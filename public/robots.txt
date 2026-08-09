@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /admin.html
-Disallow: /api/admin/
-
-# Sitemap à mettre à jour avec le domaine final.
-Sitemap: https://lnxbeats.fr/sitemap.xml

@@ -1,22 +1,33 @@
 {
-  "name": "lnx-beats-site",
-  "version": "1.0.0",
+  "name": "lnx-studio",
+  "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check public/js/app.js && node --check public/js/order.js && node --check public/js/admin.js && node --check public/js/site-config.js"
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "check": "npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
-    "dotenv": "^16.6.1",
-    "express": "^5.1.0",
-    "express-rate-limit": "^8.0.1",
-    "helmet": "^8.1.0",
-    "multer": "^2.0.2",
-    "nodemailer": "^7.0.5"
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
   },
   "engines": {
-    "node": ">=20"
-  }
+    "node": ">=20.9.0"
+  },
+  "packageManager": "npm@11.16.0"
 }
