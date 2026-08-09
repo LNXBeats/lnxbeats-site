@@ -7,7 +7,7 @@ import { ProjectArtwork } from "@/components/project-artwork";
 import { featuredProjects } from "@/data/discography";
 import { officialLinks, siteConfig } from "@/data/site";
 
-const homeDescription = "Découvrez LNX Beats, ses récits musicaux, ses projets et ses créations sur mesure. Une musique construite autour des histoires, de l’humour et de l’émotion.";
+const homeDescription = "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux. Chaque histoire mérite sa musique.";
 
 export const metadata: Metadata = {
   title: "LNX Beats — Chaque histoire mérite sa musique",
@@ -29,27 +29,27 @@ export const metadata: Metadata = {
 };
 
 const universes = [
-  { title: "Rap narratif", description: "Des textes qui installent une scène, un point de vue et des personnages." },
-  { title: "Humour", description: "Le quotidien observé de biais, entre détails familiers et situations inattendues." },
-  { title: "Émotion", description: "Des récits plus sensibles, écrits pour laisser résonner ce qui ne se dit pas toujours." },
-  { title: "Cinéma", description: "Une manière de penser la musique par images, ambiances et mouvements narratifs." },
-  { title: "Sur mesure", description: "Une histoire personnelle transformée en création musicale originale." },
-  { title: "Expérimentation", description: "Un espace libre où les formes, les voix et les idées peuvent se déplacer." },
+  { title: "Rap narratif", description: "Une voix entre dans le cadre. Le décor suit. L’histoire peut commencer." },
+  { title: "Humour", description: "Le quotidien se décale juste assez pour révéler ce qu’il avait de drôle." },
+  { title: "Émotion", description: "Des mots pour faire entendre ce que les souvenirs gardent en silence." },
+  { title: "Cinéma", description: "Des morceaux pensés en lumière, en mouvement et en scènes intérieures." },
+  { title: "Sur mesure", description: "Votre histoire, ses détails, puis une musique qui n’appartient qu’à elle." },
+  { title: "Expérimentation", description: "L’endroit où les voix et les formes prennent des chemins inattendus." },
 ] as const;
 
 const platforms = [
-  { name: "Spotify", label: "Catalogue artiste", mark: "S", url: officialLinks.spotify, tone: "spotify" },
-  { name: "Apple Music", label: "Catalogue artiste", mark: "A", url: officialLinks.appleMusic, tone: "apple" },
-  { name: "Deezer", label: "Catalogue artiste", mark: "D", url: officialLinks.deezer, tone: "deezer" },
-  { name: "YouTube", label: "Chaîne officielle", mark: "Y", url: officialLinks.youtube, tone: "youtube" },
-  { name: "TikTok", label: "Profil officiel", mark: "T", url: officialLinks.tiktok, tone: "tiktok" },
-  { name: "Instagram", label: "Profil officiel", mark: "I", url: officialLinks.instagram, tone: "instagram" },
+  { name: "Spotify", label: "Écouter les récits", mark: "S", url: officialLinks.spotify, tone: "spotify" },
+  { name: "Apple Music", label: "Écouter les récits", mark: "A", url: officialLinks.appleMusic, tone: "apple" },
+  { name: "Deezer", label: "Écouter les récits", mark: "D", url: officialLinks.deezer, tone: "deezer" },
+  { name: "YouTube", label: "Regarder les histoires", mark: "Y", url: officialLinks.youtube, tone: "youtube" },
+  { name: "TikTok", label: "Suivre les coulisses", mark: "T", url: officialLinks.tiktok, tone: "tiktok" },
+  { name: "Instagram", label: "Suivre les coulisses", mark: "I", url: officialLinks.instagram, tone: "instagram" },
 ] as const;
 
 const commissionSteps = [
-  { number: "01", title: "Tu racontes", description: "Tu poses les personnes, les souvenirs et les détails qui rendent ton histoire unique." },
-  { number: "02", title: "LNX Beats compose", description: "Le récit devient un texte, une intention et un univers musical original." },
-  { number: "03", title: "Tu reçois ton œuvre", description: "Une création singulière, pensée autour de ton histoire et de ses émotions." },
+  { number: "01", title: "Vous confiez", description: "Un prénom, un souvenir, une phrase que vous êtes seul à comprendre." },
+  { number: "02", title: "Le récit prend forme", description: "LNX Beats cherche la voix, le rythme et la lumière justes." },
+  { number: "03", title: "La musique vous revient", description: "Votre histoire a changé de forme, mais elle porte toujours votre émotion." },
 ] as const;
 
 const leadProject = featuredProjects[0];
@@ -70,13 +70,13 @@ export default function HomePage() {
         </div>
         <Container className="home-hero__inner">
           <div className="home-hero__copy">
-            <p className="eyebrow">Artiste · Auteur de récits musicaux</p>
+            <p className="eyebrow">LNX Beats · Les histoires deviennent musique</p>
             <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
             <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
-            <p className="home-hero__lead">Des scènes du quotidien aux récits les plus personnels, LNX Beats transforme des histoires en chansons, en personnages et en univers singuliers.</p>
+            <p className="home-hero__lead">Il suffit parfois d’un prénom, d’un souvenir ou d’une scène banale. LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
             <div className="home-hero__actions">
-              <ButtonLink href="/discographie">Écouter la musique</ButtonLink>
-              <ButtonLink href="/commander" variant="secondary">Commander sur mesure</ButtonLink>
+              <ButtonLink href="/discographie">Entrer dans les récits</ButtonLink>
+              <ButtonLink href="/commander" variant="secondary">Confier une histoire</ButtonLink>
             </div>
           </div>
           <div className="home-hero__signature" aria-hidden="true">
@@ -85,7 +85,7 @@ export default function HomePage() {
             <span>Émotion</span>
           </div>
           <a className="home-hero__scroll" href="#univers">
-            <span>Découvrir l’univers</span>
+            <span>Laisser l’histoire commencer</span>
             <span aria-hidden="true">↓</span>
           </a>
         </Container>
@@ -96,7 +96,7 @@ export default function HomePage() {
           <p className="section-index">01 — La démarche</p>
           <div>
             <h2 id="home-intro-title">Le réel devient une scène.<br /><em>La musique, un récit.</em></h2>
-            <p>Une famille trop bruyante, un collègue impossible, un animal qui observe les humains ou un souvenir que l’on veut garder : tout peut devenir le point de départ d’une chanson.</p>
+            <p>Une famille trop bruyante. Un collègue impossible. Un animal qui regarde les humains vivre. Un souvenir que l’on refuse de laisser partir. La musique commence souvent là.</p>
           </div>
         </Container>
       </section>
@@ -108,7 +108,7 @@ export default function HomePage() {
               <p className="section-index">02 — Les territoires</p>
               <h2 id="universe-title">Un artiste.<br />Plusieurs univers.</h2>
             </div>
-            <p>LNX Beats ne s’enferme pas dans un seul ton. Chaque histoire appelle sa propre couleur, son propre rythme et sa propre façon d’être racontée.</p>
+            <p>Chaque histoire réclame sa propre lumière. Certaines font sourire, d’autres serrent la gorge. Aucune ne demande à être racontée de la même manière.</p>
           </div>
           <div className="universe-grid">
             {universes.map((universe, index) => (
@@ -132,11 +132,11 @@ export default function HomePage() {
                 <p className="section-index">03 — La musique</p>
                 <h2 id="projects-title">Des mondes à écouter.</h2>
               </div>
-              <ButtonLink href="/discographie" variant="quiet">Voir toute la discographie</ButtonLink>
+              <ButtonLink href="/discographie" variant="quiet">Traverser tous les univers</ButtonLink>
             </div>
 
             <article className="home-project-lead">
-              <Link className="home-project-lead__art" href={`/album/${leadProject.slug}`} aria-label={`Découvrir ${leadProject.title}`}>
+              <Link className="home-project-lead__art" href={`/album/${leadProject.slug}`} aria-label={`Ouvrir l’univers ${leadProject.title}`}>
                 <ProjectArtwork project={leadProject} priority sizes="(max-width: 820px) 100vw, 58vw" />
               </Link>
               <div className="home-project-lead__copy">
@@ -150,14 +150,14 @@ export default function HomePage() {
             <div className="home-project-supporting">
               {supportingProjects.map((project, index) => (
                 <article className="home-project-secondary" key={project.slug}>
-                  <Link href={`/album/${project.slug}`} aria-label={`Découvrir ${project.title}`}>
+                  <Link href={`/album/${project.slug}`} aria-label={`Ouvrir l’univers ${project.title}`}>
                     <ProjectArtwork project={project} sizes="(max-width: 600px) 100vw, 40vw" />
                   </Link>
                   <div className="home-project-secondary__copy">
                     <p className="section-index">{String(index + 1).padStart(2, "0")} — Sélection</p>
                     <h3><Link href={`/album/${project.slug}`}>{project.title}</Link></h3>
                     <p>{project.shortDescription}</p>
-                    <Link className="text-link" href={`/album/${project.slug}`}>Découvrir <span aria-hidden="true">→</span></Link>
+                    <Link className="text-link" href={`/album/${project.slug}`}>Ouvrir cet univers <span aria-hidden="true">→</span></Link>
                   </div>
                 </article>
               ))}
@@ -170,8 +170,8 @@ export default function HomePage() {
         <Container>
           <div className="commission-story__intro">
             <p className="section-index">04 — Votre histoire</p>
-            <h2 id="commission-title">Une musique<br /><em>rien que pour vous.</em></h2>
-            <p>Un cadeau, un souvenir ou un message à transmettre : votre récit devient le point de départ d’une œuvre originale.</p>
+            <h2 id="commission-title">Votre histoire<br /><em>attend sa voix.</em></h2>
+            <p>Vous apportez les personnes, les silences et les détails. La création commence par cette rencontre.</p>
           </div>
           <ol className="commission-steps">
             {commissionSteps.map((step) => (
@@ -183,8 +183,8 @@ export default function HomePage() {
             ))}
           </ol>
           <div className="commission-story__action">
-            <p>Vous avez une histoire en tête ?</p>
-            <ButtonLink href="/commander">Commencer votre création</ButtonLink>
+            <p>Quelques mots suffisent pour ouvrir la première scène.</p>
+            <ButtonLink href="/commander">Confier les premiers mots</ButtonLink>
           </div>
         </Container>
       </section>
@@ -194,9 +194,9 @@ export default function HomePage() {
           <div className="premium-heading">
             <div>
               <p className="section-index">05 — Écouter & suivre</p>
-              <h2 id="platforms-title">Retrouvez LNX Beats.</h2>
+              <h2 id="platforms-title">Les histoires continuent ailleurs.</h2>
             </div>
-            <p>Écoutez le catalogue et suivez les nouvelles histoires depuis les profils officiels.</p>
+            <p>Chaque plateforme ouvre une autre porte sur les morceaux, les personnages et ce qui se prépare encore.</p>
           </div>
           <div className="platforms-grid">
             {platforms.map((platform) => (
@@ -225,10 +225,10 @@ export default function HomePage() {
         <Container className="home-contact__inner">
           <p className="section-index">06 — Contact</p>
           <div>
-            <h2 id="home-contact-title">Une histoire à raconter ?</h2>
-            <p>Pour une création sur mesure, une proposition professionnelle ou simplement pour entrer dans l’univers LNX Beats.</p>
+            <h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2>
+            <p>Une idée, une proposition ou simplement quelques mots à partager : de l’autre côté, c’est LNX Beats qui répond.</p>
             <div className="home-contact__actions">
-              <ButtonLink href="/contact">Prendre contact</ButtonLink>
+              <ButtonLink href="/contact">Ouvrir la conversation</ButtonLink>
               <ButtonLink href={`mailto:${siteConfig.email}`} variant="quiet" external>{siteConfig.email}</ButtonLink>
             </div>
           </div>

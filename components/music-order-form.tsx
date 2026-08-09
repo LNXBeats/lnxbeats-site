@@ -58,7 +58,7 @@ const initialForm: ProjectForm = {
   termsAccepted: false,
 };
 
-const stepLabels = ["Identité", "Projet", "Style & droits", "Récapitulatif"];
+const stepLabels = ["Vous", "Le récit", "La couleur", "Dernier regard"];
 
 export function MusicOrderForm() {
   const [step, setStep] = useState(0);
@@ -120,7 +120,7 @@ export function MusicOrderForm() {
 
   return (
     <form className="order-form" onSubmit={(event) => event.preventDefault()}>
-      <div className="order-progress" aria-label="Progression du formulaire">
+      <div className="order-progress" aria-label="Progression du récit">
         {stepLabels.map((label, index) => (
           <div key={label} className={`order-progress__item ${index <= step ? "is-active" : ""}`} aria-current={index === step ? "step" : undefined}>
             {String(index + 1).padStart(2, "0")} <span>· {label}</span>
@@ -132,8 +132,8 @@ export function MusicOrderForm() {
         {step === 0 ? (
           <>
             <p className="eyebrow" aria-live="polite">Étape 1 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Parlez-nous de vous.</h2>
-            <p className="form-step__intro">Ces informations serviront au suivi du projet lorsqu’un système de commande sécurisé sera activé.</p>
+            <h2 ref={headingRef} tabIndex={-1}>Avant l’histoire, il y a vous.</h2>
+            <p className="form-step__intro">Quelques repères pour savoir qui confie le récit et à qui la musique sera destinée. Rien ne quitte cette page.</p>
             <div className="field-grid">
               <div className="field">
                 <label htmlFor="first-name">Prénom *</label>
@@ -156,11 +156,11 @@ export function MusicOrderForm() {
             </div>
             <div className="field-grid">
               <div className="field">
-                <label htmlFor="recipient">Destinataire de la musique *</label>
+                <label htmlFor="recipient">À qui cette histoire est-elle destinée ? *</label>
                 <input id="recipient" name="recipient" required placeholder="Prénom, couple, équipe…" value={form.recipient} onChange={(event) => setField("recipient", event.target.value)} />
               </div>
               <div className="field">
-                <label htmlFor="occasion">Occasion</label>
+                <label htmlFor="occasion">Ce qui vous réunit</label>
                 <input id="occasion" name="occasion" placeholder="Anniversaire, mariage, surprise…" value={form.occasion} onChange={(event) => setField("occasion", event.target.value)} />
               </div>
             </div>
@@ -170,24 +170,24 @@ export function MusicOrderForm() {
         {step === 1 ? (
           <>
             <p className="eyebrow" aria-live="polite">Étape 2 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Racontez votre histoire.</h2>
-            <p className="form-step__intro">Donnez les détails qui rendent cette histoire unique. Le brief reste local à votre navigateur dans cette version et n’est pas envoyé.</p>
+            <h2 ref={headingRef} tabIndex={-1}>Laissez revenir la scène.</h2>
+            <p className="form-step__intro">Ne cherchez pas les mots parfaits. Racontez les personnes, le moment et ce qui doit rester. Ce récit demeure local et n’est pas envoyé.</p>
             <div className="field">
-              <label htmlFor="story">Histoire à raconter *</label>
+              <label htmlFor="story">Ce qui compte vraiment *</label>
               <textarea id="story" name="story" required minLength={30} placeholder="Le contexte, les personnes, les souvenirs, ce que vous ressentez…" value={form.story} onChange={(event) => setField("story", event.target.value)} />
-              <span className="field__hint">Minimum 30 caractères pour préparer un brief exploitable.</span>
+              <span className="field__hint">Au moins 30 caractères : juste assez pour ouvrir la première scène.</span>
             </div>
             <div className="field">
-              <label htmlFor="important-details">Informations importantes</label>
+              <label htmlFor="important-details">Les détails à ne pas perdre</label>
               <textarea id="important-details" name="importantDetails" placeholder="Dates, lieux, anecdotes ou traits de caractère…" value={form.importantDetails} onChange={(event) => setField("importantDetails", event.target.value)} />
             </div>
             <div className="field-grid">
               <div className="field">
-                <label htmlFor="words">Mots ou prénoms à intégrer</label>
+                <label htmlFor="words">Les mots qui doivent rester</label>
                 <textarea id="words" name="wordsToInclude" value={form.wordsToInclude} onChange={(event) => setField("wordsToInclude", event.target.value)} />
               </div>
               <div className="field">
-                <label htmlFor="avoid">Éléments à éviter</label>
+                <label htmlFor="avoid">Ce qui doit rester hors du récit</label>
                 <textarea id="avoid" name="avoid" value={form.avoid} onChange={(event) => setField("avoid", event.target.value)} />
               </div>
             </div>
@@ -197,8 +197,8 @@ export function MusicOrderForm() {
         {step === 2 ? (
           <>
             <p className="eyebrow" aria-live="polite">Étape 3 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Donnez le ton.</h2>
-            <p className="form-step__intro">Choisissez une direction ou laissez LNX Beats trouver le style qui sert le mieux votre histoire.</p>
+            <h2 ref={headingRef} tabIndex={-1}>Quelle couleur porte ce souvenir ?</h2>
+            <p className="form-step__intro">Vous pouvez indiquer une direction ou laisser LNX Beats écouter l’histoire et trouver celle qui lui ressemble.</p>
             <fieldset
               className="fieldset"
               id="genre-choice"
@@ -206,7 +206,7 @@ export function MusicOrderForm() {
               aria-describedby={genreError ? "genre-error" : "genre-help"}
               aria-invalid={genreError || undefined}
             >
-              <legend>Genre musical *</legend>
+              <legend>La matière musicale *</legend>
               <div className="choice-grid">
                 {genres.map((genre) => (
                   <label className="choice" key={genre}>
@@ -236,12 +236,12 @@ export function MusicOrderForm() {
                   <span>Je laisse LNX Beats choisir le style qui correspond le mieux à mon histoire</span>
                 </label>
               </div>
-              <span className="field__hint" id="genre-help">Sélectionnez un style ou confiez ce choix à LNX Beats.</span>
-              {genreError ? <span className="field__error" id="genre-error" role="alert">Choisissez un genre musical ou confiez ce choix à LNX Beats.</span> : null}
+              <span className="field__hint" id="genre-help">Indiquez une piste ou laissez LNX Beats chercher la couleur juste.</span>
+              {genreError ? <span className="field__error" id="genre-error" role="alert">Choisissez une matière musicale ou confiez ce choix à LNX Beats.</span> : null}
             </fieldset>
 
             <fieldset className="fieldset">
-              <legend>Émotion / ambiance — plusieurs choix possibles</legend>
+              <legend>Ce que la musique doit laisser — plusieurs choix possibles</legend>
               <div className="choice-grid">
                 {moods.map((mood) => (
                   <label className="choice" key={mood}>
@@ -268,7 +268,7 @@ export function MusicOrderForm() {
             </fieldset>
 
             <div className="field">
-              <label htmlFor="files">Photos, documents ou références</label>
+              <label htmlFor="files">Les traces de l’histoire</label>
               <div className="upload-field">
                 <div>
                   <input
@@ -279,7 +279,7 @@ export function MusicOrderForm() {
                     accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,audio/mpeg,audio/mp4,audio/wav"
                     onChange={(event) => setField("files", Array.from(event.target.files ?? []).map((file) => file.name))}
                   />
-                  <p>Aucun fichier n’est téléversé dans cette version.</p>
+                  <p>Ces repères restent sur votre appareil dans cette version.</p>
                 </div>
               </div>
             </div>
@@ -289,16 +289,16 @@ export function MusicOrderForm() {
         {step === 3 ? (
           <>
             <p className="eyebrow" aria-live="polite">Étape 4 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Votre projet, en un regard.</h2>
-            <p className="form-step__intro">Vérifiez la structure du brief. Aucune donnée n’est enregistrée ni transmise dans cette version.</p>
+            <h2 ref={headingRef} tabIndex={-1}>Relisez l’histoire avant de refermer le chapitre.</h2>
+            <p className="form-step__intro">Un dernier regard sur ce que vous avez posé. Pour le moment, rien n’est enregistré ni transmis.</p>
             <dl className="summary">
-              <div><dt>Client</dt><dd>{form.firstName} {form.lastName}</dd></div>
+              <div><dt>Vous</dt><dd>{form.firstName} {form.lastName}</dd></div>
               <div><dt>Contact</dt><dd>{form.email}{form.phone ? ` · ${form.phone}` : ""}</dd></div>
-              <div><dt>Projet</dt><dd>Pour {form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
-              <div><dt>Direction</dt><dd>{form.letLnxChoose ? "Choix confié à LNX Beats" : form.genre}</dd></div>
-              <div><dt>Ambiance</dt><dd>{form.moods.length ? form.moods.join(", ") : "À définir avec LNX Beats"}</dd></div>
+              <div><dt>Histoire pour</dt><dd>{form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
+              <div><dt>Couleur</dt><dd>{form.letLnxChoose ? "Choix confié à LNX Beats" : form.genre}</dd></div>
+              <div><dt>Émotion</dt><dd>{form.moods.length ? form.moods.join(", ") : "À chercher avec LNX Beats"}</dd></div>
               <div><dt>Droits</dt><dd>{form.rights === "personal" ? "Usage personnel" : "Usage commercial à cadrer"}</dd></div>
-              <div><dt>Fichiers</dt><dd>{form.files.length ? form.files.join(", ") : "Aucun fichier sélectionné"}</dd></div>
+              <div><dt>Repères</dt><dd>{form.files.length ? form.files.join(", ") : "Aucun fichier sélectionné"}</dd></div>
             </dl>
             <label className="choice choice--full">
               <input type="checkbox" name="termsAccepted" checked={form.termsAccepted} onChange={(event) => setField("termsAccepted", event.target.checked)} />
@@ -306,14 +306,14 @@ export function MusicOrderForm() {
             </label>
             <p className="terms-note">Paiement prévu à terme : PayPal ou virement bancaire. Aucun paiement, aucune commande et aucune persistance ne sont actifs dans cette version.</p>
             <div className="form-navigation">
-              <button className="form-button" type="button" onClick={previousStep}>← Modifier</button>
-              <button className="form-button form-button--primary" type="button" disabled>Passage au paiement — bientôt</button>
+              <button className="form-button" type="button" onClick={previousStep}>← Revenir au récit</button>
+              <button className="form-button form-button--primary" type="button" disabled>L’échange ouvrira bientôt</button>
             </div>
           </>
         ) : (
           <div className="form-navigation">
-            {step > 0 ? <button className="form-button" type="button" onClick={previousStep}>← Retour</button> : <span />}
-            <button className="form-button form-button--primary" type="button" onClick={nextStep}>Continuer →</button>
+            {step > 0 ? <button className="form-button" type="button" onClick={previousStep}>← Chapitre précédent</button> : <span />}
+            <button className="form-button form-button--primary" type="button" onClick={nextStep}>Ouvrir le chapitre suivant →</button>
           </div>
         )}
       </div>

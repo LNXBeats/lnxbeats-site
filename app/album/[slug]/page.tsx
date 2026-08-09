@@ -62,7 +62,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
     <>
       <header className="album-hero">
         <Container>
-          <Link className="back-link" href="/discographie"><span aria-hidden="true">←</span> Retour à la discographie</Link>
+          <Link className="back-link" href="/discographie"><span aria-hidden="true">←</span> Revenir aux univers</Link>
           <div className="album-hero__grid">
             <ProjectArtwork project={project} priority sizes="(max-width: 820px) 100vw, 48vw" className="album-hero__art" />
             <div className="album-hero__content">
@@ -72,7 +72,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
               <p className="album-hero__description">{project.description}</p>
               <dl className="album-facts">
                 <div><dt>Type</dt><dd>{kind}</dd></div>
-                <div><dt>Année</dt><dd>{project.year ?? "À confirmer"}</dd></div>
+                <div><dt>Année</dt><dd>{project.year ?? "Non annoncée"}</dd></div>
                 <div><dt>Statut</dt><dd>{status}</dd></div>
                 {project.genres.length > 0 ? <div><dt>Genres</dt><dd>{project.genres.join(" · ")}</dd></div> : null}
               </dl>
@@ -86,9 +86,9 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
         <Container className="album-details__grid">
           <Tracklist project={project} />
           <aside className="album-editorial-note">
-            <p className="eyebrow">À propos de cette fiche</p>
-            <h2>Une information vérifiable.</h2>
-            <p>Les pochettes, dates, genres, durées et liens propres à cette parution seront ajoutés ici dès qu’ils pourront être confirmés. Les liens marqués « profil » mènent au profil officiel de LNX Beats, pas à une page d’album supposée.</p>
+            <p className="eyebrow">Ce qui reste dans l’ombre</p>
+            <h2>Le récit grandira ici.</h2>
+            <p>Pochette, dates, durées et liens prendront leur place lorsqu’ils auront été officiellement révélés. D’ici là, chaque mot affiché reste fidèle à ce qui est connu.</p>
           </aside>
         </Container>
       </section>

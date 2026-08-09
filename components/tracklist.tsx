@@ -4,12 +4,12 @@ export function Tracklist({ project }: { project: Project }) {
   if (project.tracks.length === 0) {
     return (
       <div className="tracklist-empty">
-        <p className="eyebrow">Tracklist</p>
-        <h2>Détail à venir</h2>
+        <p className="eyebrow">Les chapitres</p>
+        <h2>Les titres viendront au bon moment.</h2>
         <p>
           {project.trackCount
-            ? `Le projet compte ${project.trackCount} titres. Leur détail sera publié ici dès qu’une source officielle permettra de le confirmer.`
-            : "La liste des titres sera publiée ici lorsqu’elle aura été officiellement annoncée."}
+            ? `${project.trackCount} titres composent cet univers. Leurs noms resteront dans l’ombre jusqu’à leur révélation officielle.`
+            : "La liste reste volontairement silencieuse jusqu’à son annonce officielle."}
         </p>
       </div>
     );
@@ -18,7 +18,7 @@ export function Tracklist({ project }: { project: Project }) {
   return (
     <section aria-labelledby="tracklist-title">
       <div className="catalog-header">
-        <h2 id="tracklist-title">Tracklist</h2>
+        <h2 id="tracklist-title">Les chapitres</h2>
         <span>{project.tracks.length} {project.tracks.length > 1 ? "titres" : "titre"}</span>
       </div>
       <ol className="tracklist">

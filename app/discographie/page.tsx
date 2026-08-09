@@ -9,7 +9,7 @@ import { siteConfig } from "@/data/site";
 
 export const metadata: Metadata = {
   title: "Discographie",
-  description: "Explorez les albums, singles et projets artistiques publiés ou en développement dans l’univers de LNX Beats.",
+  description: "Les récits musicaux de LNX Beats : des personnages, des scènes ordinaires et des mondes à ouvrir un morceau après l’autre.",
   alternates: { canonical: "/discographie" },
 };
 
@@ -22,11 +22,11 @@ export default function DiscographyPage() {
       <header className="page-hero page-hero--catalog">
         <Container className="page-hero__grid">
           <div>
-            <p className="eyebrow">Écouter · Explorer</p>
+            <p className="eyebrow">Des récits mis en musique</p>
             <h1>Discographie</h1>
           </div>
           <div>
-            <p className="page-hero__intro">Albums, singles, récits et projets en devenir. Chaque fiche distingue clairement ce qui est publié de ce qui reste en développement.</p>
+            <p className="page-hero__intro">Ici, un titre n’est jamais seulement un titre. C’est une porte entrouverte sur une voix, un personnage ou une scène qui attend d’être vécue.</p>
             <div className="page-hero__meta">
               <span>{publishedProjects.length} parutions</span>
               <span>{projectsInDevelopment.length} projets en développement</span>
@@ -45,10 +45,10 @@ export default function DiscographyPage() {
         <Container>
           <div className="catalog-header catalog-header--large">
             <div>
-              <p className="eyebrow">Sélection éditoriale</p>
-              <h2 id="selection-title">Projets à la une</h2>
+              <p className="eyebrow">Premières portes</p>
+              <h2 id="selection-title">Des récits pour entrer.</h2>
             </div>
-            <p>Quelques portes d’entrée dans les différents univers LNX Beats.</p>
+            <p>Commencez là où un titre vous retient. Le reste du monde se révélera derrière.</p>
           </div>
           <div className="catalog-feature-list">
             {featuredProjects.map((project, index) => (
@@ -60,7 +60,7 @@ export default function DiscographyPage() {
                   <p className="release-card__meta">{project.type === "album" ? "Album" : "Single"}{project.year ? ` · ${project.year}` : ""}</p>
                   <h3><Link href={`/album/${project.slug}`}>{project.title}</Link></h3>
                   <p>{project.shortDescription}</p>
-                  <Link className="text-link" href={`/album/${project.slug}`}>Découvrir le projet <span aria-hidden="true">→</span></Link>
+                  <Link className="text-link" href={`/album/${project.slug}`}>Ouvrir cet univers <span aria-hidden="true">→</span></Link>
                 </div>
               </article>
             ))}
@@ -71,7 +71,7 @@ export default function DiscographyPage() {
       <section className="section section--soft catalog-section" aria-labelledby="catalog-title">
         <Container>
           <div className="catalog-header">
-            <h2 id="catalog-title">Autres parutions</h2>
+            <h2 id="catalog-title">D’autres histoires attendent.</h2>
             <span>{otherProjects.length} projets</span>
           </div>
           <div className="release-grid">
@@ -84,10 +84,10 @@ export default function DiscographyPage() {
         <Container>
           <div className="catalog-header catalog-header--large">
             <div>
-              <p className="eyebrow">En chantier</p>
-              <h2 id="development-title">Projets en développement</h2>
+              <p className="eyebrow">Encore hors champ</p>
+              <h2 id="development-title">Les titres sont là. Le reste se prépare.</h2>
             </div>
-            <p>Ces noms sont intégrés à la structure du catalogue sans inventer de date, de tracklist ou de disponibilité.</p>
+            <p>Des noms ont déjà trouvé leur place. Leurs images, leurs voix et leurs dates resteront dans l’ombre jusqu’au moment juste.</p>
           </div>
           <div className="release-grid">
             {projectsInDevelopment.map((project) => <AlbumCard key={project.slug} project={project} />)}

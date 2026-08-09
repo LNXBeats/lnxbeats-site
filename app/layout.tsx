@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     default: "LNX Beats — Site officiel",
     template: "%s — LNX Beats",
   },
-  description: "Le site officiel de LNX Beats : musique, discographie et créations musicales personnalisées.",
+  description: "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux.",
   applicationName: "LNX Studio",
   alternates: { canonical: "/" },
   openGraph: {

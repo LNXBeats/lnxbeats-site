@@ -27,11 +27,11 @@ export function ProjectArtwork({ project, priority = false, sizes, className = "
     <div
       className={`project-artwork project-artwork--${project.artworkTone} ${className}`}
       role="img"
-      aria-label={`Emplacement éditorial, pochette officielle de ${project.title} à venir`}
+      aria-label={`Pochette officielle de ${project.title} non encore révélée`}
     >
       <span className="project-artwork__brand" aria-hidden="true">LNX BEATS</span>
       <span className="project-artwork__title" aria-hidden="true">{project.title}</span>
-      <span className="project-artwork__status" aria-hidden="true">Pochette officielle à venir</span>
+      <span className="project-artwork__status" aria-hidden="true">Son visage reste à révéler</span>
     </div>
   );
 }

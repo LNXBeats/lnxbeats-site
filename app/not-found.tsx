@@ -7,8 +7,8 @@ export default function NotFound() {
       <Container className="legal-shell">
         <p className="eyebrow">Erreur 404</p>
         <h1>Cette piste n’existe pas.</h1>
-        <p className="page-hero__intro">La page demandée a peut-être changé d’adresse ou n’est pas encore disponible.</p>
-        <div style={{ marginTop: "2rem" }}><ButtonLink href="/">Revenir à l’accueil</ButtonLink></div>
+        <p className="page-hero__intro">Il n’y a rien au bout de ce lien. Peut-être une adresse déplacée, peut-être une histoire qui n’a pas encore commencé.</p>
+        <div style={{ marginTop: "2rem" }}><ButtonLink href="/">Revenir là où tout commence</ButtonLink></div>
       </Container>
     </section>
   );

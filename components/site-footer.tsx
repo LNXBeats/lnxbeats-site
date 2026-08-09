@@ -14,17 +14,17 @@ export function SiteFooter() {
 
           <div className="site-footer__columns">
             <div>
-              <h2>Navigation</h2>
+              <h2>Les portes</h2>
               {navigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
             </div>
             <div>
-              <h2>Écouter</h2>
+              <h2>Les voix</h2>
               {siteConfig.platforms.map((platform) => (
                 <a key={platform.name} href={platform.url} target="_blank" rel="noopener noreferrer" aria-label={`${platform.name} — nouvel onglet`}>{platform.name}</a>
               ))}
             </div>
             <div>
-              <h2>Suivre & acheter</h2>
+              <h2>Prolonger l’histoire</h2>
               {[...siteConfig.social, ...siteConfig.shops].map((item) => (
                 <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} — nouvel onglet`}>{item.name}</a>
               ))}
