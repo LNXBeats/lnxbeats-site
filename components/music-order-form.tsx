@@ -13,9 +13,12 @@ const genres = [
   "Acoustique",
   "Chanson / variété",
   "Cinématographique",
-];
+] as const;
 
-const moods = ["Émouvant", "Drôle", "Énergique", "Romantique", "Sombre", "Nostalgique", "Festif", "Motivant"];
+const moods = ["Émouvant", "Drôle", "Énergique", "Romantique", "Sombre", "Nostalgique", "Festif", "Motivant"] as const;
+
+type Genre = (typeof genres)[number];
+type Mood = (typeof moods)[number];
 
 type ProjectForm = {
   firstName: string;
@@ -28,9 +31,9 @@ type ProjectForm = {
   importantDetails: string;
   wordsToInclude: string;
   avoid: string;
-  genre: string;
+  genre: Genre | "";
   letLnxChoose: boolean;
-  moods: string[];
+  moods: Mood[];
   rights: "personal" | "commercial";
   files: string[];
   termsAccepted: boolean;
@@ -60,6 +63,7 @@ const stepLabels = ["Identité", "Projet", "Style & droits", "Récapitulatif"];
 export function MusicOrderForm() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<ProjectForm>(initialForm);
+  const [genreError, setGenreError] = useState(false);
   const stepRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const initialized = useRef(false);
@@ -88,6 +92,7 @@ export function MusicOrderForm() {
     }
 
     if (step === 2 && !form.letLnxChoose && !form.genre) {
+      setGenreError(true);
       document.getElementById("genre-choice")?.focus();
       return false;
     }
@@ -104,7 +109,7 @@ export function MusicOrderForm() {
     setStep((current) => Math.max(current - 1, 0));
   }
 
-  function toggleMood(mood: string) {
+  function toggleMood(mood: Mood) {
     setForm((current) => ({
       ...current,
       moods: current.moods.includes(mood)
@@ -114,7 +119,7 @@ export function MusicOrderForm() {
   }
 
   return (
-    <form className="order-form" onSubmit={(event) => event.preventDefault()} noValidate={false}>
+    <form className="order-form" onSubmit={(event) => event.preventDefault()}>
       <div className="order-progress" aria-label="Progression du formulaire">
         {stepLabels.map((label, index) => (
           <div key={label} className={`order-progress__item ${index <= step ? "is-active" : ""}`} aria-current={index === step ? "step" : undefined}>
@@ -132,31 +137,31 @@ export function MusicOrderForm() {
             <div className="field-grid">
               <div className="field">
                 <label htmlFor="first-name">Prénom *</label>
-                <input id="first-name" required autoComplete="given-name" value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} />
+                <input id="first-name" name="firstName" required autoComplete="given-name" value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} />
               </div>
               <div className="field">
                 <label htmlFor="last-name">Nom *</label>
-                <input id="last-name" required autoComplete="family-name" value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} />
+                <input id="last-name" name="lastName" required autoComplete="family-name" value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} />
               </div>
             </div>
             <div className="field-grid">
               <div className="field">
                 <label htmlFor="email">E-mail *</label>
-                <input id="email" type="email" required autoComplete="email" value={form.email} onChange={(event) => setField("email", event.target.value)} />
+                <input id="email" name="email" type="email" required autoComplete="email" value={form.email} onChange={(event) => setField("email", event.target.value)} />
               </div>
               <div className="field">
                 <label htmlFor="phone">Téléphone</label>
-                <input id="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setField("phone", event.target.value)} />
+                <input id="phone" name="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setField("phone", event.target.value)} />
               </div>
             </div>
             <div className="field-grid">
               <div className="field">
                 <label htmlFor="recipient">Destinataire de la musique *</label>
-                <input id="recipient" required placeholder="Prénom, couple, équipe…" value={form.recipient} onChange={(event) => setField("recipient", event.target.value)} />
+                <input id="recipient" name="recipient" required placeholder="Prénom, couple, équipe…" value={form.recipient} onChange={(event) => setField("recipient", event.target.value)} />
               </div>
               <div className="field">
                 <label htmlFor="occasion">Occasion</label>
-                <input id="occasion" placeholder="Anniversaire, mariage, surprise…" value={form.occasion} onChange={(event) => setField("occasion", event.target.value)} />
+                <input id="occasion" name="occasion" placeholder="Anniversaire, mariage, surprise…" value={form.occasion} onChange={(event) => setField("occasion", event.target.value)} />
               </div>
             </div>
           </>
@@ -166,24 +171,24 @@ export function MusicOrderForm() {
           <>
             <p className="eyebrow" aria-live="polite">Étape 2 sur 4</p>
             <h2 ref={headingRef} tabIndex={-1}>Racontez votre histoire.</h2>
-            <p className="form-step__intro">Donnez les détails qui rendent cette histoire unique. Le brief reste local à votre navigateur dans cette V0.1 et n’est pas envoyé.</p>
+            <p className="form-step__intro">Donnez les détails qui rendent cette histoire unique. Le brief reste local à votre navigateur dans cette version et n’est pas envoyé.</p>
             <div className="field">
               <label htmlFor="story">Histoire à raconter *</label>
-              <textarea id="story" required minLength={30} placeholder="Le contexte, les personnes, les souvenirs, ce que vous ressentez…" value={form.story} onChange={(event) => setField("story", event.target.value)} />
+              <textarea id="story" name="story" required minLength={30} placeholder="Le contexte, les personnes, les souvenirs, ce que vous ressentez…" value={form.story} onChange={(event) => setField("story", event.target.value)} />
               <span className="field__hint">Minimum 30 caractères pour préparer un brief exploitable.</span>
             </div>
             <div className="field">
               <label htmlFor="important-details">Informations importantes</label>
-              <textarea id="important-details" placeholder="Dates, lieux, anecdotes ou traits de caractère…" value={form.importantDetails} onChange={(event) => setField("importantDetails", event.target.value)} />
+              <textarea id="important-details" name="importantDetails" placeholder="Dates, lieux, anecdotes ou traits de caractère…" value={form.importantDetails} onChange={(event) => setField("importantDetails", event.target.value)} />
             </div>
             <div className="field-grid">
               <div className="field">
                 <label htmlFor="words">Mots ou prénoms à intégrer</label>
-                <textarea id="words" value={form.wordsToInclude} onChange={(event) => setField("wordsToInclude", event.target.value)} />
+                <textarea id="words" name="wordsToInclude" value={form.wordsToInclude} onChange={(event) => setField("wordsToInclude", event.target.value)} />
               </div>
               <div className="field">
                 <label htmlFor="avoid">Éléments à éviter</label>
-                <textarea id="avoid" value={form.avoid} onChange={(event) => setField("avoid", event.target.value)} />
+                <textarea id="avoid" name="avoid" value={form.avoid} onChange={(event) => setField("avoid", event.target.value)} />
               </div>
             </div>
           </>
@@ -194,7 +199,13 @@ export function MusicOrderForm() {
             <p className="eyebrow" aria-live="polite">Étape 3 sur 4</p>
             <h2 ref={headingRef} tabIndex={-1}>Donnez le ton.</h2>
             <p className="form-step__intro">Choisissez une direction ou laissez LNX Beats trouver le style qui sert le mieux votre histoire.</p>
-            <fieldset className="fieldset" id="genre-choice" tabIndex={-1}>
+            <fieldset
+              className="fieldset"
+              id="genre-choice"
+              tabIndex={-1}
+              aria-describedby={genreError ? "genre-error" : "genre-help"}
+              aria-invalid={genreError || undefined}
+            >
               <legend>Genre musical *</legend>
               <div className="choice-grid">
                 {genres.map((genre) => (
@@ -204,7 +215,10 @@ export function MusicOrderForm() {
                       name="genre"
                       value={genre}
                       checked={form.genre === genre && !form.letLnxChoose}
-                      onChange={() => setForm((current) => ({ ...current, genre, letLnxChoose: false }))}
+                      onChange={() => {
+                        setGenreError(false);
+                        setForm((current) => ({ ...current, genre, letLnxChoose: false }));
+                      }}
                     />
                     <span>{genre}</span>
                   </label>
@@ -212,13 +226,18 @@ export function MusicOrderForm() {
                 <label className="choice choice--full">
                   <input
                     type="checkbox"
+                    name="letLnxChooseStyle"
                     checked={form.letLnxChoose}
-                    onChange={(event) => setForm((current) => ({ ...current, letLnxChoose: event.target.checked, genre: event.target.checked ? "" : current.genre }))}
+                    onChange={(event) => {
+                      if (event.target.checked) setGenreError(false);
+                      setForm((current) => ({ ...current, letLnxChoose: event.target.checked, genre: event.target.checked ? "" : current.genre }));
+                    }}
                   />
                   <span>Je laisse LNX Beats choisir le style qui correspond le mieux à mon histoire</span>
                 </label>
               </div>
-              {!form.letLnxChoose && !form.genre ? <span className="field__hint">Sélectionnez un style ou confiez ce choix à LNX Beats.</span> : null}
+              <span className="field__hint" id="genre-help">Sélectionnez un style ou confiez ce choix à LNX Beats.</span>
+              {genreError ? <span className="field__error" id="genre-error" role="alert">Choisissez un genre musical ou confiez ce choix à LNX Beats.</span> : null}
             </fieldset>
 
             <fieldset className="fieldset">
@@ -226,7 +245,7 @@ export function MusicOrderForm() {
               <div className="choice-grid">
                 {moods.map((mood) => (
                   <label className="choice" key={mood}>
-                    <input type="checkbox" checked={form.moods.includes(mood)} onChange={() => toggleMood(mood)} />
+                    <input type="checkbox" name="moods" value={mood} checked={form.moods.includes(mood)} onChange={() => toggleMood(mood)} />
                     <span>{mood}</span>
                   </label>
                 ))}
@@ -237,11 +256,11 @@ export function MusicOrderForm() {
               <legend>Droits envisagés</legend>
               <div className="choice-grid">
                 <label className="choice">
-                  <input type="radio" name="rights" checked={form.rights === "personal"} onChange={() => setField("rights", "personal")} />
+                  <input type="radio" name="rights" value="personal" checked={form.rights === "personal"} onChange={() => setField("rights", "personal")} />
                   <span>Usage personnel</span>
                 </label>
                 <label className="choice">
-                  <input type="radio" name="rights" checked={form.rights === "commercial"} onChange={() => setField("rights", "commercial")} />
+                  <input type="radio" name="rights" value="commercial" checked={form.rights === "commercial"} onChange={() => setField("rights", "commercial")} />
                   <span>Droits commerciaux à discuter</span>
                 </label>
               </div>
@@ -254,12 +273,13 @@ export function MusicOrderForm() {
                 <div>
                   <input
                     id="files"
+                    name="attachments"
                     type="file"
                     multiple
                     accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,audio/mpeg,audio/mp4,audio/wav"
                     onChange={(event) => setField("files", Array.from(event.target.files ?? []).map((file) => file.name))}
                   />
-                  <p>Aucun fichier n’est téléversé dans cette V0.1.</p>
+                  <p>Aucun fichier n’est téléversé dans cette version.</p>
                 </div>
               </div>
             </div>
@@ -281,10 +301,10 @@ export function MusicOrderForm() {
               <div><dt>Fichiers</dt><dd>{form.files.length ? form.files.join(", ") : "Aucun fichier sélectionné"}</dd></div>
             </dl>
             <label className="choice choice--full">
-              <input type="checkbox" checked={form.termsAccepted} onChange={(event) => setField("termsAccepted", event.target.checked)} />
+              <input type="checkbox" name="termsAccepted" checked={form.termsAccepted} onChange={(event) => setField("termsAccepted", event.target.checked)} />
               <span>J’ai vérifié ce récapitulatif et je comprends que les conditions définitives devront être acceptées avant une future commande.</span>
             </label>
-            <p className="terms-note">Paiement prévu à terme : PayPal ou virement bancaire. Aucun paiement, aucune commande et aucune persistance ne sont actifs dans cette V0.1.</p>
+            <p className="terms-note">Paiement prévu à terme : PayPal ou virement bancaire. Aucun paiement, aucune commande et aucune persistance ne sont actifs dans cette version.</p>
             <div className="form-navigation">
               <button className="form-button" type="button" onClick={previousStep}>← Modifier</button>
               <button className="form-button form-button--primary" type="button" disabled>Passage au paiement — bientôt</button>

@@ -35,7 +35,7 @@ export default function OrderPage() {
               <li>Style au choix ou confié à LNX Beats</li>
               <li>Usage personnel préparé</li>
               <li>Droits commerciaux à cadrer séparément</li>
-              <li>Paiement non activé en V0.1</li>
+              <li>Paiement non activé</li>
             </ul>
           </aside>
         </Container>

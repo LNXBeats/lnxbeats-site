@@ -21,7 +21,7 @@ export default function HomePage() {
             src="/assets/hero-desktop.jpg"
             alt="LNX Beats dans son studio, casquette noire et lumière tamisée"
             fill
-            priority
+            preload
             sizes="100vw"
           />
         </div>
@@ -72,7 +72,7 @@ export default function HomePage() {
                 href={siteConfig.featuredRelease.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Écouter J’ai adopté un humain sur YouTube"
+                aria-label="Écouter J’ai adopté un humain sur YouTube — nouvel onglet"
               >
                 <span aria-hidden="true">▶</span>
               </a>

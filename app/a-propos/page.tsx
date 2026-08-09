@@ -21,7 +21,7 @@ export default function AboutPage() {
       <section className="section">
         <Container className="about-teaser">
           <div className="about-teaser__image">
-            <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill sizes="(max-width: 820px) 100vw, 45vw" priority />
+            <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill sizes="(max-width: 820px) 100vw, 45vw" preload />
           </div>
           <div className="about-teaser__copy">
             <p className="eyebrow">Une intention</p>

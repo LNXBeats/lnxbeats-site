@@ -3,7 +3,7 @@ import type { Release } from "@/data/discography";
 export function AlbumCard({ release, index }: { release: Release; index: number }) {
   return (
     <article className="release-card">
-      <a href={release.primaryUrl} target="_blank" rel="noopener noreferrer" aria-label={`Écouter ${release.title}`}>
+      <a href={release.primaryUrl} target="_blank" rel="noopener noreferrer" aria-label={`Écouter ${release.title} — nouvel onglet`}>
         <div className="release-card__art" aria-hidden="true">
           <span className="release-card__number">{String(index + 1).padStart(2, "0")}</span>
           <span className="release-card__monogram">LNX</span>

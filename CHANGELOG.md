@@ -2,6 +2,24 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.1.1] — 2026-08-09
+
+### Modifié
+
+- navigation mobile renforcée avec piégeage du focus et retour au déclencheur ;
+- contrastes, cibles tactiles, noms de champs et validation explicite du genre musical ;
+- liens officiels centralisés et catalogue exposé en lecture seule ;
+- images prioritaires migrées vers l’API `preload` de Next.js 16 ;
+- favicon PNG généré par l’application et asset de référence inutilisé retiré ;
+- documentation alignée sur l’audit qualité.
+
+### Sécurité
+
+- Content Security Policy restrictive compatible avec Next.js ;
+- protection anti-cadrage avec `frame-ancestors` et `X-Frame-Options` ;
+- sérialisation JSON-LD neutralisant les balises HTML injectables ;
+- audit des secrets, dépendances et flux réseau de la fondation.
+
 ## [0.1.0] — 2026-08-09
 
 ### Ajouté

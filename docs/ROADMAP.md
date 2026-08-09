@@ -9,6 +9,14 @@
 - catalogue local typé et formulaire de commande purement frontend
 - documentation et contrôles qualité
 
+## V0.1.1 — Audit qualité
+
+- audit de l’architecture, du rendu responsive et du contenu
+- durcissement des en-têtes HTTP et de la sérialisation JSON-LD
+- amélioration du clavier, du focus, des contrastes et des cibles tactiles
+- validation frontend explicite du formulaire sans ajout de flux métier
+- rationalisation des données publiques, des assets et de la documentation
+
 ## V0.2 — Homepage enrichie
 
 - intégration des assets officiels définitifs

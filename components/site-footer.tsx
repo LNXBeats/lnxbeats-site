@@ -20,13 +20,13 @@ export function SiteFooter() {
             <div>
               <h2>Écouter</h2>
               {siteConfig.platforms.map((platform) => (
-                <a key={platform.name} href={platform.url} target="_blank" rel="noopener noreferrer">{platform.name}</a>
+                <a key={platform.name} href={platform.url} target="_blank" rel="noopener noreferrer" aria-label={`${platform.name} — nouvel onglet`}>{platform.name}</a>
               ))}
             </div>
             <div>
               <h2>Suivre & acheter</h2>
               {[...siteConfig.social, ...siteConfig.shops].map((item) => (
-                <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a>
+                <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} — nouvel onglet`}>{item.name}</a>
               ))}
               <a href={`mailto:${siteConfig.email}`}>E-mail</a>
             </div>

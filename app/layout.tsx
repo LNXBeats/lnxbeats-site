@@ -48,6 +48,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     url: siteUrl,
     sameAs: [...siteConfig.platforms, ...siteConfig.social].map((item) => item.url),
   };
+  const serializedStructuredData = JSON.stringify(structuredData).replace(/</g, "\\u003c");
 
   return (
     <html lang="fr">
@@ -56,7 +57,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <SiteHeader />
         <main id="contenu">{children}</main>
         <SiteFooter />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializedStructuredData }} />
       </body>
     </html>
   );

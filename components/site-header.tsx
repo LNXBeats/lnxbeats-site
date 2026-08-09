@@ -9,20 +9,47 @@ import { Container } from "@/components/container";
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const lastLinkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
-    if (open) firstLinkRef.current?.focus();
 
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && open) {
+        setOpen(false);
+        menuButtonRef.current?.focus();
+        return;
+      }
+
+      if (event.key !== "Tab" || !open) return;
+
+      const button = menuButtonRef.current;
+      const firstLink = firstLinkRef.current;
+      const lastLink = lastLinkRef.current;
+
+      if (!button || !firstLink || !lastLink) return;
+
+      if (event.shiftKey && document.activeElement === firstLink) {
+        event.preventDefault();
+        button.focus();
+      } else if (event.shiftKey && document.activeElement === button) {
+        event.preventDefault();
+        lastLink.focus();
+      } else if (!event.shiftKey && document.activeElement === lastLink) {
+        event.preventDefault();
+        button.focus();
+      } else if (!event.shiftKey && document.activeElement === button) {
+        event.preventDefault();
+        firstLink.focus();
+      }
     };
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.body.style.overflow = "";
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
 
@@ -50,6 +77,7 @@ export function SiteHeader() {
         </nav>
 
         <button
+          ref={menuButtonRef}
           className="menu-button"
           type="button"
           aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
@@ -65,17 +93,24 @@ export function SiteHeader() {
         </button>
       </Container>
 
-      <div id="mobile-navigation" className={`mobile-navigation ${open ? "is-open" : ""}`} aria-hidden={!open}>
+      <div
+        id="mobile-navigation"
+        className={`mobile-navigation ${open ? "is-open" : ""}`}
+        aria-hidden={!open}
+      >
         <Container className="mobile-navigation__inner">
           <nav aria-label="Navigation mobile">
             {navigation.map((item, index) => (
               <Link
                 key={item.href}
-                ref={index === 0 ? firstLinkRef : undefined}
+                ref={index === 0 ? firstLinkRef : index === navigation.length - 1 ? lastLinkRef : undefined}
                 href={item.href}
                 tabIndex={open ? 0 : -1}
                 aria-current={isActive(item.href) ? "page" : undefined}
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  menuButtonRef.current?.focus();
+                }}
               >
                 <span>{String(index + 1).padStart(2, "0")}</span>
                 {item.label}

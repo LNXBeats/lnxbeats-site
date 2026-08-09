@@ -1,6 +1,6 @@
 # LNX Studio
 
-Fondation professionnelle du site officiel de **LNX Beats**. Cette V0.1 installe une architecture moderne, un système visuel sombre et premium, les routes publiques essentielles et la structure du futur parcours de commande.
+Fondation professionnelle du site officiel de **LNX Beats**. La V0.1.1 consolide l’architecture moderne, le système visuel sombre et premium, les routes publiques essentielles et la structure du futur parcours de commande introduits en V0.1.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucune authentification et aucune persistance métier ne sont actifs dans cette version.
 
@@ -94,7 +94,8 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 
 - `main` — production, protégée ; aucun travail direct
 - `develop` — intégration des sprints validés
-- `feature/v0.1-foundation` — branche de travail de cette V0.1
+- `feature/v0.1-foundation` — fondation V0.1 validée
+- `feature/v0.1.1-quality-audit` — audit et durcissement local de la fondation
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 

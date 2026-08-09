@@ -11,6 +11,7 @@ app/
   api/health/       Healthcheck Railway
   [routes]/         Pages publiques et metadata associées
   globals.css       Tokens et styles du design system
+  icon.tsx          Favicon PNG généré par Next.js
   layout.tsx        Layout racine, SEO, navigation et footer
 components/         Composants visuels et interactifs partagés
 data/               Configuration publique et discographie typée
@@ -25,7 +26,7 @@ Les pages sont des Server Components par défaut. Cette approche minimise le Jav
 
 Deux composants seulement ont besoin de l’exécution client :
 
-- `SiteHeader` pour l’ouverture, la fermeture, le focus et le clavier du menu mobile ;
+- `SiteHeader` pour l’ouverture, la fermeture, le piégeage du focus et le clavier du menu mobile ;
 - `MusicOrderForm` pour la progression locale, la validation et le récapitulatif du brief.
 
 Le formulaire ne déclenche aucun appel réseau. Les fichiers sélectionnés ne quittent pas le navigateur.
@@ -38,7 +39,7 @@ Les animations reposent uniquement sur CSS et sont neutralisées avec `prefers-r
 
 ## Données
 
-`data/discography.ts` expose un type `Release` et une liste locale. Les identifiants `slug`, la catégorie, les liens et l’artwork optionnel préparent :
+`data/site.ts` centralise les liens officiels pour éviter les divergences entre les pages. `data/discography.ts` expose un type `Release` et une liste locale en lecture seule. Les identifiants `slug`, la catégorie, les liens et l’artwork optionnel préparent :
 
 - la future route `/album/[slug]` ;
 - une migration vers PostgreSQL ;
@@ -52,13 +53,15 @@ Les pages `/admin`, `/client` et `/api/*` métier ne sont pas implémentées en 
 - URL canonique configurable par `SITE_URL` ;
 - Open Graph et Twitter Card dédiés ;
 - sitemap et robots générés ;
-- données structurées `MusicGroup` limitées aux informations publiques connues ;
+- données structurées `MusicGroup` limitées aux informations publiques connues et sérialisées sans balise HTML injectable ;
 - images servies avec `next/image` ;
 - catalogue pré-rendu statiquement ;
 - healthcheck dynamique sans cache.
 
 ## Sécurité
 
-La V0.1 ne contient aucun secret ni flux financier. Les anciens endpoints Express de commande, PayPal, virement, SMTP et administration ont été retirés. Les en-têtes de base désactivent la détection MIME, limitent le referrer et ferment caméra, microphone et géolocalisation.
+La V0.1.1 ne contient aucun secret ni flux financier. Les anciens endpoints Express de commande, PayPal, virement, SMTP et administration ont été retirés. Les réponses ajoutent une Content Security Policy, interdisent l’intégration en iframe, désactivent la détection MIME, limitent le referrer et ferment caméra, microphone et géolocalisation.
+
+HSTS n’est volontairement pas imposé par l’application tant que la terminaison TLS et l’ensemble des sous-domaines de production ne sont pas validés. Il devra être activé au niveau Railway ou applicatif uniquement après cette vérification.
 
 Toute future fonctionnalité sensible devra inclure validation serveur, contrôle d’accès, journalisation minimale, rate limiting et gestion des secrets dans Railway.

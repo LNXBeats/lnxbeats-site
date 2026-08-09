@@ -19,10 +19,20 @@ export function ButtonLink({
   const classes = `button button--${variant} ${className}`;
 
   if (external) {
+    const opensNewTab = !href.startsWith("mailto:");
+
     return (
-      <a className={classes} href={href} target="_blank" rel="noopener noreferrer">
-        <span>{children}</span>
-        <span aria-hidden="true">↗</span>
+      <a
+        className={classes}
+        href={href}
+        target={opensNewTab ? "_blank" : undefined}
+        rel={opensNewTab ? "noopener noreferrer" : undefined}
+      >
+        <span>
+          {children}
+          {opensNewTab ? <span className="visually-hidden"> — nouvel onglet</span> : null}
+        </span>
+        <span aria-hidden="true">{opensNewTab ? "↗" : "→"}</span>
       </a>
     );
   }

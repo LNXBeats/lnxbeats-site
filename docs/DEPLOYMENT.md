@@ -1,6 +1,6 @@
 # Déploiement Railway
 
-Ce document prépare le déploiement sans l’exécuter. Aucun domaine, DNS ou environnement de production n’est modifié dans le sprint V0.1.
+Ce document prépare le déploiement sans l’exécuter. Aucun domaine, DNS ou environnement de production n’est modifié dans le sprint V0.1.1.
 
 ## Configuration attendue
 
@@ -16,13 +16,15 @@ Le fichier `railway.toml` sélectionne Railpack, le start command et le healthch
 
 ## Vérification avant déploiement
 
-1. Confirmer que la branche à déployer n’est pas `main` tant que la V0.1 n’est pas validée.
+1. Confirmer que la branche à déployer n’est pas `main` tant que la V0.1.1 n’est pas validée.
 2. Exécuter `npm ci`, `npm run lint`, `npm run typecheck` et `npm run build` dans un environnement propre.
 3. Démarrer le build et exécuter `npm run test:smoke` contre son URL.
 4. Vérifier visuellement les formats mobile, tablette et desktop.
 5. Confirmer que `/api/health` retourne HTTP 200 avec `{"ok":true,"service":"lnx-studio"}`.
 6. Vérifier que seules les variables documentées sont présentes.
-7. Demander une validation humaine avant tout déploiement de production.
+7. Vérifier la présence de `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` et `Permissions-Policy` sur les réponses publiques.
+8. Valider la terminaison HTTPS et tous les sous-domaines avant d’activer HSTS ; ne pas utiliser `includeSubDomains` sans cet inventaire.
+9. Demander une validation humaine avant tout déploiement de production.
 
 ## Rollback
 
