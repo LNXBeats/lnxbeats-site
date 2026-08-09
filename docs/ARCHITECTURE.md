@@ -8,6 +8,7 @@ LNX Studio utilise l’App Router de Next.js. L’architecture reste volontairem
 
 ```text
 app/
+  album/[slug]/     Fiches de projet pré-rendues et metadata dynamiques
   api/health/       Healthcheck Railway
   [routes]/         Pages publiques et metadata associées
   globals.css       Tokens et styles du design system
@@ -39,13 +40,39 @@ Les animations reposent uniquement sur CSS et sont neutralisées avec `prefers-r
 
 ## Données
 
-`data/site.ts` centralise les liens officiels pour éviter les divergences entre les pages. `data/discography.ts` expose un type `Release` et une liste locale en lecture seule. Les identifiants `slug`, la catégorie, les liens et l’artwork optionnel préparent :
+`data/site.ts` centralise les liens officiels pour éviter les divergences entre les pages. `data/discography.ts` expose un type `Project` et une liste locale en lecture seule. Chaque entrée regroupe :
 
-- la future route `/album/[slug]` ;
+- identité (`slug`, titre, sous-titre, type, statut et année nullable) ;
+- contenu éditorial court et long ;
+- pochette officielle nullable et tonalité du placeholder éditorial ;
+- mise à la une, genres et pistes structurées ;
+- liens de plateformes avec une portée explicite (`release`, `artist` ou `store`) ;
+- description SEO propre à la fiche.
+
+Les agrégats `publishedProjects`, `projectsInDevelopment` et `featuredProjects` alimentent l’accueil et la discographie. `getProjectBySlug` résout une fiche sans dupliquer les données.
+
+Les identifiants et relations préparent :
+
+- la route statique `/album/[slug]` ;
 - une migration vers PostgreSQL ;
 - l’administration du catalogue.
 
-Les pages `/admin`, `/client` et `/api/*` métier ne sont pas implémentées en V0.1. Elles seront ajoutées avec une couche d’authentification et des autorisations explicites.
+### Fiches de projet
+
+`app/album/[slug]/page.tsx` reste un Server Component. `generateStaticParams` produit une route pour chaque entrée ; `generateMetadata` fournit titre, description, canonique, Open Graph et Twitter Card par projet. Les fiches inconnues retournent `notFound()`.
+
+L’absence d’une donnée est un état normal : aucune année, pochette, durée, liste de titres ou URL de sortie n’est extrapolée. `ProjectArtwork`, `Tracklist` et `ProjectPlatforms` rendent alors un message éditorial explicite. Un lien de profil artiste n’est jamais présenté comme un lien direct vers l’album.
+
+### Ajouter ou enrichir une fiche
+
+1. Créer l’entrée dans `projects` avec un `slug` stable et unique.
+2. Utiliser le helper `published` ou `inDevelopment` approprié.
+3. Ajouter une pochette vérifiée sous `public/assets/covers/` et renseigner son texte alternatif ; sinon garder `cover: null`.
+4. Ajouter une piste avec numéro, titre, durée optionnelle et statut uniquement si les informations sont confirmées.
+5. Construire les liens de plateforme depuis `officialLinks` et définir leur portée réelle.
+6. Exécuter lint, typecheck, build et smoke tests. La route et le sitemap sont dérivés automatiquement.
+
+Les pages `/admin`, `/client` et `/api/*` métier ne sont pas implémentées en V0.2. Elles seront ajoutées avec une couche d’authentification et des autorisations explicites.
 
 ## SEO et performance
 
@@ -55,7 +82,7 @@ Les pages `/admin`, `/client` et `/api/*` métier ne sont pas implémentées en 
 - sitemap et robots générés ;
 - données structurées `MusicGroup` limitées aux informations publiques connues et sérialisées sans balise HTML injectable ;
 - images servies avec `next/image` ;
-- catalogue pré-rendu statiquement ;
+- catalogue et 25 fiches de projet pré-rendus statiquement ;
 - healthcheck dynamique sans cache.
 
 ## Sécurité

@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { AlbumCard } from "@/components/album-card";
 import { ButtonLink } from "@/components/button";
 import { Container } from "@/components/container";
 import { PlatformLink } from "@/components/platform-link";
+import { ProjectArtwork } from "@/components/project-artwork";
 import { SectionHeading } from "@/components/section-heading";
-import { albums } from "@/data/discography";
+import { featuredProjects, projectsInDevelopment } from "@/data/discography";
 import { siteConfig } from "@/data/site";
 
 export const metadata: Metadata = {
+  title: "LNX Beats — Chaque histoire mérite sa musique",
+  description: "Site officiel de LNX Beats : musique narrative, discographie, projets artistiques et création musicale personnalisée.",
   alternates: { canonical: "/" },
 };
+
+const leadProject = featuredProjects[0];
+const secondaryProjects = featuredProjects.slice(1, 4);
 
 export default function HomePage() {
   return (
@@ -27,21 +34,22 @@ export default function HomePage() {
         </div>
         <Container className="hero__content">
           <div className="hero__copy">
-            <p className="eyebrow">LNX Beats · Site officiel</p>
+            <p className="hero__identity">LNX BEATS</p>
+            <p className="eyebrow">Artiste · Auteur d’univers</p>
             <h1 className="display-title" id="hero-title">
               Chaque histoire <em>mérite sa musique.</em>
             </h1>
             <p className="hero__lead">
-              Des morceaux narratifs, des émotions brutes et une création sur mesure pour donner une voix à ce qui compte.
+              Des récits en chansons, des personnages et des émotions brutes. LNX Beats transforme les scènes du quotidien en univers musicaux singuliers.
             </p>
             <div className="hero__actions">
-              <ButtonLink href={siteConfig.featuredRelease.url} external>Écouter maintenant</ButtonLink>
+              <ButtonLink href="/discographie">Explorer la discographie</ButtonLink>
               <ButtonLink href="/commander" variant="secondary">Commander une musique</ButtonLink>
             </div>
           </div>
           <div className="hero__footer" aria-hidden="true">
             <span className="hero__scroll">Découvrir</span>
-            <span>Musique · Récits · Émotion</span>
+            <span>Récits · Personnages · Émotion</span>
           </div>
         </Container>
       </section>
@@ -52,76 +60,85 @@ export default function HomePage() {
         </Container>
       </div>
 
-      <section className="section">
-        <Container>
-          <SectionHeading
-            eyebrow="Titre à la une"
-            title="Une histoire entre deux mondes."
-            description="Le titre actuellement mis en lumière dans l’univers LNX Beats. Une écoute lancée à votre rythme, sans lecture automatique."
-          />
-          <article className="featured-release">
-            <div className="featured-release__visual">
-              <Image
-                src="/assets/hero-mobile.jpg"
-                alt="Visuel de LNX Beats pour le titre J’ai adopté un humain"
-                fill
-                sizes="(max-width: 820px) 100vw, 60vw"
-              />
-              <a
-                className="play-link"
-                href={siteConfig.featuredRelease.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Écouter J’ai adopté un humain sur YouTube — nouvel onglet"
-              >
-                <span aria-hidden="true">▶</span>
-              </a>
-            </div>
-            <div className="featured-release__copy">
-              <div>
-                <p className="eyebrow">LNX Beats · À la une</p>
-                <h2>{siteConfig.featuredRelease.title}</h2>
-              </div>
-              <div>
-                <p>Découvrez le titre sur la chaîne YouTube officielle et poursuivez l’écoute sur vos plateformes préférées.</p>
-                <ButtonLink href={siteConfig.featuredRelease.url} external>Ouvrir YouTube</ButtonLink>
-              </div>
-            </div>
-          </article>
+      <section className="section manifesto-section">
+        <Container className="manifesto-grid">
+          <div>
+            <p className="eyebrow">L’univers LNX</p>
+            <h2>Le réel comme matière. La musique comme récit.</h2>
+          </div>
+          <div className="manifesto-copy">
+            <p>Une famille trop bruyante, un collègue impossible, un animal qui observe les humains : chaque détail peut devenir un décor, une voix et une histoire.</p>
+            <p>LNX Beats développe un catalogue où l’humour, l’émotion et l’expérimentation se répondent sans enfermer le projet dans un seul genre.</p>
+          </div>
         </Container>
       </section>
+
+      {leadProject ? (
+        <section className="section section--soft" aria-labelledby="featured-title">
+          <Container>
+            <SectionHeading
+              eyebrow="Projets à la une"
+              title="Des univers à parcourir, pas seulement des titres à écouter."
+              description="Une sélection éditoriale du catalogue officiel, présentée avec les seules informations actuellement confirmées."
+            />
+            <article className="featured-project">
+              <Link className="featured-project__art" href={`/album/${leadProject.slug}`} aria-label={`Découvrir ${leadProject.title}`}>
+                <ProjectArtwork project={leadProject} priority sizes="(max-width: 820px) 100vw, 55vw" />
+              </Link>
+              <div className="featured-project__copy">
+                <p className="eyebrow">Single · À la une</p>
+                <h2 id="featured-title">{leadProject.title}</h2>
+                <p>{leadProject.description}</p>
+                <ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Entrer dans le projet</ButtonLink>
+              </div>
+            </article>
+            <div className="release-grid release-grid--editorial">
+              {secondaryProjects.map((project) => <AlbumCard key={project.slug} project={project} />)}
+            </div>
+            <div className="section-cta">
+              <ButtonLink href="/discographie" variant="quiet">Voir tout le catalogue</ButtonLink>
+            </div>
+          </Container>
+        </section>
+      ) : null}
 
       <section className="section section--paper">
         <Container className="commission-grid">
           <div>
             <p className="eyebrow">Création personnalisée</p>
-            <h2>Créez votre <span>musique</span> personnalisée.</h2>
+            <h2>Votre histoire peut devenir <span>une musique.</span></h2>
           </div>
           <div className="commission-grid__details">
             <p className="commission-grid__price">50 €</p>
-            <p className="commission-grid__delivery">Délai indicatif : 7 jours. Votre histoire, transformée en morceau original par LNX Beats.</p>
-            <ButtonLink href="/commander">Commencer mon projet</ButtonLink>
+            <p className="commission-grid__delivery">Délai indicatif : 7 jours. Un morceau original imaginé par LNX Beats à partir de votre récit.</p>
+            <ButtonLink href="/commander">Présenter mon histoire</ButtonLink>
+          </div>
+        </Container>
+      </section>
+
+      <section className="section future-section" aria-labelledby="future-title">
+        <Container>
+          <div className="catalog-header catalog-header--large">
+            <div>
+              <p className="eyebrow">En développement</p>
+              <h2 id="future-title">La suite se construit déjà.</h2>
+            </div>
+            <p>Des noms de projets, sans fausse date ni promesse prématurée.</p>
+          </div>
+          <div className="future-projects">
+            {projectsInDevelopment.slice(0, 5).map((project, index) => (
+              <Link href={`/album/${project.slug}`} className="future-project-row" key={project.slug}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <strong>{project.title}</strong>
+                <span>En développement</span>
+                <span aria-hidden="true">→</span>
+              </Link>
+            ))}
           </div>
         </Container>
       </section>
 
       <section className="section section--soft">
-        <Container>
-          <SectionHeading
-            eyebrow="Discographie"
-            title="Plusieurs univers. Une même signature."
-            description="Une sélection de projets LNX Beats, entre récit, humour, observation et émotion."
-          />
-          <div className="release-grid">
-            {albums.slice(0, 3).map((release, index) => <AlbumCard key={release.slug} release={release} index={index} />)}
-          </div>
-          <div className="section-cta">
-            <ButtonLink href="/discographie" variant="quiet">Explorer la discographie</ButtonLink>
-          </div>
-        </Container>
-      </section>
-
-      <section className="section">
         <Container className="about-teaser">
           <div className="about-teaser__image">
             <Image
@@ -134,10 +151,8 @@ export default function HomePage() {
           <div className="about-teaser__copy">
             <p className="eyebrow">Derrière LNX Beats</p>
             <h2>Raconter autrement.</h2>
-            <p>
-              LNX Beats développe un projet artistique centré sur les histoires, les personnages et les émotions. Chaque morceau cherche son propre ton, sans perdre la signature qui relie l’ensemble.
-            </p>
-            <ButtonLink href="/a-propos" variant="quiet">Découvrir le projet</ButtonLink>
+            <p>Un projet artistique pensé comme un ensemble de mondes : certains drôles, d’autres plus sensibles, toujours construits autour d’un point de vue et d’une histoire.</p>
+            <ButtonLink href="/a-propos" variant="quiet">Découvrir la démarche</ButtonLink>
           </div>
         </Container>
       </section>

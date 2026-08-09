@@ -9,7 +9,7 @@ export function SiteFooter() {
         <div className="site-footer__top">
           <div className="site-footer__statement">
             <p className="eyebrow">LNX Beats</p>
-            <p>Des histoires vécues.<br />Des morceaux qui restent.</p>
+            <p>Chaque histoire<br />mérite sa musique.</p>
           </div>
 
           <div className="site-footer__columns">

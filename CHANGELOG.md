@@ -2,6 +2,28 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.2.0] — 2026-08-09
+
+### Ajouté
+
+- modèle de catalogue extensible pour les parutions et projets en développement ;
+- fiches statiques `/album/[slug]`, metadata dynamiques et entrées de sitemap ;
+- composants de pochette, liens officiels et tracklist avec états de données manquantes explicites ;
+- sélection éditoriale sur l’accueil et la discographie ;
+- structure dédiée aux futurs projets narratifs et expérimentaux.
+
+### Modifié
+
+- direction artistique sombre et cinématographique autour du slogan officiel ;
+- contenus des pages à propos, commande, boutique, contact et footer ;
+- responsive, micro-interactions CSS et documentation du catalogue.
+
+### Sécurité et intégrité éditoriale
+
+- aucun flux backend, paiement, stockage ou envoi réseau ajouté ;
+- aucune pochette, date, tracklist, durée, statistique ou disponibilité inventée ;
+- distinction explicite entre les liens de sortie et les profils artiste.
+
 ## [0.1.1] — 2026-08-09
 
 ### Modifié

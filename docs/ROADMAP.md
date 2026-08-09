@@ -17,18 +17,19 @@
 - validation frontend explicite du formulaire sans ajout de flux métier
 - rationalisation des données publiques, des assets et de la documentation
 
-## V0.2 — Homepage enrichie
+## V0.2 — Identité artistique & catalogue
 
-- intégration des assets officiels définitifs
-- direction éditoriale enrichie du titre à la une
-- blocs de contenu modulaires et animation progressive maîtrisée
-- validation éditoriale des textes et metadata sociales
+- identité éditoriale LNX Beats et slogan officiel
+- accueil enrichi, sélection de projets et catalogue structuré
+- route statique `/album/[slug]` et metadata propres à chaque fiche
+- placeholders honnêtes en attente des pochettes et données officielles
+- enrichissement des pages à propos, commande, boutique et contact
 
-## V0.3 — Discographie
+## V0.3 — Enrichissement du catalogue
 
-- pochettes officielles et fiches par projet
-- route `/album/[slug]`
-- liens d’écoute par sortie
+- intégration progressive des pochettes officielles
+- années, genres, crédits et tracklists vérifiés
+- liens d’écoute propres à chaque sortie
 - préparation de la source de données métier
 
 ## V0.4 — Commande

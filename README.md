@@ -1,6 +1,6 @@
 # LNX Studio
 
-Fondation professionnelle du site officiel de **LNX Beats**. La V0.1.1 consolide l’architecture moderne, le système visuel sombre et premium, les routes publiques essentielles et la structure du futur parcours de commande introduits en V0.1.
+Site officiel de **LNX Beats**. La V0.2 transforme la fondation technique en expérience artistique : identité éditoriale affirmée, catalogue local extensible, sélection de projets et fiches pré-rendues pour chaque album, single ou projet en développement.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucune authentification et aucune persistance métier ne sont actifs dans cette version.
 
@@ -56,12 +56,13 @@ Puis, dans un second terminal :
 npm run test:smoke
 ```
 
-Le smoke test vérifie les six routes publiques principales ainsi que `/api/health`. Une autre origine peut être ciblée avec `SMOKE_BASE_URL`.
+Le smoke test vérifie les routes publiques principales, une fiche publiée, une fiche en développement, le sitemap et `/api/health`. Une autre origine peut être ciblée avec `SMOKE_BASE_URL`.
 
 ## Routes publiques
 
 - `/` — accueil
-- `/discographie` — catalogue local typé
+- `/discographie` — catalogue local typé et sélection éditoriale
+- `/album/[slug]` — fiche statique d’un projet, avec metadata dynamiques
 - `/commander` — parcours frontend de préparation d’un brief
 - `/boutique` — liens DistroKid Direct et Etsy
 - `/a-propos` — présentation éditoriale
@@ -80,7 +81,15 @@ Les futurs secrets de paiement, SMTP ou d’authentification ne doivent pas êtr
 
 ## Architecture
 
-Les pages et composants serveur sont privilégiés. Seuls le menu mobile et le formulaire interactif de préparation de commande utilisent des Client Components. La discographie est stockée dans un module local strictement typé afin de pouvoir être migrée plus tard vers PostgreSQL sans coupler l’interface à une base de données.
+Les pages et composants serveur sont privilégiés. Seuls le menu mobile et le formulaire interactif de préparation de commande utilisent des Client Components. La discographie est stockée dans un module local strictement typé ; `generateStaticParams` pré-rend toutes les fiches sans base de données.
+
+## Ajouter un projet au catalogue
+
+1. Ajouter une entrée dans `data/discography.ts` avec un `slug` unique, des descriptions factuelles, un statut et les champs structurants.
+2. Conserver `year: null`, `cover: null`, `genres: []` ou `tracks: []` tant que ces données ne sont pas confirmées.
+3. Pour une pochette officielle, déposer l’image dans `public/assets/covers/` puis renseigner `cover` et `coverAlt`.
+4. Ajouter uniquement des liens vérifiés dans `platforms`, en distinguant `scope: "release"` d’un simple profil artiste.
+5. Lancer `npm run check` : la route `/album/[slug]`, ses metadata et son entrée de sitemap sont générées automatiquement.
 
 Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) pour le détail.
 
@@ -96,6 +105,7 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 - `develop` — intégration des sprints validés
 - `feature/v0.1-foundation` — fondation V0.1 validée
 - `feature/v0.1.1-quality-audit` — audit et durcissement local de la fondation
+- `feature/v0.2-artistic-catalog` — identité artistique et catalogue
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 

@@ -264,7 +264,7 @@ export function MusicOrderForm() {
                   <span>Droits commerciaux à discuter</span>
                 </label>
               </div>
-              <span className="field__hint">Le périmètre juridique et les conditions commerciales définitives seront précisés dans un prochain sprint.</span>
+              <span className="field__hint">Le périmètre juridique et les conditions commerciales devront être précisés avant toute activation de commande.</span>
             </fieldset>
 
             <div className="field">

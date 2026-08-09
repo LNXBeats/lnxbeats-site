@@ -1,25 +1,32 @@
-import type { Release } from "@/data/discography";
+import Link from "next/link";
+import type { Project } from "@/data/discography";
+import { getProjectKindLabel, getProjectStatusLabel } from "@/data/discography";
+import { ProjectArtwork } from "@/components/project-artwork";
 
-export function AlbumCard({ release, index }: { release: Release; index: number }) {
+type AlbumCardProps = {
+  project: Project;
+  priority?: boolean;
+};
+
+export function AlbumCard({ project, priority = false }: AlbumCardProps) {
+  const detail = project.year ? `${getProjectKindLabel(project.type)} · ${project.year}` : getProjectKindLabel(project.type);
+
   return (
     <article className="release-card">
-      <a href={release.primaryUrl} target="_blank" rel="noopener noreferrer" aria-label={`Écouter ${release.title} — nouvel onglet`}>
-        <div className="release-card__art" aria-hidden="true">
-          <span className="release-card__number">{String(index + 1).padStart(2, "0")}</span>
-          <span className="release-card__monogram">LNX</span>
-          <span className="release-card__line" />
-        </div>
+      <Link href={`/album/${project.slug}`} aria-label={`Découvrir ${project.title}`}>
+        <ProjectArtwork project={project} priority={priority} sizes="(max-width: 767px) 100vw, (max-width: 1199px) 50vw, 33vw" />
         <div className="release-card__body">
           <div>
             <p className="release-card__meta">
-              {release.kind === "album" ? "Album" : "Single"}
-              {release.trackCount ? ` · ${release.trackCount} titres` : ""}
+              {detail}
+              {project.status !== "published" ? ` · ${getProjectStatusLabel(project.status)}` : ""}
             </p>
-            <h3>{release.title}</h3>
+            <h3>{project.title}</h3>
+            <p className="release-card__description">{project.shortDescription}</p>
           </div>
-          <span className="release-card__action" aria-hidden="true">↗</span>
+          <span className="release-card__action" aria-hidden="true">→</span>
         </div>
-      </a>
+      </Link>
     </article>
   );
 }

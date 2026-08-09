@@ -21,11 +21,17 @@ export default function ContactPage() {
       </header>
       <section className="section">
         <Container>
+          <div className="contact-intents" aria-label="Motifs de contact">
+            <span>Collaboration musicale</span>
+            <span>Média & interview</span>
+            <span>Licence & synchronisation</span>
+            <span>Demande professionnelle</span>
+          </div>
           <div className="contact-panel">
             <div>
               <p className="eyebrow">E-mail direct</p>
               <h2>Une idée en tête ?</h2>
-              <p>Précisez l’objet de votre demande et les éléments utiles. Une réponse pourra ensuite être apportée directement par e-mail.</p>
+              <p>Précisez l’objet, le contexte, les délais éventuels et les éléments utiles. L’échange se poursuit directement par e-mail : aucun formulaire réseau n’est utilisé ici.</p>
               <a className="contact-email" href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
             </div>
             <ButtonLink href={`mailto:${siteConfig.email}`} external>Écrire un e-mail</ButtonLink>

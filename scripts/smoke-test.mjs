@@ -1,5 +1,15 @@
 const baseUrl = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3000";
-const routes = ["/", "/discographie", "/commander", "/boutique", "/a-propos", "/contact"];
+const routes = [
+  "/",
+  "/discographie",
+  "/album/jai-adopte-un-humain",
+  "/album/miss-click",
+  "/commander",
+  "/boutique",
+  "/a-propos",
+  "/contact",
+  "/sitemap.xml",
+];
 
 let failed = false;
 
@@ -7,7 +17,10 @@ for (const route of routes) {
   try {
     const response = await fetch(`${baseUrl}${route}`, { redirect: "manual" });
     const body = await response.text();
-    const valid = response.status === 200 && body.includes("LNX Beats") && body.includes("</html>");
+    const isSitemap = route === "/sitemap.xml";
+    const valid = response.status === 200 && (isSitemap
+      ? body.includes("/album/jai-adopte-un-humain") && body.includes("</urlset>")
+      : body.includes("LNX Beats") && body.includes("</html>"));
     console.log(`${valid ? "OK" : "KO"} ${route} — HTTP ${response.status}`);
     if (!valid) failed = true;
   } catch (error) {

@@ -15,7 +15,7 @@ export default function ShopPage() {
       <header className="page-hero">
         <Container className="page-hero__grid">
           <div><p className="eyebrow">Boutiques officielles</p><h1>Boutique</h1></div>
-          <p className="page-hero__intro">Deux destinations directes pour découvrir les sorties et créations proposées par LNX Beats. Aucun paiement n’est traité sur ce site.</p>
+          <p className="page-hero__intro">Les destinations officielles pour découvrir les sorties et créations proposées par LNX Beats. Aucun stock, panier ou paiement n’est géré sur ce site.</p>
         </Container>
       </header>
       <section className="section">
@@ -36,6 +36,15 @@ export default function ShopPage() {
               <ButtonLink href={siteConfig.shops[1].url} external>Ouvrir Etsy</ButtonLink>
             </div>
           </article>
+        </Container>
+      </section>
+      <section className="section section--soft">
+        <Container className="content-columns">
+          <p className="content-columns__label">Éditions physiques</p>
+          <div className="editorial-copy">
+            <p>CD, objets et éditions liées aux univers LNX Beats pourront trouver leur place ici.</p>
+            <p>Aucun produit, prix, stock ou calendrier n’est annoncé à ce stade. Cette section pose seulement l’espace éditorial d’une future offre physique.</p>
+          </div>
         </Container>
       </section>
     </>
