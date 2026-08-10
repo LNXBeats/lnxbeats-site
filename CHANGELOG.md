@@ -2,6 +2,24 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.5.1] — 2026-08-10
+
+### Ajouté
+
+- Better Auth et adaptateur Prisma pour des sessions PostgreSQL serveur ;
+- mots de passe Argon2id, tables credentials/sessions/vérifications/rate limiting et migration dédiée ;
+- connexion fermée, espace compte minimal et placeholder admin ;
+- helpers serveur pour les rôles `ADMIN`, `MEMBER` et `CUSTOMER` actifs ;
+- tests ciblés et suite runtime auth sur base locale jetable.
+
+### Sécurité et périmètre
+
+- inscription publique et sélection de rôle refusées ;
+- cookies `HttpOnly`, `SameSite=Lax`, `Secure` en production, durée de 12 heures et logout révocatoire ;
+- protection d’origine/CSRF, redirections internes validées, anti-énumération et rate limiting PostgreSQL ;
+- pages privées dynamiques, `noindex`, absentes du sitemap et protégées côté serveur ;
+- aucun email, reset public, dashboard, compte permanent, secret, push ou déploiement.
+
 ## [0.4.1] — 2026-08-10
 
 ### Validé

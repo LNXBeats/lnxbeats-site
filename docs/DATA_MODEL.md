@@ -4,13 +4,15 @@
 
 La V0.4 crée une fondation PostgreSQL avec Prisma ORM. Elle ne connecte aucune base de production, ne migre aucune donnée artistique et ne change pas la source runtime du site public. `data/discography.ts` reste la seule source des pages publiques jusqu’à un sprint de migration contrôlé.
 
-Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers futurs et la traçabilité. Il ne crée ni authentification, ni back-office, ni paiement, ni stockage de fichiers.
+Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers futurs et la traçabilité. La V0.5.1 active uniquement la fondation d’authentification ; elle ne crée ni back-office complet, ni paiement, ni stockage de fichiers.
 
 ## Vue d’ensemble
 
 ```mermaid
 erDiagram
   User ||--o| Customer : "peut correspondre à"
+  User ||--o{ Session : ouvre
+  User ||--o{ Account : possède
   User ||--o{ Favorite : enregistre
   Project ||--o{ Favorite : reçoit
   Customer o|--o{ Order : passe
@@ -47,7 +49,7 @@ Rôles conservés :
 
 `EDITOR` n’est pas ajouté : aucune permission actuelle ne justifie ce rôle. Une table de rôles multiples pourra remplacer l’enum si les besoins réels le demandent plus tard.
 
-Les états `PENDING`, `ACTIVE`, `SUSPENDED` et `DEACTIVATED` préparent le cycle de vie d’un compte. Aucun mot de passe, secret de session ou fournisseur OAuth n’est stocké. Aucun utilisateur ni administrateur réel n’est créé.
+Les états `PENDING`, `ACTIVE`, `SUSPENDED` et `DEACTIVATED` pilotent désormais l’ouverture de session : seul `ACTIVE` est accepté. `Account` stocke le hash Argon2id du credential, jamais un mot de passe en clair. `Session` conserve le token opaque côté serveur et son expiration. `Verification` et `RateLimit` préparent les workflows à usage unique et la protection partagée entre instances. Aucun utilisateur ni administrateur réel n’est créé.
 
 ## Customer et distinction avec User
 
@@ -149,7 +151,13 @@ Aucune préférence marketing n’est modélisée avant l’existence d’un bes
 
 Prisma Client est généré dans `generated/prisma`, répertoire ignoré par Git et recréé par `postinstall`. `lib/prisma.ts` utilise `@prisma/adapter-pg` et un singleton global en développement pour éviter la multiplication des pools pendant le rechargement Next.js.
 
-Le module échoue avec un message neutre si `DATABASE_URL` manque. Il n’est importé par aucune page publique en V0.4, donc le build et le site public n’ouvrent aucune connexion PostgreSQL.
+Les appels runtime échouent avec un message neutre si `DATABASE_URL` manque. Un adaptateur loopback injoignable permet uniquement d’instancier Prisma pendant un build public sans secret ; aucune connexion n’est ouverte. Le module n’est importé par aucune page publique, donc les fiches statiques et le catalogue ne consultent pas PostgreSQL.
+
+## Extension auth V0.5.1
+
+La migration `auth_foundation` ajoute `auth_accounts`, `auth_sessions`, `auth_verifications` et `auth_rate_limits`, ainsi que les champs Better Auth nécessaires sur `users`. Les comptes et sessions sont supprimés en cascade avec `User`; les compteurs et vérifications sont indépendants.
+
+`emailVerified` est l’état technique attendu par l’adaptateur. `emailVerifiedAt` reste le futur horodatage métier ; un workflow d’email ultérieur devra les synchroniser. Les détails de session, cookie, autorisation et tests sont consignés dans [`docs/AUTH.md`](AUTH.md).
 
 ## Migration initiale
 

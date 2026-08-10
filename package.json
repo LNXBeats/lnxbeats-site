@@ -11,6 +11,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:smoke": "node scripts/smoke-test.mjs",
+    "test:auth": "tsx --test tests/auth/*.test.ts",
+    "test:auth:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-auth-runtime.ts",
+    "auth:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/auth-qa-fixtures.ts",
     "test:database": "tsx scripts/test-database.ts",
     "prisma:format": "prisma format",
     "prisma:validate": "prisma validate",
@@ -19,13 +22,16 @@
     "check": "npm run prisma:check && npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
+    "@node-rs/argon2": "2.0.2",
     "@prisma/adapter-pg": "7.9.1",
     "@prisma/client": "7.9.1",
+    "better-auth": "1.6.26",
     "dotenv": "17.4.2",
     "next": "16.3.0",
     "pg": "8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

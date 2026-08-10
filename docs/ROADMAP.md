@@ -48,11 +48,19 @@
 - données QA et instance temporaire supprimées après validation
 - aucune connexion à la production et aucune bascule du frontend
 
-## V0.5 — Authentification & membres
+## V0.5.1 — Auth Foundation
+
+- Better Auth, Prisma et sessions PostgreSQL
+- connexion fermée et passwords Argon2id
+- rôles `ADMIN`, `MEMBER`, `CUSTOMER` et statuts contrôlés côté serveur
+- placeholders protégés `/compte` et `/admin`
+- anti-énumération, protection d’origine et rate limiting en base
+- aucune inscription, email, récupération ou administration complète
+
+## V0.5.2 — Parcours membres
 
 - inscription et connexion sécurisées
 - vérification d’adresse et récupération de compte
-- sessions, autorisations et espace membre minimal
 - favoris connectés à un utilisateur réel
 
 ## V0.6 — Administration & commandes

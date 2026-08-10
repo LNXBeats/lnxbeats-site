@@ -133,10 +133,12 @@ enum OrderStatus {
 model User {
   id                String                 @id @default(uuid()) @db.Uuid
   email             String                 @unique @db.VarChar(320)
+  emailVerified     Boolean                @default(false)
   emailVerifiedAt   DateTime?              @db.Timestamptz(3)
-  displayName       String?                @db.VarChar(120)
+  displayName       String                 @default("") @db.VarChar(120)
   firstName         String?                @db.VarChar(100)
   lastName          String?                @db.VarChar(100)
+  image             String?                @db.VarChar(500)
   role              UserRole               @default(MEMBER)
   status            UserStatus             @default(PENDING)
   createdAt         DateTime               @default(now()) @db.Timestamptz(3)
@@ -146,9 +148,70 @@ model User {
   orderEvents       OrderEvent[]           @relation("OrderEventActor")
   confidenceReviews ConfidenceAnnotation[] @relation("ConfidenceReviewer")
   favorites         Favorite[]
+  sessions          Session[]
+  accounts          Account[]
 
   @@index([role, status])
   @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?  @db.VarChar(64)
+  userAgent String?  @db.VarChar(500)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @db.Uuid
+  accountId             String    @db.VarChar(255)
+  providerId            String    @db.VarChar(120)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?   @db.Text
+  password              String?   @db.VarChar(500)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String   @db.VarChar(320)
+  value      String   @db.VarChar(500)
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@index([expiresAt])
+  @@map("auth_verifications")
+}
+
+model RateLimit {
+  id          String @id @default(uuid()) @db.Uuid
+  key         String @unique @db.VarChar(255)
+  count       Int
+  lastRequest BigInt
+
+  @@map("auth_rate_limits")
 }
 
 model Customer {
