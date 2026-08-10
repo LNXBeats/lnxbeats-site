@@ -1,0 +1,373 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+  CUSTOMER
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum ProjectType {
+  ALBUM
+  SINGLE
+  PROJECT
+}
+
+enum ProjectStatus {
+  DRAFT
+  IN_DEVELOPMENT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum TrackStatus {
+  DRAFT
+  ANNOUNCED
+  RELEASED
+  UNLISTED
+}
+
+enum Platform {
+  SPOTIFY
+  APPLE_MUSIC
+  DEEZER
+  YOUTUBE
+  AMAZON_MUSIC
+  DISTROKID
+  ETSY
+  OTHER
+}
+
+enum PlatformScope {
+  ARTIST
+  RELEASE
+  STORE
+}
+
+enum CreditRole {
+  ARTIST
+  WRITER
+  COMPOSER
+  PRODUCER
+  FEATURING
+  ENGINEER
+  OTHER
+}
+
+enum DataConfidence {
+  CONFIRMED
+  PARTIAL
+  PLACEHOLDER
+  UNKNOWN
+}
+
+enum ConfidenceDomain {
+  OVERALL
+  IDENTITY
+  EDITORIAL
+  RELEASE
+  ARTWORK
+  TRACKLIST
+  PLATFORMS
+  GENRES
+  CREDITS
+  SEO
+}
+
+enum AssetType {
+  COVER
+  HERO
+  IMAGE
+  AUDIO
+  DOCUMENT
+  VIDEO
+  OTHER
+}
+
+enum RightsStatus {
+  UNKNOWN
+  PENDING
+  CLEARED
+  RESTRICTED
+}
+
+enum ProjectAssetRole {
+  COVER
+  HERO
+  GALLERY
+  AUDIO
+  DOCUMENT
+  VIDEO
+}
+
+enum OrderAssetRole {
+  REFERENCE
+  DELIVERY
+  DOCUMENT
+}
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWING
+  ACCEPTED
+  IN_PROGRESS
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id                String                 @id @default(uuid()) @db.Uuid
+  email             String                 @unique @db.VarChar(320)
+  emailVerifiedAt   DateTime?              @db.Timestamptz(3)
+  displayName       String?                @db.VarChar(120)
+  firstName         String?                @db.VarChar(100)
+  lastName          String?                @db.VarChar(100)
+  role              UserRole               @default(MEMBER)
+  status            UserStatus             @default(PENDING)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  customerProfile   Customer?
+  orders            Order[]                @relation("OrderAccount")
+  orderEvents       OrderEvent[]           @relation("OrderEventActor")
+  confidenceReviews ConfidenceAnnotation[] @relation("ConfidenceReviewer")
+  favorites         Favorite[]
+
+  @@index([role, status])
+  @@map("users")
+}
+
+model Customer {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @unique @db.Uuid
+  email       String   @unique @db.VarChar(320)
+  displayName String?  @db.VarChar(120)
+  firstName   String?  @db.VarChar(100)
+  lastName    String?  @db.VarChar(100)
+  phone       String?  @db.VarChar(40)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orders      Order[]
+
+  @@index([createdAt])
+  @@map("customers")
+}
+
+model Project {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  slug                  String                 @unique @db.VarChar(160)
+  title                 String                 @db.VarChar(240)
+  subtitle              String?                @db.VarChar(240)
+  type                  ProjectType
+  status                ProjectStatus          @default(DRAFT)
+  shortDescription      String?                @db.Text
+  description           String?                @db.Text
+  releaseDate           DateTime?              @db.Date
+  featured              Boolean                @default(false)
+  trackCount            Int?
+  confidence            DataConfidence         @default(UNKNOWN)
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(3)
+  tracks                Track[]
+  platformLinks         PlatformLink[]
+  credits               Credit[]
+  confidenceAnnotations ConfidenceAnnotation[]
+  assets                ProjectAsset[]
+  favorites             Favorite[]
+
+  @@index([status, featured])
+  @@index([type, status])
+  @@map("projects")
+}
+
+model Track {
+  id              String         @id @default(uuid()) @db.Uuid
+  projectId       String         @db.Uuid
+  position        Int
+  title           String         @db.VarChar(240)
+  durationSeconds Int?
+  status          TrackStatus    @default(DRAFT)
+  confidence      DataConfidence @default(UNKNOWN)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  credits         Credit[]
+
+  @@unique([projectId, position])
+  @@index([projectId, status])
+  @@map("tracks")
+}
+
+model PlatformLink {
+  id         String         @id @default(uuid()) @db.Uuid
+  projectId  String?        @db.Uuid
+  platform   Platform
+  scope      PlatformScope
+  url        String         @unique @db.Text
+  label      String?        @db.VarChar(180)
+  position   Int            @default(0)
+  confidence DataConfidence @default(UNKNOWN)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime       @updatedAt @db.Timestamptz(3)
+  project    Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, scope, position])
+  @@map("platform_links")
+}
+
+model Credit {
+  id         String         @id @default(uuid()) @db.Uuid
+  projectId  String?        @db.Uuid
+  trackId    String?        @db.Uuid
+  name       String         @db.VarChar(180)
+  role       CreditRole
+  note       String?        @db.Text
+  position   Int            @default(0)
+  confidence DataConfidence @default(UNKNOWN)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime       @updatedAt @db.Timestamptz(3)
+  project    Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  track      Track?         @relation(fields: [trackId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, position])
+  @@index([trackId, position])
+  @@map("credits")
+}
+
+model ConfidenceAnnotation {
+  id           String           @id @default(uuid()) @db.Uuid
+  projectId    String           @db.Uuid
+  domain       ConfidenceDomain
+  level        DataConfidence
+  source       String?          @db.VarChar(500)
+  note         String?          @db.Text
+  verifiedAt   DateTime?        @db.Timestamptz(3)
+  verifiedById String?          @db.Uuid
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  verifiedBy   User?            @relation("ConfidenceReviewer", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, domain])
+  @@index([verifiedById])
+  @@map("confidence_annotations")
+}
+
+model Asset {
+  id           String         @id @default(uuid()) @db.Uuid
+  type         AssetType
+  storageKey   String         @unique @db.VarChar(500)
+  filename     String         @db.VarChar(255)
+  mimeType     String         @db.VarChar(160)
+  sizeBytes    BigInt
+  width        Int?
+  height       Int?
+  alt          String?        @db.VarChar(500)
+  rightsStatus RightsStatus   @default(UNKNOWN)
+  rightsNote   String?        @db.Text
+  confidence   DataConfidence @default(UNKNOWN)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
+  projects     ProjectAsset[]
+  orders       OrderAsset[]
+
+  @@index([type, rightsStatus])
+  @@map("assets")
+}
+
+model ProjectAsset {
+  projectId String           @db.Uuid
+  assetId   String           @db.Uuid
+  role      ProjectAssetRole
+  position  Int              @default(0)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  asset     Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([projectId, assetId, role])
+  @@index([projectId, role, position])
+  @@index([assetId])
+  @@map("project_assets")
+}
+
+model Order {
+  id               String       @id @default(uuid()) @db.Uuid
+  orderNumber      String       @unique @db.VarChar(32)
+  userId           String?      @db.Uuid
+  customerId       String?      @db.Uuid
+  customerEmail    String       @db.VarChar(320)
+  customerName     String?      @db.VarChar(200)
+  status           OrderStatus  @default(DRAFT)
+  title            String?      @db.VarChar(240)
+  brief            String       @db.Text
+  musicalDirection String?      @db.Text
+  emotion          String?      @db.Text
+  notes            String?      @db.Text
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+  account          User?        @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
+  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  events           OrderEvent[]
+  assets           OrderAsset[]
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@index([customerId])
+  @@map("orders")
+}
+
+model OrderEvent {
+  id          String       @id @default(uuid()) @db.Uuid
+  orderId     String       @db.Uuid
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  note        String?      @db.Text
+  actorUserId String?      @db.Uuid
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actor       User?        @relation("OrderEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([actorUserId])
+  @@map("order_events")
+}
+
+model OrderAsset {
+  orderId   String         @db.Uuid
+  assetId   String         @db.Uuid
+  role      OrderAssetRole
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  asset     Asset          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([orderId, assetId, role])
+  @@index([assetId])
+  @@map("order_assets")
+}
+
+model Favorite {
+  userId    String   @db.Uuid
+  projectId String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@index([projectId])
+  @@map("favorites")
+}

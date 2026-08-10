@@ -1,6 +1,7 @@
 node_modules/
 .next/
 out/
+/generated/prisma/
 .env
 .env.*
 !.env.example

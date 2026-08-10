@@ -17,6 +17,9 @@ app/
 components/         Composants visuels et interactifs partagés
 data/               Configuration publique et discographie typée
 docs/               Architecture, roadmap et déploiement
+generated/prisma/   Prisma Client généré localement et ignoré par Git
+lib/prisma.ts       Singleton PostgreSQL pour les futurs composants serveur
+prisma/             Schéma et migrations de la fondation de données
 public/             Images publiques et carte Open Graph
 scripts/            Contrôles automatisés légers
 ```
@@ -79,11 +82,15 @@ L’inventaire détaillé et les besoins de confirmation humaine sont consignés
 7. Mettre à jour les niveaux de confiance concernés.
 8. Exécuter lint, typecheck, build et smoke tests. La route et le sitemap sont dérivés automatiquement.
 
-### Préparation PostgreSQL
+### Fondation PostgreSQL
 
-La future persistance pourra séparer les entités `Project`, `Track`, `PlatformLink`, `Credit` et `Asset`. Les statuts de confiance devront rester attachés aux champs ou aux enregistrements importés afin qu’une donnée provisoire ne devienne pas certaine lors de la migration. Aucune couche SQL, migration ou API métier n’est implémentée à ce stade.
+La V0.4 ajoute Prisma ORM 7, un schéma PostgreSQL et une migration initiale. Les entités séparent catalogue, comptes, clients, commandes, historique, assets, favoris et confiance des données. Les décisions détaillées, relations et règles de suppression sont décrites dans [`docs/DATA_MODEL.md`](DATA_MODEL.md).
 
-Les pages `/admin`, `/client` et `/api/*` métier ne sont pas implémentées en V0.2. Elles seront ajoutées avec une couche d’authentification et des autorisations explicites.
+`lib/prisma.ts` utilise l’adaptateur `pg` et un singleton global en développement. Il n’est importé par aucune route publique : le build, les fiches statiques et le formulaire Commander ne consultent ni ne modifient PostgreSQL. `data/discography.ts` reste la source runtime tant qu’un sprint de migration dédié n’a pas vérifié les 25 projets.
+
+Prisma Client est généré dans un répertoire ignoré par Git. La configuration ne contient aucun secret et accepte `DATABASE_URL` uniquement depuis l’environnement. Aucune base réelle, aucun seed et aucun utilisateur ne sont créés en V0.4.
+
+Les pages `/admin`, `/client` et `/api/*` métier ne sont pas implémentées en V0.4. Elles seront ajoutées avec une couche d’authentification et des autorisations explicites.
 
 ## SEO et performance
 
@@ -102,4 +109,4 @@ La V0.1.1 ne contient aucun secret ni flux financier. Les anciens endpoints Expr
 
 HSTS n’est volontairement pas imposé par l’application tant que la terminaison TLS et l’ensemble des sous-domaines de production ne sont pas validés. Il devra être activé au niveau Railway ou applicatif uniquement après cette vérification.
 
-Toute future fonctionnalité sensible devra inclure validation serveur, contrôle d’accès, journalisation minimale, rate limiting et gestion des secrets dans Railway.
+Toute future fonctionnalité sensible devra inclure validation serveur, contrôle d’accès, journalisation minimale, rate limiting et gestion des secrets dans Railway. Les briefs, credentials et URL PostgreSQL ne devront jamais être écrits dans les logs.

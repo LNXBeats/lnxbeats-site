@@ -32,27 +32,36 @@
 - liens d’écoute propres à chaque sortie
 - préparation de la source de données métier
 
-## V0.4 — Commande
+## V0.4 — Data Foundation
 
-- validation serveur du brief
-- téléversement sécurisé des références
-- persistance PostgreSQL
-- e-mails transactionnels et suivi de statut
-- textes juridiques validés
+- schéma PostgreSQL et Prisma ORM
+- catalogue, utilisateurs, clients, commandes et assets modélisés
+- migration initiale et Prisma Client pour Next.js
+- confidentialité et stratégie de migration documentées
+- aucune bascule du frontend vers la base
 
-## V0.5 — Paiement
+## V0.5 — Authentification & membres
 
-- PayPal côté serveur
-- virement bancaire encadré
-- webhooks, idempotence et rapprochement
-- facturation et conformité juridique
+- inscription et connexion sécurisées
+- vérification d’adresse et récupération de compte
+- sessions, autorisations et espace membre minimal
+- favoris connectés à un utilisateur réel
 
-## V0.6 — Administration
+## V0.6 — Administration & commandes
 
 - authentification forte
 - rôles et permissions
-- gestion des commandes et de la discographie
-- espace client et livraison sécurisée
+- gestion du catalogue et des niveaux de confiance
+- validation serveur des briefs et suivi de statut
+- téléversement et livraison sécurisés
+- e-mails transactionnels et textes juridiques validés
+
+## V0.7 — Paiement
+
+- fournisseur de paiement retenu après cadrage
+- webhooks, idempotence et rapprochement
+- facturation et conformité juridique
+- aucune donnée bancaire sensible stockée
 
 ## V1.0 — Production
 

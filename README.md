@@ -1,8 +1,8 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**. La V0.2 transforme la fondation technique en expérience artistique : identité éditoriale affirmée, catalogue local extensible, sélection de projets et fiches pré-rendues pour chaque album, single ou projet en développement.
+Site officiel de **LNX Beats**. La V0.4 conserve l’expérience publique statique et ajoute, sans l’activer dans le frontend, une fondation PostgreSQL/Prisma pour les futurs comptes, clients, commandes et outils d’administration.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucune authentification et aucune persistance métier ne sont actifs dans cette version.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucune authentification et aucune lecture ou écriture PostgreSQL ne sont actifs dans cette version.
 
 ## Stack
 
@@ -11,11 +11,12 @@ Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergeme
 - TypeScript strict
 - Tailwind CSS 4 et CSS global pour le design system
 - ESLint avec les règles Next.js Core Web Vitals
-- Node.js 20.9 ou supérieur
+- PostgreSQL et Prisma ORM 7 pour la fondation de données inactive
+- Node.js 20.19, 22.12 ou 24+
 
 ## Prérequis
 
-- Node.js `>= 20.9.0`
+- Node.js `^20.19.0`, `^22.12.0` ou `>= 24.0.0`
 - npm 11 recommandé
 
 ## Installation
@@ -26,6 +27,8 @@ cp .env.example .env.local
 ```
 
 Une première installation sans lockfile existant peut utiliser `npm install`.
+
+`postinstall` génère Prisma Client sans ouvrir de connexion. Une URL PostgreSQL n’est requise que lorsqu’un module métier importe réellement `lib/prisma.ts` ou lorsqu’une commande de migration accède à une base.
 
 ## Développement
 
@@ -41,6 +44,7 @@ Le serveur local est accessible par défaut sur `http://localhost:3000`.
 npm run lint
 npm run typecheck
 npm run build
+npm run prisma:check
 ```
 
 Pour les smoke tests, lancer d’abord le build et le serveur de production :
@@ -75,13 +79,15 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | Variable | Usage | Secret |
 | --- | --- | --- |
 | `SITE_URL` | URL canonique utilisée par les metadata, le sitemap et robots.txt | Non |
+| `DATABASE_URL` | Connexion PostgreSQL locale ou de développement | Oui |
+| `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `PORT` | Port d’écoute ; fourni automatiquement par Railway | Non |
 
-Les futurs secrets de paiement, SMTP ou d’authentification ne doivent pas être ajoutés tant que les fonctionnalités correspondantes ne sont pas développées côté serveur.
+Les URL PostgreSQL réelles restent dans les fichiers `.env*` ignorés par Git ou dans un gestionnaire de secrets. Les futurs secrets de paiement, SMTP ou d’authentification ne doivent pas être ajoutés tant que les fonctionnalités correspondantes ne sont pas développées côté serveur.
 
 ## Architecture
 
-Les pages et composants serveur sont privilégiés. Seuls le menu mobile et le formulaire interactif de préparation de commande utilisent des Client Components. La discographie est stockée dans un module local strictement typé ; `generateStaticParams` pré-rend toutes les fiches sans base de données.
+Les pages et composants serveur sont privilégiés. Seuls le menu mobile et le formulaire interactif de préparation de commande utilisent des Client Components. La discographie reste stockée dans un module local strictement typé ; `generateStaticParams` pré-rend toutes les fiches sans base de données. Le schéma Prisma et la migration initiale sont préparatoires et ne sont importés par aucune route publique.
 
 ## Ajouter un projet au catalogue
 
@@ -107,12 +113,14 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 - `feature/v0.1-foundation` — fondation V0.1 validée
 - `feature/v0.1.1-quality-audit` — audit et durcissement local de la fondation
 - `feature/v0.2-artistic-catalog` — identité artistique et catalogue
+- `feature/v0.4-data-foundation` — fondation PostgreSQL/Prisma sans bascule runtime
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Modèle de données](docs/DATA_MODEL.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Déploiement](docs/DEPLOYMENT.md)

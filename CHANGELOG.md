@@ -2,6 +2,23 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.4.0] — 2026-08-10
+
+### Ajouté
+
+- Prisma ORM 7 et adaptateur PostgreSQL officiel ;
+- schéma métier pour comptes, clients, catalogue, pistes, plateformes, crédits, assets, commandes, historique et favoris ;
+- migration PostgreSQL initiale avec contraintes relationnelles et contrôles de cohérence ;
+- singleton Prisma compatible avec le rechargement Next.js ;
+- documentation du modèle, des suppressions, de la confidentialité et de la future migration du catalogue.
+
+### Sécurité et périmètre
+
+- aucun secret, utilisateur, seed ou donnée artistique ajouté ;
+- aucune connexion à une base réelle et aucune migration exécutée ;
+- aucune authentification, administration, commande, livraison ou intégration de paiement activée ;
+- `data/discography.ts` reste la source runtime du site public.
+
 ## [0.2.0] — 2026-08-09
 
 ### Ajouté
