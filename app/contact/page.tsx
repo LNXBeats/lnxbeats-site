@@ -21,13 +21,13 @@ export default function ContactPage() {
       </header>
       <section className="section">
         <Container>
-          <div className="contact-intents" aria-label="Motifs de contact">
+          <div className="contact-intents motion-reveal motion-reveal--soft" aria-label="Motifs de contact">
             <span>Collaboration musicale</span>
             <span>Média & interview</span>
             <span>Licence & synchronisation</span>
             <span>Demande professionnelle</span>
           </div>
-          <div className="contact-panel">
+          <div className="contact-panel motion-reveal">
             <div>
               <p className="eyebrow">De vous à LNX Beats</p>
               <h2>Quelques lignes suffisent.</h2>
@@ -40,7 +40,7 @@ export default function ContactPage() {
       </section>
       <section className="section section--soft">
         <Container>
-          <div className="content-columns">
+          <div className="content-columns motion-reveal">
             <p className="content-columns__label">Le dialogue continue</p>
             <div>
               {siteConfig.social.map((item) => <PlatformLink key={item.name} {...item} compact />)}

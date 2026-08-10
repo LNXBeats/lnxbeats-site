@@ -19,7 +19,7 @@ export default function ShopPage() {
         </Container>
       </header>
       <section className="section">
-        <Container className="shop-grid">
+        <Container className="shop-grid motion-reveal motion-reveal--soft">
           <article className="shop-card">
             <span className="shop-card__index">01 · MUSIQUE</span>
             <div className="shop-card__content">
@@ -39,7 +39,7 @@ export default function ShopPage() {
         </Container>
       </section>
       <section className="section section--soft">
-        <Container className="content-columns">
+        <Container className="content-columns motion-reveal">
           <p className="content-columns__label">Un jour, peut-être</p>
           <div className="editorial-copy">
             <p>Si les univers LNX Beats quittent un jour l’écran, cet espace pourra accueillir leurs formes physiques.</p>

@@ -92,7 +92,7 @@ export default function HomePage() {
       </section>
 
       <section className="home-intro" aria-labelledby="home-intro-title">
-        <Container className="home-intro__grid">
+        <Container className="home-intro__grid motion-reveal">
           <p className="section-index">01 — La démarche</p>
           <div>
             <h2 id="home-intro-title">Le réel devient une scène.<br /><em>La musique, un récit.</em></h2>
@@ -103,14 +103,14 @@ export default function HomePage() {
 
       <section className="section universe-section" id="univers" aria-labelledby="universe-title">
         <Container>
-          <div className="premium-heading">
+          <div className="premium-heading motion-reveal">
             <div>
               <p className="section-index">02 — Les territoires</p>
               <h2 id="universe-title">Un artiste.<br />Plusieurs univers.</h2>
             </div>
             <p>Chaque histoire réclame sa propre lumière. Certaines font sourire, d’autres serrent la gorge. Aucune ne demande à être racontée de la même manière.</p>
           </div>
-          <div className="universe-grid">
+          <div className="universe-grid motion-reveal motion-reveal--soft">
             {universes.map((universe, index) => (
               <article className="universe-card" key={universe.title}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
@@ -127,7 +127,7 @@ export default function HomePage() {
       {leadProject ? (
         <section className="section home-projects" id="projets" aria-labelledby="projects-title">
           <Container>
-            <div className="premium-heading premium-heading--projects">
+            <div className="premium-heading premium-heading--projects motion-reveal">
               <div>
                 <p className="section-index">03 — La musique</p>
                 <h2 id="projects-title">Des mondes à écouter.</h2>
@@ -135,7 +135,7 @@ export default function HomePage() {
               <ButtonLink href="/discographie" variant="quiet">Traverser tous les univers</ButtonLink>
             </div>
 
-            <article className="home-project-lead">
+            <article className="home-project-lead motion-reveal motion-reveal--soft">
               <Link className="home-project-lead__art" href={`/album/${leadProject.slug}`} aria-label={`Ouvrir l’univers ${leadProject.title}`}>
                 <ProjectArtwork project={leadProject} priority sizes="(max-width: 820px) 100vw, 58vw" />
               </Link>
@@ -147,7 +147,7 @@ export default function HomePage() {
               </div>
             </article>
 
-            <div className="home-project-supporting">
+            <div className="home-project-supporting motion-reveal motion-reveal--soft">
               {supportingProjects.map((project, index) => (
                 <article className="home-project-secondary" key={project.slug}>
                   <Link href={`/album/${project.slug}`} aria-label={`Ouvrir l’univers ${project.title}`}>
@@ -168,12 +168,12 @@ export default function HomePage() {
 
       <section className="section commission-story" id="sur-mesure" aria-labelledby="commission-title">
         <Container>
-          <div className="commission-story__intro">
+          <div className="commission-story__intro motion-reveal">
             <p className="section-index">04 — Votre histoire</p>
             <h2 id="commission-title">Votre histoire<br /><em>attend sa voix.</em></h2>
             <p>Vous apportez les personnes, les silences et les détails. La création commence par cette rencontre.</p>
           </div>
-          <ol className="commission-steps">
+          <ol className="commission-steps motion-reveal motion-reveal--soft">
             {commissionSteps.map((step) => (
               <li key={step.number}>
                 <span>{step.number}</span>
@@ -182,7 +182,7 @@ export default function HomePage() {
               </li>
             ))}
           </ol>
-          <div className="commission-story__action">
+          <div className="commission-story__action motion-reveal motion-reveal--soft">
             <p>Quelques mots suffisent pour ouvrir la première scène.</p>
             <ButtonLink href="/commander">Confier les premiers mots</ButtonLink>
           </div>
@@ -191,14 +191,14 @@ export default function HomePage() {
 
       <section className="section platforms-stage" id="plateformes" aria-labelledby="platforms-title">
         <Container>
-          <div className="premium-heading">
+          <div className="premium-heading motion-reveal">
             <div>
               <p className="section-index">05 — Écouter & suivre</p>
               <h2 id="platforms-title">Les histoires continuent ailleurs.</h2>
             </div>
             <p>Chaque plateforme ouvre une autre porte sur les morceaux, les personnages et ce qui se prépare encore.</p>
           </div>
-          <div className="platforms-grid">
+          <div className="platforms-grid motion-reveal motion-reveal--soft">
             {platforms.map((platform) => (
               <a
                 className="platform-card"
@@ -222,7 +222,7 @@ export default function HomePage() {
       </section>
 
       <section className="home-contact" id="contact-home" aria-labelledby="home-contact-title">
-        <Container className="home-contact__inner">
+        <Container className="home-contact__inner motion-reveal">
           <p className="section-index">06 — Contact</p>
           <div>
             <h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2>

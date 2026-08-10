@@ -36,21 +36,21 @@ export default function DiscographyPage() {
       </header>
 
       <div className="platform-strip" aria-label="Plateformes d’écoute">
-        <Container className="platform-strip__inner">
+        <Container className="platform-strip__inner motion-reveal motion-reveal--soft">
           {siteConfig.platforms.map((platform) => <PlatformLink key={platform.name} {...platform} />)}
         </Container>
       </div>
 
       <section className="section catalog-section" aria-labelledby="selection-title">
         <Container>
-          <div className="catalog-header catalog-header--large">
+          <div className="catalog-header catalog-header--large motion-reveal">
             <div>
               <p className="eyebrow">Premières portes</p>
               <h2 id="selection-title">Des récits pour entrer.</h2>
             </div>
             <p>Commencez là où un titre vous retient. Le reste du monde se révélera derrière.</p>
           </div>
-          <div className="catalog-feature-list">
+          <div className="catalog-feature-list motion-reveal motion-reveal--soft">
             {featuredProjects.map((project, index) => (
               <article className="catalog-feature" key={project.slug}>
                 <Link className="catalog-feature__art" href={`/album/${project.slug}`}>
@@ -70,11 +70,11 @@ export default function DiscographyPage() {
 
       <section className="section section--soft catalog-section" aria-labelledby="catalog-title">
         <Container>
-          <div className="catalog-header">
+          <div className="catalog-header motion-reveal">
             <h2 id="catalog-title">D’autres histoires attendent.</h2>
             <span>{otherProjects.length} projets</span>
           </div>
-          <div className="release-grid">
+          <div className="release-grid motion-reveal motion-reveal--soft">
             {otherProjects.map((project) => <AlbumCard key={project.slug} project={project} />)}
           </div>
         </Container>
@@ -82,14 +82,14 @@ export default function DiscographyPage() {
 
       <section className="section catalog-section" aria-labelledby="development-title">
         <Container>
-          <div className="catalog-header catalog-header--large">
+          <div className="catalog-header catalog-header--large motion-reveal">
             <div>
               <p className="eyebrow">Encore hors champ</p>
               <h2 id="development-title">Les titres sont là. Le reste se prépare.</h2>
             </div>
             <p>Des noms ont déjà trouvé leur place. Leurs images, leurs voix et leurs dates resteront dans l’ombre jusqu’au moment juste.</p>
           </div>
-          <div className="release-grid">
+          <div className="release-grid motion-reveal motion-reveal--soft">
             {projectsInDevelopment.map((project) => <AlbumCard key={project.slug} project={project} />)}
           </div>
         </Container>

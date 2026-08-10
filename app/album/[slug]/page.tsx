@@ -83,7 +83,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
       </header>
 
       <section className="section album-details">
-        <Container className="album-details__grid">
+        <Container className="album-details__grid motion-reveal motion-reveal--soft">
           <Tracklist project={project} />
           <aside className="album-editorial-note">
             <p className="eyebrow">Ce qui reste dans l’ombre</p>

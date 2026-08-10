@@ -24,7 +24,7 @@ export default function OrderPage() {
         </Container>
       </header>
       <section className="section section--soft">
-        <Container className="content-columns">
+        <Container className="content-columns motion-reveal">
           <p className="content-columns__label">La rencontre</p>
           <div className="editorial-copy">
             <p>Vous n’avez pas besoin d’écrire une chanson. Vous avez seulement besoin de raconter ce qui ne doit pas être perdu.</p>
@@ -33,7 +33,7 @@ export default function OrderPage() {
         </Container>
       </section>
       <section className="section">
-        <Container className="order-layout">
+        <Container className="order-layout motion-reveal motion-reveal--soft">
           <MusicOrderForm />
           <aside className="order-aside" aria-label="Informations tarifaires">
             <p className="eyebrow">Ce que vous confiez</p>

@@ -19,7 +19,7 @@ export default function AboutPage() {
         </Container>
       </header>
       <section className="section">
-        <Container className="about-teaser">
+        <Container className="about-teaser motion-reveal motion-reveal--soft">
           <div className="about-teaser__image">
             <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill sizes="(max-width: 820px) 100vw, 45vw" preload />
           </div>
@@ -33,7 +33,7 @@ export default function AboutPage() {
         </Container>
       </section>
       <section className="section section--soft">
-        <Container className="content-columns">
+        <Container className="content-columns motion-reveal">
           <p className="content-columns__label">Ce qui relie tout</p>
           <div className="editorial-copy">
             <p>Une voix entre dans le cadre. Quelque chose se joue. Un détail change tout.</p>
