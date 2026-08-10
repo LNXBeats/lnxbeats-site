@@ -18,8 +18,8 @@ export default function ResendVerificationPage() {
       <Container className="auth-shell__inner">
         <div className="auth-intro">
           <p className="eyebrow">Adresse à confirmer</p>
-          <h1>Faire revenir le message.</h1>
-          <p>Le résultat reste identique pour toutes les adresses afin de protéger l’existence des comptes.</p>
+          <h1>Recevoir un nouveau lien.</h1>
+          <p>Demandez un nouvel email de vérification. Le résultat reste identique pour toutes les adresses afin de protéger l’existence des comptes.</p>
         </div>
         <div className="auth-panel">
           <p className="auth-panel__label">Nouvel envoi</p>

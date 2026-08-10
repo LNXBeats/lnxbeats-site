@@ -75,7 +75,7 @@ export function RegistrationForm() {
           <span aria-hidden="true">→</span>
         </button>
       </form>
-      <p className="auth-panel__note">Déjà membre ? <Link href="/connexion">Reprendre votre espace</Link>.</p>
+      <p className="auth-panel__note">Vos informations servent à créer et sécuriser votre accès. La <Link href="/confidentialite">politique de confidentialité</Link> indique les traitements déjà identifiés et les mentions qui restent à finaliser. Déjà membre ? <Link href="/connexion">Se connecter</Link>.</p>
     </>
   );
 }

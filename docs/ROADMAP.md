@@ -65,6 +65,15 @@
 - invalidation des sessions après reset ou changement sensible
 - transport email local capturé, sans fournisseur de production
 
+## V0.5.2.1 — Cohérence produit et éditoriale
+
+- biographie officielle de Ludovic Mathon et identité LNX Beats harmonisées
+- audit page par page, CTA clarifiés et parcours Commander mieux cadré
+- valeur actuelle et future du compte membre explicitée sans faux dashboard
+- vision documentée des commandes, livraisons, favoris, alertes et préférences
+- paiements PayPal/virement, boutique physique et administration préparés sans activation
+- informations légales manquantes recensées sans donnée inventée
+
 ## V0.5.3 — Email transactionnel et bootstrap sécurisé
 
 - fournisseur email de production choisi, configuré et observé sans exposer les tokens

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Connexion",
-  description: "Accès privé à l’espace LNX Studio.",
+  description: "Connexion sécurisée à l’espace membre LNX Beats.",
   robots: { index: false, follow: false },
 };
 
@@ -34,9 +34,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <section className="auth-shell">
       <Container className="auth-shell__inner">
         <div className="auth-intro">
-          <p className="eyebrow">Espace privé</p>
-          <h1>Reprendre le fil.</h1>
-          <p>Un accès discret aux histoires, projets et échanges qui vous concernent.</p>
+          <p className="eyebrow">Espace membre</p>
+          <h1>Accéder à votre espace.</h1>
+          <p>Votre compte protège aujourd’hui votre profil et votre accès. Le suivi des créations et les livraisons y seront ajoutés seulement lorsqu’ils seront réellement disponibles.</p>
         </div>
         <div className="auth-panel">
           <p className="auth-panel__label">Connexion</p>

@@ -22,8 +22,8 @@ app/
   icon.tsx          Favicon PNG généré par Next.js
   layout.tsx        Layout racine, SEO, navigation et footer
 components/         Composants visuels et interactifs partagés
-data/               Configuration publique et discographie typée
-docs/               Architecture, roadmap et déploiement
+data/               Configuration publique, biographies et discographie typée
+docs/               Architecture, vision produit, audits, roadmap et déploiement
 generated/prisma/   Prisma Client généré localement et ignoré par Git
 lib/auth/           Validation, tokens, email, rôles, session et redirection
 lib/email/          Templates transactionnels et transport capture QA
@@ -55,7 +55,7 @@ Les animations reposent uniquement sur CSS et sont neutralisées avec `prefers-r
 
 ## Données
 
-`data/site.ts` centralise les liens officiels pour éviter les divergences entre les pages. `data/discography.ts` expose un type `Project` et une liste locale en lecture seule. Chaque entrée regroupe :
+`data/site.ts` centralise les liens officiels pour éviter les divergences entre les pages. `data/artist.ts` contient les trois biographies éditoriales de référence afin de ne pas recréer des faits biographiques dans les pages. `data/discography.ts` expose un type `Project` et une liste locale en lecture seule. Chaque entrée regroupe :
 
 - identité (`slug`, titre, sous-titre, type et statut) ;
 - date de sortie et année explicitement nullables ;
@@ -107,6 +107,8 @@ Prisma Client est généré dans un répertoire ignoré par Git. La configuratio
 La V0.5.1 ajoute Better Auth, son adaptateur Prisma et Argon2id. La V0.5.2 active l’inscription `MEMBER`, la vérification email, le renvoi, la récupération et le profil minimal. Les sessions, credentials, marqueurs de vérification et compteurs de rate limiting vivent dans des tables dédiées. Toutes les pages auth et privées sont dynamiques et non indexables. Les helpers `requireUser`, `requireRole` et `requireAdmin` relisent la session en base et appliquent le statut/rôle côté serveur.
 
 Le frontend ne reçoit jamais Prisma Client, un hash ou le token de session. Les tokens de vérification et reset sont consommés ou retirés de l’URL au plus tôt. Le catalogue public reste indépendant de l’authentification et le transport email QA ne charge aucun SDK client. Les choix détaillés et limites sont décrits dans [`docs/AUTH.md`](AUTH.md).
+
+La valeur actuelle et future du compte, les rôles visiteur/membre/client/admin, le suivi de commande, les notifications et les paiements futurs sont cadrés dans [`docs/PRODUCT_VISION.md`](PRODUCT_VISION.md). L’état éditorial réel de chaque route est consigné dans [`docs/PAGE_AUDIT.md`](PAGE_AUDIT.md). Ces documents n’activent aucun flux métier.
 
 ## SEO et performance
 

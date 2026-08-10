@@ -24,26 +24,26 @@ export default function ShopPage() {
             <span className="shop-card__index">01 · MUSIQUE</span>
             <div className="shop-card__content">
               <h2>DistroKid Direct</h2>
-              <p>La musique rejoint sa destination officielle, sans intermédiaire ajouté par ce site.</p>
-              <ButtonLink href={siteConfig.shops[0].url} external>Rejoindre DistroKid Direct</ButtonLink>
+              <p>Le lien mène vers l’espace musical officiel. Les disponibilités et les éventuels achats y sont gérés hors de ce site.</p>
+              <ButtonLink href={siteConfig.shops[0].url} external>Ouvrir DistroKid Direct</ButtonLink>
             </div>
           </article>
           <article className="shop-card">
             <span className="shop-card__index">02 · CRÉATIONS</span>
             <div className="shop-card__content">
               <h2>Etsy</h2>
-              <p>Les créations actuellement proposées par LNX Beats trouvent ici un autre espace.</p>
-              <ButtonLink href={siteConfig.shops[1].url} external>Passer par Etsy</ButtonLink>
+              <p>Le lien mène vers la page Etsy officielle de LNX Beats. Son contenu et ses disponibilités peuvent évoluer indépendamment de ce site.</p>
+              <ButtonLink href={siteConfig.shops[1].url} external>Ouvrir la page Etsy</ButtonLink>
             </div>
           </article>
         </Container>
       </section>
       <section className="section section--soft">
         <Container className="content-columns motion-reveal">
-          <p className="content-columns__label">Un jour, peut-être</p>
+          <p className="content-columns__label">Éditions futures</p>
           <div className="editorial-copy">
-            <p>Si les univers LNX Beats quittent un jour l’écran, cet espace pourra accueillir leurs formes physiques.</p>
-            <p>Rien n’est annoncé pour le moment : ni objet, ni prix, ni date. Seulement une place laissée ouverte.</p>
+            <p>Certains univers pourront un jour prendre une forme physique.</p>
+            <p>Albums sur CD, éditions limitées, objets collector ou prolongements visuels font partie des pistes à étudier. Rien n’est annoncé ni disponible ici pour le moment : aucun produit, stock, prix ou calendrier n’est confirmé.</p>
           </div>
         </Container>
       </section>

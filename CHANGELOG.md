@@ -2,6 +2,22 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.5.2.1] — 2026-08-11
+
+### Modifié
+
+- biographie officielle de Ludovic Mathon et démarche artistique LNX Beats harmonisées entre l’accueil et la page À propos ;
+- CTA, discographie, Commander, boutique, contact et parcours d’authentification rendus plus explicites sans perdre leur ton éditorial ;
+- espace compte clarifié avec des libellés humains et une vision honnête des fonctions futures ;
+- pages légales transformées en checklists préparatoires distinguant les éléments identifiés, à fournir et à valider ;
+- avertissement LCP de la page À propos corrigé par le préchargement de son image principale.
+
+### Documentation et périmètre
+
+- vision produit des rôles, commandes, livraisons, favoris, alertes, paiements futurs et administration ;
+- audit réel de chaque page et inventaire des actions humaines encore nécessaires ;
+- aucun flux métier, paiement, email de production, téléchargement, CRUD admin, dépendance ou changement Prisma ajouté.
+
 ## [0.5.2] — 2026-08-10
 
 ### Ajouté

@@ -18,8 +18,8 @@ export default function ForgotPasswordPage() {
       <Container className="auth-shell__inner">
         <div className="auth-intro">
           <p className="eyebrow">Accès perdu</p>
-          <h1>Retrouver le chemin.</h1>
-          <p>Indiquez votre adresse. La réponse restera volontairement discrète, qu’un compte existe ou non.</p>
+          <h1>Réinitialiser votre mot de passe.</h1>
+          <p>Indiquez votre adresse email. Pour protéger les comptes, la réponse restera identique qu’une adresse soit inscrite ou non.</p>
         </div>
         <div className="auth-panel">
           <p className="auth-panel__label">Réinitialisation</p>

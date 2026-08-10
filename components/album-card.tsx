@@ -13,7 +13,7 @@ export function AlbumCard({ project, priority = false }: AlbumCardProps) {
 
   return (
     <article className="release-card">
-      <Link href={`/album/${project.slug}`} aria-label={`Ouvrir l’univers ${project.title}`}>
+      <Link href={`/album/${project.slug}`} aria-label={`Voir la fiche de ${project.title}`}>
         <ProjectArtwork project={project} priority={priority} sizes="(max-width: 767px) 100vw, (max-width: 1199px) 50vw, 33vw" />
         <div className="release-card__body">
           <div>

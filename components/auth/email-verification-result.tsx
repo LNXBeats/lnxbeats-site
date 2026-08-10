@@ -38,7 +38,7 @@ export function EmailVerificationResult() {
     <>
       <div className="auth-intro">
         <p className="eyebrow">Vérification</p>
-        <h1>{checking ? "Le lien est vérifié…" : confirmed ? "L’adresse est confirmée." : "Le lien s’est refermé."}</h1>
+        <h1>{checking ? "Vérification du lien…" : confirmed ? "Adresse email confirmée." : "Lien inutilisable."}</h1>
         <p>{checking ? "Un instant suffit pour confirmer cette adresse." : confirmed ? "Votre espace membre est maintenant actif. La première connexion peut commencer." : "Ce lien est invalide, expiré ou a déjà été utilisé."}</p>
       </div>
       <div className="auth-panel auth-panel--minimal" aria-live="polite">

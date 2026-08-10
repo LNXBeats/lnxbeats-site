@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/button";
 import { Container } from "@/components/container";
 import { ProjectArtwork } from "@/components/project-artwork";
+import { artistBiography } from "@/data/artist";
 import { featuredProjects } from "@/data/discography";
 import { officialLinks, siteConfig } from "@/data/site";
 
@@ -75,8 +76,8 @@ export default function HomePage() {
             <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
             <p className="home-hero__lead">Il suffit parfois d’un prénom, d’un souvenir ou d’une scène banale. LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
             <div className="home-hero__actions">
-              <ButtonLink href="/discographie">Entrer dans les récits</ButtonLink>
-              <ButtonLink href="/commander" variant="secondary">Confier une histoire</ButtonLink>
+              <ButtonLink href="/discographie">Écouter la discographie</ButtonLink>
+              <ButtonLink href="/commander" variant="secondary">Préparer votre histoire</ButtonLink>
             </div>
           </div>
           <div className="home-hero__signature" aria-hidden="true">
@@ -85,7 +86,7 @@ export default function HomePage() {
             <span>Émotion</span>
           </div>
           <a className="home-hero__scroll" href="#univers">
-            <span>Laisser l’histoire commencer</span>
+            <span>Comprendre la démarche</span>
             <span aria-hidden="true">↓</span>
           </a>
         </Container>
@@ -97,6 +98,10 @@ export default function HomePage() {
           <div>
             <h2 id="home-intro-title">Le réel devient une scène.<br /><em>La musique, un récit.</em></h2>
             <p>Une famille trop bruyante. Un collègue impossible. Un animal qui regarde les humains vivre. Un souvenir que l’on refuse de laisser partir. La musique commence souvent là.</p>
+            <div className="home-intro__artist">
+              <p>{artistBiography.short}</p>
+              <Link className="text-link" href="/a-propos">Lire la démarche de Ludovic Mathon <span aria-hidden="true">→</span></Link>
+            </div>
           </div>
         </Container>
       </section>
@@ -132,7 +137,7 @@ export default function HomePage() {
                 <p className="section-index">03 — La musique</p>
                 <h2 id="projects-title">Des mondes à écouter.</h2>
               </div>
-              <ButtonLink href="/discographie" variant="quiet">Traverser tous les univers</ButtonLink>
+              <ButtonLink href="/discographie" variant="quiet">Voir toute la discographie</ButtonLink>
             </div>
 
             <article className="home-project-lead motion-reveal motion-reveal--soft">
@@ -143,7 +148,7 @@ export default function HomePage() {
                 <p className="eyebrow">Projet majeur · Single</p>
                 <h3>{leadProject.title}</h3>
                 <p>{leadProject.description}</p>
-                <ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Entrer dans le récit</ButtonLink>
+                <ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Voir la fiche du projet</ButtonLink>
               </div>
             </article>
 
@@ -157,7 +162,7 @@ export default function HomePage() {
                     <p className="section-index">{String(index + 1).padStart(2, "0")} — Sélection</p>
                     <h3><Link href={`/album/${project.slug}`}>{project.title}</Link></h3>
                     <p>{project.shortDescription}</p>
-                    <Link className="text-link" href={`/album/${project.slug}`}>Ouvrir cet univers <span aria-hidden="true">→</span></Link>
+                    <Link className="text-link" href={`/album/${project.slug}`}>Voir la fiche <span aria-hidden="true">→</span></Link>
                   </div>
                 </article>
               ))}
@@ -184,7 +189,7 @@ export default function HomePage() {
           </ol>
           <div className="commission-story__action motion-reveal motion-reveal--soft">
             <p>Quelques mots suffisent pour ouvrir la première scène.</p>
-            <ButtonLink href="/commander">Confier les premiers mots</ButtonLink>
+            <ButtonLink href="/commander">Préparer votre récit</ButtonLink>
           </div>
         </Container>
       </section>
@@ -221,14 +226,29 @@ export default function HomePage() {
         </Container>
       </section>
 
+      <section className="section section--soft" aria-labelledby="member-space-title">
+        <Container className="content-columns home-member motion-reveal">
+          <p className="content-columns__label">06 — Espace membre</p>
+          <div className="home-member__copy">
+            <h2 id="member-space-title">Garder la main sur votre accès.</h2>
+            <p>Aujourd’hui, le compte protège votre profil et votre mot de passe. Il ne contient encore ni commande, ni paiement, ni fichier à télécharger.</p>
+            <p>Le suivi des créations, les livraisons, les favoris et les alertes choisies pourront y être réunis progressivement, à mesure que ces services seront réellement activés.</p>
+            <div className="home-member__actions">
+              <ButtonLink href="/inscription">Créer un espace membre</ButtonLink>
+              <ButtonLink href="/connexion" variant="quiet">Se connecter</ButtonLink>
+            </div>
+          </div>
+        </Container>
+      </section>
+
       <section className="home-contact" id="contact-home" aria-labelledby="home-contact-title">
         <Container className="home-contact__inner motion-reveal">
-          <p className="section-index">06 — Contact</p>
+          <p className="section-index">07 — Contact</p>
           <div>
             <h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2>
             <p>Une idée, une proposition ou simplement quelques mots à partager : de l’autre côté, c’est LNX Beats qui répond.</p>
             <div className="home-contact__actions">
-              <ButtonLink href="/contact">Ouvrir la conversation</ButtonLink>
+              <ButtonLink href="/contact">Écrire à LNX Beats</ButtonLink>
               <ButtonLink href={`mailto:${siteConfig.email}`} variant="quiet" external>{siteConfig.email}</ButtonLink>
             </div>
           </div>

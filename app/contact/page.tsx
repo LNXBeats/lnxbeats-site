@@ -22,10 +22,11 @@ export default function ContactPage() {
       <section className="section">
         <Container>
           <div className="contact-intents motion-reveal motion-reveal--soft" aria-label="Motifs de contact">
-            <span>Collaboration musicale</span>
-            <span>Média & interview</span>
-            <span>Licence & synchronisation</span>
+            <span>Création personnalisée</span>
+            <span>Collaboration</span>
+            <span>Adaptation & droits</span>
             <span>Demande professionnelle</span>
+            <span>Autre échange</span>
           </div>
           <div className="contact-panel motion-reveal">
             <div>
@@ -34,7 +35,7 @@ export default function ContactPage() {
               <p>Racontez d’où vient votre idée, ce que vous imaginez et les éventuels repères de temps. L’échange commence directement par e-mail, sans passer par un support anonyme.</p>
               <a className="contact-email" href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
             </div>
-            <ButtonLink href={`mailto:${siteConfig.email}`} external>Envoyer les premiers mots</ButtonLink>
+            <ButtonLink href={`mailto:${siteConfig.email}`} external>Écrire à LNX Beats</ButtonLink>
           </div>
         </Container>
       </section>

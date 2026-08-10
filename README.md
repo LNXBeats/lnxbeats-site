@@ -1,6 +1,6 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**. La V0.5.2 conserve l’expérience publique statique et ouvre les parcours membres : inscription, vérification email, récupération de compte, sessions PostgreSQL et profil minimal.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.5.2.1 aligne l’expérience publique et membre sur cette identité, tout en conservant les parcours sécurisés d’inscription, de vérification, de récupération et de profil minimal introduits en V0.5.2.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucun email de production et aucun dashboard ne sont actifs dans cette version.
 
@@ -86,9 +86,9 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/album/[slug]` — fiche statique d’un projet, avec metadata dynamiques
 - `/commander` — parcours frontend de préparation d’un brief
 - `/boutique` — liens DistroKid Direct et Etsy
-- `/a-propos` — présentation éditoriale
+- `/a-propos` — biographie officielle et démarche artistique
 - `/contact` — contact professionnel
-- `/mentions-legales`, `/confidentialite`, `/cgv` — emplacements juridiques à finaliser
+- `/mentions-legales`, `/confidentialite`, `/cgv` — brouillons préparatoires listant les informations à fournir ou valider
 - `/api/health` — healthcheck JSON Railway
 
 ## Routes d’authentification et privées
@@ -154,6 +154,7 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 - `feature/v0.4.1-postgres-runtime-validation` — validation PostgreSQL locale jetable
 - `feature/v0.5.1-auth-foundation` — sessions, rôles et espaces privés minimaux
 - `feature/v0.5.2-registration-recovery` — inscription, vérification email et récupération de compte
+- `feature/v0.5.2.1-product-editorial-audit` — identité, audit produit, parcours membres et préparation juridique
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 
@@ -162,6 +163,8 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Architecture](docs/ARCHITECTURE.md)
 - [Modèle de données](docs/DATA_MODEL.md)
 - [Authentification et sécurité](docs/AUTH.md)
+- [Vision produit](docs/PRODUCT_VISION.md)
+- [Audit produit et éditorial](docs/PAGE_AUDIT.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Déploiement](docs/DEPLOYMENT.md)

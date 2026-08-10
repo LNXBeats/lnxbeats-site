@@ -24,7 +24,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPageProps
       <Container className="auth-shell__inner">
         <div className="auth-intro">
           <p className="eyebrow">Sécurité</p>
-          <h1>{confirmed ? "Le passage est refermé." : "Une nouvelle clé."}</h1>
+          <h1>{confirmed ? "Mot de passe modifié." : "Choisir un nouveau mot de passe."}</h1>
           <p>{confirmed ? "Le mot de passe a été remplacé et toutes les anciennes sessions ont été révoquées." : "Choisissez une phrase secrète longue, personnelle et différente de vos autres accès."}</p>
         </div>
         <div className="auth-panel">

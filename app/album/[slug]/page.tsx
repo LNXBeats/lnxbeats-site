@@ -66,7 +66,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
     <>
       <header className="album-hero">
         <Container>
-          <Link className="back-link" href="/discographie"><span aria-hidden="true">←</span> Revenir aux univers</Link>
+          <Link className="back-link" href="/discographie"><span aria-hidden="true">←</span> Retour à la discographie</Link>
           <div className="album-hero__grid">
             <ProjectArtwork project={project} priority sizes="(max-width: 820px) 100vw, 48vw" className="album-hero__art" />
             <div className="album-hero__content">

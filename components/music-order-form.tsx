@@ -59,6 +59,7 @@ const initialForm: ProjectForm = {
 };
 
 const stepLabels = ["Vous", "Le récit", "La couleur", "Dernier regard"];
+const nextStepLabels = ["Raconter l’histoire →", "Choisir la couleur →", "Relire le récapitulatif →"];
 
 export function MusicOrderForm() {
   const [step, setStep] = useState(0);
@@ -66,11 +67,12 @@ export function MusicOrderForm() {
   const [genreError, setGenreError] = useState(false);
   const stepRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const initialized = useRef(false);
+  const previousStepRef = useRef(step);
 
   useEffect(() => {
-    if (initialized.current) headingRef.current?.focus();
-    initialized.current = true;
+    if (previousStepRef.current === step) return;
+    previousStepRef.current = step;
+    headingRef.current?.focus();
   }, [step]);
 
   function setField<K extends keyof ProjectForm>(field: K, value: ProjectForm[K]) {
@@ -85,8 +87,8 @@ export function MusicOrderForm() {
 
     for (const field of fields) {
       if (!field.checkValidity()) {
-        field.reportValidity();
         field.focus();
+        field.reportValidity();
         return false;
       }
     }
@@ -307,13 +309,13 @@ export function MusicOrderForm() {
             <p className="terms-note">Paiement prévu à terme : PayPal ou virement bancaire. Aucun paiement, aucune commande et aucune persistance ne sont actifs dans cette version.</p>
             <div className="form-navigation">
               <button className="form-button" type="button" onClick={previousStep}>← Revenir au récit</button>
-              <button className="form-button form-button--primary" type="button" disabled>L’échange ouvrira bientôt</button>
+              <button className="form-button form-button--primary" type="button" disabled>Envoi indisponible pour le moment</button>
             </div>
           </>
         ) : (
           <div className="form-navigation">
-            {step > 0 ? <button className="form-button" type="button" onClick={previousStep}>← Chapitre précédent</button> : <span />}
-            <button className="form-button form-button--primary" type="button" onClick={nextStep}>Ouvrir le chapitre suivant →</button>
+            {step > 0 ? <button className="form-button" type="button" onClick={previousStep}>← Étape précédente</button> : <span />}
+            <button className="form-button form-button--primary" type="button" onClick={nextStep}>{nextStepLabels[step]}</button>
           </div>
         )}
       </div>
