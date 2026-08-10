@@ -6,6 +6,8 @@ Chaque page a été relue dans le code puis contrôlée dans un navigateur réel
 
 Les ajustements restent éditoriaux ou de présentation. Aucun flux métier, paiement, email de production, stockage de brief ou administration opérationnelle n’est ajouté.
 
+> **Addendum V0.6 :** ce document conserve l’état observé lors de la V0.5.2.1. Commander enregistre désormais des brouillons et photos privés pour les membres vérifiés, puis finalise une demande `AWAITING_PAYMENT`. Le paiement, les emails de commande, la facture et la livraison restent inactifs. L’état technique courant est décrit dans [`ORDER_MODEL.md`](ORDER_MODEL.md).
+
 ## Éléments transversaux
 
 ### Header

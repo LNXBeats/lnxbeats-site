@@ -51,10 +51,13 @@ Depuis `/compte`, un membre peut modifier son mot de passe après avoir fourni l
 Les pages privées appellent toujours les helpers serveur :
 
 - `requireUser()` exige une session persistée et un statut `ACTIVE` ;
+- `requireVerifiedUser()` ajoute l’exigence d’une adresse vérifiée pour les brouillons et commandes ;
 - `requireRole()` contrôle le rôle relu depuis PostgreSQL ;
 - `requireAdmin()` n’accepte que `ADMIN`.
 
 Le masquage d’un élément côté client ne constitue jamais une autorisation. Aucun formulaire de création d’admin ni bootstrap de production n’existe.
+
+Les routes `/api/orders/*` relisent également le propriétaire de chaque commande. Une référence valide ne donne aucun droit d’accès ; les détails de prévention IDOR et de protection des photos sont dans [`docs/ORDER_MODEL.md`](ORDER_MODEL.md).
 
 ## Mots de passe, sessions et cookies
 

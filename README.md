@@ -1,8 +1,8 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.5.2.1 aligne l’expérience publique et membre sur cette identité, tout en conservant les parcours sécurisés d’inscription, de vérification, de récupération et de profil minimal introduits en V0.5.2.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6 ajoute le socle sécurisé des commandes personnalisées aux parcours membres, sans ouvrir de paiement.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucun email de production et aucun dashboard ne sont actifs dans cette version.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Aucun paiement, email de commande, facture, livraison WAV ou dashboard administrateur n’est actif.
 
 ## Stack
 
@@ -47,6 +47,8 @@ npm run typecheck
 npm run build
 npm run prisma:check
 npm run test:auth
+npm run test:order
+npm run test:upload
 ```
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
@@ -63,6 +65,8 @@ npm run test:database
 Le script contrôle le schéma physique, les opérations Prisma, les contraintes et les comportements de suppression. Il nettoie ses données QA même après un échec. Il ne doit jamais être lancé contre une base partagée, distante ou de production.
 
 La validation runtime de l’authentification possède des gardes supplémentaires liées à l’instance Prisma Dev locale `lnx-studio-v052-test`. Elle utilise uniquement des identités `@example.invalid` et un transport email capturé sans réseau. Elle couvre inscription, vérification, récupération, profil et invalidation des sessions, puis supprime comptes, credentials, sessions, vérifications, compteurs et boîte QA. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
+
+La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, prix serveur, finalisation atomique, références concurrentes, événements, IDOR, photos normalisées et nettoyage. La procédure et les limites sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md).
 
 Pour les smoke tests, lancer d’abord le build et le serveur de production :
 
@@ -84,7 +88,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/` — accueil
 - `/discographie` — catalogue local typé et sélection éditoriale
 - `/album/[slug]` — fiche statique d’un projet, avec metadata dynamiques
-- `/commander` — parcours frontend de préparation d’un brief
+- `/commander` — brief membre sauvegardable, photos privées, prix serveur et finalisation sans paiement
 - `/boutique` — liens DistroKid Direct et Etsy
 - `/a-propos` — biographie officielle et démarche artistique
 - `/contact` — contact professionnel
@@ -99,9 +103,11 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/renvoyer-verification` — renvoi générique du message de vérification
 - `/reinitialiser-mot-de-passe` — choix d’un nouveau mot de passe avec token temporaire
 - `/verifier-email` — résultat neutre de la vérification
-- `/compte` — profil minimal et sécurité pour les rôles actifs
+- `/compte` — profil, sécurité, brouillons et suivi des demandes pour les rôles actifs
+- `/compte/commandes/[orderNumber]` — détail privé, timeline client et récapitulatif d’une demande
 - `/admin` — placeholder protégé réservé à `ADMIN`
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
+- `/api/orders/*` — brouillons et photos privés, protégés par session, origine et propriété
 
 ## Variables d’environnement
 
@@ -114,6 +120,8 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `MAIL_FROM` | Expéditeur logique des emails transactionnels | Non |
 | `AUTH_EMAIL_TRANSPORT` | Transport non-production ; seule la valeur `capture` existe en V0.5.2 | Non |
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
+| `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
+| `ORDER_UPLOAD_DIR` | Racine privée, hors `public/` ; QA limitée à `/private/tmp` | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
 | `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
@@ -124,7 +132,7 @@ Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés 
 
 ## Architecture
 
-Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief et les formulaires d’authentification utilisent des Client Components limités. Les décisions de rôle, de statut, de vérification et de session restent côté serveur. La discographie demeure locale et toutes ses fiches sont pré-rendues sans base de données ; les bundles des pages publiques n’importent pas les formulaires membres.
+Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief et les formulaires d’authentification utilisent des Client Components limités. Les décisions de rôle, propriété, statut, vérification, prix et transition de commande restent côté serveur. Les photos privées sont réencodées hors du répertoire public ; seuls leurs descripteurs sont en base. La discographie demeure locale et ses fiches restent pré-rendues sans base de données.
 
 ## Ajouter un projet au catalogue
 
@@ -155,6 +163,7 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 - `feature/v0.5.1-auth-foundation` — sessions, rôles et espaces privés minimaux
 - `feature/v0.5.2-registration-recovery` — inscription, vérification email et récupération de compte
 - `feature/v0.5.2.1-product-editorial-audit` — identité, audit produit, parcours membres et préparation juridique
+- `feature/v0.6-order-foundation` — brouillons, commandes, prix, photos privées et suivi membre
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 
@@ -163,6 +172,7 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Architecture](docs/ARCHITECTURE.md)
 - [Modèle de données](docs/DATA_MODEL.md)
 - [Authentification et sécurité](docs/AUTH.md)
+- [Commandes et sécurité des fichiers](docs/ORDER_MODEL.md)
 - [Vision produit](docs/PRODUCT_VISION.md)
 - [Audit produit et éditorial](docs/PAGE_AUDIT.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)

@@ -14,6 +14,10 @@
     "test:auth": "tsx --test tests/auth/*.test.ts",
     "test:auth:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-auth-runtime.ts",
     "auth:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/auth-qa-fixtures.ts",
+    "test:order": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/domain.test.ts tests/orders/request.test.ts",
+    "test:upload": "tsx --test tests/orders/upload.test.ts",
+    "test:order:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-order-runtime.ts",
+    "order:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/order-qa-fixtures.ts",
     "test:database": "tsx scripts/test-database.ts",
     "prisma:format": "prisma format",
     "prisma:validate": "prisma validate",
@@ -31,7 +35,8 @@
     "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "sharp": "0.35.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

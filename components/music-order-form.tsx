@@ -1,8 +1,20 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-const genres = [
+import { orderOffer } from "@/data/order-offer";
+import {
+  calculateOrderPrice,
+  formatEuro,
+  orderTextLimits,
+  type OrderDraftInput,
+  validateOrderForSubmission,
+} from "@/lib/orders/domain";
+import type { SerializedOrder, SerializedOrderPhoto } from "@/lib/orders/types";
+
+const musicalDirections = [
   "Rap français",
   "Boom bap",
   "Rap moderne",
@@ -13,157 +25,292 @@ const genres = [
   "Acoustique",
   "Chanson / variété",
   "Cinématographique",
+  "Je laisse LNX Beats choisir",
 ] as const;
 
-const moods = ["Émouvant", "Drôle", "Énergique", "Romantique", "Sombre", "Nostalgique", "Festif", "Motivant"] as const;
-
-type Genre = (typeof genres)[number];
-type Mood = (typeof moods)[number];
-
-type ProjectForm = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  recipient: string;
-  occasion: string;
-  story: string;
-  importantDetails: string;
-  wordsToInclude: string;
-  avoid: string;
-  genre: Genre | "";
-  letLnxChoose: boolean;
-  moods: Mood[];
-  rights: "personal" | "commercial";
-  files: string[];
-  termsAccepted: boolean;
-};
-
-const initialForm: ProjectForm = {
-  firstName: "",
-  lastName: "",
-  email: "",
-  phone: "",
+const emptyDraft: OrderDraftInput = {
+  title: "",
   recipient: "",
   occasion: "",
-  story: "",
+  brief: "",
+  musicalDirection: "",
+  emotion: "",
   importantDetails: "",
   wordsToInclude: "",
   avoid: "",
-  genre: "",
-  letLnxChoose: false,
-  moods: [],
-  rights: "personal",
-  files: [],
-  termsAccepted: false,
+  pronunciationNotes: "",
+  usage: "PERSONAL",
+  coverIncluded: false,
+  priorityProcessing: false,
 };
 
-const stepLabels = ["Vous", "Le récit", "La couleur", "Dernier regard"];
-const nextStepLabels = ["Raconter l’histoire →", "Choisir la couleur →", "Relire le récapitulatif →"];
+const steps = ["Le repère", "L’histoire", "La création", "Récapitulatif"] as const;
 
-export function MusicOrderForm() {
+type AccountState = { authenticated: false } | { authenticated: true; name: string };
+
+function draftFromOrder(order: SerializedOrder | null): OrderDraftInput {
+  if (!order) return emptyDraft;
+  return {
+    title: order.title,
+    recipient: order.recipient,
+    occasion: order.occasion,
+    brief: order.brief,
+    musicalDirection: order.musicalDirection,
+    emotion: order.emotion,
+    importantDetails: order.importantDetails,
+    wordsToInclude: order.wordsToInclude,
+    avoid: order.avoid,
+    pronunciationNotes: order.pronunciationNotes,
+    usage: order.usage,
+    coverIncluded: order.coverIncluded,
+    priorityProcessing: order.priorityProcessing,
+  };
+}
+
+async function responsePayload(response: Response) {
+  return response.json().catch(() => ({})) as Promise<{ order?: SerializedOrder; error?: string; field?: string }>;
+}
+
+export function MusicOrderForm({ account, initialDraft }: { account: AccountState; initialDraft: SerializedOrder | null }) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<ProjectForm>(initialForm);
-  const [genreError, setGenreError] = useState(false);
-  const stepRef = useRef<HTMLDivElement>(null);
+  const [form, setForm] = useState<OrderDraftInput>(() => draftFromOrder(initialDraft));
+  const [orderNumber, setOrderNumber] = useState(initialDraft?.orderNumber ?? "");
+  const [photos, setPhotos] = useState<SerializedOrderPhoto[]>(initialDraft?.photos ?? []);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(false);
+  const [summaryConfirmed, setSummaryConfirmed] = useState(false);
+  const [contentConfirmed, setContentConfirmed] = useState(false);
+  const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">(initialDraft ? "saved" : "dirty");
+  const [message, setMessage] = useState(initialDraft ? `Brouillon ${initialDraft.orderNumber} repris.` : "");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const previousStepRef = useRef(step);
+  const previousStep = useRef(step);
+
+  const pricing = calculateOrderPrice(form);
 
   useEffect(() => {
-    if (previousStepRef.current === step) return;
-    previousStepRef.current = step;
+    if (previousStep.current === step) return;
+    previousStep.current = step;
     headingRef.current?.focus();
   }, [step]);
 
-  function setField<K extends keyof ProjectForm>(field: K, value: ProjectForm[K]) {
+  function setField<K extends keyof OrderDraftInput>(field: K, value: OrderDraftInput[K]) {
     setForm((current) => ({ ...current, [field]: value }));
+    setSaveState("dirty");
+    setMessage("");
+    setError("");
   }
 
-  function validateStep() {
-    const fields = stepRef.current?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-      "input, textarea, select",
-    );
-    if (!fields) return true;
-
-    for (const field of fields) {
-      if (!field.checkValidity()) {
-        field.focus();
-        field.reportValidity();
-        return false;
-      }
-    }
-
-    if (step === 2 && !form.letLnxChoose && !form.genre) {
-      setGenreError(true);
-      document.getElementById("genre-choice")?.focus();
+  function validateCurrentStep() {
+    if (step === 0 && !form.recipient.trim()) {
+      setError("Indiquez à qui ou à quoi cette histoire est destinée.");
+      document.getElementById("order-recipient")?.focus();
       return false;
     }
-
+    if (step === 1 && form.brief.trim().length < orderTextLimits.briefMin) {
+      setError(`Racontez l’histoire en au moins ${orderTextLimits.briefMin} caractères.`);
+      document.getElementById("order-brief")?.focus();
+      return false;
+    }
+    if (step === 2 && !form.musicalDirection) {
+      setError("Choisissez une direction musicale ou confiez ce choix à LNX Beats.");
+      document.getElementById("order-musical-direction")?.focus();
+      return false;
+    }
+    setError("");
     return true;
   }
 
   function nextStep() {
-    if (!validateStep()) return;
-    setStep((current) => Math.min(current + 1, stepLabels.length - 1));
+    if (!validateCurrentStep()) return;
+    setStep((current) => Math.min(current + 1, steps.length - 1));
   }
 
-  function previousStep() {
-    setStep((current) => Math.max(current - 1, 0));
+  async function saveDraft() {
+    if (!account.authenticated) {
+      setError("Connectez-vous ou créez un compte vérifié avant la première sauvegarde.");
+      return null;
+    }
+    setBusy(true);
+    setSaveState("saving");
+    setError("");
+    try {
+      const response = await fetch(orderNumber ? `/api/orders/${encodeURIComponent(orderNumber)}` : "/api/orders/drafts", {
+        method: orderNumber ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const payload = await responsePayload(response);
+      if (!response.ok || !payload.order) throw new Error(payload.error ?? "Le brouillon n’a pas pu être enregistré.");
+      setOrderNumber(payload.order.orderNumber);
+      setPhotos(payload.order.photos);
+      setSaveState("saved");
+      setMessage(`Enregistré — ${payload.order.orderNumber}`);
+      router.refresh();
+      return payload.order;
+    } catch (caught) {
+      setSaveState("error");
+      setError(caught instanceof Error ? caught.message : "Le brouillon n’a pas pu être enregistré.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function toggleMood(mood: Mood) {
-    setForm((current) => ({
-      ...current,
-      moods: current.moods.includes(mood)
-        ? current.moods.filter((item) => item !== mood)
-        : [...current.moods, mood],
-    }));
+  async function uploadPhotos() {
+    if (!pendingFiles.length) return setError("Choisissez au moins une photo.");
+    if (!photoRightsConfirmed) return setError("Confirmez que vous avez le droit de communiquer ces photos.");
+    const current = orderNumber ? { orderNumber } : await saveDraft();
+    if (!current) return;
+
+    setBusy(true);
+    setError("");
+    setMessage("Normalisation et enregistrement des photos…");
+    try {
+      const body = new FormData();
+      pendingFiles.forEach((file) => body.append("files", file));
+      body.set("rightsConfirmed", "true");
+      const response = await fetch(`/api/orders/${encodeURIComponent(current.orderNumber)}/photos`, { method: "POST", body });
+      const payload = await responsePayload(response);
+      if (!response.ok || !payload.order) throw new Error(payload.error ?? "Les photos n’ont pas pu être ajoutées.");
+      setPhotos(payload.order.photos);
+      setPendingFiles([]);
+      setPhotoRightsConfirmed(false);
+      setMessage("Photos privées enregistrées et métadonnées retirées.");
+      const input = document.getElementById("order-photos");
+      if (input instanceof HTMLInputElement) input.value = "";
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Les photos n’ont pas pu être ajoutées.");
+      setMessage("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removePhoto(assetId: string) {
+    if (!orderNumber) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/photos/${encodeURIComponent(assetId)}`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = await responsePayload(response);
+        throw new Error(payload.error ?? "La photo n’a pas pu être supprimée.");
+      }
+      setPhotos((current) => current.filter((photo) => photo.id !== assetId));
+      setMessage("Photo supprimée du brouillon.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "La photo n’a pas pu être supprimée.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finalize() {
+    const validation = validateOrderForSubmission(form);
+    if (!validation.ok) {
+      setError(validation.message);
+      return;
+    }
+    if (!summaryConfirmed || !contentConfirmed) {
+      setError("Confirmez le récapitulatif et les règles de contenu avant de créer la demande.");
+      return;
+    }
+    if (!account.authenticated) {
+      setError("Connectez-vous avec un compte vérifié avant de créer la demande.");
+      return;
+    }
+    const current = orderNumber ? { orderNumber } : await saveDraft();
+    if (!current) return;
+
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(current.orderNumber)}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const payload = await responsePayload(response);
+      if (!response.ok || !payload.order) throw new Error(payload.error ?? "La demande n’a pas pu être créée.");
+      router.push(`/compte/commandes/${encodeURIComponent(payload.order.orderNumber)}`);
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "La demande n’a pas pu être créée.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteDraft() {
+    if (!orderNumber || !window.confirm("Supprimer définitivement ce brouillon et ses photos ?")) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = await responsePayload(response);
+        throw new Error(payload.error ?? "Le brouillon n’a pas pu être supprimé.");
+      }
+      setForm(emptyDraft);
+      setOrderNumber("");
+      setPhotos([]);
+      setStep(0);
+      setSaveState("dirty");
+      setMessage("Brouillon supprimé.");
+      router.replace("/commander");
+      router.refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Le brouillon n’a pas pu être supprimé.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <form className="order-form" onSubmit={(event) => event.preventDefault()}>
-      <div className="order-progress" aria-label="Progression du récit">
-        {stepLabels.map((label, index) => (
+    <form className="order-form order-form--connected" onSubmit={(event) => event.preventDefault()}>
+      <div className="order-progress" aria-label="Progression du brief">
+        {steps.map((label, index) => (
           <div key={label} className={`order-progress__item ${index <= step ? "is-active" : ""}`} aria-current={index === step ? "step" : undefined}>
             {String(index + 1).padStart(2, "0")} <span>· {label}</span>
           </div>
         ))}
       </div>
 
-      <div ref={stepRef} className="form-step" key={step}>
+      <div className="order-savebar" aria-live="polite">
+        <div>
+          <strong>{orderNumber || "Nouveau brief"}</strong>
+          <span>{saveState === "saving" ? "Enregistrement…" : saveState === "saved" ? "Enregistré" : saveState === "error" ? "Échec de l’enregistrement" : "Modifications non enregistrées"}</span>
+        </div>
+        <button type="button" className="form-button" onClick={() => void saveDraft()} disabled={busy}>Enregistrer le brouillon</button>
+      </div>
+
+      {!account.authenticated ? (
+        <div className="order-auth-note">
+          <p><strong>Votre brief reste dans cette page tant qu’il n’est pas sauvegardé.</strong> Pour protéger son contenu, aucune donnée sensible n’est placée dans le stockage du navigateur.</p>
+          <p><Link href="/connexion?retour=%2Fcommander">Se connecter</Link> ou <Link href="/inscription">créer un compte</Link> avant la sauvegarde.</p>
+        </div>
+      ) : <p className="order-auth-note">Connecté en tant que <strong>{account.name}</strong>. Ce brouillon n’est accessible qu’à votre compte.</p>}
+
+      <div className="form-step" key={step}>
         {step === 0 ? (
           <>
-            <p className="eyebrow" aria-live="polite">Étape 1 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Avant l’histoire, il y a vous.</h2>
-            <p className="form-step__intro">Quelques repères pour savoir qui confie le récit et à qui la musique sera destinée. Rien ne quitte cette page.</p>
-            <div className="field-grid">
-              <div className="field">
-                <label htmlFor="first-name">Prénom *</label>
-                <input id="first-name" name="firstName" required autoComplete="given-name" value={form.firstName} onChange={(event) => setField("firstName", event.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="last-name">Nom *</label>
-                <input id="last-name" name="lastName" required autoComplete="family-name" value={form.lastName} onChange={(event) => setField("lastName", event.target.value)} />
-              </div>
+            <p className="eyebrow">Étape 1 sur 4</p>
+            <h2 ref={headingRef} tabIndex={-1}>Donnez un repère à cette histoire.</h2>
+            <p className="form-step__intro">Ce nom vous aidera à retrouver la demande. Il ne devient pas automatiquement le titre du morceau.</p>
+            <div className="field">
+              <label htmlFor="order-title">Nom de repère <span>(facultatif)</span></label>
+              <input id="order-title" maxLength={orderTextLimits.title} value={form.title} placeholder="Anniversaire de Julie" onChange={(event) => setField("title", event.target.value)} />
             </div>
             <div className="field-grid">
               <div className="field">
-                <label htmlFor="email">E-mail *</label>
-                <input id="email" name="email" type="email" required autoComplete="email" value={form.email} onChange={(event) => setField("email", event.target.value)} />
+                <label htmlFor="order-recipient">Personne ou situation concernée *</label>
+                <input id="order-recipient" required maxLength={orderTextLimits.recipient} value={form.recipient} onChange={(event) => setField("recipient", event.target.value)} />
               </div>
               <div className="field">
-                <label htmlFor="phone">Téléphone</label>
-                <input id="phone" name="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setField("phone", event.target.value)} />
-              </div>
-            </div>
-            <div className="field-grid">
-              <div className="field">
-                <label htmlFor="recipient">À qui cette histoire est-elle destinée ? *</label>
-                <input id="recipient" name="recipient" required placeholder="Prénom, couple, équipe…" value={form.recipient} onChange={(event) => setField("recipient", event.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="occasion">Ce qui vous réunit</label>
-                <input id="occasion" name="occasion" placeholder="Anniversaire, mariage, surprise…" value={form.occasion} onChange={(event) => setField("occasion", event.target.value)} />
+                <label htmlFor="order-occasion">Occasion ou contexte</label>
+                <input id="order-occasion" maxLength={orderTextLimits.occasion} value={form.occasion} onChange={(event) => setField("occasion", event.target.value)} />
               </div>
             </div>
           </>
@@ -171,153 +318,158 @@ export function MusicOrderForm() {
 
         {step === 1 ? (
           <>
-            <p className="eyebrow" aria-live="polite">Étape 2 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Laissez revenir la scène.</h2>
-            <p className="form-step__intro">Ne cherchez pas les mots parfaits. Racontez les personnes, le moment et ce qui doit rester. Ce récit demeure local et n’est pas envoyé.</p>
+            <p className="eyebrow">Étape 2 sur 4</p>
+            <h2 ref={headingRef} tabIndex={-1}>Racontez ce qui ne doit pas être perdu.</h2>
+            <p className="form-step__intro">Le client apporte l’histoire et les intentions. LNX Beats choisit les mots, écrit et construit la création musicale.</p>
             <div className="field">
-              <label htmlFor="story">Ce qui compte vraiment *</label>
-              <textarea id="story" name="story" required minLength={30} placeholder="Le contexte, les personnes, les souvenirs, ce que vous ressentez…" value={form.story} onChange={(event) => setField("story", event.target.value)} />
-              <span className="field__hint">Au moins 30 caractères : juste assez pour ouvrir la première scène.</span>
+              <label htmlFor="order-brief">Histoire principale *</label>
+              <textarea id="order-brief" required minLength={orderTextLimits.briefMin} maxLength={orderTextLimits.brief} value={form.brief} onChange={(event) => setField("brief", event.target.value)} />
+              <span className="field__hint">{form.brief.length.toLocaleString("fr-FR")} / {orderTextLimits.brief.toLocaleString("fr-FR")} caractères · minimum {orderTextLimits.briefMin}</span>
             </div>
             <div className="field">
-              <label htmlFor="important-details">Les détails à ne pas perdre</label>
-              <textarea id="important-details" name="importantDetails" placeholder="Dates, lieux, anecdotes ou traits de caractère…" value={form.importantDetails} onChange={(event) => setField("importantDetails", event.target.value)} />
+              <label htmlFor="order-details">Détails importants</label>
+              <textarea id="order-details" maxLength={orderTextLimits.importantDetails} value={form.importantDetails} onChange={(event) => setField("importantDetails", event.target.value)} />
             </div>
             <div className="field-grid">
               <div className="field">
-                <label htmlFor="words">Les mots qui doivent rester</label>
-                <textarea id="words" name="wordsToInclude" value={form.wordsToInclude} onChange={(event) => setField("wordsToInclude", event.target.value)} />
+                <label htmlFor="order-words">Mots ou expressions à préserver</label>
+                <textarea id="order-words" maxLength={orderTextLimits.wordsToInclude} value={form.wordsToInclude} onChange={(event) => setField("wordsToInclude", event.target.value)} />
               </div>
               <div className="field">
-                <label htmlFor="avoid">Ce qui doit rester hors du récit</label>
-                <textarea id="avoid" name="avoid" value={form.avoid} onChange={(event) => setField("avoid", event.target.value)} />
+                <label htmlFor="order-avoid">Éléments à éviter</label>
+                <textarea id="order-avoid" maxLength={orderTextLimits.avoid} value={form.avoid} onChange={(event) => setField("avoid", event.target.value)} />
               </div>
+            </div>
+            <div className="field">
+              <label htmlFor="order-pronunciation">Prononciations ou noms particuliers</label>
+              <textarea id="order-pronunciation" maxLength={orderTextLimits.pronunciationNotes} value={form.pronunciationNotes} onChange={(event) => setField("pronunciationNotes", event.target.value)} />
             </div>
           </>
         ) : null}
 
         {step === 2 ? (
           <>
-            <p className="eyebrow" aria-live="polite">Étape 3 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Quelle couleur porte ce souvenir ?</h2>
-            <p className="form-step__intro">Vous pouvez indiquer une direction ou laisser LNX Beats écouter l’histoire et trouver celle qui lui ressemble.</p>
-            <fieldset
-              className="fieldset"
-              id="genre-choice"
-              tabIndex={-1}
-              aria-describedby={genreError ? "genre-error" : "genre-help"}
-              aria-invalid={genreError || undefined}
-            >
-              <legend>La matière musicale *</legend>
+            <p className="eyebrow">Étape 3 sur 4</p>
+            <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur et l’usage.</h2>
+            <fieldset className="fieldset" id="order-musical-direction" tabIndex={-1}>
+              <legend>Direction musicale *</legend>
               <div className="choice-grid">
-                {genres.map((genre) => (
-                  <label className="choice" key={genre}>
-                    <input
-                      type="radio"
-                      name="genre"
-                      value={genre}
-                      checked={form.genre === genre && !form.letLnxChoose}
-                      onChange={() => {
-                        setGenreError(false);
-                        setForm((current) => ({ ...current, genre, letLnxChoose: false }));
-                      }}
-                    />
-                    <span>{genre}</span>
-                  </label>
-                ))}
-                <label className="choice choice--full">
-                  <input
-                    type="checkbox"
-                    name="letLnxChooseStyle"
-                    checked={form.letLnxChoose}
-                    onChange={(event) => {
-                      if (event.target.checked) setGenreError(false);
-                      setForm((current) => ({ ...current, letLnxChoose: event.target.checked, genre: event.target.checked ? "" : current.genre }));
-                    }}
-                  />
-                  <span>Je laisse LNX Beats choisir le style qui correspond le mieux à mon histoire</span>
-                </label>
-              </div>
-              <span className="field__hint" id="genre-help">Indiquez une piste ou laissez LNX Beats chercher la couleur juste.</span>
-              {genreError ? <span className="field__error" id="genre-error" role="alert">Choisissez une matière musicale ou confiez ce choix à LNX Beats.</span> : null}
-            </fieldset>
-
-            <fieldset className="fieldset">
-              <legend>Ce que la musique doit laisser — plusieurs choix possibles</legend>
-              <div className="choice-grid">
-                {moods.map((mood) => (
-                  <label className="choice" key={mood}>
-                    <input type="checkbox" name="moods" value={mood} checked={form.moods.includes(mood)} onChange={() => toggleMood(mood)} />
-                    <span>{mood}</span>
+                {musicalDirections.map((direction) => (
+                  <label className="choice" key={direction}>
+                    <input type="radio" name="musicalDirection" checked={form.musicalDirection === direction} onChange={() => setField("musicalDirection", direction)} />
+                    <span>{direction}</span>
                   </label>
                 ))}
               </div>
             </fieldset>
-
-            <fieldset className="fieldset">
-              <legend>Droits envisagés</legend>
-              <div className="choice-grid">
-                <label className="choice">
-                  <input type="radio" name="rights" value="personal" checked={form.rights === "personal"} onChange={() => setField("rights", "personal")} />
-                  <span>Usage personnel</span>
-                </label>
-                <label className="choice">
-                  <input type="radio" name="rights" value="commercial" checked={form.rights === "commercial"} onChange={() => setField("rights", "commercial")} />
-                  <span>Droits commerciaux à discuter</span>
-                </label>
-              </div>
-              <span className="field__hint">Le périmètre juridique et les conditions commerciales devront être précisés avant toute activation de commande.</span>
-            </fieldset>
-
             <div className="field">
-              <label htmlFor="files">Les traces de l’histoire</label>
-              <div className="upload-field">
-                <div>
-                  <input
-                    id="files"
-                    name="attachments"
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,audio/mpeg,audio/mp4,audio/wav"
-                    onChange={(event) => setField("files", Array.from(event.target.files ?? []).map((file) => file.name))}
-                  />
-                  <p>Ces repères restent sur votre appareil dans cette version.</p>
-                </div>
-              </div>
+              <label htmlFor="order-emotion">Ce que la musique doit faire ressentir</label>
+              <input id="order-emotion" maxLength={orderTextLimits.emotion} value={form.emotion} placeholder="Tendre, drôle, nostalgique…" onChange={(event) => setField("emotion", event.target.value)} />
             </div>
+
+            <fieldset className="fieldset">
+              <legend>Usage envisagé</legend>
+              <div className="choice-grid choice-grid--offer">
+                <label className="choice">
+                  <input type="radio" name="usage" checked={form.usage === "PERSONAL"} onChange={() => setField("usage", "PERSONAL")} />
+                  <span><strong>Usage personnel — 50 €</strong><small>Conditions détaillées précisées avant activation commerciale.</small></span>
+                </label>
+                <label className="choice">
+                  <input type="radio" name="usage" checked={form.usage === "COMMERCIAL_EXTENDED"} onChange={() => setField("usage", "COMMERCIAL_EXTENDED")} />
+                  <span><strong>Exploitation commerciale étendue — 1 500 €</strong><small>Contrat spécifique requis avant toute exploitation sur les plateformes et supports convenus.</small></span>
+                </label>
+              </div>
+              <p className="field__hint">La formule commerciale prévoit une exploitation selon contrat sur les plateformes et supports convenus. Elle ne cède pas le droit moral et ne crée aucune part SACEM automatique.</p>
+            </fieldset>
+
+            <fieldset className="fieldset">
+              <legend>Options</legend>
+              <div className="choice-grid">
+                <label className="choice">
+                  <input type="checkbox" checked={form.coverIncluded} onChange={(event) => setField("coverIncluded", event.target.checked)} />
+                  <span><strong>Cover personnalisée +10 €</strong><small>Option commandée, sans génération automatique.</small></span>
+                </label>
+                <label className="choice">
+                  <input type="checkbox" checked={form.priorityProcessing} onChange={(event) => setField("priorityProcessing", event.target.checked)} />
+                  <span><strong>Traitement prioritaire +30 €</strong><small>{orderOffer.priorityDelay}</small></span>
+                </label>
+              </div>
+            </fieldset>
+
+            <section className="order-photo-panel" aria-labelledby="order-photo-title">
+              <div>
+                <p className="auth-panel__label">Photos de référence privées</p>
+                <h3 id="order-photo-title">Quelques images, jamais un dossier public.</h3>
+                <p>JPEG, PNG ou WebP · 10 Mo maximum par photo · 10 photos maximum. Chaque image est vérifiée, réencodée et débarrassée de ses métadonnées.</p>
+              </div>
+              <div className="field">
+                <label htmlFor="order-photos">Choisir des photos</label>
+                <input id="order-photos" type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => setPendingFiles(Array.from(event.target.files ?? []))} />
+              </div>
+              <label className="choice choice--full">
+                <input type="checkbox" checked={photoRightsConfirmed} onChange={(event) => setPhotoRightsConfirmed(event.target.checked)} />
+                <span>Je dispose du droit de communiquer ces photos à LNX Beats pour cette demande.</span>
+              </label>
+              <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>Ajouter les photos au brouillon</button>
+              {photos.length ? (
+                <ul className="order-photo-list">
+                  {photos.map((photo) => (
+                    <li key={photo.id}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/api/orders/${encodeURIComponent(orderNumber)}/photos/${photo.id}`} alt={`Photo de référence ${photo.position + 1}`} />
+                      <span>{photo.width} × {photo.height} · {Math.ceil(photo.sizeBytes / 1024)} Ko</span>
+                      <button type="button" onClick={() => void removePhoto(photo.id)} disabled={busy}>Supprimer</button>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="field__hint">Aucune photo enregistrée.</p>}
+            </section>
           </>
         ) : null}
 
         {step === 3 ? (
           <>
-            <p className="eyebrow" aria-live="polite">Étape 4 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Relisez l’histoire avant de refermer le chapitre.</h2>
-            <p className="form-step__intro">Un dernier regard sur ce que vous avez posé. Pour le moment, rien n’est enregistré ni transmis.</p>
-            <dl className="summary">
-              <div><dt>Vous</dt><dd>{form.firstName} {form.lastName}</dd></div>
-              <div><dt>Contact</dt><dd>{form.email}{form.phone ? ` · ${form.phone}` : ""}</dd></div>
+            <p className="eyebrow">Étape 4 sur 4</p>
+            <h2 ref={headingRef} tabIndex={-1}>Relisez avant de créer la demande.</h2>
+            <dl className="summary order-summary">
+              <div><dt>Repère</dt><dd>{form.title || "Sans titre de repère"}</dd></div>
               <div><dt>Histoire pour</dt><dd>{form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
-              <div><dt>Couleur</dt><dd>{form.letLnxChoose ? "Choix confié à LNX Beats" : form.genre}</dd></div>
-              <div><dt>Émotion</dt><dd>{form.moods.length ? form.moods.join(", ") : "À chercher avec LNX Beats"}</dd></div>
-              <div><dt>Droits</dt><dd>{form.rights === "personal" ? "Usage personnel" : "Usage commercial à cadrer"}</dd></div>
-              <div><dt>Repères</dt><dd>{form.files.length ? form.files.join(", ") : "Aucun fichier sélectionné"}</dd></div>
+              <div><dt>Histoire</dt><dd className="summary__long">{form.brief}</dd></div>
+              <div><dt>Direction</dt><dd>{form.musicalDirection}</dd></div>
+              <div><dt>Usage</dt><dd>{form.usage === "PERSONAL" ? "Personnel" : "Commercial étendu — contrat spécifique requis"}</dd></div>
+              <div><dt>Options</dt><dd>{[form.coverIncluded ? "Cover" : "", form.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
+              <div><dt>Photos</dt><dd>{photos.length}</dd></div>
+              <div><dt>Livraison future</dt><dd>WAV · disponible 6 mois à compter de la livraison</dd></div>
+              <div><dt>Retour inclus</dt><dd>1 retour pour corriger un écart avec le brief initial</dd></div>
+              <div><dt>Délai indicatif</dt><dd>{orderOffer.indicativeDelay} · point de départ confirmé avant activation commerciale</dd></div>
             </dl>
-            <label className="choice choice--full">
-              <input type="checkbox" name="termsAccepted" checked={form.termsAccepted} onChange={(event) => setField("termsAccepted", event.target.checked)} />
-              <span>J’ai vérifié ce récapitulatif et je comprends que les conditions définitives devront être acceptées avant une future commande.</span>
-            </label>
-            <p className="terms-note">Paiement prévu à terme : PayPal ou virement bancaire. Aucun paiement, aucune commande et aucune persistance ne sont actifs dans cette version.</p>
-            <div className="form-navigation">
-              <button className="form-button" type="button" onClick={previousStep}>← Revenir au récit</button>
-              <button className="form-button form-button--primary" type="button" disabled>Envoi indisponible pour le moment</button>
+
+            <div className="order-total" aria-live="polite">
+              <span>Total calculé</span><strong>{formatEuro(pricing.totalCents)}</strong>
+              <small>Calcul serveur définitif lors de la création · paiement non encore disponible.</small>
             </div>
+
+            <label className="choice choice--full">
+              <input type="checkbox" checked={summaryConfirmed} onChange={(event) => setSummaryConfirmed(event.target.checked)} />
+              <span>J’ai relu le brief. Les droits, l’annulation et le remboursement seront détaillés dans les CGV applicables avant activation du paiement.</span>
+            </label>
+            <label className="choice choice--full">
+              <input type="checkbox" checked={contentConfirmed} onChange={(event) => setContentConfirmed(event.target.checked)} />
+              <span>Je comprends que LNX Beats peut refuser une demande illégale, haineuse, diffamatoire, harcelante ou portant atteinte aux droits d’un tiers.</span>
+            </label>
+            {form.usage === "COMMERCIAL_EXTENDED" ? <p className="terms-note">Exploitation commerciale étendue encadrée par un contrat spécifique. Le droit moral n’est pas cédé. Toute éventuelle répartition SACEM suppose une contribution réelle et un accord distinct.</p> : null}
+            <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed}>Créer ma demande</button>
           </>
-        ) : (
-          <div className="form-navigation">
-            {step > 0 ? <button className="form-button" type="button" onClick={previousStep}>← Étape précédente</button> : <span />}
-            <button className="form-button form-button--primary" type="button" onClick={nextStep}>{nextStepLabels[step]}</button>
-          </div>
-        )}
+        ) : null}
+
+        {error ? <p className="form-message form-message--error" role="alert">{error}</p> : null}
+        {message ? <p className="form-message" role="status">{message}</p> : null}
+
+        <div className="form-navigation">
+          {step > 0 ? <button className="form-button" type="button" onClick={() => setStep((current) => current - 1)} disabled={busy}>← Étape précédente</button> : <span />}
+          {step < steps.length - 1 ? <button className="form-button form-button--primary" type="button" onClick={nextStep} disabled={busy}>Étape suivante →</button> : null}
+        </div>
+        {orderNumber ? <button className="order-delete-draft" type="button" onClick={() => void deleteDraft()} disabled={busy}>Supprimer ce brouillon</button> : null}
       </div>
     </form>
   );

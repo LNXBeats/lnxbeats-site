@@ -82,14 +82,21 @@
 - aucune création publique ou automatique d’`ADMIN`
 - cadrage de la suppression/anonymisation de compte avant toute action destructive
 
-## V0.6 — Administration & commandes
+## V0.6 — Order Foundation
 
-- authentification forte
-- rôles et permissions
-- gestion du catalogue et des niveaux de confiance
-- validation serveur des briefs et suivi de statut
-- téléversement et livraison sécurisés
-- e-mails transactionnels et textes juridiques validés
+- brouillons persistés, reprise, suppression et finalisation membre
+- prix déterministes côté serveur et snapshots en centimes
+- références concurrentes, événements client et suivi privé
+- photos de référence contrôlées, réencodées et stockées hors webroot
+- aucun paiement, aucune facture, aucun email de commande et aucune livraison WAV active
+
+## V0.6.1 — Payment architecture & fiscal/legal readiness audit
+
+- choix d’architecture sans intégration prématurée d’un fournisseur
+- validation du régime de TVA, de la facturation et des informations professionnelles manquantes
+- CGV, droits, rétractation, commencement de service, annulation et remboursement
+- modèle futur `Payment` / `Invoice`, idempotence et articulation avec LNX Gestion
+- Wero étudié comme possibilité future, sans implémentation ni simulation
 
 ## V0.7 — Paiement
 

@@ -1,10 +1,10 @@
-# Modèle de données — V0.5.2
+# Modèle de données — V0.6
 
 ## Périmètre
 
 La V0.4 crée une fondation PostgreSQL avec Prisma ORM. Elle ne connecte aucune base de production, ne migre aucune donnée artistique et ne change pas la source runtime du site public. `data/discography.ts` reste la seule source des pages publiques jusqu’à un sprint de migration contrôlé.
 
-Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers futurs et la traçabilité. La V0.5.2 active les parcours membres et de récupération ; elle ne crée ni back-office complet, ni paiement, ni stockage de fichiers.
+Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers et la traçabilité. La V0.6 active les brouillons, commandes et photos de référence privées ; elle ne crée ni back-office complet, ni paiement, ni facture, ni livraison audio.
 
 ## Vue d’ensemble
 
@@ -98,27 +98,30 @@ L’enum `DataConfidence` conserve `CONFIRMED`, `PARTIAL`, `PLACEHOLDER` et `UNK
 
 Les relations `ProjectAsset` et `OrderAsset` décrivent l’usage réel d’un fichier : pochette, Hero, galerie, référence client, document ou livraison. Les suppressions sont en `RESTRICT` pour empêcher la disparition silencieuse d’un fichier encore référencé.
 
-Aucun stockage cloud ni fichier n’est créé dans cette version.
+La V0.6 utilise `Asset` et `OrderAsset` pour les photos de référence. Le binaire normalisé reste dans un stockage local privé non-production, hors `public/`; la base ne conserve que la clé opaque et les métadonnées vérifiées. `position` stabilise l’ordre des photos. Le stockage objet privé et les livraisons sont différés.
 
 ## Commandes
 
-`Order` prépare le futur parcours de création personnalisée avec :
+`Order` porte le parcours de création personnalisée avec :
 
 - un numéro unique ;
 - un compte et un client optionnels ;
 - un contact historique obligatoire ;
-- un brief et des directions musicales optionnelles ;
-- les états `DRAFT`, `SUBMITTED`, `REVIEWING`, `ACCEPTED`, `IN_PROGRESS`, `DELIVERED` et `CANCELLED`.
+- un brief borné, ses repères narratifs et sa direction musicale ;
+- un usage `PERSONAL` ou `COMMERCIAL_EXTENDED` et l’obligation contractuelle associée ;
+- un snapshot du prix en centimes (`base`, `cover`, `priority`, `total`, devise et version) ;
+- le retour inclus et consommé, ainsi que les jalons de soumission, service, livraison, expiration et annulation ;
+- les états détaillés du brouillon jusqu’à la livraison, au refus, à l’annulation ou au remboursement futur.
 
-Le formulaire public reste purement local : aucune route, écriture ou soumission n’utilise ce modèle en V0.4.
+Une séquence PostgreSQL indépendante produit les numéros `LNX-AAAA-NNNNNN` sans collision concurrente. Les contrôles SQL imposent prix non négatifs, somme du snapshot, cohérence usage/contrat, bornes de révision et expiration postérieure à la livraison. Les détails d’autorisation et de workflow sont dans [`docs/ORDER_MODEL.md`](ORDER_MODEL.md).
 
 ### Historique
 
-`OrderEvent` conserve les transitions de statut, une note, un acteur optionnel et leur date. La migration refuse un événement dont les états source et destination sont identiques. La suppression d’une commande est restreinte lorsqu’un historique existe.
+`OrderEvent` conserve les transitions de statut, une note, un acteur optionnel, une visibilité `CLIENT` ou `INTERNAL` et leur date. La timeline membre ne sélectionne que `CLIENT`. La migration refuse un événement dont les états source et destination sont identiques. Le service supprime seulement un brouillon appartenant au membre et ses données associées.
 
 ### Paiements
 
-Le paiement est différé. Un futur modèle `Payment` pourra se rattacher à `Order` avec un fournisseur, une référence externe, un montant en unité mineure, une devise et un statut. Aucune donnée bancaire sensible ne devra être stockée.
+Le paiement est différé. `AWAITING_PAYMENT` signifie uniquement qu’un brief est finalisé. Un futur modèle `Payment` pourra se rattacher à `Order` avec fournisseur, référence externe, montant en unité mineure, devise, idempotence et statut. La facture gardera une numérotation distincte. Aucune donnée bancaire sensible ne devra être stockée.
 
 ## Favoris
 

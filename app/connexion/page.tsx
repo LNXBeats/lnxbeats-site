@@ -36,7 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="auth-intro">
           <p className="eyebrow">Espace membre</p>
           <h1>Accéder à votre espace.</h1>
-          <p>Votre compte protège aujourd’hui votre profil et votre accès. Le suivi des créations et les livraisons y seront ajoutés seulement lorsqu’ils seront réellement disponibles.</p>
+          <p>Votre compte protège votre profil, vos brouillons et le suivi de vos demandes. Les paiements et livraisons n’apparaîtront que lorsqu’ils seront réellement disponibles.</p>
         </div>
         <div className="auth-panel">
           <p className="auth-panel__label">Connexion</p>

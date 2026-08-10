@@ -22,6 +22,14 @@ export async function requireUser(returnTo = "/compte") {
   return session;
 }
 
+export async function requireVerifiedUser(returnTo = "/compte") {
+  const session = await requireUser(returnTo);
+  if (session.user.emailVerified !== true) {
+    redirect("/renvoyer-verification");
+  }
+  return session;
+}
+
 export async function requireRole(allowedRoles: readonly UserRole[], returnTo: string) {
   const session = await requireUser(returnTo);
 

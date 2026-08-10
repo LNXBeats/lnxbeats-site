@@ -2,6 +2,24 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.0] — 2026-08-11
+
+### Ajouté
+
+- brouillons de commande persistés, reprenables et supprimables par leur propriétaire ;
+- finalisation atomique vers `AWAITING_PAYMENT`, référence concurrente sûre et timeline d’événements client ;
+- calcul serveur en centimes pour l’usage personnel, l’exploitation commerciale étendue, la cover et la priorité ;
+- espace membre listant brouillons, demandes actives et terminées, avec détail privé ;
+- photos JPEG/PNG/WebP limitées, décodées, réencodées sans métadonnées et stockées hors du webroot ;
+- migration Prisma dédiée, tests de domaine, tests de fichiers et validation runtime PostgreSQL jetable.
+
+### Sécurité et périmètre
+
+- compte actif et email vérifié requis, contrôles de propriété serveur et réponses neutres contre l’IDOR ;
+- prix client ignoré, snapshots tarifaires, contrat spécifique requis pour l’exploitation commerciale ;
+- aucun paiement, PSP, webhook, secret marchand, facture, email de commande ou livraison WAV active ;
+- informations professionnelles confirmées distinguées des validations fiscales, juridiques et d’adresse encore nécessaires.
+
 ## [0.5.2.1] — 2026-08-11
 
 ### Modifié

@@ -232,7 +232,7 @@ export default function HomePage() {
           <div className="home-member__copy">
             <h2 id="member-space-title">Garder la main sur votre accès.</h2>
             <p>Aujourd’hui, le compte protège votre profil et votre mot de passe. Il ne contient encore ni commande, ni paiement, ni fichier à télécharger.</p>
-            <p>Le suivi des créations, les livraisons, les favoris et les alertes choisies pourront y être réunis progressivement, à mesure que ces services seront réellement activés.</p>
+            <p>Les brouillons et le suivi des demandes y sont désormais réunis. Les livraisons, favoris et alertes choisies apparaîtront seulement lorsque ces services seront réellement activés.</p>
             <div className="home-member__actions">
               <ButtonLink href="/inscription">Créer un espace membre</ButtonLink>
               <ButtonLink href="/connexion" variant="quiet">Se connecter</ButtonLink>

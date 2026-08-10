@@ -43,11 +43,11 @@ Ces trois versions sont les références éditoriales. Elles n’ajoutent aucune
 
 ### Auditeur / visiteur
 
-Le visiteur peut comprendre la démarche, consulter la discographie, ouvrir les fiches projet, utiliser localement le parcours Commander, suivre les liens officiels et contacter LNX Beats. Il ne doit pas avoir besoin d’un compte pour écouter ou comprendre l’artiste.
+Le visiteur peut comprendre la démarche, consulter la discographie, ouvrir les fiches projet, préparer le parcours Commander, suivre les liens officiels et contacter LNX Beats. Il ne doit pas avoir besoin d’un compte pour écouter ou comprendre l’artiste. Un compte vérifié devient nécessaire au moment de sauvegarder une histoire privée.
 
 ### Membre — `MEMBER`
 
-Le membre possède actuellement un accès vérifié, un profil minimal et des fonctions de sécurité. À terme, ce rôle peut enregistrer des favoris, choisir des alertes de sortie et préparer une future relation de commande. Le rôle reste distinct d’un client tant qu’aucune commande n’a été acceptée.
+Le membre possède un accès vérifié, un profil minimal, des fonctions de sécurité et des brouillons privés. Il peut finaliser une demande et suivre son état, sans que cela prouve un paiement ou une acceptation. Les favoris et alertes restent futurs.
 
 ### Client — `CUSTOMER`
 
@@ -82,22 +82,29 @@ L’administrateur gère à terme les membres, clients, commandes, statuts, livr
 - préférences fines de formats ou de canaux ;
 - avantages liés à de futures éditions physiques.
 
-Les fonctions optionnelles ne justifient jamais une collecte obligatoire. La V0.5.2.1 n’active aucun de ces nouveaux services : elle explique seulement leur destination.
+Les fonctions optionnelles ne justifient jamais une collecte obligatoire. La V0.6 active seulement le brief, les photos de référence et le suivi nécessaires à une demande ; favoris, alertes et livraisons restent annoncés comme futurs.
 
 ## Suivi d’une création personnalisée
 
-Le futur parcours doit conserver le langage du studio tout en restant sans ambiguïté. Les statuts métier déjà préparés par Prisma peuvent être présentés ainsi :
+Le parcours conserve le langage du studio tout en restant sans ambiguïté. Les statuts métier peuvent être présentés ainsi :
 
 | Statut interne | Libellé membre proposé | Sens |
 | --- | --- | --- |
 | `DRAFT` | Brief en préparation | Le récit n’a pas été transmis. |
+| `AWAITING_PAYMENT` | En attente de paiement | La demande est finalisée, sans moyen de paiement actif. |
+| `PAYMENT_CONFIRMED` | Paiement confirmé | Futur état fondé uniquement sur une preuve serveur. |
 | `SUBMITTED` | Histoire reçue | Le brief a été transmis avec succès. |
+| `RECEIVED` | Histoire reçue | La demande est entrée dans le traitement métier. |
 | `REVIEWING` | En cours d’étude | LNX Beats analyse le besoin et les conditions. |
 | `ACCEPTED` | Projet accepté | Le périmètre, le prix et les conditions ont été acceptés. |
 | `IN_PROGRESS` | Création en cours | Le travail artistique a commencé. |
-| `IN_PROGRESS` + jalon | Finalisation | Une étape d’avancement, pas un nouveau statut tant que le besoin n’est pas confirmé. |
+| `FIRST_VERSION_READY` | Première version prête | Une première version attend le retour prévu. |
+| `REVISION_REQUESTED` | Retour demandé | Le retour inclus a été demandé. |
+| `FINALIZING` | Finalisation | La version finale est préparée. |
 | `DELIVERED` | Livré | Les fichiers autorisés sont disponibles. |
+| `REFUSED` | Demande refusée | Le projet n’est pas accepté. |
 | `CANCELLED` | Projet arrêté | Le projet ne se poursuit pas ; la raison et les conséquences doivent être expliquées. |
+| `REFUND_PENDING` / `REFUNDED` | Remboursement | États réservés à une architecture de paiement future. |
 
 Chaque changement important doit produire un événement horodaté et compréhensible. La timeline membre ne doit pas exposer les notes internes, les identifiants techniques ou les opérations administratives sans intérêt pour le client.
 
@@ -141,9 +148,9 @@ La boutique actuelle ne traite aucun achat : elle renvoie vers les espaces offic
 
 ## Paiements futurs
 
-### PayPal
+### Architecture à choisir
 
-Une future intégration doit créer l’intention côté serveur, vérifier la confirmation via API ou webhook, appliquer l’idempotence, rapprocher le paiement de la commande et ne jamais prendre le succès d’une redirection navigateur comme preuve de règlement. Aucun bouton réel, secret, identifiant marchand ou SDK PayPal n’est ajouté en V0.5.2.1.
+Une future intégration doit créer l’intention côté serveur, vérifier la confirmation via API ou webhook, appliquer l’idempotence, rapprocher le paiement de la commande et ne jamais prendre le succès d’une redirection navigateur comme preuve de règlement. Aucun bouton réel, secret, identifiant marchand, SDK ou fournisseur n’est ajouté en V0.6. Wero est une possibilité souhaitée pour le futur ; il n’est ni implémenté ni simulé.
 
 ### Virement bancaire et RIB
 
@@ -211,21 +218,21 @@ Le placeholder `/admin` reste minimal tant que ces opérations ne sont pas impl�
 
 La politique définitive doit reconnaître les données d’authentification déjà traitées. Elle ne peut plus affirmer que le site ne conserve aucune donnée.
 
-## Frontières de la V0.5.2.1
+## Frontières de la V0.6
 
 Cette version :
 
-- aligne les textes et CTA avec l’identité LNX Beats ;
-- publie la biographie artistique autorisée ;
-- clarifie l’utilité actuelle et future du compte ;
-- documente les parcours membres, commandes, administration, boutique et paiements futurs ;
-- prépare les champs juridiques sans inventer de données.
+- enregistre et reprend les brouillons d’un membre vérifié ;
+- valide les briefs et calcule les prix côté serveur ;
+- finalise une demande en attente de paiement et expose sa timeline privée ;
+- protège et normalise les photos de référence ;
+- publie les seules informations professionnelles confirmées tout en signalant les validations restantes.
 
 Cette version n’ajoute :
 
-- aucune commande persistée ;
 - aucun email de production ou notification marketing ;
-- aucun téléchargement ;
-- aucun paiement, bouton PayPal ou RIB ;
+- aucun téléchargement WAV actif ;
+- aucun paiement, PSP, webhook, bouton marchand ou RIB ;
+- aucune facture ni prétendue validation fiscale/juridique ;
 - aucun CRUD administrateur ;
-- aucune nouvelle dépendance ni modification du schéma Prisma.
+- aucune intégration avec LNX Gestion.

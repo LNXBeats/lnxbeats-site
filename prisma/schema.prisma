@@ -122,12 +122,31 @@ enum OrderAssetRole {
 
 enum OrderStatus {
   DRAFT
+  AWAITING_PAYMENT
+  PAYMENT_CONFIRMED
+  RECEIVED
   SUBMITTED
   REVIEWING
   ACCEPTED
   IN_PROGRESS
+  FIRST_VERSION_READY
+  REVISION_REQUESTED
+  FINALIZING
   DELIVERED
+  REFUSED
   CANCELLED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum OrderUsage {
+  PERSONAL
+  COMMERCIAL_EXTENDED
+}
+
+enum OrderEventVisibility {
+  CLIENT
+  INTERNAL
 }
 
 model User {
@@ -368,41 +387,66 @@ model ProjectAsset {
 }
 
 model Order {
-  id               String       @id @default(uuid()) @db.Uuid
-  orderNumber      String       @unique @db.VarChar(32)
-  userId           String?      @db.Uuid
-  customerId       String?      @db.Uuid
-  customerEmail    String       @db.VarChar(320)
-  customerName     String?      @db.VarChar(200)
-  status           OrderStatus  @default(DRAFT)
-  title            String?      @db.VarChar(240)
-  brief            String       @db.Text
-  musicalDirection String?      @db.Text
-  emotion          String?      @db.Text
-  notes            String?      @db.Text
-  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
-  account          User?        @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
-  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  events           OrderEvent[]
-  assets           OrderAsset[]
+  id                 String       @id @default(uuid()) @db.Uuid
+  orderNumber        String       @unique @db.VarChar(32)
+  userId             String?      @db.Uuid
+  customerId         String?      @db.Uuid
+  customerEmail      String       @db.VarChar(320)
+  customerName       String?      @db.VarChar(200)
+  status             OrderStatus  @default(DRAFT)
+  title              String?      @db.VarChar(240)
+  recipient          String?      @db.VarChar(200)
+  occasion           String?      @db.VarChar(200)
+  brief              String       @db.Text
+  musicalDirection   String?      @db.Text
+  emotion            String?      @db.Text
+  importantDetails   String?      @db.Text
+  wordsToInclude     String?      @db.Text
+  avoid              String?      @db.Text
+  pronunciationNotes String?      @db.Text
+  notes              String?      @db.Text
+  usage              OrderUsage   @default(PERSONAL)
+  coverIncluded      Boolean      @default(false)
+  priorityProcessing Boolean      @default(false)
+  basePriceCents     Int          @default(5000)
+  coverPriceCents    Int          @default(0)
+  priorityPriceCents Int          @default(0)
+  totalCents         Int          @default(5000)
+  currency           String       @default("EUR") @db.VarChar(3)
+  pricingVersion     String       @default("2026-08-v1") @db.VarChar(32)
+  contractRequired   Boolean      @default(false)
+  revisionAllowance  Int          @default(1)
+  revisionUsed       Int          @default(0)
+  submittedAt        DateTime?    @db.Timestamptz(3)
+  serviceStartedAt   DateTime?    @db.Timestamptz(3)
+  deliveredAt        DateTime?    @db.Timestamptz(3)
+  downloadExpiresAt  DateTime?    @db.Timestamptz(3)
+  cancelledAt        DateTime?    @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
+  account            User?        @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
+  customer           Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  events             OrderEvent[]
+  assets             OrderAsset[]
 
   @@index([status, createdAt])
   @@index([userId])
+  @@index([userId, status, updatedAt])
   @@index([customerId])
   @@map("orders")
 }
 
 model OrderEvent {
-  id          String       @id @default(uuid()) @db.Uuid
-  orderId     String       @db.Uuid
+  id          String               @id @default(uuid()) @db.Uuid
+  orderId     String               @db.Uuid
   fromStatus  OrderStatus?
   toStatus    OrderStatus
-  note        String?      @db.Text
-  actorUserId String?      @db.Uuid
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
-  order       Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  actor       User?        @relation("OrderEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  note        String?              @db.Text
+  visibility  OrderEventVisibility @default(CLIENT)
+  actorUserId String?              @db.Uuid
+  createdAt   DateTime             @default(now()) @db.Timestamptz(3)
+  order       Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actor       User?                @relation("OrderEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([orderId, createdAt])
   @@index([actorUserId])
@@ -413,6 +457,7 @@ model OrderAsset {
   orderId   String         @db.Uuid
   assetId   String         @db.Uuid
   role      OrderAssetRole
+  position  Int            @default(0)
   createdAt DateTime       @default(now()) @db.Timestamptz(3)
   order     Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
   asset     Asset          @relation(fields: [assetId], references: [id], onDelete: Restrict)

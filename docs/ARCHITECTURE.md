@@ -11,8 +11,9 @@ app/
   admin/            Placeholder protégé réservé à ADMIN
   album/[slug]/     Fiches de projet pré-rendues et metadata dynamiques
   api/auth/         Handlers Better Auth
+  api/orders/       Brouillons et photos privés, contrôlés côté serveur
   api/health/       Healthcheck Railway
-  compte/           Profil et sécurité du membre actif
+  compte/           Profil, sécurité, liste et détail des commandes
   connexion/        Formulaire de connexion
   inscription/      Création publique d’un MEMBER
   verifier-email/   Résultat de vérification sans token persistant dans l’URL
@@ -26,6 +27,7 @@ data/               Configuration publique, biographies et discographie typée
 docs/               Architecture, vision produit, audits, roadmap et déploiement
 generated/prisma/   Prisma Client généré localement et ignoré par Git
 lib/auth/           Validation, tokens, email, rôles, session et redirection
+lib/orders/         Domaine, prix, autorisations, stockage et services commande
 lib/email/          Templates transactionnels et transport capture QA
 lib/auth.ts         Configuration Better Auth exclusivement serveur
 lib/prisma.ts       Singleton PostgreSQL exclusivement serveur
@@ -45,7 +47,7 @@ Les zones suivantes ont besoin de l’exécution client :
 - les formulaires d’authentification pour envoyer des mutations de même origine et annoncer des messages neutres ;
 - `LogoutButton` pour révoquer la session puis rafraîchir la navigation.
 
-Le formulaire Commander ne déclenche aucun appel réseau. Les fichiers sélectionnés ne quittent pas le navigateur.
+Le formulaire Commander garde sa progression côté client mais enregistre explicitement les brouillons via des routes de même origine. Les prix, droits d’accès, limites et transitions sont recalculés côté serveur. Les photos passent par une validation binaire et un stockage privé ; elles ne sont jamais servies directement depuis `public/`.
 
 ## Design system
 
@@ -110,6 +112,12 @@ Le frontend ne reçoit jamais Prisma Client, un hash ou le token de session. Les
 
 La valeur actuelle et future du compte, les rôles visiteur/membre/client/admin, le suivi de commande, les notifications et les paiements futurs sont cadrés dans [`docs/PRODUCT_VISION.md`](PRODUCT_VISION.md). L’état éditorial réel de chaque route est consigné dans [`docs/PAGE_AUDIT.md`](PAGE_AUDIT.md). Ces documents n’activent aucun flux métier.
 
+### Commandes personnalisées
+
+La V0.6 relie Commander à PostgreSQL pour les membres actifs et vérifiés. `lib/orders/domain.ts` reste pur pour validation et tarification ; `lib/orders/service.ts` concentre transactions, propriété, séquence de référence et sérialisation ; `lib/orders/storage.ts` isole l’adaptateur de fichiers non-production. Les routes API ne font que valider session/origine, parser la requête et traduire les erreurs métier.
+
+La finalisation transactionnelle recalcule le prix et crée l’événement client avec le passage vers `AWAITING_PAYMENT`. Elle ne déclenche aucun fournisseur externe. La conception complète, les limites de fichiers et les frontières paiement/livraison sont consignées dans [`docs/ORDER_MODEL.md`](ORDER_MODEL.md).
+
 ## SEO et performance
 
 - metadata Next.js par route ;
@@ -123,7 +131,7 @@ La valeur actuelle et future du compte, les rôles visiteur/membre/client/admin,
 
 ## Sécurité
 
-La V0.5.2 ne contient aucun secret ni flux financier. Les anciens endpoints Express de commande, PayPal, virement et SMTP restent absents. Les réponses ajoutent une Content Security Policy, interdisent l’intégration en iframe, désactivent la détection MIME, limitent le referrer et ferment caméra, microphone et géolocalisation.
+La V0.6 ne contient aucun secret marchand ni flux financier. Les anciens endpoints Express, PayPal, virement et SMTP restent absents. Les réponses ajoutent une Content Security Policy, interdisent l’intégration en iframe, désactivent la détection MIME, limitent le referrer et ferment caméra, microphone et géolocalisation.
 
 HSTS n’est volontairement pas imposé par l’application tant que la terminaison TLS et l’ensemble des sous-domaines de production ne sont pas validés. Il devra être activé au niveau Railway ou applicatif uniquement après cette vérification.
 
