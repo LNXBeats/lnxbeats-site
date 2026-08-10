@@ -155,16 +155,36 @@ Le module échoue avec un message neutre si `DATABASE_URL` manque. Il n’est im
 
 La migration a été générée par `prisma migrate diff` depuis un état vide, sans connexion à une base. Elle ajoute quelques contraintes `CHECK` PostgreSQL non exprimables directement dans Prisma : valeurs positives, parent unique des crédits et cohérence des portées de plateformes.
 
-Migration SQL générée et validée statiquement, mais non encore exécutée sur une instance PostgreSQL réelle de développement. Cette réserve ne bloque pas la fondation V0.4 et devra être levée dans un sprint dédié : `V0.4.1 — PostgreSQL Runtime Validation`.
+La réserve d’exécution de la V0.4 est levée par `V0.4.1 — PostgreSQL Runtime Validation`. La migration a été appliquée depuis une base locale vide, réinitialisée avec consentement explicite, puis rejouée sans erreur SQL. `prisma migrate status` confirme que la base est à jour ; les comparaisons migrations → base et schéma Prisma → base ne détectent aucune différence.
 
-Une instance PostgreSQL locale ou de développement est nécessaire pour exécuter ensuite :
+## Validation PostgreSQL V0.4.1
+
+La validation a utilisé exclusivement l’instance locale jetable `lnx-studio-v041-test`, fournie par Prisma Dev et isolée sur l’adresse de boucle locale. Le moteur a déclaré PostgreSQL 17.5 sur PGlite. Aucun service distant, identifiant de production, secret de production ou environnement de production n’a été utilisé.
+
+Le schéma physique obtenu contient les 13 tables métier, la table de migrations, 15 enums, 17 clés étrangères, 14 clés primaires, 42 index et les 11 contraintes `CHECK` nommées par la migration. La suite `npm run test:database` valide :
+
+- le singleton et la connexion Prisma, le CRUD, les valeurs par défaut, les UUID et les horodatages ;
+- 11 contraintes uniques ou composites, 11 contraintes `CHECK` et une violation de clé étrangère ;
+- 3 suppressions `RESTRICT`, 5 mises à `NULL` et 2 cascades ;
+- le rollback d’une transaction, une concurrence sur unicité, puis la déconnexion et la reconnexion ;
+- le nettoyage complet des données QA avant de rendre la main.
+
+La suite refuse de s’exécuter sans toutes ses gardes : `NODE_ENV=test`, `ALLOW_DATABASE_RESET=true`, cible logique exacte `lnx-studio-v041-test`, base attendue explicite, protocole PostgreSQL, hôte de boucle locale et port non standard différent de 5432. Les valeurs de connexion restent hors Git.
+
+Procédure reproductible sur une nouvelle base locale jetable :
 
 ```bash
 npx prisma migrate deploy
 npx prisma migrate status
+NODE_ENV=test \
+ALLOW_DATABASE_RESET=true \
+LNX_DATABASE_TARGET=lnx-studio-v041-test \
+LNX_EXPECTED_DATABASE=<nom-base-locale> \
+DATABASE_URL=<url-postgresql-locale-jetable> \
+npm run test:database
 ```
 
-`prisma migrate dev` est réservé au développement et requiert une base shadow distincte et jetable. `DATABASE_URL` et `SHADOW_DATABASE_URL` ne doivent jamais viser la production pendant ces validations.
+Le reset et la comparaison de drift requièrent une autorisation séparée ainsi qu’une base shadow locale distincte et jetable. `DATABASE_URL` et `SHADOW_DATABASE_URL` ne doivent jamais viser la production. Après la validation V0.4.1, les données QA comptaient zéro ligne et l’instance `lnx-studio-v041-test` a été supprimée.
 
 ## Seed et migration du catalogue
 

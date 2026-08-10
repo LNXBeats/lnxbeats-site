@@ -1,6 +1,6 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**. La V0.4 conserve l’expérience publique statique et ajoute, sans l’activer dans le frontend, une fondation PostgreSQL/Prisma pour les futurs comptes, clients, commandes et outils d’administration.
+Site officiel de **LNX Beats**. La V0.4.1 conserve l’expérience publique statique et valide, sans l’activer dans le frontend, la fondation PostgreSQL/Prisma destinée aux futurs comptes, clients, commandes et outils d’administration.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucune authentification et aucune lecture ou écriture PostgreSQL ne sont actifs dans cette version.
 
@@ -47,6 +47,19 @@ npm run build
 npm run prisma:check
 ```
 
+La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
+
+```bash
+NODE_ENV=test \
+ALLOW_DATABASE_RESET=true \
+LNX_DATABASE_TARGET=lnx-studio-v041-test \
+LNX_EXPECTED_DATABASE=<nom-base-locale> \
+DATABASE_URL=<url-postgresql-locale-jetable> \
+npm run test:database
+```
+
+Le script contrôle le schéma physique, les opérations Prisma, les contraintes et les comportements de suppression. Il nettoie ses données QA même après un échec. Il ne doit jamais être lancé contre une base partagée, distante ou de production.
+
 Pour les smoke tests, lancer d’abord le build et le serveur de production :
 
 ```bash
@@ -81,6 +94,9 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `SITE_URL` | URL canonique utilisée par les metadata, le sitemap et robots.txt | Non |
 | `DATABASE_URL` | Connexion PostgreSQL locale ou de développement | Oui |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
+| `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
+| `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
+| `ALLOW_DATABASE_RESET` | Garde explicite requise pour la validation destructive locale | Non |
 | `PORT` | Port d’écoute ; fourni automatiquement par Railway | Non |
 
 Les URL PostgreSQL réelles restent dans les fichiers `.env*` ignorés par Git ou dans un gestionnaire de secrets. Les futurs secrets de paiement, SMTP ou d’authentification ne doivent pas être ajoutés tant que les fonctionnalités correspondantes ne sont pas développées côté serveur.
@@ -114,6 +130,7 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 - `feature/v0.1.1-quality-audit` — audit et durcissement local de la fondation
 - `feature/v0.2-artistic-catalog` — identité artistique et catalogue
 - `feature/v0.4-data-foundation` — fondation PostgreSQL/Prisma sans bascule runtime
+- `feature/v0.4.1-postgres-runtime-validation` — validation PostgreSQL locale jetable
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 

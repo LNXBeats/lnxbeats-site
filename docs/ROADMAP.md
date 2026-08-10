@@ -40,6 +40,14 @@
 - confidentialité et stratégie de migration documentées
 - aucune bascule du frontend vers la base
 
+## V0.4.1 — PostgreSQL Runtime Validation
+
+- migration initiale exécutée, réinitialisée et rejouée sur une base locale jetable
+- schéma physique, contraintes et comportements relationnels validés avec Prisma Client
+- rollback, concurrence, reconnexion et absence de drift confirmés
+- données QA et instance temporaire supprimées après validation
+- aucune connexion à la production et aucune bascule du frontend
+
 ## V0.5 — Authentification & membres
 
 - inscription et connexion sécurisées

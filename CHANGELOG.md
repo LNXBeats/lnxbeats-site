@@ -2,6 +2,23 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.4.1] — 2026-08-10
+
+### Validé
+
+- migration initiale appliquée depuis une base PostgreSQL locale vide, réinitialisée puis rejouée sans erreur SQL ;
+- schéma physique, Prisma Client, singleton, CRUD, valeurs par défaut, UUID et horodatages ;
+- contraintes d’unicité, composites, `CHECK`, clés étrangères et comportements `RESTRICT`, `SET NULL` et `CASCADE` ;
+- rollback transactionnel, concurrence sur une unicité, déconnexion et reconnexion ;
+- absence de drift entre migrations, schéma Prisma et base après reset.
+
+### Sécurité et périmètre
+
+- suite d’intégration protégée par des gardes imposant le mode test, une cible nommée, une adresse de boucle locale et un port non standard ;
+- données QA fictives nettoyées et instance PostgreSQL jetable supprimée après validation ;
+- aucune base distante ou de production, aucun secret, aucune donnée artistique et aucune bascule frontend utilisés ;
+- aucun changement du schéma métier ni de la migration V0.4.
+
 ## [0.4.0] — 2026-08-10
 
 ### Ajouté
