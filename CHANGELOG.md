@@ -2,6 +2,25 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.5.2] — 2026-08-10
+
+### Ajouté
+
+- inscription publique `MEMBER`, vérification email, renvoi et récupération de compte ;
+- profil membre minimal, email en lecture seule et changement de mot de passe connecté ;
+- templates de vérification/reset et transport QA local sans appel réseau ;
+- migration dédiée garantissant l’unicité des marqueurs de consommation ;
+- tests unitaires ciblés et suite PostgreSQL runtime couvrant tous les parcours sensibles.
+
+### Sécurité et périmètre
+
+- comptes publics créés `PENDING`, sans session, puis activés après vérification ;
+- tokens expirables, reset stocké sous identifiant haché, vérification à usage unique et aucun token loggé ;
+- anti-énumération, validation stricte des payloads, origine exacte et rate limiting PostgreSQL étendu ;
+- reset révoquant toutes les sessions et changement connecté faisant tourner la session courante ;
+- pages auth dynamiques, `noindex`, hors sitemap et transport capture limité à `@example.invalid` ;
+- aucun email réel, admin permanent, SMTP production, push, merge ou déploiement.
+
 ## [0.5.1] — 2026-08-10
 
 ### Ajouté

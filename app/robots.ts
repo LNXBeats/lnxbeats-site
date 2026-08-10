@@ -4,7 +4,21 @@ import { siteConfig } from "@/data/site";
 export default function robots(): MetadataRoute.Robots {
   const baseUrl = process.env.SITE_URL ?? siteConfig.url;
   return {
-    rules: { userAgent: "*", allow: "/", disallow: ["/api/", "/connexion", "/compte", "/admin"] },
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      disallow: [
+        "/api/",
+        "/connexion",
+        "/inscription",
+        "/mot-de-passe-oublie",
+        "/renvoyer-verification",
+        "/reinitialiser-mot-de-passe",
+        "/verifier-email",
+        "/compte",
+        "/admin",
+      ],
+    },
     sitemap: `${baseUrl}/sitemap.xml`,
     host: baseUrl,
   };

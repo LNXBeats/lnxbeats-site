@@ -1,140 +1,128 @@
-# Authentification — V0.5.1
+# Authentification — V0.5.2
 
 ## Décision
 
-La fondation utilise **Better Auth 1.6.26** avec son adaptateur Prisma officiel. Cette solution est retenue pour ses sessions en base, son intégration App Router, ses protections d’origine/CSRF, son rate limiting persistant et ses parcours email/password extensibles. Elle évite de reconstruire une authentification complète autour de simples primitives cryptographiques.
-
-Auth.js a également été évalué. Son fournisseur Credentials laisse volontairement à l’application la persistance des utilisateurs, le hachage, le rate limiting et les workflows de récupération. Cette liberté est utile dans certains contextes, mais apportait ici davantage de code de sécurité spécifique sans bénéfice fonctionnel en V0.5.1.
+L’authentification utilise **Better Auth 1.6.26**, son adaptateur Prisma officiel, PostgreSQL et Argon2id. La V0.5.2 ouvre l’inscription membre, la vérification d’adresse, le renvoi de vérification, la récupération du compte et un profil minimal. Elle ne branche aucun fournisseur email de production et ne crée aucun administrateur permanent.
 
 Références officielles :
 
 - [Better Auth avec Next.js](https://better-auth.com/docs/integrations/next)
-- [Adaptateur Prisma](https://better-auth.com/docs/adapters/prisma)
-- [Sécurité](https://better-auth.com/docs/reference/security)
+- [Email et mot de passe](https://better-auth.com/docs/authentication/email-password)
+- [Email](https://better-auth.com/docs/concepts/email)
 - [Sessions](https://better-auth.com/docs/concepts/session-management)
 - [Rate limiting](https://better-auth.com/docs/concepts/rate-limit)
-- [Auth.js Credentials](https://authjs.dev/getting-started/authentication/credentials)
+- [Sécurité](https://better-auth.com/docs/reference/security)
 
-Les versions sont fixées dans le lockfile. `server-only` interdit une importation accidentelle de Prisma ou de la configuration d’auth dans un Client Component.
+Les modules de configuration, Prisma et transport email sont marqués `server-only`. Aucun hash, secret, token ou client Prisma n’est importé dans un Client Component.
 
-## Périmètre actif
+## Parcours et état du membre
 
-La V0.5.1 fournit :
+Une inscription publique crée toujours un utilisateur avec :
 
-- `POST /api/auth/sign-in/email` et les routes de session Better Auth nécessaires ;
-- `/connexion`, sans inscription publique ;
-- `/compte`, protégé et accessible aux rôles actifs ;
-- `/admin`, placeholder strictement réservé à `ADMIN` ;
-- un logout qui invalide réellement la session en base ;
-- les helpers serveur `requireUser`, `requireRole` et `requireAdmin`.
+- rôle `MEMBER`, imposé par le serveur ;
+- statut `PENDING` ;
+- `emailVerified = false` et `emailVerifiedAt = null` ;
+- aucune session automatique.
 
-Elle ne fournit pas d’inscription, d’envoi d’email, de récupération publique, de dashboard, de favoris dynamiques ni de gestion des membres.
+Le payload public n’accepte que l’email normalisé, le mot de passe et un nom d’affichage borné. `role`, `status`, `image` et tout champ supplémentaire sont refusés avant Better Auth. L’email n’est pas modifiable dans l’espace membre.
 
-## Modèle
+La connexion d’un compte non vérifié est bloquée. Après une vérification valide, Better Auth positionne `emailVerified`; le callback serveur renseigne `emailVerifiedAt` et fait passer uniquement un compte `PENDING` à `ACTIVE`. Un compte déjà suspendu ou désactivé n’est jamais réactivé par ce parcours. Seul un statut `ACTIVE` peut ouvrir une session.
 
-Better Auth s’appuie sur quatre modèles dédiés :
+## Vérification email
 
-- `Account` : identité du fournisseur et hash du mot de passe pour `credential` ;
-- `Session` : token opaque, expiration, user agent et adresse IP éventuelle ;
-- `Verification` : support futur des jetons à usage limité ;
-- `RateLimit` : compteurs partagés entre instances applicatives.
+Better Auth signe un token de vérification non prévisible avec `AUTH_SECRET`. Sa durée de validité est de 60 minutes. Le message pointe vers `/verifier-email` avec le token dans le fragment, qui n’est jamais envoyé dans la ligne de requête HTTP. La page retire immédiatement le fragment de l’historique puis transmet le token par `POST` à `/api/auth/verification-email`, qui le consomme côté serveur. L’endpoint Better Auth natif est masqué au public afin que le passage par le contrôle d’usage unique ne puisse pas être contourné.
 
-`User` garde les données de profil et les enums métier `UserRole` et `UserStatus`. Le booléen `emailVerified`, requis par Better Auth, coexiste avec `emailVerifiedAt`, conservé pour une future trace métier datée. Le workflow futur devra mettre ces deux champs à jour ensemble.
+Après une consommation réussie, une empreinte SHA-256 du token est enregistrée sous un identifiant unique dans `auth_verifications`. Le token brut n’est ni stocké ni journalisé. Une seconde consommation, un token expiré ou une valeur invalide produit le même état utilisateur neutre. L’index unique ajouté par la migration V0.5.2 protège les consommations concurrentes.
 
-Les relations `Session` et `Account` utilisent `ON DELETE CASCADE`. Un compte désactivé ou suspendu ne peut pas ouvrir une nouvelle session. Aucun rôle n’est accepté depuis les données publiques d’inscription ou de connexion.
+Le renvoi de vérification utilise la même destination locale. Sa réponse est identique pour une adresse existante, absente ou déjà vérifiée.
 
-## Mots de passe
+## Récupération et mots de passe
 
-Les mots de passe sont hachés avec Argon2id v19 :
+`/mot-de-passe-oublie` répond toujours par un message générique. Better Auth ne crée un token que pour un compte approprié, sans exposer cette décision. Le token de reset est aléatoire, expire après 30 minutes et son identifiant est stocké sous forme hachée grâce à `verification.storeIdentifier = "hashed"`.
 
-- mémoire : 64 MiB ;
-- itérations : 3 ;
-- parallélisme : 1 ;
-- sortie : 32 octets ;
-- sel aléatoire propre à chaque hash.
+`/reinitialiser-mot-de-passe` reçoit également le token dans le fragment, le retire de l’historique dès le chargement, puis impose la politique de 12 à 128 caractères. Une consommation réussie supprime le token et révoque toutes les sessions du compte. L’ancien mot de passe et tous les anciens cookies deviennent inutilisables ; une nouvelle connexion est nécessaire.
 
-La politique courante accepte 12 à 128 caractères. La vérification d’un hash malformé échoue sans exception publique. `needsPasswordRehash` permet une migration ultérieure des paramètres. Aucun mot de passe ou hash n’est journalisé.
+Depuis `/compte`, un membre peut modifier son mot de passe après avoir fourni le mot de passe courant. Better Auth supprime alors toutes les sessions existantes, crée une nouvelle session courante et remplace le cookie. Les cookies antérieurs, y compris celui de l’onglet courant, sont invalidés.
 
-## Sessions et cookies
+## Profil minimal et autorisation
 
-La session est stockée dans PostgreSQL ; le navigateur reçoit uniquement un token opaque signé dans un cookie préfixé `lnx-studio`.
+`/compte` affiche l’email en lecture seule, l’état de vérification, un formulaire de nom d’affichage et la section Sécurité. Seul `displayName` peut être modifié. Les tentatives de modifier email, rôle, statut ou image sont rejetées côté serveur.
 
-- durée maximale : 12 heures ;
-- renouvellement après 1 heure d’activité ;
-- fraîcheur sensible : 30 minutes ;
-- cache de session dans le cookie désactivé, afin qu’une révocation soit immédiatement visible ;
-- cookie `HttpOnly`, `SameSite=Lax`, `Path=/` ;
-- `Secure` forcé en production ;
-- `Max-Age=43200` lorsque la session est mémorisée ;
-- logout : suppression de la session PostgreSQL et expiration du cookie.
+Les pages privées appellent toujours les helpers serveur :
 
-Aucun token n’est placé dans `localStorage` ou rendu accessible à `document.cookie`.
-
-## Autorisation serveur
-
-Les pages privées appellent la couche d’accès serveur :
-
-- `requireUser()` exige une session et un statut `ACTIVE` ;
-- `requireRole()` contrôle le rôle issu de la ligne `User` en base ;
+- `requireUser()` exige une session persistée et un statut `ACTIVE` ;
+- `requireRole()` contrôle le rôle relu depuis PostgreSQL ;
 - `requireAdmin()` n’accepte que `ADMIN`.
 
-Le masquage d’une interface client n’est jamais considéré comme une autorisation. Les pages privées sont rendues à la requête (`force-dynamic`) et ne mettent aucune donnée utilisateur dans un cache partagé.
+Le masquage d’un élément côté client ne constitue jamais une autorisation. Aucun formulaire de création d’admin ni bootstrap de production n’existe.
 
-## Anti-énumération et redirections
+## Mots de passe, sessions et cookies
 
-Better Auth effectue un hash factice lorsqu’un compte ou un credential n’existe pas. La route publique normalise en plus tous les échecs de connexion — email absent, mot de passe incorrect, compte suspendu ou erreur de création de session — vers le même statut et le même message. Le rate limiting conserve son statut `429`, avec le même corps générique.
+Les mots de passe sont hachés avec Argon2id v19 : 64 MiB, trois itérations, parallélisme 1, sortie 32 octets et sel aléatoire par hash. Aucun mot de passe ou hash n’est journalisé.
 
-La destination après connexion passe par `safeInternalPath`. Les URL absolues, protocol-relative, contenant un antislash, des caractères de contrôle ou une origine différente sont remplacées par `/compte`.
+Les sessions vivent dans PostgreSQL. Le navigateur reçoit un token opaque dans un cookie préfixé `lnx-studio`, `HttpOnly`, `SameSite=Lax`, `Path=/` et `Secure` en production. La durée maximale est de 12 heures, le renouvellement intervient après une heure d’activité et la fraîcheur sensible vaut 30 minutes. Le cache de session dans le cookie reste désactivé afin qu’une révocation soit immédiatement observable.
 
-## CSRF, origine et brute force
+## Anti-énumération
 
-Les contrôles d’origine, de Fetch Metadata et de destination de Better Auth restent actifs. `trustedOrigins` contient uniquement `AUTH_URL`; `disableCSRFCheck` et `disableOriginCheck` sont explicitement fixés à `false`, y compris pendant les tests. Le client envoie la connexion au handler HTTP de même origine pour que le rate limiter s’exécute réellement.
+Les réponses publiques sont normalisées :
 
-Le login est limité à cinq requêtes par minute et par couple route/IP. Les compteurs sont stockés dans PostgreSQL, donc partagés entre plusieurs instances. Ce premier palier n’est pas un verrouillage permanent de compte. Avant un déploiement derrière proxy, la chaîne d’IP de confiance devra être vérifiée avec l’infrastructure réelle ; une future version pourra combiner IP, identité normalisée, délai progressif et événements de sécurité sobres.
+- connexion : même erreur pour email absent, mauvais mot de passe, compte non vérifié ou statut refusé ;
+- inscription : même succès neutre pour une création possible ou un email déjà utilisé ;
+- renvoi et mot de passe oublié : même succès pour une adresse existante ou absente ;
+- vérification et reset : même refus neutre pour une valeur invalide, expirée ou déjà utilisée.
 
-Les logs de sécurité ne doivent contenir ni email complet si non nécessaire, ni mot de passe, hash, token, cookie, secret ou URL de connexion.
+Le login conserve un statut `429` lorsqu’une limite est atteinte, mais sans révéler l’existence d’un compte. Les parcours d’envoi et d’inscription appliquent en plus un plancher temporel court pour réduire les différences observables.
 
-## Secrets et build
+## Rate limiting PostgreSQL
 
-Les variables runtime sont :
+Les compteurs partagés sont persistés dans `auth_rate_limits` :
 
-- `AUTH_URL` : origine exacte de l’application ;
-- `AUTH_SECRET` : valeur aléatoire d’au moins 32 octets, distincte par environnement ;
-- `DATABASE_URL` : URL PostgreSQL fournie uniquement côté serveur.
+| Route | Limite |
+| --- | --- |
+| connexion | 5 par minute |
+| inscription | 5 par 10 minutes |
+| renvoi de vérification | 3 par heure |
+| mot de passe oublié | 3 par heure |
+| reset password | 5 par 15 minutes |
+| changement de mot de passe | 5 par 15 minutes |
+| modification du profil | 10 par 10 minutes |
 
-Le build public utilise un secret aléatoire transitoire uniquement pendant `phase-production-build`, car aucun endpoint n’est alors servi. Au runtime, l’absence de `AUTH_SECRET` fait échouer l’authentification de manière fermée. Aucun secret de secours stable n’est commité.
+Ces limites sont temporaires et ne verrouillent jamais définitivement un compte. Avant production, l’interprétation de l’adresse IP derrière le proxy réel devra être validée.
 
-## Création de comptes
+## CSRF, origine, redirections et logs
 
-Il n’existe ni inscription publique ni création automatique du premier administrateur. `createInternalAuthUser` est une primitive serveur atomique qui normalise l’email, valide le rôle, hache le mot de passe puis crée `User` et `Account` dans une transaction.
+Les protections d’origine et CSRF de Better Auth restent activées. Les mutations sensibles sont en plus refusées si leur en-tête `Origin` ne correspond pas exactement à `AUTH_URL`. Les callbacks acceptés sont des chemins internes fixes ; aucune destination fournie par le visiteur n’est utilisée comme redirect externe.
 
-Le script de fixtures n’est qu’un outil QA : il exige `NODE_ENV=test`, le nom exact `lnx-studio-v051-test`, une URL directe en boucle locale et une preuve Prisma Dev correspondant à cette instance. Il ne crée que des emails `@example.invalid` et propose une opération de nettoyage. Une vraie commande de bootstrap ADMIN, interactive et auditable, sera conçue séparément avant tout usage réel.
+La destination demandée après connexion passe par `safeInternalPath`. Les URL absolues, protocol-relative, contenant un antislash, des caractères de contrôle ou une origine différente sont remplacées par `/compte`.
 
-## Email verification et password reset
+Les tokens peuvent exister brièvement dans une URL d’action locale, mais ne sont envoyés à aucun domaine tiers. Les routes concernées ont une politique de referrer restrictive, consomment le token côté serveur ou le retirent immédiatement de l’URL, et sont dynamiques avec `no-store`. Les logs ne doivent jamais contenir mot de passe, hash, token, cookie, secret ou URL d’action complète.
 
-Les tables et l’adaptateur rendent ces parcours possibles, mais ils sont désactivés : aucun callback d’envoi, SMTP, écran public ou token réel n’est créé en V0.5.1.
+## Transport email QA
 
-La future implémentation devra :
+`lib/email/auth-email.ts` définit une abstraction minimale pour les emails de vérification et de reset. Le seul transport V0.5.2 est `capture` :
 
-- répondre de façon identique pour un email existant ou absent ;
-- utiliser des tokens cryptographiquement aléatoires, courts en durée et à usage unique ;
-- réévaluer le stockage hashé des tokens avant activation ;
-- synchroniser `emailVerified` et `emailVerifiedAt` ;
-- invalider les autres sessions après un reset ;
-- journaliser l’événement sans données sensibles.
+- interdit lorsque `NODE_ENV=production` ;
+- accepte uniquement des destinataires `@example.invalid` ;
+- écrit un fichier JSON Lines local avec des permissions `0600` ;
+- ne charge aucun SDK SMTP et n’effectue aucun appel réseau ;
+- n’ajoute ni tracking pixel, ni marketing, ni ressource distante.
 
-## SEO et limites
+Les variables génériques sont `MAIL_FROM`, `AUTH_EMAIL_TRANSPORT` et `AUTH_EMAIL_CAPTURE_PATH`. Aucun credential SMTP ou fournisseur réel n’est prévu avant la V0.5.3.
 
-`/connexion`, `/compte` et `/admin` déclarent `noindex, nofollow`, sont absents du sitemap et interdits dans `robots.txt`. Les headers CSP, anti-frame, nosniff, referrer et permissions restent inchangés.
+## Secrets, build et comptes internes
 
-Limites connues : pas de MFA, pas de vérification email, pas de reset, pas de bootstrap de production, pas d’audit métier persistant et pas encore de politique de proxy validée en environnement déployé.
+`AUTH_URL`, `AUTH_SECRET` et `DATABASE_URL` restent exclusivement fournis par l’environnement. Le build public utilise un secret aléatoire transitoire uniquement pendant `phase-production-build`, alors qu’aucun endpoint n’est servi. Au runtime, l’absence d’un vrai `AUTH_SECRET` fait échouer l’authentification de manière fermée ; aucun secret de secours stable n’est commité.
+
+`createInternalAuthUser` reste une primitive serveur pour les fixtures contrôlées. Ces comptes de confiance sont créés `ACTIVE` et déjà vérifiés, car aucun email réel ne peut leur être envoyé en QA. Le script exige le mode test, la cible Prisma Dev exacte et une adresse `@example.invalid`. Il ne constitue pas un bootstrap de production.
+
+## SEO, cache et accessibilité
+
+Les routes `/inscription`, `/connexion`, `/mot-de-passe-oublie`, `/renvoyer-verification`, `/reinitialiser-mot-de-passe`, `/verifier-email`, `/compte` et `/admin` déclarent `noindex, nofollow`, sont hors sitemap et bloquées dans `robots.txt`. Les pages dépendantes d’une session ou d’un token sont dynamiques et ne partagent aucun cache utilisateur.
+
+Les formulaires utilisent des labels explicites, `autocomplete` adapté (`email`, `current-password`, `new-password`), messages annoncés, focus visible et boutons tactiles. Les animations suivent la règle globale `prefers-reduced-motion`.
 
 ## Validation locale
 
-Les contrôles purs s’exécutent avec :
+Les tests purs s’exécutent avec `npm run test:auth`. La suite `npm run test:auth:runtime` refuse de démarrer hors de l’instance locale jetable `lnx-studio-v052-test`, sans preuve Prisma Dev exacte, secrets éphémères, transport capture et boîte locale approuvée. Elle couvre inscription, injection de rôle, vérification, renvoi, profil, sessions, récupération, reset, expiration, réutilisation, origine et limites, puis vérifie le nettoyage complet.
 
-```bash
-npm run test:auth
-```
-
-`npm run test:auth:runtime` exige exclusivement l’instance PostgreSQL locale jetable `lnx-studio-v051-test`, ses variables de preuve et un mot de passe QA fourni par l’environnement. La suite vérifie création interne, Argon2id, inscription refusée, CSRF, anti-énumération, trois rôles, cookie, session, logout et rate limiting, puis garantit zéro donnée QA. Elle n’exécute aucun reset.
+La suppression définitive d’un compte, le MFA, les emails réels, le bootstrap administrateur et le dashboard restent hors périmètre. La suppression/anonymisation devra être arbitrée avec les obligations métier et RGPD avant d’exposer une action destructive.

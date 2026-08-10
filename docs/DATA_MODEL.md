@@ -1,10 +1,10 @@
-# Modèle de données — V0.4
+# Modèle de données — V0.5.2
 
 ## Périmètre
 
 La V0.4 crée une fondation PostgreSQL avec Prisma ORM. Elle ne connecte aucune base de production, ne migre aucune donnée artistique et ne change pas la source runtime du site public. `data/discography.ts` reste la seule source des pages publiques jusqu’à un sprint de migration contrôlé.
 
-Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers futurs et la traçabilité. La V0.5.1 active uniquement la fondation d’authentification ; elle ne crée ni back-office complet, ni paiement, ni stockage de fichiers.
+Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers futurs et la traçabilité. La V0.5.2 active les parcours membres et de récupération ; elle ne crée ni back-office complet, ni paiement, ni stockage de fichiers.
 
 ## Vue d’ensemble
 
@@ -49,7 +49,7 @@ Rôles conservés :
 
 `EDITOR` n’est pas ajouté : aucune permission actuelle ne justifie ce rôle. Une table de rôles multiples pourra remplacer l’enum si les besoins réels le demandent plus tard.
 
-Les états `PENDING`, `ACTIVE`, `SUSPENDED` et `DEACTIVATED` pilotent désormais l’ouverture de session : seul `ACTIVE` est accepté. `Account` stocke le hash Argon2id du credential, jamais un mot de passe en clair. `Session` conserve le token opaque côté serveur et son expiration. `Verification` et `RateLimit` préparent les workflows à usage unique et la protection partagée entre instances. Aucun utilisateur ni administrateur réel n’est créé.
+Les états `PENDING`, `ACTIVE`, `SUSPENDED` et `DEACTIVATED` pilotent l’ouverture de session : seul `ACTIVE` est accepté. Une inscription publique impose `MEMBER/PENDING`, puis une vérification valide synchronise `emailVerified`, `emailVerifiedAt` et le passage conditionnel à `ACTIVE`. `Account` stocke le hash Argon2id du credential, jamais un mot de passe en clair. `Session` conserve le token opaque côté serveur et son expiration. `Verification` stocke des identifiants de reset hachés et les empreintes uniques des vérifications consommées. `RateLimit` partage les compteurs entre instances. Aucun administrateur réel n’est créé.
 
 ## Customer et distinction avec User
 
@@ -153,11 +153,11 @@ Prisma Client est généré dans `generated/prisma`, répertoire ignoré par Git
 
 Les appels runtime échouent avec un message neutre si `DATABASE_URL` manque. Un adaptateur loopback injoignable permet uniquement d’instancier Prisma pendant un build public sans secret ; aucune connexion n’est ouverte. Le module n’est importé par aucune page publique, donc les fiches statiques et le catalogue ne consultent pas PostgreSQL.
 
-## Extension auth V0.5.1
+## Extensions auth V0.5.1 et V0.5.2
 
 La migration `auth_foundation` ajoute `auth_accounts`, `auth_sessions`, `auth_verifications` et `auth_rate_limits`, ainsi que les champs Better Auth nécessaires sur `users`. Les comptes et sessions sont supprimés en cascade avec `User`; les compteurs et vérifications sont indépendants.
 
-`emailVerified` est l’état technique attendu par l’adaptateur. `emailVerifiedAt` reste le futur horodatage métier ; un workflow d’email ultérieur devra les synchroniser. Les détails de session, cookie, autorisation et tests sont consignés dans [`docs/AUTH.md`](AUTH.md).
+`emailVerified` est l’état technique attendu par l’adaptateur. Depuis la V0.5.2, le workflow de vérification synchronise `emailVerifiedAt` et active uniquement un membre encore `PENDING`. La migration `registration_recovery_token_uniqueness` remplace l’index non unique de `Verification.identifier` par une contrainte unique, nécessaire aux marqueurs de consommation concurrents. Aucune migration précédente n’est réécrite. Les détails de session, cookie, autorisation et tests sont consignés dans [`docs/AUTH.md`](AUTH.md).
 
 ## Migration initiale
 

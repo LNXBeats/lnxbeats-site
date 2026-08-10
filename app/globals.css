@@ -246,6 +246,22 @@ a {
   color: var(--background);
 }
 
+.desktop-navigation__account {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  margin-left: 0.35rem;
+  color: var(--text-soft);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: color var(--motion-fast) ease;
+}
+
+.desktop-navigation__account:is(:hover, :focus-visible),
+.desktop-navigation__account.is-active { color: var(--gold-light); }
+
 .menu-button {
   display: none;
   width: 48px;
@@ -2014,6 +2030,8 @@ a {
   text-transform: uppercase;
 }
 
+.auth-field label span { color: #77736c; font-size: 0.62rem; }
+
 .auth-field input {
   width: 100%;
   min-height: 52px;
@@ -2026,6 +2044,12 @@ a {
 }
 
 .auth-field input:focus-visible { border-color: var(--gold-light); box-shadow: 0 0 0 1px var(--gold-light); }
+
+.auth-field__help {
+  margin: 0;
+  color: #8f8a82;
+  font-size: 0.75rem;
+}
 
 .auth-submit {
   display: flex;
@@ -2055,6 +2079,23 @@ a {
   font-size: 0.88rem;
 }
 
+.auth-form__success {
+  margin: 0;
+  padding: 0.85rem 0;
+  border-block: 1px solid rgba(104, 151, 118, 0.45);
+  color: #c3ddca;
+  font-size: 0.88rem;
+}
+
+.auth-form__error a,
+.auth-form__success a,
+.auth-panel__note a,
+.auth-panel__links a,
+.auth-inline-link {
+  border-bottom: 1px solid currentColor;
+  color: var(--gold-light);
+}
+
 .auth-panel__note {
   margin: 2rem 0 0;
   padding-top: 1.5rem;
@@ -2062,6 +2103,28 @@ a {
   color: var(--text-soft);
   font-size: 0.78rem;
 }
+
+.auth-panel__links {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.78rem;
+}
+
+.auth-panel__links a { justify-self: start; }
+
+.auth-account-stack { display: grid; gap: 1rem; }
+.auth-account-stack .auth-panel__label { font-family: inherit; }
+
+.auth-submit--secondary {
+  border-color: var(--line-strong);
+  background: transparent;
+  color: var(--gold-light);
+}
+
+.auth-submit--secondary:hover { border-color: var(--gold); background: var(--gold); color: var(--background); }
 
 .auth-profile > div {
   display: grid;

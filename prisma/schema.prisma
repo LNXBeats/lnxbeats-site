@@ -194,13 +194,12 @@ model Account {
 
 model Verification {
   id         String   @id @default(uuid()) @db.Uuid
-  identifier String   @db.VarChar(320)
+  identifier String   @unique @db.VarChar(320)
   value      String   @db.VarChar(500)
   expiresAt  DateTime @db.Timestamptz(3)
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
-  @@index([identifier])
   @@index([expiresAt])
   @@map("auth_verifications")
 }

@@ -59,9 +59,19 @@
 
 ## V0.5.2 — Parcours membres
 
-- inscription et connexion sécurisées
-- vérification d’adresse et récupération de compte
-- favoris connectés à un utilisateur réel
+- inscription publique strictement `MEMBER` et connexion après vérification
+- vérification d’adresse, renvoi et récupération de compte anti-énumération
+- profil minimal et changement de mot de passe connecté
+- invalidation des sessions après reset ou changement sensible
+- transport email local capturé, sans fournisseur de production
+
+## V0.5.3 — Email transactionnel et bootstrap sécurisé
+
+- fournisseur email de production choisi, configuré et observé sans exposer les tokens
+- domaines d’envoi, rebonds et délivrabilité validés
+- bootstrap administrateur explicite, interactif et auditable
+- aucune création publique ou automatique d’`ADMIN`
+- cadrage de la suppression/anonymisation de compte avant toute action destructive
 
 ## V0.6 — Administration & commandes
 

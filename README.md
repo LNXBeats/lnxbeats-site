@@ -1,8 +1,8 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**. La V0.5.1 conserve l’expérience publique statique et ajoute une fondation d’authentification fermée : connexion, sessions PostgreSQL, rôles serveur et espaces privés minimaux.
+Site officiel de **LNX Beats**. La V0.5.2 conserve l’expérience publique statique et ouvre les parcours membres : inscription, vérification email, récupération de compte, sessions PostgreSQL et profil minimal.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucune inscription publique, aucun email et aucun dashboard ne sont actifs dans cette version.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Aucun paiement, aucune commande réelle, aucun email de production et aucun dashboard ne sont actifs dans cette version.
 
 ## Stack
 
@@ -62,7 +62,7 @@ npm run test:database
 
 Le script contrôle le schéma physique, les opérations Prisma, les contraintes et les comportements de suppression. Il nettoie ses données QA même après un échec. Il ne doit jamais être lancé contre une base partagée, distante ou de production.
 
-La validation runtime de l’authentification possède des gardes supplémentaires liées à l’instance Prisma Dev locale `lnx-studio-v051-test`. Elle crée uniquement des identités `@example.invalid`, ne lance aucun reset et supprime comptes, credentials, sessions, vérifications et compteurs à la fin. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
+La validation runtime de l’authentification possède des gardes supplémentaires liées à l’instance Prisma Dev locale `lnx-studio-v052-test`. Elle utilise uniquement des identités `@example.invalid` et un transport email capturé sans réseau. Elle couvre inscription, vérification, récupération, profil et invalidation des sessions, puis supprime comptes, credentials, sessions, vérifications, compteurs et boîte QA. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
 
 Pour les smoke tests, lancer d’abord le build et le serveur de production :
 
@@ -91,10 +91,15 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/mentions-legales`, `/confidentialite`, `/cgv` — emplacements juridiques à finaliser
 - `/api/health` — healthcheck JSON Railway
 
-## Routes privées
+## Routes d’authentification et privées
 
-- `/connexion` — connexion email/password, sans inscription publique
-- `/compte` — placeholder protégé pour `MEMBER`, `CUSTOMER` et `ADMIN` actifs
+- `/inscription` — création publique d’un compte `MEMBER` en attente de vérification
+- `/connexion` — connexion email/password après vérification
+- `/mot-de-passe-oublie` — demande générique de récupération
+- `/renvoyer-verification` — renvoi générique du message de vérification
+- `/reinitialiser-mot-de-passe` — choix d’un nouveau mot de passe avec token temporaire
+- `/verifier-email` — résultat neutre de la vérification
+- `/compte` — profil minimal et sécurité pour les rôles actifs
 - `/admin` — placeholder protégé réservé à `ADMIN`
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
 
@@ -106,6 +111,9 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `AUTH_URL` | Origine exacte autorisée pour les routes d’authentification | Non |
 | `AUTH_SECRET` | Signature et protection des données d’auth ; minimum 32 octets aléatoires | Oui |
 | `DATABASE_URL` | Connexion PostgreSQL locale ou de développement | Oui |
+| `MAIL_FROM` | Expéditeur logique des emails transactionnels | Non |
+| `AUTH_EMAIL_TRANSPORT` | Transport non-production ; seule la valeur `capture` existe en V0.5.2 | Non |
+| `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
 | `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
@@ -116,7 +124,7 @@ Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés 
 
 ## Architecture
 
-Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief et les contrôles de connexion/logout utilisent des Client Components limités. Les décisions de rôle et de statut restent côté serveur. La discographie demeure locale et toutes ses fiches sont pré-rendues sans base de données ; aucune route publique n’interroge les comptes.
+Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief et les formulaires d’authentification utilisent des Client Components limités. Les décisions de rôle, de statut, de vérification et de session restent côté serveur. La discographie demeure locale et toutes ses fiches sont pré-rendues sans base de données ; les bundles des pages publiques n’importent pas les formulaires membres.
 
 ## Ajouter un projet au catalogue
 
@@ -145,6 +153,7 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 - `feature/v0.4-data-foundation` — fondation PostgreSQL/Prisma sans bascule runtime
 - `feature/v0.4.1-postgres-runtime-validation` — validation PostgreSQL locale jetable
 - `feature/v0.5.1-auth-foundation` — sessions, rôles et espaces privés minimaux
+- `feature/v0.5.2-registration-recovery` — inscription, vérification email et récupération de compte
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 

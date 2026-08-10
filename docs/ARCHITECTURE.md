@@ -12,8 +12,11 @@ app/
   album/[slug]/     Fiches de projet pré-rendues et metadata dynamiques
   api/auth/         Handlers Better Auth
   api/health/       Healthcheck Railway
-  compte/           Espace membre minimal protégé
+  compte/           Profil et sécurité du membre actif
   connexion/        Formulaire de connexion
+  inscription/      Création publique d’un MEMBER
+  verifier-email/   Résultat de vérification sans token persistant dans l’URL
+  [auth routes]/    Renvoi, mot de passe oublié et reset
   [routes]/         Pages publiques et metadata associées
   globals.css       Tokens et styles du design system
   icon.tsx          Favicon PNG généré par Next.js
@@ -22,7 +25,8 @@ components/         Composants visuels et interactifs partagés
 data/               Configuration publique et discographie typée
 docs/               Architecture, roadmap et déploiement
 generated/prisma/   Prisma Client généré localement et ignoré par Git
-lib/auth/           Politiques de mot de passe, rôles, session et redirection
+lib/auth/           Validation, tokens, email, rôles, session et redirection
+lib/email/          Templates transactionnels et transport capture QA
 lib/auth.ts         Configuration Better Auth exclusivement serveur
 lib/prisma.ts       Singleton PostgreSQL exclusivement serveur
 prisma/             Schéma et migrations de la fondation de données
@@ -34,11 +38,11 @@ scripts/            Contrôles automatisés légers
 
 Les pages sont des Server Components par défaut. Cette approche minimise le JavaScript envoyé au navigateur et facilite le référencement.
 
-Quatre zones ont besoin de l’exécution client :
+Les zones suivantes ont besoin de l’exécution client :
 
 - `SiteHeader` pour l’ouverture, la fermeture, le piégeage du focus et le clavier du menu mobile ;
 - `MusicOrderForm` pour la progression locale, la validation et le récapitulatif du brief ;
-- `LoginForm` pour envoyer les credentials au handler de même origine et afficher un message générique ;
+- les formulaires d’authentification pour envoyer des mutations de même origine et annoncer des messages neutres ;
 - `LogoutButton` pour révoquer la session puis rafraîchir la navigation.
 
 Le formulaire Commander ne déclenche aucun appel réseau. Les fichiers sélectionnés ne quittent pas le navigateur.
@@ -98,11 +102,11 @@ La V0.4 ajoute Prisma ORM 7, un schéma PostgreSQL et une migration initiale. Le
 
 Prisma Client est généré dans un répertoire ignoré par Git. La configuration ne contient aucun secret et accepte `DATABASE_URL` uniquement depuis l’environnement. Aucune base réelle, aucun seed et aucun utilisateur ne sont créés en V0.4.
 
-### Fondation d’authentification
+### Authentification et parcours membres
 
-La V0.5.1 ajoute Better Auth, son adaptateur Prisma et Argon2id. Les sessions, credentials, vérifications futures et compteurs de rate limiting vivent dans des tables dédiées. `/connexion`, `/compte` et `/admin` sont dynamiques et non indexables. Les helpers `requireUser`, `requireRole` et `requireAdmin` relisent la session en base et appliquent le statut/rôle côté serveur.
+La V0.5.1 ajoute Better Auth, son adaptateur Prisma et Argon2id. La V0.5.2 active l’inscription `MEMBER`, la vérification email, le renvoi, la récupération et le profil minimal. Les sessions, credentials, marqueurs de vérification et compteurs de rate limiting vivent dans des tables dédiées. Toutes les pages auth et privées sont dynamiques et non indexables. Les helpers `requireUser`, `requireRole` et `requireAdmin` relisent la session en base et appliquent le statut/rôle côté serveur.
 
-Le frontend ne reçoit jamais Prisma Client, un hash ou le token de session. Le catalogue public reste indépendant de l’authentification. Les choix détaillés et limites sont décrits dans [`docs/AUTH.md`](AUTH.md).
+Le frontend ne reçoit jamais Prisma Client, un hash ou le token de session. Les tokens de vérification et reset sont consommés ou retirés de l’URL au plus tôt. Le catalogue public reste indépendant de l’authentification et le transport email QA ne charge aucun SDK client. Les choix détaillés et limites sont décrits dans [`docs/AUTH.md`](AUTH.md).
 
 ## SEO et performance
 
@@ -117,8 +121,8 @@ Le frontend ne reçoit jamais Prisma Client, un hash ou le token de session. Le 
 
 ## Sécurité
 
-La V0.5.1 ne contient aucun secret ni flux financier. Les anciens endpoints Express de commande, PayPal, virement et SMTP restent absents. Les réponses ajoutent une Content Security Policy, interdisent l’intégration en iframe, désactivent la détection MIME, limitent le referrer et ferment caméra, microphone et géolocalisation.
+La V0.5.2 ne contient aucun secret ni flux financier. Les anciens endpoints Express de commande, PayPal, virement et SMTP restent absents. Les réponses ajoutent une Content Security Policy, interdisent l’intégration en iframe, désactivent la détection MIME, limitent le referrer et ferment caméra, microphone et géolocalisation.
 
 HSTS n’est volontairement pas imposé par l’application tant que la terminaison TLS et l’ensemble des sous-domaines de production ne sont pas validés. Il devra être activé au niveau Railway ou applicatif uniquement après cette vérification.
 
-L’authentification applique validation serveur, contrôle de rôle, cookies `HttpOnly`, protection d’origine, rate limiting PostgreSQL et messages anti-énumération. `AUTH_SECRET` et les URL PostgreSQL devront être fournis par le gestionnaire de secrets de l’environnement avant tout déploiement. Briefs, credentials, tokens et cookies ne doivent jamais être écrits dans les logs.
+L’authentification applique validation serveur, rôle `MEMBER` imposé, statut vérifié, cookies `HttpOnly`, protection d’origine, rate limiting PostgreSQL, tokens expirables et messages anti-énumération. Le transport capture refuse la production et toute adresse autre que `@example.invalid`. `AUTH_SECRET` et les URL PostgreSQL devront être fournis par le gestionnaire de secrets de l’environnement avant tout déploiement. Briefs, credentials, tokens et cookies ne doivent jamais être écrits dans les logs.

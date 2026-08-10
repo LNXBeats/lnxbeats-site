@@ -74,6 +74,13 @@ export function SiteHeader() {
               {item.label}
             </Link>
           ))}
+          <Link
+            href="/connexion"
+            className={`desktop-navigation__account ${isActive("/connexion") || isActive("/compte") ? "is-active" : ""}`}
+            aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}
+          >
+            {isActive("/compte") ? "Mon compte" : "Connexion"}
+          </Link>
         </nav>
 
         <button
@@ -103,7 +110,7 @@ export function SiteHeader() {
             {navigation.map((item, index) => (
               <Link
                 key={item.href}
-                ref={index === 0 ? firstLinkRef : index === navigation.length - 1 ? lastLinkRef : undefined}
+                ref={index === 0 ? firstLinkRef : undefined}
                 href={item.href}
                 tabIndex={open ? 0 : -1}
                 aria-current={isActive(item.href) ? "page" : undefined}
@@ -116,6 +123,19 @@ export function SiteHeader() {
                 {item.label}
               </Link>
             ))}
+            <Link
+              ref={lastLinkRef}
+              href="/connexion"
+              tabIndex={open ? 0 : -1}
+              aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}
+              onClick={() => {
+                setOpen(false);
+                menuButtonRef.current?.focus();
+              }}
+            >
+              <span>{String(navigation.length + 1).padStart(2, "0")}</span>
+              {isActive("/compte") ? "Mon compte" : "Connexion"}
+            </Link>
           </nav>
           <p>Chaque histoire mérite sa musique.</p>
         </Container>

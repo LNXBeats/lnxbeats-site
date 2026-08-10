@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -40,7 +41,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="auth-panel">
           <p className="auth-panel__label">Connexion</p>
           <LoginForm returnTo={returnTo} />
-          <p className="auth-panel__note">Les accès sont créés directement par LNX Studio. L’inscription publique n’est pas ouverte.</p>
+          <div className="auth-panel__links">
+            <Link href="/mot-de-passe-oublie">Mot de passe oublié</Link>
+            <Link href="/renvoyer-verification">Renvoyer la confirmation</Link>
+            <Link href="/inscription">Créer un espace membre</Link>
+          </div>
         </div>
       </Container>
     </section>

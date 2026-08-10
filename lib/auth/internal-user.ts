@@ -37,7 +37,8 @@ export async function createInternalAuthUser(input: InternalUserInput) {
       data: {
         email,
         displayName,
-        emailVerified: false,
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
         status: "ACTIVE",
         role: input.role,
       },

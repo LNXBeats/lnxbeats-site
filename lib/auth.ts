@@ -5,6 +5,8 @@ import { randomBytes } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 
+import { sendPasswordResetEmail } from "@/lib/auth/email-delivery";
+import { issueEmailVerification } from "@/lib/auth/email-verification";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
@@ -26,16 +28,43 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    disableSignUp: true,
+    disableSignUp: false,
     autoSignIn: false,
-    requireEmailVerification: false,
+    requireEmailVerification: true,
     minPasswordLength: 12,
     maxPasswordLength: 128,
     resetPasswordTokenExpiresIn: 1_800,
     revokeSessionsOnPasswordReset: true,
+    async sendResetPassword({ user, url }) {
+      await sendPasswordResetEmail({ email: user.email, url });
+    },
     password: {
       hash: hashPassword,
       verify: ({ hash, password }) => verifyPassword(hash, password),
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendOnSignIn: false,
+    autoSignInAfterVerification: false,
+    expiresIn: 60 * 60,
+    async sendVerificationEmail({ user, token }) {
+      await issueEmailVerification({ email: user.email, token });
+    },
+    async afterEmailVerification(user) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { status: true },
+      });
+      if (!currentUser) return;
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerifiedAt: new Date(),
+          status: currentUser.status === "PENDING" ? "ACTIVE" : currentUser.status,
+        },
+      });
     },
   },
   user: {
@@ -71,9 +100,25 @@ export const auth = betterAuth({
     max: 100,
     customRules: {
       "/sign-in/email": { window: 60, max: 5 },
+      "/sign-up/email": { window: 600, max: 5 },
+      "/send-verification-email": { window: 3_600, max: 3 },
+      "/request-password-reset": { window: 3_600, max: 3 },
+      "/reset-password": { window: 900, max: 5 },
+      "/change-password": { window: 900, max: 5 },
+      "/update-user": { window: 600, max: 10 },
     },
   },
+  verification: {
+    storeIdentifier: "hashed",
+  },
   databaseHooks: {
+    user: {
+      create: {
+        async before(user) {
+          return { data: { ...user, role: "MEMBER", status: "PENDING", emailVerified: false } };
+        },
+      },
+    },
     session: {
       create: {
         async before(session) {
