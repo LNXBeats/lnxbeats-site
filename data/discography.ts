@@ -5,6 +5,8 @@ export type ProjectStatus = "published" | "in-development" | "archive";
 export type TrackStatus = "released" | "announced" | "unlisted";
 export type ArtworkTone = "gold" | "wine" | "graphite" | "bronze" | "ivory";
 export type PlatformId = "spotify" | "appleMusic" | "deezer" | "youtube" | "distroKid";
+export type DataConfidence = "confirmed" | "partial" | "placeholder" | "unknown";
+export type CreditRole = "artist" | "writer" | "composer" | "producer" | "featuring" | "other";
 
 export type ProjectTrack = {
   readonly number: number;
@@ -20,12 +22,32 @@ export type ProjectPlatform = {
   readonly scope: "release" | "artist" | "store";
 };
 
+export type ProjectCredit = {
+  readonly name: string;
+  readonly role: CreditRole;
+  readonly detail?: string;
+};
+
+export type ProjectDataConfidence = {
+  readonly overall: DataConfidence;
+  readonly identity: DataConfidence;
+  readonly editorial: DataConfidence;
+  readonly release: DataConfidence;
+  readonly artwork: DataConfidence;
+  readonly tracklist: DataConfidence;
+  readonly platforms: DataConfidence;
+  readonly genres: DataConfidence;
+  readonly credits: DataConfidence;
+  readonly seo: DataConfidence;
+};
+
 export type Project = {
   readonly slug: string;
   readonly title: string;
   readonly subtitle?: string;
   readonly type: ProjectKind;
   readonly year: number | null;
+  readonly releaseDate: string | null;
   readonly description: string;
   readonly shortDescription: string;
   readonly cover: string | null;
@@ -33,14 +55,16 @@ export type Project = {
   readonly featured: boolean;
   readonly status: ProjectStatus;
   readonly genres: readonly string[];
+  readonly credits: readonly ProjectCredit[];
   readonly tracks: readonly ProjectTrack[];
-  readonly trackCount?: number;
+  readonly trackCount: number | null;
   readonly platforms: readonly ProjectPlatform[];
   readonly seo: {
     readonly title?: string;
     readonly description: string;
   };
   readonly artworkTone: ArtworkTone;
+  readonly dataConfidence: ProjectDataConfidence;
 };
 
 const artistPlatforms: readonly ProjectPlatform[] = [
@@ -54,32 +78,101 @@ const featuredPlatforms: readonly ProjectPlatform[] = [
   ...artistPlatforms,
 ];
 
+const publishedConfidence: ProjectDataConfidence = {
+  overall: "partial",
+  identity: "confirmed",
+  editorial: "confirmed",
+  release: "partial",
+  artwork: "placeholder",
+  tracklist: "unknown",
+  platforms: "partial",
+  genres: "unknown",
+  credits: "unknown",
+  seo: "partial",
+};
+
+const developmentConfidence: ProjectDataConfidence = {
+  overall: "placeholder",
+  identity: "confirmed",
+  editorial: "placeholder",
+  release: "partial",
+  artwork: "placeholder",
+  tracklist: "unknown",
+  platforms: "unknown",
+  genres: "unknown",
+  credits: "unknown",
+  seo: "partial",
+};
+
+type PublishedProjectArtwork =
+  | { readonly cover: string; readonly coverAlt: string }
+  | { readonly cover?: undefined; readonly coverAlt?: undefined };
+
 const published = (
-  project: Omit<Project, "year" | "cover" | "status" | "genres" | "tracks" | "platforms" | "seo"> &
-    Partial<Pick<Project, "year" | "cover" | "genres" | "tracks" | "platforms">>,
-): Project => ({
-  year: null,
-  cover: null,
-  status: "published",
-  genres: [],
-  tracks: [],
-  platforms: artistPlatforms,
-  ...project,
-  seo: { description: `${project.title} ouvre un nouvel univers musical signé LNX Beats. Récit, informations confirmées et liens officiels.` },
-});
+  project: Omit<
+    Project,
+    | "year"
+    | "releaseDate"
+    | "cover"
+    | "coverAlt"
+    | "status"
+    | "genres"
+    | "credits"
+    | "tracks"
+    | "trackCount"
+    | "platforms"
+    | "seo"
+    | "dataConfidence"
+  > &
+    PublishedProjectArtwork &
+    Partial<Pick<Project, "year" | "releaseDate" | "genres" | "credits" | "tracks" | "trackCount" | "platforms">>,
+): Project => {
+  const tracks = project.tracks ?? [];
+  const trackCount = project.trackCount ?? null;
+  const platforms = project.platforms ?? artistPlatforms;
+  const hasConfirmedReleaseLink = platforms.some((platform) => platform.scope === "release");
+
+  return {
+    year: null,
+    releaseDate: null,
+    cover: null,
+    coverAlt: undefined,
+    status: "published",
+    genres: [],
+    credits: [],
+    tracks,
+    trackCount,
+    platforms,
+    ...project,
+    seo: { description: `${project.title} : fiche éditoriale LNX Beats et état actuellement documenté du projet.` },
+    dataConfidence: {
+      ...publishedConfidence,
+      release: project.year || project.releaseDate ? "confirmed" : "partial",
+      artwork: project.cover ? "confirmed" : "placeholder",
+      tracklist: tracks.length > 0 ? "confirmed" : trackCount ? "partial" : "unknown",
+      platforms: hasConfirmedReleaseLink ? "confirmed" : "partial",
+      genres: project.genres && project.genres.length > 0 ? "confirmed" : "unknown",
+      credits: project.credits && project.credits.length > 0 ? "confirmed" : "unknown",
+    },
+  };
+};
 
 const inDevelopment = (
   project: Pick<Project, "slug" | "title" | "subtitle" | "type" | "shortDescription" | "description" | "artworkTone">,
 ): Project => ({
   ...project,
   year: null,
+  releaseDate: null,
   cover: null,
   featured: false,
   status: "in-development",
   genres: [],
+  credits: [],
   tracks: [],
+  trackCount: null,
   platforms: [],
   seo: { description: `${project.title} : le nom est posé, l’univers musical de LNX Beats reste encore hors champ.` },
+  dataConfidence: developmentConfidence,
 });
 
 export const projects: readonly Project[] = [
@@ -93,6 +186,7 @@ export const projects: readonly Project[] = [
     featured: true,
     artworkTone: "gold",
     tracks: [{ number: 1, title: "J’ai adopté un humain", status: "released" }],
+    trackCount: 1,
     platforms: featuredPlatforms,
   }),
   published({ slug: "bienvenue-dans-le-bordel-familial", title: "Bienvenue dans le bordel familial", subtitle: "Chroniques d’un équilibre impossible", type: "album", description: "Une maison, plusieurs voix, et cet équilibre qui tient jusqu’au moment où un détail déborde. La famille devient ici un décor vivant, tendre et impossible à ranger.", shortDescription: "Quand le désordre familial devient un monde à part entière.", featured: true, trackCount: 18, artworkTone: "wine" }),
@@ -139,4 +233,20 @@ export function getProjectStatusLabel(status: ProjectStatus) {
   if (status === "published") return "Publié";
   if (status === "in-development") return "En développement";
   return "Archive";
+}
+
+export function getProjectConfidenceLabel(confidence: DataConfidence) {
+  if (confidence === "confirmed") return "Informations confirmées";
+  if (confidence === "partial") return "Informations partielles";
+  if (confidence === "placeholder") return "Présentation provisoire";
+  return "Informations non documentées";
+}
+
+export function getCreditRoleLabel(role: CreditRole) {
+  if (role === "artist") return "Artiste";
+  if (role === "writer") return "Auteur";
+  if (role === "composer") return "Compositeur";
+  if (role === "producer") return "Production";
+  if (role === "featuring") return "Featuring";
+  return "Autre crédit";
 }

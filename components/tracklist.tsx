@@ -2,14 +2,16 @@ import type { Project } from "@/data/discography";
 
 export function Tracklist({ project }: { project: Project }) {
   if (project.tracks.length === 0) {
+    const hasConfirmedCount = project.dataConfidence.tracklist === "partial" && project.trackCount !== null;
+
     return (
       <div className="tracklist-empty">
         <p className="eyebrow">Les chapitres</p>
-        <h2>Les titres viendront au bon moment.</h2>
+        <h2>{hasConfirmedCount ? "Le nombre est connu. Les titres restent à documenter." : "Aucune tracklist confirmée."}</h2>
         <p>
-          {project.trackCount
-            ? `${project.trackCount} titres composent cet univers. Leurs noms resteront dans l’ombre jusqu’à leur révélation officielle.`
-            : "La liste reste volontairement silencieuse jusqu’à son annonce officielle."}
+          {hasConfirmedCount
+            ? `${project.trackCount} titres sont documentés pour ce projet. Leurs noms et leur ordre ne figurent pas encore dans les sources locales autorisées.`
+            : "Aucun titre ni ordre de piste ne figure encore dans les sources locales autorisées. Rien n’est ajouté par supposition."}
         </p>
       </div>
     );

@@ -85,11 +85,12 @@ Les pages et composants serveur sont privilégiés. Seuls le menu mobile et le f
 
 ## Ajouter un projet au catalogue
 
-1. Ajouter une entrée dans `data/discography.ts` avec un `slug` unique, des descriptions factuelles, un statut et les champs structurants.
-2. Conserver `year: null`, `cover: null`, `genres: []` ou `tracks: []` tant que ces données ne sont pas confirmées.
+1. Ajouter une entrée dans `data/discography.ts` avec un `slug` unique, des descriptions éditoriales explicitement distinguées des données factuelles, un statut et les champs structurants.
+2. Conserver `year: null`, `releaseDate: null`, `cover: null`, `genres: []`, `credits: []` ou `tracks: []` tant que ces données ne sont pas confirmées.
 3. Pour une pochette officielle, déposer l’image dans `public/assets/covers/` puis renseigner `cover` et `coverAlt`.
 4. Ajouter uniquement des liens vérifiés dans `platforms`, en distinguant `scope: "release"` d’un simple profil artiste.
-5. Lancer `npm run check` : la route `/album/[slug]`, ses metadata et son entrée de sitemap sont générées automatiquement.
+5. Mettre à jour les niveaux de confiance concernés sans transformer une donnée inconnue en valeur plausible.
+6. Lancer `npm run check` : la route `/album/[slug]`, ses metadata et son entrée de sitemap sont générées automatiquement.
 
 Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) pour le détail.
 
@@ -112,6 +113,7 @@ Le merge, le push et le déploiement de production restent des actions explicite
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Déploiement](docs/DEPLOYMENT.md)
 - [Changelog](CHANGELOG.md)

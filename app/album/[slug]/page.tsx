@@ -7,6 +7,8 @@ import { ProjectPlatforms } from "@/components/project-platforms";
 import { Tracklist } from "@/components/tracklist";
 import {
   getProjectBySlug,
+  getProjectConfidenceLabel,
+  getCreditRoleLabel,
   getProjectKindLabel,
   getProjectStatusLabel,
   projects,
@@ -57,6 +59,8 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
 
   const kind = getProjectKindLabel(project.type);
   const status = getProjectStatusLabel(project.status);
+  const confidence = getProjectConfidenceLabel(project.dataConfidence.overall);
+  const documentedDate = project.releaseDate ?? project.year;
 
   return (
     <>
@@ -72,9 +76,16 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
               <p className="album-hero__description">{project.description}</p>
               <dl className="album-facts">
                 <div><dt>Type</dt><dd>{kind}</dd></div>
-                <div><dt>Année</dt><dd>{project.year ?? "Non annoncée"}</dd></div>
+                <div><dt>Date</dt><dd>{documentedDate ?? "Non documentée"}</dd></div>
                 <div><dt>Statut</dt><dd>{status}</dd></div>
+                <div><dt>Données</dt><dd>{confidence}</dd></div>
                 {project.genres.length > 0 ? <div><dt>Genres</dt><dd>{project.genres.join(" · ")}</dd></div> : null}
+                {project.credits.length > 0 ? (
+                  <div>
+                    <dt>Crédits confirmés</dt>
+                    <dd>{project.credits.map((credit) => `${getCreditRoleLabel(credit.role)} : ${credit.name}${credit.detail ? ` (${credit.detail})` : ""}`).join(" · ")}</dd>
+                  </div>
+                ) : null}
               </dl>
               <ProjectPlatforms platforms={project.platforms} />
             </div>
@@ -88,7 +99,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
           <aside className="album-editorial-note">
             <p className="eyebrow">Ce qui reste dans l’ombre</p>
             <h2>Le récit grandira ici.</h2>
-            <p>Pochette, dates, durées et liens prendront leur place lorsqu’ils auront été officiellement révélés. D’ici là, chaque mot affiché reste fidèle à ce qui est connu.</p>
+            <p>Cette fiche distingue les informations confirmées, partielles et non documentées. Pochette, dates, crédits, durées et liens directs resteront absents tant qu’aucune source locale fiable ne les établit.</p>
           </aside>
         </Container>
       </section>

@@ -42,12 +42,15 @@ Les animations reposent uniquement sur CSS et sont neutralisées avec `prefers-r
 
 `data/site.ts` centralise les liens officiels pour éviter les divergences entre les pages. `data/discography.ts` expose un type `Project` et une liste locale en lecture seule. Chaque entrée regroupe :
 
-- identité (`slug`, titre, sous-titre, type, statut et année nullable) ;
+- identité (`slug`, titre, sous-titre, type et statut) ;
+- date de sortie et année explicitement nullables ;
 - contenu éditorial court et long ;
 - pochette officielle nullable et tonalité du placeholder éditorial ;
-- mise à la une, genres et pistes structurées ;
+- mise à la une, genres, crédits et pistes structurées ;
+- nombre de pistes nullable, distinct de la liste détaillée ;
 - liens de plateformes avec une portée explicite (`release`, `artist` ou `store`) ;
-- description SEO propre à la fiche.
+- description SEO propre à la fiche ;
+- niveau de confiance global et par domaine (`confirmed`, `partial`, `placeholder` ou `unknown`).
 
 Les agrégats `publishedProjects`, `projectsInDevelopment` et `featuredProjects` alimentent l’accueil et la discographie. `getProjectBySlug` résout une fiche sans dupliquer les données.
 
@@ -61,16 +64,24 @@ Les identifiants et relations préparent :
 
 `app/album/[slug]/page.tsx` reste un Server Component. `generateStaticParams` produit une route pour chaque entrée ; `generateMetadata` fournit titre, description, canonique, Open Graph et Twitter Card par projet. Les fiches inconnues retournent `notFound()`.
 
-L’absence d’une donnée est un état normal : aucune année, pochette, durée, liste de titres ou URL de sortie n’est extrapolée. `ProjectArtwork`, `Tracklist` et `ProjectPlatforms` rendent alors un message éditorial explicite. Un lien de profil artiste n’est jamais présenté comme un lien direct vers l’album.
+L’absence d’une donnée est un état normal : aucune année, pochette, durée, liste de titres, crédit ou URL de sortie n’est extrapolée. `ProjectArtwork`, `Tracklist` et `ProjectPlatforms` rendent alors un message explicite. Les profils artiste et les liens directs de sortie sont présentés dans des groupes séparés.
+
+L’inventaire détaillé et les besoins de confirmation humaine sont consignés dans [`docs/CATALOG_AUDIT.md`](CATALOG_AUDIT.md). Ce document reste un audit : `data/discography.ts` demeure l’unique source runtime du catalogue.
 
 ### Ajouter ou enrichir une fiche
 
 1. Créer l’entrée dans `projects` avec un `slug` stable et unique.
 2. Utiliser le helper `published` ou `inDevelopment` approprié.
 3. Ajouter une pochette vérifiée sous `public/assets/covers/` et renseigner son texte alternatif ; sinon garder `cover: null`.
-4. Ajouter une piste avec numéro, titre, durée optionnelle et statut uniquement si les informations sont confirmées.
+4. Ajouter une piste avec numéro, titre, durée optionnelle et statut uniquement si les informations sont confirmées ; renseigner séparément le nombre total lorsqu’il est connu sans tracklist complète.
 5. Construire les liens de plateforme depuis `officialLinks` et définir leur portée réelle.
-6. Exécuter lint, typecheck, build et smoke tests. La route et le sitemap sont dérivés automatiquement.
+6. Ajouter les crédits uniquement avec un nom et un rôle explicitement documentés.
+7. Mettre à jour les niveaux de confiance concernés.
+8. Exécuter lint, typecheck, build et smoke tests. La route et le sitemap sont dérivés automatiquement.
+
+### Préparation PostgreSQL
+
+La future persistance pourra séparer les entités `Project`, `Track`, `PlatformLink`, `Credit` et `Asset`. Les statuts de confiance devront rester attachés aux champs ou aux enregistrements importés afin qu’une donnée provisoire ne devienne pas certaine lors de la migration. Aucune couche SQL, migration ou API métier n’est implémentée à ce stade.
 
 Les pages `/admin`, `/client` et `/api/*` métier ne sont pas implémentées en V0.2. Elles seront ajoutées avec une couche d’authentification et des autorisations explicites.
 

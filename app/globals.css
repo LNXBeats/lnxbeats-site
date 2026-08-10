@@ -1247,11 +1247,14 @@ a {
 .album-hero h1 { max-width: 11ch; margin: 0; font-size: clamp(3.4rem, 7vw, 7.6rem); font-weight: 500; letter-spacing: -.07em; line-height: .86; overflow-wrap: anywhere; }
 .album-hero__subtitle { margin: 1.25rem 0 0; color: var(--gold-light); font-family: Georgia, serif; font-size: clamp(1.2rem, 2.4vw, 1.8rem); font-style: italic; }
 .album-hero__description { max-width: 42rem; margin: 2rem 0; color: var(--text-soft); font-size: 1.04rem; }
-.album-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 0 2rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.album-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 2rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .album-facts div { min-width: 0; padding: 1rem .75rem 1rem 0; }
 .album-facts div + div { padding-left: .75rem; border-left: 1px solid var(--line); }
 .album-facts dt { color: #77736c; font-size: .57rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 .album-facts dd { margin: .35rem 0 0; font-size: .82rem; overflow-wrap: anywhere; }
+.project-platforms { display: grid; gap: 1rem; }
+.project-platforms__group { display: grid; gap: .55rem; }
+.project-platforms__label { margin: 0; color: #77736c; font-size: .57rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 .album-platforms { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; padding: 0; list-style: none; }
 .album-platforms a { display: inline-flex; min-height: 46px; align-items: center; gap: 1.2rem; padding: .7rem .85rem; border: 1px solid var(--line-strong); font-size: .65rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
 .album-platforms a:hover { border-color: var(--gold); background: var(--gold); color: var(--background); }

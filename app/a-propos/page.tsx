@@ -21,7 +21,7 @@ export default function AboutPage() {
       <section className="section">
         <Container className="about-teaser motion-reveal motion-reveal--soft">
           <div className="about-teaser__image">
-            <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill sizes="(max-width: 820px) 100vw, 45vw" preload />
+            <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill sizes="(max-width: 820px) 100vw, 45vw" />
           </div>
           <div className="about-teaser__copy">
             <p className="eyebrow">Le point de départ</p>
