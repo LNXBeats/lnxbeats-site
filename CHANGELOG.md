@@ -2,6 +2,25 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.0.1] — 2026-08-11
+
+### Modifié
+
+- commande initiale limitée à l’usage personnel : 50 €, cover +10 €, priorité +30 €, soit 90 € maximum ;
+- suppression du choix commercial et du prix 1 500 € dans Commander, avec prix et usage forcés côté serveur ;
+- détail membre distinguant désormais le total de la création et l’état d’une éventuelle extension de droits.
+
+### Ajouté
+
+- modèle `CommercialLicense` et migration additive pour une demande autonome après `DELIVERED` ;
+- prix serveur de 1 500 €, contrat spécifique requis, statuts dédiés et protection contre les demandes ouvertes en doublon ;
+- route propriétaire post-livraison, interface privée, tests de domaine et couverture runtime jetable.
+
+### Périmètre
+
+- droit moral hors du dispositif et aucune part SACEM automatique ;
+- aucun paiement, contrat électronique, facture, email, back-office, push, merge ou déploiement activé.
+
 ## [0.6.0] — 2026-08-11
 
 ### Ajouté

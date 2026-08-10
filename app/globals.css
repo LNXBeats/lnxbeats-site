@@ -2246,6 +2246,18 @@ a {
 .order-detail__photos li { aspect-ratio: 1; overflow: hidden; border: 1px solid var(--line); background: #080808; }
 .order-detail__photos img { width: 100%; height: 100%; object-fit: cover; }
 .order-delivery-future { border-color: rgba(198, 161, 91, 0.3); background: rgba(198, 161, 91, 0.04); }
+.commercial-license { border-color: rgba(198, 161, 91, 0.45); background: linear-gradient(135deg, rgba(198, 161, 91, 0.08), var(--surface) 58%); }
+.commercial-license__question { color: var(--text) !important; font-size: clamp(1.2rem, 2.5vw, 1.8rem); }
+.commercial-license__status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 1.75rem 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.commercial-license__status > div { padding: 1rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.commercial-license__status dt { margin-bottom: 0.35rem; color: var(--text-soft); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.commercial-license__status dd { margin: 0; }
+.commercial-license__details { margin-top: 1.75rem; border-top: 1px solid var(--line-strong); }
+.commercial-license__details summary { min-height: 52px; padding: 1rem 0; color: var(--gold-light); cursor: pointer; font-weight: 700; }
+.commercial-license__details > div { max-width: 760px; padding-bottom: 0.5rem; }
+.commercial-license__details p { color: var(--text-soft); }
+.commercial-license__details p strong { color: var(--text); }
+.commercial-license__details .form-button { margin-top: 0.75rem; }
 
 .auth-submit--secondary {
   border-color: var(--line-strong);

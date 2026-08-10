@@ -1,10 +1,10 @@
-# Modèle de données — V0.6
+# Modèle de données — V0.6.0.1
 
 ## Périmètre
 
 La V0.4 crée une fondation PostgreSQL avec Prisma ORM. Elle ne connecte aucune base de production, ne migre aucune donnée artistique et ne change pas la source runtime du site public. `data/discography.ts` reste la seule source des pages publiques jusqu’à un sprint de migration contrôlé.
 
-Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers et la traçabilité. La V0.6 active les brouillons, commandes et photos de référence privées ; elle ne crée ni back-office complet, ni paiement, ni facture, ni livraison audio.
+Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers et la traçabilité. La V0.6 active les brouillons, commandes et photos de référence privées. La V0.6.0.1 ajoute les demandes de droits post-livraison, sans back-office complet, paiement, facture, contrat électronique ni livraison audio.
 
 ## Vue d’ensemble
 
@@ -18,6 +18,7 @@ erDiagram
   Customer o|--o{ Order : passe
   User o|--o{ Order : "utilise un compte"
   Order ||--o{ OrderEvent : conserve
+  Order ||--o{ CommercialLicense : "ouvre après livraison"
   Project ||--o{ Track : contient
   Project ||--o{ PlatformLink : publie
   Project ||--o{ ConfidenceAnnotation : qualifie
@@ -108,12 +109,16 @@ La V0.6 utilise `Asset` et `OrderAsset` pour les photos de référence. Le binai
 - un compte et un client optionnels ;
 - un contact historique obligatoire ;
 - un brief borné, ses repères narratifs et sa direction musicale ;
-- un usage `PERSONAL` ou `COMMERCIAL_EXTENDED` et l’obligation contractuelle associée ;
+- un usage historique compatible avec `PERSONAL` ou `COMMERCIAL_EXTENDED`, mais forcé à `PERSONAL` par le flux initial actif ;
 - un snapshot du prix en centimes (`base`, `cover`, `priority`, `total`, devise et version) ;
 - le retour inclus et consommé, ainsi que les jalons de soumission, service, livraison, expiration et annulation ;
 - les états détaillés du brouillon jusqu’à la livraison, au refus, à l’annulation ou au remboursement futur.
 
 Une séquence PostgreSQL indépendante produit les numéros `LNX-AAAA-NNNNNN` sans collision concurrente. Les contrôles SQL imposent prix non négatifs, somme du snapshot, cohérence usage/contrat, bornes de révision et expiration postérieure à la livraison. Les détails d’autorisation et de workflow sont dans [`docs/ORDER_MODEL.md`](ORDER_MODEL.md).
+
+### Droits commerciaux post-livraison
+
+`CommercialLicense` représente une demande distincte rattachée à la commande livrée. Son snapshot serveur conserve 1 500 €, EUR, la version tarifaire et l’obligation de contrat. Ses statuts, son paiement futur et ses dates n’altèrent ni `Order.totalCents` ni l’usage personnel initial. Une contrainte unique partielle interdit plusieurs demandes ouvertes ou actives sur la même commande, tout en conservant les refus ou annulations historiques.
 
 ### Historique
 
@@ -121,7 +126,7 @@ Une séquence PostgreSQL indépendante produit les numéros `LNX-AAAA-NNNNNN` sa
 
 ### Paiements
 
-Le paiement est différé. `AWAITING_PAYMENT` signifie uniquement qu’un brief est finalisé. Un futur modèle `Payment` pourra se rattacher à `Order` avec fournisseur, référence externe, montant en unité mineure, devise, idempotence et statut. La facture gardera une numérotation distincte. Aucune donnée bancaire sensible ne devra être stockée.
+Le paiement est différé. `AWAITING_PAYMENT` signifie uniquement qu’un brief est finalisé. Un futur modèle `Payment` devra distinguer le paiement de la création (`Order`) de celui des droits (`CommercialLicense`) avec fournisseur, référence externe, montant en unité mineure, devise, idempotence et statut. La facture gardera une numérotation distincte. Aucune donnée bancaire sensible ne devra être stockée.
 
 ## Favoris
 
@@ -132,7 +137,7 @@ Le paiement est différé. `AWAITING_PAYMENT` signifie uniquement qu’un brief 
 - compte : future désactivation/anonymisation avant suppression ; références métier mises à `NULL` ; favoris supprimés ;
 - client : les commandes gardent leur instantané de contact et la relation peut être mise à `NULL` ;
 - projet : archivage privilégié, suppressions structurantes restreintes ;
-- commande : suppression restreinte si un événement ou un asset existe ;
+- commande : suppression restreinte si un événement, un asset ou une extension de droits existe ;
 - asset : suppression restreinte tant qu’il est référencé ;
 - acteur d’un événement ou relecteur : relation mise à `NULL`, trace conservée.
 

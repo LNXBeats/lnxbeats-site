@@ -17,6 +17,7 @@ import {
   getDraftForActor,
   getOrderPhotoForActor,
   listMemberOrders,
+  requestCommercialLicense,
   saveDraftOrder,
 } from "@/lib/orders/service";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,6 @@ const baseInput: OrderDraftInput = {
   wordsToInclude: "",
   avoid: "",
   pronunciationNotes: "",
-  usage: "PERSONAL",
   coverIncluded: false,
   priorityProcessing: false,
 };
@@ -72,6 +72,7 @@ async function validateSafetyGuards() {
 async function cleanup() {
   await prisma.$transaction(async (transaction) => {
     await transaction.orderAsset.deleteMany();
+    await transaction.commercialLicense.deleteMany();
     await transaction.orderEvent.deleteMany();
     await transaction.order.deleteMany();
     await transaction.asset.deleteMany();
@@ -87,7 +88,7 @@ async function cleanup() {
 
 async function assertClean(stage: string) {
   const counts = await Promise.all([
-    prisma.order.count(), prisma.orderEvent.count(), prisma.orderAsset.count(), prisma.asset.count(),
+    prisma.order.count(), prisma.orderEvent.count(), prisma.orderAsset.count(), prisma.commercialLicense.count(), prisma.asset.count(),
     prisma.customer.count(), prisma.rateLimit.count(), prisma.account.count(), prisma.session.count(),
     prisma.user.count({ where: { email: { endsWith: "@example.invalid" } } }),
   ]);
@@ -128,13 +129,13 @@ async function run() {
 
     const priced = await saveDraftOrder(member, draft.orderNumber, {
       ...baseInput,
-      usage: "COMMERCIAL_EXTENDED",
       coverIncluded: true,
       priorityProcessing: true,
     });
-    assert.equal(priced.basePriceCents, 150_000);
-    assert.equal(priced.totalCents, 154_000);
-    assert.equal(priced.contractRequired, true);
+    assert.equal(priced.usage, "PERSONAL");
+    assert.equal(priced.basePriceCents, 5_000);
+    assert.equal(priced.totalCents, 9_000);
+    assert.equal(priced.contractRequired, false);
     assert.equal((await getDraftForActor(member, draft.orderNumber))?.orderNumber, draft.orderNumber);
     await assert.rejects(saveDraftOrder(other, draft.orderNumber, baseInput));
     passed.push("server pricing snapshot persisted");
@@ -161,18 +162,59 @@ async function run() {
 
     const finalized = await finalizeOrder(member, draft.orderNumber, {
       ...baseInput,
-      usage: "COMMERCIAL_EXTENDED",
       coverIncluded: true,
       priorityProcessing: true,
     });
     assert.equal(finalized.status, "AWAITING_PAYMENT");
     assert.equal(finalized.events.length, 2);
     assert.ok(finalized.submittedAt);
+    assert.equal(finalized.usage, "PERSONAL");
+    assert.equal(finalized.totalCents, 9_000);
     await assert.rejects(saveDraftOrder(member, draft.orderNumber, baseInput));
     assert.equal(await getOrderForActor(other, draft.orderNumber), null);
     assert.ok(await getOrderForActor(admin, draft.orderNumber));
     assert.deepEqual((await listMemberOrders(other)).map((order) => order.orderNumber), [invalid.orderNumber]);
     passed.push("atomic finalization, immutable submitted brief and access control validated");
+
+    await assert.rejects(requestCommercialLicense(member, draft.orderNumber), (error: unknown) => (
+      error instanceof Error && "code" in error && error.code === "ORDER_NOT_DELIVERED"
+    ));
+    await assert.rejects(requestCommercialLicense(other, draft.orderNumber), (error: unknown) => (
+      error instanceof Error && "code" in error && error.code === "ORDER_NOT_FOUND"
+    ));
+    const deliveredAt = new Date();
+    await prisma.$transaction(async (transaction) => {
+      const order = await transaction.order.findUniqueOrThrow({ where: { orderNumber: draft.orderNumber } });
+      await transaction.order.update({ where: { id: order.id }, data: { status: "DELIVERED", deliveredAt } });
+      await transaction.orderEvent.create({
+        data: {
+          orderId: order.id,
+          fromStatus: "AWAITING_PAYMENT",
+          toStatus: "DELIVERED",
+          note: "Livraison fictive créée par la validation locale jetable.",
+          visibility: "CLIENT",
+          actorUserId: admin.id,
+        },
+      });
+    });
+    const withRights = await requestCommercialLicense(member, draft.orderNumber);
+    assert.equal(withRights.totalCents, 9_000);
+    assert.equal(withRights.usage, "PERSONAL");
+    assert.equal(withRights.commercialLicenses.length, 1);
+    assert.equal(withRights.commercialLicenses[0]?.status, "REQUESTED");
+    assert.equal(withRights.commercialLicenses[0]?.priceCents, 150_000);
+    assert.equal(withRights.commercialLicenses[0]?.contractRequired, true);
+    assert.equal(withRights.commercialLicenses[0]?.paymentStatus, "NOT_STARTED");
+    await assert.rejects(requestCommercialLicense(member, draft.orderNumber), (error: unknown) => (
+      error instanceof Error && "code" in error && error.code === "COMMERCIAL_LICENSE_ALREADY_OPEN"
+    ));
+    const rightsRequest = withRights.commercialLicenses[0];
+    assert.ok(rightsRequest);
+    await assert.rejects(prisma.commercialLicense.update({
+      where: { id: rightsRequest.id },
+      data: { priceCents: 1 },
+    }));
+    passed.push("post-delivery commercial rights isolated, server-priced and owner-protected");
 
     const stored = await prisma.order.findUniqueOrThrow({ where: { orderNumber: draft.orderNumber } });
     await prisma.orderEvent.create({ data: { orderId: stored.id, toStatus: stored.status, note: "Note interne QA", visibility: "INTERNAL", actorUserId: admin.id } });

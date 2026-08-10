@@ -1,6 +1,6 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6 ajoute le socle sécurisé des commandes personnalisées aux parcours membres, sans ouvrir de paiement.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.1 sépare la commande personnelle de l’éventuelle extension de droits post-livraison, sans ouvrir de paiement.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Aucun paiement, email de commande, facture, livraison WAV ou dashboard administrateur n’est actif.
 
@@ -48,6 +48,7 @@ npm run build
 npm run prisma:check
 npm run test:auth
 npm run test:order
+npm run test:rights
 npm run test:upload
 ```
 
@@ -66,7 +67,7 @@ Le script contrôle le schéma physique, les opérations Prisma, les contraintes
 
 La validation runtime de l’authentification possède des gardes supplémentaires liées à l’instance Prisma Dev locale `lnx-studio-v052-test`. Elle utilise uniquement des identités `@example.invalid` et un transport email capturé sans réseau. Elle couvre inscription, vérification, récupération, profil et invalidation des sessions, puis supprime comptes, credentials, sessions, vérifications, compteurs et boîte QA. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
 
-La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, prix serveur, finalisation atomique, références concurrentes, événements, IDOR, photos normalisées et nettoyage. La procédure et les limites sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md).
+La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, prix serveur plafonné à 90 €, finalisation atomique, demande de droits après livraison à 1 500 €, propriété, anti-doublon, références concurrentes, événements, IDOR, photos normalisées et nettoyage. La procédure et les limites sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md).
 
 Pour les smoke tests, lancer d’abord le build et le serveur de production :
 
@@ -88,7 +89,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/` — accueil
 - `/discographie` — catalogue local typé et sélection éditoriale
 - `/album/[slug]` — fiche statique d’un projet, avec metadata dynamiques
-- `/commander` — brief membre sauvegardable, photos privées, prix serveur et finalisation sans paiement
+- `/commander` — brief personnel sauvegardable, photos privées, prix serveur de 50 à 90 € et finalisation sans paiement
 - `/boutique` — liens DistroKid Direct et Etsy
 - `/a-propos` — biographie officielle et démarche artistique
 - `/contact` — contact professionnel
@@ -104,7 +105,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/reinitialiser-mot-de-passe` — choix d’un nouveau mot de passe avec token temporaire
 - `/verifier-email` — résultat neutre de la vérification
 - `/compte` — profil, sécurité, brouillons et suivi des demandes pour les rôles actifs
-- `/compte/commandes/[orderNumber]` — détail privé, timeline client et récapitulatif d’une demande
+- `/compte/commandes/[orderNumber]` — détail privé, timeline, récapitulatif et extension de droits uniquement après livraison
 - `/admin` — placeholder protégé réservé à `ADMIN`
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
 - `/api/orders/*` — brouillons et photos privés, protégés par session, origine et propriété
@@ -132,7 +133,7 @@ Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés 
 
 ## Architecture
 
-Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief et les formulaires d’authentification utilisent des Client Components limités. Les décisions de rôle, propriété, statut, vérification, prix et transition de commande restent côté serveur. Les photos privées sont réencodées hors du répertoire public ; seuls leurs descripteurs sont en base. La discographie demeure locale et ses fiches restent pré-rendues sans base de données.
+Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief, l’action post-livraison et les formulaires d’authentification utilisent des Client Components limités. Les décisions de rôle, propriété, statut, vérification, prix de création, éligibilité et prix des droits restent côté serveur. Les photos privées sont réencodées hors du répertoire public ; seuls leurs descripteurs sont en base. La discographie demeure locale et ses fiches restent pré-rendues sans base de données.
 
 ## Ajouter un projet au catalogue
 
@@ -164,6 +165,7 @@ La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYME
 - `feature/v0.5.2-registration-recovery` — inscription, vérification email et récupération de compte
 - `feature/v0.5.2.1-product-editorial-audit` — identité, audit produit, parcours membres et préparation juridique
 - `feature/v0.6-order-foundation` — brouillons, commandes, prix, photos privées et suivi membre
+- `feature/v0.6.0.1-post-delivery-rights` — séparation de la création personnelle et des droits post-livraison
 
 Le merge, le push et le déploiement de production restent des actions explicites, séparées de ce sprint.
 

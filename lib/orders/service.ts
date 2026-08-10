@@ -9,6 +9,8 @@ import {
   assertPhotoCapacity,
   calculateOrderPrice,
   canAccessOrder,
+  canRequestCommercialLicense,
+  commercialLicensePricingSnapshot,
   formatOrderNumber,
   type OrderActor,
   type OrderDraftInput,
@@ -35,6 +37,9 @@ const orderInclude = {
     where: { role: "REFERENCE" },
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
     include: { asset: true },
+  },
+  commercialLicenses: {
+    orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
   },
 } satisfies Prisma.OrderInclude;
 
@@ -120,6 +125,21 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
       height: asset.height,
       position,
     })),
+    commercialLicenses: order.commercialLicenses.map((license) => ({
+      id: license.id,
+      status: license.status,
+      priceCents: license.priceCents,
+      currency: license.currency,
+      pricingVersion: license.pricingVersion,
+      contractRequired: license.contractRequired,
+      contractAcceptedAt: license.contractAcceptedAt?.toISOString() ?? null,
+      paymentStatus: license.paymentStatus,
+      requestedAt: license.requestedAt.toISOString(),
+      approvedAt: license.approvedAt?.toISOString() ?? null,
+      activatedAt: license.activatedAt?.toISOString() ?? null,
+      createdAt: license.createdAt.toISOString(),
+      updatedAt: license.updatedAt.toISOString(),
+    })),
   };
 }
 
@@ -166,7 +186,7 @@ async function customerForActor(transaction: Transaction, actor: OrderActor) {
 
 export async function enforceOrderRateLimit(
   actorId: string,
-  action: "draft" | "finalize" | "upload" | "delete",
+  action: "draft" | "finalize" | "upload" | "delete" | "rights",
 ) {
   assertDatabaseConfigured();
   const limits = {
@@ -174,6 +194,7 @@ export async function enforceOrderRateLimit(
     finalize: { windowMs: 60 * 60_000, max: 10 },
     upload: { windowMs: 60 * 60_000, max: 30 },
     delete: { windowMs: 60 * 60_000, max: 30 },
+    rights: { windowMs: 60 * 60_000, max: 5 },
   } as const;
   const limit = limits[action];
   const key = `orders:${action}:${actorId}`;
@@ -288,6 +309,52 @@ export async function getOrderForActor(actor: OrderActor, orderNumber: string) {
   const order = await prisma.order.findUnique({ where: { orderNumber }, include: orderInclude });
   if (!order || !canAccessOrder(actor, order.userId)) return null;
   return serializeOrder(order);
+}
+
+export async function requestCommercialLicense(actor: OrderActor, orderNumber: string) {
+  assertDatabaseConfigured();
+  return withOrderLock(`commercial-license:${orderNumber}`, async (transaction) => {
+    const order = await transaction.order.findFirst({
+      where: { orderNumber, userId: actor.id },
+      include: { commercialLicenses: { select: { status: true } } },
+    });
+    if (!order) {
+      throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
+    }
+    if (order.status !== "DELIVERED") {
+      throw new OrderServiceError(
+        "Les droits d’exploitation peuvent être demandés après la livraison.",
+        409,
+        "ORDER_NOT_DELIVERED",
+      );
+    }
+    if (!canRequestCommercialLicense(order.status, order.commercialLicenses.map(({ status }) => status))) {
+      throw new OrderServiceError(
+        "Une demande de droits est déjà en cours ou active pour cette création.",
+        409,
+        "COMMERCIAL_LICENSE_ALREADY_OPEN",
+      );
+    }
+
+    const pricing = commercialLicensePricingSnapshot();
+    await transaction.commercialLicense.create({
+      data: {
+        orderId: order.id,
+        status: "REQUESTED",
+        priceCents: pricing.priceCents,
+        currency: pricing.currency,
+        pricingVersion: pricing.pricingVersion,
+        contractRequired: pricing.contractRequired,
+        paymentStatus: "NOT_STARTED",
+      },
+    });
+
+    const refreshed = await transaction.order.findUniqueOrThrow({
+      where: { id: order.id },
+      include: orderInclude,
+    });
+    return serializeOrder(refreshed);
+  });
 }
 
 export async function getDraftForActor(actor: OrderActor, orderNumber?: string) {

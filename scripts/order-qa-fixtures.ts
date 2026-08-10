@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createInternalAuthUser } from "@/lib/auth/internal-user";
 import type { OrderActor, OrderDraftInput } from "@/lib/orders/domain";
 import { clearQaOrderStorage } from "@/lib/orders/storage";
-import { createDraftOrder, finalizeOrder } from "@/lib/orders/service";
+import { createDraftOrder, finalizeOrder, requestCommercialLicense } from "@/lib/orders/service";
 import { prisma } from "@/lib/prisma";
 
 const EXPECTED_TARGET = "lnx-studio-v060-test";
@@ -29,6 +29,7 @@ async function guards() {
 async function cleanup() {
   await prisma.$transaction(async (transaction) => {
     await transaction.orderAsset.deleteMany();
+    await transaction.commercialLicense.deleteMany();
     await transaction.orderEvent.deleteMany();
     await transaction.order.deleteMany();
     await transaction.asset.deleteMany();
@@ -49,7 +50,7 @@ const input: OrderDraftInput = {
   title: "Histoire QA", recipient: "Une personne fictive", occasion: "Contrôle navigateur",
   brief: "Une histoire fictive suffisamment détaillée pour le contrôle navigateur de la commande.",
   musicalDirection: "Cinématographique", emotion: "Lumineuse", importantDetails: "",
-  wordsToInclude: "", avoid: "", pronunciationNotes: "", usage: "PERSONAL",
+  wordsToInclude: "", avoid: "", pronunciationNotes: "",
   coverIncluded: true, priorityProcessing: false,
 };
 
@@ -68,9 +69,33 @@ async function run() {
   await createInternalAuthUser({ email: QA_EMAILS[1], password: process.env.LNX_AUTH_QA_PASSWORD, displayName: "LNX Browser Admin QA", role: "ADMIN" });
   const member = actor(memberUser);
   const draft = await createDraftOrder(member, { ...input, title: "Brouillon à reprendre" });
-  const submitted = await createDraftOrder(member, input);
+  const submitted = await createDraftOrder(member, { ...input, title: "Commande non livrée" });
   await finalizeOrder(member, submitted.orderNumber, input);
-  console.info(`Order browser fixtures created: draft ${draft.orderNumber}, submitted ${submitted.orderNumber}.`);
+  const delivered = await createDraftOrder(member, { ...input, title: "Création livrée" });
+  await finalizeOrder(member, delivered.orderNumber, input);
+  const requested = await createDraftOrder(member, { ...input, title: "Droits demandés" });
+  await finalizeOrder(member, requested.orderNumber, input);
+
+  async function markDelivered(orderNumber: string) {
+    await prisma.$transaction(async (transaction) => {
+      const order = await transaction.order.findUniqueOrThrow({ where: { orderNumber } });
+      await transaction.order.update({ where: { id: order.id }, data: { status: "DELIVERED", deliveredAt: new Date() } });
+      await transaction.orderEvent.create({
+        data: {
+          orderId: order.id,
+          fromStatus: "AWAITING_PAYMENT",
+          toStatus: "DELIVERED",
+          note: "Livraison fictive réservée au contrôle navigateur local.",
+          visibility: "CLIENT",
+        },
+      });
+    });
+  }
+
+  await markDelivered(delivered.orderNumber);
+  await markDelivered(requested.orderNumber);
+  await requestCommercialLicense(member, requested.orderNumber);
+  console.info(`Order browser fixtures created: draft ${draft.orderNumber}, undelivered ${submitted.orderNumber}, delivered ${delivered.orderNumber}, rights requested ${requested.orderNumber}.`);
 }
 
 run().finally(() => prisma.$disconnect()).catch((error: unknown) => {

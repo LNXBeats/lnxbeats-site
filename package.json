@@ -15,6 +15,7 @@
     "test:auth:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-auth-runtime.ts",
     "auth:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/auth-qa-fixtures.ts",
     "test:order": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/domain.test.ts tests/orders/request.test.ts",
+    "test:rights": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/rights.test.ts",
     "test:upload": "tsx --test tests/orders/upload.test.ts",
     "test:order:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-order-runtime.ts",
     "order:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/order-qa-fixtures.ts",

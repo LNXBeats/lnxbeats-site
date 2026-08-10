@@ -149,6 +149,23 @@ enum OrderEventVisibility {
   INTERNAL
 }
 
+enum CommercialLicenseStatus {
+  REQUESTED
+  CONTRACT_PENDING
+  PAYMENT_PENDING
+  ACTIVE
+  REJECTED
+  CANCELLED
+}
+
+enum CommercialLicensePaymentStatus {
+  NOT_STARTED
+  PENDING
+  CONFIRMED
+  REFUND_PENDING
+  REFUNDED
+}
+
 model User {
   id                String                 @id @default(uuid()) @db.Uuid
   email             String                 @unique @db.VarChar(320)
@@ -387,53 +404,76 @@ model ProjectAsset {
 }
 
 model Order {
-  id                 String       @id @default(uuid()) @db.Uuid
-  orderNumber        String       @unique @db.VarChar(32)
-  userId             String?      @db.Uuid
-  customerId         String?      @db.Uuid
-  customerEmail      String       @db.VarChar(320)
-  customerName       String?      @db.VarChar(200)
-  status             OrderStatus  @default(DRAFT)
-  title              String?      @db.VarChar(240)
-  recipient          String?      @db.VarChar(200)
-  occasion           String?      @db.VarChar(200)
-  brief              String       @db.Text
-  musicalDirection   String?      @db.Text
-  emotion            String?      @db.Text
-  importantDetails   String?      @db.Text
-  wordsToInclude     String?      @db.Text
-  avoid              String?      @db.Text
-  pronunciationNotes String?      @db.Text
-  notes              String?      @db.Text
-  usage              OrderUsage   @default(PERSONAL)
-  coverIncluded      Boolean      @default(false)
-  priorityProcessing Boolean      @default(false)
-  basePriceCents     Int          @default(5000)
-  coverPriceCents    Int          @default(0)
-  priorityPriceCents Int          @default(0)
-  totalCents         Int          @default(5000)
-  currency           String       @default("EUR") @db.VarChar(3)
-  pricingVersion     String       @default("2026-08-v1") @db.VarChar(32)
-  contractRequired   Boolean      @default(false)
-  revisionAllowance  Int          @default(1)
-  revisionUsed       Int          @default(0)
-  submittedAt        DateTime?    @db.Timestamptz(3)
-  serviceStartedAt   DateTime?    @db.Timestamptz(3)
-  deliveredAt        DateTime?    @db.Timestamptz(3)
-  downloadExpiresAt  DateTime?    @db.Timestamptz(3)
-  cancelledAt        DateTime?    @db.Timestamptz(3)
-  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
-  account            User?        @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
-  customer           Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  id                 String              @id @default(uuid()) @db.Uuid
+  orderNumber        String              @unique @db.VarChar(32)
+  userId             String?             @db.Uuid
+  customerId         String?             @db.Uuid
+  customerEmail      String              @db.VarChar(320)
+  customerName       String?             @db.VarChar(200)
+  status             OrderStatus         @default(DRAFT)
+  title              String?             @db.VarChar(240)
+  recipient          String?             @db.VarChar(200)
+  occasion           String?             @db.VarChar(200)
+  brief              String              @db.Text
+  musicalDirection   String?             @db.Text
+  emotion            String?             @db.Text
+  importantDetails   String?             @db.Text
+  wordsToInclude     String?             @db.Text
+  avoid              String?             @db.Text
+  pronunciationNotes String?             @db.Text
+  notes              String?             @db.Text
+  usage              OrderUsage          @default(PERSONAL)
+  coverIncluded      Boolean             @default(false)
+  priorityProcessing Boolean             @default(false)
+  basePriceCents     Int                 @default(5000)
+  coverPriceCents    Int                 @default(0)
+  priorityPriceCents Int                 @default(0)
+  totalCents         Int                 @default(5000)
+  currency           String              @default("EUR") @db.VarChar(3)
+  pricingVersion     String              @default("2026-08-v1") @db.VarChar(32)
+  contractRequired   Boolean             @default(false)
+  revisionAllowance  Int                 @default(1)
+  revisionUsed       Int                 @default(0)
+  submittedAt        DateTime?           @db.Timestamptz(3)
+  serviceStartedAt   DateTime?           @db.Timestamptz(3)
+  deliveredAt        DateTime?           @db.Timestamptz(3)
+  downloadExpiresAt  DateTime?           @db.Timestamptz(3)
+  cancelledAt        DateTime?           @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  account            User?               @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
+  customer           Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
   events             OrderEvent[]
   assets             OrderAsset[]
+  commercialLicenses CommercialLicense[]
 
   @@index([status, createdAt])
   @@index([userId])
   @@index([userId, status, updatedAt])
   @@index([customerId])
   @@map("orders")
+}
+
+model CommercialLicense {
+  id                 String                         @id @default(uuid()) @db.Uuid
+  orderId            String                         @db.Uuid
+  status             CommercialLicenseStatus        @default(REQUESTED)
+  priceCents         Int                            @default(150000)
+  currency           String                         @default("EUR") @db.VarChar(3)
+  pricingVersion     String                         @default("2026-08-rights-v1") @db.VarChar(32)
+  contractRequired   Boolean                        @default(true)
+  contractAcceptedAt DateTime?                      @db.Timestamptz(3)
+  paymentStatus      CommercialLicensePaymentStatus @default(NOT_STARTED)
+  requestedAt        DateTime                       @default(now()) @db.Timestamptz(3)
+  approvedAt         DateTime?                      @db.Timestamptz(3)
+  activatedAt        DateTime?                      @db.Timestamptz(3)
+  createdAt          DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                       @updatedAt @db.Timestamptz(3)
+  order              Order                          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@index([status, updatedAt])
+  @@map("commercial_licenses")
 }
 
 model OrderEvent {

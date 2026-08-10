@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CommercialLicensePanel } from "@/components/commercial-license-panel";
 import { Container } from "@/components/container";
 import { requireVerifiedUser } from "@/lib/auth/session";
-import { formatEuro, type OrderActor } from "@/lib/orders/domain";
+import { canRequestCommercialLicense, formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { orderStatusPresentation } from "@/lib/orders/status";
 
@@ -61,11 +62,19 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           </section>
 
           <aside className="order-detail__price" aria-label="Prix de la demande">
-            <span>Montant calculé</span><strong>{formatEuro(order.totalCents)}</strong>
-            <p>{order.usage === "PERSONAL" ? "Usage personnel" : "Exploitation commerciale étendue"}</p>
+            <span>Total de la création</span><strong>{formatEuro(order.totalCents)}</strong>
+            <p>{order.usage === "PERSONAL" ? "Usage personnel" : "Ancien snapshot commercial V0.6 — à régulariser"}</p>
             <small>Version tarifaire {order.pricingVersion} · paiement non encore disponible</small>
           </aside>
         </div>
+
+        {order.status === "DELIVERED" ? (
+          <CommercialLicensePanel
+            orderNumber={order.orderNumber}
+            initialLicense={order.commercialLicenses[0] ?? null}
+            initialCanRequest={canRequestCommercialLicense(order.status, order.commercialLicenses.map(({ status: licenseStatus }) => licenseStatus))}
+          />
+        ) : null}
 
         <section className="order-detail__section" aria-labelledby="order-brief-title">
           <p className="auth-panel__label">Récapitulatif</p>

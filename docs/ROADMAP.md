@@ -90,6 +90,14 @@
 - photos de référence contrôlées, réencodées et stockées hors webroot
 - aucun paiement, aucune facture, aucun email de commande et aucune livraison WAV active
 
+## V0.6.0.1 — Séparation création / droits commerciaux
+
+- commande initiale strictement personnelle de 50 à 90 €, sans sélection commerciale
+- demande de droits séparée et disponible uniquement après livraison
+- prix serveur de 1 500 €, contrat spécifique requis et statut autonome
+- propriété, refus avant livraison, anti-doublon et migration additive validés
+- aucun paiement, contrat électronique, facture ou interface administrateur activé
+
 ## V0.6.1 — Payment architecture & fiscal/legal readiness audit
 
 - choix d’architecture sans intégration prématurée d’un fournisseur

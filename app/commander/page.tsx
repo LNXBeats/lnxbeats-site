@@ -44,7 +44,8 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
           <div className="editorial-copy">
             <p>Vous n’avez pas besoin d’apporter des paroles finales. Racontez les personnes, la scène et ce que la musique devra préserver.</p>
             <p>Un compte vérifié est requis dès la première sauvegarde. Le brouillon reste privé et peut être repris depuis votre espace.</p>
-            <p>La demande créée restera en attente de paiement : aucun paiement, contrat électronique ou engagement de réalisation n’est activé dans cette version.</p>
+            <p>La demande initiale reste personnelle et son total ne dépasse pas 90 €. Une extension d’exploitation séparée ne peut être envisagée qu’après livraison.</p>
+            <p>Aucun paiement, contrat électronique ou engagement de réalisation n’est activé dans cette version.</p>
           </div>
         </Container>
       </section>
@@ -62,10 +63,11 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
               <li>Un retour conforme au brief initial inclus</li>
               <li>Cover personnalisée : +10 €</li>
               <li>Traitement prioritaire : +30 €</li>
-              <li>Commercial étendu : 1 500 € au total, hors options</li>
+              <li>Total maximum de la création : 90 €</li>
+              <li>Droits d’exploitation exclus de cette première commande</li>
               <li>Paiement non encore disponible</li>
             </ul>
-            <p className="order-aside__note">Traitement fiscal, droits détaillés et conditions d’annulation à valider avant activation commerciale.</p>
+            <p className="order-aside__note">Après livraison, une demande distincte pourra ouvrir un échange sur les droits d’exploitation, selon contrat spécifique.</p>
           </aside>
         </Container>
       </section>

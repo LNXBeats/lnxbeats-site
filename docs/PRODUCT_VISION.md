@@ -14,6 +14,7 @@ La promesse reste artistique avant d’être fonctionnelle : **chaque histoire m
 4. **Un compte utile, pas décoratif.** Chaque donnée demandée doit servir l’accès, la sécurité, le suivi d’une création ou une préférence choisie.
 5. **Une administration centrée sur la relation.** Les futurs outils doivent aider à suivre les projets, les contenus et les livraisons, sans tableau de bord inutilement complexe.
 6. **Aucune pression marketing.** Les alertes de sortie et communications non essentielles reposent sur un choix explicite, distinct et révocable.
+7. **La création avant les droits.** Une commande personnelle et une extension d’exploitation sont deux décisions, deux prix et deux futurs paiements distincts ; la seconde n’apparaît qu’après livraison.
 
 ## Identité éditoriale officielle
 
@@ -82,7 +83,7 @@ L’administrateur gère à terme les membres, clients, commandes, statuts, livr
 - préférences fines de formats ou de canaux ;
 - avantages liés à de futures éditions physiques.
 
-Les fonctions optionnelles ne justifient jamais une collecte obligatoire. La V0.6 active seulement le brief, les photos de référence et le suivi nécessaires à une demande ; favoris, alertes et livraisons restent annoncés comme futurs.
+Les fonctions optionnelles ne justifient jamais une collecte obligatoire. La V0.6 active seulement le brief, les photos de référence et le suivi nécessaires à une demande. La V0.6.0.1 ajoute une demande de droits post-livraison sans contrat ni paiement actif ; favoris, alertes et livraisons restent annoncés comme futurs.
 
 ## Suivi d’une création personnalisée
 
@@ -107,6 +108,14 @@ Le parcours conserve le langage du studio tout en restant sans ambiguïté. Les 
 | `REFUND_PENDING` / `REFUNDED` | Remboursement | États réservés à une architecture de paiement future. |
 
 Chaque changement important doit produire un événement horodaté et compréhensible. La timeline membre ne doit pas exposer les notes internes, les identifiants techniques ou les opérations administratives sans intérêt pour le client.
+
+## Droits d’exploitation après livraison
+
+Commander porte uniquement la création personnelle, de 50 à 90 € selon les options. Aucun choix commercial ni tarif à 1 500 € ne doit détourner la rencontre artistique initiale.
+
+Une fois l’`Order` livrée, le propriétaire peut ouvrir une demande distincte à 1 500 €. Le détail privé conserve deux lectures séparées : total de la création d’origine, puis état et prix de l’extension. Le produit présente cette dernière comme une cession/licence exclusive de droits patrimoniaux d’exploitation selon contrat spécifique, sans inclure le droit moral ni attribuer automatiquement une part SACEM.
+
+Les statuts de droits (`REQUESTED`, contrat en préparation, paiement futur, actif, refusé ou annulé) ne valent jamais preuve de paiement ou de contrat signé par eux-mêmes. L’administration, la génération du contrat, son acceptation et l’activation restent des travaux futurs explicites.
 
 ## Favoris, alertes et préférences
 
@@ -150,7 +159,7 @@ La boutique actuelle ne traite aucun achat : elle renvoie vers les espaces offic
 
 ### Architecture à choisir
 
-Une future intégration doit créer l’intention côté serveur, vérifier la confirmation via API ou webhook, appliquer l’idempotence, rapprocher le paiement de la commande et ne jamais prendre le succès d’une redirection navigateur comme preuve de règlement. Aucun bouton réel, secret, identifiant marchand, SDK ou fournisseur n’est ajouté en V0.6. Wero est une possibilité souhaitée pour le futur ; il n’est ni implémenté ni simulé.
+Une future intégration doit créer l’intention côté serveur, vérifier la confirmation via API ou webhook, appliquer l’idempotence et ne jamais prendre le succès d’une redirection navigateur comme preuve de règlement. Elle devra distinguer le paiement de la création lié à `Order` du paiement des droits lié à `CommercialLicense`. Aucun bouton réel, secret, identifiant marchand, SDK ou fournisseur n’est ajouté en V0.6.0.1. Wero est une possibilité souhaitée pour le futur ; il n’est ni implémenté ni simulé.
 
 ### Virement bancaire et RIB
 
@@ -218,7 +227,7 @@ Le placeholder `/admin` reste minimal tant que ces opérations ne sont pas impl�
 
 La politique définitive doit reconnaître les données d’authentification déjà traitées. Elle ne peut plus affirmer que le site ne conserve aucune donnée.
 
-## Frontières de la V0.6
+## Frontières de la V0.6.0.1
 
 Cette version :
 
@@ -226,6 +235,8 @@ Cette version :
 - valide les briefs et calcule les prix côté serveur ;
 - finalise une demande en attente de paiement et expose sa timeline privée ;
 - protège et normalise les photos de référence ;
+- force la commande initiale à l’usage personnel et à 90 € maximum ;
+- enregistre, après livraison seulement, une demande autonome de droits à prix serveur ;
 - publie les seules informations professionnelles confirmées tout en signalant les validations restantes.
 
 Cette version n’ajoute :

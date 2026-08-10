@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPlaceholder } from "@/components/legal-placeholder";
-import { orderOffer } from "@/data/order-offer";
+import { commercialRightsOffer, orderOffer } from "@/data/order-offer";
 
 export const metadata: Metadata = { title: "Conditions générales de vente", robots: { index: false, follow: true }, alternates: { canonical: "/cgv" } };
 
@@ -15,11 +15,12 @@ export default function TermsPage() {
           items: [
             { status: "DÉJÀ IDENTIFIÉ", text: "Vendeur annoncé : Ludovic Mathon, entrepreneur individuel, sous le nom artistique LNX Beats." },
             { status: "À FOURNIR", text: "Description exacte de la prestation et du livrable musical." },
-            { status: "DÉJÀ IDENTIFIÉ", text: `Références enregistrées : usage personnel ${(orderOffer.personalBaseCents / 100).toLocaleString("fr-FR")} €, exploitation commerciale étendue ${(orderOffer.commercialExtendedBaseCents / 100).toLocaleString("fr-FR")} €, cover +${orderOffer.coverCents / 100} €, priorité +${orderOffer.priorityCents / 100} €.` },
+            { status: "DÉJÀ IDENTIFIÉ", text: `Commande initiale personnelle : ${(orderOffer.personalBaseCents / 100).toLocaleString("fr-FR")} €, cover +${orderOffer.coverCents / 100} €, priorité +${orderOffer.priorityCents / 100} €, soit 90 € maximum.` },
+            { status: "DÉJÀ IDENTIFIÉ", text: `Après livraison uniquement, une extension de droits distincte peut être demandée au tarif serveur de ${(commercialRightsOffer.priceCents / 100).toLocaleString("fr-FR")} €, selon contrat spécifique.` },
             { status: "À VALIDER", text: "Taxes, devis, durée de validité, conditions de révision tarifaire et régime de TVA applicable." },
             { status: "À VALIDER", text: "Calendrier, étapes de validation et livraison. Une demande de retour est prévue dans le modèle, sans délai contractuel annoncé." },
             { status: "À VALIDER", text: "Droits d’usage personnel, licences commerciales et propriété intellectuelle." },
-            { status: "DÉJÀ IDENTIFIÉ", text: "L’exploitation commerciale étendue exige un contrat spécifique. Aucune cession automatique des droits moraux ni aucune affiliation SACEM ne sont affirmées." },
+            { status: "DÉJÀ IDENTIFIÉ", text: "L’extension commerciale exige un contrat spécifique. Le droit moral reste hors du dispositif et aucune part SACEM n’est attribuée automatiquement." },
           ],
         },
         {

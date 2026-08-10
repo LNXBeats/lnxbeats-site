@@ -170,7 +170,8 @@ async function run() {
     const tables = await prisma.$queryRawUnsafe<Array<{ tablename: string }>>(
       `SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations' ORDER BY tablename`,
     );
-    assert.equal(tables.length, 17);
+    assert.equal(tables.length, 18);
+    assert.ok(tables.some(({ tablename }) => tablename === "commercial_licenses"));
     passed.push("physical authentication schema inspected");
 
     const crossOriginSignup = await post("/api/auth/sign-up/email", {

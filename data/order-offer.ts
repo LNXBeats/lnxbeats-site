@@ -2,7 +2,6 @@ export const orderOffer = {
   pricingVersion: "2026-08-v1",
   currency: "EUR",
   personalBaseCents: 5_000,
-  commercialExtendedBaseCents: 150_000,
   coverCents: 1_000,
   priorityCents: 3_000,
   revisionAllowance: 1,
@@ -18,3 +17,25 @@ export const orderOffer = {
 } as const;
 
 export type OrderUsage = "PERSONAL" | "COMMERCIAL_EXTENDED";
+
+export const commercialRightsOffer = {
+  pricingVersion: "2026-08-rights-v1",
+  priceCents: 150_000,
+  currency: "EUR",
+  contractRequired: true,
+} as const;
+
+export type CommercialLicenseStatus =
+  | "REQUESTED"
+  | "CONTRACT_PENDING"
+  | "PAYMENT_PENDING"
+  | "ACTIVE"
+  | "REJECTED"
+  | "CANCELLED";
+
+export type CommercialLicensePaymentStatus =
+  | "NOT_STARTED"
+  | "PENDING"
+  | "CONFIRMED"
+  | "REFUND_PENDING"
+  | "REFUNDED";

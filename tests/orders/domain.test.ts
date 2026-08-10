@@ -23,12 +23,11 @@ const validBrief = {
   wordsToInclude: "",
   avoid: "",
   pronunciationNotes: "",
-  usage: "PERSONAL",
   coverIncluded: false,
   priorityProcessing: false,
 } as const;
 
-test("calcule les prix personnels exclusivement en centimes", () => {
+test("calcule exclusivement la création personnelle entre 50 et 90 euros", () => {
   assert.deepEqual(calculateOrderPrice(validBrief), {
     usage: "PERSONAL",
     basePriceCents: 5_000,
@@ -39,21 +38,16 @@ test("calcule les prix personnels exclusivement en centimes", () => {
     pricingVersion: "2026-08-v1",
     contractRequired: false,
   });
-  assert.equal(calculateOrderPrice({ ...validBrief, coverIncluded: true, priorityProcessing: true }).totalCents, 9_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: false }).totalCents, 6_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: false, priorityProcessing: true }).totalCents, 8_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: true }).totalCents, 9_000);
 });
 
-test("l'exploitation commerciale vaut 1 500 euros au total avant options et exige un contrat", () => {
-  assert.equal(calculateOrderPrice({ usage: "COMMERCIAL_EXTENDED", coverIncluded: false, priorityProcessing: false }).totalCents, 150_000);
-  const pricing = calculateOrderPrice({ usage: "COMMERCIAL_EXTENDED", coverIncluded: true, priorityProcessing: true });
-  assert.equal(pricing.basePriceCents, 150_000);
-  assert.equal(pricing.totalCents, 154_000);
-  assert.equal(pricing.contractRequired, true);
-});
-
-test("ignore tout montant, propriétaire ou rôle forgé par le client", () => {
-  const parsed = parseOrderDraftInput({ ...validBrief, totalCents: 1, basePriceCents: -1, contractRequired: false, userId: "attacker", role: "ADMIN", status: "PAID" });
+test("ignore tout usage, montant, propriétaire ou rôle forgé par le client", () => {
+  const parsed = parseOrderDraftInput({ ...validBrief, usage: "COMMERCIAL_EXTENDED", totalCents: 1, basePriceCents: -1, contractRequired: true, userId: "attacker", role: "ADMIN", status: "PAID" });
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
+  assert.equal("usage" in parsed.value, false);
   assert.equal("totalCents" in parsed.value, false);
   assert.equal("userId" in parsed.value, false);
   assert.equal("role" in parsed.value, false);
@@ -62,7 +56,6 @@ test("ignore tout montant, propriétaire ou rôle forgé par le client", () => {
 
 test("refuse les payloads ambigus et les briefs incomplets", () => {
   assert.equal(parseOrderDraftInput([]).ok, false);
-  assert.equal(parseOrderDraftInput({ ...validBrief, usage: "FREE" }).ok, false);
   assert.equal(parseOrderDraftInput({ ...validBrief, coverIncluded: "yes" }).ok, false);
   const parsed = parseOrderDraftInput({ ...validBrief, brief: "court" });
   assert.equal(parsed.ok, true);

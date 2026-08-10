@@ -39,7 +39,6 @@ const emptyDraft: OrderDraftInput = {
   wordsToInclude: "",
   avoid: "",
   pronunciationNotes: "",
-  usage: "PERSONAL",
   coverIncluded: false,
   priorityProcessing: false,
 };
@@ -61,7 +60,6 @@ function draftFromOrder(order: SerializedOrder | null): OrderDraftInput {
     wordsToInclude: order.wordsToInclude,
     avoid: order.avoid,
     pronunciationNotes: order.pronunciationNotes,
-    usage: order.usage,
     coverIncluded: order.coverIncluded,
     priorityProcessing: order.priorityProcessing,
   };
@@ -350,7 +348,8 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
         {step === 2 ? (
           <>
             <p className="eyebrow">Étape 3 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur et l’usage.</h2>
+            <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur de la création.</h2>
+            <p className="form-step__intro">Cette première commande couvre une création à usage personnel. Une extension de droits distincte pourra être demandée depuis votre espace après la livraison.</p>
             <fieldset className="fieldset" id="order-musical-direction" tabIndex={-1}>
               <legend>Direction musicale *</legend>
               <div className="choice-grid">
@@ -366,21 +365,6 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
               <label htmlFor="order-emotion">Ce que la musique doit faire ressentir</label>
               <input id="order-emotion" maxLength={orderTextLimits.emotion} value={form.emotion} placeholder="Tendre, drôle, nostalgique…" onChange={(event) => setField("emotion", event.target.value)} />
             </div>
-
-            <fieldset className="fieldset">
-              <legend>Usage envisagé</legend>
-              <div className="choice-grid choice-grid--offer">
-                <label className="choice">
-                  <input type="radio" name="usage" checked={form.usage === "PERSONAL"} onChange={() => setField("usage", "PERSONAL")} />
-                  <span><strong>Usage personnel — 50 €</strong><small>Conditions détaillées précisées avant activation commerciale.</small></span>
-                </label>
-                <label className="choice">
-                  <input type="radio" name="usage" checked={form.usage === "COMMERCIAL_EXTENDED"} onChange={() => setField("usage", "COMMERCIAL_EXTENDED")} />
-                  <span><strong>Exploitation commerciale étendue — 1 500 €</strong><small>Contrat spécifique requis avant toute exploitation sur les plateformes et supports convenus.</small></span>
-                </label>
-              </div>
-              <p className="field__hint">La formule commerciale prévoit une exploitation selon contrat sur les plateformes et supports convenus. Elle ne cède pas le droit moral et ne crée aucune part SACEM automatique.</p>
-            </fieldset>
 
             <fieldset className="fieldset">
               <legend>Options</legend>
@@ -436,17 +420,17 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
               <div><dt>Histoire pour</dt><dd>{form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
               <div><dt>Histoire</dt><dd className="summary__long">{form.brief}</dd></div>
               <div><dt>Direction</dt><dd>{form.musicalDirection}</dd></div>
-              <div><dt>Usage</dt><dd>{form.usage === "PERSONAL" ? "Personnel" : "Commercial étendu — contrat spécifique requis"}</dd></div>
+              <div><dt>Usage compris</dt><dd>Personnel</dd></div>
               <div><dt>Options</dt><dd>{[form.coverIncluded ? "Cover" : "", form.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
               <div><dt>Photos</dt><dd>{photos.length}</dd></div>
               <div><dt>Livraison future</dt><dd>WAV · disponible 6 mois à compter de la livraison</dd></div>
               <div><dt>Retour inclus</dt><dd>1 retour pour corriger un écart avec le brief initial</dd></div>
-              <div><dt>Délai indicatif</dt><dd>{orderOffer.indicativeDelay} · point de départ confirmé avant activation commerciale</dd></div>
+              <div><dt>Délai indicatif</dt><dd>{orderOffer.indicativeDelay} · point de départ confirmé lors de la prise en charge</dd></div>
             </dl>
 
             <div className="order-total" aria-live="polite">
-              <span>Total calculé</span><strong>{formatEuro(pricing.totalCents)}</strong>
-              <small>Calcul serveur définitif lors de la création · paiement non encore disponible.</small>
+              <span>Total de la création</span><strong>{formatEuro(pricing.totalCents)}</strong>
+              <small>De 50 € à 90 € avec les options · les droits d’exploitation ne font pas partie de cette commande · paiement non encore disponible.</small>
             </div>
 
             <label className="choice choice--full">
@@ -457,7 +441,6 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
               <input type="checkbox" checked={contentConfirmed} onChange={(event) => setContentConfirmed(event.target.checked)} />
               <span>Je comprends que LNX Beats peut refuser une demande illégale, haineuse, diffamatoire, harcelante ou portant atteinte aux droits d’un tiers.</span>
             </label>
-            {form.usage === "COMMERCIAL_EXTENDED" ? <p className="terms-note">Exploitation commerciale étendue encadrée par un contrat spécifique. Le droit moral n’est pas cédé. Toute éventuelle répartition SACEM suppose une contribution réelle et un accord distinct.</p> : null}
             <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed}>Créer ma demande</button>
           </>
         ) : null}

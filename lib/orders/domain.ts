@@ -1,4 +1,8 @@
-import { orderOffer, type OrderUsage } from "@/data/order-offer";
+import {
+  commercialRightsOffer,
+  orderOffer,
+  type CommercialLicenseStatus,
+} from "@/data/order-offer";
 
 export const orderTextLimits = {
   title: 120,
@@ -25,7 +29,6 @@ export type OrderDraftInput = {
   wordsToInclude: string;
   avoid: string;
   pronunciationNotes: string;
-  usage: OrderUsage;
   coverIncluded: boolean;
   priorityProcessing: boolean;
 };
@@ -40,7 +43,7 @@ export type OrderActor = {
 };
 
 export type PricingSnapshot = {
-  usage: OrderUsage;
+  usage: "PERSONAL";
   basePriceCents: number;
   coverPriceCents: number;
   priorityPriceCents: number;
@@ -96,10 +99,6 @@ export function parseOrderDraftInput(value: unknown): ParseResult {
     strings[field] = parsed.value;
   }
 
-  const usage = payload.usage ?? "PERSONAL";
-  if (usage !== "PERSONAL" && usage !== "COMMERCIAL_EXTENDED") {
-    return { ok: false, message: "Le type d’exploitation choisi est invalide.", field: "usage" };
-  }
   if (payload.coverIncluded !== undefined && typeof payload.coverIncluded !== "boolean") {
     return { ok: false, message: "L’option cover est invalide.", field: "coverIncluded" };
   }
@@ -111,7 +110,6 @@ export function parseOrderDraftInput(value: unknown): ParseResult {
     ok: true,
     value: {
       ...strings,
-      usage,
       coverIncluded: payload.coverIncluded === true,
       priorityProcessing: payload.priorityProcessing === true,
     },
@@ -130,26 +128,42 @@ export function validateOrderForSubmission(input: OrderDraftInput) {
 }
 
 export function calculateOrderPrice(selection: {
-  usage: OrderUsage;
   coverIncluded: boolean;
   priorityProcessing: boolean;
 }): PricingSnapshot {
-  const basePriceCents = selection.usage === "COMMERCIAL_EXTENDED"
-    ? orderOffer.commercialExtendedBaseCents
-    : orderOffer.personalBaseCents;
+  const basePriceCents = orderOffer.personalBaseCents;
   const coverPriceCents = selection.coverIncluded ? orderOffer.coverCents : 0;
   const priorityPriceCents = selection.priorityProcessing ? orderOffer.priorityCents : 0;
 
   return {
-    usage: selection.usage,
+    usage: "PERSONAL",
     basePriceCents,
     coverPriceCents,
     priorityPriceCents,
     totalCents: basePriceCents + coverPriceCents + priorityPriceCents,
     currency: orderOffer.currency,
     pricingVersion: orderOffer.pricingVersion,
-    contractRequired: selection.usage === "COMMERCIAL_EXTENDED",
+    contractRequired: false,
   };
+}
+
+export function commercialLicensePricingSnapshot() {
+  return { ...commercialRightsOffer };
+}
+
+const openCommercialLicenseStatuses = new Set<CommercialLicenseStatus>([
+  "REQUESTED",
+  "CONTRACT_PENDING",
+  "PAYMENT_PENDING",
+  "ACTIVE",
+]);
+
+export function canRequestCommercialLicense(
+  orderStatus: string,
+  existingStatuses: CommercialLicenseStatus[],
+) {
+  return orderStatus === "DELIVERED"
+    && !existingStatuses.some((status) => openCommercialLicenseStatuses.has(status));
 }
 
 export function canAccessOrder(actor: Pick<OrderActor, "id" | "role">, ownerUserId: string | null) {
