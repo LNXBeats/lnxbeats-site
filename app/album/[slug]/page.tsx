@@ -5,26 +5,24 @@ import { Container } from "@/components/container";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { ProjectPlatforms } from "@/components/project-platforms";
 import { Tracklist } from "@/components/tracklist";
+import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import {
-  getProjectBySlug,
   getProjectConfidenceLabel,
   getCreditRoleLabel,
   getProjectKindLabel,
   getProjectStatusLabel,
-  projects,
-} from "@/data/discography";
+} from "@/lib/catalog/types";
+import { getPublicProjectBySlug } from "@/lib/catalog/queries";
 
 type AlbumPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export function generateStaticParams() {
-  return projects.map((project) => ({ slug: project.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: AlbumPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const project = getProjectBySlug(slug);
+  const project = await getPublicProjectBySlug(slug);
 
   if (!project) return {};
 
@@ -40,27 +38,29 @@ export async function generateMetadata({ params }: AlbumPageProps): Promise<Meta
       url: canonical,
       title: `${title} — LNX Beats`,
       description: project.seo.description,
-      images: [{ url: "/og.png", width: 1200, height: 630, alt: "LNX Beats — Chaque histoire mérite sa musique." }],
+      images: [{ url: project.cover ?? "/og.png", width: 1200, height: 630, alt: resolveCatalogCoverAlt(project.title, project.coverAlt) }],
     },
     twitter: {
       card: "summary_large_image",
       title: `${title} — LNX Beats`,
       description: project.seo.description,
-      images: ["/og.png"],
+      images: [project.cover ?? "/og.png"],
     },
   };
 }
 
 export default async function AlbumPage({ params }: AlbumPageProps) {
   const { slug } = await params;
-  const project = getProjectBySlug(slug);
+  const project = await getPublicProjectBySlug(slug);
 
   if (!project) notFound();
 
   const kind = getProjectKindLabel(project.type);
   const status = getProjectStatusLabel(project.status);
   const confidence = getProjectConfidenceLabel(project.dataConfidence.overall);
-  const documentedDate = project.releaseDate ?? project.year;
+  const documentedDate = project.releaseDate
+    ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${project.releaseDate}T00:00:00.000Z`))
+    : project.year;
 
   return (
     <>
@@ -99,7 +99,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
           <aside className="album-editorial-note">
             <p className="eyebrow">Ce qui reste dans l’ombre</p>
             <h2>Le récit grandira ici.</h2>
-            <p>Cette fiche distingue les informations confirmées, partielles et non documentées. Pochette, dates, crédits, durées et liens directs resteront absents tant qu’aucune source locale fiable ne les établit.</p>
+            <p>Cette fiche distingue les informations confirmées, partielles et non documentées. Pochette, dates, crédits, durées et liens directs restent absents tant qu’ils n’ont pas été confirmés dans le catalogue.</p>
           </aside>
         </Container>
       </section>

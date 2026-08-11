@@ -1,5 +1,6 @@
 import Image from "next/image";
-import type { Project } from "@/data/discography";
+import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
+import type { Project } from "@/lib/catalog/types";
 
 type ProjectArtworkProps = {
   project: Project;
@@ -14,7 +15,7 @@ export function ProjectArtwork({ project, priority = false, sizes, className = "
       <div className={`project-artwork project-artwork--image ${className}`}>
         <Image
           src={project.cover}
-          alt={project.coverAlt ?? `Pochette de ${project.title}`}
+          alt={resolveCatalogCoverAlt(project.title, project.coverAlt)}
           fill
           priority={priority}
           sizes={sizes}

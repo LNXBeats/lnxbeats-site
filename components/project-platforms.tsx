@@ -1,4 +1,4 @@
-import type { ProjectPlatform } from "@/data/discography";
+import type { ProjectPlatform } from "@/lib/catalog/types";
 
 const platformGroups = [
   { scope: "release", label: "Liens directs de la sortie" },
@@ -8,7 +8,7 @@ const platformGroups = [
 
 export function ProjectPlatforms({ platforms }: { platforms: readonly ProjectPlatform[] }) {
   if (platforms.length === 0) {
-    return <p className="project-note">Aucun lien officiel propre à cette sortie n’est documenté dans les sources locales.</p>;
+    return <p className="project-note">Aucun lien officiel propre à cette sortie n’est encore documenté.</p>;
   }
 
   return (

@@ -293,11 +293,17 @@ model Project {
   subtitle              String?                @db.VarChar(240)
   type                  ProjectType
   status                ProjectStatus          @default(DRAFT)
+  catalogPosition       Int                    @unique
+  highlighted           Boolean                @default(false)
   shortDescription      String?                @db.Text
   description           String?                @db.Text
   releaseDate           DateTime?              @db.Date
   featured              Boolean                @default(false)
   trackCount            Int?
+  artworkTone           String                 @default("graphite") @db.VarChar(32)
+  seoTitle              String?                @db.VarChar(240)
+  seoDescription        String?                @db.Text
+  legacySourceVersion   String?                @db.VarChar(80)
   confidence            DataConfidence         @default(UNKNOWN)
   createdAt             DateTime               @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime               @updatedAt @db.Timestamptz(3)
@@ -344,6 +350,7 @@ model PlatformLink {
   updatedAt  DateTime       @updatedAt @db.Timestamptz(3)
   project    Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
+  @@unique([projectId, platform, scope])
   @@index([projectId, scope, position])
   @@map("platform_links")
 }

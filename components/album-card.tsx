@@ -1,6 +1,6 @@
 import Link from "next/link";
-import type { Project } from "@/data/discography";
-import { getProjectKindLabel, getProjectStatusLabel } from "@/data/discography";
+import type { Project } from "@/lib/catalog/types";
+import { getProjectKindLabel, getProjectStatusLabel } from "@/lib/catalog/types";
 import { ProjectArtwork } from "@/components/project-artwork";
 
 type AlbumCardProps = {

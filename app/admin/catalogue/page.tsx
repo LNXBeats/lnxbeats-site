@@ -1,68 +1,51 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
-import type { DataConfidence, Project } from "@/data/discography";
-import { getProjectKindLabel, getProjectStatusLabel, projects } from "@/data/discography";
-import { getProjectBySlug } from "@/data/discography";
-import { homeEditorial } from "@/data/home";
 import { requireAdmin } from "@/lib/auth/session";
+import { listAdminCatalogProjects } from "@/lib/catalog/service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Catalogue" };
 
-function getCatalogueState(confidence: DataConfidence) {
-  if (confidence === "confirmed") return "Complet";
-  if (confidence === "partial") return "À compléter";
-  if (confidence === "placeholder") return "Provisoire";
-  return "Non documenté";
-}
+const statusLabels: Record<string, string> = { DRAFT: "Brouillon", IN_DEVELOPMENT: "En développement", PUBLISHED: "Publié", ARCHIVED: "Archivé" };
 
-function getDirectLinksLabel(project: Project) {
-  const count = project.platforms.filter(({ scope }) => scope === "release").length;
-  if (count === 0) return "Aucun lien direct";
-  return `${count} lien${count === 1 ? "" : "s"} renseigné${count === 1 ? "" : "s"}`;
-}
-
-function getTracklistLabel(project: Project) {
-  const count = project.tracks.length || project.trackCount;
-  if (!count) return "Non documentée";
-  if (project.tracks.length) return `${count} titre${count === 1 ? "" : "s"}`;
-  return `${count} titre${count === 1 ? " annoncé" : "s annoncés"}`;
-}
-
-export default async function AdminCataloguePage() {
+export default async function AdminCataloguePage({ searchParams }: { searchParams: Promise<{ q?: string; statut?: string }> }) {
   await requireAdmin();
-  const spotlight = getProjectBySlug(homeEditorial.spotlightProjectSlug);
+  const params = await searchParams;
+  const query = params.q ?? "";
+  const status = params.statut ?? "all";
+  const projects = await listAdminCatalogProjects(query, status);
+  const featured = projects.find((project) => project.featured) ?? (await listAdminCatalogProjects()).find((project) => project.featured);
 
   return (
     <div className="admin-main">
-      <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue</p><h1>Audit de la discographie.</h1></div><p>{projects.length} projets composent actuellement le catalogue. Cette vue met en lumière les informations qui méritent encore votre attention.</p></header>
+      <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue PostgreSQL</p><h1>La discographie, éditable.</h1></div><p>Les pages publiques et cette administration lisent désormais la même source. Chaque enregistrement reste explicite et contrôlé.</p></header>
 
       <section className="admin-catalogue-notice" id="mise-en-avant">
-        <div><p className="admin-section-label">Projet actuellement mis en avant</p><h2>{spotlight?.title ?? "Aucun projet sélectionné"}</h2></div>
-        <p>La modification sera disponible depuis l’administration lorsque l’édition du catalogue sera activée.</p>
+        <div><p className="admin-section-label">Projet mis en avant sur l’accueil</p><h2>{featured?.title ?? "Aucun projet sélectionné"}</h2></div>
+        <p>Une seule mise en avant peut être active. Le changement se fait depuis la fiche du projet et remplace l’ancienne sélection dans une transaction.</p>
       </section>
 
-      <section className="admin-list-window" aria-labelledby="catalogue-audit-title">
-        <div className="admin-list-window__heading"><h2 id="catalogue-audit-title">Catalogue LNX Beats</h2><span>{projects.length} projets</span></div>
-        <ul className="admin-catalogue-list">
-          {projects.map((project) => {
-            return <li key={project.slug}>
-              <div><strong>{project.title}</strong><small>{getProjectKindLabel(project.type)} · {getProjectStatusLabel(project.status)}{project.featured ? " · Mis en avant" : ""}</small></div>
-              <dl>
-                <div><dt>Informations</dt><dd>{getCatalogueState(project.dataConfidence.overall)}</dd></div>
-                <div><dt>Cover</dt><dd>{project.cover ? "Officielle" : "Manquante"}</dd></div>
-                <div><dt>Liens directs</dt><dd>{getDirectLinksLabel(project)}</dd></div>
-                <div><dt>Tracklist</dt><dd>{getTracklistLabel(project)}</dd></div>
-              </dl>
-            </li>;
-          })}
-        </ul>
-      </section>
+      <form className="admin-catalogue-filters" action="/admin/catalogue" method="get" role="search">
+        <label><span>Rechercher</span><input name="q" defaultValue={query} maxLength={120} placeholder="Titre ou slug" /></label>
+        <label><span>Statut</span><select name="statut" defaultValue={status}><option value="all">Tous</option><option value="PUBLISHED">Publié</option><option value="IN_DEVELOPMENT">En développement</option><option value="DRAFT">Brouillon</option><option value="ARCHIVED">Archivé</option></select></label>
+        <button type="submit">Filtrer</button>
+      </form>
 
-      <section className="admin-migration-window">
-        <p className="admin-section-label">Édition du catalogue</p><h2>Les modifications seront bientôt disponibles ici.</h2>
-        <p>Pour le moment, cette page permet de vérifier les projets et les éléments à compléter.</p>
-        <p>L’édition, la mise en avant et l’ajout de covers seront activés lorsque le catalogue pourra être géré directement depuis l’administration.</p>
+      <section className="admin-list-window" aria-labelledby="catalogue-title">
+        <div className="admin-list-window__heading"><h2 id="catalogue-title">Catalogue LNX Beats</h2><span>{projects.length} projet{projects.length === 1 ? "" : "s"}</span></div>
+        {projects.length ? <ul className="admin-catalogue-list">
+          {projects.map((project) => <li key={project.id}>
+            <div><strong><Link href={`/admin/catalogue/${project.slug}`}>{project.title}</Link></strong><small>{project.slug} · {statusLabels[project.status]}</small></div>
+            <dl>
+              <div><dt>Type</dt><dd>{project.type === "ALBUM" ? "Album" : project.type === "SINGLE" ? "Single" : "Projet"}</dd></div>
+              <div><dt>Cover</dt><dd>{project._count.assets ? "Officielle" : "Manquante"}</dd></div>
+              <div><dt>Liens directs</dt><dd>{project._count.platformLinks}</dd></div>
+              <div><dt>Tracklist</dt><dd>{project._count.tracks || project.trackCount || "Non documentée"}</dd></div>
+            </dl>
+            <Link className="admin-row-action" href={`/admin/catalogue/${project.slug}`}>Modifier <span aria-hidden="true">→</span></Link>
+          </li>)}
+        </ul> : <div className="admin-empty"><h2>Aucun projet ne correspond.</h2><p>Modifiez la recherche ou le filtre de statut.</p></div>}
       </section>
     </div>
   );

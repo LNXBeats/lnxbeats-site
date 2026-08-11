@@ -98,6 +98,26 @@
 - propriété, refus avant livraison, anti-doublon et migration additive validés
 - aucun paiement, contrat électronique, facture ou interface administrateur activé
 
+## V0.6.0.3 — Catalogue PostgreSQL administrable
+
+- migration exacte et idempotente des 25 projets depuis la fixture historique figée
+- PostgreSQL comme source runtime unique de l’accueil, la discographie, les fiches et le sitemap
+- cockpit ADMIN pour identité, publication, SEO, fiabilité, pistes, liens et mise en avant unique
+- covers JPEG/PNG/WebP normalisées, stockées hors webroot et servies par une route bornée
+- sauvegarde logique, parité 25/25 et intégrité Auth/commandes vérifiées sans reset personnel
+
+## V0.6.0.4 — Media previews & audio storage
+
+- stockage durable et séparation explicite des extraits publics et livraisons privées
+- métadonnées de durée, offset, MIME, taille et relation projet/piste
+- publication volontaire d’extraits autorisés, sans exposer automatiquement les morceaux complets
+
+## V0.6.0.5 — Jukebox / horizontal music experience
+
+- expérience horizontale fondée uniquement sur les previews réellement disponibles
+- navigation, accessibilité clavier, reduced motion et performance à valider dans un sprint dédié
+- liens officiels externes conservés comme destinations complémentaires
+
 ## V0.6.1 — Payment architecture & fiscal/legal readiness audit
 
 - choix d’architecture sans intégration prématurée d’un fournisseur

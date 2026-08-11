@@ -1,80 +1,43 @@
 import { officialLinks } from "@/data/site";
+import { automaticPlatformLabel } from "@/lib/catalog/platform-label";
+import type {
+  Project,
+  ProjectDataConfidence,
+  ProjectPlatform,
+} from "@/lib/catalog/types";
 
-export type ProjectKind = "album" | "single" | "project";
-export type ProjectStatus = "published" | "in-development" | "archive";
-export type TrackStatus = "released" | "announced" | "unlisted";
-export type ArtworkTone = "gold" | "wine" | "graphite" | "bronze" | "ivory";
-export type PlatformId = "spotify" | "appleMusic" | "deezer" | "youtube" | "distroKid";
-export type DataConfidence = "confirmed" | "partial" | "placeholder" | "unknown";
-export type CreditRole = "artist" | "writer" | "composer" | "producer" | "featuring" | "other";
+// Frozen V0.6.0.2 migration fixture. Public runtime code must query PostgreSQL
+// through lib/catalog/queries.ts and must never fall back to this module.
 
-export type ProjectTrack = {
-  readonly number: number;
-  readonly title: string;
-  readonly duration?: string;
-  readonly status?: TrackStatus;
-};
-
-export type ProjectPlatform = {
-  readonly platform: PlatformId;
-  readonly label: string;
-  readonly url: string;
-  readonly scope: "release" | "artist" | "store";
-};
-
-export type ProjectCredit = {
-  readonly name: string;
-  readonly role: CreditRole;
-  readonly detail?: string;
-};
-
-export type ProjectDataConfidence = {
-  readonly overall: DataConfidence;
-  readonly identity: DataConfidence;
-  readonly editorial: DataConfidence;
-  readonly release: DataConfidence;
-  readonly artwork: DataConfidence;
-  readonly tracklist: DataConfidence;
-  readonly platforms: DataConfidence;
-  readonly genres: DataConfidence;
-  readonly credits: DataConfidence;
-  readonly seo: DataConfidence;
-};
-
-export type Project = {
-  readonly slug: string;
-  readonly title: string;
-  readonly subtitle?: string;
-  readonly type: ProjectKind;
-  readonly year: number | null;
-  readonly releaseDate: string | null;
-  readonly description: string;
-  readonly shortDescription: string;
-  readonly cover: string | null;
-  readonly coverAlt?: string;
-  readonly featured: boolean;
-  readonly status: ProjectStatus;
-  readonly genres: readonly string[];
-  readonly credits: readonly ProjectCredit[];
-  readonly tracks: readonly ProjectTrack[];
-  readonly trackCount: number | null;
-  readonly platforms: readonly ProjectPlatform[];
-  readonly seo: {
-    readonly title?: string;
-    readonly description: string;
-  };
-  readonly artworkTone: ArtworkTone;
-  readonly dataConfidence: ProjectDataConfidence;
-};
+export type {
+  ArtworkTone,
+  CreditRole,
+  DataConfidence,
+  PlatformId,
+  Project,
+  ProjectCredit,
+  ProjectDataConfidence,
+  ProjectKind,
+  ProjectPlatform,
+  ProjectStatus,
+  ProjectTrack,
+  TrackStatus,
+} from "@/lib/catalog/types";
+export {
+  getCreditRoleLabel,
+  getProjectConfidenceLabel,
+  getProjectKindLabel,
+  getProjectStatusLabel,
+} from "@/lib/catalog/types";
 
 const artistPlatforms: readonly ProjectPlatform[] = [
-  { platform: "spotify", label: "Suivre LNX Beats sur Spotify", url: officialLinks.spotify, scope: "artist" },
-  { platform: "appleMusic", label: "Suivre LNX Beats sur Apple Music", url: officialLinks.appleMusic, scope: "artist" },
-  { platform: "deezer", label: "Suivre LNX Beats sur Deezer", url: officialLinks.deezer, scope: "artist" },
+  { platform: "spotify", label: automaticPlatformLabel("spotify", "artist"), url: officialLinks.spotify, scope: "artist" },
+  { platform: "appleMusic", label: automaticPlatformLabel("appleMusic", "artist"), url: officialLinks.appleMusic, scope: "artist" },
+  { platform: "deezer", label: automaticPlatformLabel("deezer", "artist"), url: officialLinks.deezer, scope: "artist" },
 ];
 
 const featuredPlatforms: readonly ProjectPlatform[] = [
-  { platform: "youtube", label: "Écouter le titre sur YouTube", url: officialLinks.featuredRelease, scope: "release" },
+  { platform: "youtube", label: automaticPlatformLabel("youtube", "release"), url: officialLinks.featuredRelease, scope: "release" },
   ...artistPlatforms,
 ];
 
@@ -223,30 +186,4 @@ export const singles = publishedProjects.filter((project) => project.type === "s
 
 export function getProjectBySlug(slug: string) {
   return projects.find((project) => project.slug === slug);
-}
-
-export function getProjectKindLabel(type: ProjectKind) {
-  return type === "album" ? "Album" : type === "single" ? "Single" : "Projet";
-}
-
-export function getProjectStatusLabel(status: ProjectStatus) {
-  if (status === "published") return "Publié";
-  if (status === "in-development") return "En développement";
-  return "Archive";
-}
-
-export function getProjectConfidenceLabel(confidence: DataConfidence) {
-  if (confidence === "confirmed") return "Informations confirmées";
-  if (confidence === "partial") return "Informations partielles";
-  if (confidence === "placeholder") return "Présentation provisoire";
-  return "Informations non documentées";
-}
-
-export function getCreditRoleLabel(role: CreditRole) {
-  if (role === "artist") return "Artiste";
-  if (role === "writer") return "Auteur";
-  if (role === "composer") return "Compositeur";
-  if (role === "producer") return "Production";
-  if (role === "featuring") return "Featuring";
-  return "Autre crédit";
 }

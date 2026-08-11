@@ -4,7 +4,7 @@ import test from "node:test";
 import { getProjectBySlug, projects } from "@/data/discography";
 import { homeEditorial } from "@/data/home";
 
-test("the local catalogue remains the explicit public runtime source", () => {
+test("the frozen legacy catalogue remains a complete migration fixture", () => {
   assert.equal(projects.length, 25);
   assert.equal(new Set(projects.map(({ slug }) => slug)).size, projects.length);
 });

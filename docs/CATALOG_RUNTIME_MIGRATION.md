@@ -1,30 +1,54 @@
-# Catalog Runtime Migration
+# Migration runtime du catalogue — V0.6.0.3
 
-## État Phase 3
+## Source de vérité
 
-Le catalogue public utilise exclusivement `data/discography.ts` à l’exécution. Il contient 25 projets éditoriaux et reste la source de vérité du site public. La sélection de la page d’accueil est isolée dans `data/home.ts`.
+PostgreSQL est la seule source runtime des pages `/`, `/discographie`, `/album/[slug]`, du sitemap et du cockpit catalogue. `data/discography.ts` est une fixture historique figée de V0.6.0.2 ; elle reste importée uniquement par les scripts de migration et les tests de parité. Il n’existe ni fallback ni double écriture.
 
-Le modèle PostgreSQL `Project` existe avec ses relations `Track`, `PlatformLink`, `Credit`, `ConfidenceAnnotation` et `ProjectAsset`. La Phase 3 audite ces lignes en lecture seule depuis `/admin/catalogue`, sans synchronisation implicite et sans bascule du frontend public.
+## Correspondance des données
 
-Cette séparation est volontaire : écrire seulement dans PostgreSQL aujourd’hui créerait deux sources actives incohérentes. Écrire seulement dans le fichier TypeScript depuis une interface runtime serait également trompeur et inadapté à la production.
+La migration déterministe conserve les 25 slugs, l’ordre, les textes, types, statuts, dates nullables, nombres de pistes déclarés, pistes nommées, liens directs, crédits, SEO, tonalités et niveaux de confiance. Les profils artiste demeurent globaux dans `data/site.ts` et ne sont pas dupliqués par projet.
 
-## Sprint dédié requis
+`highlighted` conserve les sélections historiques de discographie. `featured` représente l’unique projet mis en avant sur l’accueil ; un index partiel garantit qu’une seule ligne peut être active. `trackCount` reste indépendant de la tracklist nommée afin de ne jamais inventer de titres.
 
-Le sprint « Catalog Runtime Migration » devra :
+| Contrôle | Résultat |
+| --- | ---: |
+| Projets legacy | 25 |
+| Projets PostgreSQL | 25 |
+| Slugs identiques | 25 |
+| Projet homepage `featured` | 1 |
+| Sélections historiques `highlighted` | 4 |
+| Pistes nommées | 1 |
+| Projets avec un nombre de pistes déclaré | 11 |
+| Liens directs de parution | 1 |
+| Anomalies de parité | 0 |
 
-1. établir un mapping déterministe des 25 projets locaux vers `Project` ;
-2. conserver les niveaux de confiance et les champs inconnus sans les inventer ;
-3. migrer les tracklists, liens, crédits et assets documentés ;
-4. comparer chaque fiche locale et chaque ligne PostgreSQL avant activation ;
-5. choisir PostgreSQL comme source runtime unique seulement après validation ;
-6. supprimer ensuite le chemin d’écriture devenu obsolète, sans période durable de double écriture.
+## Procédure
 
-## Covers officielles
+Les commandes refusent toute cible autre que `lnx-studio-v0603-test` ou `lnx-studio-local-preview`, tout hôte non loopback et le port PostgreSQL standard.
 
-L’ajout d’une cover ne sera activé qu’avec un stockage final cohérent et un workflow qui enregistre le fichier, l’alt text, les dimensions, le format, la provenance, la confirmation des droits, un `Asset` et la relation `ProjectAsset` avec le rôle `COVER`.
+```bash
+npm run catalog:migrate:dry-run
+npm run catalog:migrate
+npm run catalog:migrate
+npm run catalog:compare
+```
 
-La Phase 3 n’effectue aucun upload temporaire, ne fabrique aucune pochette et n’affiche aucun bouton de sauvegarde fictif.
+La première exécution crée les lignes absentes dans une transaction avec verrou consultatif. La seconde ignore uniquement les 25 lignes strictement identiques et marquées par la même version de source. Une ligne existante différente devient un conflit : le script refuse de l’écraser, ce qui protège les futures modifications administratives.
 
-## Mise en avant
+## Validation et retour arrière
 
-Le projet à la une reste configuré par `homeEditorial.spotlightProjectSlug`. Le cockpit l’affiche en lecture seule. Sa modification sera activée après la migration vers une source runtime unique.
+La procédure a d’abord été exécutée sur une base Prisma Dev jetable depuis zéro. Elle a validé migrations, dry-run 25 créations, idempotence à 25 lignes ignorées identiques, parité 25/25, concurrence, pistes, liens et stockage cover. La base QA a ensuite été supprimée. Avant la base personnelle, une sauvegarde logique des tables catalogue et des empreintes SHA-256 de 11 tables Auth/commandes a été créée sous `/private/tmp`. La migration personnelle est additive, atteint également 25/25 et n’utilise aucun reset.
+
+En cas d’échec avant la bascule, restaurer les tables catalogue depuis la sauvegarde logique et revenir au commit de départ. Ne jamais réactiver automatiquement la fixture TypeScript comme fallback : une panne de base doit rester visible et être traitée comme une panne runtime.
+
+## Administration
+
+`/admin/catalogue` liste et filtre les projets. `/admin/catalogue/[slug]` édite les champs autorisés, la publication, l’unique mise en avant, le SEO, les pistes, les liens directs et la cover. Les écritures exigent une session ADMIN et une origine valide. Les suppressions de piste ou de lien sont explicites ; la suppression d’un projet n’est pas proposée.
+
+La fiabilité affichée n’est plus une série de dix sélecteurs techniques. Elle est calculée à la lecture : présence d’une cover officielle, date, rapport entre nombre déclaré et pistes nommées, liens de sortie, SEO et crédits. Les annotations legacy restent en base pour la compatibilité et servent uniquement de contexte aux domaines qui ne peuvent pas être déduits objectivement, comme l’éditorial ou les genres. Le niveau global devient « Informations principales complètes » uniquement lorsque les domaines principaux sont tous confirmés.
+
+Les libellés de plateforme sont centralisés par plateforme et portée. Un label vide utilise automatiquement, par exemple, « Écouter sur Spotify », « Voir sur YouTube » ou « LNX Beats sur Spotify ». Le champ `label` existant demeure un override facultatif ; les anciens textes automatiques connus sont normalisés vers `null` lors d’une future écriture sans écraser les libellés réellement personnalisés.
+
+`Track.durationSeconds` reste exclusivement la durée réelle du morceau. Une durée d’extrait audio de 30 secondes ne doit jamais y être injectée ; une durée inconnue reste `null`.
+
+L’alt public d’une cover est calculé par défaut sous la forme `Pochette de « {titre} » — LNX Beats`. Seule une personnalisation réelle est stockée dans `Asset.alt`, afin qu’un changement de titre mette automatiquement le fallback à jour. Les champs SEO vides utilisent les fallbacks éditoriaux effectifs ; l’administration distingue donc SEO automatique, mixte et personnalisé sans signaler un faux manque.

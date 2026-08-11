@@ -10,3 +10,4 @@ out/
 playwright-report/
 test-results/
 .private/
+.local-media/

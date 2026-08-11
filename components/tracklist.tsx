@@ -1,4 +1,4 @@
-import type { Project } from "@/data/discography";
+import type { Project } from "@/lib/catalog/types";
 
 export function Tracklist({ project }: { project: Project }) {
   if (project.tracks.length === 0) {
@@ -10,8 +10,8 @@ export function Tracklist({ project }: { project: Project }) {
         <h2>{hasConfirmedCount ? "Le nombre est connu. Les titres restent à documenter." : "Aucune tracklist confirmée."}</h2>
         <p>
           {hasConfirmedCount
-            ? `${project.trackCount} titres sont documentés pour ce projet. Leurs noms et leur ordre ne figurent pas encore dans les sources locales autorisées.`
-            : "Aucun titre ni ordre de piste ne figure encore dans les sources locales autorisées. Rien n’est ajouté par supposition."}
+            ? `${project.trackCount} titres sont documentés pour ce projet. Leurs noms et leur ordre ne sont pas encore renseignés.`
+            : "Aucun titre ni ordre de piste n’est encore renseigné. Rien n’est ajouté par supposition."}
         </p>
       </div>
     );

@@ -2,14 +2,15 @@
 
 ## Principes
 
-LNX Studio utilise l’App Router de Next.js. L’architecture reste volontairement directe : composants réutilisables pour les motifs stables, données locales typées pour le catalogue et JavaScript client limité aux interactions qui l’exigent.
+LNX Studio utilise l’App Router de Next.js. L’architecture reste volontairement directe : composants réutilisables pour les motifs stables, catalogue PostgreSQL lu côté serveur et JavaScript client limité aux interactions qui l’exigent.
 
 ## Arborescence
 
 ```text
 app/
-  admin/            Placeholder protégé réservé à ADMIN
-  album/[slug]/     Fiches de projet pré-rendues et metadata dynamiques
+  admin/            Cockpit et catalogue éditable réservés à ADMIN
+  album/[slug]/     Fiches de projet dynamiques et metadata PostgreSQL
+  media/catalog/    Lecture publique bornée aux covers de projets visibles
   api/auth/         Handlers Better Auth
   api/orders/       Brouillons et photos privés, contrôlés côté serveur
   api/health/       Healthcheck Railway
@@ -23,11 +24,12 @@ app/
   icon.tsx          Favicon PNG généré par Next.js
   layout.tsx        Layout racine, SEO, navigation et footer
 components/         Composants visuels et interactifs partagés
-data/               Configuration publique, biographies et discographie typée
+data/               Configuration publique, biographies et fixture historique figée
 docs/               Architecture, vision produit, audits, roadmap et déploiement
 generated/prisma/   Prisma Client généré localement et ignoré par Git
 lib/auth/           Validation, tokens, email, rôles, session et redirection
 lib/orders/         Domaine, prix, autorisations, stockage et services commande
+lib/catalog/        Requêtes, validation, mutations, migration et covers catalogue
 lib/email/          Templates transactionnels et transport capture QA
 lib/auth.ts         Configuration Better Auth exclusivement serveur
 lib/prisma.ts       Singleton PostgreSQL exclusivement serveur
@@ -57,7 +59,7 @@ Les animations reposent uniquement sur CSS et sont neutralisées avec `prefers-r
 
 ## Données
 
-`data/site.ts` centralise les liens officiels pour éviter les divergences entre les pages. `data/artist.ts` contient les trois biographies éditoriales de référence afin de ne pas recréer des faits biographiques dans les pages. `data/discography.ts` expose un type `Project` et une liste locale en lecture seule. Chaque entrée regroupe :
+`data/site.ts` centralise les profils artiste officiels pour éviter les divergences entre les pages. `data/artist.ts` contient les biographies éditoriales de référence. PostgreSQL est la source runtime unique du catalogue ; `data/discography.ts` reste uniquement la fixture figée ayant permis la migration contrôlée des 25 projets.
 
 - identité (`slug`, titre, sous-titre, type et statut) ;
 - date de sortie et année explicitement nullables ;
@@ -69,38 +71,31 @@ Les animations reposent uniquement sur CSS et sont neutralisées avec `prefers-r
 - description SEO propre à la fiche ;
 - niveau de confiance global et par domaine (`confirmed`, `partial`, `placeholder` ou `unknown`).
 
-Les agrégats `publishedProjects`, `projectsInDevelopment` et `featuredProjects` alimentent l’accueil et la discographie. `getProjectBySlug` résout une fiche sans dupliquer les données.
+`lib/catalog/queries.ts` centralise les lectures de l’accueil, de la discographie, des fiches et du sitemap. Aucun de ces chemins ne contient de fallback vers la fixture historique.
 
-Les identifiants et relations préparent :
+Les identifiants et relations permettent :
 
-- la route statique `/album/[slug]` ;
-- une migration vers PostgreSQL ;
+- la route dynamique `/album/[slug]` ;
+- la persistance PostgreSQL ;
 - l’administration du catalogue.
 
 ### Fiches de projet
 
-`app/album/[slug]/page.tsx` reste un Server Component. `generateStaticParams` produit une route pour chaque entrée ; `generateMetadata` fournit titre, description, canonique, Open Graph et Twitter Card par projet. Les fiches inconnues retournent `notFound()`.
+`app/album/[slug]/page.tsx` reste un Server Component dynamique. `generateMetadata` charge le même projet PostgreSQL que la page et fournit titre, description, canonique, Open Graph et Twitter Card. Les fiches inconnues ou non publiques retournent `notFound()`.
 
 L’absence d’une donnée est un état normal : aucune année, pochette, durée, liste de titres, crédit ou URL de sortie n’est extrapolée. `ProjectArtwork`, `Tracklist` et `ProjectPlatforms` rendent alors un message explicite. Les profils artiste et les liens directs de sortie sont présentés dans des groupes séparés.
 
-L’inventaire détaillé et les besoins de confirmation humaine sont consignés dans [`docs/CATALOG_AUDIT.md`](CATALOG_AUDIT.md). Ce document reste un audit : `data/discography.ts` demeure l’unique source runtime du catalogue.
+L’inventaire historique est consigné dans [`docs/CATALOG_AUDIT.md`](CATALOG_AUDIT.md). La procédure de bascule, les gardes et le rollback sont décrits dans [`docs/CATALOG_RUNTIME_MIGRATION.md`](CATALOG_RUNTIME_MIGRATION.md).
 
-### Ajouter ou enrichir une fiche
+### Enrichir une fiche
 
-1. Créer l’entrée dans `projects` avec un `slug` stable et unique.
-2. Utiliser le helper `published` ou `inDevelopment` approprié.
-3. Ajouter une pochette vérifiée sous `public/assets/covers/` et renseigner son texte alternatif ; sinon garder `cover: null`.
-4. Ajouter une piste avec numéro, titre, durée optionnelle et statut uniquement si les informations sont confirmées ; renseigner séparément le nombre total lorsqu’il est connu sans tracklist complète.
-5. Construire les liens de plateforme depuis `officialLinks` et définir leur portée réelle.
-6. Ajouter les crédits uniquement avec un nom et un rôle explicitement documentés.
-7. Mettre à jour les niveaux de confiance concernés.
-8. Exécuter lint, typecheck, build et smoke tests. La route et le sitemap sont dérivés automatiquement.
+L’ADMIN utilise `/admin/catalogue/[slug]`. Les mutations choisissent explicitement les champs autorisés, contrôlent l’origine, valident les entrées côté serveur et sérialisent les opérations sensibles par projet. Le slug, le rôle, le compte et les autres domaines métier ne sont jamais modifiables par ces formulaires. La création et la suppression complète d’un projet sont différées.
 
 ### Fondation PostgreSQL
 
 La V0.4 ajoute Prisma ORM 7, un schéma PostgreSQL et une migration initiale. Les entités séparent catalogue, comptes, clients, commandes, historique, assets, favoris et confiance des données. Les décisions détaillées, relations et règles de suppression sont décrites dans [`docs/DATA_MODEL.md`](DATA_MODEL.md).
 
-`lib/prisma.ts` utilise l’adaptateur `pg`, un singleton global en développement et la barrière `server-only`. Il n’est importé par aucune route publique : le build, les fiches statiques et le formulaire Commander ne consultent ni ne modifient PostgreSQL. `data/discography.ts` reste la source runtime tant qu’un sprint de migration dédié n’a pas vérifié les 25 projets.
+`lib/prisma.ts` utilise l’adaptateur `pg`, un singleton global en développement et la barrière `server-only`. Les routes catalogue publiques l’atteignent uniquement par `lib/catalog/queries.ts`. Le formulaire Commander garde sa couche métier séparée. La migration V0.6.0.3 a comparé les 25 projets avant la bascule.
 
 Prisma Client est généré dans un répertoire ignoré par Git. La configuration ne contient aucun secret et accepte `DATABASE_URL` uniquement depuis l’environnement. Aucune base réelle, aucun seed et aucun utilisateur ne sont créés en V0.4.
 
@@ -126,7 +121,7 @@ La finalisation transactionnelle recalcule le prix et crée l’événement clie
 - sitemap et robots générés ;
 - données structurées `MusicGroup` limitées aux informations publiques connues et sérialisées sans balise HTML injectable ;
 - images servies avec `next/image` ;
-- catalogue et 25 fiches de projet pré-rendus statiquement ;
+- catalogue et 25 fiches rendus côté serveur depuis PostgreSQL ;
 - healthcheck dynamique sans cache.
 
 ## Sécurité

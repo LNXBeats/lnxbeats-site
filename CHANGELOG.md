@@ -2,6 +2,27 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.0.3] — 2026-08-11
+
+### Ajouté
+
+- migration additive et idempotente des 25 projets vers PostgreSQL, avec dry-run, garde de cible et comparaison 25/25 ;
+- administration privée du catalogue : publication, SEO, fiabilité, tracklist, liens directs et mise en avant unique ;
+- upload de covers validées, réencodées en WebP sans métadonnées et stockées hors du webroot ;
+- tests de concurrence, CRUD et stockage sur une base locale jetable.
+
+### Modifié
+
+- accueil, discographie, fiches, metadata et sitemap alimentés exclusivement par PostgreSQL ;
+- `data/discography.ts` figé comme fixture historique de migration, sans fallback runtime ;
+- cockpit aligné sur le même catalogue que le site public.
+
+### Sécurité et périmètre
+
+- mutations ADMIN protégées par session, origine, validation serveur et listes de champs explicites ;
+- sauvegarde logique avant migration personnelle et empreintes Auth/commandes inchangées ;
+- aucun projet artistique modifié pendant la préparation de la preview, aucun paiement, push, merge ou déploiement.
+
 ## [0.6.0.1] — 2026-08-11
 
 ### Modifié

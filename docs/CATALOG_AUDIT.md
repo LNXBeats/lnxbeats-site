@@ -2,7 +2,7 @@
 
 ## Portée et méthode
 
-Cet audit couvre les 25 entrées de `data/discography.ts` et les assets locaux du dépôt. Il n’utilise ni recherche Internet, ni déduction à partir d’un nom de fichier, ni information issue d’une date Git. `data/discography.ts` reste l’unique source runtime ; ce document ne sert qu’au suivi humain et à la préparation d’une future migration.
+Cet audit historique couvre les 25 entrées figées de `data/discography.ts` et les assets locaux du dépôt. Il n’utilise ni recherche Internet, ni déduction à partir d’un nom de fichier, ni information issue d’une date Git. Depuis V0.6.0.3, PostgreSQL est la source runtime ; ce document conserve la trace humaine ayant préparé la migration.
 
 Niveaux utilisés :
 

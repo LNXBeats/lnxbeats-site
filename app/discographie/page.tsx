@@ -4,8 +4,8 @@ import { AlbumCard } from "@/components/album-card";
 import { Container } from "@/components/container";
 import { PlatformLink } from "@/components/platform-link";
 import { ProjectArtwork } from "@/components/project-artwork";
-import { featuredProjects, projectsInDevelopment, publishedProjects } from "@/data/discography";
 import { siteConfig } from "@/data/site";
+import { listDiscographyProjects } from "@/lib/catalog/queries";
 
 export const metadata: Metadata = {
   title: "Discographie",
@@ -13,10 +13,12 @@ export const metadata: Metadata = {
   alternates: { canonical: "/discographie" },
 };
 
-const featuredSlugs = new Set(featuredProjects.map((project) => project.slug));
-const otherProjects = publishedProjects.filter((project) => !featuredSlugs.has(project.slug));
+export const dynamic = "force-dynamic";
 
-export default function DiscographyPage() {
+export default async function DiscographyPage() {
+  const { featuredProjects, publishedProjects, projectsInDevelopment } = await listDiscographyProjects();
+  const featuredSlugs = new Set(featuredProjects.map((project) => project.slug));
+  const otherProjects = publishedProjects.filter((project) => !featuredSlugs.has(project.slug));
   return (
     <>
       <header className="page-hero page-hero--catalog">

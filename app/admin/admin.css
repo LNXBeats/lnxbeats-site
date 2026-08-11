@@ -199,6 +199,7 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-migration-window p { max-width: 58rem; }
 .admin-catalogue-list > li,
 .admin-member-list > li { display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr); gap: 2rem; align-items: center; padding: 1.2rem clamp(1.2rem, 3vw, 2rem); }
+.admin-catalogue-list > li { grid-template-columns: minmax(190px, 0.72fr) minmax(0, 1.2fr) auto; }
 .admin-catalogue-list > li > div,
 .admin-member-list > li > div { display: grid; gap: 0.3rem; }
 .admin-catalogue-list small,
@@ -209,6 +210,93 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-member-list dt { color: #77736c; font-size: 0.56rem; text-transform: uppercase; }
 .admin-catalogue-list dd,
 .admin-member-list dd { margin: 0.2rem 0 0; font-size: 0.72rem; overflow-wrap: anywhere; }
+
+.admin-row-action { display: inline-flex; min-height: 44px; align-items: center; gap: 0.7rem; color: var(--admin-gold); font-size: 0.72rem; font-weight: 700; }
+.admin-catalogue-filters { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.34fr) auto; gap: 0.7rem; align-items: end; margin-bottom: 1rem; padding: 1rem; border: 1px solid rgba(244, 240, 232, 0.13); border-radius: 18px; background: rgba(18, 17, 15, 0.8); }
+.admin-catalogue-filters label,
+.admin-catalogue-form label,
+.admin-track-editor label,
+.admin-link-editor label { display: grid; gap: 0.42rem; color: #aaa59c; font-size: 0.68rem; }
+.admin-catalogue-filters :is(input, select),
+.admin-catalogue-form :is(input, select, textarea),
+.admin-track-editor :is(input, select),
+.admin-link-editor :is(input, select) { width: 100%; min-height: 46px; padding: 0.72rem 0.8rem; border: 1px solid rgba(244, 240, 232, 0.16); border-radius: 12px; background: #0b0b0a; color: #f4f0e8; font: inherit; }
+.admin-catalogue-form textarea { resize: vertical; }
+.admin-catalogue-filters button,
+.admin-catalogue-form > button,
+.admin-track-editor button,
+.admin-link-editor button,
+.admin-inline-actions button { min-height: 46px; padding: 0.7rem 1rem; border: 1px solid rgba(214, 179, 106, 0.4); border-radius: 12px; background: rgba(214, 179, 106, 0.1); color: #ead39f; cursor: pointer; font-size: 0.7rem; font-weight: 700; }
+.admin-catalogue-editor { display: grid; gap: 1.2rem; }
+.admin-editor-actions { display: flex; justify-content: flex-end; }
+.admin-catalogue-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: clip; border: 1px solid rgba(244, 240, 232, 0.13); border-radius: 18px; background: rgba(18, 17, 15, 0.88); }
+.admin-catalogue-summary > div { display: grid; gap: 0.35rem; padding: 1rem; }
+.admin-catalogue-summary > div + div { border-left: 1px solid rgba(244, 240, 232, 0.1); }
+.admin-catalogue-summary span { color: #858179; font-size: 0.6rem; text-transform: uppercase; }
+.admin-catalogue-summary strong { font-size: 0.78rem; }
+.admin-project-state-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.8rem 2rem; align-items: baseline; margin-bottom: 1rem; }
+.admin-project-state-heading h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 2.2rem); font-weight: 500; letter-spacing: -0.035em; }
+.admin-project-state-heading p { margin: 0; color: #918d85; font-size: 0.72rem; }
+.admin-project-state-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; overflow: clip; border: 1px solid rgba(244, 240, 232, 0.11); border-radius: 16px; }
+.admin-project-state-grid > div { display: grid; gap: 0.35rem; padding: 1rem; }
+.admin-project-state-grid > div:nth-child(3n + 2),
+.admin-project-state-grid > div:nth-child(3n + 3) { border-left: 1px solid rgba(244, 240, 232, 0.09); }
+.admin-project-state-grid > div:nth-child(n + 4) { border-top: 1px solid rgba(244, 240, 232, 0.09); }
+.admin-project-state-grid dt,
+.admin-state-details dt { color: #858179; font-size: 0.6rem; text-transform: uppercase; }
+.admin-project-state-grid dd,
+.admin-state-details dd { margin: 0; color: #e6dfd2; font-size: 0.76rem; }
+.admin-state-details { margin-top: 1rem; padding: 0.9rem; border: 1px solid rgba(244, 240, 232, 0.09); border-radius: 13px; }
+.admin-state-details summary { cursor: pointer; color: #d7c59f; font-size: 0.72rem; font-weight: 700; }
+.admin-state-details dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0 0; }
+.admin-state-details dl > div { display: grid; gap: 0.3rem; }
+.admin-catalogue-editor > .admin-back-link,
+.admin-catalogue-editor > .admin-page-heading,
+.admin-catalogue-editor > .admin-feedback { margin-bottom: 0; }
+.admin-catalogue-form { display: grid; gap: 1rem; }
+.admin-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.admin-form-wide { grid-column: 1 / -1; }
+.admin-checkbox { display: flex !important; min-height: 46px; align-items: center; gap: 0.7rem !important; }
+.admin-checkbox input { width: 20px !important; min-height: 20px !important; }
+.admin-dirty-state { color: #858179; font-size: 0.65rem; }
+.admin-catalogue-form button:disabled,
+.admin-track-editor button:disabled,
+.admin-link-editor button:disabled { cursor: wait; opacity: 0.55; }
+.admin-secondary-fields { padding: 0.9rem; border: 1px solid rgba(244, 240, 232, 0.11); border-radius: 13px; }
+.admin-secondary-fields > summary { min-height: 30px; cursor: pointer; color: #d7c59f; font-size: 0.72rem; font-weight: 700; }
+.admin-secondary-fields > div { display: grid; gap: 1rem; margin-top: 1rem; }
+.admin-muted { color: #918d85; }
+.admin-track-editor label small,
+.admin-form-grid label small { color: #77736c; font-size: 0.6rem; }
+.admin-cover-preview { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: center; margin-bottom: 1rem; }
+.admin-cover-preview img { width: min(240px, 100%); height: auto; border-radius: 18px; }
+.admin-cover-preview > div { display: grid; gap: 0.55rem; }
+.admin-cover-preview p { margin: 0; color: #918d85; font-size: 0.72rem; }
+.admin-track-editor,
+.admin-link-editor { display: grid; gap: 0.8rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+.admin-track-editor > li,
+.admin-link-editor > li { padding: 1rem; border: 1px solid rgba(244, 240, 232, 0.11); border-radius: 16px; background: #0c0b0a; }
+.admin-link-summary { display: grid; gap: 0.28rem; }
+.admin-link-summary strong { color: #f4f0e8; font-size: 0.9rem; }
+.admin-link-summary span { color: #d7c59f; font-size: 0.76rem; }
+.admin-link-summary small { overflow-wrap: anywhere; color: #77736c; font-size: 0.62rem; }
+.admin-platform-preview { margin: 0; padding: 0.8rem; border: 1px solid rgba(214, 179, 106, 0.18); border-radius: 12px; background: rgba(214, 179, 106, 0.06); color: #aaa59c; font-size: 0.7rem; }
+.admin-platform-preview strong { color: #ead39f; }
+.admin-track-editor > li > form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.3fr) minmax(150px, 0.35fr) auto; gap: 0.7rem; align-items: end; }
+.admin-link-editor > li > form { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)) auto; gap: 0.7rem; align-items: end; }
+.admin-link-editor > li > form .admin-form-wide { grid-column: 1 / span 3; }
+.admin-inline-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; margin-top: 0.8rem; }
+.admin-inline-actions form { display: flex; gap: 0.5rem; }
+.admin-inline-actions > details { min-width: min(100%, 270px); }
+.admin-inline-actions > details > form.admin-catalogue-form { display: grid; gap: 1rem; min-width: min(680px, 76vw); margin-top: 1rem; }
+.admin-inline-actions details,
+.admin-link-editor details,
+.admin-add-panel { padding: 0.8rem; border: 1px solid rgba(244, 240, 232, 0.11); border-radius: 12px; color: #aaa59c; }
+.admin-add-panel { margin-top: 1rem; }
+.admin-add-panel > summary,
+.admin-inline-actions summary,
+.admin-link-editor summary { min-height: 32px; cursor: pointer; color: #d7c59f; font-size: 0.72rem; font-weight: 700; }
+.admin-add-panel > form { margin-top: 1rem; }
 
 @media (max-width: 1120px) {
   .admin-header { align-items: flex-start; flex-direction: column; gap: 0.6rem; }
@@ -231,6 +319,17 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-order-list__next { grid-column: 2; grid-row: 1 / span 2; }
   .admin-order-list__arrow { grid-column: 3; grid-row: 1 / span 2; }
   .admin-member-list dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .admin-catalogue-list > li { grid-template-columns: 1fr; }
+  .admin-track-editor > li > form,
+  .admin-link-editor > li > form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-link-editor > li > form .admin-form-wide { grid-column: 1 / -1; }
+  .admin-catalogue-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-catalogue-summary > div:nth-child(4) { border-left: 0; border-top: 1px solid rgba(244, 240, 232, 0.1); }
+  .admin-catalogue-summary > div:nth-child(5) { border-top: 1px solid rgba(244, 240, 232, 0.1); }
+  .admin-project-state-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-project-state-grid > div { border-top: 1px solid rgba(244, 240, 232, 0.09); border-left: 0 !important; }
+  .admin-project-state-grid > div:nth-child(-n + 2) { border-top: 0; }
+  .admin-project-state-grid > div:nth-child(even) { border-left: 1px solid rgba(244, 240, 232, 0.09) !important; }
 }
 
 @media (max-width: 680px) {
@@ -260,6 +359,20 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-private-photos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-catalogue-list dl,
   .admin-member-list dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-catalogue-filters,
+  .admin-form-grid,
+  .admin-track-editor > li > form,
+  .admin-link-editor > li > form { grid-template-columns: 1fr; }
+  .admin-form-wide,
+  .admin-link-editor > li > form .admin-form-wide { grid-column: 1; }
+  .admin-catalogue-summary { grid-template-columns: 1fr; }
+  .admin-catalogue-summary > div + div { border-top: 1px solid rgba(244, 240, 232, 0.1); border-left: 0; }
+  .admin-project-state-grid,
+  .admin-state-details dl { grid-template-columns: 1fr; }
+  .admin-project-state-grid > div { border-top: 1px solid rgba(244, 240, 232, 0.09) !important; border-left: 0 !important; }
+  .admin-project-state-grid > div:first-child { border-top: 0 !important; }
+  .admin-inline-actions > details,
+  .admin-inline-actions > details > form.admin-catalogue-form { min-width: 0; width: 100%; }
 }
 
 @media (max-width: 440px) {

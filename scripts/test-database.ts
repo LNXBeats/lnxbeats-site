@@ -170,7 +170,7 @@ async function run() {
     );
 
     const project = await prisma.project.create({
-      data: { slug: "lnx-v041-project", title: "LNX V0.4.1 Project QA", type: "ALBUM" },
+      data: { slug: "lnx-v041-project", title: "LNX V0.4.1 Project QA", type: "ALBUM", catalogPosition: 1 },
     });
     assert.equal(project.releaseDate, null);
     assert.equal(project.status, "DRAFT");
@@ -178,11 +178,11 @@ async function run() {
     await expectFailure(
       results,
       "Project slug unique",
-      () => prisma.project.create({ data: { slug: project.slug, title: "Duplicate", type: "SINGLE" } }),
+      () => prisma.project.create({ data: { slug: project.slug, title: "Duplicate", type: "SINGLE", catalogPosition: 2 } }),
       "P2002",
     );
     await expectFailure(results, "Project trackCount CHECK", () =>
-      prisma.project.create({ data: { slug: "lnx-v041-negative-track-count", title: "Invalid", type: "PROJECT", trackCount: -1 } }),
+      prisma.project.create({ data: { slug: "lnx-v041-negative-track-count", title: "Invalid", type: "PROJECT", trackCount: -1, catalogPosition: 2 } }),
     );
 
     const trackOne = await prisma.track.create({
@@ -351,7 +351,7 @@ async function run() {
     record(results, "SET NULL on Customer delete");
 
     const cascadeUser = await prisma.user.create({ data: { email: "lnx-v041-cascade@example.invalid" } });
-    const cascadeProject = await prisma.project.create({ data: { slug: "lnx-v041-cascade", title: "Cascade QA", type: "PROJECT" } });
+    const cascadeProject = await prisma.project.create({ data: { slug: "lnx-v041-cascade", title: "Cascade QA", type: "PROJECT", catalogPosition: 2 } });
     await prisma.favorite.create({ data: { userId: cascadeUser.id, projectId: cascadeProject.id } });
     await prisma.project.delete({ where: { id: cascadeProject.id } });
     assert.equal(await prisma.favorite.count({ where: { userId: cascadeUser.id } }), 0);
@@ -364,7 +364,7 @@ async function run() {
     try {
       await prisma.$transaction(async (transaction) => {
         await transaction.user.create({ data: { email: transactionUserEmail } });
-        await transaction.project.create({ data: { slug: transactionProjectSlug, title: "Transaction QA", type: "PROJECT" } });
+        await transaction.project.create({ data: { slug: transactionProjectSlug, title: "Transaction QA", type: "PROJECT", catalogPosition: 3 } });
         throw new Error("intentional V0.4.1 rollback");
       });
     } catch (error) {

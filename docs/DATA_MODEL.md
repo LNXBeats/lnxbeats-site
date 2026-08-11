@@ -1,8 +1,8 @@
-# Modèle de données — V0.6.0.1
+# Modèle de données — V0.6.0.3
 
 ## Périmètre
 
-La V0.4 crée une fondation PostgreSQL avec Prisma ORM. Elle ne connecte aucune base de production, ne migre aucune donnée artistique et ne change pas la source runtime du site public. `data/discography.ts` reste la seule source des pages publiques jusqu’à un sprint de migration contrôlé.
+La V0.4 crée la fondation PostgreSQL avec Prisma ORM. La V0.6.0.3 migre les 25 projets de façon contrôlée et choisit PostgreSQL comme source runtime unique du site public. `data/discography.ts` reste une fixture historique figée, jamais un fallback.
 
 Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers et la traçabilité. La V0.6 active les brouillons, commandes et photos de référence privées. La V0.6.0.1 ajoute les demandes de droits post-livraison, sans back-office complet, paiement, facture, contrat électronique ni livraison audio.
 
@@ -65,7 +65,7 @@ Cette duplication limitée est volontaire : `User.email` sert au compte, `Custom
 
 ## Catalogue
 
-`Project` couvre les albums, singles et projets, avec les états `DRAFT`, `IN_DEVELOPMENT`, `PUBLISHED` et `ARCHIVED`. La date, les descriptions et le nombre de pistes restent nullables.
+`Project` couvre les albums, singles et projets, avec les états `DRAFT`, `IN_DEVELOPMENT`, `PUBLISHED` et `ARCHIVED`. La date, les descriptions et le nombre de pistes restent nullables. `catalogPosition` stabilise l’ordre, `highlighted` conserve la sélection éditoriale et `featured` désigne l’unique mise en avant de l’accueil. `artworkTone`, les champs SEO et `legacySourceVersion` complètent la migration sans inventer de donnée.
 
 La suppression logique par `ARCHIVED` est privilégiée. Les relations structurantes utilisent `RESTRICT` pour empêcher qu’un projet soit supprimé avec ses pistes, crédits, liens, annotations ou associations d’assets.
 
@@ -159,7 +159,7 @@ Aucune préférence marketing n’est modélisée avant l’existence d’un bes
 
 Prisma Client est généré dans `generated/prisma`, répertoire ignoré par Git et recréé par `postinstall`. `lib/prisma.ts` utilise `@prisma/adapter-pg` et un singleton global en développement pour éviter la multiplication des pools pendant le rechargement Next.js.
 
-Les appels runtime échouent avec un message neutre si `DATABASE_URL` manque. Un adaptateur loopback injoignable permet uniquement d’instancier Prisma pendant un build public sans secret ; aucune connexion n’est ouverte. Le module n’est importé par aucune page publique, donc les fiches statiques et le catalogue ne consultent pas PostgreSQL.
+Les appels runtime échouent avec un message neutre si `DATABASE_URL` manque. Un adaptateur loopback injoignable permet uniquement d’instancier Prisma pendant un build sans secret ; aucune connexion n’est ouverte. Les pages catalogue publiques interrogent PostgreSQL par la couche serveur centralisée et échouent explicitement si la base est indisponible.
 
 ## Extensions auth V0.5.1 et V0.5.2
 
@@ -202,14 +202,6 @@ npm run test:database
 
 Le reset et la comparaison de drift requièrent une autorisation séparée ainsi qu’une base shadow locale distincte et jetable. `DATABASE_URL` et `SHADOW_DATABASE_URL` ne doivent jamais viser la production. Après la validation V0.4.1, les données QA comptaient zéro ligne et l’instance `lnx-studio-v041-test` a été supprimée.
 
-## Seed et migration du catalogue
+## Migration du catalogue
 
-Aucun seed n’est fourni : un enregistrement technique fictif apporterait peu de valeur, et les 25 projets ne sont pas assez confirmés pour être migrés automatiquement.
-
-Le futur sprint de migration devra :
-
-1. figer une correspondance entre les enums TypeScript et Prisma ;
-2. importer uniquement les champs autorisés et leur confiance ;
-3. vérifier les 25 projets avant écriture ;
-4. comparer chaque page entre la source locale et PostgreSQL ;
-5. basculer le frontend seulement après validation et plan de retour arrière.
+La migration V0.6.0.3 est additive, idempotente et gardée par une liste fermée de cibles locales. Elle importe les 25 projets sans seed fictif, conserve les valeurs nulles et refuse d’écraser une ligne déjà différente. La parité compare la représentation publique complète après mapping. La procédure et le plan de retour arrière figurent dans [`docs/CATALOG_RUNTIME_MIGRATION.md`](CATALOG_RUNTIME_MIGRATION.md).

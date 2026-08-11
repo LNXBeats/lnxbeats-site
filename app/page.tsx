@@ -6,9 +6,8 @@ import { Container } from "@/components/container";
 import { PlatformDestination } from "@/components/platform-destination";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { artistBiography } from "@/data/artist";
-import { featuredProjects, getProjectBySlug } from "@/data/discography";
-import { homeEditorial } from "@/data/home";
 import { officialLinks, siteConfig } from "@/data/site";
+import { getHomepageProjects } from "@/lib/catalog/queries";
 
 const homeDescription = "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux. Chaque histoire mérite sa musique.";
 
@@ -56,11 +55,10 @@ const commissionSteps = [
   { number: "03", title: "La musique vous revient", description: "Votre histoire a changé de forme, mais elle porte toujours votre émotion." },
 ] as const;
 
-const configuredSpotlight = getProjectBySlug(homeEditorial.spotlightProjectSlug);
-const leadProject = configuredSpotlight?.featured && configuredSpotlight.status === "published" ? configuredSpotlight : undefined;
-const supportingProjects = featuredProjects.filter((project) => project.slug !== leadProject?.slug).slice(0, 2);
+export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const { lead: leadProject, supporting: supportingProjects } = await getHomepageProjects();
   return (
     <>
       <div className="visual-chapter visual-chapter--artist">

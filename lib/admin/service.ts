@@ -2,7 +2,6 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 
-import { projects } from "@/data/discography";
 import {
   getAdminOrderTransition,
   getOrderTransitionTimestamps,
@@ -43,13 +42,14 @@ function statusesForFilter(filter: AdminOrderFilter): KnownOrderStatus[] | undef
 
 export async function getAdminOverview() {
   assertDatabaseConfigured();
-  const [orders, attention, active, delivered, members, databaseProjects] = await Promise.all([
+  const [orders, attention, active, delivered, members, databaseProjects, featuredProject] = await Promise.all([
     prisma.order.count(),
     prisma.order.count({ where: { status: { in: attentionStatuses } } }),
     prisma.order.count({ where: { status: { in: activeStatuses } } }),
     prisma.order.count({ where: { status: "DELIVERED" } }),
     prisma.user.count(),
     prisma.project.count(),
+    prisma.project.findFirst({ where: { featured: true }, select: { title: true, slug: true } }),
   ]);
   return {
     orders,
@@ -57,8 +57,8 @@ export async function getAdminOverview() {
     active,
     delivered,
     members,
-    localProjects: projects.length,
     databaseProjects,
+    featuredProject,
   };
 }
 

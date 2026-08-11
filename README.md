@@ -1,6 +1,6 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.2 prépare une expérience publique immersive, un compte contextuel et un cockpit administrateur privé, sans ouvrir de paiement.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.3 relie le catalogue public à PostgreSQL et ouvre son administration privée, sans ouvrir de paiement.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement, email de commande, facture ou livraison WAV n’est actif.
 
@@ -51,6 +51,7 @@ npm run test:order
 npm run test:rights
 npm run test:upload
 npm run test:admin
+npm run test:catalog
 ```
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
@@ -88,8 +89,8 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 ## Routes publiques
 
 - `/` — accueil
-- `/discographie` — catalogue local typé et sélection éditoriale
-- `/album/[slug]` — fiche statique d’un projet, avec metadata dynamiques
+- `/discographie` — catalogue PostgreSQL et sélection éditoriale
+- `/album/[slug]` — fiche dynamique d’un projet, avec metadata issues du catalogue
 - `/commander` — brief personnel sauvegardable, photos privées, prix serveur de 50 à 90 € et finalisation sans paiement
 - `/boutique` — liens DistroKid Direct et Etsy
 - `/a-propos` — biographie officielle et démarche artistique
@@ -109,7 +110,8 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/compte/commandes/[orderNumber]` — détail privé, timeline, récapitulatif et extension de droits uniquement après livraison
 - `/admin` — cockpit protégé réservé à `ADMIN`
 - `/admin/commandes` — liste privée, filtres et transitions métier contextuelles
-- `/admin/catalogue` — audit en lecture seule de la source locale et de PostgreSQL
+- `/admin/catalogue` — liste, filtres et édition sécurisée du catalogue PostgreSQL
+- `/admin/catalogue/[slug]` — identité, publication, SEO, fiabilité, pistes, liens directs et cover
 - `/admin/membres` — lecture limitée des comptes sans credentials ni sessions
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
 - `/api/orders/*` — brouillons et photos privés, protégés par session, origine et propriété
@@ -129,6 +131,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
 | `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
 | `ORDER_UPLOAD_DIR` | Racine privée, hors `public/` ; QA limitée à `/private/tmp` | Non |
+| `MEDIA_STORAGE_ROOT` | Racine absolue privée des covers normalisées, hors `public/` et hors Git | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
 | `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
@@ -139,16 +142,13 @@ Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés 
 
 ## Architecture
 
-Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief, l’action post-livraison et les formulaires d’authentification utilisent des Client Components limités. Les décisions de rôle, propriété, statut, vérification, prix de création, éligibilité et prix des droits restent côté serveur. Les photos privées sont réencodées hors du répertoire public ; seuls leurs descripteurs sont en base. La discographie demeure locale et ses fiches restent pré-rendues sans base de données.
+Les pages et composants serveur sont privilégiés. Le menu mobile, le formulaire de brief, l’action post-livraison et les formulaires d’authentification utilisent des Client Components limités. Les décisions de rôle, propriété, statut, vérification, prix de création, éligibilité et prix des droits restent côté serveur. Les photos privées sont réencodées hors du répertoire public ; seuls leurs descripteurs sont en base. La discographie, l’accueil, les fiches et le sitemap interrogent PostgreSQL par une couche serveur unique, sans fallback vers le fichier historique.
 
-## Ajouter un projet au catalogue
+## Administrer le catalogue
 
-1. Ajouter une entrée dans `data/discography.ts` avec un `slug` unique, des descriptions éditoriales explicitement distinguées des données factuelles, un statut et les champs structurants.
-2. Conserver `year: null`, `releaseDate: null`, `cover: null`, `genres: []`, `credits: []` ou `tracks: []` tant que ces données ne sont pas confirmées.
-3. Pour une pochette officielle, déposer l’image dans `public/assets/covers/` puis renseigner `cover` et `coverAlt`.
-4. Ajouter uniquement des liens vérifiés dans `platforms`, en distinguant `scope: "release"` d’un simple profil artiste.
-5. Mettre à jour les niveaux de confiance concernés sans transformer une donnée inconnue en valeur plausible.
-6. Lancer `npm run check` : la route `/album/[slug]`, ses metadata et son entrée de sitemap sont générées automatiquement.
+Le catalogue existant se modifie depuis `/admin/catalogue`. Le slug est stable et non modifiable. Chaque bloc est enregistré explicitement ; les changements concurrents d’une fiche sont refusés plutôt qu’écrasés. Les profils artiste globaux restent dans `data/site.ts`, tandis que seuls les liens propres à une parution ou une boutique sont rattachés au projet.
+
+`data/discography.ts` est figé comme source historique de migration V0.6.0.2. Il ne doit plus être importé par le runtime public ni modifié pour éditer le catalogue. La création ou suppression complète d’un projet reste volontairement hors périmètre de cette version.
 
 Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) pour le détail.
 
@@ -184,6 +184,8 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Vision produit](docs/PRODUCT_VISION.md)
 - [Audit produit et éditorial](docs/PAGE_AUDIT.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)
+- [Migration runtime du catalogue](docs/CATALOG_RUNTIME_MIGRATION.md)
+- [Stockage des covers](docs/MEDIA_STORAGE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Déploiement](docs/DEPLOYMENT.md)
 - [Changelog](CHANGELOG.md)
