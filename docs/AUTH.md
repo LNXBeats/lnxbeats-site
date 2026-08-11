@@ -1,131 +1,165 @@
-# Authentification — V0.5.2
+# Authentification — inscription vérifiée par code
 
 ## Décision
 
-L’authentification utilise **Better Auth 1.6.26**, son adaptateur Prisma officiel, PostgreSQL et Argon2id. La V0.5.2 ouvre l’inscription membre, la vérification d’adresse, le renvoi de vérification, la récupération du compte et un profil minimal. Elle ne branche aucun fournisseur email de production et ne crée aucun administrateur permanent.
+L’authentification repose sur Better Auth 1.6.26, Prisma, PostgreSQL et Argon2id. Better Auth conserve la connexion, les sessions, le profil et la récupération du mot de passe. La création publique de compte appartient désormais au parcours LNX Beats vérifié par code ; l’endpoint natif `sign-up/email` est désactivé et bloqué.
 
-Références officielles :
+Le parcours ne crée aucun utilisateur en attente :
 
-- [Better Auth avec Next.js](https://better-auth.com/docs/integrations/next)
-- [Email et mot de passe](https://better-auth.com/docs/authentication/email-password)
-- [Email](https://better-auth.com/docs/concepts/email)
-- [Sessions](https://better-auth.com/docs/concepts/session-management)
-- [Rate limiting](https://better-auth.com/docs/concepts/rate-limit)
-- [Sécurité](https://better-auth.com/docs/reference/security)
+1. le visiteur saisit uniquement son adresse email ;
+2. un code cryptographiquement aléatoire à six chiffres est préparé ;
+3. le visiteur prouve la possession de la boîte ;
+4. une preuve serveur courte autorise le choix du mot de passe ;
+5. une transaction crée le compte vérifié `MEMBER / ACTIVE` et son credential Argon2id ;
+6. la connexion reste une action distincte.
 
-Les modules de configuration, Prisma et transport email sont marqués `server-only`. Aucun hash, secret, token ou client Prisma n’est importé dans un Client Component.
+Aucune commande, aucun paiement et aucune session ne sont créés par l’inscription.
 
-## Parcours et état du membre
+## Nouveau parcours d’inscription
 
-Une inscription publique crée toujours un utilisateur avec :
+`/inscription` présente une seule décision par écran : email, code, puis mot de passe. Le nom d’affichage initial est neutre (`Membre LNX`) et pourra être modifié depuis le compte.
 
-- rôle `MEMBER`, imposé par le serveur ;
-- statut `PENDING` ;
-- `emailVerified = false` et `emailVerifiedAt = null` ;
-- aucune session automatique.
+`POST /api/auth/registration/code` n’accepte que `email`. `POST /api/auth/registration/verify` n’accepte que `attemptId` et un code à six chiffres. `POST /api/auth/registration/complete` n’accepte que deux mots de passe identiques de 12 à 128 caractères. Tout champ supplémentaire — notamment `role`, `status`, `emailVerified`, `image` ou un email de remplacement — est refusé.
 
-Le payload public n’accepte que l’email normalisé, le mot de passe et un nom d’affichage borné. `role`, `status`, `image` et tout champ supplémentaire sont refusés avant Better Auth. L’email n’est pas modifiable dans l’espace membre.
+Une fermeture ou un rafraîchissement après validation du code peut reprendre à l’écran du mot de passe tant que la preuve serveur est valide. Aucun token durable n’est écrit dans `localStorage` ou `sessionStorage`.
 
-La connexion d’un compte non vérifié est bloquée. Après une vérification valide, Better Auth positionne `emailVerified`; le callback serveur renseigne `emailVerifiedAt` et fait passer uniquement un compte `PENDING` à `ACTIVE`. Un compte déjà suspendu ou désactivé n’est jamais réactivé par ce parcours. Seul un statut `ACTIVE` peut ouvrir une session.
+## Sécurité OTP
 
-## Vérification email
+Chaque envoi crée une ligne `auth_registration_attempts` contenant l’identifiant, l’email normalisé, une empreinte HMAC-SHA-256 du code liée à l’identifiant et à l’email, l’expiration, les compteurs, les dates de vérification et de consommation, puis l’empreinte éventuelle de la preuve de continuation. Le code brut n’est jamais persisté ni journalisé.
 
-Better Auth signe un token de vérification non prévisible avec `AUTH_SECRET`. Sa durée de validité est de 60 minutes. Le message pointe vers `/verifier-email` avec le token dans le fragment, qui n’est jamais envoyé dans la ligne de requête HTTP. La page retire immédiatement le fragment de l’historique puis transmet le token par `POST` à `/api/auth/verification-email`, qui le consomme côté serveur. L’endpoint Better Auth natif est masqué au public afin que le passage par le contrôle d’usage unique ne puisse pas être contourné.
+Le code est généré avec le générateur cryptographique Node, sur six chiffres. Un nouvel envoi invalide immédiatement les tentatives antérieures pour cette adresse. Le dernier code remplace donc tous les précédents.
 
-Après une consommation réussie, une empreinte SHA-256 du token est enregistrée sous un identifiant unique dans `auth_verifications`. Le token brut n’est ni stocké ni journalisé. Une seconde consommation, un token expiré ou une valeur invalide produit le même état utilisateur neutre. L’index unique ajouté par la migration V0.5.2 protège les consommations concurrentes.
+Après un code correct, un token opaque de 256 bits est généré. Seule son empreinte SHA-256 est stockée. Le navigateur reçoit la valeur dans un cookie `HttpOnly`, `SameSite=Lax`, limité au chemin `/api/auth/registration`, `Secure` hors preview locale explicite et jamais lisible par JavaScript.
 
-Le renvoi de vérification utilise la même destination locale. Sa réponse est identique pour une adresse existante, absente ou déjà vérifiée.
+## Expiration et tentatives
 
-## Récupération et mots de passe
+- code : 10 minutes ;
+- maximum : 5 erreurs, la cinquième invalide la tentative ;
+- preuve de continuation : 10 minutes ;
+- code et preuve : usage unique ;
+- renvoi : rotation complète du code et de l’identifiant.
 
-`/mot-de-passe-oublie` répond toujours par un message générique. Better Auth ne crée un token que pour un compte approprié, sans exposer cette décision. Le token de reset est aléatoire, expire après 30 minutes et son identifiant est stocké sous forme hachée grâce à `verification.storeIdentifier = "hashed"`.
+Une preuve déjà consommée ne peut ni recréer le compte ni remplacer le mot de passe. Une répétition concurrente de la même finalisation est idempotente : un seul utilisateur et un seul credential existent à la fin.
 
-`/reinitialiser-mot-de-passe` reçoit également le token dans le fragment, le retire de l’historique dès le chargement, puis impose la politique de 12 à 128 caractères. Une consommation réussie supprime le token et révoque toutes les sessions du compte. L’ancien mot de passe et tous les anciens cookies deviennent inutilisables ; une nouvelle connexion est nécessaire.
+## Création atomique du membre
 
-Depuis `/compte`, un membre peut modifier son mot de passe après avoir fourni le mot de passe courant. Better Auth supprime alors toutes les sessions existantes, crée une nouvelle session courante et remplace le cookie. Les cookies antérieurs, y compris celui de l’onglet courant, sont invalidés.
+La finalisation relit la tentative sous verrou transactionnel PostgreSQL. Elle vérifie la preuve, son expiration et sa consommation, puis crée dans la même transaction :
 
-## Profil minimal et autorisation
+- `User.email` normalisé ;
+- `emailVerified = true` et `emailVerifiedAt` renseigné ;
+- `role = MEMBER`, imposé côté serveur ;
+- `status = ACTIVE`, imposé côté serveur ;
+- un `Account` credential avec hash Argon2id.
 
-`/compte` affiche l’email en lecture seule, l’état de vérification, un formulaire de nom d’affichage et la section Sécurité. Seul `displayName` peut être modifié. Les tentatives de modifier email, rôle, statut ou image sont rejetées côté serveur.
-
-Les pages privées appellent toujours les helpers serveur :
-
-- `requireUser()` exige une session persistée et un statut `ACTIVE` ;
-- `requireVerifiedUser()` ajoute l’exigence d’une adresse vérifiée pour les brouillons et commandes ;
-- `requireRole()` contrôle le rôle relu depuis PostgreSQL ;
-- `requireAdmin()` n’accepte que `ADMIN`.
-
-Le masquage d’un élément côté client ne constitue jamais une autorisation. Aucun formulaire de création d’admin ni bootstrap de production n’existe.
-
-Les routes `/api/orders/*` relisent également le propriétaire de chaque commande. Une référence valide ne donne aucun droit d’accès ; les détails de prévention IDOR et de protection des photos sont dans [`docs/ORDER_MODEL.md`](ORDER_MODEL.md).
-
-## Mots de passe, sessions et cookies
-
-Les mots de passe sont hachés avec Argon2id v19 : 64 MiB, trois itérations, parallélisme 1, sortie 32 octets et sel aléatoire par hash. Aucun mot de passe ou hash n’est journalisé.
-
-Les sessions vivent dans PostgreSQL. Le navigateur reçoit un token opaque dans un cookie préfixé `lnx-studio`, `HttpOnly`, `SameSite=Lax`, `Path=/` et `Secure` en production. La durée maximale est de 12 heures, le renouvellement intervient après une heure d’activité et la fraîcheur sensible vaut 30 minutes. Le cache de session dans le cookie reste désactivé afin qu’une révocation soit immédiatement observable.
-
-## Anti-énumération
-
-Les réponses publiques sont normalisées :
-
-- connexion : même erreur pour email absent, mauvais mot de passe, compte non vérifié ou statut refusé ;
-- inscription : même succès neutre pour une création possible ou un email déjà utilisé ;
-- renvoi et mot de passe oublié : même succès pour une adresse existante ou absente ;
-- vérification et reset : même refus neutre pour une valeur invalide, expirée ou déjà utilisée.
-
-Le login conserve un statut `429` lorsqu’une limite est atteinte, mais sans révéler l’existence d’un compte. Les parcours d’envoi et d’inscription appliquent en plus un plancher temporel court pour réduire les différences observables.
+Argon2id utilise la version 19, 64 MiB, trois itérations, parallélisme 1, sortie 32 octets et un sel aléatoire. Le mot de passe brut et le hash ne sont jamais journalisés. La transaction et le verrou consultatif empêchent la duplication lors d’un double clic ou de deux requêtes concurrentes.
 
 ## Rate limiting PostgreSQL
 
-Les compteurs partagés sont persistés dans `auth_rate_limits` :
+Les compteurs partagés utilisent la table existante `auth_rate_limits`. Les clés sont préfixées et HMAC-hachées afin de ne pas stocker directement l’email ou l’adresse IP dans la clé.
 
-| Route | Limite |
+| Action | Limite principale |
 | --- | --- |
+| envoi / renvoi du code | 4 par email et par heure |
+| envoi / renvoi du code | 20 par IP et par heure |
+| validation du code | 5 erreurs au niveau de la tentative, plus plafonds techniques tentative/IP |
+| finalisation | plafonds courts par tentative et IP |
 | connexion | 5 par minute |
-| inscription | 5 par 10 minutes |
-| renvoi de vérification | 3 par heure |
 | mot de passe oublié | 3 par heure |
 | reset password | 5 par 15 minutes |
-| changement de mot de passe | 5 par 15 minutes |
-| modification du profil | 10 par 10 minutes |
 
-Ces limites sont temporaires et ne verrouillent jamais définitivement un compte. Avant production, l’interprétation de l’adresse IP derrière le proxy réel devra être validée.
+Les routes extraient l’adresse transmise par le proxy puis appliquent toujours en parallèle logique une limite liée à l’email ou à la tentative. La chaîne de proxy réelle devra être validée avant production ; une IP seule n’est jamais le garde-fou unique.
 
-## CSRF, origine, redirections et logs
+## Anti-énumération
 
-Les protections d’origine et CSRF de Better Auth restent activées. Les mutations sensibles sont en plus refusées si leur en-tête `Origin` ne correspond pas exactement à `AUTH_URL`. Les callbacks acceptés sont des chemins internes fixes ; aucune destination fournie par le visiteur n’est utilisée comme redirect externe.
+Une adresse nouvelle et une adresse déjà inscrite reçoivent le même statut, la même structure et le même message lors de la demande de code. Dans les deux cas, un code est préparé : il n’existe donc pas de différence publique liée à une recherche utilisateur.
 
-La destination demandée après connexion passe par `safeInternalPath`. Les URL absolues, protocol-relative, contenant un antislash, des caractères de contrôle ou une origine différente sont remplacées par `/compte`.
+Après un code correct seulement — donc après preuve de possession de la boîte — une adresse déjà inscrite est orientée vers la connexion ou la récupération. Son mot de passe n’est jamais remplacé par le parcours d’inscription. Les réponses de connexion et de récupération restent génériques.
 
-Les tokens peuvent exister brièvement dans une URL d’action locale, mais ne sont envoyés à aucun domaine tiers. Les routes concernées ont une politique de referrer restrictive, consomment le token côté serveur ou le retirent immédiatement de l’URL, et sont dynamiques avec `no-store`. Les logs ne doivent jamais contenir mot de passe, hash, token, cookie, secret ou URL d’action complète.
+## Email transactionnel
 
-## Transport email QA
+Le sujet du nouveau message est `Votre code LNX Beats`. Le corps contient le code, sa validité de dix minutes et la consigne d’ignorer la demande si elle n’a pas été initiée par le destinataire. Il n’ajoute ni marketing, tracking, pixel, ressource distante ou lien externe.
 
-`lib/email/auth-email.ts` définit une abstraction minimale pour les emails de vérification et de reset. Le seul transport V0.5.2 est `capture` :
+L’Auth appelle une abstraction unique. Le transport `capture` écrit un fichier JSON Lines local en permissions `0600` et n’effectue aucun appel réseau. Il accepte :
 
-- interdit lorsque `NODE_ENV=production` ;
-- accepte uniquement des destinataires `@example.invalid` ;
-- écrit un fichier JSON Lines local avec des permissions `0600` ;
-- ne charge aucun SDK SMTP et n’effectue aucun appel réseau ;
-- n’ajoute ni tracking pixel, ni marketing, ni ressource distante.
+- les identités fictives `@example.invalid` dans les bases QA jetables ;
+- l’identité exacte configurée par `ADMIN_EMAIL` dans la seule preview locale persistante explicitement gardée ;
+- cette même identité dans la base QA auth dédiée, pour tester le bootstrap.
 
-Les variables génériques sont `MAIL_FROM`, `AUTH_EMAIL_TRANSPORT` et `AUTH_EMAIL_CAPTURE_PATH`. Aucun credential SMTP ou fournisseur réel n’est prévu avant la V0.5.3.
+Le transport `resend` est limité à la preview personnelle persistante explicitement reconnue. Il exige la clé locale, l’expéditeur exact `LNX Beats <no-reply@email.lnxbeats.fr>`, l’adresse de réponse administrative et le destinataire propriétaire approuvé. Il refuse avant tout appel réseau :
 
-## Secrets, build et comptes internes
+- `NODE_ENV=test` ;
+- toute base dont la cible se termine par `-test` ;
+- les adresses `@example.invalid` ;
+- tout destinataire autre que le propriétaire dans cette preview ;
+- une origine, une base, un expéditeur ou une adresse de réponse inattendus.
 
-`AUTH_URL`, `AUTH_SECRET` et `DATABASE_URL` restent exclusivement fournis par l’environnement. Le build public utilise un secret aléatoire transitoire uniquement pendant `phase-production-build`, alors qu’aucun endpoint n’est servi. Au runtime, l’absence d’un vrai `AUTH_SECRET` fait échouer l’authentification de manière fermée ; aucun secret de secours stable n’est commité.
+Le domaine `email.lnxbeats.fr` doit rester vérifié côté Resend. L’envoi OTP fournit une clé d’idempotence liée à l’identifiant de tentative ; le rate limiting PostgreSQL et le verrouillage existants restent actifs. Une erreur ou une réponse sans identifiant d’acceptation invalide la tentative et produit uniquement une erreur publique générique. Aucun code, clé, cookie, preuve ou mot de passe n’est journalisé.
 
-`createInternalAuthUser` reste une primitive serveur pour les fixtures contrôlées. Ces comptes de confiance sont créés `ACTIVE` et déjà vérifiés, car aucun email réel ne peut leur être envoyé en QA. Le script exige le mode test, la cible Prisma Dev exacte et une adresse `@example.invalid`. Il ne constitue pas un bootstrap de production.
+Le sujet OTP est `Votre code LNX Beats`. Les versions HTML et texte contiennent seulement le code, son expiration de dix minutes et la consigne d’ignorer une demande non initiée, sans tracking, publicité, image distante ni lien externe.
 
-## SEO, cache et accessibilité
+## Sessions, profil et récupération
 
-Les routes `/inscription`, `/connexion`, `/mot-de-passe-oublie`, `/renvoyer-verification`, `/reinitialiser-mot-de-passe`, `/verifier-email`, `/compte` et `/admin` déclarent `noindex, nofollow`, sont hors sitemap et bloquées dans `robots.txt`. Les pages dépendantes d’une session ou d’un token sont dynamiques et ne partagent aucun cache utilisateur.
+Les sessions vivent dans PostgreSQL. Le navigateur reçoit un token opaque dans un cookie préfixé `lnx-studio`, `HttpOnly`, `SameSite=Lax`, `Path=/` et `Secure` en production. Leur durée maximale est de 12 heures, le renouvellement intervient après une heure et le cache de session dans le cookie reste désactivé ; une révocation est donc immédiatement observable.
 
-Les formulaires utilisent des labels explicites, `autocomplete` adapté (`email`, `current-password`, `new-password`), messages annoncés, focus visible et boutons tactiles. Les animations suivent la règle globale `prefers-reduced-motion`.
+`/compte` autorise uniquement le nom d’affichage. Email, rôle, statut et image ne peuvent pas être modifiés par le payload public. Le changement de mot de passe exige le mot de passe courant et révoque les autres sessions. La récupération utilise un token opaque haché, valable 30 minutes et à usage unique ; une réussite révoque toutes les sessions précédentes.
 
-## Validation locale
+Les anciennes pages de vérification par lien restent disponibles uniquement pour d’éventuels comptes `PENDING` issus de la version antérieure. Elles ne participent plus à une nouvelle inscription.
 
-Les tests purs s’exécutent avec `npm run test:auth`. La suite `npm run test:auth:runtime` refuse de démarrer hors de l’instance locale jetable `lnx-studio-v052-test`, sans preuve Prisma Dev exacte, secrets éphémères, transport capture et boîte locale approuvée. Elle couvre inscription, injection de rôle, vérification, renvoi, profil, sessions, récupération, reset, expiration, réutilisation, origine et limites, puis vérifie le nettoyage complet.
+## Autorisation et administration
 
-La suppression définitive d’un compte, le MFA, les emails réels, le bootstrap administrateur et le dashboard restent hors périmètre. La suppression/anonymisation devra être arbitrée avec les obligations métier et RGPD avant d’exposer une action destructive.
+L’autorisation ne dépend jamais de l’adresse email. Les pages privées relisent la session et le rôle PostgreSQL : `requireUser()` exige `ACTIVE`, `requireVerifiedUser()` ajoute la vérification, `requireRole()` contrôle le rôle, et `/admin` appelle toujours `requireAdmin()` qui exige `role = ADMIN`.
+
+L’identité administrative approuvée est configurée par `ADMIN_EMAIL=lnx.beats.pro@gmail.com`, mais cette variable ne donne aucun droit à elle seule. Le propriétaire doit d’abord suivre le parcours public sécurisé et vérifier l’adresse. Ensuite seulement, le script serveur/CLI contrôlé peut promouvoir ce compte :
+
+```text
+ADMIN_BOOTSTRAP_CONFIRM=promote-verified-admin npm run auth:admin:bootstrap
+```
+
+Le bootstrap :
+
+- cible uniquement l’adresse configurée et approuvée ;
+- exige un compte `ACTIVE` avec email vérifié ;
+- refuse les bases distantes, le port PostgreSQL standard et toute cible non approuvée ;
+- accepte uniquement la preview locale persistante ou une base QA suffixée `-test` sous `NODE_ENV=test` ;
+- est idempotent ;
+- ne crée pas le compte, ne demande pas le mot de passe et ne journalise aucun secret.
+
+Un email ressemblant à celui de l’administrateur, un champ client `role: ADMIN` ou une modification visuelle du navigateur ne confère aucun accès.
+
+## Preview locale persistante
+
+La preview personnelle utilise conceptuellement la cible `lnx-studio-local-preview`. Sa configuration doit vivre dans `.env.local`, déjà ignoré par Git :
+
+```text
+AUTH_URL=http://127.0.0.1:3000
+AUTH_SECRET=<secret local stable, au moins 32 caractères>
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=<clé locale non commitée>
+EMAIL_FROM=LNX Beats <no-reply@email.lnxbeats.fr>
+EMAIL_REPLY_TO=lnx.beats.pro@gmail.com
+AUTH_EMAIL_CAPTURE_PATH=/private/tmp/lnx-studio-local-preview-mailbox.jsonl
+ADMIN_EMAIL=lnx.beats.pro@gmail.com
+LNX_PREVIEW_MODE=persistent-local
+LNX_DATABASE_TARGET=lnx-studio-local-preview
+DATABASE_URL=<URL de la base locale persistante>
+```
+
+Le secret doit rester stable entre build et démarrage afin de préserver les sessions. Il ne doit jamais être commité ni affiché dans un rapport. La base ne doit pas être recréée, vidée ou réinitialisée à chaque lancement. Les builds `.next` sont reconstructibles ; les utilisateurs, credentials, rôles et sessions PostgreSQL ne le sont pas et doivent survivre aux rebuilds.
+
+## QA jetable contre données personnelles
+
+La suite `npm run test:registration:runtime` cible exclusivement l’instance locale jetable `lnx-studio-v062-auth-test`, son fichier de preuve Prisma Dev exact, une boîte sous `/private/tmp`, un secret et un mot de passe QA jetables. Elle exige `EMAIL_PROVIDER=capture` et refuse une URL distante, le port 5432, une cible différente ou un transport réel.
+
+Elle couvre notamment : email valide, envoi, code correct, code incorrect, cinquième échec, expiration, réutilisation, renvoi, limite, politique de mot de passe, rôle membre forcé, injection admin, preuve rejouée, double soumission concurrente, email existant, anti-énumération, création/promotion admin, contrôle du rôle et révocation de session. Son nettoyage supprime uniquement les données de cette base dédiée et sa boîte locale.
+
+La preview `lnx-studio-local-preview` est personnelle et persistante. Aucun script QA ne doit la cibler, aucun reset automatique ne doit la supprimer et le compte `lnx.beats.pro@gmail.com` ainsi que ses sessions ne doivent jamais être inclus dans un nettoyage de fixtures.
+
+## Secrets, logs et production
+
+`AUTH_SECRET`, `DATABASE_URL`, mots de passe, codes, preuves, cookies et URLs d’action complètes ne doivent jamais être committés ou journalisés. Le build sans base utilise uniquement le secret transitoire existant pendant `phase-production-build` ; tout runtime réel sans secret échoue fermé.
+
+Railway et sa base de production restent hors périmètre de cette validation locale. Aucun reset, bootstrap ou transport capture ne doit être exécuté sur ces services. L’activation future de Resend sur Railway exigera une validation dédiée de ses secrets et garde-fous ; elle n’est pas implicite dans la configuration de preview.
+
+## SEO et accessibilité
+
+Les routes d’authentification déclarent `noindex, nofollow`, sont exclues du sitemap et servies sans cache partagé. Les formulaires utilisent des labels explicites, `autocomplete=email`, `one-time-code` et `new-password`, des annonces d’erreur, un focus visible, des cibles tactiles et le comportement global `prefers-reduced-motion`.

@@ -3,13 +3,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 export const DISPLAY_NAME_MAX_LENGTH = 120;
-
-export type RegistrationInput = {
-  email: string;
-  password: string;
-  passwordConfirmation: string;
-  displayName: string;
-};
+export const REGISTRATION_CODE_LENGTH = 6;
 
 export function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -28,22 +22,26 @@ export function isValidPassword(value: string) {
   return value.length >= PASSWORD_MIN_LENGTH && value.length <= PASSWORD_MAX_LENGTH;
 }
 
-export function validateRegistrationInput(input: RegistrationInput) {
-  const email = normalizeEmail(input.email);
-  const displayName = normalizeDisplayName(input.displayName) || "Membre LNX";
-
+export function validateRegistrationEmail(value: string) {
+  const email = normalizeEmail(value);
   if (!isValidEmail(email)) return { ok: false as const, message: "Saisissez une adresse email valide." };
+  return { ok: true as const, value: email };
+}
+
+export function validateRegistrationCode(value: string) {
+  const code = value.trim();
+  if (!/^\d{6}$/.test(code)) return { ok: false as const, message: "Saisissez les six chiffres du code." };
+  return { ok: true as const, value: code };
+}
+
+export function validateRegistrationPassword(input: { password: string; passwordConfirmation: string }) {
   if (!isValidPassword(input.password)) {
     return { ok: false as const, message: "Le mot de passe doit contenir entre 12 et 128 caractères." };
   }
   if (input.password !== input.passwordConfirmation) {
     return { ok: false as const, message: "Les deux mots de passe ne correspondent pas." };
   }
-  if (displayName.length > DISPLAY_NAME_MAX_LENGTH) {
-    return { ok: false as const, message: "Le nom d’affichage est trop long." };
-  }
-
-  return { ok: true as const, value: { email, password: input.password, displayName } };
+  return { ok: true as const, value: input.password };
 }
 
 export function validateProfileName(value: string) {
@@ -52,21 +50,34 @@ export function validateProfileName(value: string) {
   return displayName;
 }
 
-export function isAllowedPublicRegistrationPayload(value: unknown) {
+export function isAllowedRegistrationEmailPayload(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const payload = value as Record<string, unknown>;
-  const allowedKeys = new Set(["email", "password", "name", "callbackURL", "rememberMe"]);
-  if (Object.keys(payload).some((key) => !allowedKeys.has(key))) return false;
-  return (
-    typeof payload.email === "string"
-    && isValidEmail(payload.email)
+  return Object.keys(payload).every((key) => key === "email")
+    && typeof payload.email === "string"
+    && isValidEmail(payload.email);
+}
+
+export function isAllowedRegistrationCodePayload(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  return Object.keys(payload).every((key) => key === "attemptId" || key === "code")
+    && typeof payload.attemptId === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.attemptId)
+    && typeof payload.code === "string"
+    && /^\d{6}$/.test(payload.code);
+}
+
+export function isAllowedRegistrationCompletionPayload(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  return Object.keys(payload).every((key) => key === "password" || key === "passwordConfirmation")
     && typeof payload.password === "string"
-    && isValidPassword(payload.password)
-    && typeof payload.name === "string"
-    && Boolean(validateProfileName(payload.name))
-    && (payload.callbackURL === undefined || payload.callbackURL === "/verifier-email")
-    && (payload.rememberMe === undefined || typeof payload.rememberMe === "boolean")
-  );
+    && typeof payload.passwordConfirmation === "string"
+    && validateRegistrationPassword({
+      password: payload.password,
+      passwordConfirmation: payload.passwordConfirmation,
+    }).ok;
 }
 
 export function isAllowedProfilePayload(value: unknown) {

@@ -249,6 +249,26 @@ model RateLimit {
   @@map("auth_rate_limits")
 }
 
+model RegistrationAttempt {
+  id                    String    @id @default(uuid()) @db.Uuid
+  email                 String    @db.VarChar(320)
+  codeHash              String    @db.VarChar(128)
+  expiresAt             DateTime  @db.Timestamptz(3)
+  failedAttempts        Int       @default(0)
+  resendCount           Int       @default(0)
+  verifiedAt            DateTime? @db.Timestamptz(3)
+  consumedAt            DateTime? @db.Timestamptz(3)
+  continuationHash      String?   @db.VarChar(128)
+  continuationExpiresAt DateTime? @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([email, createdAt])
+  @@index([expiresAt])
+  @@index([continuationExpiresAt])
+  @@map("auth_registration_attempts")
+}
+
 model Customer {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String?  @unique @db.Uuid

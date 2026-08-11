@@ -3,40 +3,47 @@ import test from "node:test";
 
 import {
   isAllowedProfilePayload,
-  isAllowedPublicRegistrationPayload,
+  isAllowedRegistrationCodePayload,
+  isAllowedRegistrationCompletionPayload,
+  isAllowedRegistrationEmailPayload,
   normalizeEmail,
   validateProfileName,
-  validateRegistrationInput,
+  validateRegistrationCode,
+  validateRegistrationEmail,
+  validateRegistrationPassword,
 } from "@/lib/auth/input";
 
-test("registration normalizes email and applies a neutral optional display name", () => {
-  const result = validateRegistrationInput({
-    email: "  MEMBER@Example.Invalid ",
-    password: "a sufficiently long passphrase",
-    passwordConfirmation: "a sufficiently long passphrase",
-    displayName: "   ",
-  });
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.equal(result.value.email, "member@example.invalid");
-    assert.equal(result.value.displayName, "Membre LNX");
-  }
+test("registration begins with a normalized valid email only", () => {
+  const result = validateRegistrationEmail("  MEMBER@Example.Invalid ");
+  assert.deepEqual(result, { ok: true, value: "member@example.invalid" });
   assert.equal(normalizeEmail(" USER@Example.Invalid "), "user@example.invalid");
+  assert.equal(isAllowedRegistrationEmailPayload({ email: "member@example.invalid" }), true);
+  assert.equal(isAllowedRegistrationEmailPayload({ email: "member@example.invalid", role: "ADMIN" }), false);
+  assert.equal(isAllowedRegistrationEmailPayload({ email: "invalid" }), false);
 });
 
-test("registration rejects weak or mismatched passwords", () => {
-  const weak = validateRegistrationInput({ email: "member@example.invalid", password: "short", passwordConfirmation: "short", displayName: "Membre" });
-  const mismatch = validateRegistrationInput({ email: "member@example.invalid", password: "a sufficiently long passphrase", passwordConfirmation: "a different long passphrase", displayName: "Membre" });
-  assert.equal(weak.ok, false);
-  assert.equal(mismatch.ok, false);
+test("registration code accepts exactly six decimal digits", () => {
+  assert.deepEqual(validateRegistrationCode(" 012345 "), { ok: true, value: "012345" });
+  assert.equal(validateRegistrationCode("12345").ok, false);
+  assert.equal(validateRegistrationCode("12345a").ok, false);
+  assert.equal(isAllowedRegistrationCodePayload({
+    attemptId: "f7f3bead-2f8f-4ac3-8ff2-e719d0c378d3",
+    code: "012345",
+  }), true);
+  assert.equal(isAllowedRegistrationCodePayload({
+    attemptId: "f7f3bead-2f8f-4ac3-8ff2-e719d0c378d3",
+    code: "012345",
+    status: "ACTIVE",
+  }), false);
 });
 
-test("public registration payload rejects role, status and image injection", () => {
-  const valid = { email: "member@example.invalid", password: "a sufficiently long passphrase", name: "Membre", callbackURL: "/verifier-email" };
-  assert.equal(isAllowedPublicRegistrationPayload(valid), true);
-  assert.equal(isAllowedPublicRegistrationPayload({ ...valid, role: "ADMIN" }), false);
-  assert.equal(isAllowedPublicRegistrationPayload({ ...valid, status: "ACTIVE" }), false);
-  assert.equal(isAllowedPublicRegistrationPayload({ ...valid, image: "https://example.invalid/avatar" }), false);
+test("password completion enforces length, equality and a closed payload", () => {
+  const password = "a sufficiently long passphrase";
+  assert.deepEqual(validateRegistrationPassword({ password, passwordConfirmation: password }), { ok: true, value: password });
+  assert.equal(validateRegistrationPassword({ password: "short", passwordConfirmation: "short" }).ok, false);
+  assert.equal(validateRegistrationPassword({ password, passwordConfirmation: "a different long passphrase" }).ok, false);
+  assert.equal(isAllowedRegistrationCompletionPayload({ password, passwordConfirmation: password }), true);
+  assert.equal(isAllowedRegistrationCompletionPayload({ password, passwordConfirmation: password, role: "ADMIN" }), false);
 });
 
 test("profile validation accepts only a bounded display name", () => {

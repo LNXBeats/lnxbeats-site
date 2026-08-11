@@ -4,7 +4,6 @@ import { auth } from "@/lib/auth";
 import {
   isAllowedEmailRequestPayload,
   isAllowedProfilePayload,
-  isAllowedPublicRegistrationPayload,
   isAllowedResetPayload,
 } from "@/lib/auth/input";
 import { isSameOriginMutation } from "@/lib/auth/origin";
@@ -12,11 +11,6 @@ import { isSameOriginMutation } from "@/lib/auth/origin";
 const GENERIC_LOGIN_ERROR = {
   code: "INVALID_CREDENTIALS",
   message: "Identifiants invalides",
-};
-
-const GENERIC_REGISTRATION_RESPONSE = {
-  status: true,
-  message: "Si cette inscription peut être créée, un message de confirmation a été préparé.",
 };
 
 const GENERIC_EMAIL_RESPONSE = {
@@ -71,14 +65,17 @@ export async function handleAuthRequest(request: Request) {
     return jsonResponse(GENERIC_ACTION_ERROR, 404);
   }
 
+  // Account creation is owned by the verified-code flow. Better Auth's native
+  // sign-up endpoint must never be usable as a shortcut around it.
+  if (pathname === "/api/auth/sign-up/email") {
+    return jsonResponse(GENERIC_ACTION_ERROR, 404);
+  }
+
   if (request.method !== "GET" && sameOriginMutationPaths.has(pathname) && !isSameOriginMutation(request, authBaseUrl)) {
     return jsonResponse(GENERIC_ACTION_ERROR, 403);
   }
 
   const body = request.method === "GET" ? null : await requestBody(request);
-  if (pathname === "/api/auth/sign-up/email" && !isAllowedPublicRegistrationPayload(body)) {
-    return jsonResponse(GENERIC_ACTION_ERROR, 400);
-  }
   if (pathname === "/api/auth/update-user" && !isAllowedProfilePayload(body)) {
     return jsonResponse(GENERIC_ACTION_ERROR, 400);
   }
@@ -96,11 +93,6 @@ export async function handleAuthRequest(request: Request) {
 
   if (pathname === "/api/auth/sign-in/email" && !response.ok) {
     return jsonResponse(GENERIC_LOGIN_ERROR, response.status === 429 ? 429 : 401, response);
-  }
-
-  if (pathname === "/api/auth/sign-up/email") {
-    await minimumResponseTime(startedAt);
-    return jsonResponse(GENERIC_REGISTRATION_RESPONSE, response.status === 429 ? 429 : 200, response);
   }
 
   if (pathname === "/api/auth/send-verification-email" || pathname === "/api/auth/request-password-reset") {

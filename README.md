@@ -65,7 +65,7 @@ npm run test:database
 
 Le script contrôle le schéma physique, les opérations Prisma, les contraintes et les comportements de suppression. Il nettoie ses données QA même après un échec. Il ne doit jamais être lancé contre une base partagée, distante ou de production.
 
-La validation runtime de l’authentification possède des gardes supplémentaires liées à l’instance Prisma Dev locale `lnx-studio-v052-test`. Elle utilise uniquement des identités `@example.invalid` et un transport email capturé sans réseau. Elle couvre inscription, vérification, récupération, profil et invalidation des sessions, puis supprime comptes, credentials, sessions, vérifications, compteurs et boîte QA. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
+La validation runtime de l’inscription possède des gardes supplémentaires liées à l’instance Prisma Dev locale jetable `lnx-studio-v062-auth-test`. Elle utilise un transport email capturé sans réseau et couvre code OTP, expiration, tentatives, anti-énumération, concurrence, compte membre, bootstrap admin et invalidation de session, puis nettoie exclusivement cette base et sa boîte QA. La preview personnelle `lnx-studio-local-preview` reste persistante et ne doit jamais être ciblée par ce nettoyage. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
 
 La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, prix serveur plafonné à 90 €, finalisation atomique, demande de droits après livraison à 1 500 €, propriété, anti-doublon, références concurrentes, événements, IDOR, photos normalisées et nettoyage. La procédure et les limites sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md).
 
@@ -118,8 +118,10 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `AUTH_URL` | Origine exacte autorisée pour les routes d’authentification | Non |
 | `AUTH_SECRET` | Signature et protection des données d’auth ; minimum 32 octets aléatoires | Oui |
 | `DATABASE_URL` | Connexion PostgreSQL locale ou de développement | Oui |
-| `MAIL_FROM` | Expéditeur logique des emails transactionnels | Non |
-| `AUTH_EMAIL_TRANSPORT` | Transport non-production ; seule la valeur `capture` existe en V0.5.2 | Non |
+| `EMAIL_PROVIDER` | Adaptateur transactionnel : `capture` en QA automatisée, `resend` dans la preview personnelle autorisée | Non |
+| `RESEND_API_KEY` | Clé d’envoi Resend, exclusivement dans les secrets locaux ou d’environnement | Oui |
+| `EMAIL_FROM` | Expéditeur appartenant au domaine transactionnel vérifié | Non |
+| `EMAIL_REPLY_TO` | Adresse de réponse humaine des messages transactionnels | Non |
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
 | `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
 | `ORDER_UPLOAD_DIR` | Racine privée, hors `public/` ; QA limitée à `/private/tmp` | Non |

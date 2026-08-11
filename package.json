@@ -13,7 +13,9 @@
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:auth": "tsx --test tests/auth/*.test.ts",
     "test:auth:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-auth-runtime.ts",
+    "test:registration:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-registration-runtime.ts",
     "auth:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/auth-qa-fixtures.ts",
+    "auth:admin:bootstrap": "NODE_OPTIONS=--conditions=react-server tsx scripts/bootstrap-admin.ts",
     "test:order": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/domain.test.ts tests/orders/request.test.ts",
     "test:rights": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/rights.test.ts",
     "test:upload": "tsx --test tests/orders/upload.test.ts",
@@ -36,6 +38,7 @@
     "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "resend": "6.19.0",
     "server-only": "0.0.1",
     "sharp": "0.35.3"
   },

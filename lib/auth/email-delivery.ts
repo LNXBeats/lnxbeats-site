@@ -1,7 +1,16 @@
 import "server-only";
 
 import { sendAuthEmail } from "@/lib/email/auth-email";
-import { resetPasswordEmailTemplate } from "@/lib/email/templates";
+import { registrationCodeEmailTemplate, resetPasswordEmailTemplate } from "@/lib/email/templates";
+
+export async function sendRegistrationCodeEmail(input: { email: string; code: string; idempotencyKey: string }) {
+  await sendAuthEmail({
+    idempotencyKey: input.idempotencyKey,
+    kind: "registration-code",
+    to: input.email,
+    template: registrationCodeEmailTemplate(input.code),
+  });
+}
 
 export async function sendPasswordResetEmail(input: { email: string; url: string }) {
   const betterAuthUrl = new URL(input.url);

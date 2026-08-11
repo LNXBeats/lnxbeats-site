@@ -7,11 +7,13 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 
 import { sendPasswordResetEmail } from "@/lib/auth/email-delivery";
 import { issueEmailVerification } from "@/lib/auth/email-verification";
+import { isPersistentLocalPreview } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 const authBaseUrl = process.env.AUTH_URL ?? process.env.SITE_URL ?? "http://localhost:3000";
 const isProduction = process.env.NODE_ENV === "production";
+const useSecureCookies = isProduction && !isPersistentLocalPreview();
 const authSecret = process.env.AUTH_SECRET
   ?? (process.env.NEXT_PHASE === "phase-production-build" ? randomBytes(32).toString("base64url") : undefined);
 
@@ -28,7 +30,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    disableSignUp: false,
+    disableSignUp: true,
     autoSignIn: false,
     requireEmailVerification: true,
     minPasswordLength: 12,
@@ -44,7 +46,7 @@ export const auth = betterAuth({
     },
   },
   emailVerification: {
-    sendOnSignUp: true,
+    sendOnSignUp: false,
     sendOnSignIn: false,
     autoSignInAfterVerification: false,
     expiresIn: 60 * 60,
@@ -136,10 +138,10 @@ export const auth = betterAuth({
     disableCSRFCheck: false,
     disableOriginCheck: false,
     cookiePrefix: "lnx-studio",
-    useSecureCookies: isProduction,
+    useSecureCookies,
     defaultCookieAttributes: {
       httpOnly: true,
-      secure: isProduction,
+      secure: useSecureCookies,
       sameSite: "lax",
       path: "/",
     },

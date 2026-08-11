@@ -15,7 +15,7 @@ const QA_EMAILS = [
 async function validateSafetyGuards() {
   assert.equal(process.env.NODE_ENV, "test", "NODE_ENV must be test.");
   assert.equal(process.env.LNX_DATABASE_TARGET, EXPECTED_TARGET, `LNX_DATABASE_TARGET must be ${EXPECTED_TARGET}.`);
-  assert.equal(process.env.AUTH_EMAIL_TRANSPORT, "capture");
+  assert.equal(process.env.EMAIL_PROVIDER, "capture");
   assert.equal(process.env.AUTH_EMAIL_CAPTURE_PATH, EXPECTED_CAPTURE_PATH);
   assert.ok(process.env.DATABASE_URL);
   assert.equal(process.env.LNX_PRISMA_DEV_SERVER_FILE, EXPECTED_SERVER_FILE);

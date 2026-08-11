@@ -30,6 +30,38 @@ function emailLayout(title: string, message: string, action: string, url: string
 </html>`;
 }
 
+function codeEmailLayout(code: string) {
+  const title = "Votre code LNX Beats";
+  const message = "Votre code de vérification est :";
+  const expiration = "Ce code expire dans 10 minutes.";
+  const ignore = "Si vous n’êtes pas à l’origine de cette demande, ignorez ce message.";
+  return `<!doctype html>
+<html lang="fr">
+  <body style="margin:0;background:#080808;color:#f5f1e8;font-family:Arial,sans-serif">
+    <main style="max-width:620px;margin:0 auto;padding:48px 24px">
+      <p style="color:#c6a15b;font-size:12px;letter-spacing:2px;text-transform:uppercase">LNX Beats</p>
+      <h1 style="font-family:Georgia,serif;font-size:36px;font-weight:400">${escapeHtml(title)}</h1>
+      <p style="color:#c8c3ba;line-height:1.6">${escapeHtml(message)}</p>
+      <p style="margin:32px 0;font-family:Georgia,serif;font-size:42px;letter-spacing:12px">${escapeHtml(code)}</p>
+      <p style="color:#9b968d;font-size:14px">${escapeHtml(expiration)}</p>
+      <p style="color:#9b968d;font-size:14px">${escapeHtml(ignore)}</p>
+    </main>
+  </body>
+</html>`;
+}
+
+export function registrationCodeEmailTemplate(code: string): AuthEmailTemplate {
+  if (!/^\d{6}$/.test(code)) throw new Error("A six-digit registration code is required.");
+  const message = "Votre code de vérification est :";
+  const expiration = "Ce code expire dans 10 minutes.";
+  const ignore = "Si vous n’êtes pas à l’origine de cette demande, ignorez ce message.";
+  return {
+    subject: "Votre code LNX Beats",
+    text: `LNX Beats\n\n${message}\n\n${code}\n\n${expiration}\n${ignore}`,
+    html: codeEmailLayout(code),
+  };
+}
+
 export function verificationEmailTemplate(url: string): AuthEmailTemplate {
   const title = "Confirmez votre adresse email";
   const message = "Vous venez de créer un espace membre LNX Beats. Confirmez cette adresse pour pouvoir vous connecter.";
