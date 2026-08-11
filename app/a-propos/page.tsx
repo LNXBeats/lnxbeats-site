@@ -13,33 +13,35 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <>
-      <header className="page-hero">
-        <Container className="page-hero__grid">
-          <div><p className="eyebrow">Derrière LNX Beats</p><h1>Ludovic Mathon.</h1></div>
-          <p className="page-hero__intro">{artistBiography.short}</p>
+      <header className="about-hero">
+        <Container className="about-hero__grid">
+          <div className="about-hero__copy">
+            <p className="eyebrow">Derrière LNX Beats</p>
+            <h1>Ludovic<br /><em>Mathon.</em></h1>
+            <p>{artistBiography.short}</p>
+          </div>
+          <div className="about-hero__portrait">
+            <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill loading="eager" sizes="(max-width: 820px) 100vw, 48vw" />
+            <span aria-hidden="true">Portrait / studio</span>
+          </div>
         </Container>
       </header>
-      <section className="section">
+      <section className="section about-story-scene">
         <Container className="about-teaser motion-reveal motion-reveal--soft">
           <div className="about-teaser__image">
-            <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill preload sizes="(max-width: 820px) 100vw, 45vw" />
+            <Image src="/assets/hero-desktop.jpg" alt="Détail de l’univers visuel de LNX Beats" fill sizes="(max-width: 820px) 100vw, 45vw" />
           </div>
           <div className="about-teaser__copy">
             <p className="eyebrow">La démarche artistique</p>
             <h2>Faire du quotidien une œuvre musicale.</h2>
             {artistBiography.principal.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+            <div className="about-story-scene__thread">
+              <p>Une histoire d’abord. La forme musicale ensuite.</p>
+              <p>LNX Beats ne cherche pas à faire entrer chaque récit dans la même couleur. Le choix du ton, de la voix et du rythme dépend de ce que l’histoire demande.</p>
+              <p>Cette liberté permet aux chroniques du quotidien, aux récits familiaux, à l’humour, à l’émotion et à l’expérimentation de cohabiter sans perdre leur singularité.</p>
+              <blockquote>Chaque histoire mérite sa musique.</blockquote>
+            </div>
             <ButtonLink href="/discographie" variant="quiet">Écouter la discographie</ButtonLink>
-          </div>
-        </Container>
-      </section>
-      <section className="section section--soft">
-        <Container className="content-columns motion-reveal">
-          <p className="content-columns__label">Le fil conducteur</p>
-          <div className="editorial-copy">
-            <p>Une histoire d’abord. La forme musicale ensuite.</p>
-            <p>LNX Beats ne cherche pas à faire entrer chaque récit dans la même couleur. Le choix du ton, de la voix et du rythme dépend de ce que l’histoire demande.</p>
-            <p>Cette liberté permet aux chroniques du quotidien, aux récits familiaux, à l’humour, à l’émotion et à l’expérimentation de cohabiter sans perdre leur singularité.</p>
-            <blockquote>Chaque histoire mérite sa musique.</blockquote>
           </div>
         </Container>
       </section>

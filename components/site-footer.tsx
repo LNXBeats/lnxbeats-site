@@ -6,6 +6,10 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <Container>
+        <div className="site-footer__signature" aria-hidden="true">
+          <span>LNX</span>
+          <span>BEATS</span>
+        </div>
         <div className="site-footer__top">
           <div className="site-footer__statement">
             <p className="eyebrow">LNX Beats</p>

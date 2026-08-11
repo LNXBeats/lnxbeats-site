@@ -20,7 +20,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPageProps
   const confirmed = parameters.etat === "confirme";
 
   return (
-    <section className="auth-shell">
+    <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
         <div className="auth-intro">
           <p className="eyebrow">Sécurité</p>

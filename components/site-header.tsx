@@ -55,10 +55,12 @@ export function SiteHeader() {
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
+  if (pathname.startsWith("/admin")) return null;
+
   return (
-    <header className="site-header">
+    <header className={`site-header ${pathname === "/" ? "site-header--home" : ""}`}>
       <Container className="site-header__inner">
-        <Link className="brand" href="/" aria-label="LNX Beats — accueil">
+        <Link className="brand" href="/" aria-label="LNX Beats — accueil" onClick={() => setOpen(false)}>
           <span className="brand__lnx">LNX</span>
           <span className="brand__beats">Beats</span>
         </Link>
@@ -75,11 +77,11 @@ export function SiteHeader() {
             </Link>
           ))}
           <Link
-            href="/connexion"
+            href="/compte"
             className={`desktop-navigation__account ${isActive("/connexion") || isActive("/compte") ? "is-active" : ""}`}
             aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}
           >
-            {isActive("/compte") ? "Mon compte" : "Connexion"}
+            Compte
           </Link>
         </nav>
 
@@ -125,7 +127,7 @@ export function SiteHeader() {
             ))}
             <Link
               ref={lastLinkRef}
-              href="/connexion"
+              href="/compte"
               tabIndex={open ? 0 : -1}
               aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}
               onClick={() => {
@@ -134,7 +136,7 @@ export function SiteHeader() {
               }}
             >
               <span>{String(navigation.length + 1).padStart(2, "0")}</span>
-              {isActive("/compte") ? "Mon compte" : "Connexion"}
+              Compte
             </Link>
           </nav>
           <p>Chaque histoire mérite sa musique.</p>

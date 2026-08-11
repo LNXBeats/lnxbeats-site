@@ -3,9 +3,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { ButtonLink } from "@/components/button";
 import { Container } from "@/components/container";
+import { PlatformDestination } from "@/components/platform-destination";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { artistBiography } from "@/data/artist";
-import { featuredProjects } from "@/data/discography";
+import { featuredProjects, getProjectBySlug } from "@/data/discography";
+import { homeEditorial } from "@/data/home";
 import { officialLinks, siteConfig } from "@/data/site";
 
 const homeDescription = "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux. Chaque histoire mérite sa musique.";
@@ -39,12 +41,13 @@ const universes = [
 ] as const;
 
 const platforms = [
-  { name: "Spotify", label: "Écouter les récits", mark: "S", url: officialLinks.spotify, tone: "spotify" },
-  { name: "Apple Music", label: "Écouter les récits", mark: "A", url: officialLinks.appleMusic, tone: "apple" },
-  { name: "Deezer", label: "Écouter les récits", mark: "D", url: officialLinks.deezer, tone: "deezer" },
-  { name: "YouTube", label: "Regarder les histoires", mark: "Y", url: officialLinks.youtube, tone: "youtube" },
-  { name: "TikTok", label: "Suivre les coulisses", mark: "T", url: officialLinks.tiktok, tone: "tiktok" },
-  { name: "Instagram", label: "Suivre les coulisses", mark: "I", url: officialLinks.instagram, tone: "instagram" },
+  { name: "Spotify", label: "Écouter les récits", action: "Écouter sur Spotify", url: officialLinks.spotify, tone: "spotify", logo: { src: "/brands/spotify-full-logo-white.png", width: 219, height: 60 } },
+  { name: "Apple Music", label: "Écouter les récits", action: "Écouter sur Apple Music", url: officialLinks.appleMusic, tone: "apple" },
+  { name: "Deezer", label: "Écouter les récits", action: "Écouter sur Deezer", url: officialLinks.deezer, tone: "deezer" },
+  { name: "Amazon Music", label: "Écouter les récits", action: "Écouter sur Amazon Music", url: officialLinks.amazonMusic, tone: "amazon" },
+  { name: "YouTube", label: "Regarder les histoires", action: "Voir sur YouTube", url: officialLinks.youtube, tone: "youtube", logo: { src: "/brands/youtube-logo.svg", width: 224, height: 50 } },
+  { name: "TikTok", label: "Suivre les coulisses", action: "Suivre sur TikTok", url: officialLinks.tiktok, tone: "tiktok" },
+  { name: "Instagram", label: "Suivre les coulisses", action: "Suivre sur Instagram", url: officialLinks.instagram, tone: "instagram" },
 ] as const;
 
 const commissionSteps = [
@@ -53,84 +56,98 @@ const commissionSteps = [
   { number: "03", title: "La musique vous revient", description: "Votre histoire a changé de forme, mais elle porte toujours votre émotion." },
 ] as const;
 
-const leadProject = featuredProjects[0];
-const supportingProjects = featuredProjects.slice(1, 3);
+const configuredSpotlight = getProjectBySlug(homeEditorial.spotlightProjectSlug);
+const leadProject = configuredSpotlight?.featured && configuredSpotlight.status === "published" ? configuredSpotlight : undefined;
+const supportingProjects = featuredProjects.filter((project) => project.slug !== leadProject?.slug).slice(0, 2);
 
 export default function HomePage() {
   return (
     <>
-      <section className="home-hero" aria-labelledby="home-hero-title">
-        <div className="home-hero__media" aria-hidden="true">
+      <div className="visual-chapter visual-chapter--artist">
+        <div className="visual-chapter__backdrop" aria-hidden="true">
           <Image
             src="/assets/hero-desktop.jpg"
             alt=""
             fill
-            preload
-            sizes="100vw"
+            loading="eager"
+            sizes="(max-width: 700px) 100vw, 100vw"
           />
+          <span className="visual-chapter__grain" />
         </div>
-        <Container className="home-hero__inner">
-          <div className="home-hero__copy">
-            <p className="eyebrow">LNX Beats · Les histoires deviennent musique</p>
-            <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
-            <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
-            <p className="home-hero__lead">Il suffit parfois d’un prénom, d’un souvenir ou d’une scène banale. LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
-            <div className="home-hero__actions">
-              <ButtonLink href="/discographie">Écouter la discographie</ButtonLink>
-              <ButtonLink href="/commander" variant="secondary">Préparer votre histoire</ButtonLink>
-            </div>
-          </div>
-          <div className="home-hero__signature" aria-hidden="true">
-            <span>Rap narratif</span>
-            <span>Humour</span>
-            <span>Émotion</span>
-          </div>
-          <a className="home-hero__scroll" href="#univers">
-            <span>Comprendre la démarche</span>
-            <span aria-hidden="true">↓</span>
-          </a>
-        </Container>
-      </section>
-
-      <section className="home-intro" aria-labelledby="home-intro-title">
-        <Container className="home-intro__grid motion-reveal">
-          <p className="section-index">01 — La démarche</p>
-          <div>
-            <h2 id="home-intro-title">Le réel devient une scène.<br /><em>La musique, un récit.</em></h2>
-            <p>Une famille trop bruyante. Un collègue impossible. Un animal qui regarde les humains vivre. Un souvenir que l’on refuse de laisser partir. La musique commence souvent là.</p>
-            <div className="home-intro__artist">
-              <p>{artistBiography.short}</p>
-              <Link className="text-link" href="/a-propos">Lire la démarche de Ludovic Mathon <span aria-hidden="true">→</span></Link>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="section universe-section" id="univers" aria-labelledby="universe-title">
-        <Container>
-          <div className="premium-heading motion-reveal">
-            <div>
-              <p className="section-index">02 — Les territoires</p>
-              <h2 id="universe-title">Un artiste.<br />Plusieurs univers.</h2>
-            </div>
-            <p>Chaque histoire réclame sa propre lumière. Certaines font sourire, d’autres serrent la gorge. Aucune ne demande à être racontée de la même manière.</p>
-          </div>
-          <div className="universe-grid motion-reveal motion-reveal--soft">
-            {universes.map((universe, index) => (
-              <article className="universe-card" key={universe.title}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <div>
-                  <h3>{universe.title}</h3>
-                  <p>{universe.description}</p>
+        <div className="visual-chapter__flow">
+          <section className="home-hero" aria-labelledby="home-hero-title">
+            <Container className="home-hero__inner">
+              <div className="home-hero__copy">
+                <p className="eyebrow">LNX Beats · Les histoires deviennent musique</p>
+                <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
+                <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
+                <p className="home-hero__lead">Il suffit parfois d’un prénom, d’un souvenir ou d’une scène banale. LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
+                <div className="home-hero__actions">
+                  <ButtonLink href="/discographie">Écouter la discographie</ButtonLink>
+                  <ButtonLink href="/commander" variant="secondary">Préparer votre histoire</ButtonLink>
                 </div>
-              </article>
-            ))}
-          </div>
-        </Container>
-      </section>
+              </div>
+              <div className="home-hero__signature" aria-hidden="true">
+                <span>Rap narratif</span>
+                <span>Humour</span>
+                <span>Émotion</span>
+              </div>
+              <p className="home-hero__chapter-mark" aria-hidden="true">LNX / 01</p>
+              <a className="home-hero__scroll" href="#univers">
+                <span>Comprendre la démarche</span>
+                <span aria-hidden="true">↓</span>
+              </a>
+            </Container>
+          </section>
+
+          <section className="home-intro story-window story-window--scene" aria-labelledby="home-intro-title">
+            <Container className="home-intro__grid motion-reveal">
+              <p className="section-index">01 — La démarche</p>
+              <div className="home-intro__copy">
+                <h2 id="home-intro-title">Le réel devient une scène.<br /><em>La musique, un récit.</em></h2>
+                <p>Une famille trop bruyante. Un collègue impossible. Un animal qui regarde les humains vivre. Un souvenir que l’on refuse de laisser partir. La musique commence souvent là.</p>
+                <div className="home-intro__artist">
+                  <p>{artistBiography.short}</p>
+                  <Link className="text-link" href="/a-propos">Lire la démarche de Ludovic Mathon <span aria-hidden="true">→</span></Link>
+                </div>
+              </div>
+              <div className="home-intro__portrait" aria-hidden="true">
+                <Image src="/assets/hero-mobile.jpg" alt="" fill sizes="(max-width: 820px) calc(100vw - 48px), 34vw" />
+                <span>Ludovic Mathon · LNX Beats</span>
+              </div>
+            </Container>
+          </section>
+
+          <section className="section universe-section story-window story-window--scene" id="univers" aria-labelledby="universe-title">
+            <Container>
+              <div className="premium-heading motion-reveal">
+                <div>
+                  <p className="section-index">02 — Les territoires</p>
+                  <h2 id="universe-title">Un artiste.<br />Plusieurs univers.</h2>
+                </div>
+                <p>Chaque histoire réclame sa propre lumière. Certaines font sourire, d’autres serrent la gorge. Aucune ne demande à être racontée de la même manière.</p>
+              </div>
+              <div className="universe-grid motion-reveal motion-reveal--soft">
+                {universes.map((universe, index) => (
+                  <article className="universe-card" key={universe.title}>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <div>
+                      <h3>{universe.title}</h3>
+                      <p>{universe.description}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </Container>
+          </section>
+        </div>
+      </div>
 
       {leadProject ? (
-        <section className="section home-projects" id="projets" aria-labelledby="projects-title">
+        <div className="visual-chapter visual-chapter--music">
+          <div className="visual-chapter__backdrop visual-chapter__backdrop--music" aria-hidden="true"><span className="visual-chapter__record" /><span className="visual-chapter__grain" /></div>
+          <div className="visual-chapter__flow">
+        <section className="section home-projects story-window story-window--scene" id="projets" aria-labelledby="projects-title">
           <Container>
             <div className="premium-heading premium-heading--projects motion-reveal">
               <div>
@@ -142,10 +159,10 @@ export default function HomePage() {
 
             <article className="home-project-lead motion-reveal motion-reveal--soft">
               <Link className="home-project-lead__art" href={`/album/${leadProject.slug}`} aria-label={`Ouvrir l’univers ${leadProject.title}`}>
-                <ProjectArtwork project={leadProject} priority sizes="(max-width: 820px) 100vw, 58vw" />
+                <ProjectArtwork project={leadProject} sizes="(max-width: 820px) calc(100vw - 48px), 58vw" />
               </Link>
               <div className="home-project-lead__copy">
-                <p className="eyebrow">Projet majeur · Single</p>
+                <p className="eyebrow">Projet à la une · Single</p>
                 <h3>{leadProject.title}</h3>
                 <p>{leadProject.description}</p>
                 <ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Voir la fiche du projet</ButtonLink>
@@ -169,12 +186,46 @@ export default function HomePage() {
             </div>
           </Container>
         </section>
+
+      <section className="image-chapter story-window story-window--scene" aria-labelledby="image-chapter-title">
+        <Image src="/assets/hero-desktop.jpg" alt="" fill sizes="(max-width: 820px) calc(100vw - 24px), 96vw" />
+        <div className="image-chapter__veil" aria-hidden="true" />
+        <Container className="image-chapter__inner motion-reveal">
+          <p className="section-index">Entre les morceaux</p>
+          <div>
+            <h2 id="image-chapter-title">Une voix, une lumière, puis le cadre s’ouvre.</h2>
+            <p>La musique ne quitte jamais vraiment l’image. Elle garde une scène en mémoire et lui invente une autre façon d’exister.</p>
+          </div>
+        </Container>
+      </section>
+
+      <section className="section platforms-stage story-window story-window--scene" id="plateformes" aria-labelledby="platforms-title">
+        <Container>
+          <div className="premium-heading motion-reveal">
+            <div>
+              <p className="section-index">04 — Écouter & suivre</p>
+              <h2 id="platforms-title">Les histoires continuent ailleurs.</h2>
+            </div>
+            <p>La musique d’abord, puis les coulisses. Chaque destination indique clairement ce que vous y trouverez.</p>
+          </div>
+          <div className="platforms-grid motion-reveal motion-reveal--soft">
+            {platforms.map((platform, index) => (
+              <PlatformDestination key={platform.name} index={String(index + 1).padStart(2, "0")} {...platform} />
+            ))}
+          </div>
+        </Container>
+      </section>
+          </div>
+        </div>
       ) : null}
 
-      <section className="section commission-story" id="sur-mesure" aria-labelledby="commission-title">
+      <div className="visual-chapter visual-chapter--story">
+        <div className="visual-chapter__backdrop visual-chapter__backdrop--story" aria-hidden="true"><span className="visual-chapter__grain" /></div>
+        <div className="visual-chapter__flow">
+      <section className="section commission-story story-window story-window--scene" id="sur-mesure" aria-labelledby="commission-title">
         <Container>
           <div className="commission-story__intro motion-reveal">
-            <p className="section-index">04 — Votre histoire</p>
+            <p className="section-index">05 — Votre histoire</p>
             <h2 id="commission-title">Votre histoire<br /><em>attend sa voix.</em></h2>
             <p>Vous apportez les personnes, les silences et les détails. La création commence par cette rencontre.</p>
           </div>
@@ -194,45 +245,13 @@ export default function HomePage() {
         </Container>
       </section>
 
-      <section className="section platforms-stage" id="plateformes" aria-labelledby="platforms-title">
-        <Container>
-          <div className="premium-heading motion-reveal">
-            <div>
-              <p className="section-index">05 — Écouter & suivre</p>
-              <h2 id="platforms-title">Les histoires continuent ailleurs.</h2>
-            </div>
-            <p>Chaque plateforme ouvre une autre porte sur les morceaux, les personnages et ce qui se prépare encore.</p>
-          </div>
-          <div className="platforms-grid motion-reveal motion-reveal--soft">
-            {platforms.map((platform) => (
-              <a
-                className="platform-card"
-                data-platform={platform.tone}
-                href={platform.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                key={platform.name}
-              >
-                <span className="platform-card__mark" aria-hidden="true">{platform.mark}</span>
-                <span className="platform-card__copy">
-                  <strong>{platform.name}</strong>
-                  <small>{platform.label}</small>
-                </span>
-                <span className="platform-card__arrow" aria-hidden="true">↗</span>
-                <span className="visually-hidden"> — nouvel onglet</span>
-              </a>
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      <section className="section section--soft" aria-labelledby="member-space-title">
+      <section className="section section--soft story-window story-window--scene story-window--scene-compact" aria-labelledby="member-space-title">
         <Container className="content-columns home-member motion-reveal">
           <p className="content-columns__label">06 — Espace membre</p>
           <div className="home-member__copy">
-            <h2 id="member-space-title">Garder la main sur votre accès.</h2>
-            <p>Aujourd’hui, le compte protège votre profil et votre mot de passe. Il ne contient encore ni commande, ni paiement, ni fichier à télécharger.</p>
-            <p>Les brouillons et le suivi des demandes y sont désormais réunis. Les livraisons, favoris et alertes choisies apparaîtront seulement lorsque ces services seront réellement activés.</p>
+            <h2 id="member-space-title">Votre espace LNX Beats.</h2>
+            <p>Retrouvez votre profil, vos créations et leurs étapes au même endroit, dans un compte sécurisé.</p>
+            <p>Les brouillons, commandes et suivis disponibles sont réunis dans un espace privé.</p>
             <div className="home-member__actions">
               <ButtonLink href="/inscription">Créer un espace membre</ButtonLink>
               <ButtonLink href="/connexion" variant="quiet">Se connecter</ButtonLink>
@@ -240,8 +259,10 @@ export default function HomePage() {
           </div>
         </Container>
       </section>
+        </div>
+      </div>
 
-      <section className="home-contact" id="contact-home" aria-labelledby="home-contact-title">
+      <section className="home-contact story-window story-window--closing" id="contact-home" aria-labelledby="home-contact-title">
         <Container className="home-contact__inner motion-reveal">
           <p className="section-index">07 — Contact</p>
           <div>

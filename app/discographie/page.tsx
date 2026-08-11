@@ -32,6 +32,9 @@ export default function DiscographyPage() {
               <span>{projectsInDevelopment.length} projets en développement</span>
             </div>
           </div>
+          <div className="page-hero__visual page-hero__visual--record" aria-hidden="true">
+            <span>LNX</span>
+          </div>
         </Container>
       </header>
 

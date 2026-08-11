@@ -31,7 +31,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <section className="auth-shell">
+    <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
         <div className="auth-intro">
           <p className="eyebrow">Espace membre</p>
@@ -41,10 +41,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="auth-panel">
           <p className="auth-panel__label">Connexion</p>
           <LoginForm returnTo={returnTo} />
-          <div className="auth-panel__links">
-            <Link href="/mot-de-passe-oublie">Mot de passe oublié</Link>
-            <Link href="/renvoyer-verification">Renvoyer la confirmation</Link>
-            <Link href="/inscription">Créer un espace membre</Link>
+          <div className="auth-panel__links auth-panel__links--login">
+            <Link className="auth-panel__forgotten" href="/mot-de-passe-oublie">Mot de passe oublié&nbsp;?</Link>
+            <p>Première visite&nbsp;? <Link href="/inscription">Créer un espace membre</Link></p>
           </div>
         </div>
       </Container>

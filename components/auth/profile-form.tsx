@@ -48,7 +48,7 @@ export function ProfileForm({ initialName }: { initialName: string }) {
       {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
       {message ? <p className="auth-form__success" role="status">{message}</p> : null}
       <button className="auth-submit auth-submit--secondary" type="submit" disabled={pending}>
-        <span>{pending ? "Enregistrement…" : "Enregistrer le profil"}</span>
+        <span>{pending ? "Enregistrement…" : "Enregistrer"}</span>
         <span aria-hidden="true">→</span>
       </button>
     </form>

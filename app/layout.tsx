@@ -3,6 +3,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteConfig } from "@/data/site";
 import "./globals.css";
+import "./visual-phase2.css";
+import "./visual-phase3.css";
 
 const siteUrl = process.env.SITE_URL ?? siteConfig.url;
 const socialImage = new URL("/og.png", siteUrl).toString();

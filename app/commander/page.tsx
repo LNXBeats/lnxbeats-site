@@ -26,7 +26,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
 
   return (
     <>
-      <header className="page-hero">
+      <header className="page-hero page-hero--story">
         <Container className="page-hero__grid">
           <div>
             <p className="eyebrow">Une histoire à confier</p>
@@ -36,9 +36,12 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             <p className="page-hero__intro">Vous apportez l’histoire, les intentions et les repères. LNX Beats l’interprète, écrit et construit la création musicale.</p>
             <div className="page-hero__meta"><span>Création personnelle : 50 €</span><span>Délai indicatif : {orderOffer.indicativeDelay}</span></div>
           </div>
+          <div className="page-hero__visual page-hero__visual--story" aria-hidden="true">
+            <span>Votre récit</span>
+          </div>
         </Container>
       </header>
-      <section className="section section--soft">
+      <section className="section editorial-break">
         <Container className="content-columns motion-reveal">
           <p className="content-columns__label">La rencontre</p>
           <div className="editorial-copy">

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { ButtonLink } from "@/components/button";
 import { Container } from "@/components/container";
 import { PlatformLink } from "@/components/platform-link";
@@ -13,10 +14,14 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <>
-      <header className="page-hero">
-        <Container className="page-hero__grid">
-          <div><p className="eyebrow">Une porte ouverte</p><h1>Parlons avant de parler projet.</h1></div>
-          <p className="page-hero__intro">Une collaboration, une question, une intuition encore difficile à nommer : quelques lignes suffisent pour commencer. C’est LNX Beats qui vous lit.</p>
+      <header className="contact-hero">
+        <Image src="/assets/hero-desktop.jpg" alt="" fill loading="eager" sizes="100vw" />
+        <Container className="contact-hero__inner">
+          <div>
+            <p className="eyebrow">Une porte ouverte</p>
+            <h1>Parlons avant de parler projet.</h1>
+            <p>Une collaboration, une question, une intuition encore difficile à nommer : quelques lignes suffisent pour commencer. C’est LNX Beats qui vous lit.</p>
+          </div>
         </Container>
       </header>
       <section className="section">

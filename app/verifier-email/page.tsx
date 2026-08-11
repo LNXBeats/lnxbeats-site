@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function VerificationPage() {
   return (
-    <section className="auth-shell">
+    <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
         <EmailVerificationResult />
       </Container>

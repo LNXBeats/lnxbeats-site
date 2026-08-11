@@ -21,9 +21,9 @@ export const siteConfig = {
   },
   platforms: [
     { name: "Spotify", url: officialLinks.spotify },
-    { name: "YouTube", url: officialLinks.youtube },
     { name: "Apple Music", url: officialLinks.appleMusic },
     { name: "Deezer", url: officialLinks.deezer },
+    { name: "YouTube", url: officialLinks.youtube },
     { name: "Amazon Music", url: officialLinks.amazonMusic },
   ],
   social: [

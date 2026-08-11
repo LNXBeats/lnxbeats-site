@@ -1,6 +1,6 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.1 sépare la commande personnelle de l’éventuelle extension de droits post-livraison, sans ouvrir de paiement.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.2 prépare une expérience publique immersive et un compte contextuel, sans ouvrir de paiement.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Aucun paiement, email de commande, facture, livraison WAV ou dashboard administrateur n’est actif.
 

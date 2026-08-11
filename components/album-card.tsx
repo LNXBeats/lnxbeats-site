@@ -12,7 +12,7 @@ export function AlbumCard({ project, priority = false }: AlbumCardProps) {
   const detail = project.year ? `${getProjectKindLabel(project.type)} · ${project.year}` : getProjectKindLabel(project.type);
 
   return (
-    <article className="release-card">
+    <article className="release-card" data-project-type={project.type}>
       <Link href={`/album/${project.slug}`} aria-label={`Voir la fiche de ${project.title}`}>
         <ProjectArtwork project={project} priority={priority} sizes="(max-width: 767px) 100vw, (max-width: 1199px) 50vw, 33vw" />
         <div className="release-card__body">
@@ -22,9 +22,8 @@ export function AlbumCard({ project, priority = false }: AlbumCardProps) {
               {project.status !== "published" ? ` · ${getProjectStatusLabel(project.status)}` : ""}
             </p>
             <h3>{project.title}</h3>
-            <p className="release-card__description">{project.shortDescription}</p>
           </div>
-          <span className="release-card__action" aria-hidden="true">→</span>
+          <span className="release-card__action" aria-hidden="true"><small>Entrer</small> →</span>
         </div>
       </Link>
     </article>
