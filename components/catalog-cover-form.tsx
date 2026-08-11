@@ -10,7 +10,8 @@ const coverFeedback: Record<string, string> = {
   "cover-dimensions": "Cette image dépasse la limite de 40 millions de pixels.",
   "cover-vide": "Sélectionnez une image avant de continuer.",
   "cover-droits": "Confirmez les droits de publication avant de continuer.",
-  "cover-conflit": "La fiche a changé. Rechargez-la avant de remplacer la cover.",
+  "cover-conflit": "La cover a été modifiée depuis l’ouverture de cette fiche.",
+  "cover-etat-actualise": "L’état de la cover est actualisé. Vérifiez votre sélection puis relancez l’envoi.",
   "cover-invalide": "La demande d’envoi est invalide. Sélectionnez de nouveau l’image.",
   "cover-erreur": "Impossible d’enregistrer la cover. Réessayez.",
 };
@@ -19,6 +20,7 @@ type CoverResponse = {
   ok?: boolean;
   state?: string;
   location?: string;
+  currentCoverAssetId?: string | null;
 };
 
 const coverUploadEndpoint = "/api/admin/catalogue/cover";
@@ -26,7 +28,7 @@ const coverUploadEndpoint = "/api/admin/catalogue/cover";
 export function CatalogCoverForm({
   projectId,
   slug,
-  updatedAt,
+  currentCoverAssetId,
   alt,
   altPlaceholder,
   hasCover,
@@ -34,7 +36,7 @@ export function CatalogCoverForm({
 }: {
   projectId: string;
   slug: string;
-  updatedAt: string;
+  currentCoverAssetId: string | null;
   alt: string;
   altPlaceholder: string;
   hasCover: boolean;
@@ -45,6 +47,9 @@ export function CatalogCoverForm({
   const [pending, setPending] = useState(false);
   const [state, setState] = useState(initialState);
   const [selectedFile, setSelectedFile] = useState<{ count: number; size: number } | null>(null);
+  const [expectedCoverAssetId, setExpectedCoverAssetId] = useState(currentCoverAssetId);
+  const [coverPresent, setCoverPresent] = useState(hasCover);
+  const [conflictingCover, setConflictingCover] = useState<{ known: boolean; assetId: string | null }>({ known: false, assetId: null });
 
   async function submit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -80,7 +85,7 @@ export function CatalogCoverForm({
       const body = new FormData();
       body.set("projectId", projectId);
       body.set("slug", slug);
-      body.set("updatedAt", updatedAt);
+      body.set("expectedCoverAssetId", expectedCoverAssetId ?? "");
       body.set("rightsConfirmed", "on");
       body.set("alt", altInput instanceof HTMLInputElement ? altInput.value : "");
       body.set("cover", uploadFile, uploadFile.name);
@@ -98,6 +103,9 @@ export function CatalogCoverForm({
         : null;
 
       if (!response.ok || !payload?.ok) {
+        if (payload?.state === "cover-conflit" && Object.prototype.hasOwnProperty.call(payload, "currentCoverAssetId")) {
+          setConflictingCover({ known: true, assetId: payload.currentCoverAssetId ?? null });
+        }
         setState(payload?.state && coverFeedback[payload.state] ? payload.state : "cover-erreur");
         return;
       }
@@ -122,7 +130,7 @@ export function CatalogCoverForm({
       >
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="slug" value={slug} />
-        <input type="hidden" name="updatedAt" value={updatedAt} />
+        <input type="hidden" name="expectedCoverAssetId" value={expectedCoverAssetId ?? ""} />
         <div className="admin-form-grid">
           <label className="admin-form-wide">
             <span>Choisir le fichier · JPEG, PNG ou WebP · 10 Mo max.</span>
@@ -135,7 +143,7 @@ export function CatalogCoverForm({
               onChange={(event) => {
                 const current = event.currentTarget.files?.[0];
                 setSelectedFile(current ? { count: event.currentTarget.files?.length ?? 0, size: current.size } : null);
-                setState(undefined);
+                setState((currentState) => currentState === "cover-conflit" ? currentState : undefined);
               }}
             />
           </label>
@@ -154,7 +162,13 @@ export function CatalogCoverForm({
             </label>
           </div>
         </details>
-        <button type="button" disabled={pending} onClick={() => void submit()}>{pending ? "Enregistrement…" : hasCover ? "Remplacer la cover" : "Ajouter la cover"}</button>
+        {state === "cover-conflit" && conflictingCover.known ? <button type="button" disabled={pending} onClick={() => {
+          setExpectedCoverAssetId(conflictingCover.assetId);
+          setCoverPresent(conflictingCover.assetId !== null);
+          setConflictingCover({ known: false, assetId: null });
+          setState("cover-etat-actualise");
+        }}>Actualiser l’état de la cover</button> : null}
+        <button type="button" disabled={pending} onClick={() => void submit()}>{pending ? "Enregistrement…" : coverPresent ? "Remplacer la cover" : "Ajouter la cover"}</button>
       </form>
     </>
   );

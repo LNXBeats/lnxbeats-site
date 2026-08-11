@@ -58,11 +58,11 @@ async function login(baseUrl: string, email: string, password: string) {
   return sessionCookie(response);
 }
 
-function uploadForm(project: { id: string; slug: string; updatedAt: Date }, file: File, alt?: string) {
+function uploadForm(project: { id: string; slug: string }, expectedCoverAssetId: string | null, file: File, alt?: string) {
   const body = new FormData();
   body.set("projectId", project.id);
   body.set("slug", project.slug);
-  body.set("updatedAt", project.updatedAt.toISOString());
+  body.set("expectedCoverAssetId", expectedCoverAssetId ?? "");
   if (alt !== undefined) body.set("alt", alt);
   body.set("rightsConfirmed", "on");
   body.set("cover", file);
@@ -77,6 +77,21 @@ async function upload(baseUrl: string, body: FormData, cookie?: string, origin =
       origin,
       referer: `${baseUrl}/admin/catalogue/laboratoire-narratif`,
       ...(cookie ? { cookie } : {}),
+    },
+    body,
+  });
+}
+
+async function uploadJson(baseUrl: string, body: FormData, cookie: string) {
+  return fetch(`${baseUrl}/api/admin/catalogue/cover`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      origin: baseUrl,
+      referer: `${baseUrl}/admin/catalogue/laboratoire-narratif`,
+      cookie,
+      accept: "application/json",
+      "x-lnx-cover-upload": "browser",
     },
     body,
   });
@@ -118,23 +133,23 @@ async function run() {
     const smallJpeg = await sharp({ create: { width: 32, height: 32, channels: 3, background: "#2c2219" } }).jpeg().toBuffer();
     const smallFile = new File([smallJpeg], "small.jpg", { type: "image/jpeg" });
 
-    const visitor = await upload(baseUrl, uploadForm(project, smallFile));
+    const visitor = await upload(baseUrl, uploadForm(project, null, smallFile));
     assert.equal(visitor.status, 303, "A visitor must be refused before multipart parsing.");
     assert.match(visitor.headers.get("location") ?? "", /\/connexion\?retour=/);
-    const member = await upload(baseUrl, uploadForm(project, smallFile), memberCookie);
+    const member = await upload(baseUrl, uploadForm(project, null, smallFile), memberCookie);
     assert.equal(member.status, 303, "A MEMBER must be refused by requireAdmin().");
     assert.match(member.headers.get("location") ?? "", /\/compte\?acces=refuse/);
-    assert.equal((await upload(baseUrl, uploadForm(project, smallFile), adminCookie, "https://attacker.invalid")).status, 403, "A cross-origin ADMIN request must be refused.");
+    assert.equal((await upload(baseUrl, uploadForm(project, null, smallFile), adminCookie, "https://attacker.invalid")).status, 403, "A cross-origin ADMIN request must be refused.");
 
     const jpeg = await largeRealJpeg();
-    const response = await upload(baseUrl, uploadForm(project, new File([jpeg], "cover-3000.jpg", { type: "image/jpeg" })), adminCookie);
+    const response = await upload(baseUrl, uploadForm(project, null, new File([jpeg], "cover-3000.jpg", { type: "image/jpeg" })), adminCookie);
     assert.equal(response.status, 303);
     assert.match(response.headers.get("location") ?? "", /etat=cover-enregistree/);
 
     const referenceFixture = await optionalReferenceFixture();
     if (referenceFixture) {
-      const afterGeneric = await prisma.project.findUniqueOrThrow({ where: { id: project.id } });
-      const referenceResponse = await upload(baseUrl, uploadForm(afterGeneric, referenceFixture), adminCookie);
+      const afterGeneric = await prisma.project.findUniqueOrThrow({ where: { id: project.id }, include: { assets: { where: { role: "COVER" }, take: 1 } } });
+      const referenceResponse = await upload(baseUrl, uploadForm(afterGeneric, afterGeneric.assets[0]?.assetId ?? null, referenceFixture), adminCookie);
       assert.equal(referenceResponse.status, 303);
       assert.match(referenceResponse.headers.get("location") ?? "", /etat=cover-enregistree/);
     }
@@ -151,15 +166,34 @@ async function run() {
     assert.equal(metadata.height, 1_600);
     assert.equal(metadata.format, "webp");
 
-    const refreshed = await prisma.project.findUniqueOrThrow({ where: { id: project.id } });
+    const observedCoverAssetId = asset.id;
+    const beforeIndependentEdit = await prisma.project.findUniqueOrThrow({ where: { id: project.id }, select: { updatedAt: true } });
+    await prisma.project.update({ where: { id: project.id }, data: { legacySourceVersion: null } });
+    const afterIndependentEdit = await prisma.project.findUniqueOrThrow({ where: { id: project.id }, select: { updatedAt: true } });
+    assert.notEqual(afterIndependentEdit.updatedAt.getTime(), beforeIndependentEdit.updatedAt.getTime());
+    const falseConflictResponse = await uploadJson(baseUrl, uploadForm(project, observedCoverAssetId, smallFile), adminCookie);
+    assert.equal(falseConflictResponse.status, 200, "An unrelated Project.updatedAt change must not reject the cover upload.");
+    assert.equal((await falseConflictResponse.json() as { state?: string }).state, "cover-enregistree");
+
+    const coverAfterIndependentEdit = await prisma.asset.findFirstOrThrow({ where: { projects: { some: { projectId: project.id, role: "COVER" } } } });
+    storedKey = coverAfterIndependentEdit.storageKey;
+    const realConflictResponse = await uploadJson(baseUrl, uploadForm(project, observedCoverAssetId, smallFile), adminCookie);
+    assert.equal(realConflictResponse.status, 409);
+    const realConflictPayload = await realConflictResponse.json() as { state?: string; currentCoverAssetId?: string | null };
+    assert.equal(realConflictPayload.state, "cover-conflit");
+    assert.equal(realConflictPayload.currentCoverAssetId, coverAfterIndependentEdit.id);
+    assert.equal((await prisma.asset.findFirstOrThrow({ where: { projects: { some: { projectId: project.id, role: "COVER" } } } })).id, coverAfterIndependentEdit.id);
+
+    const refreshed = await prisma.project.findUniqueOrThrow({ where: { id: project.id }, include: { assets: { where: { role: "COVER" }, take: 1 } } });
     const oversized = Buffer.alloc(10 * 1024 * 1024 + 1);
     oversized.set([0xff, 0xd8, 0xff]);
-    const refused = await upload(baseUrl, uploadForm(refreshed, new File([oversized], "too-large.jpg", { type: "image/jpeg" })), adminCookie);
+    const refused = await upload(baseUrl, uploadForm(refreshed, refreshed.assets[0]?.assetId ?? null, new File([oversized], "too-large.jpg", { type: "image/jpeg" })), adminCookie);
     assert.equal(refused.status, 303);
     assert.match(refused.headers.get("location") ?? "", /etat=cover-trop-lourde/);
     assert.equal(await prisma.asset.count({ where: { projects: { some: { projectId: project.id, role: "COVER" } } } }), 1);
 
     console.info(`PASS real HTTP/FormData 3000x3000 JPEG (${jpeg.length} bytes) exceeded 1 MB and was normalized to 1600x1600 WebP.`);
+    console.info("PASS unrelated Project.updatedAt changes no longer conflict; stale cover versions return 409 and preserve the active cover.");
     if (referenceFixture) console.info(`PASS exact reference fixture ${referenceFixture.name} (${referenceFixture.size} bytes) passed the real HTTP Route Handler.`);
     console.info("PASS visitor, MEMBER, cross-origin and >10 MB requests were refused without replacing the active cover.");
   } finally {

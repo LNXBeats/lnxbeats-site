@@ -90,7 +90,12 @@ async function run() {
   assert.ok(beforeCover);
   const png = await sharp({ create: { width: 3_000, height: 3_000, channels: 3, background: "#d6b36a" } }).png().toBuffer();
   const file = new File([png], "qa-cover-3000.png", { type: "image/png" });
-  await cover.replaceCatalogCover(initial.id, beforeCover.updatedAt.toISOString(), file, "Cover QA jetable");
+  const staleProjectUpdatedAt = beforeCover.updatedAt;
+  await service.updateCatalogProject(initial.id, projectInput(beforeCover, `${beforeCover.title} indépendant`));
+  const afterIndependentProjectEdit = await service.getAdminCatalogProject(initial.slug);
+  assert.ok(afterIndependentProjectEdit);
+  assert.notEqual(afterIndependentProjectEdit.updatedAt.getTime(), staleProjectUpdatedAt.getTime());
+  await cover.replaceCatalogCover(initial.id, null, file, "Cover QA jetable");
   const withCover = await service.getAdminCatalogProject(initial.slug);
   assert.equal(withCover?.assets.length, 1);
   const asset = withCover!.assets[0]!.asset;
@@ -98,25 +103,42 @@ async function run() {
   assert.ok(bytes.length > 0);
   assert.equal(asset.mimeType, "image/webp");
 
-  const concurrentSource = await service.getAdminCatalogProject(initial.slug);
-  assert.ok(concurrentSource);
+  const expectedCoverA = asset.id;
   const concurrentJpeg = await sharp({ create: { width: 3_000, height: 3_000, channels: 3, background: "#2c2219" } }).jpeg().toBuffer();
-  const concurrentFile = new File([concurrentJpeg], "qa-cover-concurrent-3000.jpg", { type: "image/jpeg" });
-  const concurrent = await Promise.allSettled([
-    cover.replaceCatalogCover(initial.id, concurrentSource.updatedAt.toISOString(), concurrentFile, "Cover QA concurrente A"),
-    cover.replaceCatalogCover(initial.id, concurrentSource.updatedAt.toISOString(), concurrentFile, "Cover QA concurrente B"),
+  await cover.replaceCatalogCover(initial.id, expectedCoverA, new File([concurrentJpeg], "qa-cover-b-3000.jpg", { type: "image/jpeg" }), "Cover QA B");
+  const withCoverB = await service.getAdminCatalogProject(initial.slug);
+  const coverB = withCoverB!.assets[0]!.asset;
+  await assert.rejects(
+    cover.replaceCatalogCover(initial.id, expectedCoverA, new File([concurrentJpeg], "qa-cover-c-3000.jpg", { type: "image/jpeg" }), "Cover QA C"),
+    (error: unknown) => error instanceof cover.CatalogCoverConflictError && error.currentCoverAssetId === coverB.id,
+  );
+  assert.equal((await service.getAdminCatalogProject(initial.slug))?.assets[0]?.asset.id, coverB.id, "A stale client must not replace cover B.");
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.projectAsset.deleteMany({ where: { assetId: coverB.id } });
+    await transaction.asset.delete({ where: { id: coverB.id } });
+  });
+  await storage.removeCatalogCover(coverB.storageKey);
+  assert.equal((await service.getAdminCatalogProject(initial.slug))?.assets.length, 0);
+
+  const firstCoverRace = await Promise.allSettled([
+    cover.replaceCatalogCover(initial.id, null, new File([png], "qa-first-cover-a.png", { type: "image/png" }), "Première cover A"),
+    cover.replaceCatalogCover(initial.id, null, new File([concurrentJpeg], "qa-first-cover-b.jpg", { type: "image/jpeg" }), "Première cover B"),
   ]);
-  assert.equal(concurrent.filter(({ status }) => status === "fulfilled").length, 1, "Concurrent cover replacement must accept one write only.");
-  const afterConcurrent = await service.getAdminCatalogProject(initial.slug);
-  assert.equal(afterConcurrent?.assets.length, 1);
-  const finalAsset = afterConcurrent!.assets[0]!.asset;
+  assert.equal(firstCoverRace.filter(({ status }) => status === "fulfilled").length, 1, "Concurrent first covers must accept one write only.");
+  const rejectedFirstCover = firstCoverRace.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+  assert.equal(rejectedFirstCover.length, 1);
+  assert.ok(rejectedFirstCover[0]!.reason instanceof cover.CatalogCoverConflictError);
+  const afterConcurrentFirstCover = await service.getAdminCatalogProject(initial.slug);
+  assert.equal(afterConcurrentFirstCover?.assets.length, 1);
+  const finalAsset = afterConcurrentFirstCover!.assets[0]!.asset;
 
   await prisma.$transaction(async (transaction) => {
     await transaction.projectAsset.deleteMany({ where: { assetId: finalAsset.id } });
     await transaction.asset.delete({ where: { id: finalAsset.id } });
   });
   await storage.removeCatalogCover(finalAsset.storageKey);
-  console.info("Catalogue runtime passed: concurrency, project, track, platform and private cover storage checks.");
+  console.info("Catalogue runtime passed: false cover conflict avoided, real cover conflict blocked, concurrent first cover blocked, and private storage cleaned.");
 }
 
 run().finally(async () => {

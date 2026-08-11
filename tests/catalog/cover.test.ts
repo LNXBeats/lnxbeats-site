@@ -5,7 +5,9 @@ import sharp from "sharp";
 
 import {
   CATALOG_COVER_MAXIMUM_BYTES,
+  CatalogCoverConflictError,
   CatalogCoverError,
+  catalogCoverVersionMatches,
   normalizeCatalogCover,
 } from "@/lib/catalog/cover";
 
@@ -61,4 +63,14 @@ test("fake JPEG, SVG, GIF, forged MIME and corrupted images are rejected", async
   const png = await fixture("png", 32, 32);
   await expectCoverError(new File([png], "forged.jpg", { type: "image/jpeg" }), "MIME_MISMATCH");
   await expectCoverError(new File([Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x00])], "corrupted.jpg", { type: "image/jpeg" }), "UNREADABLE_IMAGE");
+});
+
+test("cover concurrency compares only the observed active cover", () => {
+  const coverA = "00000000-0000-0000-0000-00000000000a";
+  const coverB = "00000000-0000-0000-0000-00000000000b";
+  assert.equal(catalogCoverVersionMatches(null, null), true, "An unchanged empty cover slot must remain writable.");
+  assert.equal(catalogCoverVersionMatches(coverA, coverA), true, "The observed cover may be replaced.");
+  assert.equal(catalogCoverVersionMatches(null, coverA), false, "A concurrent first cover must conflict.");
+  assert.equal(catalogCoverVersionMatches(coverA, coverB), false, "A stale replacement must conflict.");
+  assert.equal(new CatalogCoverConflictError(coverB).message, "La cover a été modifiée depuis l’ouverture de cette fiche.");
 });

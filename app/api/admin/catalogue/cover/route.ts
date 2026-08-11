@@ -3,9 +3,8 @@ import { NextResponse } from "next/server";
 
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { requireAdmin } from "@/lib/auth/session";
-import { CatalogCoverError, replaceCatalogCover } from "@/lib/catalog/cover";
+import { CatalogCoverConflictError, CatalogCoverError, replaceCatalogCover } from "@/lib/catalog/cover";
 import { CatalogCoverRequestError, readCatalogCoverFormData } from "@/lib/catalog/cover-request";
-import { CatalogConflictError } from "@/lib/catalog/service";
 
 export const runtime = "nodejs";
 
@@ -17,11 +16,14 @@ function expectsJson(request: Request) {
   return request.headers.get("x-lnx-cover-upload") === "browser" && request.headers.get("accept")?.includes("application/json");
 }
 
-function result(request: Request, baseUrl: string, slug: string, state: string, status = 400) {
+function result(request: Request, baseUrl: string, slug: string, state: string, status = 400, currentCoverAssetId?: string | null) {
   const location = destination(baseUrl, slug, state).toString();
   const responseStatus = state === "cover-enregistree" ? 200 : status;
   const json = expectsJson(request);
-  if (json) return NextResponse.json({ ok: state === "cover-enregistree", state, location }, { status: responseStatus });
+  if (json) return NextResponse.json({
+    ok: state === "cover-enregistree", state, location,
+    ...(currentCoverAssetId !== undefined ? { currentCoverAssetId } : {}),
+  }, { status: responseStatus });
   return NextResponse.redirect(location, 303);
 }
 
@@ -40,12 +42,13 @@ function referringSlug(request: Request, baseUrl: string) {
 
 function coverErrorState(error: unknown) {
   if (error instanceof CatalogCoverRequestError) return error.code === "TRANSPORT_TOO_LARGE" ? "cover-trop-lourde" : "cover-invalide";
-  if (error instanceof CatalogConflictError) return "cover-conflit";
+  if (error instanceof CatalogCoverConflictError) return "cover-conflit";
   if (!(error instanceof CatalogCoverError)) return "cover-erreur";
   if (error.code === "FILE_TOO_LARGE") return "cover-trop-lourde";
   if (error.code === "EMPTY_FILE") return "cover-vide";
   if (error.code === "UNREADABLE_IMAGE") return "cover-illisible";
   if (error.code === "TOO_MANY_PIXELS") return "cover-dimensions";
+  if (error.code === "INVALID_VERSION") return "cover-invalide";
   return "cover-format";
 }
 
@@ -88,9 +91,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    await replaceCatalogCover(projectId, formData.get("updatedAt"), file, formData.get("alt"));
+    await replaceCatalogCover(projectId, formData.get("expectedCoverAssetId"), file, formData.get("alt"));
   } catch (error) {
-    return result(request, baseUrl, slug, coverErrorState(error), error instanceof CatalogConflictError ? 409 : 422);
+    return result(
+      request, baseUrl, slug, coverErrorState(error), error instanceof CatalogCoverConflictError ? 409 : 422,
+      error instanceof CatalogCoverConflictError ? error.currentCoverAssetId : undefined,
+    );
   }
 
   refresh(slug);

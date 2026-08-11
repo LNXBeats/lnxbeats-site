@@ -4,11 +4,11 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import sharp from "sharp";
 
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { catalogCoverAltOverride } from "@/lib/catalog/cover-alt";
-import { CatalogConflictError } from "@/lib/catalog/service";
 import { removeCatalogCover, writeCatalogCover } from "@/lib/catalog/media-storage";
-import { optionalText, requiredText } from "@/lib/catalog/validation";
+import { optionalText } from "@/lib/catalog/validation";
 
 const maximumUploadBytes = 10 * 1024 * 1024;
 const maximumPixels = 40_000_000;
@@ -23,13 +23,63 @@ export type CatalogCoverErrorCode =
   | "UNSUPPORTED_FORMAT"
   | "MIME_MISMATCH"
   | "UNREADABLE_IMAGE"
-  | "TOO_MANY_PIXELS";
+  | "TOO_MANY_PIXELS"
+  | "INVALID_VERSION";
 
 export class CatalogCoverError extends Error {
   constructor(readonly code: CatalogCoverErrorCode) {
     super(code);
     this.name = "CatalogCoverError";
   }
+}
+
+export class CatalogCoverConflictError extends Error {
+  constructor(readonly currentCoverAssetId: string | null) {
+    super("La cover a été modifiée depuis l’ouverture de cette fiche.");
+    this.name = "CatalogCoverConflictError";
+  }
+}
+
+export function catalogCoverVersionMatches(expectedCoverAssetId: string | null, currentCoverAssetId: string | null) {
+  return expectedCoverAssetId === currentCoverAssetId;
+}
+
+function parseExpectedCoverAssetId(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string" || !/^[0-9a-f-]{36}$/i.test(value)) throw new CatalogCoverError("INVALID_VERSION");
+  return value;
+}
+
+async function lockedCoverState(transaction: Prisma.TransactionClient, projectId: string) {
+  await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-cover:${projectId}`})) IS NULL AS locked`;
+  const project = await transaction.project.findUnique({
+    where: { id: projectId },
+    select: {
+      title: true,
+      assets: {
+        where: { role: "COVER" },
+        orderBy: [{ position: "asc" }, { createdAt: "desc" }],
+        take: 1,
+        select: { asset: { select: { id: true, storageKey: true } } },
+      },
+    },
+  });
+  if (!project) throw new CatalogCoverError("INVALID_VERSION");
+  return {
+    title: project.title,
+    currentCoverAssetId: project.assets[0]?.asset.id ?? null,
+    currentCoverStorageKey: project.assets[0]?.asset.storageKey ?? null,
+  };
+}
+
+async function assertCurrentCoverVersion(projectId: string, expectedCoverAssetId: string | null) {
+  return prisma.$transaction(async (transaction) => {
+    const state = await lockedCoverState(transaction, projectId);
+    if (!catalogCoverVersionMatches(expectedCoverAssetId, state.currentCoverAssetId)) {
+      throw new CatalogCoverConflictError(state.currentCoverAssetId);
+    }
+    return state;
+  });
 }
 
 function detectedMimeType(source: Buffer) {
@@ -75,10 +125,13 @@ export async function normalizeCatalogCover(file: File) {
   }
 }
 
-export async function replaceCatalogCover(projectId: string, rawUpdatedAt: unknown, file: File, rawAlt: unknown) {
-  const expectedUpdatedAt = new Date(requiredText(rawUpdatedAt, "La version", 80));
-  if (Number.isNaN(expectedUpdatedAt.getTime())) throw new CatalogConflictError();
+export async function replaceCatalogCover(projectId: string, rawExpectedCoverAssetId: unknown, file: File, rawAlt: unknown) {
+  const expectedCoverAssetId = parseExpectedCoverAssetId(rawExpectedCoverAssetId);
   const requestedAlt = optionalText(rawAlt, "Le texte alternatif", 500);
+  // Fail before image normalization and media storage when the observed cover
+  // is already stale. The guarded comparison is repeated during activation to
+  // close the race between this preflight and the final transaction.
+  await assertCurrentCoverVersion(projectId, expectedCoverAssetId);
   const normalized = await normalizeCatalogCover(file);
   const storageKey = `catalog/covers/${randomUUID()}.webp`;
   const safeBase = path.basename(file.name || "cover").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 180);
@@ -86,18 +139,15 @@ export async function replaceCatalogCover(projectId: string, rawUpdatedAt: unkno
   let oldStorageKey: string | null = null;
   try {
     await prisma.$transaction(async (transaction) => {
-      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-cover:${projectId}`})) IS NULL AS locked`;
-      const project = await transaction.project.findUnique({
-        where: { id: projectId },
-        include: { assets: { where: { role: "COVER" }, include: { asset: true } } },
-      });
-      if (!project || project.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new CatalogConflictError();
-      const alt = catalogCoverAltOverride(requestedAlt, project.title);
-      const previous = project.assets[0]?.asset;
-      oldStorageKey = previous?.storageKey ?? null;
-      if (previous) {
+      const state = await lockedCoverState(transaction, projectId);
+      if (!catalogCoverVersionMatches(expectedCoverAssetId, state.currentCoverAssetId)) {
+        throw new CatalogCoverConflictError(state.currentCoverAssetId);
+      }
+      const alt = catalogCoverAltOverride(requestedAlt, state.title);
+      oldStorageKey = state.currentCoverStorageKey;
+      if (state.currentCoverAssetId) {
         await transaction.projectAsset.deleteMany({ where: { projectId, role: "COVER" } });
-        await transaction.asset.delete({ where: { id: previous.id } });
+        await transaction.asset.delete({ where: { id: state.currentCoverAssetId } });
       }
       const asset = await transaction.asset.create({
         data: {

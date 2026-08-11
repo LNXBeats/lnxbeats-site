@@ -34,7 +34,7 @@ const feedback: Record<string, string> = {
   "cover-dimensions": "Cette image dépasse la limite de 40 millions de pixels.",
   "cover-vide": "Sélectionnez une image avant de continuer.",
   "cover-droits": "Confirmez les droits de publication avant de continuer.",
-  "cover-conflit": "La fiche a changé. Rechargez-la avant de remplacer la cover.",
+  "cover-conflit": "La cover a été modifiée depuis l’ouverture de cette fiche.",
   "cover-invalide": "La demande d’envoi est invalide. Sélectionnez de nouveau l’image.",
   "cover-erreur": "Impossible d’enregistrer la cover. Réessayez.",
   "suppression-refusee": "La suppression n’a pas été appliquée.",
@@ -117,7 +117,7 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
     <section className="admin-detail-window">
       <p className="admin-section-label">Cover officielle</p>
       {cover ? <div className="admin-cover-preview"><Image src={`/media/catalog/${cover.id}`} alt={coverAlt} width={320} height={320} /><div><p>Cover officielle actuelle</p><Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir sur le site <span aria-hidden="true">↗</span></Link></div></div> : <p className="admin-muted">Aucune cover officielle. L’espace graphique de repli reste visible publiquement.</p>}
-      <CatalogCoverForm projectId={project.id} slug={project.slug} updatedAt={project.updatedAt.toISOString()} alt={coverAltOverride ?? ""} altPlaceholder={coverAlt} hasCover={Boolean(cover)} initialState={etat?.startsWith("cover-") ? etat : undefined} />
+      <CatalogCoverForm projectId={project.id} slug={project.slug} currentCoverAssetId={cover?.id ?? null} alt={coverAltOverride ?? ""} altPlaceholder={coverAlt} hasCover={Boolean(cover)} initialState={etat?.startsWith("cover-") ? etat : undefined} />
     </section>
 
     <section className="admin-detail-window">
