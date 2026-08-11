@@ -20,6 +20,8 @@
     "test:rights": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/rights.test.ts",
     "test:upload": "tsx --test tests/orders/upload.test.ts",
     "test:order:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-order-runtime.ts",
+    "test:admin": "NODE_OPTIONS=--conditions=react-server tsx --test tests/admin/*.test.ts",
+    "test:admin:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-admin-runtime.ts",
     "order:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/order-qa-fixtures.ts",
     "test:database": "tsx scripts/test-database.ts",
     "prisma:format": "prisma format",

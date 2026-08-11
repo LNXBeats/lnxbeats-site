@@ -1,8 +1,8 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.2 prépare une expérience publique immersive et un compte contextuel, sans ouvrir de paiement.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.2 prépare une expérience publique immersive, un compte contextuel et un cockpit administrateur privé, sans ouvrir de paiement.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Aucun paiement, email de commande, facture, livraison WAV ou dashboard administrateur n’est actif.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement, email de commande, facture ou livraison WAV n’est actif.
 
 ## Stack
 
@@ -50,6 +50,7 @@ npm run test:auth
 npm run test:order
 npm run test:rights
 npm run test:upload
+npm run test:admin
 ```
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
@@ -106,7 +107,10 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/verifier-email` — résultat neutre de la vérification
 - `/compte` — profil, sécurité, brouillons et suivi des demandes pour les rôles actifs
 - `/compte/commandes/[orderNumber]` — détail privé, timeline, récapitulatif et extension de droits uniquement après livraison
-- `/admin` — placeholder protégé réservé à `ADMIN`
+- `/admin` — cockpit protégé réservé à `ADMIN`
+- `/admin/commandes` — liste privée, filtres et transitions métier contextuelles
+- `/admin/catalogue` — audit en lecture seule de la source locale et de PostgreSQL
+- `/admin/membres` — lecture limitée des comptes sans credentials ni sessions
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
 - `/api/orders/*` — brouillons et photos privés, protégés par session, origine et propriété
 
