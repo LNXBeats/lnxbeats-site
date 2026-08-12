@@ -12,13 +12,19 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
-  "media-src 'self'",
+  // The Admin audio editor previews the owner-selected local File through an
+  // object URL; public audio still comes exclusively from same-origin routes.
+  "media-src 'self' blob:",
   "manifest-src 'self'",
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  agentRules: false,
   poweredByHeader: false,
   reactStrictMode: true,
+  // FFmpeg is spawned as a real executable. Keeping its package external
+  // prevents Turbopack/Webpack from rewriting the runtime binary path.
+  serverExternalPackages: ["ffmpeg-static"],
   images: {
     formats: ["image/avif", "image/webp"],
   },

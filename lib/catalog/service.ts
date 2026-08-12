@@ -28,7 +28,11 @@ const adminInclude = {
   platformLinks: { where: { scope: { in: ["RELEASE" as const, "STORE" as const] } }, orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
   credits: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
   confidenceAnnotations: { orderBy: [{ domain: "asc" as const }] },
-  assets: { where: { role: "COVER" as const }, orderBy: [{ position: "asc" as const }, { createdAt: "desc" as const }], take: 1, include: { asset: true } },
+  assets: {
+    where: { role: { in: ["COVER" as const, "AUDIO_PREVIEW" as const] } },
+    orderBy: [{ role: "asc" as const }, { position: "asc" as const }, { createdAt: "desc" as const }],
+    include: { asset: true },
+  },
 } satisfies Prisma.ProjectInclude;
 
 export async function listAdminCatalogProjects(query = "", status = "all") {
@@ -42,7 +46,10 @@ export async function listAdminCatalogProjects(query = "", status = "all") {
       ...(search ? { OR: [{ title: { contains: search, mode: "insensitive" } }, { slug: { contains: search, mode: "insensitive" } }] } : {}),
     },
     orderBy: [{ catalogPosition: "asc" }, { id: "asc" }],
-    include: { _count: { select: { tracks: true, platformLinks: true, assets: true } } },
+    include: {
+      _count: { select: { tracks: true, platformLinks: true } },
+      assets: { where: { role: { in: ["COVER", "AUDIO_PREVIEW"] } }, select: { role: true } },
+    },
   });
 }
 

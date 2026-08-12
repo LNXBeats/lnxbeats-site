@@ -90,6 +90,7 @@ enum ConfidenceDomain {
 
 enum AssetType {
   COVER
+  AUDIO_PREVIEW
   HERO
   IMAGE
   AUDIO
@@ -107,6 +108,7 @@ enum RightsStatus {
 
 enum ProjectAssetRole {
   COVER
+  AUDIO_PREVIEW
   HERO
   GALLERY
   AUDIO
@@ -402,6 +404,7 @@ model Asset {
   sizeBytes    BigInt
   width        Int?
   height       Int?
+  durationMs   Int?           @map("duration_ms")
   alt          String?        @db.VarChar(500)
   rightsStatus RightsStatus   @default(UNKNOWN)
   rightsNote   String?        @db.Text

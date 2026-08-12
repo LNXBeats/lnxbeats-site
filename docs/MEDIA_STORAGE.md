@@ -1,4 +1,4 @@
-# Stockage des covers du catalogue
+# Stockage des médias du catalogue
 
 ## Frontière de stockage
 
@@ -21,6 +21,10 @@ L’envoi Admin passe par un Route Handler dédié, et non par la limite globale
 
 Ce sprint valide un adaptateur local privé pour la preview et la QA. Un déploiement multi-instance devra remplacer cet adaptateur par un stockage objet durable, conserver le même namespace logique et définir sauvegarde, réplication, cache et procédure de suppression avant activation en production.
 
-## Audio futur
+## Extraits audio V0.6.0.4
 
-Une future preview audio devra enregistrer un `Asset` audio, le projet ou la piste associée, le MIME, la taille, la durée de l’extrait et un éventuel offset de début. Seul un extrait choisi et autorisé par le propriétaire pourra devenir public ; un WAV de livraison restera dans un namespace privé distinct. Aucun lecteur, upload audio ou query jukebox n’est implémenté en V0.6.0.3.
+Les extraits publics utilisent le namespace distinct `catalog/audio-previews/`. Le binaire normalisé est un MP3 192 kbit/s, 44,1 kHz sans tags ID3, nommé par une clé opaque et stocké sous `MEDIA_STORAGE_ROOT`. PostgreSQL ne conserve que l’identité de l’asset, sa clé, `audio/mpeg`, sa taille, sa durée mesurée et ses droits confirmés.
+
+Le morceau complet MP3/WAV reçu par la route Admin est écrit en streaming sous un dossier temporaire privé `lnx-studio/catalog/audio-sources-temp/`, hors `MEDIA_STORAGE_ROOT`. Il sert uniquement à l’analyse et au transcodage FFmpeg, puis il est supprimé dans tous les chemins terminaux. Les abandons de plus d’une heure sont nettoyés opportunément. Ni la source complète ni un WAV découpé ne sont servis ou enregistrés comme `Asset`.
+
+La livraison privée d’un morceau complet reste hors périmètre et ne doit jamais réutiliser ce namespace. Un futur adaptateur objet durable devra conserver cette séparation logique, ainsi que la suppression de l’ancien fichier après remplacement réussi.

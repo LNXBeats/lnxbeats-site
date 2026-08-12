@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-const allowedTargets = new Set(["lnx-studio-v0603-test", "lnx-studio-local-preview"]);
+const allowedTargets = new Set(["lnx-studio-v0603-test", "lnx-studio-v0604-test", "lnx-studio-local-preview"]);
 
 export async function assertApprovedCatalogDatabase() {
   const target = process.env.LNX_DATABASE_TARGET;

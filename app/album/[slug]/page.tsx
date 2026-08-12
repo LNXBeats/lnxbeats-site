@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
+import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { ProjectPlatforms } from "@/components/project-platforms";
 import { Tracklist } from "@/components/tracklist";
@@ -87,6 +88,14 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                   </div>
                 ) : null}
               </dl>
+              {project.audioPreview ? <div className="album-audio-preview">
+                <AudioPreviewPlayer
+                  src={project.audioPreview.url}
+                  title={project.title}
+                  durationMs={project.audioPreview.durationMs}
+                />
+                {project.platforms.length ? <p>Écouter le titre complet</p> : null}
+              </div> : null}
               <ProjectPlatforms platforms={project.platforms} />
             </div>
           </div>

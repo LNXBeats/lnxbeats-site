@@ -24,7 +24,7 @@ La migration déterministe conserve les 25 slugs, l’ordre, les textes, types, 
 
 ## Procédure
 
-Les commandes refusent toute cible autre que `lnx-studio-v0603-test` ou `lnx-studio-local-preview`, tout hôte non loopback et le port PostgreSQL standard.
+Les commandes refusent toute cible autre que les bases QA explicitement autorisées (`lnx-studio-v0603-test`, `lnx-studio-v0604-test`) ou `lnx-studio-local-preview`, tout hôte non loopback et le port PostgreSQL standard.
 
 ```bash
 npm run catalog:migrate:dry-run
@@ -49,6 +49,6 @@ La fiabilité affichée n’est plus une série de dix sélecteurs techniques. E
 
 Les libellés de plateforme sont centralisés par plateforme et portée. Un label vide utilise automatiquement, par exemple, « Écouter sur Spotify », « Voir sur YouTube » ou « LNX Beats sur Spotify ». Le champ `label` existant demeure un override facultatif ; les anciens textes automatiques connus sont normalisés vers `null` lors d’une future écriture sans écraser les libellés réellement personnalisés.
 
-`Track.durationSeconds` reste exclusivement la durée réelle du morceau. Une durée d’extrait audio de 30 secondes ne doit jamais y être injectée ; une durée inconnue reste `null`.
+`Track.durationSeconds` reste exclusivement la durée réelle du morceau. La durée de la preview générée, plafonnée à 60 secondes, vit dans `Asset.durationMs` et ne doit jamais être injectée dans la piste ; une durée de piste inconnue reste `null`.
 
 L’alt public d’une cover est calculé par défaut sous la forme `Pochette de « {titre} » — LNX Beats`. Seule une personnalisation réelle est stockée dans `Asset.alt`, afin qu’un changement de titre mette automatiquement le fallback à jour. Les champs SEO vides utilisent les fallbacks éditoriaux effectifs ; l’administration distingue donc SEO automatique, mixte et personnalisé sans signaler un faux manque.

@@ -2,6 +2,22 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.0.4] — 2026-08-12
+
+### Ajouté
+
+- upload de morceaux complets MP3/WAV jusqu’à 80 Mio et génération FFmpeg d’une preview MP3 de 60 secondes maximum ;
+- lecture locale du source, choix du début, ajustement à la fin et suppression systématique du fichier complet temporaire ;
+- upload, remplacement et suppression ADMIN avec droits explicites et concurrence bornée à l’asset audio actif ;
+- lecture publique streamée avec `Range`, lecteur accessible sur la fiche et présence conditionnelle sur l’accueil ;
+- tests unitaires, runtime, HTTP et vrai parcours navigateur sur une base et un stockage QA jetables.
+
+### Sécurité et périmètre
+
+- aucune livraison privée ni conservation du morceau complet ; FFmpeg est borné, reproductible et réservé à cette route ;
+- projets privés masqués au public, route Admin streamée et protégée, limite de 80 Mio et suppression des tags avant stockage ;
+- aucun audio artistique ajouté automatiquement à la base personnelle.
+
 ## [0.6.0.3] — 2026-08-11
 
 ### Ajouté

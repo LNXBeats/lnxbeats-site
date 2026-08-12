@@ -7,7 +7,7 @@ import { config } from "dotenv";
 config({ path: ".env.local", quiet: true });
 
 const backupDirectory = process.argv[2];
-if (!backupDirectory?.startsWith("/private/tmp/lnx-studio-v0603-preview-backup-")) throw new Error("A valid preview backup directory is required.");
+if (!backupDirectory?.startsWith("/private/tmp/lnx-studio-v0604-preview-backup-")) throw new Error("A valid preview backup directory is required.");
 const [{ assertApprovedCatalogDatabase }, { prisma }] = await Promise.all([
   import("@/scripts/catalog-guard"), import("@/lib/prisma"),
 ]);

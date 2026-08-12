@@ -52,6 +52,11 @@ export type PublicProject = {
   readonly shortDescription: string;
   readonly cover: string | null;
   readonly coverAlt?: string;
+  readonly audioPreview?: {
+    readonly id: string;
+    readonly url: string;
+    readonly durationMs: number;
+  } | null;
   readonly featured: boolean;
   readonly status: ProjectStatus;
   readonly genres: readonly string[];

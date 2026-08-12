@@ -10,7 +10,7 @@ LNX Studio utilise l’App Router de Next.js. L’architecture reste volontairem
 app/
   admin/            Cockpit et catalogue éditable réservés à ADMIN
   album/[slug]/     Fiches de projet dynamiques et metadata PostgreSQL
-  media/catalog/    Lecture publique bornée aux covers de projets visibles
+  media/catalog/    Lecture publique bornée aux covers et extraits de projets visibles
   api/auth/         Handlers Better Auth
   api/orders/       Brouillons et photos privés, contrôlés côté serveur
   api/health/       Healthcheck Railway
@@ -123,6 +123,14 @@ La finalisation transactionnelle recalcule le prix et crée l’événement clie
 - images servies avec `next/image` ;
 - catalogue et 25 fiches rendus côté serveur depuis PostgreSQL ;
 - healthcheck dynamique sans cache.
+
+### Extraits audio publics
+
+La V0.6.0.4 ajoute un pipeline Admin séparé des covers : Route Handler multipart streamé et borné à une source MP3/WAV de 80 Mio, contrôle ADMIN et origine, stockage source temporaire, analyse/transcodage FFmpeg puis MP3 public de 60 secondes maximum. Les tags sont retirés, le mix n’est pas normalisé et le morceau complet est supprimé après traitement ; une livraison privée n’utilise jamais cette route.
+
+La route publique sert uniquement un `AUDIO_PREVIEW` aux droits confirmés lié à un projet `PUBLISHED`. Les projets en développement, brouillons et archives restent écoutables par l’Admin, mais privés. Elle streame le fichier, gère `HEAD` et les requêtes `Range` (`200`, `206`, `416`), publie une identité de cache dépendant du nouvel asset et ne propose aucun téléchargement. Le lecteur React est léger, sans autoplay, accessible au clavier et coupe les autres extraits de la page.
+
+La spécification opérationnelle complète se trouve dans [`docs/AUDIO_PREVIEWS.md`](AUDIO_PREVIEWS.md).
 
 ## Sécurité
 

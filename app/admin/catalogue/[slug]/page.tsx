@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CatalogEditGuard, CatalogSubmitButton } from "@/components/catalog-edit-guard";
+import { CatalogAudioForm } from "@/components/catalog-audio-form";
 import { CatalogCoverForm } from "@/components/catalog-cover-form";
 import { CatalogPlatformLinkFields } from "@/components/catalog-platform-link-fields";
 import { requireAdmin } from "@/lib/auth/session";
@@ -58,9 +59,14 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
   if (!project) notFound();
   const { etat } = await searchParams;
   const annotations = new Map(project.confidenceAnnotations.map((item) => [item.domain.toLowerCase(), item.level]));
-  const cover = project.assets[0]?.asset;
+  const cover = project.assets.find(({ role }) => role === "COVER")?.asset;
+  const audio = project.assets.find(({ role }) => role === "AUDIO_PREVIEW")?.asset;
   const legacyConfidence = Object.fromEntries([...annotations].map(([domain, level]) => [domain, confidenceFromDb[level] ?? "unknown"])) as Partial<ProjectDataConfidence>;
-  const confidence = deriveCatalogConfidence({ ...project, legacy: { ...legacyConfidence, overall: confidenceFromDb[project.confidence] ?? "unknown" } });
+  const confidence = deriveCatalogConfidence({
+    ...project,
+    assets: project.assets.filter(({ role }) => role === "COVER"),
+    legacy: { ...legacyConfidence, overall: confidenceFromDb[project.confidence] ?? "unknown" },
+  });
   const coverAlt = cover ? resolveCatalogCoverAlt(project.title, cover.alt) : resolveCatalogCoverAlt(project.title, null);
   const coverAltOverride = cover ? catalogCoverAltOverride(cover.alt, project.title) : null;
   const seoMode = catalogSeoMode(project);
@@ -73,6 +79,7 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
     <section className="admin-catalogue-summary" aria-label="État actuel des données">
       <div><span>Publication</span><strong>{project.status === "PUBLISHED" ? "Publié" : project.status === "IN_DEVELOPMENT" ? "En développement" : "Archivé"}</strong></div>
       <div><span>Cover</span><strong>{cover ? "Renseignée" : "Manquante"}</strong></div>
+      <div><span>Extrait audio</span><strong>{audio?.durationMs ? `${Math.round(audio.durationMs / 1_000)} s` : "Facultatif"}</strong></div>
       <div><span>Date</span><strong>{project.releaseDate ? project.releaseDate.toLocaleDateString("fr-FR", { timeZone: "UTC" }) : "À compléter"}</strong></div>
       <div><span>Liens directs</span><strong>{project.platformLinks.length}</strong></div>
       <div><span>Tracklist</span><strong>{project.tracks.length ? `${project.tracks.length} nommée${project.tracks.length === 1 ? "" : "s"}` : project.trackCount ? `${project.trackCount} annoncées` : "À compléter"}</strong></div>
@@ -105,6 +112,7 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
       <div className="admin-project-state-heading"><h2>{projectCompletenessLabel(confidence)}</h2><p>Ces indications évoluent automatiquement avec les données renseignées.</p></div>
       <dl className="admin-project-state-grid">
         <div><dt>Cover</dt><dd>{cover ? "✓ Renseignée" : "— À compléter"}</dd></div>
+        <div><dt>Preview audio</dt><dd>{audio?.durationMs ? `✓ ${Math.round(audio.durationMs / 1_000)} secondes` : "— Facultative"}</dd></div>
         <div><dt>Date de sortie</dt><dd>{project.releaseDate ? `✓ ${project.releaseDate.toLocaleDateString("fr-FR", { timeZone: "UTC" })}` : "— À compléter"}</dd></div>
         <div><dt>Tracklist</dt><dd>{confidence.tracklist === "confirmed" ? "✓ Complète" : project.tracks.length || project.trackCount ? "Partielle" : "— À compléter"}</dd></div>
         <div><dt>Plateformes</dt><dd>{project.platformLinks.length ? `${project.platformLinks.length} lien${project.platformLinks.length === 1 ? "" : "s"} renseigné${project.platformLinks.length === 1 ? "" : "s"}` : "— À compléter"}</dd></div>
@@ -118,6 +126,19 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
       <p className="admin-section-label">Cover officielle</p>
       {cover ? <div className="admin-cover-preview"><Image src={`/media/catalog/${cover.id}`} alt={coverAlt} width={320} height={320} /><div><p>Cover officielle actuelle</p><Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir sur le site <span aria-hidden="true">↗</span></Link></div></div> : <p className="admin-muted">Aucune cover officielle. L’espace graphique de repli reste visible publiquement.</p>}
       <CatalogCoverForm projectId={project.id} slug={project.slug} currentCoverAssetId={cover?.id ?? null} alt={coverAltOverride ?? ""} altPlaceholder={coverAlt} hasCover={Boolean(cover)} initialState={etat?.startsWith("cover-") ? etat : undefined} />
+    </section>
+
+    <section className="admin-detail-window">
+      <p className="admin-section-label">Preview audio</p>
+      <CatalogAudioForm
+        projectId={project.id}
+        slug={project.slug}
+        title={project.title}
+        currentAudioAssetId={audio?.id ?? null}
+        durationMs={audio?.durationMs ?? null}
+        updatedAt={audio?.updatedAt.toISOString() ?? null}
+        initialState={etat?.startsWith("audio-") ? etat : undefined}
+      />
     </section>
 
     <section className="admin-detail-window">

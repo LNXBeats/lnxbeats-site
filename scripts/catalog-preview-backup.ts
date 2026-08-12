@@ -23,10 +23,19 @@ async function rows(table: string) {
 async function run() {
   const { target } = await assertApprovedCatalogDatabase();
   if (target !== "lnx-studio-local-preview") throw new Error("Logical preview backup refused outside lnx-studio-local-preview.");
-  const directory = await mkdtemp("/private/tmp/lnx-studio-v0603-preview-backup-");
+  const directory = await mkdtemp("/private/tmp/lnx-studio-v0604-preview-backup-");
   const catalog: Record<string, unknown> = {};
   const integrity: Record<string, { count: number; sha256: string }> = {};
-  for (const table of catalogTables) catalog[table] = await rows(table);
+  for (const table of catalogTables) {
+    const content = await rows(table);
+    catalog[table] = table === "assets"
+      ? content.map((asset) => {
+          const stableAsset = { ...asset };
+          delete stableAsset.duration_ms;
+          return stableAsset;
+        })
+      : content;
+  }
   for (const table of protectedTables) {
     const content = await rows(table);
     integrity[table] = { count: content.length, sha256: createHash("sha256").update(serialized(content)).digest("hex") };

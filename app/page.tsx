@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ButtonLink } from "@/components/button";
+import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { Container } from "@/components/container";
 import { PlatformDestination } from "@/components/platform-destination";
 import { ProjectArtwork } from "@/components/project-artwork";
@@ -163,6 +164,12 @@ export default async function HomePage() {
                 <p className="eyebrow">Projet à la une · Single</p>
                 <h3>{leadProject.title}</h3>
                 <p>{leadProject.description}</p>
+                {leadProject.audioPreview ? <AudioPreviewPlayer
+                  src={leadProject.audioPreview.url}
+                  title={leadProject.title}
+                  durationMs={leadProject.audioPreview.durationMs}
+                  compact
+                /> : null}
                 <ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Voir la fiche du projet</ButtonLink>
               </div>
             </article>

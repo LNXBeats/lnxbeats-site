@@ -32,7 +32,10 @@ type DatabaseProject = {
   platformLinks?: Array<{ id: string; platform: string; scope: string; url: string; label: string | null }>;
   credits?: Array<{ name: string; role: string; note: string | null }>;
   confidenceAnnotations?: Array<{ domain: string; level: string }>;
-  assets?: Array<{ asset: { id: string; alt: string | null; updatedAt: Date } }>;
+  assets?: Array<{
+    role: string;
+    asset: { id: string; alt: string | null; durationMs: number | null; mimeType: string; updatedAt: Date };
+  }>;
 };
 
 const artistPlatforms = [
@@ -92,7 +95,8 @@ function legacyConfidenceSummary(project: DatabaseProject): ProjectDataConfidenc
 
 export function mapDatabaseProject(project: DatabaseProject): Project {
   const releaseDate = project.releaseDate?.toISOString().slice(0, 10) ?? null;
-  const coverAsset = project.assets?.[0]?.asset;
+  const coverAsset = project.assets?.find(({ role }) => role === "COVER")?.asset;
+  const audioAsset = project.assets?.find(({ role }) => role === "AUDIO_PREVIEW")?.asset;
   const directPlatforms = (project.platformLinks ?? []).map((link) => {
     const platform = platformMap[link.platform] ?? "other";
     const scope = link.scope === "STORE" ? "store" as const : link.scope === "ARTIST" ? "artist" as const : "release" as const;
@@ -103,7 +107,7 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
     tracks: project.tracks ?? [],
     platformLinks: project.platformLinks ?? [],
     credits: project.credits ?? [],
-    assets: project.assets ?? [],
+    assets: (project.assets ?? []).filter(({ role }) => role === "COVER"),
     legacy: legacyConfidenceSummary(project),
   });
   return {
@@ -117,6 +121,11 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
     shortDescription: project.shortDescription ?? project.description ?? "",
     cover: coverAsset ? `/media/catalog/${coverAsset.id}` : null,
     coverAlt: coverAsset ? resolveCatalogCoverAlt(project.title, coverAsset.alt) : undefined,
+    audioPreview: audioAsset?.durationMs && audioAsset.mimeType === "audio/mpeg" ? {
+      id: audioAsset.id,
+      url: `/media/catalog/audio/${audioAsset.id}`,
+      durationMs: audioAsset.durationMs,
+    } : null,
     featured: project.highlighted,
     status: (projectStatusMap[project.status as keyof typeof projectStatusMap] ?? "archive") as ProjectStatus,
     genres: [],

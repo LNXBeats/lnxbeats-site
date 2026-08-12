@@ -131,7 +131,9 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
 | `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
 | `ORDER_UPLOAD_DIR` | Racine privée, hors `public/` ; QA limitée à `/private/tmp` | Non |
-| `MEDIA_STORAGE_ROOT` | Racine absolue privée des covers normalisées, hors `public/` et hors Git | Non |
+| `MEDIA_STORAGE_ROOT` | Racine absolue privée des covers et previews audio normalisées, hors `public/` et hors Git | Non |
+| `AUDIO_TEMP_ROOT` | Racine temporaire optionnelle des sources audio complètes ; le namespace et le TTL restent imposés par l’application | Non |
+| `FFMPEG_PATH` | Chemin absolu optionnel du FFmpeg système ; sinon le binaire reproductible du package est utilisé | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
 | `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
@@ -185,7 +187,8 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Audit produit et éditorial](docs/PAGE_AUDIT.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)
 - [Migration runtime du catalogue](docs/CATALOG_RUNTIME_MIGRATION.md)
-- [Stockage des covers](docs/MEDIA_STORAGE.md)
+- [Stockage des médias](docs/MEDIA_STORAGE.md)
+- [Previews audio](docs/AUDIO_PREVIEWS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Déploiement](docs/DEPLOYMENT.md)
 - [Changelog](CHANGELOG.md)

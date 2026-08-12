@@ -108,9 +108,12 @@
 
 ## V0.6.0.4 — Media previews & audio storage
 
-- stockage durable et séparation explicite des extraits publics et livraisons privées
-- métadonnées de durée, offset, MIME, taille et relation projet/piste
-- publication volontaire d’extraits autorisés, sans exposer automatiquement les morceaux complets
+- morceaux complets MP3/WAV jusqu’à 80 Mio transformés par FFmpeg en previews MP3 de 60 secondes maximum
+- source temporaire streamée puis supprimée, choix du début depuis le lecteur local et dérivée stockée hors webroot
+- métadonnées de durée, MIME et taille portées par un `Asset` séparé de la durée des pistes
+- upload ADMIN, remplacement/suppression concurrents sûrs et diffusion publique avec requêtes Range
+- lecteur léger sur la fiche projet et sur l’accueil uniquement lorsque l’extrait existe
+- publication volontaire d’extraits autorisés, sans exposer les morceaux complets ni les livraisons privées
 
 ## V0.6.0.5 — Jukebox / horizontal music experience
 

@@ -39,7 +39,8 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
             <div><strong><Link href={`/admin/catalogue/${project.slug}`}>{project.title}</Link></strong><small>{project.slug} · {statusLabels[project.status]}</small></div>
             <dl>
               <div><dt>Type</dt><dd>{project.type === "ALBUM" ? "Album" : project.type === "SINGLE" ? "Single" : "Projet"}</dd></div>
-              <div><dt>Cover</dt><dd>{project._count.assets ? "Officielle" : "Manquante"}</dd></div>
+              <div><dt>Cover</dt><dd>{project.assets.some(({ role }) => role === "COVER") ? "Officielle" : "Manquante"}</dd></div>
+              <div><dt>Extrait</dt><dd>{project.assets.some(({ role }) => role === "AUDIO_PREVIEW") ? "✓" : "—"}</dd></div>
               <div><dt>Liens directs</dt><dd>{project._count.platformLinks}</dd></div>
               <div><dt>Tracklist</dt><dd>{project._count.tracks || project.trackCount || "Non documentée"}</dd></div>
             </dl>

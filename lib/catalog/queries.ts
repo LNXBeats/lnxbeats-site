@@ -12,9 +12,8 @@ const detailInclude = {
   credits: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
   confidenceAnnotations: true,
   assets: {
-    where: { role: "COVER" as const },
-    orderBy: [{ position: "asc" as const }, { createdAt: "desc" as const }],
-    take: 1,
+    where: { role: { in: ["COVER" as const, "AUDIO_PREVIEW" as const] } },
+    orderBy: [{ role: "asc" as const }, { position: "asc" as const }, { createdAt: "desc" as const }],
     include: { asset: true },
   },
 } satisfies Prisma.ProjectInclude;
