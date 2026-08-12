@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ass
   const asset = await prisma.asset.findFirst({
     where: {
       id: assetId, type: "COVER", mimeType: "image/webp",
-      projects: { some: { role: "COVER", project: { status: { in: ["PUBLISHED", "IN_DEVELOPMENT"] } } } },
+      projects: { some: { role: "COVER", project: { publicVisible: true, status: { in: ["PUBLISHED", "IN_DEVELOPMENT"] } } } },
     },
     select: { storageKey: true, updatedAt: true },
   });

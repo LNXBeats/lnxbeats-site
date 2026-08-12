@@ -2,6 +2,21 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.1] — 2026-08-12
+
+### Ajouté
+
+- visibilité publique indépendante du statut, placement explicite dans le jukebox publié ou en développement et ordre éditorial déterministe ;
+- second jukebox conditionnel réutilisant strictement le composant audio existant, avec exclusion mutuelle des players ;
+- catalogue publié compact avec compteur dynamique et extension native sans pagination client ;
+- flèches premium symétriques de 48 px, consignes de navigation adaptées au desktop et au tactile.
+
+### Sécurité et périmètre
+
+- projets masqués exclus des listes, routes directes, sitemap et routes de médias publics ;
+- migration additive préservant les statuts et données existants, sans projet fictif ni fallback hors PostgreSQL ;
+- logique Safari de lecture continue conservée, à l’exception de la coordination nécessaire entre players concurrents.
+
 ## [0.6.0.4] — 2026-08-12
 
 ### Ajouté

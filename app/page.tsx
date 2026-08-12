@@ -6,8 +6,7 @@ import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { Container } from "@/components/container";
 import { PlatformDestination } from "@/components/platform-destination";
 import { ProjectArtwork } from "@/components/project-artwork";
-import { artistBiography } from "@/data/artist";
-import { officialLinks, siteConfig } from "@/data/site";
+import { officialLinks } from "@/data/site";
 import { getHomepageProjects } from "@/lib/catalog/queries";
 
 const homeDescription = "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux. Chaque histoire mérite sa musique.";
@@ -16,28 +15,14 @@ export const metadata: Metadata = {
   title: "LNX Beats — Chaque histoire mérite sa musique",
   description: homeDescription,
   alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    url: "/",
-    title: "LNX Beats — Chaque histoire mérite sa musique",
-    description: homeDescription,
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "LNX Beats — Chaque histoire mérite sa musique." }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "LNX Beats — Chaque histoire mérite sa musique",
-    description: homeDescription,
-    images: ["/og.png"],
-  },
+  openGraph: { type: "website", url: "/", title: "LNX Beats — Chaque histoire mérite sa musique", description: homeDescription, images: [{ url: "/og.png", width: 1200, height: 630, alt: "LNX Beats — Chaque histoire mérite sa musique." }] },
+  twitter: { card: "summary_large_image", title: "LNX Beats — Chaque histoire mérite sa musique", description: homeDescription, images: ["/og.png"] },
 };
 
-const universes = [
-  { title: "Rap narratif", description: "Une voix entre dans le cadre. Le décor suit. L’histoire peut commencer." },
-  { title: "Humour", description: "Le quotidien se décale juste assez pour révéler ce qu’il avait de drôle." },
-  { title: "Émotion", description: "Des mots pour faire entendre ce que les souvenirs gardent en silence." },
-  { title: "Cinéma", description: "Des morceaux pensés en lumière, en mouvement et en scènes intérieures." },
-  { title: "Sur mesure", description: "Votre histoire, ses détails, puis une musique qui n’appartient qu’à elle." },
-  { title: "Expérimentation", description: "L’endroit où les voix et les formes prennent des chemins inattendus." },
+const perspectives = [
+  { number: "01", title: "Histoires", description: "Des personnages, du vécu, des scènes qui restent." },
+  { number: "02", title: "Univers", description: "Rap, humour, émotion, expérimentation : chaque récit trouve sa lumière." },
+  { number: "03", title: "Sur mesure", description: "Votre histoire devient une création LNX Beats, pensée dans ses détails." },
 ] as const;
 
 const platforms = [
@@ -50,236 +35,42 @@ const platforms = [
   { name: "Instagram", label: "Suivre les coulisses", action: "Suivre sur Instagram", url: officialLinks.instagram, tone: "instagram" },
 ] as const;
 
-const commissionSteps = [
-  { number: "01", title: "Vous confiez", description: "Un prénom, un souvenir, une phrase que vous êtes seul à comprendre." },
-  { number: "02", title: "Le récit prend forme", description: "LNX Beats cherche la voix, le rythme et la lumière justes." },
-  { number: "03", title: "La musique vous revient", description: "Votre histoire a changé de forme, mais elle porte toujours votre émotion." },
-] as const;
-
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const { lead: leadProject, supporting: supportingProjects } = await getHomepageProjects();
-  return (
-    <>
-      <div className="visual-chapter visual-chapter--artist">
-        <div className="visual-chapter__backdrop" aria-hidden="true">
-          <Image
-            src="/assets/hero-desktop.jpg"
-            alt=""
-            fill
-            loading="eager"
-            sizes="(max-width: 700px) 100vw, 100vw"
-          />
-          <span className="visual-chapter__grain" />
+  const { lead: leadProject } = await getHomepageProjects();
+
+  return <>
+    <section className="home-hero" aria-labelledby="home-hero-title">
+      <div className="home-hero__media" aria-hidden="true"><Image src="/assets/hero-desktop.jpg" alt="" fill priority sizes="100vw" /></div>
+      <Container className="home-hero__inner">
+        <div className="home-hero__copy">
+          <p className="eyebrow">LNX Beats · Les histoires deviennent musique</p>
+          <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
+          <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
+          <p className="home-hero__lead">Un prénom, un souvenir ou une scène banale : LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
+          <div className="home-hero__actions"><ButtonLink href="/discographie">Découvrir la musique</ButtonLink><ButtonLink href="/commander" variant="secondary">Commander une création</ButtonLink></div>
         </div>
-        <div className="visual-chapter__flow">
-          <section className="home-hero" aria-labelledby="home-hero-title">
-            <Container className="home-hero__inner">
-              <div className="home-hero__copy">
-                <p className="eyebrow">LNX Beats · Les histoires deviennent musique</p>
-                <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
-                <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
-                <p className="home-hero__lead">Il suffit parfois d’un prénom, d’un souvenir ou d’une scène banale. LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
-                <div className="home-hero__actions">
-                  <ButtonLink href="/discographie">Écouter la discographie</ButtonLink>
-                  <ButtonLink href="/commander" variant="secondary">Préparer votre histoire</ButtonLink>
-                </div>
-              </div>
-              <div className="home-hero__signature" aria-hidden="true">
-                <span>Rap narratif</span>
-                <span>Humour</span>
-                <span>Émotion</span>
-              </div>
-              <p className="home-hero__chapter-mark" aria-hidden="true">LNX / 01</p>
-              <a className="home-hero__scroll" href="#univers">
-                <span>Comprendre la démarche</span>
-                <span aria-hidden="true">↓</span>
-              </a>
-            </Container>
-          </section>
+        <div className="home-hero__signature" aria-hidden="true"><span>Rap narratif</span><span>Humour</span><span>Émotion</span></div>
+      </Container>
+    </section>
 
-          <section className="home-intro story-window story-window--scene" aria-labelledby="home-intro-title">
-            <Container className="home-intro__grid motion-reveal">
-              <p className="section-index">01 — La démarche</p>
-              <div className="home-intro__copy">
-                <h2 id="home-intro-title">Le réel devient une scène.<br /><em>La musique, un récit.</em></h2>
-                <p>Une famille trop bruyante. Un collègue impossible. Un animal qui regarde les humains vivre. Un souvenir que l’on refuse de laisser partir. La musique commence souvent là.</p>
-                <div className="home-intro__artist">
-                  <p>{artistBiography.short}</p>
-                  <Link className="text-link" href="/a-propos">Lire la démarche de Ludovic Mathon <span aria-hidden="true">→</span></Link>
-                </div>
-              </div>
-              <div className="home-intro__portrait" aria-hidden="true">
-                <Image src="/assets/hero-mobile.jpg" alt="" fill sizes="(max-width: 820px) calc(100vw - 48px), 34vw" />
-                <span>Ludovic Mathon · LNX Beats</span>
-              </div>
-            </Container>
-          </section>
+    {leadProject ? <section className="section home-featured" aria-labelledby="featured-title">
+      <Container>
+        <div className="home-featured__heading motion-reveal"><div><p className="section-index">À la une</p><h2 id="featured-title">Une histoire à écouter.</h2></div><ButtonLink href="/discographie" variant="quiet">Toute la discographie</ButtonLink></div>
+        <article className="home-project-lead motion-reveal motion-reveal--soft">
+          <Link className="home-project-lead__art" href={`/album/${leadProject.slug}`} aria-label={`Ouvrir l’univers ${leadProject.title}`}><ProjectArtwork project={leadProject} priority sizes="(max-width: 820px) calc(100vw - 48px), 48vw" /></Link>
+          <div className="home-project-lead__copy"><p className="eyebrow">Projet à la une · {leadProject.type === "album" ? "Album" : "Single"}</p><h3>{leadProject.title}</h3><p>{leadProject.description}</p>{leadProject.audioPreview ? <AudioPreviewPlayer src={leadProject.audioPreview.url} title={leadProject.title} durationMs={leadProject.audioPreview.durationMs} compact /> : null}<ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Entrer dans le projet</ButtonLink></div>
+        </article>
+      </Container>
+    </section> : null}
 
-          <section className="section universe-section story-window story-window--scene" id="univers" aria-labelledby="universe-title">
-            <Container>
-              <div className="premium-heading motion-reveal">
-                <div>
-                  <p className="section-index">02 — Les territoires</p>
-                  <h2 id="universe-title">Un artiste.<br />Plusieurs univers.</h2>
-                </div>
-                <p>Chaque histoire réclame sa propre lumière. Certaines font sourire, d’autres serrent la gorge. Aucune ne demande à être racontée de la même manière.</p>
-              </div>
-              <div className="universe-grid motion-reveal motion-reveal--soft">
-                {universes.map((universe, index) => (
-                  <article className="universe-card" key={universe.title}>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <div>
-                      <h3>{universe.title}</h3>
-                      <p>{universe.description}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </Container>
-          </section>
-        </div>
-      </div>
+    <section className="section home-perspectives" aria-labelledby="perspectives-title">
+      <Container><div className="home-perspectives__heading motion-reveal"><p className="section-index">LNX en trois regards</p><h2 id="perspectives-title">Une musique qui prend le réel au sérieux.</h2></div><div className="home-perspectives__grid motion-reveal motion-reveal--soft">{perspectives.map((perspective) => <article className="home-perspective" key={perspective.title}><span>{perspective.number}</span><h3>{perspective.title}</h3><p>{perspective.description}</p></article>)}</div></Container>
+    </section>
 
-      {leadProject ? (
-        <div className="visual-chapter visual-chapter--music">
-          <div className="visual-chapter__backdrop visual-chapter__backdrop--music" aria-hidden="true"><span className="visual-chapter__record" /><span className="visual-chapter__grain" /></div>
-          <div className="visual-chapter__flow">
-        <section className="section home-projects story-window story-window--scene" id="projets" aria-labelledby="projects-title">
-          <Container>
-            <div className="premium-heading premium-heading--projects motion-reveal">
-              <div>
-                <p className="section-index">03 — La musique</p>
-                <h2 id="projects-title">Des mondes à écouter.</h2>
-              </div>
-              <ButtonLink href="/discographie" variant="quiet">Voir toute la discographie</ButtonLink>
-            </div>
+    <section className="home-contact home-contact--compact" id="sur-mesure" aria-labelledby="home-contact-title"><Container className="home-contact__inner motion-reveal"><p className="section-index">Votre histoire</p><div><h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2><p>Quelques détails suffisent pour ouvrir la première scène.</p><div className="home-contact__actions"><ButtonLink href="/commander">Commander une création</ButtonLink><ButtonLink href="/contact" variant="quiet">Écrire à LNX Beats</ButtonLink></div></div></Container></section>
 
-            <article className="home-project-lead motion-reveal motion-reveal--soft">
-              <Link className="home-project-lead__art" href={`/album/${leadProject.slug}`} aria-label={`Ouvrir l’univers ${leadProject.title}`}>
-                <ProjectArtwork project={leadProject} sizes="(max-width: 820px) calc(100vw - 48px), 58vw" />
-              </Link>
-              <div className="home-project-lead__copy">
-                <p className="eyebrow">Projet à la une · Single</p>
-                <h3>{leadProject.title}</h3>
-                <p>{leadProject.description}</p>
-                {leadProject.audioPreview ? <AudioPreviewPlayer
-                  src={leadProject.audioPreview.url}
-                  title={leadProject.title}
-                  durationMs={leadProject.audioPreview.durationMs}
-                  compact
-                /> : null}
-                <ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Voir la fiche du projet</ButtonLink>
-              </div>
-            </article>
-
-            <div className="home-project-supporting motion-reveal motion-reveal--soft">
-              {supportingProjects.map((project, index) => (
-                <article className="home-project-secondary" key={project.slug}>
-                  <Link href={`/album/${project.slug}`} aria-label={`Ouvrir l’univers ${project.title}`}>
-                    <ProjectArtwork project={project} sizes="(max-width: 600px) 100vw, 40vw" />
-                  </Link>
-                  <div className="home-project-secondary__copy">
-                    <p className="section-index">{String(index + 1).padStart(2, "0")} — Sélection</p>
-                    <h3><Link href={`/album/${project.slug}`}>{project.title}</Link></h3>
-                    <p>{project.shortDescription}</p>
-                    <Link className="text-link" href={`/album/${project.slug}`}>Voir la fiche <span aria-hidden="true">→</span></Link>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </Container>
-        </section>
-
-      <section className="image-chapter story-window story-window--scene" aria-labelledby="image-chapter-title">
-        <Image src="/assets/hero-desktop.jpg" alt="" fill sizes="(max-width: 820px) calc(100vw - 24px), 96vw" />
-        <div className="image-chapter__veil" aria-hidden="true" />
-        <Container className="image-chapter__inner motion-reveal">
-          <p className="section-index">Entre les morceaux</p>
-          <div>
-            <h2 id="image-chapter-title">Une voix, une lumière, puis le cadre s’ouvre.</h2>
-            <p>La musique ne quitte jamais vraiment l’image. Elle garde une scène en mémoire et lui invente une autre façon d’exister.</p>
-          </div>
-        </Container>
-      </section>
-
-      <section className="section platforms-stage story-window story-window--scene" id="plateformes" aria-labelledby="platforms-title">
-        <Container>
-          <div className="premium-heading motion-reveal">
-            <div>
-              <p className="section-index">04 — Écouter & suivre</p>
-              <h2 id="platforms-title">Les histoires continuent ailleurs.</h2>
-            </div>
-            <p>La musique d’abord, puis les coulisses. Chaque destination indique clairement ce que vous y trouverez.</p>
-          </div>
-          <div className="platforms-grid motion-reveal motion-reveal--soft">
-            {platforms.map((platform, index) => (
-              <PlatformDestination key={platform.name} index={String(index + 1).padStart(2, "0")} {...platform} />
-            ))}
-          </div>
-        </Container>
-      </section>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="visual-chapter visual-chapter--story">
-        <div className="visual-chapter__backdrop visual-chapter__backdrop--story" aria-hidden="true"><span className="visual-chapter__grain" /></div>
-        <div className="visual-chapter__flow">
-      <section className="section commission-story story-window story-window--scene" id="sur-mesure" aria-labelledby="commission-title">
-        <Container>
-          <div className="commission-story__intro motion-reveal">
-            <p className="section-index">05 — Votre histoire</p>
-            <h2 id="commission-title">Votre histoire<br /><em>attend sa voix.</em></h2>
-            <p>Vous apportez les personnes, les silences et les détails. La création commence par cette rencontre.</p>
-          </div>
-          <ol className="commission-steps motion-reveal motion-reveal--soft">
-            {commissionSteps.map((step) => (
-              <li key={step.number}>
-                <span>{step.number}</span>
-                <h3>{step.title}</h3>
-                <p>{step.description}</p>
-              </li>
-            ))}
-          </ol>
-          <div className="commission-story__action motion-reveal motion-reveal--soft">
-            <p>Quelques mots suffisent pour ouvrir la première scène.</p>
-            <ButtonLink href="/commander">Préparer votre récit</ButtonLink>
-          </div>
-        </Container>
-      </section>
-
-      <section className="section section--soft story-window story-window--scene story-window--scene-compact" aria-labelledby="member-space-title">
-        <Container className="content-columns home-member motion-reveal">
-          <p className="content-columns__label">06 — Espace membre</p>
-          <div className="home-member__copy">
-            <h2 id="member-space-title">Votre espace LNX Beats.</h2>
-            <p>Retrouvez votre profil, vos créations et leurs étapes au même endroit, dans un compte sécurisé.</p>
-            <p>Les brouillons, commandes et suivis disponibles sont réunis dans un espace privé.</p>
-            <div className="home-member__actions">
-              <ButtonLink href="/inscription">Créer un espace membre</ButtonLink>
-              <ButtonLink href="/connexion" variant="quiet">Se connecter</ButtonLink>
-            </div>
-          </div>
-        </Container>
-      </section>
-        </div>
-      </div>
-
-      <section className="home-contact story-window story-window--closing" id="contact-home" aria-labelledby="home-contact-title">
-        <Container className="home-contact__inner motion-reveal">
-          <p className="section-index">07 — Contact</p>
-          <div>
-            <h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2>
-            <p>Une idée, une proposition ou simplement quelques mots à partager : de l’autre côté, c’est LNX Beats qui répond.</p>
-            <div className="home-contact__actions">
-              <ButtonLink href="/contact">Écrire à LNX Beats</ButtonLink>
-              <ButtonLink href={`mailto:${siteConfig.email}`} variant="quiet" external>{siteConfig.email}</ButtonLink>
-            </div>
-          </div>
-        </Container>
-      </section>
-    </>
-  );
+    <section className="section platforms-stage" id="plateformes" aria-labelledby="platforms-title"><Container><div className="home-featured__heading motion-reveal"><div><p className="section-index">Écouter & suivre</p><h2 id="platforms-title">Les histoires continuent ailleurs.</h2></div></div><div className="platforms-grid motion-reveal motion-reveal--soft">{platforms.map((platform, index) => <PlatformDestination key={platform.name} index={String(index + 1).padStart(2, "0")} {...platform} />)}</div></Container></section>
+  </>;
 }

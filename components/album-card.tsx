@@ -6,15 +6,16 @@ import { ProjectArtwork } from "@/components/project-artwork";
 type AlbumCardProps = {
   project: Project;
   priority?: boolean;
+  compact?: boolean;
 };
 
-export function AlbumCard({ project, priority = false }: AlbumCardProps) {
+export function AlbumCard({ project, priority = false, compact = false }: AlbumCardProps) {
   const detail = project.year ? `${getProjectKindLabel(project.type)} · ${project.year}` : getProjectKindLabel(project.type);
 
   return (
-    <article className="release-card" data-project-type={project.type}>
+    <article className={`release-card${compact ? " release-card--compact" : ""}`} data-project-type={project.type}>
       <Link href={`/album/${project.slug}`} aria-label={`Voir la fiche de ${project.title}`}>
-        <ProjectArtwork project={project} priority={priority} sizes="(max-width: 767px) 100vw, (max-width: 1199px) 50vw, 33vw" />
+        <ProjectArtwork project={project} priority={priority} sizes={compact ? "(max-width: 520px) 44vw, (max-width: 900px) 30vw, 22vw" : "(max-width: 767px) 100vw, (max-width: 1199px) 50vw, 33vw"} />
         <div className="release-card__body">
           <div>
             <p className="release-card__meta">

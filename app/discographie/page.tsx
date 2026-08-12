@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { AlbumCard } from "@/components/album-card";
+import { CompactProjectCatalog } from "@/components/compact-project-catalog";
 import { Container } from "@/components/container";
-import { PlatformLink } from "@/components/platform-link";
-import { ProjectArtwork } from "@/components/project-artwork";
-import { siteConfig } from "@/data/site";
+import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
+import { jukeboxInitialIndex } from "@/lib/catalog/jukebox";
 
 export const metadata: Metadata = {
   title: "Discographie",
@@ -15,10 +13,21 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+function jukeboxView(projects: Awaited<ReturnType<typeof listDiscographyProjects>>["publishedJukeboxProjects"]): JukeboxProject[] {
+  return projects.map((project) => ({
+    slug: project.slug,
+    title: project.title,
+    year: project.year,
+    cover: project.cover!,
+    coverAlt: project.coverAlt ?? `Pochette de « ${project.title} » — LNX Beats`,
+    audioPreview: project.audioPreview ? { url: project.audioPreview.url, durationMs: project.audioPreview.durationMs } : null,
+  }));
+}
+
 export default async function DiscographyPage() {
-  const { featuredProjects, publishedProjects, projectsInDevelopment } = await listDiscographyProjects();
-  const featuredSlugs = new Set(featuredProjects.map((project) => project.slug));
-  const otherProjects = publishedProjects.filter((project) => !featuredSlugs.has(project.slug));
+  const { publishedProjects, projectsInDevelopment, publishedJukeboxProjects, developmentJukeboxProjects } = await listDiscographyProjects();
+  const publishedJukebox = jukeboxView(publishedJukeboxProjects);
+  const developmentJukebox = jukeboxView(developmentJukeboxProjects);
   return (
     <>
       <header className="page-hero page-hero--catalog">
@@ -28,7 +37,7 @@ export default async function DiscographyPage() {
             <h1>Discographie</h1>
           </div>
           <div>
-            <p className="page-hero__intro">Le catalogue réunit les albums, les singles et les projets en développement de LNX Beats. Chaque fiche indique clairement ce qui est publié, confirmé ou encore non documenté.</p>
+            <p className="page-hero__intro">Des projets publiés, des récits en cours, et une entrée directe dans leur écoute.</p>
             <div className="page-hero__meta">
               <span>{publishedProjects.length} parutions</span>
               <span>{projectsInDevelopment.length} projets en développement</span>
@@ -40,65 +49,20 @@ export default async function DiscographyPage() {
         </Container>
       </header>
 
-      <div className="platform-strip" aria-label="Plateformes d’écoute">
-        <Container className="platform-strip__inner motion-reveal motion-reveal--soft">
-          {siteConfig.platforms.map((platform) => <PlatformLink key={platform.name} {...platform} />)}
-        </Container>
-      </div>
+      {publishedJukebox.length ? <div id="jukebox"><Container><ProjectJukebox projects={publishedJukebox} initialIndex={jukeboxInitialIndex(publishedJukeboxProjects)} eyebrow="Écouter la discographie" heading="Des covers, puis une histoire." variant="published" eager /></Container></div> : null}
 
-      <section className="section catalog-section" aria-labelledby="selection-title">
+      <section className="section section--soft catalog-section catalog-section--compact" aria-labelledby="catalog-title">
         <Container>
           <div className="catalog-header catalog-header--large motion-reveal">
-            <div>
-              <p className="eyebrow">Sélection d’entrée</p>
-              <h2 id="selection-title">Trois récits pour commencer.</h2>
-            </div>
-            <p>Trois projets publiés pour rencontrer les voix, les personnages et les contrastes du catalogue.</p>
+            <div><p className="eyebrow">Catalogue</p><h2 id="catalog-title">Tous les projets.</h2></div>
+            <div className="catalog-header__summary"><p>Retrouvez tous les projets LNX Beats.</p><span>{publishedProjects.length} projets publiés</span></div>
           </div>
-          <div className="catalog-feature-list motion-reveal motion-reveal--soft">
-            {featuredProjects.map((project, index) => (
-              <article className="catalog-feature" key={project.slug}>
-                <Link className="catalog-feature__art" href={`/album/${project.slug}`}>
-                  <ProjectArtwork project={project} priority={index === 0} sizes="(max-width: 820px) 100vw, 42vw" />
-                </Link>
-                <div className="catalog-feature__copy">
-                  <p className="release-card__meta">{project.type === "album" ? "Album" : "Single"}{project.year ? ` · ${project.year}` : ""}</p>
-                  <h3><Link href={`/album/${project.slug}`}>{project.title}</Link></h3>
-                  <p>{project.shortDescription}</p>
-                  <Link className="text-link" href={`/album/${project.slug}`}>Voir la fiche du projet <span aria-hidden="true">→</span></Link>
-                </div>
-              </article>
-            ))}
-          </div>
+          <CompactProjectCatalog projects={publishedProjects} />
         </Container>
       </section>
 
-      <section className="section section--soft catalog-section" aria-labelledby="catalog-title">
-        <Container>
-          <div className="catalog-header motion-reveal">
-            <h2 id="catalog-title">Parutions publiées.</h2>
-            <span>{otherProjects.length} projets</span>
-          </div>
-          <div className="release-grid motion-reveal motion-reveal--soft">
-            {otherProjects.map((project) => <AlbumCard key={project.slug} project={project} />)}
-          </div>
-        </Container>
-      </section>
+      {developmentJukebox.length ? <div className="development-jukebox-section"><Container><ProjectJukebox projects={developmentJukebox} initialIndex={jukeboxInitialIndex(developmentJukeboxProjects)} eyebrow="En cours de création" heading="Dans les coulisses de LNX Beats." variant="development" /></Container></div> : null}
 
-      <section className="section catalog-section" aria-labelledby="development-title">
-        <Container>
-          <div className="catalog-header catalog-header--large motion-reveal">
-            <div>
-              <p className="eyebrow">Projets en développement</p>
-              <h2 id="development-title">Les titres sont posés. Rien de plus n’est inventé.</h2>
-            </div>
-            <p>Ces projets n’ont pas encore de date, de pochette ou de forme officiellement documentée. Les fiches resteront incomplètes jusqu’à confirmation.</p>
-          </div>
-          <div className="release-grid motion-reveal motion-reveal--soft">
-            {projectsInDevelopment.map((project) => <AlbumCard key={project.slug} project={project} />)}
-          </div>
-        </Container>
-      </section>
     </>
   );
 }

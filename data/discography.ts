@@ -71,6 +71,8 @@ type PublishedProjectArtwork =
   | { readonly cover: string; readonly coverAlt: string }
   | { readonly cover?: undefined; readonly coverAlt?: undefined };
 
+let fixtureCatalogPosition = 0;
+
 const published = (
   project: Omit<
     Project,
@@ -86,6 +88,10 @@ const published = (
     | "platforms"
     | "seo"
     | "dataConfidence"
+    | "publicVisible"
+    | "jukeboxPlacement"
+    | "jukeboxPosition"
+    | "catalogPosition"
   > &
     PublishedProjectArtwork &
     Partial<Pick<Project, "year" | "releaseDate" | "genres" | "credits" | "tracks" | "trackCount" | "platforms">>,
@@ -101,6 +107,10 @@ const published = (
     cover: null,
     coverAlt: undefined,
     status: "published",
+    publicVisible: true,
+    jukeboxPlacement: null,
+    jukeboxPosition: null,
+    catalogPosition: ++fixtureCatalogPosition,
     genres: [],
     credits: [],
     tracks,
@@ -129,6 +139,10 @@ const inDevelopment = (
   cover: null,
   featured: false,
   status: "in-development",
+  publicVisible: true,
+  jukeboxPlacement: null,
+  jukeboxPosition: null,
+  catalogPosition: ++fixtureCatalogPosition,
   genres: [],
   credits: [],
   tracks: [],

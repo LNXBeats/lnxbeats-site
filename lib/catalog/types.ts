@@ -1,5 +1,6 @@
 export type ProjectKind = "album" | "single" | "project";
 export type ProjectStatus = "published" | "in-development" | "draft" | "archive";
+export type ProjectJukeboxPlacement = "published" | "development";
 export type TrackStatus = "released" | "announced" | "unlisted";
 export type ArtworkTone = "gold" | "wine" | "graphite" | "bronze" | "ivory";
 export type PlatformId = "spotify" | "appleMusic" | "deezer" | "youtube" | "amazonMusic" | "distroKid" | "other";
@@ -59,6 +60,10 @@ export type PublicProject = {
   } | null;
   readonly featured: boolean;
   readonly status: ProjectStatus;
+  readonly publicVisible: boolean;
+  readonly jukeboxPlacement: ProjectJukeboxPlacement | null;
+  readonly jukeboxPosition: number | null;
+  readonly catalogPosition: number;
   readonly genres: readonly string[];
   readonly credits: readonly ProjectCredit[];
   readonly tracks: readonly ProjectTrack[];

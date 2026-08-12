@@ -14,7 +14,7 @@ async function publicAudioAsset(assetId: string) {
       projects: {
         some: {
           role: "AUDIO_PREVIEW",
-          project: { status: "PUBLISHED" },
+          project: { publicVisible: true, status: { in: ["PUBLISHED", "IN_DEVELOPMENT"] } },
         },
       },
     },

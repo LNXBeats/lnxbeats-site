@@ -130,6 +130,7 @@ async function run() {
   await createInternalAuthUser({ email: MEMBER_EMAIL, password, displayName: "Audio Member QA", role: "MEMBER" });
   const project = await prisma.project.findUniqueOrThrow({ where: { slug: "jai-adopte-un-humain" } });
   const originalStatus = project.status;
+  const originalPublicVisible = project.publicVisible;
   await cleanupAudio(project.id);
 
   try {
@@ -199,9 +200,11 @@ async function run() {
     assert.equal((await currentAudio(project.id)).id, second.id);
 
     await prisma.project.update({ where: { id: project.id }, data: { status: "IN_DEVELOPMENT" } });
+    assert.equal((await fetch(`${baseUrl}/media/catalog/audio/${second.id}`)).status, 200);
+    await prisma.project.update({ where: { id: project.id }, data: { publicVisible: false } });
     assert.equal((await fetch(`${baseUrl}/media/catalog/audio/${second.id}`)).status, 404);
     assert.equal((await fetch(`${baseUrl}/api/admin/catalogue/audio/${second.id}`, { headers: { cookie: adminCookie } })).status, 200);
-    await prisma.project.update({ where: { id: project.id }, data: { status: originalStatus } });
+    await prisma.project.update({ where: { id: project.id }, data: { status: originalStatus, publicVisible: originalPublicVisible } });
 
     const deleted = await remove(baseUrl, project, second.id, adminCookie);
     assert.equal(deleted.status, 200);
@@ -256,7 +259,7 @@ async function run() {
     assert.equal((await upload(baseUrl, audioForm(project, null, oversized), adminCookie)).status, 413);
     console.info("Audio HTTP passed: full MP3/WAV transcoding, near-80 MiB streaming upload, public Range/HEAD, privacy, conflicts, delete and security refusals.");
   } finally {
-    await prisma.project.update({ where: { id: project.id }, data: { status: originalStatus } });
+    await prisma.project.update({ where: { id: project.id }, data: { status: originalStatus, publicVisible: originalPublicVisible } });
     await cleanupAudio(project.id);
     await cleanupUsers();
   }

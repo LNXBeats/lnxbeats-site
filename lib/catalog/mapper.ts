@@ -19,6 +19,10 @@ type DatabaseProject = {
   subtitle: string | null;
   type: string;
   status: string;
+  publicVisible: boolean;
+  jukeboxPlacement: string | null;
+  jukeboxPosition: number | null;
+  catalogPosition: number;
   shortDescription: string | null;
   description: string | null;
   releaseDate: Date | null;
@@ -128,6 +132,10 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
     } : null,
     featured: project.highlighted,
     status: (projectStatusMap[project.status as keyof typeof projectStatusMap] ?? "archive") as ProjectStatus,
+    publicVisible: project.publicVisible,
+    jukeboxPlacement: project.jukeboxPlacement === "PUBLISHED" ? "published" : project.jukeboxPlacement === "DEVELOPMENT" ? "development" : null,
+    jukeboxPosition: project.jukeboxPosition,
+    catalogPosition: project.catalogPosition,
     genres: [],
     credits: (project.credits ?? []).map((credit) => ({
       name: credit.name,

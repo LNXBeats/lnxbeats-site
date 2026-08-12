@@ -1,4 +1,4 @@
-# Modèle de données — V0.6.0.4
+# Modèle de données — V0.6.1
 
 ## Périmètre
 
@@ -66,6 +66,8 @@ Cette duplication limitée est volontaire : `User.email` sert au compte, `Custom
 ## Catalogue
 
 `Project` couvre les albums, singles et projets, avec les états `DRAFT`, `IN_DEVELOPMENT`, `PUBLISHED` et `ARCHIVED`. La date, les descriptions et le nombre de pistes restent nullables. `catalogPosition` stabilise l’ordre, `highlighted` conserve la sélection éditoriale et `featured` désigne l’unique mise en avant de l’accueil. `artworkTone`, les champs SEO et `legacySourceVersion` complètent la migration sans inventer de donnée.
+
+Depuis la V0.6.1, le statut éditorial est distinct de l’exposition publique : `publicVisible` masque un projet de la discographie, de sa route directe, du sitemap et de ses médias publics sans falsifier son avancement. `jukeboxPlacement` choisit explicitement le jukebox `PUBLISHED`, `DEVELOPMENT` ou aucun ; `jukeboxPosition` fournit un ordre nullable. Les positions absentes, dupliquées ou espacées restent déterministes grâce au repli sur `catalogPosition`, puis le slug. La migration additive initialise uniquement les projets déjà publics et dotés d’une cover selon leur statut existant ; elle ne cache, ne publie et ne requalifie arbitrairement aucune œuvre.
 
 La suppression logique par `ARCHIVED` est privilégiée. Les relations structurantes utilisent `RESTRICT` pour empêcher qu’un projet soit supprimé avec ses pistes, crédits, liens, annotations ou associations d’assets.
 
