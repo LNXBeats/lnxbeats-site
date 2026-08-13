@@ -2,8 +2,10 @@ import Image from "next/image";
 import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import type { Project } from "@/lib/catalog/types";
 
+type ArtworkProject = Pick<Project, "artworkTone" | "cover" | "coverAlt" | "title">;
+
 type ProjectArtworkProps = {
-  project: Project;
+  project: ArtworkProject;
   priority?: boolean;
   sizes: string;
   className?: string;

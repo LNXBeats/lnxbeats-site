@@ -1,0 +1,501 @@
+/* V0.6.4 — exhaustive PostgreSQL catalogue presented as one CSS 3D scene. */
+
+.v064-discography-hero.page-hero--catalog {
+  min-height: min(56svh, 590px);
+  padding-top: calc(var(--header-height) + clamp(3.6rem, 7vw, 6.5rem));
+  padding-bottom: clamp(3rem, 6vw, 5rem);
+}
+
+.v064-discography-hero .page-hero__grid { min-height: 250px; }
+.v064-discography-hero h1 { font-size: clamp(3.8rem, 8.4vw, 8.4rem); }
+.v064-discography-hero .page-hero__visual { bottom: -7rem; width: min(29vw, 410px); opacity: .48; }
+
+.v064-discography-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  padding-block: clamp(3.5rem, 7vw, 7rem);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(198, 161, 91, .11), transparent 34rem),
+    radial-gradient(circle at 7% 52%, rgba(111, 75, 38, .08), transparent 26rem),
+    #080808;
+}
+
+.v064-discography-stage::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  opacity: .22;
+  background-image: radial-gradient(circle, rgba(226, 196, 126, .22) 0 1px, transparent 2px);
+  background-position: 0 0;
+  background-size: 96px 96px;
+  mask-image: linear-gradient(90deg, transparent, #000 20% 80%, transparent);
+}
+
+.v064-discography-container { max-width: min(1760px, calc(100% - (var(--window-gutter) * 2))); }
+
+.discography-jukebox.home-jukebox {
+  margin-top: 0;
+  padding: clamp(1.2rem, 2.6vw, 2.6rem);
+  overflow: hidden;
+  border: 1px solid rgba(244, 240, 232, .14);
+  border-radius: clamp(22px, 3vw, 42px);
+  background: rgba(10, 9, 8, .76);
+  box-shadow: 0 38px 110px rgba(0, 0, 0, .34);
+}
+
+.discography-jukebox.home-jukebox::after {
+  background: linear-gradient(100deg, rgba(7, 7, 6, .96), rgba(8, 8, 7, .68), rgba(7, 7, 6, .96));
+}
+
+.discography-jukebox .home-jukebox__background {
+  inset: -24%;
+  opacity: .12;
+  filter: blur(54px) saturate(.8);
+  background:
+    radial-gradient(circle at 50% 32%, rgba(198, 161, 91, .24), transparent 24rem),
+    linear-gradient(145deg, rgba(44, 32, 19, .42), transparent 66%);
+}
+
+.discography-jukebox .home-jukebox__heading { align-items: end; }
+.discography-jukebox .home-jukebox__heading h2 {
+  max-width: 14ch;
+  margin: .4rem 0 0;
+  font-size: clamp(2.7rem, 5vw, 5.8rem);
+  font-weight: 520;
+  letter-spacing: -.065em;
+  line-height: .92;
+}
+
+.discography-jukebox .home-jukebox__heading output {
+  color: rgba(244, 240, 232, .62);
+  font-size: .7rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .12em;
+  white-space: nowrap;
+}
+
+.discography-jukebox__toolbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  margin-top: clamp(1.8rem, 3vw, 3rem);
+}
+
+.discography-jukebox__filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: .45rem;
+}
+
+.discography-jukebox__filters button,
+.discography-jukebox__sort select {
+  min-height: 46px;
+  border: 1px solid rgba(244, 240, 232, .14);
+  border-radius: 999px;
+  background: rgba(9, 9, 8, .78);
+  color: #c7c2b9;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) ease, background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.discography-jukebox__filters button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .75rem;
+  padding: .65rem .9rem;
+  font-size: .68rem;
+  font-weight: 700;
+}
+
+.discography-jukebox__filters button strong {
+  display: grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .06);
+  color: rgba(244, 240, 232, .68);
+  font-size: .58rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.discography-jukebox__filters button:is(:hover, :focus-visible),
+.discography-jukebox__filters button[aria-pressed="true"] {
+  border-color: rgba(226, 196, 126, .72);
+  background: rgba(198, 161, 91, .11);
+  color: var(--gold-light);
+}
+
+.discography-jukebox__filters button[aria-pressed="true"] strong { background: var(--gold); color: #0a0908; }
+.discography-jukebox__filters button:disabled { cursor: not-allowed; opacity: .38; }
+
+.discography-jukebox__sort { position: relative; flex: 0 0 auto; }
+.discography-jukebox__sort::after {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  content: "⌄";
+  color: var(--gold-light);
+  pointer-events: none;
+  transform: translateY(-58%);
+}
+
+.discography-jukebox__sort select {
+  min-width: 176px;
+  padding: .65rem 2.5rem .65rem 1rem;
+  appearance: none;
+  font-size: .68rem;
+}
+
+.discography-jukebox .home-jukebox__scene {
+  --jukebox-cover-size: clamp(270px, 29vw, 430px);
+  --jukebox-cover-half: clamp(135px, 14.5vw, 215px);
+  --discography-card-width: var(--jukebox-cover-size);
+  position: relative;
+  display: block;
+  min-height: calc(var(--discography-card-width) + 150px);
+  margin: clamp(2rem, 4vw, 3.8rem) 0 0;
+  perspective: 1500px;
+  perspective-origin: 50% 42%;
+}
+
+.discography-jukebox .home-jukebox__scene::after {
+  position: absolute;
+  z-index: -1;
+  right: 5%;
+  bottom: 0;
+  left: 5%;
+  height: 36%;
+  content: "";
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 100%, rgba(226, 196, 126, .09), transparent 60%);
+  transform: rotateX(66deg) translateY(36%);
+  transform-origin: bottom;
+}
+
+.discography-jukebox .home-jukebox__rail {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: calc(var(--discography-card-width) + 150px);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  perspective: 1500px;
+  transform-style: preserve-3d;
+}
+
+.discography-jukebox .home-jukebox__item {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--discography-card-width);
+  height: auto;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-50%, 3%, -330px) scale(.54);
+  transform-origin: 50% 45%;
+  transform-style: preserve-3d;
+  transition: transform 620ms cubic-bezier(.22, 1, .36, 1), opacity 440ms ease;
+}
+
+.discography-jukebox .home-jukebox__item.is-active {
+  z-index: 5;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate3d(-50%, 0, 110px) scale(1) rotateY(0deg);
+  animation: none !important;
+}
+
+.discography-jukebox .home-jukebox__item.is-previous {
+  z-index: 4;
+  opacity: .72;
+  pointer-events: auto;
+  transform: translate3d(-126%, 4%, -90px) scale(.8) rotateY(38deg);
+}
+
+.discography-jukebox .home-jukebox__item.is-next {
+  z-index: 4;
+  opacity: .72;
+  pointer-events: auto;
+  transform: translate3d(26%, 4%, -90px) scale(.8) rotateY(-38deg);
+}
+
+.discography-jukebox .home-jukebox__item.is-far-previous {
+  z-index: 3;
+  opacity: .38;
+  pointer-events: auto;
+  transform: translate3d(-190%, 9%, -230px) scale(.61) rotateY(49deg);
+}
+
+.discography-jukebox .home-jukebox__item.is-far-next {
+  z-index: 3;
+  opacity: .38;
+  pointer-events: auto;
+  transform: translate3d(90%, 9%, -230px) scale(.61) rotateY(-49deg);
+}
+
+.discography-jukebox .home-jukebox__item.is-hidden-before,
+.discography-jukebox .home-jukebox__item.is-hidden-after { visibility: hidden; }
+
+.discography-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(128px, auto);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(244, 240, 232, .2);
+  border-radius: clamp(20px, 2vw, 30px);
+  background: linear-gradient(155deg, rgba(24, 22, 19, .98), rgba(8, 8, 7, .98));
+  box-shadow: 0 26px 72px rgba(0, 0, 0, .54);
+  transform-style: preserve-3d;
+  transition: border-color var(--motion-standard) ease, box-shadow var(--motion-standard) ease;
+}
+
+.discography-card[data-active="true"] {
+  border-color: rgba(226, 196, 126, .62);
+  box-shadow: 0 38px 100px rgba(0, 0, 0, .64), 0 0 42px rgba(198, 161, 91, .08);
+}
+
+.discography-card__art { position: relative; aspect-ratio: 1; overflow: hidden; }
+.discography-card__artwork { width: 100%; height: 100%; border: 0; border-radius: 0; }
+.discography-card__artwork.project-artwork:not(.project-artwork--image) { padding: clamp(1rem, 2vw, 1.6rem); }
+.discography-card__artwork .project-artwork__title { font-size: clamp(1.4rem, 3.3vw, 3rem); }
+
+.discography-card__body {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  min-height: 128px;
+  align-content: center;
+  padding: 1rem clamp(1rem, 2vw, 1.35rem);
+  border-top: 1px solid rgba(244, 240, 232, .12);
+}
+
+.discography-card__body p {
+  margin: 0 0 .4rem;
+  color: var(--gold-light);
+  font-size: .58rem;
+  font-weight: 750;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+
+.discography-card__body h3 {
+  max-width: 22ch;
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.35rem);
+  font-weight: 570;
+  letter-spacing: -.035em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.discography-jukebox .home-jukebox__item a.discography-card__link {
+  position: absolute;
+  z-index: 5;
+  right: 1rem;
+  bottom: 1rem;
+  display: inline-flex;
+  width: auto;
+  min-height: 42px;
+  aspect-ratio: auto;
+  align-items: center;
+  gap: .55rem;
+  padding: .45rem .7rem;
+  overflow: visible;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--gold-light);
+  font-size: .58rem;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.discography-jukebox .home-jukebox__item button.discography-card__play-hit,
+.discography-jukebox .home-jukebox__item button.discography-card__select-hit {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: inherit;
+  aspect-ratio: auto;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.discography-card__play-hit { border-radius: 0; }
+.discography-card__select-hit:focus-visible,
+.discography-card__play-hit:focus-visible { outline: 3px solid var(--gold-light); outline-offset: -5px; }
+
+.discography-jukebox .home-jukebox__play {
+  padding: .68rem .9rem;
+  border-color: rgba(255, 255, 255, .42);
+  background: rgba(8, 8, 7, .62);
+  opacity: .94;
+}
+
+.discography-jukebox .home-jukebox__progress { z-index: 6; }
+
+.discography-jukebox .home-jukebox__arrow {
+  top: calc(var(--discography-card-width) / 2);
+  --jukebox-arrow-vertical: -50%;
+}
+
+.discography-jukebox .home-jukebox__navigation-hint { margin-top: .9rem; }
+
+@media (min-width: 701px) and (max-width: 1000px) {
+  .discography-jukebox .home-jukebox__scene {
+    --jukebox-cover-size: clamp(260px, 42vw, 340px);
+    --jukebox-cover-half: clamp(130px, 21vw, 170px);
+  }
+
+  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-112%, 5%, -70px) scale(.77) rotateY(29deg); }
+  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(12%, 5%, -70px) scale(.77) rotateY(-29deg); }
+  .discography-jukebox .home-jukebox__item.is-far-previous,
+  .discography-jukebox .home-jukebox__item.is-far-next { visibility: hidden; opacity: 0; pointer-events: none; }
+}
+
+@media (max-width: 900px) {
+  .v064-discography-hero.page-hero--catalog { min-height: 0; }
+  .v064-discography-hero .page-hero__grid { min-height: 360px; }
+  .discography-jukebox__toolbar { align-items: stretch; flex-direction: column; }
+  .discography-jukebox__filters { overflow-x: auto; padding: 3px; scrollbar-width: none; }
+  .discography-jukebox__filters::-webkit-scrollbar { display: none; }
+  .discography-jukebox__sort select { width: 100%; }
+}
+
+@media (max-width: 700px) {
+  .v064-discography-hero.page-hero--catalog {
+    padding-top: calc(var(--header-height) + 3.25rem);
+    padding-bottom: 2.75rem;
+  }
+
+  .v064-discography-hero .page-hero__grid { min-height: 390px; align-content: end; }
+  .v064-discography-hero h1 { max-width: 100%; font-size: clamp(3rem, 14.5vw, 3.75rem); line-height: .9; }
+  .v064-discography-hero .page-hero__visual { right: -18%; bottom: 1rem; width: 74vw; opacity: .25; }
+  .v064-discography-stage { padding-block: 2.5rem 4rem; }
+  .v064-discography-container { max-width: 100%; padding-inline: 0; }
+
+  .discography-jukebox.home-jukebox {
+    margin-inline: 0;
+    padding: 1.1rem 0;
+    border-inline: 0;
+    border-radius: 0;
+  }
+
+  .discography-jukebox .home-jukebox__heading,
+  .discography-jukebox__toolbar { padding-inline: 1.1rem; }
+  .discography-jukebox .home-jukebox__heading { align-items: start; }
+  .discography-jukebox .home-jukebox__heading h2 { font-size: clamp(2.45rem, 13vw, 3.5rem); }
+  .discography-jukebox__toolbar { margin-top: 1.5rem; }
+  .discography-jukebox__filters { margin-inline: -3px; padding-bottom: .35rem; }
+  .discography-jukebox__filters button { min-height: 44px; }
+
+  .discography-jukebox .home-jukebox__scene {
+    --discography-card-width: 78vw;
+    min-height: 0;
+    margin-top: 1.6rem;
+    padding-bottom: 3.5rem;
+    perspective: none;
+  }
+
+  .discography-jukebox .home-jukebox__scene::after { display: none; }
+  .discography-jukebox .home-jukebox__rail {
+    display: flex;
+    height: auto;
+    gap: .85rem;
+    padding: .25rem 11vw 1rem;
+    overflow-x: auto;
+    scroll-padding-inline: 11vw;
+    scroll-snap-type: x mandatory;
+    perspective: none;
+  }
+
+  .discography-jukebox .home-jukebox__item,
+  .discography-jukebox .home-jukebox__item.is-active,
+  .discography-jukebox .home-jukebox__item.is-previous,
+  .discography-jukebox .home-jukebox__item.is-next,
+  .discography-jukebox .home-jukebox__item.is-far-previous,
+  .discography-jukebox .home-jukebox__item.is-far-next,
+  .discography-jukebox .home-jukebox__item.is-hidden-before,
+  .discography-jukebox .home-jukebox__item.is-hidden-after {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    height: auto;
+    flex: 0 0 var(--discography-card-width);
+    visibility: visible !important;
+    pointer-events: auto;
+    transform: none !important;
+    opacity: .48;
+    scroll-snap-align: center;
+    will-change: auto;
+  }
+
+  .discography-jukebox .home-jukebox__item.is-active { opacity: 1; }
+  .discography-jukebox .home-jukebox__item.is-previous,
+  .discography-jukebox .home-jukebox__item.is-next { opacity: .68; }
+  .discography-card { grid-template-rows: auto minmax(116px, auto); }
+  .discography-card__body { min-height: 116px; padding: .9rem 1rem; }
+  .discography-card__body h3 { padding-right: 3.7rem; font-size: 1rem; }
+
+  .discography-jukebox .home-jukebox__arrow {
+    --jukebox-arrow-line-width: 24px;
+    --jukebox-arrow-vertical: 0%;
+    top: auto;
+    bottom: 0;
+    width: calc(72px + .55rem);
+    transform: translateY(var(--jukebox-arrow-vertical));
+  }
+
+  .discography-jukebox .home-jukebox__arrow--previous { right: auto; left: 1.1rem; }
+  .discography-jukebox .home-jukebox__arrow--next { right: 1.1rem; left: auto; }
+  .discography-jukebox .home-jukebox__navigation-hint { margin-top: .65rem; }
+  .discography-jukebox .home-jukebox__navigation-hint span:first-child { display: none; }
+  .discography-jukebox .home-jukebox__navigation-hint span:last-child { display: inline; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discography-jukebox .home-jukebox__background,
+  .discography-jukebox .home-jukebox__item,
+  .discography-card,
+  .discography-jukebox .home-jukebox__progress,
+  .discography-jukebox__filters button,
+  .discography-jukebox__sort select { transition: none !important; animation: none !important; }
+
+  .discography-jukebox .home-jukebox__item.is-active { transform: translate3d(-50%, 0, 0) scale(1); }
+  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-126%, 4%, 0) scale(.8); }
+  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(26%, 4%, 0) scale(.8); }
+  .discography-jukebox .home-jukebox__item.is-far-previous { transform: translate3d(-190%, 9%, 0) scale(.61); }
+  .discography-jukebox .home-jukebox__item.is-far-next { transform: translate3d(90%, 9%, 0) scale(.61); }
+}
+
+@media (min-width: 701px) and (max-width: 1000px) and (prefers-reduced-motion: reduce) {
+  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-112%, 5%, 0) scale(.77); }
+  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(12%, 5%, 0) scale(.77); }
+}
+
+@media (max-width: 700px) and (prefers-reduced-motion: reduce) {
+  .discography-jukebox .home-jukebox__item { transform: none !important; }
+}

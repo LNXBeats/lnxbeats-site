@@ -1,0 +1,188 @@
+/* V0.6.4 — compact route-aware access to official music and social profiles. */
+
+.quick-access-slot {
+  position: relative;
+  z-index: 40;
+  width: min(1760px, calc(100% - (var(--window-gutter, 16px) * 2)));
+  margin: calc(var(--header-height) + var(--header-float-gap, 12px) + 12px) auto 0;
+}
+
+.quick-access-slot + main :is(.home-hero__inner, .page-hero, .album-hero, .about-hero) {
+  --header-height: 0px;
+}
+
+.quick-access {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(244, 240, 232, 0.13);
+  border-radius: 18px;
+  background: rgba(12, 12, 11, 0.86);
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px) saturate(0.82);
+}
+
+.quick-access__heading {
+  display: grid;
+  min-width: 148px;
+  align-content: center;
+  gap: 0.1rem;
+  padding: 0.7rem 1.15rem;
+  border-right: 1px solid rgba(244, 240, 232, 0.11);
+}
+
+.quick-access__heading strong {
+  color: var(--text);
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.quick-access__heading span {
+  color: rgba(244, 240, 232, 0.52);
+  font-size: 0.56rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.quick-access__rail {
+  display: grid;
+  min-width: max-content;
+  grid-template-columns: repeat(6, minmax(112px, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-access__rail li {
+  min-width: 0;
+}
+
+.quick-access__link {
+  display: flex;
+  min-width: 112px;
+  min-height: 58px;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem clamp(0.7rem, 1.2vw, 1rem);
+  border-right: 1px solid rgba(244, 240, 232, 0.1);
+  color: rgba(244, 240, 232, 0.78);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.quick-access__rail li:last-child .quick-access__link {
+  border-right: 0;
+}
+
+.quick-access__link:is(:hover, :focus-visible) {
+  background: rgba(226, 196, 126, 0.08);
+  color: var(--text);
+}
+
+.quick-access__link:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline-offset: -3px;
+}
+
+.quick-access__icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 1px solid rgba(244, 240, 232, 0.12);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.quick-access__icon img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+@media (max-width: 1180px) {
+  .quick-access {
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+
+  .quick-access__heading {
+    min-width: 0;
+    padding-inline: 0.9rem;
+  }
+
+  .quick-access__rail {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(226, 196, 126, 0.34) transparent;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .quick-access__rail li {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 600px) {
+  .quick-access-slot {
+    width: calc(100% - (var(--window-gutter, 10px) * 2));
+    margin-top: calc(var(--header-height) + var(--header-float-gap, 10px) + 10px);
+  }
+
+  .quick-access {
+    grid-template-columns: 104px minmax(0, 1fr);
+    border-radius: 15px;
+  }
+
+  .quick-access__heading {
+    padding-inline: 0.75rem;
+  }
+
+  .quick-access__heading span {
+    display: none;
+  }
+
+  .quick-access__link {
+    min-width: 112px;
+    min-height: 56px;
+    padding-inline: 0.75rem;
+  }
+
+  .quick-access__icon {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  .quick-access__icon img {
+    width: 19px;
+    height: 19px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-access__rail {
+    scroll-behavior: auto;
+    scroll-snap-type: none;
+  }
+
+  .quick-access__link {
+    transition: none;
+  }
+}

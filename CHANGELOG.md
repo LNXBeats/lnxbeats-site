@@ -2,6 +2,26 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.4] — 2026-08-13
+
+### Ajouté
+
+- scène Discographie unique en perspective CSS 3D, exhaustive et alimentée par PostgreSQL, avec filtres et tris dynamiques ;
+- navigation par flèches, clavier, cartes voisines et rail tactile mobile, sans multiplier les lecteurs audio ;
+- barre Accès rapide partagée vers les six plateformes officielles configurées, avec glyphes SVG locaux documentés.
+
+### Modifié
+
+- hero Discographie raccourci et anciennes présentations redondantes retirées de la page publique ;
+- projets sans cover conservés dans le catalogue grâce aux visuels éditoriaux existants, sans pochette fictive ;
+- lecture continue, pause volontaire, Range R2 et source runtime PostgreSQL conservés dans la nouvelle scène.
+
+### Accessibilité et performance
+
+- focus visible et restauré après sélection, projet actif annoncé, filtres `aria-pressed` et tri natif ;
+- profondeur, rotations et transitions neutralisées avec `prefers-reduced-motion: reduce` sans masquer le contenu ;
+- aucune dépendance lourde, aucun WebGL/canvas et aucun préchargement global des previews audio.
+
 ## [0.6.3] — 2026-08-13
 
 ### Ajouté

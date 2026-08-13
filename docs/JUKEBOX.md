@@ -1,30 +1,49 @@
-# Jukeboxes et discographie dynamiques
+# Discographie 3D et lecture continue
 
-La page `/discographie` repose sur une seule lecture PostgreSQL structurée. Elle construit le catalogue publié, le jukebox des parutions et, uniquement lorsqu’il possède au moins un projet éligible, le jukebox des créations en développement. Le composant `ProjectJukebox` est partagé par les deux collections : aucune variante du player ni source de vérité parallèle n’est maintenue.
+La page `/discographie` repose sur une seule lecture PostgreSQL et une seule scène React. Elle présente dans cette scène l’ensemble des projets publics documentés, qu’ils soient publiés ou en développement. La grille compacte et le second jukebox ont été retirés de cette page : aucun catalogue parallèle n’est maintenu.
 
 ## Contrat éditorial
 
-La publication publique et le placement dans un jukebox sont explicites :
-
 - `publicVisible` autorise ou masque le projet sur toutes les surfaces publiques ;
-- `status` garde sa signification éditoriale (`PUBLISHED`, `IN_DEVELOPMENT`, `DRAFT`, `ARCHIVED`) ;
-- `jukeboxPlacement` choisit `PUBLISHED`, `DEVELOPMENT` ou aucun jukebox ;
-- `jukeboxPosition` fixe l’ordre voulu sans dépendre de l’ordre SQL implicite.
+- seuls les statuts `PUBLISHED` et `IN_DEVELOPMENT` entrent dans la requête publique ;
+- `catalogPosition` fournit l’ordre éditorial stable de la scène ;
+- `releaseDate` permet les tris chronologiques sans inventer de date ;
+- une cover officielle est rendue par sa route média PostgreSQL/R2 ;
+- en l’absence de cover, `ProjectArtwork` affiche le visuel éditorial provisoire déjà prévu par le catalogue.
 
-Un projet n’entre dans un jukebox que si sa visibilité, son statut, son placement et sa cover concordent. Les positions nulles viennent après les positions explicites ; les trous et doublons sont départagés par `catalogPosition`, puis par slug. La migration V0.6.1 conserve tous les projets publics existants et initialise le placement des projets déjà dotés d’une cover à partir de leur statut documenté.
+Les champs `jukeboxPlacement` et `jukeboxPosition` restent disponibles pour les surfaces promotionnelles historiques. La nouvelle scène « Tous les projets » est volontairement exhaustive : ils n’en excluent pas un projet public. Un nouvel album admissible apparaît ainsi sans ajout manuel dans le code dès que son statut et sa visibilité le rendent public ; sa cover officielle prend automatiquement la place du visuel éditorial lorsqu’elle est ajoutée.
 
-`publicVisible = false` retire également le projet de la fiche directe, du sitemap et des routes publiques de cover/audio. PostgreSQL reste l’unique source runtime ; `data/discography.ts` demeure une fixture historique sans fallback.
+`publicVisible = false` retire toujours le projet de la liste, de sa fiche directe, du sitemap et des routes publiques de cover/audio. `data/discography.ts` demeure une fixture historique sans fallback runtime.
+
+## Filtres et tri
+
+Les vues `Tous`, `Albums`, `Singles` et `Projets en développement` sont dérivées de la même collection reçue du serveur. Leurs compteurs ne sont pas codés en dur. Le tri propose l’ordre éditorial, le plus récent et le plus ancien ; les projets sans date restent à la fin et sont départagés par `catalogPosition`, puis par slug.
+
+Le changement de filtre ne remonte pas le composant et ne recrée pas l’élément audio. Si le projet actif appartient encore au filtre, il reste actif. Sinon, la scène choisit le premier projet visible via le même chemin de navigation que les flèches et le clavier.
 
 ## Interaction et audio
 
-Sur desktop, une scène pilotée par l’index actif positionne les cinq covers les plus proches en `-2`, `-1`, `0`, `+1`, `+2`. Les transitions ne touchent qu’à `transform` et `opacity`. Sur mobile, le même état et les mêmes données sont reliés à un rail tactile `scroll-snap` natif. Les flèches symétriques possèdent une cible circulaire de 48 px, restent alignées sur la cover et sont accompagnées d’une consigne adaptée au pointeur ou au geste tactile.
+Sur desktop, l’index actif positionne cinq cartes en `-2`, `-1`, `0`, `+1`, `+2` avec perspective, rotation Y, profondeur et échelle. L’index initial garde deux voisins de chaque côté lorsqu’il y a assez de projets, afin que la profondeur soit perceptible dès l’ouverture. Sur tablette, la scène conserve la carte active et ses deux voisines avec une profondeur réduite. Sur mobile, les mêmes données passent dans un rail tactile `scroll-snap` natif : une carte centrale et les aperçus de ses voisines restent visibles.
 
-Le client ne reçoit que le slug, le titre, l’année, l’URL publique de la cover, son alt et l’éventuel extrait public. Une cover sans extrait reste navigable, sans faux bouton Play. Chaque jukebox conserve un unique élément `<audio>` et les players publics partagent l’événement `lnx-audio-preview-play` : le démarrage d’un player arrête les autres, y compris entre les deux jukeboxes.
+Le cœur audio validé reste inchangé :
 
-Après une première lecture acceptée par le navigateur, `audioUnlocked` et `continuousPlayback` autorisent l’enchaînement sur la cover suivante. Un projet sans extrait impose le silence sans perdre ce mode ; une pause volontaire le désactive et un nouveau Play le réactive. Chaque promesse `play()` est protégée contre les refus Safari et les navigations rapides. Le modèle validé en V0.6.0.5 n’est pas réécrit ; V0.6.1 ajoute seulement la coordination inter-jukebox.
+- aucun autoplay au chargement ;
+- un premier Play volontaire ;
+- navigation avant Play silencieuse ;
+- après déverrouillage, navigation vers un projet avec preview automatiquement lue ;
+- projet sans preview silencieux sans perdre le mode continu ;
+- pause volontaire désactivant l’enchaînement ;
+- reprise volontaire le réactivant ;
+- un seul élément `<audio>` et une seule source active ;
+- coordination avec les autres lecteurs par `lnx-audio-preview-play` ;
+- protection des promesses `play()` pour Safari et les navigations rapides.
+
+Un projet, publié ou en développement, ne reçoit un bouton Play que lorsqu'une preview publique, validée et réellement reliée au projet existe. Les filtres et le tri manipulent les indices visibles tout en conservant les indices globaux utilisés par la machine audio.
 
 ## Performance et accessibilité
 
-La cover active et ses voisines immédiates peuvent être prioritaires dans le premier jukebox ; le second reste différé. Aucun chargement groupé de tous les extraits n’est déclenché. Les commandes sont nommées, utilisables au clavier et bornées aux extrémités. `prefers-reduced-motion: reduce` neutralise la perspective animée et la respiration sans masquer le contenu ni modifier l’audio.
+La scène utilise uniquement des transforms CSS ; elle n’ajoute ni WebGL, ni canvas, ni dépendance de carousel. L’élément audio ne charge que la preview active. Les images proches peuvent être prioritaires, les autres conservent le chargement différé de `next/image`.
 
-Le catalogue compact affiche douze fiches puis un élément `<details>` natif pour le reste. Tout le contenu reste rendu côté serveur et accessible sans pagination client ni JavaScript supplémentaire.
+Les flèches sont de vrais boutons, les cartes voisines sont sélectionnables, les flèches clavier parcourent la vue filtrée et le projet actif est annoncé dans une zone live. Les filtres utilisent `aria-pressed`, le tri reste un `select` natif et chaque focus reste visible.
+
+Avec `prefers-reduced-motion: reduce`, transitions, rotations, profondeur et respiration sont neutralisées. La carte active, les voisines, les filtres, le tri et Play/Pause restent utilisables ; aucun contenu actif n’est laissé invisible.

@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
+import { QuickAccessBar } from "@/components/quick-access-bar";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteConfig } from "@/data/site";
 import "./globals.css";
 import "./visual-phase2.css";
 import "./visual-phase3.css";
+import "./v064-quick-access.css";
 
 const siteUrl = process.env.SITE_URL ?? siteConfig.url;
 const socialImage = new URL("/og.png", siteUrl).toString();
@@ -57,6 +59,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <a className="skip-link" href="#contenu">Aller au contenu</a>
         <SiteHeader />
+        <QuickAccessBar />
         <main id="contenu">{children}</main>
         <SiteFooter />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializedStructuredData }} />

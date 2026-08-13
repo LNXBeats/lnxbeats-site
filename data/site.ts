@@ -11,6 +11,15 @@ export const officialLinks = {
   etsy: "https://lnxbeats.etsy.com/listing/4528037390",
 } as const;
 
+export const quickAccessPlatforms = [
+  { name: "Spotify", url: officialLinks.spotify, icon: "/brands/spotify-icon.svg", tone: "spotify" },
+  { name: "Apple Music", url: officialLinks.appleMusic, icon: "/brands/apple-music-icon.svg", tone: "apple-music" },
+  { name: "YouTube", url: officialLinks.youtube, icon: "/brands/youtube-icon.svg", tone: "youtube" },
+  { name: "Amazon Music", url: officialLinks.amazonMusic, icon: "/brands/amazon-icon.svg", tone: "amazon" },
+  { name: "TikTok", url: officialLinks.tiktok, icon: "/brands/tiktok-icon.svg", tone: "tiktok" },
+  { name: "Instagram", url: officialLinks.instagram, icon: "/brands/instagram-icon.svg", tone: "instagram" },
+] as const;
+
 export const siteConfig = {
   name: "LNX Beats",
   url: "https://lnxbeats.fr",

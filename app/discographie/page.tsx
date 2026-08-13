@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { CompactProjectCatalog } from "@/components/compact-project-catalog";
 import { Container } from "@/components/container";
 import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
 import { jukeboxInitialIndex } from "@/lib/catalog/jukebox";
+import "../v064-discography.css";
 
 export const metadata: Metadata = {
   title: "Discographie",
@@ -13,24 +13,32 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-function jukeboxView(projects: Awaited<ReturnType<typeof listDiscographyProjects>>["publishedJukeboxProjects"]): JukeboxProject[] {
+function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProjects>>["projects"]): JukeboxProject[] {
   return projects.map((project) => ({
     slug: project.slug,
     title: project.title,
+    type: project.type,
+    status: project.status,
     year: project.year,
-    cover: project.cover!,
-    coverAlt: project.coverAlt ?? `Pochette de « ${project.title} » — LNX Beats`,
-    audioPreview: project.audioPreview ? { url: project.audioPreview.url, durationMs: project.audioPreview.durationMs } : null,
+    releaseDate: project.releaseDate,
+    cover: project.cover,
+    coverAlt: project.coverAlt,
+    artworkTone: project.artworkTone,
+    audioPreview: project.audioPreview
+      ? { url: project.audioPreview.url, durationMs: project.audioPreview.durationMs }
+      : null,
+    featured: project.featured,
+    catalogPosition: project.catalogPosition,
   }));
 }
 
 export default async function DiscographyPage() {
-  const { publishedProjects, projectsInDevelopment, publishedJukeboxProjects, developmentJukeboxProjects } = await listDiscographyProjects();
-  const publishedJukebox = jukeboxView(publishedJukeboxProjects);
-  const developmentJukebox = jukeboxView(developmentJukeboxProjects);
+  const { projects, publishedProjects, projectsInDevelopment } = await listDiscographyProjects();
+  const sceneProjects = discographyView(projects);
+
   return (
     <>
-      <header className="page-hero page-hero--catalog">
+      <header className="page-hero page-hero--catalog v064-discography-hero">
         <Container className="page-hero__grid">
           <div>
             <p className="eyebrow">Des récits mis en musique</p>
@@ -49,20 +57,17 @@ export default async function DiscographyPage() {
         </Container>
       </header>
 
-      {publishedJukebox.length ? <div id="jukebox"><Container><ProjectJukebox projects={publishedJukebox} initialIndex={jukeboxInitialIndex(publishedJukeboxProjects)} eyebrow="Écouter la discographie" heading="Des covers, puis une histoire." variant="published" eager /></Container></div> : null}
-
-      <section className="section section--soft catalog-section catalog-section--compact" aria-labelledby="catalog-title">
-        <Container>
-          <div className="catalog-header catalog-header--large motion-reveal">
-            <div><p className="eyebrow">Catalogue</p><h2 id="catalog-title">Tous les projets.</h2></div>
-            <div className="catalog-header__summary"><p>Retrouvez tous les projets LNX Beats.</p><span>{publishedProjects.length} projets publiés</span></div>
-          </div>
-          <CompactProjectCatalog projects={publishedProjects} />
+      <section className="v064-discography-stage" aria-label="Catalogue LNX Beats">
+        <Container className="v064-discography-container">
+          <ProjectJukebox
+            projects={sceneProjects}
+            initialIndex={jukeboxInitialIndex(sceneProjects, 2)}
+            eyebrow="Catalogue"
+            heading="Tous les projets."
+            eager
+          />
         </Container>
       </section>
-
-      {developmentJukebox.length ? <div className="development-jukebox-section"><Container><ProjectJukebox projects={developmentJukebox} initialIndex={jukeboxInitialIndex(developmentJukeboxProjects)} eyebrow="En cours de création" heading="Dans les coulisses de LNX Beats." variant="development" /></Container></div> : null}
-
     </>
   );
 }
