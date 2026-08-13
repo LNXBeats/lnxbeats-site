@@ -46,4 +46,4 @@ La scène utilise uniquement des transforms CSS ; elle n’ajoute ni WebGL, ni c
 
 Les flèches sont de vrais boutons, les cartes voisines sont sélectionnables, les flèches clavier parcourent la vue filtrée et le projet actif est annoncé dans une zone live. Les filtres utilisent `aria-pressed`, le tri reste un `select` natif et chaque focus reste visible.
 
-Avec `prefers-reduced-motion: reduce`, transitions, rotations, profondeur et respiration sont neutralisées. La carte active, les voisines, les filtres, le tri et Play/Pause restent utilisables ; aucun contenu actif n’est laissé invisible.
+Avec `prefers-reduced-motion: reduce`, toutes les transitions et la respiration sont neutralisées. La composition 3D reste immobile, avec ses plans Z et ses rotations statiques : la profondeur et la hiérarchie visuelle ne dépendent donc jamais d’une animation. La carte active, les voisines, les filtres, le tri et Play/Pause restent utilisables ; aucun contenu actif n’est laissé invisible.

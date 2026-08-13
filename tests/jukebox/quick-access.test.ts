@@ -5,18 +5,34 @@ import test from "node:test";
 import { quickAccessPlatforms } from "@/data/site";
 import { isQuickAccessRoute } from "@/lib/navigation/quick-access";
 
-test("quick access uses the six configured official destinations in editorial order", () => {
+test("quick access uses the seven configured official destinations in editorial order", () => {
   assert.deepEqual(quickAccessPlatforms.map(({ name }) => name), [
     "Spotify",
     "Apple Music",
+    "Deezer",
     "YouTube",
     "Amazon Music",
     "TikTok",
     "Instagram",
   ]);
-  assert.equal(new Set(quickAccessPlatforms.map(({ url }) => url)).size, 6);
+  assert.equal(new Set(quickAccessPlatforms.map(({ url }) => url)).size, 7);
   assert.equal(quickAccessPlatforms.every(({ url }) => url.startsWith("https://")), true);
   assert.equal(quickAccessPlatforms.every(({ icon }) => icon.startsWith("/brands/") && icon.endsWith(".svg")), true);
+});
+
+test("the homepage does not duplicate quick access with the former large platform grid", async () => {
+  const [homepage, globals, phaseTwo, phaseThree] = await Promise.all([
+    readFile(new URL("../../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../../app/visual-phase2.css", import.meta.url), "utf8"),
+    readFile(new URL("../../app/visual-phase3.css", import.meta.url), "utf8"),
+  ]);
+  assert.doesNotMatch(homepage, /PlatformDestination/);
+  assert.doesNotMatch(homepage, /platforms-stage/);
+  assert.doesNotMatch(globals, /platforms-(?:stage|grid)|platform-(?:card|destination)/);
+  assert.doesNotMatch(phaseTwo, /platforms-(?:stage|grid)|platform-(?:card|destination)/);
+  assert.doesNotMatch(phaseThree, /platforms-(?:stage|grid)|platform-(?:card|destination)/);
+  assert.doesNotMatch(homepage, /Les histoires continuent ailleurs/);
 });
 
 test("quick access is fail-closed outside the exact public allowlist and project pages", () => {

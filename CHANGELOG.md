@@ -2,6 +2,20 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.4.1] — 2026-08-13
+
+### Modifié
+
+- Discographie resserrée autour d’une seule scène : grand hero retiré, titre et contrôles rapprochés du catalogue ;
+- galerie 3D redressée et approfondie avec une carte centrale dominante, quatre plans latéraux plus espacés et des commandes rejetées aux extrémités ;
+- profondeur statique conservée lorsque la réduction des animations est active, sans transition ni respiration ;
+- ancienne section d’écoute redondante retirée de l’accueil et Deezer ajouté à la barre Accès rapide à partir du lien officiel déjà configuré.
+
+### Périmètre
+
+- données PostgreSQL, logique audio, stockage R2, filtres métier et administration inchangés ;
+- aucun WebGL, canvas, carousel ou nouvelle dépendance.
+
 ## [0.6.4] — 2026-08-13
 
 ### Ajouté

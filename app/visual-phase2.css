@@ -201,14 +201,12 @@
   padding-top: max(54svh, 32rem);
 }
 
-.visual-chapter--music .home-projects,
-.visual-chapter--music .platforms-stage {
+.visual-chapter--music .home-projects {
   background: var(--surface-window);
 }
 
 .visual-chapter--music .home-project-lead,
-.visual-chapter--music .home-project-secondary > a,
-.visual-chapter--music .platform-destination {
+.visual-chapter--music .home-project-secondary > a {
   border-radius: var(--radius-card);
 }
 
@@ -222,14 +220,6 @@
 
 .visual-chapter--music .image-chapter > img {
   object-position: 70% center;
-}
-
-.platform-destination__action {
-  gap: 1rem;
-}
-
-.platform-destination__action b {
-  flex: none;
 }
 
 /* Homepage: personal story chapter -------------------------------------- */
@@ -750,7 +740,6 @@
   .visual-chapter--artist .universe-section,
   .visual-chapter--music .home-projects,
   .visual-chapter--music .image-chapter,
-  .visual-chapter--music .platforms-stage,
   .visual-chapter--story .commission-story,
   .visual-chapter--story .section--soft {
     width: calc(100% - (var(--window-gutter) * 2));

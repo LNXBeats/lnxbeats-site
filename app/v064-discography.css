@@ -1,20 +1,11 @@
-/* V0.6.4 — exhaustive PostgreSQL catalogue presented as one CSS 3D scene. */
-
-.v064-discography-hero.page-hero--catalog {
-  min-height: min(56svh, 590px);
-  padding-top: calc(var(--header-height) + clamp(3.6rem, 7vw, 6.5rem));
-  padding-bottom: clamp(3rem, 6vw, 5rem);
-}
-
-.v064-discography-hero .page-hero__grid { min-height: 250px; }
-.v064-discography-hero h1 { font-size: clamp(3.8rem, 8.4vw, 8.4rem); }
-.v064-discography-hero .page-hero__visual { bottom: -7rem; width: min(29vw, 410px); opacity: .48; }
+/* V0.6.4.1 — compact catalogue composition and a deeper static CSS 3D scene. */
 
 .v064-discography-stage {
   position: relative;
   isolation: isolate;
   overflow: clip;
-  padding-block: clamp(3.5rem, 7vw, 7rem);
+  min-height: min(900px, calc(100svh - 1rem));
+  padding-block: clamp(1.75rem, 3.4vw, 3.5rem) clamp(4rem, 7vw, 7rem);
   background:
     radial-gradient(circle at 50% 35%, rgba(198, 161, 91, .11), transparent 34rem),
     radial-gradient(circle at 7% 52%, rgba(111, 75, 38, .08), transparent 26rem),
@@ -38,16 +29,16 @@
 
 .discography-jukebox.home-jukebox {
   margin-top: 0;
-  padding: clamp(1.2rem, 2.6vw, 2.6rem);
-  overflow: hidden;
-  border: 1px solid rgba(244, 240, 232, .14);
-  border-radius: clamp(22px, 3vw, 42px);
-  background: rgba(10, 9, 8, .76);
-  box-shadow: 0 38px 110px rgba(0, 0, 0, .34);
+  padding: clamp(.6rem, 1.4vw, 1.35rem) 0 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .discography-jukebox.home-jukebox::after {
-  background: linear-gradient(100deg, rgba(7, 7, 6, .96), rgba(8, 8, 7, .68), rgba(7, 7, 6, .96));
+  display: none;
 }
 
 .discography-jukebox .home-jukebox__background {
@@ -59,17 +50,25 @@
     linear-gradient(145deg, rgba(44, 32, 19, .42), transparent 66%);
 }
 
-.discography-jukebox .home-jukebox__heading { align-items: end; }
-.discography-jukebox .home-jukebox__heading h2 {
+.discography-jukebox .home-jukebox__heading {
+  position: relative;
+  align-items: end;
+  justify-content: center;
+  text-align: center;
+}
+.discography-jukebox .home-jukebox__heading h1 {
   max-width: 14ch;
-  margin: .4rem 0 0;
-  font-size: clamp(2.7rem, 5vw, 5.8rem);
+  margin: .25rem 0 0;
+  font-size: clamp(2.45rem, 4.2vw, 4.65rem);
   font-weight: 520;
   letter-spacing: -.065em;
   line-height: .92;
 }
 
 .discography-jukebox .home-jukebox__heading output {
+  position: absolute;
+  right: 0;
+  bottom: .35rem;
   color: rgba(244, 240, 232, .62);
   font-size: .7rem;
   font-variant-numeric: tabular-nums;
@@ -84,7 +83,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem 1.5rem;
-  margin-top: clamp(1.8rem, 3vw, 3rem);
+  width: min(1320px, 100%);
+  margin: clamp(1rem, 1.8vw, 1.55rem) auto 0;
 }
 
 .discography-jukebox__filters {
@@ -96,7 +96,7 @@
 
 .discography-jukebox__filters button,
 .discography-jukebox__sort select {
-  min-height: 46px;
+  min-height: 42px;
   border: 1px solid rgba(244, 240, 232, .14);
   border-radius: 999px;
   background: rgba(9, 9, 8, .78);
@@ -110,8 +110,8 @@
   flex: 0 0 auto;
   align-items: center;
   gap: .75rem;
-  padding: .65rem .9rem;
-  font-size: .68rem;
+  padding: .5rem .78rem;
+  font-size: .64rem;
   font-weight: 700;
 }
 
@@ -149,47 +149,62 @@
 }
 
 .discography-jukebox__sort select {
-  min-width: 176px;
-  padding: .65rem 2.5rem .65rem 1rem;
+  min-width: 166px;
+  padding: .55rem 2.5rem .55rem .9rem;
   appearance: none;
   font-size: .68rem;
 }
 
 .discography-jukebox .home-jukebox__scene {
-  --jukebox-cover-size: clamp(270px, 29vw, 430px);
-  --jukebox-cover-half: clamp(135px, 14.5vw, 215px);
+  --jukebox-cover-size: clamp(310px, 31vw, 480px);
+  --jukebox-cover-half: clamp(155px, 15.5vw, 240px);
   --discography-card-width: var(--jukebox-cover-size);
+  --discography-scene-top-space: clamp(9rem, 12vw, 11rem);
   position: relative;
   display: block;
-  min-height: calc(var(--discography-card-width) + 150px);
-  margin: clamp(2rem, 4vw, 3.8rem) 0 0;
-  perspective: 1500px;
-  perspective-origin: 50% 42%;
+  min-height: calc(var(--discography-card-width) + 182px + var(--discography-scene-top-space));
+  margin: clamp(1.3rem, 2.4vw, 2.15rem) 0 0;
+}
+
+.discography-jukebox .home-jukebox__scene::before,
+.discography-jukebox .home-jukebox__scene::after {
+  position: absolute;
+  z-index: 0;
+  right: 3%;
+  bottom: -1rem;
+  left: 3%;
+  content: "";
+  pointer-events: none;
+}
+
+.discography-jukebox .home-jukebox__scene::before {
+  height: 150px;
+  border-top: 1px solid rgba(226, 196, 126, .09);
+  background:
+    linear-gradient(90deg, transparent, rgba(226, 196, 126, .045) 50%, transparent),
+    radial-gradient(ellipse at 50% 0, rgba(226, 196, 126, .12), transparent 64%);
+  transform: perspective(700px) rotateX(66deg);
+  transform-origin: top;
 }
 
 .discography-jukebox .home-jukebox__scene::after {
-  position: absolute;
-  z-index: -1;
-  right: 5%;
-  bottom: 0;
-  left: 5%;
-  height: 36%;
-  content: "";
-  pointer-events: none;
-  background: radial-gradient(ellipse at 50% 100%, rgba(226, 196, 126, .09), transparent 60%);
-  transform: rotateX(66deg) translateY(36%);
-  transform-origin: bottom;
+  right: 14%;
+  bottom: 1rem;
+  left: 14%;
+  height: 72px;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, .72), transparent 70%);
+  filter: blur(12px);
 }
 
 .discography-jukebox .home-jukebox__rail {
   position: relative;
   z-index: 1;
   display: block;
-  height: calc(var(--discography-card-width) + 150px);
-  margin: 0;
+  height: calc(var(--discography-card-width) + 182px);
+  margin: var(--discography-scene-top-space) 0 0;
   padding: 0;
-  overflow: hidden;
-  perspective: 1500px;
+  overflow: visible;
+  perspective: 1180px;
   transform-style: preserve-3d;
 }
 
@@ -202,9 +217,10 @@
   margin: 0;
   opacity: 0;
   pointer-events: none;
-  transform: translate3d(-50%, 3%, -330px) scale(.54);
+  transform: translate3d(-50%, 3%, -390px) scale(.5);
   transform-origin: 50% 45%;
   transform-style: preserve-3d;
+  backface-visibility: hidden;
   transition: transform 620ms cubic-bezier(.22, 1, .36, 1), opacity 440ms ease;
 }
 
@@ -212,36 +228,36 @@
   z-index: 5;
   opacity: 1;
   pointer-events: auto;
-  transform: translate3d(-50%, 0, 110px) scale(1) rotateY(0deg);
+  transform: translate3d(-50%, 0, 160px) scale(1) rotateY(0deg);
   animation: none !important;
 }
 
 .discography-jukebox .home-jukebox__item.is-previous {
   z-index: 4;
-  opacity: .72;
+  opacity: .78;
   pointer-events: auto;
-  transform: translate3d(-126%, 4%, -90px) scale(.8) rotateY(38deg);
+  transform: translate3d(-152%, 4%, -135px) scale(.84) rotateY(44deg);
 }
 
 .discography-jukebox .home-jukebox__item.is-next {
   z-index: 4;
-  opacity: .72;
+  opacity: .78;
   pointer-events: auto;
-  transform: translate3d(26%, 4%, -90px) scale(.8) rotateY(-38deg);
+  transform: translate3d(52%, 4%, -135px) scale(.84) rotateY(-44deg);
 }
 
 .discography-jukebox .home-jukebox__item.is-far-previous {
   z-index: 3;
-  opacity: .38;
+  opacity: .45;
   pointer-events: auto;
-  transform: translate3d(-190%, 9%, -230px) scale(.61) rotateY(49deg);
+  transform: translate3d(-242%, 8%, -330px) scale(.6) rotateY(58deg);
 }
 
 .discography-jukebox .home-jukebox__item.is-far-next {
   z-index: 3;
-  opacity: .38;
+  opacity: .45;
   pointer-events: auto;
-  transform: translate3d(90%, 9%, -230px) scale(.61) rotateY(-49deg);
+  transform: translate3d(142%, 8%, -330px) scale(.6) rotateY(-58deg);
 }
 
 .discography-jukebox .home-jukebox__item.is-hidden-before,
@@ -357,27 +373,47 @@
 .discography-jukebox .home-jukebox__progress { z-index: 6; }
 
 .discography-jukebox .home-jukebox__arrow {
-  top: calc(var(--discography-card-width) / 2);
+  top: calc(var(--discography-scene-top-space) + (var(--discography-card-width) / 2));
   --jukebox-arrow-vertical: -50%;
+}
+
+@media (min-width: 701px) {
+  .discography-jukebox .home-jukebox__arrow {
+    width: 48px;
+  }
+
+  .discography-jukebox .home-jukebox__arrow--previous {
+    right: auto;
+    left: calc((var(--window-gutter) * -1) + .5rem);
+  }
+
+  .discography-jukebox .home-jukebox__arrow--next {
+    right: calc((var(--window-gutter) * -1) + .5rem);
+    left: auto;
+  }
+
+  .discography-jukebox .home-jukebox__arrow-line {
+    display: none;
+  }
 }
 
 .discography-jukebox .home-jukebox__navigation-hint { margin-top: .9rem; }
 
 @media (min-width: 701px) and (max-width: 1000px) {
   .discography-jukebox .home-jukebox__scene {
-    --jukebox-cover-size: clamp(260px, 42vw, 340px);
-    --jukebox-cover-half: clamp(130px, 21vw, 170px);
+    --jukebox-cover-size: clamp(270px, 43vw, 350px);
+    --jukebox-cover-half: clamp(135px, 21.5vw, 175px);
   }
 
-  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-112%, 5%, -70px) scale(.77) rotateY(29deg); }
-  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(12%, 5%, -70px) scale(.77) rotateY(-29deg); }
+  .discography-jukebox .home-jukebox__rail { perspective: 1050px; }
+
+  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-145%, 5%, -120px) scale(.78) rotateY(35deg); }
+  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(45%, 5%, -120px) scale(.78) rotateY(-35deg); }
   .discography-jukebox .home-jukebox__item.is-far-previous,
   .discography-jukebox .home-jukebox__item.is-far-next { visibility: hidden; opacity: 0; pointer-events: none; }
 }
 
 @media (max-width: 900px) {
-  .v064-discography-hero.page-hero--catalog { min-height: 0; }
-  .v064-discography-hero .page-hero__grid { min-height: 360px; }
   .discography-jukebox__toolbar { align-items: stretch; flex-direction: column; }
   .discography-jukebox__filters { overflow-x: auto; padding: 3px; scrollbar-width: none; }
   .discography-jukebox__filters::-webkit-scrollbar { display: none; }
@@ -385,15 +421,7 @@
 }
 
 @media (max-width: 700px) {
-  .v064-discography-hero.page-hero--catalog {
-    padding-top: calc(var(--header-height) + 3.25rem);
-    padding-bottom: 2.75rem;
-  }
-
-  .v064-discography-hero .page-hero__grid { min-height: 390px; align-content: end; }
-  .v064-discography-hero h1 { max-width: 100%; font-size: clamp(3rem, 14.5vw, 3.75rem); line-height: .9; }
-  .v064-discography-hero .page-hero__visual { right: -18%; bottom: 1rem; width: 74vw; opacity: .25; }
-  .v064-discography-stage { padding-block: 2.5rem 4rem; }
+  .v064-discography-stage { min-height: 0; padding-block: 1.5rem 4rem; }
   .v064-discography-container { max-width: 100%; padding-inline: 0; }
 
   .discography-jukebox.home-jukebox {
@@ -406,24 +434,27 @@
   .discography-jukebox .home-jukebox__heading,
   .discography-jukebox__toolbar { padding-inline: 1.1rem; }
   .discography-jukebox .home-jukebox__heading { align-items: start; }
-  .discography-jukebox .home-jukebox__heading h2 { font-size: clamp(2.45rem, 13vw, 3.5rem); }
+  .discography-jukebox .home-jukebox__heading output { right: 1.1rem; }
+  .discography-jukebox .home-jukebox__heading h1 { font-size: clamp(2.45rem, 13vw, 3.5rem); }
   .discography-jukebox__toolbar { margin-top: 1.5rem; }
   .discography-jukebox__filters { margin-inline: -3px; padding-bottom: .35rem; }
   .discography-jukebox__filters button { min-height: 44px; }
 
   .discography-jukebox .home-jukebox__scene {
     --discography-card-width: 78vw;
+    --discography-scene-top-space: 0px;
     min-height: 0;
     margin-top: 1.6rem;
     padding-bottom: 3.5rem;
-    perspective: none;
   }
 
+  .discography-jukebox .home-jukebox__scene::before,
   .discography-jukebox .home-jukebox__scene::after { display: none; }
   .discography-jukebox .home-jukebox__rail {
     display: flex;
     height: auto;
     gap: .85rem;
+    margin-top: 0;
     padding: .25rem 11vw 1rem;
     overflow-x: auto;
     scroll-padding-inline: 11vw;
@@ -484,16 +515,16 @@
   .discography-jukebox__filters button,
   .discography-jukebox__sort select { transition: none !important; animation: none !important; }
 
-  .discography-jukebox .home-jukebox__item.is-active { transform: translate3d(-50%, 0, 0) scale(1); }
-  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-126%, 4%, 0) scale(.8); }
-  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(26%, 4%, 0) scale(.8); }
-  .discography-jukebox .home-jukebox__item.is-far-previous { transform: translate3d(-190%, 9%, 0) scale(.61); }
-  .discography-jukebox .home-jukebox__item.is-far-next { transform: translate3d(90%, 9%, 0) scale(.61); }
+  .discography-jukebox .home-jukebox__item.is-active { transform: translate3d(-50%, 0, 160px) scale(1) rotateY(0deg); }
+  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-152%, 4%, -135px) scale(.84) rotateY(44deg); }
+  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(52%, 4%, -135px) scale(.84) rotateY(-44deg); }
+  .discography-jukebox .home-jukebox__item.is-far-previous { transform: translate3d(-242%, 8%, -330px) scale(.6) rotateY(58deg); }
+  .discography-jukebox .home-jukebox__item.is-far-next { transform: translate3d(142%, 8%, -330px) scale(.6) rotateY(-58deg); }
 }
 
 @media (min-width: 701px) and (max-width: 1000px) and (prefers-reduced-motion: reduce) {
-  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-112%, 5%, 0) scale(.77); }
-  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(12%, 5%, 0) scale(.77); }
+  .discography-jukebox .home-jukebox__item.is-previous { transform: translate3d(-145%, 5%, -120px) scale(.78) rotateY(35deg); }
+  .discography-jukebox .home-jukebox__item.is-next { transform: translate3d(45%, 5%, -120px) scale(.78) rotateY(-35deg); }
 }
 
 @media (max-width: 700px) and (prefers-reduced-motion: reduce) {

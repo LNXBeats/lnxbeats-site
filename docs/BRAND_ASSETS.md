@@ -23,6 +23,7 @@ La barre compacte utilise des glyphes SVG locaux afin de ne charger ni script ni
 | --- | --- | --- | --- |
 | Spotify | Simple Icons 16.28.0 (`spotify.svg`) | `public/brands/spotify-icon.svg` | Simple Icons, CC0-1.0 ; couleur de marque documentée par le paquet. |
 | Apple Music | Simple Icons 16.28.0 (`applemusic.svg`) | `public/brands/apple-music-icon.svg` | Simple Icons, CC0-1.0 ; couleur de marque documentée par le paquet. |
+| Deezer | Simple Icons 16.28.0 (`deezer.svg`) | `public/brands/deezer-icon.svg` | Simple Icons, CC0-1.0 ; source du glyphe : charte Deezer. Le lien public configuré redirige vers l’artiste LNX Beats `163586087`. |
 | YouTube | Simple Icons 16.28.0 (`youtube.svg`) | `public/brands/youtube-icon.svg` | Simple Icons, CC0-1.0 ; le lien pointe directement vers la chaîne officielle. |
 | Amazon Music | Font Awesome Free Brands 7.1.0 (`faAmazon`) | `public/brands/amazon-icon.svg` | Icône Amazon issue de Font Awesome, CC BY 4.0 ; attribution conservée dans le SVG. Simple Icons 16.28.0 ne fournit pas Amazon Music. |
 | TikTok | Simple Icons 16.28.0 (`tiktok.svg`) | `public/brands/tiktok-icon.svg` | Simple Icons, CC0-1.0. |

@@ -33,41 +33,20 @@ function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProj
 }
 
 export default async function DiscographyPage() {
-  const { projects, publishedProjects, projectsInDevelopment } = await listDiscographyProjects();
+  const { projects } = await listDiscographyProjects();
   const sceneProjects = discographyView(projects);
 
   return (
-    <>
-      <header className="page-hero page-hero--catalog v064-discography-hero">
-        <Container className="page-hero__grid">
-          <div>
-            <p className="eyebrow">Des récits mis en musique</p>
-            <h1>Discographie</h1>
-          </div>
-          <div>
-            <p className="page-hero__intro">Des projets publiés, des récits en cours, et une entrée directe dans leur écoute.</p>
-            <div className="page-hero__meta">
-              <span>{publishedProjects.length} parutions</span>
-              <span>{projectsInDevelopment.length} projets en développement</span>
-            </div>
-          </div>
-          <div className="page-hero__visual page-hero__visual--record" aria-hidden="true">
-            <span>LNX</span>
-          </div>
-        </Container>
-      </header>
-
-      <section className="v064-discography-stage" aria-label="Catalogue LNX Beats">
-        <Container className="v064-discography-container">
-          <ProjectJukebox
-            projects={sceneProjects}
-            initialIndex={jukeboxInitialIndex(sceneProjects, 2)}
-            eyebrow="Catalogue"
-            heading="Tous les projets."
-            eager
-          />
-        </Container>
-      </section>
-    </>
+    <section className="v064-discography-stage" aria-label="Discographie">
+      <Container className="v064-discography-container">
+        <ProjectJukebox
+          projects={sceneProjects}
+          initialIndex={jukeboxInitialIndex(sceneProjects, 2)}
+          eyebrow="Catalogue"
+          heading="Tous les projets."
+          eager
+        />
+      </Container>
+    </section>
   );
 }

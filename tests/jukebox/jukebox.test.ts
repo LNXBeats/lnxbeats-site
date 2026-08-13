@@ -74,9 +74,10 @@ test("the featured eligible project is initial, otherwise the editorial first it
 });
 
 test("discography renders one exhaustive scene without the former duplicate grid", async () => {
-  const [homepage, discography] = await Promise.all([
+  const [homepage, discography, component] = await Promise.all([
     readFile(new URL("../../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../app/discographie/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8"),
   ]);
   assert.doesNotMatch(homepage, /ProjectJukebox|HomeJukebox/);
   assert.equal((discography.match(/<ProjectJukebox\b/g)?.length ?? 0), 1);
@@ -88,8 +89,8 @@ test("discography renders one exhaustive scene without the former duplicate grid
   assert.match(discography, /jukeboxInitialIndex\(sceneProjects, 2\)/);
   assert.match(discography, /audioPreview: project\.audioPreview/);
   assert.doesNotMatch(discography, /project\.status === "published" && project\.audioPreview/);
-  assert.match(discography, /publishedProjects\.length} parutions/);
-  assert.match(discography, /projectsInDevelopment\.length} projets en développement/);
+  assert.doesNotMatch(discography, /page-hero|v064-discography-hero/);
+  assert.match(component, /<h1 id=\{regionId\}>\{heading\}<\/h1>/);
 });
 
 test("the desktop scene keeps five relative cover positions", async () => {
@@ -168,12 +169,14 @@ test("the visual system preloads only immediate eager covers and neutralizes dra
 
 test("the desktop CSS uses 3D transforms while reduced motion keeps the catalogue visible", async () => {
   const css = await readFile(new URL("../../app/v064-discography.css", import.meta.url), "utf8");
-  assert.match(css, /perspective: 1500px/);
+  assert.match(css, /perspective: 1180px/);
   assert.match(css, /transform-style: preserve-3d/);
-  assert.match(css, /rotateY\(38deg\)/);
-  assert.match(css, /rotateY\(-38deg\)/);
+  assert.match(css, /rotateY\(44deg\)/);
+  assert.match(css, /rotateY\(-44deg\)/);
   assert.match(css, /620ms cubic-bezier\(\.22, 1, \.36, 1\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?transition: none !important; animation: none !important;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?translate3d\(-152%, 4%, -135px\) scale\(\.84\) rotateY\(44deg\)/);
   assert.match(css, /@media \(max-width: 700px\) and \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /\.discography-jukebox \.home-jukebox__item \{ transform: none !important; \}/);
 });

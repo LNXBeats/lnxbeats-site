@@ -53,7 +53,7 @@
 .quick-access__rail {
   display: grid;
   min-width: max-content;
-  grid-template-columns: repeat(6, minmax(112px, 1fr));
+  grid-template-columns: repeat(7, minmax(112px, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;

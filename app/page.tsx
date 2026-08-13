@@ -4,9 +4,7 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/button";
 import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { Container } from "@/components/container";
-import { PlatformDestination } from "@/components/platform-destination";
 import { ProjectArtwork } from "@/components/project-artwork";
-import { officialLinks } from "@/data/site";
 import { getHomepageProjects } from "@/lib/catalog/queries";
 
 const homeDescription = "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux. Chaque histoire mérite sa musique.";
@@ -23,16 +21,6 @@ const perspectives = [
   { number: "01", title: "Histoires", description: "Des personnages, du vécu, des scènes qui restent." },
   { number: "02", title: "Univers", description: "Rap, humour, émotion, expérimentation : chaque récit trouve sa lumière." },
   { number: "03", title: "Sur mesure", description: "Votre histoire devient une création LNX Beats, pensée dans ses détails." },
-] as const;
-
-const platforms = [
-  { name: "Spotify", label: "Écouter les récits", action: "Écouter sur Spotify", url: officialLinks.spotify, tone: "spotify", logo: { src: "/brands/spotify-full-logo-white.png", width: 219, height: 60 } },
-  { name: "Apple Music", label: "Écouter les récits", action: "Écouter sur Apple Music", url: officialLinks.appleMusic, tone: "apple" },
-  { name: "Deezer", label: "Écouter les récits", action: "Écouter sur Deezer", url: officialLinks.deezer, tone: "deezer" },
-  { name: "Amazon Music", label: "Écouter les récits", action: "Écouter sur Amazon Music", url: officialLinks.amazonMusic, tone: "amazon" },
-  { name: "YouTube", label: "Regarder les histoires", action: "Voir sur YouTube", url: officialLinks.youtube, tone: "youtube", logo: { src: "/brands/youtube-logo.svg", width: 224, height: 50 } },
-  { name: "TikTok", label: "Suivre les coulisses", action: "Suivre sur TikTok", url: officialLinks.tiktok, tone: "tiktok" },
-  { name: "Instagram", label: "Suivre les coulisses", action: "Suivre sur Instagram", url: officialLinks.instagram, tone: "instagram" },
 ] as const;
 
 export const dynamic = "force-dynamic";
@@ -70,7 +58,5 @@ export default async function HomePage() {
     </section>
 
     <section className="home-contact home-contact--compact" id="sur-mesure" aria-labelledby="home-contact-title"><Container className="home-contact__inner motion-reveal"><p className="section-index">Votre histoire</p><div><h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2><p>Quelques détails suffisent pour ouvrir la première scène.</p><div className="home-contact__actions"><ButtonLink href="/commander">Commander une création</ButtonLink><ButtonLink href="/contact" variant="quiet">Écrire à LNX Beats</ButtonLink></div></div></Container></section>
-
-    <section className="section platforms-stage" id="plateformes" aria-labelledby="platforms-title"><Container><div className="home-featured__heading motion-reveal"><div><p className="section-index">Écouter & suivre</p><h2 id="platforms-title">Les histoires continuent ailleurs.</h2></div></div><div className="platforms-grid motion-reveal motion-reveal--soft">{platforms.map((platform, index) => <PlatformDestination key={platform.name} index={String(index + 1).padStart(2, "0")} {...platform} />)}</div></Container></section>
   </>;
 }

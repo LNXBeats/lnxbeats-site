@@ -14,6 +14,7 @@ export const officialLinks = {
 export const quickAccessPlatforms = [
   { name: "Spotify", url: officialLinks.spotify, icon: "/brands/spotify-icon.svg", tone: "spotify" },
   { name: "Apple Music", url: officialLinks.appleMusic, icon: "/brands/apple-music-icon.svg", tone: "apple-music" },
+  { name: "Deezer", url: officialLinks.deezer, icon: "/brands/deezer-icon.svg", tone: "deezer" },
   { name: "YouTube", url: officialLinks.youtube, icon: "/brands/youtube-icon.svg", tone: "youtube" },
   { name: "Amazon Music", url: officialLinks.amazonMusic, icon: "/brands/amazon-icon.svg", tone: "amazon" },
   { name: "TikTok", url: officialLinks.tiktok, icon: "/brands/tiktok-icon.svg", tone: "tiktok" },
