@@ -129,6 +129,14 @@
 - modèle futur `Payment` / `Invoice`, idempotence et articulation avec LNX Gestion
 - Wero étudié comme possibilité future, sans implémentation ni simulation
 
+## V0.6.3 — Médias production
+
+- abstraction locale/S3-compatible et Cloudflare R2 recommandé sans couplage métier au fournisseur
+- stockage objet durable séparant deux buckets public/privé
+- métadonnées PostgreSQL, SHA-256, migration progressive, sauvegarde et dry-run
+- covers, previews Range/HEAD et références commandes migrées sans perte de compatibilité locale
+- primitives privées pour futures livraisons, sans en construire l’interface
+
 ## V0.7 — Paiement
 
 - fournisseur de paiement retenu après cadrage

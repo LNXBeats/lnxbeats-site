@@ -1,34 +1,35 @@
 import "server-only";
 
-import { Readable } from "node:stream";
-
 import { CatalogAudioRangeError, parseCatalogAudioRange } from "@/lib/catalog/audio-range";
 import { statCatalogAudioPreview, streamCatalogAudioPreview } from "@/lib/catalog/media-storage";
 
-type AudioAsset = {
+export type CatalogAudioAsset = {
   id: string;
   storageKey: string;
   mimeType: string;
   sizeBytes: bigint;
   updatedAt: Date;
+  checksumSha256: string | null;
+  storageBackend: "LOCAL" | "OBJECT";
+  storageProvider: string;
+  visibility: "PUBLIC" | "PRIVATE";
 };
 
-function commonHeaders(asset: AudioAsset, size: number, cacheControl: string) {
+function commonHeaders(asset: CatalogAudioAsset, size: number, cacheControl: string) {
   return {
     "Accept-Ranges": "bytes",
     "Cache-Control": cacheControl,
     "Content-Type": asset.mimeType,
-    "ETag": `"audio-${asset.id}-${size}"`,
+    "ETag": `"${asset.checksumSha256 ?? `audio-${asset.id}-${size}`}"`,
     "Last-Modified": asset.updatedAt.toUTCString(),
     "X-Content-Type-Options": "nosniff",
   };
 }
 
-export async function catalogAudioResponse(request: Request, asset: AudioAsset, cacheControl: string, head = false) {
+export async function catalogAudioResponse(request: Request, asset: CatalogAudioAsset, cacheControl: string, head = false) {
   try {
-    const metadata = await statCatalogAudioPreview(asset.storageKey);
-    const size = metadata.size;
-    if (!metadata.isFile() || size <= 0 || BigInt(size) !== asset.sizeBytes) return new Response(null, { status: 404 });
+    const size = Number(asset.sizeBytes);
+    if (!Number.isSafeInteger(size) || size <= 0) return new Response(null, { status: 404 });
     const headers = commonHeaders(asset, size, cacheControl);
 
     if (!request.headers.get("range") && request.headers.get("if-none-match") === headers.ETag) {
@@ -47,17 +48,23 @@ export async function catalogAudioResponse(request: Request, asset: AudioAsset, 
     }
 
     if (!range) {
-      if (head) return new Response(null, { status: 200, headers: { ...headers, "Content-Length": String(size) } });
-      const stream = streamCatalogAudioPreview(asset.storageKey);
-      return new Response(Readable.toWeb(stream) as ReadableStream, {
+      if (head) {
+        const metadata = await statCatalogAudioPreview(asset);
+        if (metadata.contentLength !== size) return new Response(null, { status: 404 });
+        return new Response(null, { status: 200, headers: { ...headers, "Content-Length": String(size) } });
+      }
+      const object = await streamCatalogAudioPreview(asset);
+      if (object.contentLength !== size) return new Response(null, { status: 404 });
+      return new Response(object.body, {
         status: 200,
         headers: { ...headers, "Content-Length": String(size) },
       });
     }
 
     const length = range.end - range.start + 1;
-    const stream = streamCatalogAudioPreview(asset.storageKey, range.start, range.end);
-    return new Response(Readable.toWeb(stream) as ReadableStream, {
+    const object = await streamCatalogAudioPreview(asset, range.start, range.end);
+    if (object.contentLength !== length) return new Response(null, { status: 404 });
+    return new Response(object.body, {
       status: 206,
       headers: {
         ...headers,

@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { catalogCoverAltOverride } from "@/lib/catalog/cover-alt";
 import { removeCatalogCover, writeCatalogCover } from "@/lib/catalog/media-storage";
 import { optionalText } from "@/lib/catalog/validation";
+import type { MediaStorageReference } from "@/lib/media/storage";
 
 const maximumUploadBytes = 10 * 1024 * 1024;
 const maximumPixels = 40_000_000;
@@ -60,7 +61,7 @@ async function lockedCoverState(transaction: Prisma.TransactionClient, projectId
         where: { role: "COVER" },
         orderBy: [{ position: "asc" }, { createdAt: "desc" }],
         take: 1,
-        select: { asset: { select: { id: true, storageKey: true } } },
+        select: { asset: { select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true } } },
       },
     },
   });
@@ -68,7 +69,7 @@ async function lockedCoverState(transaction: Prisma.TransactionClient, projectId
   return {
     title: project.title,
     currentCoverAssetId: project.assets[0]?.asset.id ?? null,
-    currentCoverStorageKey: project.assets[0]?.asset.storageKey ?? null,
+    currentCoverReference: project.assets[0]?.asset ?? null,
   };
 }
 
@@ -135,8 +136,8 @@ export async function replaceCatalogCover(projectId: string, rawExpectedCoverAss
   const normalized = await normalizeCatalogCover(file);
   const storageKey = `catalog/covers/${randomUUID()}.webp`;
   const safeBase = path.basename(file.name || "cover").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 180);
-  await writeCatalogCover(storageKey, normalized.bytes);
-  let oldStorageKey: string | null = null;
+  const stored = await writeCatalogCover(storageKey, normalized.bytes);
+  let oldReference: Pick<MediaStorageReference, "storageKey" | "storageBackend" | "storageProvider" | "visibility"> | null = null;
   try {
     await prisma.$transaction(async (transaction) => {
       const state = await lockedCoverState(transaction, projectId);
@@ -144,7 +145,7 @@ export async function replaceCatalogCover(projectId: string, rawExpectedCoverAss
         throw new CatalogCoverConflictError(state.currentCoverAssetId);
       }
       const alt = catalogCoverAltOverride(requestedAlt, state.title);
-      oldStorageKey = state.currentCoverStorageKey;
+      oldReference = state.currentCoverReference;
       if (state.currentCoverAssetId) {
         await transaction.projectAsset.deleteMany({ where: { projectId, role: "COVER" } });
         await transaction.asset.delete({ where: { id: state.currentCoverAssetId } });
@@ -153,6 +154,8 @@ export async function replaceCatalogCover(projectId: string, rawExpectedCoverAss
         data: {
           type: "COVER", storageKey, filename: `${safeBase || "cover"}.webp`, mimeType: "image/webp",
           sizeBytes: BigInt(normalized.bytes.length), width: normalized.width, height: normalized.height,
+          storageBackend: stored.storageBackend, storageProvider: stored.storageProvider,
+          visibility: stored.visibility, checksumSha256: stored.checksumSha256,
           alt, rightsStatus: "CLEARED", confidence: "CONFIRMED",
         },
       });
@@ -160,30 +163,30 @@ export async function replaceCatalogCover(projectId: string, rawExpectedCoverAss
       await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
     });
   } catch (error) {
-    await removeCatalogCover(storageKey);
+    await removeCatalogCover({ storageKey, storageBackend: stored.storageBackend, storageProvider: stored.storageProvider, visibility: stored.visibility });
     throw error;
   }
-  if (oldStorageKey) {
-    try { await removeCatalogCover(oldStorageKey); }
+  if (oldReference) {
+    try { await removeCatalogCover(oldReference); }
     catch { console.error("An obsolete catalogue cover could not be removed after replacement."); }
   }
 }
 
 export async function deleteCatalogCover(projectId: string, rawExpectedCoverAssetId: unknown) {
   const expectedCoverAssetId = parseExpectedCoverAssetId(rawExpectedCoverAssetId);
-  let storageKey: string | null = null;
+  let mediaReference: Pick<MediaStorageReference, "storageKey" | "storageBackend" | "storageProvider" | "visibility"> | null = null;
   await prisma.$transaction(async (transaction) => {
     const state = await lockedCoverState(transaction, projectId);
     if (!catalogCoverVersionMatches(expectedCoverAssetId, state.currentCoverAssetId)) {
       throw new CatalogCoverConflictError(state.currentCoverAssetId);
     }
-    if (!state.currentCoverAssetId || !state.currentCoverStorageKey) return;
-    storageKey = state.currentCoverStorageKey;
+    if (!state.currentCoverAssetId || !state.currentCoverReference) return;
+    mediaReference = state.currentCoverReference;
     await transaction.projectAsset.deleteMany({
       where: { projectId, assetId: state.currentCoverAssetId, role: "COVER" },
     });
     await transaction.asset.delete({ where: { id: state.currentCoverAssetId } });
     await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
   });
-  if (storageKey) await removeCatalogCover(storageKey);
+  if (mediaReference) await removeCatalogCover(mediaReference);
 }

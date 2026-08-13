@@ -8,6 +8,7 @@ import { analyzeAudioSource, CatalogFfmpegError, generateCatalogMp3Preview } fro
 import { createGeneratedPreviewTempPath, removeAudioTempFile } from "@/lib/catalog/audio-temp";
 import { removeCatalogAudioPreview, writeCatalogAudioPreview } from "@/lib/catalog/media-storage";
 import { prisma } from "@/lib/prisma";
+import type { MediaStorageReference } from "@/lib/media/storage";
 
 export const CATALOG_AUDIO_PREVIEW_MAXIMUM_DURATION_MS = 60_000;
 
@@ -80,14 +81,14 @@ async function lockedAudioState(transaction: Prisma.TransactionClient, projectId
         where: { role: "AUDIO_PREVIEW" },
         orderBy: [{ position: "asc" }, { createdAt: "desc" }],
         take: 2,
-        select: { asset: { select: { id: true, storageKey: true } } },
+        select: { asset: { select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true } } },
       },
     },
   });
   if (!project || project.assets.length > 1) throw new CatalogAudioError("INVALID_VERSION");
   return {
     currentAudioAssetId: project.assets[0]?.asset.id ?? null,
-    currentAudioStorageKey: project.assets[0]?.asset.storageKey ?? null,
+    currentAudioReference: project.assets[0]?.asset ?? null,
   };
 }
 
@@ -133,15 +134,15 @@ export async function generateAndReplaceCatalogAudioPreview({
     if (Math.abs(verified.durationMs - excerpt.durationMs) > 1_250) throw new CatalogAudioError("GENERATION_FAILED");
     const generatedBytes = await readFile(generatedPath);
     generatedStorageKey = `catalog/audio-previews/${randomUUID()}.mp3`;
-    await writeCatalogAudioPreview(generatedStorageKey, generatedBytes);
-    let oldStorageKey: string | null = null;
+    const stored = await writeCatalogAudioPreview(generatedStorageKey, generatedBytes);
+    let oldReference: Pick<MediaStorageReference, "storageKey" | "storageBackend" | "storageProvider" | "visibility"> | null = null;
     try {
       const created = await prisma.$transaction(async (transaction) => {
         const state = await lockedAudioState(transaction, projectId);
         if (!catalogAudioVersionMatches(expectedAudioAssetId, state.currentAudioAssetId)) {
           throw new CatalogAudioConflictError(state.currentAudioAssetId);
         }
-        oldStorageKey = state.currentAudioStorageKey;
+        oldReference = state.currentAudioReference;
         if (state.currentAudioAssetId) {
           await transaction.projectAsset.deleteMany({ where: { projectId, role: "AUDIO_PREVIEW", assetId: state.currentAudioAssetId } });
           await transaction.asset.delete({ where: { id: state.currentAudioAssetId } });
@@ -154,6 +155,10 @@ export async function generateAndReplaceCatalogAudioPreview({
             mimeType: "audio/mpeg",
             sizeBytes: BigInt(generatedBytes.length),
             durationMs: verified.durationMs,
+            storageBackend: stored.storageBackend,
+            storageProvider: stored.storageProvider,
+            visibility: stored.visibility,
+            checksumSha256: stored.checksumSha256,
             rightsStatus: "CLEARED",
             confidence: "CONFIRMED",
           },
@@ -162,8 +167,8 @@ export async function generateAndReplaceCatalogAudioPreview({
         await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
         return asset;
       });
-      if (oldStorageKey) {
-        try { await removeCatalogAudioPreview(oldStorageKey); }
+      if (oldReference) {
+        try { await removeCatalogAudioPreview(oldReference); }
         catch { console.error("An obsolete catalogue audio preview could not be removed after replacement."); }
       }
       return {
@@ -176,7 +181,12 @@ export async function generateAndReplaceCatalogAudioPreview({
         generationElapsedMs: generation.elapsedMs,
       };
     } catch (error) {
-      await removeCatalogAudioPreview(generatedStorageKey);
+      await removeCatalogAudioPreview({
+        storageKey: generatedStorageKey,
+        storageBackend: stored.storageBackend,
+        storageProvider: stored.storageProvider,
+        visibility: stored.visibility,
+      });
       throw error;
     }
   } catch (error) {
@@ -192,20 +202,20 @@ export async function generateAndReplaceCatalogAudioPreview({
 
 export async function deleteCatalogAudioPreview(projectId: string, rawExpectedAudioAssetId: unknown) {
   const expectedAudioAssetId = parseExpectedAudioAssetId(rawExpectedAudioAssetId);
-  let oldStorageKey: string | null = null;
+  let oldReference: Pick<MediaStorageReference, "storageKey" | "storageBackend" | "storageProvider" | "visibility"> | null = null;
   await prisma.$transaction(async (transaction) => {
     const state = await lockedAudioState(transaction, projectId);
     if (!catalogAudioVersionMatches(expectedAudioAssetId, state.currentAudioAssetId)) {
       throw new CatalogAudioConflictError(state.currentAudioAssetId);
     }
-    if (!state.currentAudioAssetId || !state.currentAudioStorageKey) throw new CatalogAudioError("NO_AUDIO");
-    oldStorageKey = state.currentAudioStorageKey;
+    if (!state.currentAudioAssetId || !state.currentAudioReference) throw new CatalogAudioError("NO_AUDIO");
+    oldReference = state.currentAudioReference;
     await transaction.projectAsset.deleteMany({ where: { projectId, role: "AUDIO_PREVIEW", assetId: state.currentAudioAssetId } });
     await transaction.asset.delete({ where: { id: state.currentAudioAssetId } });
     await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
   });
-  if (oldStorageKey) {
-    try { await removeCatalogAudioPreview(oldStorageKey); }
+  if (oldReference) {
+    try { await removeCatalogAudioPreview(oldReference); }
     catch { console.error("A removed catalogue audio preview file could not be deleted."); }
   }
 }

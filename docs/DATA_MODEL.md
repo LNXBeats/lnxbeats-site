@@ -97,11 +97,11 @@ L’enum `DataConfidence` conserve `CONFIRMED`, `PARTIAL`, `PLACEHOLDER` et `UNK
 
 ## Assets
 
-`Asset` stocke uniquement des métadonnées : clé de stockage, nom, MIME, poids, dimensions, durée optionnelle, texte alternatif, droits et confiance. Aucun binaire n’est placé dans PostgreSQL.
+`Asset` stocke uniquement des métadonnées : clé de stockage, backend (`LOCAL` ou `OBJECT`), fournisseur, visibilité, SHA-256, nom, MIME, poids, dimensions, durée optionnelle, texte alternatif, droits et confiance. Aucun binaire n’est placé dans PostgreSQL.
 
 Les relations `ProjectAsset` et `OrderAsset` décrivent l’usage réel d’un fichier : pochette, Hero, galerie, référence client, document ou livraison. Les suppressions sont en `RESTRICT` pour empêcher la disparition silencieuse d’un fichier encore référencé.
 
-La V0.6 utilise `Asset` et `OrderAsset` pour les photos de référence. Le binaire normalisé reste dans un stockage local privé non-production, hors `public/`; la base ne conserve que la clé opaque et les métadonnées vérifiées. `position` stabilise l’ordre des photos. Le stockage objet privé et les livraisons sont différés.
+La V0.6 utilise `Asset` et `OrderAsset` pour les photos de référence. Le binaire normalisé reste dans le namespace privé du stockage configuré, hors `public/`; la base ne conserve que la clé opaque et les métadonnées vérifiées. `position` stabilise l’ordre des photos. Le stockage objet est disponible en production ; l’interface de livraison finale reste différée.
 
 La V0.6.0.4 ajoute `AUDIO_PREVIEW` aux types et rôles catalogue. Un projet possède au plus un extrait actif par service transactionnel et verrou consultatif. Sa durée générée, 60 secondes maximum, vit dans `Asset.durationMs` et reste totalement indépendante de `Track.durationSeconds`, réservé au morceau complet. Le MP3/WAV source complet est temporaire et n’entre jamais dans le modèle. Un remplacement crée un nouvel `Asset`, échange la relation puis supprime l’ancien fichier ; le client compare exclusivement `expectedAudioAssetId`, avant et après FFmpeg, afin qu’une édition étrangère au média ne provoque pas de conflit.
 

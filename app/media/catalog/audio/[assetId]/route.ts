@@ -10,6 +10,7 @@ async function publicAudioAsset(assetId: string) {
       id: assetId,
       type: "AUDIO_PREVIEW",
       mimeType: "audio/mpeg",
+      visibility: "PUBLIC",
       rightsStatus: "CLEARED",
       projects: {
         some: {
@@ -18,7 +19,10 @@ async function publicAudioAsset(assetId: string) {
         },
       },
     },
-    select: { id: true, storageKey: true, mimeType: true, sizeBytes: true, updatedAt: true },
+    select: {
+      id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true,
+      checksumSha256: true, mimeType: true, sizeBytes: true, updatedAt: true,
+    },
   });
 }
 

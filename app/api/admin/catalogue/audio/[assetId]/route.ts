@@ -11,10 +11,14 @@ async function audioAsset(assetId: string) {
       id: assetId,
       type: "AUDIO_PREVIEW",
       mimeType: "audio/mpeg",
+      visibility: "PUBLIC",
       rightsStatus: "CLEARED",
       projects: { some: { role: "AUDIO_PREVIEW" } },
     },
-    select: { id: true, storageKey: true, mimeType: true, sizeBytes: true, updatedAt: true },
+    select: {
+      id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true,
+      checksumSha256: true, mimeType: true, sizeBytes: true, updatedAt: true,
+    },
   });
 }
 

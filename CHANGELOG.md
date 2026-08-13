@@ -2,6 +2,26 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.3] — 2026-08-13
+
+### Ajouté
+
+- abstraction média unique avec pilotes local et objet S3-compatible, Cloudflare R2 recommandé ;
+- buckets/namespaces public et privé strictement séparés, métadonnées backend/visibilité/fournisseur/SHA-256 dans `Asset` ;
+- migration progressive idempotente, dry-run, sauvegarde logique et copie byte-for-byte sans suppression des sources ;
+- primitives d’URL signée privée courte et tests ciblés stockage, Range, suppression, intégrité, traversal et IDOR.
+
+### Modifié
+
+- covers, previews audio et références de commande utilisent le même service de stockage ;
+- routes cover/audio conservent URL interne, cache immutable, ETag, `HEAD`/`Range` et streaming Safari ;
+- environnement Railway préparé pour un stockage objet durable, tandis que preview et QA restent locales.
+
+### Sécurité et périmètre
+
+- pilote local refusé en production/Railway, buckets objet public/privé obligatoirement distincts et aucune URL privée permanente ;
+- aucune source WAV conservée, aucun blob PostgreSQL, secret, média personnel, paiement, livraison finale, push ou déploiement.
+
 ## [0.6.2] — 2026-08-13
 
 ### Ajouté

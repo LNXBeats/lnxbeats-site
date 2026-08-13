@@ -1,6 +1,6 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. La V0.6.0.3 relie le catalogue public à PostgreSQL et ouvre son administration privée, sans ouvrir de paiement.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. Le catalogue public et ses métadonnées vivent dans PostgreSQL ; les médias utilisent une abstraction locale/S3-compatible, sans ouvrir de paiement.
 
 Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement, email de commande, facture ou livraison WAV n’est actif.
 
@@ -12,6 +12,7 @@ Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergeme
 - Tailwind CSS 4 et CSS global pour le design system
 - ESLint avec les règles Next.js Core Web Vitals
 - PostgreSQL et Prisma ORM 7
+- stockage média local en développement et objet S3-compatible en production
 - Better Auth avec sessions en base et mots de passe Argon2id
 - Node.js 20.19, 22.12 ou 24+
 
@@ -52,6 +53,7 @@ npm run test:rights
 npm run test:upload
 npm run test:admin
 npm run test:catalog
+npm run test:media
 ```
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
@@ -132,6 +134,13 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
 | `ORDER_UPLOAD_DIR` | Racine privée, hors `public/` ; QA limitée à `/private/tmp` | Non |
 | `MEDIA_STORAGE_ROOT` | Racine absolue privée des covers et previews audio normalisées, hors `public/` et hors Git | Non |
+| `MEDIA_STORAGE_DRIVER` | `local` en preview/QA, `s3` pour le stockage objet de production | Non |
+| `MEDIA_DEPLOYMENT_ENV` | Sépare explicitement `local-preview`, `staging` et `production` | Non |
+| `MEDIA_LOCAL_PUBLIC_ROOT` / `MEDIA_LOCAL_PRIVATE_ROOT` | Racines locales distinctes public/privé, hors webroot | Non |
+| `MEDIA_STORAGE_PROVIDER` | Identifiant du fournisseur objet persisté avec l’asset (`r2` recommandé) | Non |
+| `MEDIA_S3_ENDPOINT` / `MEDIA_S3_REGION` | Endpoint et région S3-compatible | Non |
+| `MEDIA_S3_ACCESS_KEY_ID` / `MEDIA_S3_SECRET_ACCESS_KEY` | Credentials serveur du stockage objet | Oui |
+| `MEDIA_PUBLIC_BUCKET` / `MEDIA_PRIVATE_BUCKET` | Buckets obligatoirement distincts | Non |
 | `AUDIO_TEMP_ROOT` | Racine temporaire optionnelle des sources audio complètes ; le namespace et le TTL restent imposés par l’application | Non |
 | `FFMPEG_PATH` | Chemin absolu optionnel du FFmpeg système ; sinon le binaire reproductible du package est utilisé | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
@@ -188,6 +197,7 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)
 - [Migration runtime du catalogue](docs/CATALOG_RUNTIME_MIGRATION.md)
 - [Stockage des médias](docs/MEDIA_STORAGE.md)
+- [Évaluation des fournisseurs média](docs/MEDIA_PROVIDER_EVALUATION.md)
 - [Previews audio](docs/AUDIO_PREVIEWS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Déploiement](docs/DEPLOYMENT.md)

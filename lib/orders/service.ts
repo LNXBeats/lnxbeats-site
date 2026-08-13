@@ -20,6 +20,7 @@ import { deletePrivateOrderFile, readPrivateOrderFile, writePrivateOrderFile } f
 import type { SerializedOrder } from "@/lib/orders/types";
 import { normalizeOrderImage, type NormalizedOrderImage } from "@/lib/orders/upload";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { canReadOrderMedia } from "@/lib/media/authorization";
 
 export class OrderServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -384,14 +385,19 @@ export async function deleteDraftOrder(actor: OrderActor, orderNumber: string) {
     await transaction.orderEvent.deleteMany({ where: { orderId: order.id } });
     await transaction.order.delete({ where: { id: order.id } });
     if (assetIds.length) await transaction.asset.deleteMany({ where: { id: { in: assetIds } } });
-    return order.assets.map(({ asset }) => asset.storageKey);
+    return order.assets.map(({ asset }) => asset);
   });
-  await Promise.all(storageKeys.map((storageKey) => deletePrivateOrderFile(storageKey)));
+  await Promise.all(storageKeys.map((asset) => deletePrivateOrderFile(asset)));
 }
 
 type RawOrderPhoto = { buffer: Buffer; originalFilename: string; declaredMimeType: string };
 
-type PendingPhoto = NormalizedOrderImage & { storageKey: string };
+type PendingPhoto = NormalizedOrderImage & {
+  storageKey: string;
+  storageBackend: "LOCAL" | "OBJECT";
+  storageProvider: string;
+  visibility: "PRIVATE";
+};
 
 export async function addOrderPhotos(actor: OrderActor, orderNumber: string, files: RawOrderPhoto[]) {
   assertDatabaseConfigured();
@@ -411,8 +417,14 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
     for (const file of files) {
       const normalized = await normalizeOrderImage(file);
       const storageKey = `orders/${order.id}/${randomUUID()}.webp`;
-      await writePrivateOrderFile(storageKey, normalized.buffer);
-      pending.push({ ...normalized, storageKey });
+      const stored = await writePrivateOrderFile(storageKey, normalized.buffer, normalized.checksum);
+      pending.push({
+        ...normalized,
+        storageKey,
+        storageBackend: stored.storageBackend,
+        storageProvider: stored.storageProvider,
+        visibility: stored.visibility,
+      });
     }
 
     await withOrderLock(`order:${orderNumber}`, async (transaction) => {
@@ -430,6 +442,10 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
             filename: photo.originalFilename,
             mimeType: photo.mimeType,
             sizeBytes: BigInt(photo.sizeBytes),
+            storageBackend: photo.storageBackend,
+            storageProvider: photo.storageProvider,
+            visibility: photo.visibility,
+            checksumSha256: photo.checksum,
             width: photo.width,
             height: photo.height,
             rightsStatus: "PENDING",
@@ -443,7 +459,7 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
       }
     });
   } catch (error) {
-    await Promise.all(pending.map(({ storageKey }) => deletePrivateOrderFile(storageKey)));
+    await Promise.all(pending.map((photo) => deletePrivateOrderFile(photo)));
     throw error;
   }
 
@@ -461,18 +477,24 @@ export async function getOrderPhotoForActor(actor: OrderActor, orderNumber: stri
       },
       assetId,
       role: "REFERENCE",
+      asset: { type: "IMAGE", visibility: "PRIVATE" },
     },
     include: { asset: true, order: { select: { userId: true } } },
   });
-  if (!link || !canAccessOrder(actor, link.order.userId)) return null;
-  return { asset: link.asset, buffer: await readPrivateOrderFile(link.asset.storageKey) };
+  if (!link || !canReadOrderMedia(actor, link.order.userId)) return null;
+  return { asset: link.asset, buffer: await readPrivateOrderFile(link.asset) };
 }
 
 export async function deleteOrderPhoto(actor: OrderActor, orderNumber: string, assetId: string) {
   assertDatabaseConfigured();
-  const storageKey = await withOrderLock(`order:${orderNumber}`, async (transaction) => {
+  const mediaReference = await withOrderLock(`order:${orderNumber}`, async (transaction) => {
     const link = await transaction.orderAsset.findFirst({
-      where: { order: { orderNumber, userId: actor.id, status: "DRAFT" }, assetId, role: "REFERENCE" },
+      where: {
+        order: { orderNumber, userId: actor.id, status: "DRAFT" },
+        assetId,
+        role: "REFERENCE",
+        asset: { type: "IMAGE", visibility: "PRIVATE" },
+      },
       include: { asset: true },
     });
     if (!link) throw new OrderServiceError("Cette photo est introuvable.", 404, "PHOTO_NOT_FOUND");
@@ -480,7 +502,7 @@ export async function deleteOrderPhoto(actor: OrderActor, orderNumber: string, a
       where: { orderId_assetId_role: { orderId: link.orderId, assetId: link.assetId, role: "REFERENCE" } },
     });
     await transaction.asset.delete({ where: { id: link.assetId } });
-    return link.asset.storageKey;
+    return link.asset;
   });
-  await deletePrivateOrderFile(storageKey);
+  await deletePrivateOrderFile(mediaReference);
 }

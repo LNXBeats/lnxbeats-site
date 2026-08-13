@@ -10,6 +10,7 @@ Ce document prépare le déploiement sans l’exécuter. Aucun domaine, DNS ou e
 - démarrage avec `npm start` ;
 - healthcheck `GET /api/health` ;
 - variable publique serveur `SITE_URL=https://lnxbeats.fr` ;
+- stockage média objet obligatoire (`MEDIA_STORAGE_DRIVER=s3`) avec deux buckets distincts ;
 - `PORT` fourni automatiquement par Railway.
 
 Le fichier `railway.toml` sélectionne Railpack, le start command et le healthcheck.
@@ -26,6 +27,12 @@ Le fichier `railway.toml` sélectionne Railpack, le start command et le healthch
 8. Valider la terminaison HTTPS et tous les sous-domaines avant d’activer HSTS ; ne pas utiliser `includeSubDomains` sans cet inventaire.
 9. Demander une validation humaine avant tout déploiement de production.
 
+## Médias durables
+
+Railway ne doit jamais porter les covers, previews ou références privées sur son filesystem. Configurer les variables `MEDIA_*` détaillées dans [MEDIA_STORAGE.md](MEDIA_STORAGE.md), avec un bucket public et un bucket privé distincts, avant de lancer une migration. Le démarrage refuse explicitement le pilote local lorsqu’un environnement Railway est détecté.
+
+La séquence d’activation est : backup local, dry-run, création des buckets/policies/credentials de staging, migration staging, tests HTTP et IDOR, puis procédure séparée de production. Ne jamais placer les secrets S3 dans une variable `NEXT_PUBLIC_*`, ni utiliser le bucket privé comme origine publique. Railway, R2 et DNS ne sont pas modifiés par V0.6.3.
+
 ## Rollback
 
 Railway doit conserver le déploiement précédent. Le code du prototype antérieur reste également récupérable par son commit Git de départ, documenté dans le rapport du sprint.
@@ -34,4 +41,4 @@ Ne jamais employer un push forcé, supprimer un domaine Railway ou modifier les 
 
 ## Évolutions futures
 
-Les variables de base de données, SMTP, PayPal et stockage ne seront ajoutées qu’avec les fonctionnalités serveur correspondantes. Elles devront être créées dans les secrets Railway, jamais dans le dépôt ni dans une variable `NEXT_PUBLIC_*`.
+Les variables de paiement ne seront ajoutées qu’avec la fonctionnalité correspondante. Tous les secrets restent dans Railway ou le fichier local ignoré, jamais dans le dépôt ni dans une variable `NEXT_PUBLIC_*`.

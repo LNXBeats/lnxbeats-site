@@ -111,6 +111,16 @@ enum RightsStatus {
   RESTRICTED
 }
 
+enum MediaStorageBackend {
+  LOCAL
+  OBJECT
+}
+
+enum MediaVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum ProjectAssetRole {
   COVER
   AUDIO_PREVIEW
@@ -406,25 +416,30 @@ model ConfidenceAnnotation {
 }
 
 model Asset {
-  id           String         @id @default(uuid()) @db.Uuid
-  type         AssetType
-  storageKey   String         @unique @db.VarChar(500)
-  filename     String         @db.VarChar(255)
-  mimeType     String         @db.VarChar(160)
-  sizeBytes    BigInt
-  width        Int?
-  height       Int?
-  durationMs   Int?           @map("duration_ms")
-  alt          String?        @db.VarChar(500)
-  rightsStatus RightsStatus   @default(UNKNOWN)
-  rightsNote   String?        @db.Text
-  confidence   DataConfidence @default(UNKNOWN)
-  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
-  projects     ProjectAsset[]
-  orders       OrderAsset[]
+  id              String              @id @default(uuid()) @db.Uuid
+  type            AssetType
+  storageKey      String              @unique @db.VarChar(500)
+  storageBackend  MediaStorageBackend @default(LOCAL)
+  storageProvider String              @default("local") @db.VarChar(80)
+  visibility      MediaVisibility     @default(PRIVATE)
+  checksumSha256  String?             @db.VarChar(64)
+  filename        String              @db.VarChar(255)
+  mimeType        String              @db.VarChar(160)
+  sizeBytes       BigInt
+  width           Int?
+  height          Int?
+  durationMs      Int?                @map("duration_ms")
+  alt             String?             @db.VarChar(500)
+  rightsStatus    RightsStatus        @default(UNKNOWN)
+  rightsNote      String?             @db.Text
+  confidence      DataConfidence      @default(UNKNOWN)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  projects        ProjectAsset[]
+  orders          OrderAsset[]
 
   @@index([type, rightsStatus])
+  @@index([storageBackend, visibility])
   @@map("assets")
 }
 

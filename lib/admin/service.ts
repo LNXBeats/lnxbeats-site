@@ -231,14 +231,14 @@ export async function deleteEligibleAdminOrder(orderNumber: string) {
     await transaction.order.delete({ where: { id: order.id } });
     const deletableAssets = assetIds.length ? await transaction.asset.findMany({
       where: { id: { in: assetIds }, projects: { none: {} }, orders: { none: {} } },
-      select: { id: true, storageKey: true },
+      select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true },
     }) : [];
     if (assetIds.length) {
       await transaction.asset.deleteMany({
         where: { id: { in: deletableAssets.map(({ id }) => id) } },
       });
     }
-    return deletableAssets.map(({ storageKey }) => storageKey);
+    return deletableAssets;
   });
-  await Promise.all(storageKeys.map((storageKey) => deletePrivateOrderFile(storageKey)));
+  await Promise.all(storageKeys.map((asset) => deletePrivateOrderFile(asset)));
 }
