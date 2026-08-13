@@ -5,8 +5,9 @@ import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
 export const dynamic = "force-dynamic";
 
 export function GET() {
+  let mediaStorage;
   try {
-    validateMediaStorageConfiguration();
+    mediaStorage = validateMediaStorageConfiguration();
   } catch {
     return NextResponse.json(
       { ok: false, service: "lnx-studio", check: "media-storage" },
@@ -14,7 +15,7 @@ export function GET() {
     );
   }
   return NextResponse.json(
-    { ok: true, service: "lnx-studio" },
+    { ok: true, service: "lnx-studio", mediaStorage },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import { createHash } from "node:crypto";
 
 import {
   DeleteObjectCommand,
@@ -24,6 +25,8 @@ import {
 
 type S3LikeClient = Pick<S3Client, "send">;
 
+const DEFAULT_OBJECT_OPERATION_TIMEOUT_MS = 180_000;
+
 export type S3MediaStorageOptions = {
   provider: string;
   region: string;
@@ -35,7 +38,14 @@ export type S3MediaStorageOptions = {
   forcePathStyle?: boolean;
   client?: S3LikeClient;
   signer?: typeof getSignedUrl;
+  operationTimeoutMs?: number;
 };
+
+async function streamSha256(body: ReadableStream<Uint8Array>) {
+  const hash = createHash("sha256");
+  for await (const chunk of Readable.fromWeb(body as never)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
 
 function providerError(error: unknown): never {
   const name = error && typeof error === "object" && "name" in error ? String(error.name) : "";
@@ -49,6 +59,7 @@ export class S3MediaStorage implements MediaStorage {
   private readonly buckets: Record<MediaScope, string>;
   private readonly client: S3LikeClient;
   private readonly signer: typeof getSignedUrl;
+  private readonly operationTimeoutMs: number;
 
   constructor(options: S3MediaStorageOptions) {
     if (!options.publicBucket || !options.privateBucket || options.publicBucket === options.privateBucket) {
@@ -66,6 +77,10 @@ export class S3MediaStorage implements MediaStorage {
     };
     this.client = options.client ?? new S3Client(config);
     this.signer = options.signer ?? getSignedUrl;
+    this.operationTimeoutMs = options.operationTimeoutMs ?? DEFAULT_OBJECT_OPERATION_TIMEOUT_MS;
+    if (!Number.isSafeInteger(this.operationTimeoutMs) || this.operationTimeoutMs < 1_000) {
+      throw new MediaStorageError("CONFIGURATION", "Object storage operation timeout is invalid.");
+    }
   }
 
   private bucket(scope: MediaScope, key: string) {
@@ -75,8 +90,12 @@ export class S3MediaStorage implements MediaStorage {
 
   async put(input: MediaStoragePutInput): Promise<MediaObjectMetadata> {
     const bucket = this.bucket(input.scope, input.key);
-    let uploaded = false;
+    // Application writes always use a fresh, server-generated object key. Mark
+    // the attempt before awaiting R2: the provider may persist the object and
+    // lose the response (timeout/reset), in which case cleanup is still needed.
+    let putAttempted = false;
     try {
+      putAttempted = true;
       const result = await this.client.send(new PutObjectCommand({
         Bucket: bucket,
         Key: input.key,
@@ -86,16 +105,28 @@ export class S3MediaStorage implements MediaStorage {
         CacheControl: input.scope === "public" ? "public, max-age=31536000, immutable" : "private, no-store",
         ...(input.contentDisposition ? { ContentDisposition: input.contentDisposition } : {}),
         Metadata: { "sha256": input.checksumSha256 },
-      }));
-      uploaded = true;
+      }), { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) });
       const verified = await this.head({ scope: input.scope, key: input.key });
       if (verified.contentLength !== input.contentLength) {
         throw new MediaStorageError("INTEGRITY", "The stored media size does not match its metadata.");
       }
-      return { ...verified, etag: result.ETag ?? verified.etag, checksumSha256: input.checksumSha256 };
+      if (verified.checksumSha256 !== input.checksumSha256) {
+        throw new MediaStorageError("INTEGRITY", "The stored media checksum does not match its metadata.");
+      }
+      if (verified.contentType !== input.contentType) {
+        throw new MediaStorageError("INTEGRITY", "The stored media type does not match its metadata.");
+      }
+      const storedChecksumSha256 = await streamSha256((await this.get({ scope: input.scope, key: input.key })).body);
+      if (storedChecksumSha256 !== input.checksumSha256) {
+        throw new MediaStorageError("INTEGRITY", "The stored media content does not match its checksum.");
+      }
+      return { ...verified, etag: result.ETag ?? verified.etag };
     } catch (error) {
-      if (uploaded) {
-        await this.client.send(new DeleteObjectCommand({ Bucket: bucket, Key: input.key })).catch(() => undefined);
+      if (putAttempted) {
+        await this.client.send(
+          new DeleteObjectCommand({ Bucket: bucket, Key: input.key }),
+          { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+        ).catch(() => undefined);
       }
       if (error instanceof MediaStorageError) throw error;
       return providerError(error);
@@ -104,7 +135,10 @@ export class S3MediaStorage implements MediaStorage {
 
   async head(input: { scope: MediaScope; key: string }): Promise<MediaObjectMetadata> {
     try {
-      const result = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket(input.scope, input.key), Key: input.key }));
+      const result = await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket(input.scope, input.key), Key: input.key }),
+        { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+      );
       if (result.ContentLength === undefined) throw new MediaStorageError("INTEGRITY", "Object metadata is incomplete.");
       return {
         contentLength: result.ContentLength,
@@ -125,7 +159,7 @@ export class S3MediaStorage implements MediaStorage {
         Bucket: this.bucket(input.scope, input.key),
         Key: input.key,
         ...(input.range ? { Range: `bytes=${input.range.start}-${input.range.end}` } : {}),
-      }));
+      }), { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) });
       if (!result.Body || result.ContentLength === undefined) throw new MediaStorageError("NOT_FOUND", "Media object not found.");
       const body = "transformToWebStream" in result.Body
         ? result.Body.transformToWebStream()
@@ -146,7 +180,10 @@ export class S3MediaStorage implements MediaStorage {
 
   async delete(input: { scope: MediaScope; key: string }) {
     try {
-      await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket(input.scope, input.key), Key: input.key }));
+      await this.client.send(
+        new DeleteObjectCommand({ Bucket: this.bucket(input.scope, input.key), Key: input.key }),
+        { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+      );
     } catch (error) {
       return providerError(error);
     }

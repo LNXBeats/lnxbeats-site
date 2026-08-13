@@ -21,7 +21,7 @@ Le fichier `railway.toml` sélectionne Railpack, le start command et le healthch
 2. Exécuter `npm ci`, `npm run lint`, `npm run typecheck` et `npm run build` dans un environnement propre.
 3. Démarrer le build et exécuter `npm run test:smoke` contre son URL.
 4. Vérifier visuellement les formats mobile, tablette et desktop.
-5. Confirmer que `/api/health` retourne HTTP 200 avec `{"ok":true,"service":"lnx-studio"}`.
+5. Confirmer que `/api/health` retourne HTTP 200, `ok: true`, `service: "lnx-studio"` et la configuration média attendue, sans aucun secret. Ce contrôle de configuration ne remplace pas le canary R2 opt-in.
 6. Vérifier que seules les variables documentées sont présentes.
 7. Vérifier la présence de `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` et `Permissions-Policy` sur les réponses publiques.
 8. Valider la terminaison HTTPS et tous les sous-domaines avant d’activer HSTS ; ne pas utiliser `includeSubDomains` sans cet inventaire.
@@ -31,11 +31,15 @@ Le fichier `railway.toml` sélectionne Railpack, le start command et le healthch
 
 Railway ne doit jamais porter les covers, previews ou références privées sur son filesystem. Configurer les variables `MEDIA_*` détaillées dans [MEDIA_STORAGE.md](MEDIA_STORAGE.md), avec un bucket public et un bucket privé distincts, avant de lancer une migration. Le démarrage refuse explicitement le pilote local lorsqu’un environnement Railway est détecté.
 
-La séquence d’activation est : backup local, dry-run, création des buckets/policies/credentials de staging, migration staging, tests HTTP et IDOR, puis procédure séparée de production. Ne jamais placer les secrets S3 dans une variable `NEXT_PUBLIC_*`, ni utiliser le bucket privé comme origine publique. Railway, R2 et DNS ne sont pas modifiés par V0.6.3.
+Le staging utilise exclusivement `lnx-studio-staging-public` et `lnx-studio-staging-private`, avec un token Object Read & Write limité à ces deux buckets. La séquence d’activation est : gel des écritures, backup lié à l’environnement, dry-run, canary R2 opt-in, nouveau backup lié à la cible objet, dry-run objet, migration avec `--maintenance-window`, puis tests HTTP et IDOR. Les commandes et confirmations exactes sont documentées dans [MEDIA_STORAGE.md](MEDIA_STORAGE.md).
+
+Ne jamais placer les secrets S3 dans une variable `NEXT_PUBLIC_*`, afficher une URL signée, utiliser le bucket privé comme origine publique ou réutiliser credentials/buckets staging en production. L’activation production constitue une procédure future séparée.
 
 ## Rollback
 
-Railway doit conserver le déploiement précédent. Le code du prototype antérieur reste également récupérable par son commit Git de départ, documenté dans le rapport du sprint.
+Railway doit conserver le déploiement précédent. Le code du prototype antérieur reste également récupérable par son commit Git de départ, documenté dans le rapport du sprint. R2 n’est pas une sauvegarde complète : conserver séparément un backup PostgreSQL restaurable et une copie média durable hors du stockage runtime.
+
+Un rollback staging vers le pilote local requiert de restaurer les métadonnées DB vers `LOCAL` et de disposer encore des sources locales. Il est réservé au développement/à la preview ; modifier uniquement la variable du driver ne restaure pas les assets déjà marqués `OBJECT`. Aucun fallback local n’est autorisé en production ou sur Railway.
 
 Ne jamais employer un push forcé, supprimer un domaine Railway ou modifier les DNS OVH pour effectuer un rollback applicatif.
 

@@ -35,7 +35,7 @@ test("production media migration is additive and classifies catalogue assets as 
   assert.doesNotMatch(sql, /TRUNCATE|DELETE\s+FROM/i);
 });
 
-test("a production or Railway environment refuses ephemeral local media storage", () => {
+test("a staging, production or Railway environment refuses ephemeral local media storage", () => {
   const previous = {
     driver: process.env.MEDIA_STORAGE_DRIVER,
     deployment: process.env.MEDIA_DEPLOYMENT_ENV,
@@ -43,8 +43,24 @@ test("a production or Railway environment refuses ephemeral local media storage"
   };
   try {
     process.env.MEDIA_STORAGE_DRIVER = "local";
+    process.env.MEDIA_DEPLOYMENT_ENV = "staging";
+    delete process.env.RAILWAY_ENVIRONMENT;
+    assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+
+    process.env.MEDIA_DEPLOYMENT_ENV = " staging ";
+    assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+
+    process.env.MEDIA_DEPLOYMENT_ENV = "stagng";
+    assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+
     process.env.MEDIA_DEPLOYMENT_ENV = "production";
     delete process.env.RAILWAY_ENVIRONMENT;
+    assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+
+    delete process.env.MEDIA_STORAGE_DRIVER;
+    assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+
+    process.env.MEDIA_STORAGE_DRIVER = " s3 ";
     assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
 
     process.env.MEDIA_DEPLOYMENT_ENV = "local-preview";
@@ -54,6 +70,103 @@ test("a production or Railway environment refuses ephemeral local media storage"
     if (previous.driver === undefined) delete process.env.MEDIA_STORAGE_DRIVER; else process.env.MEDIA_STORAGE_DRIVER = previous.driver;
     if (previous.deployment === undefined) delete process.env.MEDIA_DEPLOYMENT_ENV; else process.env.MEDIA_DEPLOYMENT_ENV = previous.deployment;
     if (previous.railway === undefined) delete process.env.RAILWAY_ENVIRONMENT; else process.env.RAILWAY_ENVIRONMENT = previous.railway;
+  }
+});
+
+test("Cloudflare R2 configuration requires its canonical endpoint and environment-specific buckets", () => {
+  const names = [
+    "MEDIA_STORAGE_DRIVER",
+    "MEDIA_DEPLOYMENT_ENV",
+    "MEDIA_STORAGE_PROVIDER",
+    "MEDIA_S3_ENDPOINT",
+    "MEDIA_S3_REGION",
+    "MEDIA_S3_ACCESS_KEY_ID",
+    "MEDIA_S3_SECRET_ACCESS_KEY",
+    "MEDIA_PUBLIC_BUCKET",
+    "MEDIA_PRIVATE_BUCKET",
+    "MEDIA_S3_FORCE_PATH_STYLE",
+  ] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, {
+      MEDIA_STORAGE_DRIVER: "s3",
+      MEDIA_DEPLOYMENT_ENV: "staging",
+      MEDIA_STORAGE_PROVIDER: "r2",
+      MEDIA_S3_ENDPOINT: "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
+      MEDIA_S3_REGION: "auto",
+      MEDIA_S3_ACCESS_KEY_ID: "test-access",
+      MEDIA_S3_SECRET_ACCESS_KEY: "test-secret",
+      MEDIA_PUBLIC_BUCKET: "lnx-studio-staging-public",
+      MEDIA_PRIVATE_BUCKET: "lnx-studio-staging-private",
+      MEDIA_S3_FORCE_PATH_STYLE: "false",
+    });
+    assert.deepEqual(validateMediaStorageConfiguration(), { backend: "OBJECT", provider: "r2" });
+
+    process.env.MEDIA_STORAGE_PROVIDER = "minio";
+    assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+    process.env.MEDIA_STORAGE_PROVIDER = "r2";
+
+    const invalidConfigurations = [
+      ["MEDIA_S3_ENDPOINT", "http://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com"],
+      ["MEDIA_S3_ENDPOINT", "https://example.invalid"],
+      ["MEDIA_STORAGE_PROVIDER", "R2"],
+      ["MEDIA_S3_REGION", "us-east-1"],
+      ["MEDIA_S3_FORCE_PATH_STYLE", "true"],
+      ["MEDIA_S3_FORCE_PATH_STYLE", "1"],
+      ["MEDIA_PUBLIC_BUCKET", "lnx-studio-production-public"],
+      ["MEDIA_PRIVATE_BUCKET", "lnx-studio-production-private"],
+      ["MEDIA_PUBLIC_BUCKET", "another-staging-public"],
+      ["MEDIA_PRIVATE_BUCKET", "another-staging-private"],
+      ["MEDIA_PUBLIC_BUCKET", "lnx-studio-staging-public-copy"],
+      ["MEDIA_PRIVATE_BUCKET", "lnx-studio-staging-private-copy"],
+    ] as const;
+    for (const [name, value] of invalidConfigurations) {
+      const validValue = process.env[name];
+      process.env[name] = value;
+      assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+      process.env[name] = validValue;
+    }
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test("generic S3-compatible providers retain custom endpoint and path-style support", () => {
+  const names = [
+    "MEDIA_STORAGE_DRIVER",
+    "MEDIA_DEPLOYMENT_ENV",
+    "MEDIA_STORAGE_PROVIDER",
+    "MEDIA_S3_ENDPOINT",
+    "MEDIA_S3_REGION",
+    "MEDIA_S3_ACCESS_KEY_ID",
+    "MEDIA_S3_SECRET_ACCESS_KEY",
+    "MEDIA_PUBLIC_BUCKET",
+    "MEDIA_PRIVATE_BUCKET",
+    "MEDIA_S3_FORCE_PATH_STYLE",
+  ] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, {
+      MEDIA_STORAGE_DRIVER: "s3",
+      MEDIA_DEPLOYMENT_ENV: "test",
+      MEDIA_STORAGE_PROVIDER: "minio",
+      MEDIA_S3_ENDPOINT: "http://127.0.0.1:9000/storage",
+      MEDIA_S3_REGION: "us-east-1",
+      MEDIA_S3_ACCESS_KEY_ID: "test-access",
+      MEDIA_S3_SECRET_ACCESS_KEY: "test-secret",
+      MEDIA_PUBLIC_BUCKET: "public-test",
+      MEDIA_PRIVATE_BUCKET: "private-test",
+      MEDIA_S3_FORCE_PATH_STYLE: "true",
+    });
+    assert.deepEqual(validateMediaStorageConfiguration(), { backend: "OBJECT", provider: "minio" });
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
   }
 });
 
@@ -140,7 +253,7 @@ test("S3 adapter keeps buckets separate, verifies metadata, supports range, dele
   assert.equal(put.input.CacheControl, "public, max-age=31536000, immutable");
   const object = await storage.get({ scope: "public", key: publicKey, range: { start: 0, end: 3 } });
   assert.equal(await new Response(object.body).text(), data.toString());
-  const get = calls.find((value) => value instanceof GetObjectCommand) as GetObjectCommand;
+  const get = calls.find((value) => value instanceof GetObjectCommand && value.input.Range) as GetObjectCommand;
   assert.equal(get.input.Range, "bytes=0-3");
   await storage.delete({ scope: "public", key: publicKey });
 
@@ -177,6 +290,111 @@ test("S3 adapter removes a newly uploaded object when provider verification fail
     contentType: "audio/mpeg",
     checksumSha256: checksum(data),
   }), (error) => error instanceof MediaStorageError && error.code === "INTEGRITY");
+  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 1);
+});
+
+test("S3 adapter attempts compensating cleanup when a PUT response is lost", async () => {
+  const calls: unknown[] = [];
+  const data = Buffer.from("object-body");
+  const fakeClient = {
+    async send(command: unknown) {
+      calls.push(command);
+      if (command instanceof PutObjectCommand) throw new Error("Simulated response loss after provider acceptance");
+      if (command instanceof DeleteObjectCommand) return {};
+      throw new Error("Unexpected command");
+    },
+  };
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: fakeClient as never,
+  });
+  await assert.rejects(storage.put({
+    scope: "public",
+    key: "catalog/audio-previews/00000000-0000-4000-8000-000000000001.mp3",
+    body: data,
+    contentLength: data.length,
+    contentType: "audio/mpeg",
+    checksumSha256: checksum(data),
+  }), (error) => error instanceof MediaStorageError && error.code === "PROVIDER");
+  assert.equal(calls.filter((call) => call instanceof PutObjectCommand).length, 1);
+  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 1);
+});
+
+test("S3 adapter rejects and removes uploads whose remote checksum or MIME metadata differs", async (context) => {
+  const data = Buffer.from("object-body");
+  const key = "catalog/audio-previews/00000000-0000-4000-8000-000000000001.mp3";
+  for (const mismatch of ["checksum", "mime"] as const) {
+    await context.test(mismatch, async () => {
+      const calls: unknown[] = [];
+      const fakeClient = {
+        async send(command: unknown) {
+          calls.push(command);
+          if (command instanceof PutObjectCommand) return { ETag: "\"put-etag\"" };
+          if (command instanceof HeadObjectCommand) return {
+            ContentLength: data.length,
+            ContentType: mismatch === "mime" ? "application/octet-stream" : "audio/mpeg",
+            Metadata: { sha256: mismatch === "checksum" ? "incorrect" : checksum(data) },
+          };
+          if (command instanceof DeleteObjectCommand) return {};
+          throw new Error("Unexpected command");
+        },
+      };
+      const storage = new S3MediaStorage({
+        provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+        accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+        client: fakeClient as never,
+      });
+      await assert.rejects(storage.put({
+        scope: "public",
+        key,
+        body: data,
+        contentLength: data.length,
+        contentType: "audio/mpeg",
+        checksumSha256: checksum(data),
+      }), (error) => error instanceof MediaStorageError && error.code === "INTEGRITY");
+      assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 1);
+    });
+  }
+});
+
+test("S3 adapter rejects and removes an upload whose downloaded bytes differ from signed metadata", async () => {
+  const expected = Buffer.from("object-body");
+  const corrupt = Buffer.from("corrupt-bod");
+  const calls: unknown[] = [];
+  const fakeClient = {
+    async send(command: unknown) {
+      calls.push(command);
+      if (command instanceof PutObjectCommand) return { ETag: "\"put-etag\"" };
+      if (command instanceof HeadObjectCommand) return {
+        ContentLength: expected.length,
+        ContentType: "audio/mpeg",
+        Metadata: { sha256: checksum(expected) },
+      };
+      if (command instanceof GetObjectCommand) return {
+        Body: Readable.from([corrupt]),
+        ContentLength: corrupt.length,
+        ContentType: "audio/mpeg",
+        Metadata: { sha256: checksum(expected) },
+      };
+      if (command instanceof DeleteObjectCommand) return {};
+      throw new Error("Unexpected command");
+    },
+  };
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: fakeClient as never,
+  });
+  await assert.rejects(storage.put({
+    scope: "public",
+    key: "catalog/audio-previews/00000000-0000-4000-8000-000000000001.mp3",
+    body: expected,
+    contentLength: expected.length,
+    contentType: "audio/mpeg",
+    checksumSha256: checksum(expected),
+  }), (error) => error instanceof MediaStorageError && error.code === "INTEGRITY");
+  assert.equal(calls.filter((call) => call instanceof GetObjectCommand).length, 1);
   assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 1);
 });
 

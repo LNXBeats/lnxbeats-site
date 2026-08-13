@@ -5,14 +5,39 @@ import { S3MediaStorage } from "@/lib/media/storage/s3";
 import { MediaStorageError, type MediaStorage, type MediaStorageBackend, type MediaStorageReference } from "@/lib/media/storage/types";
 
 type DriverName = "local" | "s3";
+type DeploymentEnvironment = "local-preview" | "test" | "staging" | "production";
 
-function configuredDriver(): DriverName {
+type ObjectStorageConfiguration = {
+  provider: string;
+  endpoint: string;
+  region: string;
+  publicBucket: string;
+  privateBucket: string;
+  forcePathStyle: boolean;
+};
+
+function configuredDeploymentEnvironment(): DeploymentEnvironment {
+  const value = process.env.MEDIA_DEPLOYMENT_ENV?.trim() || "local-preview";
+  if (!(["local-preview", "test", "staging", "production"] as string[]).includes(value)) {
+    throw new MediaStorageError("CONFIGURATION", "MEDIA_DEPLOYMENT_ENV is invalid.");
+  }
+  return value as DeploymentEnvironment;
+}
+
+function configuredDriver(deploymentEnvironment = configuredDeploymentEnvironment()): DriverName {
   const value = process.env.MEDIA_STORAGE_DRIVER ?? "local";
   if (value !== "local" && value !== "s3") {
     throw new MediaStorageError("CONFIGURATION", "MEDIA_STORAGE_DRIVER must be local or s3.");
   }
-  if (value === "local" && (process.env.MEDIA_DEPLOYMENT_ENV === "production" || process.env.RAILWAY_ENVIRONMENT)) {
-    throw new MediaStorageError("CONFIGURATION", "Production media storage must use an object driver.");
+  if (
+    value === "local"
+    && (
+      deploymentEnvironment === "staging"
+      || deploymentEnvironment === "production"
+      || process.env.RAILWAY_ENVIRONMENT
+    )
+  ) {
+    throw new MediaStorageError("CONFIGURATION", "Staging and production media storage must use an object driver.");
   }
   return value;
 }
@@ -36,21 +61,102 @@ function required(name: string) {
   return value;
 }
 
+function configuredBoolean(name: string, fallback = false) {
+  const value = process.env[name]?.trim();
+  if (!value) return fallback;
+  if (value !== "true" && value !== "false") {
+    throw new MediaStorageError("CONFIGURATION", `${name} must be true or false.`);
+  }
+  return value === "true";
+}
+
+function assertEnvironmentBucket(scope: "public" | "private", bucket: string, deploymentEnvironment: "staging" | "production") {
+  if (deploymentEnvironment === "staging") {
+    const expectedBucket = `lnx-studio-staging-${scope}`;
+    if (bucket !== expectedBucket) {
+      throw new MediaStorageError(
+        "CONFIGURATION",
+        `MEDIA_${scope.toUpperCase()}_BUCKET must be exactly ${expectedBucket} in staging.`,
+      );
+    }
+    return;
+  }
+
+  const normalized = bucket.toLowerCase();
+  if (
+    !normalized.split("-").includes(scope)
+    || !normalized.split("-").includes(deploymentEnvironment)
+    || normalized.split("-").includes("staging")
+  ) {
+    throw new MediaStorageError(
+      "CONFIGURATION",
+      `MEDIA_${scope.toUpperCase()}_BUCKET must identify the ${scope} ${deploymentEnvironment} bucket.`,
+    );
+  }
+}
+
+function validateR2Configuration(configuration: ObjectStorageConfiguration, deploymentEnvironment: DeploymentEnvironment) {
+  if (deploymentEnvironment === "staging" && configuration.provider !== "r2") {
+    throw new MediaStorageError("CONFIGURATION", "Staging object storage is restricted to Cloudflare R2.");
+  }
+  if (configuration.provider.toLowerCase() !== "r2") return;
+  if (configuration.provider !== "r2") {
+    throw new MediaStorageError("CONFIGURATION", "MEDIA_STORAGE_PROVIDER must be r2 for Cloudflare R2.");
+  }
+
+  let endpoint: URL;
+  try {
+    endpoint = new URL(configuration.endpoint);
+  } catch {
+    throw new MediaStorageError("CONFIGURATION", "MEDIA_S3_ENDPOINT must be a valid Cloudflare R2 HTTPS endpoint.");
+  }
+  if (
+    endpoint.protocol !== "https:"
+    || endpoint.username
+    || endpoint.password
+    || endpoint.port
+    || endpoint.pathname !== "/"
+    || endpoint.search
+    || endpoint.hash
+    || !/^[0-9a-f]{32}\.r2\.cloudflarestorage\.com$/i.test(endpoint.hostname)
+  ) {
+    throw new MediaStorageError("CONFIGURATION", "MEDIA_S3_ENDPOINT must be the account-scoped Cloudflare R2 HTTPS endpoint.");
+  }
+  if (configuration.region !== "auto") {
+    throw new MediaStorageError("CONFIGURATION", "MEDIA_S3_REGION must be auto for Cloudflare R2.");
+  }
+  if (configuration.forcePathStyle) {
+    throw new MediaStorageError("CONFIGURATION", "MEDIA_S3_FORCE_PATH_STYLE must be false for Cloudflare R2.");
+  }
+
+  if (deploymentEnvironment !== "staging" && deploymentEnvironment !== "production") {
+    throw new MediaStorageError("CONFIGURATION", "Cloudflare R2 requires MEDIA_DEPLOYMENT_ENV=staging or production.");
+  }
+  assertEnvironmentBucket("public", configuration.publicBucket, deploymentEnvironment);
+  assertEnvironmentBucket("private", configuration.privateBucket, deploymentEnvironment);
+}
+
 function objectStorage() {
-  return new S3MediaStorage({
+  const deploymentEnvironment = configuredDeploymentEnvironment();
+  const configuration: ObjectStorageConfiguration = {
     provider: process.env.MEDIA_STORAGE_PROVIDER?.trim() || "r2",
     endpoint: required("MEDIA_S3_ENDPOINT"),
     region: process.env.MEDIA_S3_REGION?.trim() || "auto",
-    accessKeyId: required("MEDIA_S3_ACCESS_KEY_ID"),
-    secretAccessKey: required("MEDIA_S3_SECRET_ACCESS_KEY"),
     publicBucket: required("MEDIA_PUBLIC_BUCKET"),
     privateBucket: required("MEDIA_PRIVATE_BUCKET"),
-    forcePathStyle: process.env.MEDIA_S3_FORCE_PATH_STYLE === "true",
+    forcePathStyle: configuredBoolean("MEDIA_S3_FORCE_PATH_STYLE"),
+  };
+  validateR2Configuration(configuration, deploymentEnvironment);
+  return new S3MediaStorage({
+    ...configuration,
+    accessKeyId: required("MEDIA_S3_ACCESS_KEY_ID"),
+    secretAccessKey: required("MEDIA_S3_SECRET_ACCESS_KEY"),
   });
 }
 
 export function activeMediaStorage(): MediaStorage {
-  return configuredDriver() === "s3" ? objectStorage() : localStorage();
+  const deploymentEnvironment = configuredDeploymentEnvironment();
+  return configuredDriver(deploymentEnvironment) === "s3" ? objectStorage() : localStorage();
 }
 
 export function validateMediaStorageConfiguration() {

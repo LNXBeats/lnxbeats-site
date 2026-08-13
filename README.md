@@ -135,17 +135,21 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
 | `ORDER_UPLOAD_DIR` | Racine privée, hors `public/` ; QA limitée à `/private/tmp` | Non |
 | `MEDIA_STORAGE_ROOT` | Racine absolue privée des covers et previews audio normalisées, hors `public/` et hors Git | Non |
-| `MEDIA_STORAGE_DRIVER` | `local` en preview/QA, `s3` pour le stockage objet de production | Non |
+| `MEDIA_STORAGE_DRIVER` | `local` en preview/QA, `s3` pour le stockage objet durable | Non |
 | `MEDIA_DEPLOYMENT_ENV` | Sépare explicitement `local-preview`, `staging` et `production` | Non |
 | `MEDIA_LOCAL_PUBLIC_ROOT` / `MEDIA_LOCAL_PRIVATE_ROOT` | Racines locales distinctes public/privé, hors webroot | Non |
 | `MEDIA_STORAGE_PROVIDER` | Identifiant du fournisseur objet persisté avec l’asset (`r2` recommandé) | Non |
 | `MEDIA_S3_ENDPOINT` / `MEDIA_S3_REGION` | Endpoint et région S3-compatible | Non |
 | `MEDIA_S3_ACCESS_KEY_ID` / `MEDIA_S3_SECRET_ACCESS_KEY` | Credentials serveur du stockage objet | Oui |
-| `MEDIA_PUBLIC_BUCKET` / `MEDIA_PRIVATE_BUCKET` | Buckets obligatoirement distincts | Non |
+| `MEDIA_PUBLIC_BUCKET` / `MEDIA_PRIVATE_BUCKET` | Buckets distincts ; staging limité à `lnx-studio-staging-public` / `lnx-studio-staging-private` | Non |
+| `MEDIA_R2_STAGING_CONFIRM` | Confirmation non secrète, opt-in, du canary R2 staging | Non |
+| `MEDIA_R2_STAGING_RUNTIME_CONFIRM` / `MEDIA_R2_AUDIO_WAV_CONFIRM` | Confirmations non secrètes des QA HTTP R2 destructives sur base jetable | Non |
+| `MEDIA_MIGRATION_CONFIRM` / `MEDIA_MIGRATION_MAINTENANCE_CONFIRM` / `MEDIA_MIGRATION_DATABASE_CONFIRM` | Triples confirmations non secrètes des écritures de migration sous maintenance, dont une cible explicitement la base preview locale persistante | Non |
 | `AUDIO_TEMP_ROOT` | Racine temporaire optionnelle des sources audio complètes ; le namespace et le TTL restent imposés par l’application | Non |
 | `FFMPEG_PATH` | Chemin absolu optionnel du FFmpeg système ; sinon le binaire reproductible du package est utilisé | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
+| `LNX_PRISMA_DEV_SERVER_FILE` | Preuve optionnelle explicite du runtime Prisma Dev ; la migration média utilise sinon la preuve locale portant le nom de `LNX_DATABASE_TARGET` | Non |
 | `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
 | `ALLOW_DATABASE_RESET` | Garde explicite requise pour la validation destructive locale | Non |
 | `PORT` | Port d’écoute ; fourni automatiquement par Railway | Non |
