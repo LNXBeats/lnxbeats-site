@@ -111,7 +111,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/admin` — cockpit protégé réservé à `ADMIN`
 - `/admin/commandes` — liste privée, filtres et transitions métier contextuelles
 - `/admin/catalogue` — liste, filtres et édition sécurisée du catalogue PostgreSQL
-- `/admin/catalogue/[slug]` — identité, publication, SEO, fiabilité, pistes, liens directs et cover
+- `/admin/catalogue/[slug]` — identité, visibilité, jukebox, récit, crédits, pistes, liens directs, cover et audio
 - `/admin/membres` — lecture limitée des comptes sans credentials ni sessions
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
 - `/api/orders/*` — brouillons et photos privés, protégés par session, origine et propriété
@@ -148,7 +148,7 @@ Les pages et composants serveur sont privilégiés. Le menu mobile, le formulair
 
 ## Administrer le catalogue
 
-Le catalogue existant se modifie depuis `/admin/catalogue`. Le slug est stable et non modifiable. Chaque bloc est enregistré explicitement ; les changements concurrents d’une fiche sont refusés plutôt qu’écrasés. Les profils artiste globaux restent dans `data/site.ts`, tandis que seuls les liens propres à une parution ou une boutique sont rattachés au projet.
+Le catalogue existant se modifie depuis `/admin/catalogue`. Le slug est stable et non modifiable. Chaque bloc est enregistré explicitement ; les changements concurrents d’une fiche sont refusés plutôt qu’écrasés. La visibilité publique, le statut, le placement et la position jukebox, le récit, la tracklist et les crédits facultatifs sont persistés dans PostgreSQL. Les profils artiste globaux restent dans `data/site.ts`, tandis que seuls les liens propres à une parution ou une boutique sont rattachés au projet.
 
 `data/discography.ts` est figé comme source historique de migration V0.6.0.2. Il ne doit plus être importé par le runtime public ni modifié pour éditer le catalogue. La création ou suppression complète d’un projet reste volontairement hors périmètre de cette version.
 

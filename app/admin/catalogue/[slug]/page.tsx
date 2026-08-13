@@ -15,9 +15,9 @@ import { catalogSeoMode, effectiveCatalogSeoDescription, effectiveCatalogSeoTitl
 import { getAdminCatalogProject } from "@/lib/catalog/service";
 import type { DataConfidence, PlatformId, ProjectDataConfidence } from "@/lib/catalog/types";
 import {
-  addCatalogLinkAction, addCatalogTrackAction, deleteCatalogLinkAction, deleteCatalogTrackAction,
+  addCatalogCreditAction, addCatalogLinkAction, addCatalogTrackAction, deleteCatalogCoverAction, deleteCatalogCreditAction, deleteCatalogLinkAction, deleteCatalogTrackAction,
   moveCatalogTrackAction, saveCatalogLinkAction,
-  saveCatalogProjectAction, saveCatalogTrackAction,
+  saveCatalogCreditAction, saveCatalogProjectAction, saveCatalogTrackAction,
 } from "@/app/admin/catalogue/actions";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +27,7 @@ const feedback: Record<string, string> = {
   "projet-enregistre": "Les informations du projet sont enregistrées.", "projet-refuse": "Enregistrement refusé. Rechargez la fiche et vérifiez les valeurs.",
   "piste-ajoutee": "La piste est ajoutée.", "piste-enregistree": "La piste est enregistrée.", "piste-supprimee": "La piste est supprimée.", "piste-refusee": "La piste n’a pas été modifiée.",
   "ordre-enregistre": "L’ordre des pistes est enregistré.", "ordre-refuse": "Le déplacement n’a pas été appliqué.",
+  "credit-ajoute": "Le crédit est ajouté.", "credit-enregistre": "Le crédit est enregistré.", "credit-supprime": "Le crédit est supprimé.", "credit-refuse": "Le crédit n’a pas été modifié.",
   "lien-ajoute": "Le lien est ajouté.", "lien-enregistre": "Le lien est enregistré.", "lien-supprime": "Le lien est supprimé.", "lien-refuse": "Le lien n’a pas été modifié.",
   "cover-enregistree": "Cover enregistrée.",
   "cover-trop-lourde": "Le fichier dépasse la limite de 10 Mo.",
@@ -38,12 +39,15 @@ const feedback: Record<string, string> = {
   "cover-conflit": "La cover a été modifiée depuis l’ouverture de cette fiche.",
   "cover-invalide": "La demande d’envoi est invalide. Sélectionnez de nouveau l’image.",
   "cover-erreur": "Impossible d’enregistrer la cover. Réessayez.",
+  "cover-supprimee": "La cover est supprimée. Le visuel de repli public est de nouveau utilisé.",
+  "cover-suppression-refusee": "La cover n’a pas été supprimée. Rechargez la fiche pour vérifier son état actuel.",
   "suppression-refusee": "La suppression n’a pas été appliquée.",
 };
 const confidenceFromDb: Record<string, DataConfidence> = { CONFIRMED: "confirmed", PARTIAL: "partial", PLACEHOLDER: "placeholder", UNKNOWN: "unknown" };
 const confidenceLabels: Record<DataConfidence, string> = { confirmed: "Confirmé", partial: "À compléter", placeholder: "À compléter", unknown: "À compléter" };
 const platformFromDb: Record<string, PlatformId> = { SPOTIFY: "spotify", APPLE_MUSIC: "appleMusic", DEEZER: "deezer", YOUTUBE: "youtube", AMAZON_MUSIC: "amazonMusic", DISTROKID: "distroKid", OTHER: "other" };
 const trackStatuses = [["RELEASED", "released", "Publié"], ["ANNOUNCED", "announced", "Annoncé"], ["UNLISTED", "unlisted", "Non listé"]] as const;
+const creditRoles = [["ARTIST", "artist", "Interprétation / artiste"], ["WRITER", "writer", "Paroles / auteur"], ["COMPOSER", "composer", "Composition"], ["PRODUCER", "producer", "Production"], ["FEATURING", "featuring", "Collaboration / featuring"], ["ENGINEER", "engineer", "Ingénierie son"], ["OTHER", "other", "Autre crédit"]] as const;
 
 function Identity({ project }: { project: { id: string; slug: string } }) {
   return <><input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="slug" value={project.slug} /></>;
@@ -69,6 +73,7 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
   });
   const coverAlt = cover ? resolveCatalogCoverAlt(project.title, cover.alt) : resolveCatalogCoverAlt(project.title, null);
   const coverAltOverride = cover ? catalogCoverAltOverride(cover.alt, project.title) : null;
+  const projectCredits = project.credits.filter(({ trackId }) => trackId === null);
   const seoMode = catalogSeoMode(project);
   const seoStateLabel = seoMode === "custom" ? "✓ Personnalisé" : seoMode === "mixed" ? "✓ Effectif · mixte" : "✓ Automatique";
 
@@ -95,12 +100,15 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
           <label><span>Titre</span><input name="title" defaultValue={project.title} maxLength={240} required autoFocus={etat === "projet-refuse"} /></label>
           <label><span>Sous-titre</span><input name="subtitle" defaultValue={project.subtitle ?? ""} maxLength={240} /></label>
           <label><span>Type</span><select name="type" defaultValue={project.type.toLowerCase()}><option value="album">Album</option><option value="single">Single</option><option value="project">Projet</option></select></label>
-          <label><span>Statut</span><select name="status" defaultValue={project.status === "IN_DEVELOPMENT" ? "in-development" : project.status.toLowerCase()}><option value="published">Publié</option><option value="in-development">En développement</option><option value="draft">Brouillon</option><option value="archive">Archivé</option></select></label>
+          <label><span>Statut éditorial</span><select name="status" defaultValue={project.status === "IN_DEVELOPMENT" ? "in-development" : project.status.toLowerCase()}><option value="published">Publié</option><option value="in-development">En développement</option><option value="draft">Brouillon</option><option value="archive">Archivé</option></select></label>
           <label><span>Date de parution</span><input name="releaseDate" type="date" defaultValue={project.releaseDate?.toISOString().slice(0, 10) ?? ""} /></label>
           <label><span>Nombre de pistes annoncé</span><input name="trackCount" type="number" min="0" max="999" defaultValue={project.trackCount ?? ""} /></label>
+          <label className="admin-checkbox"><input name="publicVisible" type="checkbox" defaultChecked={project.publicVisible} /><span>Visible sur le site</span></label>
           <label className="admin-checkbox"><input name="featured" type="checkbox" defaultChecked={project.featured} /><span>Mettre en avant sur l’accueil</span></label>
+          <label><span>Placement dans les jukebox</span><select name="jukeboxPlacement" defaultValue={project.jukeboxPlacement === "PUBLISHED" ? "published" : project.jukeboxPlacement === "DEVELOPMENT" ? "development" : "none"}><option value="none">Aucun jukebox</option><option value="published">Jukebox publié</option><option value="development">Jukebox développement</option></select></label>
+          <label><span>Position dans le jukebox</span><input name="jukeboxPosition" type="number" min="1" max="999" defaultValue={project.jukeboxPosition ?? ""} /><small>Facultatif : sans position, l’ordre du catalogue sert de repli.</small></label>
           <label className="admin-form-wide"><span>Description courte</span><textarea name="shortDescription" rows={3} maxLength={1000} defaultValue={project.shortDescription ?? ""} /></label>
-          <label className="admin-form-wide"><span>Description</span><textarea name="description" rows={7} maxLength={10000} defaultValue={project.description ?? ""} /></label>
+          <label className="admin-form-wide"><span>Récit / présentation du projet</span><textarea name="description" rows={7} maxLength={10000} defaultValue={project.description ?? ""} /><small>Ce texte alimente le récit de la fiche publique. Laissez vide plutôt que d’ajouter une information incertaine.</small></label>
           <details className="admin-form-wide admin-secondary-fields"><summary>Référencement</summary><div><label><span>Titre SEO personnalisé</span><input name="seoTitle" maxLength={240} defaultValue={project.seoTitle ?? ""} placeholder={effectiveCatalogSeoTitle(project)} /><small>Effectif : {effectiveCatalogSeoTitle(project)}</small></label><label><span>Description SEO personnalisée</span><textarea name="seoDescription" rows={3} maxLength={1000} defaultValue={project.seoDescription ?? ""} placeholder={effectiveCatalogSeoDescription(project)} /><small>Une description éditoriale existante sert automatiquement de fallback.</small></label></div></details>
         </div>
         <CatalogSubmitButton>Enregistrer le projet</CatalogSubmitButton>
@@ -117,15 +125,27 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
         <div><dt>Tracklist</dt><dd>{confidence.tracklist === "confirmed" ? "✓ Complète" : project.tracks.length || project.trackCount ? "Partielle" : "— À compléter"}</dd></div>
         <div><dt>Plateformes</dt><dd>{project.platformLinks.length ? `${project.platformLinks.length} lien${project.platformLinks.length === 1 ? "" : "s"} renseigné${project.platformLinks.length === 1 ? "" : "s"}` : "— À compléter"}</dd></div>
         <div><dt>SEO</dt><dd>{seoStateLabel}</dd></div>
-        <div><dt>Crédits</dt><dd>{project.credits.length ? `✓ ${project.credits.length} renseigné${project.credits.length === 1 ? "" : "s"}` : "— À compléter"}</dd></div>
+        <div><dt>Crédits</dt><dd>{projectCredits.length ? `✓ ${projectCredits.length} renseigné${projectCredits.length === 1 ? "" : "s"}` : "— Facultatifs"}</dd></div>
       </dl>
       <details className="admin-state-details"><summary>Voir les détails</summary><dl><div><dt>Identité</dt><dd>{confidenceLabels[confidence.identity]}</dd></div><div><dt>Éditorial</dt><dd>{confidenceLabels[confidence.editorial]}</dd></div><div><dt>Genres</dt><dd>{confidenceLabels[confidence.genres]}</dd></div></dl></details>
+    </section>
+
+    <section className="admin-detail-window">
+      <p className="admin-section-label">Crédits musicaux</p>
+      <SectionFeedback state={etat} accepted={["credit-ajoute", "credit-enregistre", "credit-supprime", "credit-refuse", "suppression-refusee"]} />
+      <p className="admin-muted">Seuls les crédits réellement renseignés apparaissent sur la fiche publique.</p>
+      {projectCredits.length ? <ul className="admin-link-editor">{projectCredits.map((credit) => <li key={credit.id}>
+        <div className="admin-link-summary"><strong>{creditRoles.find(([db]) => db === credit.role)?.[2] ?? "Autre crédit"}</strong><span>{credit.name}</span>{credit.note ? <small>{credit.note}</small> : null}</div>
+        <div className="admin-inline-actions"><details><summary>Modifier</summary><form className="admin-catalogue-form" action={saveCatalogCreditAction}><Identity project={project} /><input type="hidden" name="creditId" value={credit.id} /><div className="admin-form-grid"><label><span>Rôle</span><select name="role" defaultValue={creditRoles.find(([db]) => db === credit.role)?.[1] ?? "other"}>{creditRoles.map(([, value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>Nom crédité</span><input name="name" defaultValue={credit.name} maxLength={180} required /></label><label className="admin-form-wide"><span>Précision facultative</span><input name="note" defaultValue={credit.note ?? ""} maxLength={1000} placeholder="Artwork, mix, rôle précis…" /></label></div><CatalogSubmitButton>Enregistrer le crédit</CatalogSubmitButton></form></details><details><summary>Supprimer</summary><p>Le crédit disparaîtra de la fiche publique.</p><form action={deleteCatalogCreditAction}><Identity project={project} /><input type="hidden" name="creditId" value={credit.id} /><button>Confirmer la suppression</button></form></details></div>
+      </li>)}</ul> : <p className="admin-muted">Aucun crédit renseigné : aucun bloc vide ne sera affiché publiquement.</p>}
+      <details className="admin-add-panel"><summary>Ajouter un crédit</summary><form className="admin-catalogue-form" action={addCatalogCreditAction}><Identity project={project} /><div className="admin-form-grid"><label><span>Rôle</span><select name="role" defaultValue="artist">{creditRoles.map(([, value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>Nom crédité</span><input name="name" maxLength={180} required /></label><label className="admin-form-wide"><span>Précision facultative</span><input name="note" maxLength={1000} placeholder="Artwork, mix, rôle précis…" /></label></div><CatalogSubmitButton>Ajouter le crédit</CatalogSubmitButton></form></details>
     </section>
 
     <section className="admin-detail-window">
       <p className="admin-section-label">Cover officielle</p>
       {cover ? <div className="admin-cover-preview"><Image src={`/media/catalog/${cover.id}`} alt={coverAlt} width={320} height={320} /><div><p>Cover officielle actuelle</p><Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir sur le site <span aria-hidden="true">↗</span></Link></div></div> : <p className="admin-muted">Aucune cover officielle. L’espace graphique de repli reste visible publiquement.</p>}
       <CatalogCoverForm projectId={project.id} slug={project.slug} currentCoverAssetId={cover?.id ?? null} alt={coverAltOverride ?? ""} altPlaceholder={coverAlt} hasCover={Boolean(cover)} initialState={etat?.startsWith("cover-") ? etat : undefined} />
+      {cover ? <details className="admin-add-panel"><summary>Supprimer la cover actuelle</summary><p>La fiche publique utilisera son visuel de repli. Cette action ne concerne aucun fichier client privé.</p><form action={deleteCatalogCoverAction}><Identity project={project} /><input type="hidden" name="expectedCoverAssetId" value={cover.id} /><button className="admin-danger-action">Confirmer la suppression de la cover</button></form></details> : null}
     </section>
 
     <section className="admin-detail-window">

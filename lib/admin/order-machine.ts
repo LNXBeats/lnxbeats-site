@@ -74,3 +74,32 @@ export function normalizeAdminNote(value: unknown) {
   const note = value.trim();
   return note.length > 0 && note.length <= 1_000 ? note : null;
 }
+
+export type OrderDeletionSnapshot = {
+  status: KnownOrderStatus;
+  serviceStartedAt: Date | null;
+  deliveredAt: Date | null;
+  events: readonly { toStatus: KnownOrderStatus }[];
+  assets: readonly { role: "REFERENCE" | "DELIVERY" | "DOCUMENT" }[];
+  commercialLicenses: readonly unknown[];
+};
+
+export function getOrderDeletionEligibility(order: OrderDeletionSnapshot) {
+  if (order.status !== "DRAFT" && order.status !== "CANCELLED") {
+    return { eligible: false, reason: "Seuls un brouillon ou une commande annulée peuvent être supprimés." } as const;
+  }
+  if (order.serviceStartedAt || order.deliveredAt) {
+    return { eligible: false, reason: "Cette commande possède un historique de création ou de livraison à conserver." } as const;
+  }
+  if (order.commercialLicenses.length) {
+    return { eligible: false, reason: "Une demande de droits est liée à cette commande." } as const;
+  }
+  if (order.assets.some(({ role }) => role !== "REFERENCE")) {
+    return { eligible: false, reason: "Un document ou un fichier de livraison est lié à cette commande." } as const;
+  }
+  const protectedStatuses = new Set<KnownOrderStatus>(["PAYMENT_CONFIRMED", "DELIVERED", "REFUND_PENDING", "REFUNDED"]);
+  if (order.events.some(({ toStatus }) => protectedStatuses.has(toStatus))) {
+    return { eligible: false, reason: "Un historique de paiement, livraison ou remboursement impose la conservation." } as const;
+  }
+  return { eligible: true, reason: "Commande sans paiement, facture, livraison ni droits commerciaux." } as const;
+}

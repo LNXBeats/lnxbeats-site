@@ -1,4 +1,4 @@
-import type { DataConfidence, PlatformId, ProjectKind, ProjectStatus, TrackStatus } from "@/lib/catalog/types";
+import type { CreditRole, DataConfidence, PlatformId, ProjectJukeboxPlacement, ProjectKind, ProjectStatus, TrackStatus } from "@/lib/catalog/types";
 
 export class CatalogValidationError extends Error {
   constructor(message: string, readonly code = "INVALID_CATALOG_INPUT") {
@@ -46,6 +46,8 @@ function enumeration<T extends string>(value: unknown, values: readonly T[], lab
 export const parseProjectType = (value: unknown) => enumeration<ProjectKind>(value, ["album", "single", "project"], "Le type");
 export const parseProjectStatus = (value: unknown) => enumeration<ProjectStatus>(value, ["published", "in-development", "draft", "archive"], "Le statut");
 export const parseTrackStatus = (value: unknown) => enumeration<TrackStatus>(value, ["released", "announced", "unlisted"], "Le statut de piste");
+export const parseJukeboxPlacement = (value: unknown) => enumeration<ProjectJukeboxPlacement | "none">(value, ["published", "development", "none"], "Le placement jukebox");
+export const parseCreditRole = (value: unknown) => enumeration<CreditRole | "engineer">(value, ["artist", "writer", "composer", "producer", "featuring", "engineer", "other"], "Le rôle du crédit");
 export const parseConfidence = (value: unknown) => enumeration<DataConfidence>(value, ["confirmed", "partial", "placeholder", "unknown"], "Le niveau de confiance");
 export const parsePlatform = (value: unknown) => enumeration<PlatformId>(value, ["spotify", "appleMusic", "deezer", "youtube", "amazonMusic", "distroKid", "other"], "La plateforme");
 

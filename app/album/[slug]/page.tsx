@@ -74,7 +74,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
               <p className="album-status"><span>{kind}</span><span>{status}</span></p>
               <h1>{project.title}</h1>
               {project.subtitle ? <p className="album-hero__subtitle">{project.subtitle}</p> : null}
-              <p className="album-hero__description">{project.description}</p>
+              <p className="album-hero__description">{project.shortDescription || project.description}</p>
               <dl className="album-facts">
                 <div><dt>Type</dt><dd>{kind}</dd></div>
                 <div><dt>Date</dt><dd>{documentedDate ?? "Non documentée"}</dd></div>
@@ -106,9 +106,9 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
         <Container className="album-details__grid motion-reveal motion-reveal--soft">
           <Tracklist project={project} />
           <aside className="album-editorial-note">
-            <p className="eyebrow">Ce qui reste dans l’ombre</p>
-            <h2>Le récit grandira ici.</h2>
-            <p>Cette fiche distingue les informations confirmées, partielles et non documentées. Pochette, dates, crédits, durées et liens directs restent absents tant qu’ils n’ont pas été confirmés dans le catalogue.</p>
+            <p className="eyebrow">Derrière le projet</p>
+            <h2>{project.description ? "L’histoire qui ouvre la musique." : "Le récit viendra trouver sa place."}</h2>
+            <p>{project.description || "Aucun récit éditorial n’est publié pour ce projet à ce jour."}</p>
           </aside>
         </Container>
       </section>

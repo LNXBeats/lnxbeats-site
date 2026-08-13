@@ -29,13 +29,15 @@ Le modèle prévoit un retour inclus (`revisionAllowance = 1`). Le délai public
 
 1. Un compte actif et vérifié ouvre ou crée un brouillon.
 2. Le brief est sauvegardé explicitement en PostgreSQL ; aucune histoire sensible n’est déposée dans `localStorage`.
-3. Les photos sont contrôlées puis ajoutées au brouillon privé.
+3. Les photos sont contrôlées puis ajoutées au brouillon privé. Une sélection encore en attente est automatiquement envoyée avant la finalisation afin qu’un changement de page ne l’oublie pas.
 4. Le serveur valide de nouveau le brief, recalcule le prix et finalise atomiquement la commande.
 5. Le statut devient `AWAITING_PAYMENT`. La page privée présente le prix comme calculé mais rappelle que le paiement n’est pas disponible.
 6. Tant que la commande n’est pas `DELIVERED`, aucun bouton de droits n’est proposé et le service refuse toute demande.
 7. Après livraison, le propriétaire peut demander une extension distincte depuis le détail privé.
 
 Seul un brouillon peut être modifié ou supprimé par le membre. La suppression efface ses jointures et ses fichiers privés orphelins. Une finalisation incomplète échoue sans transition partielle.
+
+Depuis V0.6.2, l’administration peut aussi supprimer définitivement un brouillon ou une commande `CANCELLED` uniquement lorsque le serveur confirme l’absence de paiement confirmé, service commencé, livraison, droits commerciaux et asset de livraison/document. La confirmation demande le numéro complet. La transaction retire timeline et jointures ; seuls les assets devenus réellement orphelins et leurs fichiers privés sont ensuite supprimés. Une annulation conservée reste distincte d’une suppression.
 
 ## Numéro et concurrence
 
@@ -70,7 +72,7 @@ Le décodage/réencodage réduit la surface d’attaque mais ne constitue pas un
 
 ## Limites du brief
 
-L’histoire principale accepte 30 à 10 000 caractères. Le titre de repère est limité à 120 caractères ; destinataire et contexte à 200 ; direction et émotion à 500 ; détails à 4 000 ; mots à préserver et éléments à éviter à 2 000 ; prononciations à 1 000. Le JSON complet est borné à 128 Kio avant parsing. React affiche ces textes comme texte échappé, sans Markdown ni HTML utilisateur.
+L’histoire principale accepte 30 à 10 000 caractères. Le titre de repère est limité à 120 caractères ; destinataire et contexte à 200 ; direction et émotion à 500 ; détails à 4 000. Depuis V0.6.2, le client n’est plus interrogé séparément sur les mots à préserver, éléments à éviter et prononciations : `Détails importants` porte ces précisions libres. Les colonnes historiques restent intactes pour préserver les anciennes commandes. Le JSON complet est borné à 128 Kio avant parsing. React affiche ces textes comme texte échappé, sans Markdown ni HTML utilisateur.
 
 ## Statuts
 

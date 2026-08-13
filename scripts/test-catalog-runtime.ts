@@ -4,9 +4,9 @@ import sharp from "sharp";
 
 config({ path: ".env.local", quiet: true });
 
-const [{ assertApprovedCatalogDatabase }, service, cover, storage, legacy, { prisma }] = await Promise.all([
+const [{ assertApprovedCatalogDatabase }, service, cover, storage, legacy, queries, { prisma }] = await Promise.all([
   import("@/scripts/catalog-guard"), import("@/lib/catalog/service"), import("@/lib/catalog/cover"),
-  import("@/lib/catalog/media-storage"), import("@/lib/catalog/legacy"), import("@/lib/prisma"),
+  import("@/lib/catalog/media-storage"), import("@/lib/catalog/legacy"), import("@/lib/catalog/queries"), import("@/lib/prisma"),
 ]);
 
 let qaAuthorized = false;
@@ -51,6 +51,9 @@ function projectInput(project: Awaited<ReturnType<typeof service.getAdminCatalog
     shortDescription: project.shortDescription ?? "", description: project.description ?? "",
     releaseDate: project.releaseDate?.toISOString().slice(0, 10) ?? "", featured: project.featured,
     trackCount: project.trackCount ?? "", seoTitle: project.seoTitle ?? "", seoDescription: project.seoDescription ?? "",
+    publicVisible: project.publicVisible,
+    jukeboxPlacement: project.jukeboxPlacement === "PUBLISHED" ? "published" : project.jukeboxPlacement === "DEVELOPMENT" ? "development" : "none",
+    jukeboxPosition: project.jukeboxPosition ?? "",
     confidence: project.confidence.toLowerCase(),
   };
 }
@@ -64,15 +67,27 @@ async function run() {
   const initial = await service.getAdminCatalogProject("laboratoire-narratif");
   assert.ok(initial);
 
-  const input = projectInput(initial, `${initial.title} QA`);
+  const input = { ...projectInput(initial, `${initial.title} QA`), status: "published", publicVisible: false, jukeboxPlacement: "development", jukeboxPosition: "7", description: "Récit éditorial QA persisté." };
   const competing = await Promise.allSettled([
     service.updateCatalogProject(initial.id, input), service.updateCatalogProject(initial.id, input),
   ]);
   assert.equal(competing.filter(({ status }) => status === "fulfilled").length, 1, "Optimistic locking must accept one concurrent edit only.");
+  let changed = await service.getAdminCatalogProject(initial.slug);
+  assert.equal(changed?.status, "PUBLISHED");
+  assert.equal(changed?.publicVisible, false);
+  assert.equal(changed?.jukeboxPlacement, "DEVELOPMENT");
+  assert.equal(changed?.jukeboxPosition, 7);
+  assert.equal(changed?.description, "Récit éditorial QA persisté.");
+  assert.equal(await queries.getPublicProjectBySlug(initial.slug), null);
+  assert.equal((await queries.listSitemapProjects()).some(({ slug }) => slug === initial.slug), false);
+  assert.ok(changed);
+  await service.updateCatalogProject(initial.id, { ...projectInput(changed, changed.title), publicVisible: true });
+  assert.ok(await queries.getPublicProjectBySlug(initial.slug));
+  assert.equal((await queries.listSitemapProjects()).some(({ slug }) => slug === initial.slug), true);
 
   await service.addCatalogTrack(initial.id, { title: "Piste QA 1", durationSeconds: "75", status: "announced" });
   await service.addCatalogTrack(initial.id, { title: "Piste QA 2", durationSeconds: "", status: "unlisted" });
-  let changed = await service.getAdminCatalogProject(initial.slug);
+  changed = await service.getAdminCatalogProject(initial.slug);
   assert.ok(changed && changed.tracks.length === 2);
   await service.moveCatalogTrack(initial.id, changed.tracks[1]!.id, "up");
   changed = await service.getAdminCatalogProject(initial.slug);
@@ -80,6 +95,14 @@ async function run() {
   await service.updateCatalogTrack(initial.id, changed!.tracks[0]!.id, { title: "Piste QA déplacée", durationSeconds: "90", status: "released" });
   await service.deleteCatalogTrack(initial.id, changed!.tracks[1]!.id);
   assert.equal((await service.getAdminCatalogProject(initial.slug))?.tracks.length, 1);
+
+  const credit = await service.addCatalogCredit(initial.id, { role: "writer", name: "Crédit QA", note: "Paroles" });
+  await service.updateCatalogCredit(initial.id, credit.id, { role: "producer", name: "Crédit QA modifié", note: "Production" });
+  assert.equal((await service.getAdminCatalogProject(initial.slug))?.credits.find(({ id }) => id === credit.id)?.role, "PRODUCER");
+  assert.equal((await queries.getPublicProjectBySlug(initial.slug))?.credits.some(({ name }) => name === "Crédit QA modifié"), true);
+  await service.deleteCatalogCredit(initial.id, credit.id);
+  assert.equal((await service.getAdminCatalogProject(initial.slug))?.credits.some(({ id }) => id === credit.id), false);
+  assert.equal((await queries.getPublicProjectBySlug(initial.slug))?.credits.length, 0);
 
   const link = await service.addCatalogPlatformLink(initial.id, { platform: "other", scope: "release", label: "Lien QA", url: "https://example.invalid/lnx-catalogue" });
   await service.updateCatalogPlatformLink(initial.id, link.id, { platform: "other", scope: "store", label: "Boutique QA", url: "https://example.invalid/lnx-catalogue-store" });
@@ -114,11 +137,11 @@ async function run() {
   );
   assert.equal((await service.getAdminCatalogProject(initial.slug))?.assets[0]?.asset.id, coverB.id, "A stale client must not replace cover B.");
 
-  await prisma.$transaction(async (transaction) => {
-    await transaction.projectAsset.deleteMany({ where: { assetId: coverB.id } });
-    await transaction.asset.delete({ where: { id: coverB.id } });
-  });
-  await storage.removeCatalogCover(coverB.storageKey);
+  await assert.rejects(
+    cover.deleteCatalogCover(initial.id, expectedCoverA),
+    (error: unknown) => error instanceof cover.CatalogCoverConflictError && error.currentCoverAssetId === coverB.id,
+  );
+  await cover.deleteCatalogCover(initial.id, coverB.id);
   assert.equal((await service.getAdminCatalogProject(initial.slug))?.assets.length, 0);
 
   const firstCoverRace = await Promise.allSettled([
@@ -133,12 +156,9 @@ async function run() {
   assert.equal(afterConcurrentFirstCover?.assets.length, 1);
   const finalAsset = afterConcurrentFirstCover!.assets[0]!.asset;
 
-  await prisma.$transaction(async (transaction) => {
-    await transaction.projectAsset.deleteMany({ where: { assetId: finalAsset.id } });
-    await transaction.asset.delete({ where: { id: finalAsset.id } });
-  });
-  await storage.removeCatalogCover(finalAsset.storageKey);
-  console.info("Catalogue runtime passed: false cover conflict avoided, real cover conflict blocked, concurrent first cover blocked, and private storage cleaned.");
+  await cover.deleteCatalogCover(initial.id, finalAsset.id);
+  assert.equal((await service.getAdminCatalogProject(initial.slug))?.assets.length, 0);
+  console.info("Catalogue runtime passed: publication, tracks, credits, cover concurrency and safe cover deletion validated.");
 }
 
 run().finally(async () => {

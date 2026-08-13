@@ -14,6 +14,8 @@ const coverFeedback: Record<string, string> = {
   "cover-etat-actualise": "L’état de la cover est actualisé. Vérifiez votre sélection puis relancez l’envoi.",
   "cover-invalide": "La demande d’envoi est invalide. Sélectionnez de nouveau l’image.",
   "cover-erreur": "Impossible d’enregistrer la cover. Réessayez.",
+  "cover-supprimee": "La cover est supprimée. Le visuel de repli public est de nouveau utilisé.",
+  "cover-suppression-refusee": "La cover n’a pas été supprimée. Rechargez la fiche pour vérifier son état actuel.",
 };
 
 type CoverResponse = {

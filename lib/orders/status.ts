@@ -12,7 +12,7 @@ export const orderStatusPresentation = {
   FINALIZING: { label: "Finalisation", next: "La version finale est en préparation." },
   DELIVERED: { label: "Livrée", next: "La livraison restera disponible six mois à compter de sa mise à disposition." },
   REFUSED: { label: "Refusée", next: "Un remboursement intégral devra être déclenché si un paiement a été confirmé." },
-  CANCELLED: { label: "Annulée", next: "Les suites dépendent des conditions applicables à la commande." },
+  CANCELLED: { label: "Annulée", next: "Commande annulée. Aucun traitement supplémentaire n’est en cours." },
   REFUND_PENDING: { label: "Remboursement en cours", next: "Le remboursement futur est en cours de traitement." },
   REFUNDED: { label: "Remboursée", next: "Le remboursement futur a été confirmé." },
 } as const;

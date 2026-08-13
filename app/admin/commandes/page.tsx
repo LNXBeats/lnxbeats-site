@@ -18,11 +18,12 @@ const filterLabels: Record<AdminOrderFilter, string> = {
   closed: "Annulées / refusées",
 };
 
-type AdminOrdersPageProps = { searchParams: Promise<{ filtre?: string }> };
+type AdminOrdersPageProps = { searchParams: Promise<{ filtre?: string; etat?: string }> };
 
 export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageProps) {
   await requireAdmin();
-  const filter = parseAdminOrderFilter((await searchParams).filtre);
+  const params = await searchParams;
+  const filter = parseAdminOrderFilter(params.filtre);
   const orders = await listAdminOrders(filter);
 
   return (
@@ -31,6 +32,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
         <div><p className="admin-kicker">Commandes</p><h1>Les histoires confiées.</h1></div>
         <p>Les commandes apparaîtront ici selon leur état d’avancement.</p>
       </header>
+      {params.etat === "commande-supprimee" ? <p className="admin-feedback" role="status">La commande éligible, sa timeline et ses références privées ont été supprimées.</p> : params.etat === "suppression-invalide" ? <p className="admin-feedback" role="alert">La confirmation de suppression est invalide.</p> : null}
 
       <nav className="admin-filters" aria-label="Filtrer les commandes">
         {adminOrderFilters.map((value) => (

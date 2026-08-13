@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-import { addInternalOrderNote, transitionOrderStatus } from "@/lib/admin/service";
+import { addInternalOrderNote, deleteEligibleAdminOrder, transitionOrderStatus } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 
@@ -48,4 +48,20 @@ export async function addInternalNoteAction(formData: FormData) {
   }
   revalidatePath(`/admin/commandes/${orderNumber}`);
   redirect(adminOrderPath(orderNumber, "note-ajoutee"));
+}
+
+export async function deleteOrderAction(formData: FormData) {
+  const orderNumber = String(formData.get("orderNumber") ?? "");
+  const confirmation = String(formData.get("confirmation") ?? "");
+  if (!/^LNX-\d{4}-\d{6}$/.test(orderNumber) || confirmation !== orderNumber) redirect("/admin/commandes?etat=suppression-invalide");
+  await authorizeAdminAction();
+  try {
+    await deleteEligibleAdminOrder(orderNumber);
+  } catch {
+    redirect(adminOrderPath(orderNumber, "suppression-refusee"));
+  }
+  revalidatePath("/admin");
+  revalidatePath("/admin/commandes");
+  revalidatePath("/compte");
+  redirect("/admin/commandes?etat=commande-supprimee");
 }

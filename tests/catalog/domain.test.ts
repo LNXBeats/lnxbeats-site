@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { projects } from "@/data/discography";
 import { CATALOG_SOURCE_VERSION, LEGACY_CATALOG_PROJECT_COUNT, isIsoDate, legacyProjectRecord, parseLegacyDuration } from "@/lib/catalog/legacy";
-import { CatalogValidationError, parseDate, parseHttpsUrl, requiredText } from "@/lib/catalog/validation";
+import { CatalogValidationError, parseCreditRole, parseDate, parseHttpsUrl, parseJukeboxPlacement, requiredText } from "@/lib/catalog/validation";
 
 test("the frozen catalogue has 25 unique, ordered records", () => {
   assert.equal(projects.length, LEGACY_CATALOG_PROJECT_COUNT);
@@ -12,6 +12,15 @@ test("the frozen catalogue has 25 unique, ordered records", () => {
   assert.deepEqual(records.map(({ catalogPosition }) => catalogPosition), Array.from({ length: 25 }, (_, index) => index + 1));
   assert.equal(records.filter(({ featured }) => featured).length, 1);
   assert.equal(records.every(({ legacySourceVersion }) => legacySourceVersion === CATALOG_SOURCE_VERSION), true);
+});
+
+test("admin publication and credit choices are validated against the existing model", () => {
+  assert.equal(parseJukeboxPlacement("none"), "none");
+  assert.equal(parseJukeboxPlacement("published"), "published");
+  assert.equal(parseCreditRole("writer"), "writer");
+  assert.equal(parseCreditRole("engineer"), "engineer");
+  assert.throws(() => parseJukeboxPlacement("homepage"), CatalogValidationError);
+  assert.throws(() => parseCreditRole("invented-role"), CatalogValidationError);
 });
 
 test("unknown release dates remain null and declared track counts do not invent tracks", () => {

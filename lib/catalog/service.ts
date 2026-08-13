@@ -5,7 +5,7 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { platformLabelOverride } from "@/lib/catalog/platform-label";
 import {
   boundedInteger, optionalText, parseConfidence, parseDate, parseHttpsUrl, parsePlatform,
-  parseProjectStatus, parseProjectType, parseTrackStatus, requiredText,
+  parseCreditRole, parseJukeboxPlacement, parseProjectStatus, parseProjectType, parseTrackStatus, requiredText,
 } from "@/lib/catalog/validation";
 
 type Transaction = Prisma.TransactionClient;
@@ -22,6 +22,7 @@ const projectStatusDb = { published: "PUBLISHED", "in-development": "IN_DEVELOPM
 const trackStatusDb = { released: "RELEASED", announced: "ANNOUNCED", unlisted: "UNLISTED" } as const;
 const confidenceDb = { confirmed: "CONFIRMED", partial: "PARTIAL", placeholder: "PLACEHOLDER", unknown: "UNKNOWN" } as const;
 const platformDb = { spotify: "SPOTIFY", appleMusic: "APPLE_MUSIC", deezer: "DEEZER", youtube: "YOUTUBE", amazonMusic: "AMAZON_MUSIC", distroKid: "DISTROKID", other: "OTHER" } as const;
+const creditRoleDb = { artist: "ARTIST", writer: "WRITER", composer: "COMPOSER", producer: "PRODUCER", featuring: "FEATURING", engineer: "ENGINEER", other: "OTHER" } as const;
 
 const adminInclude = {
   tracks: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
@@ -77,6 +78,9 @@ export async function updateCatalogProject(projectId: string, input: Record<stri
   const type = parseProjectType(input.type);
   const status = parseProjectStatus(input.status);
   const featured = input.featured === "on" || input.featured === true;
+  const publicVisible = input.publicVisible === "on" || input.publicVisible === true;
+  const jukeboxPlacement = parseJukeboxPlacement(input.jukeboxPlacement);
+  const jukeboxPosition = boundedInteger(input.jukeboxPosition, "La position jukebox", 1, 999, true);
   if (featured && status !== "published") throw new Error("Seul un projet publié peut être mis en avant.");
   const trackCount = boundedInteger(input.trackCount, "Le nombre de pistes", 0, 999, true);
   return withProjectLock(projectId, async (transaction) => {
@@ -92,7 +96,9 @@ export async function updateCatalogProject(projectId: string, input: Record<stri
         type: projectTypeDb[type], status: projectStatusDb[status],
         shortDescription: optionalText(input.shortDescription, "La description courte", 1_000),
         description: optionalText(input.description, "La description", 10_000),
-        releaseDate: parseDate(input.releaseDate), featured, trackCount,
+        releaseDate: parseDate(input.releaseDate), featured, publicVisible, trackCount,
+        jukeboxPlacement: jukeboxPlacement === "published" ? "PUBLISHED" : jukeboxPlacement === "development" ? "DEVELOPMENT" : null,
+        jukeboxPosition,
         seoTitle: optionalText(input.seoTitle, "Le titre SEO", 240),
         seoDescription: optionalText(input.seoDescription, "La description SEO", 1_000),
         legacySourceVersion: null,
@@ -155,6 +161,39 @@ export async function deleteCatalogTrack(projectId: string, trackId: string) {
     const offset = (remaining.at(-1)?.position ?? 0) + remaining.length + 1;
     for (const item of remaining) await transaction.track.update({ where: { id: item.id }, data: { position: item.position + offset } });
     for (const [index, item] of remaining.entries()) await transaction.track.update({ where: { id: item.id }, data: { position: index + 1 } });
+    await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
+  });
+}
+
+export async function addCatalogCredit(projectId: string, input: Record<string, unknown>) {
+  const name = requiredText(input.name, "Le nom du crédit", 180);
+  const role = creditRoleDb[parseCreditRole(input.role)];
+  const note = optionalText(input.note, "La précision du crédit", 1_000);
+  return withProjectLock(projectId, async (transaction) => {
+    const aggregate = await transaction.credit.aggregate({ where: { projectId, trackId: null }, _max: { position: true } });
+    const credit = await transaction.credit.create({
+      data: { projectId, name, role, note, position: (aggregate._max.position ?? 0) + 1, confidence: "CONFIRMED" },
+    });
+    await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
+    return credit;
+  });
+}
+
+export async function updateCatalogCredit(projectId: string, creditId: string, input: Record<string, unknown>) {
+  const name = requiredText(input.name, "Le nom du crédit", 180);
+  const role = creditRoleDb[parseCreditRole(input.role)];
+  const note = optionalText(input.note, "La précision du crédit", 1_000);
+  return withProjectLock(projectId, async (transaction) => {
+    const result = await transaction.credit.updateMany({ where: { id: creditId, projectId, trackId: null }, data: { name, role, note, confidence: "CONFIRMED" } });
+    if (result.count !== 1) throw new Error("Crédit introuvable.");
+    await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
+  });
+}
+
+export async function deleteCatalogCredit(projectId: string, creditId: string) {
+  return withProjectLock(projectId, async (transaction) => {
+    const result = await transaction.credit.deleteMany({ where: { id: creditId, projectId, trackId: null } });
+    if (result.count !== 1) throw new Error("Crédit introuvable.");
     await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
   });
 }

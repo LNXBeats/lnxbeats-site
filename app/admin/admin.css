@@ -52,6 +52,24 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-header nav a:is(:hover, :focus-visible) { background: rgba(255, 255, 255, 0.055); color: #fff; }
 .admin-header nav .admin-header__site-link { margin-left: 0.5rem; border: 1px solid rgba(214, 179, 106, 0.3); color: var(--admin-gold); }
 
+.admin-confirm-dialog {
+  width: min(92vw, 560px);
+  padding: clamp(1.4rem, 4vw, 2.4rem);
+  border: 1px solid rgba(214, 179, 106, 0.42);
+  background: #11100e;
+  color: #f4f0e8;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72);
+}
+.admin-confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.78); }
+.admin-confirm-dialog h2 { margin: 0 0 1rem; font-size: clamp(1.5rem, 4vw, 2.3rem); }
+.admin-confirm-dialog p { color: #aaa59b; line-height: 1.65; }
+.admin-confirm-dialog label { display: grid; gap: 0.55rem; margin-top: 1.25rem; }
+.admin-confirm-dialog input { min-height: 46px; border: 1px solid rgba(244, 240, 232, 0.22); background: #080807; color: #fff; padding: 0.7rem; }
+.admin-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.7rem; margin-top: 1.5rem; }
+.admin-dialog-actions form { margin: 0; }
+.admin-danger-action { border-color: rgba(214, 179, 106, 0.55) !important; color: #f2cf86 !important; }
+.admin-action-reason { color: #8f8a80; font-size: 0.72rem; }
+
 .admin-main {
   width: min(1480px, calc(100% - clamp(2rem, 6vw, 7rem)));
   margin-inline: auto;

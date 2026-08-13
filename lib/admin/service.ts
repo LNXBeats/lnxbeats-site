@@ -4,11 +4,13 @@ import type { Prisma } from "@/generated/prisma/client";
 
 import {
   getAdminOrderTransition,
+  getOrderDeletionEligibility,
   getOrderTransitionTimestamps,
   normalizeAdminNote,
 } from "@/lib/admin/order-machine";
 import type { KnownOrderStatus } from "@/lib/orders/status";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { deletePrivateOrderFile } from "@/lib/orders/storage";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -206,4 +208,37 @@ export async function addInternalOrderNote(orderNumber: string, rawNote: unknown
       },
     });
   });
+}
+
+export async function deleteEligibleAdminOrder(orderNumber: string) {
+  assertDatabaseConfigured();
+  const storageKeys = await withOrderLock(orderNumber, async (transaction) => {
+    const order = await transaction.order.findUnique({
+      where: { orderNumber },
+      include: {
+        events: { select: { toStatus: true } },
+        assets: { include: { asset: true } },
+        commercialLicenses: { select: { id: true } },
+      },
+    });
+    if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");
+    const eligibility = getOrderDeletionEligibility(order);
+    if (!eligibility.eligible) throw new AdminServiceError(eligibility.reason, "ORDER_DELETE_FORBIDDEN");
+
+    const assetIds = order.assets.map(({ assetId }) => assetId);
+    await transaction.orderAsset.deleteMany({ where: { orderId: order.id } });
+    await transaction.orderEvent.deleteMany({ where: { orderId: order.id } });
+    await transaction.order.delete({ where: { id: order.id } });
+    const deletableAssets = assetIds.length ? await transaction.asset.findMany({
+      where: { id: { in: assetIds }, projects: { none: {} }, orders: { none: {} } },
+      select: { id: true, storageKey: true },
+    }) : [];
+    if (assetIds.length) {
+      await transaction.asset.deleteMany({
+        where: { id: { in: deletableAssets.map(({ id }) => id) } },
+      });
+    }
+    return deletableAssets.map(({ storageKey }) => storageKey);
+  });
+  await Promise.all(storageKeys.map((storageKey) => deletePrivateOrderFile(storageKey)));
 }

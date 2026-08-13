@@ -157,10 +157,10 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
     }
   }
 
-  async function uploadPhotos() {
+  async function uploadPhotos(targetOrderNumber?: string) {
     if (!pendingFiles.length) return setError("Choisissez au moins une photo.");
     if (!photoRightsConfirmed) return setError("Confirmez que vous avez le droit de communiquer ces photos.");
-    const current = orderNumber ? { orderNumber } : await saveDraft();
+    const current = targetOrderNumber ? { orderNumber: targetOrderNumber } : orderNumber ? { orderNumber } : await saveDraft();
     if (!current) return;
 
     setBusy(true);
@@ -179,9 +179,11 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
       setMessage("Photos privées enregistrées et métadonnées retirées.");
       const input = document.getElementById("order-photos");
       if (input instanceof HTMLInputElement) input.value = "";
+      return payload.order;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Les photos n’ont pas pu être ajoutées.");
       setMessage("");
+      return null;
     } finally {
       setBusy(false);
     }
@@ -222,6 +224,14 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
     }
     const current = orderNumber ? { orderNumber } : await saveDraft();
     if (!current) return;
+    if (pendingFiles.length) {
+      if (!photoRightsConfirmed) {
+        setError("Confirmez le droit de communiquer les photos sélectionnées avant de créer la demande.");
+        return;
+      }
+      const uploaded = await uploadPhotos(current.orderNumber);
+      if (!uploaded) return;
+    }
 
     setBusy(true);
     setError("");
@@ -328,20 +338,6 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
               <label htmlFor="order-details">Détails importants</label>
               <textarea id="order-details" maxLength={orderTextLimits.importantDetails} value={form.importantDetails} onChange={(event) => setField("importantDetails", event.target.value)} />
             </div>
-            <div className="field-grid">
-              <div className="field">
-                <label htmlFor="order-words">Mots ou expressions à préserver</label>
-                <textarea id="order-words" maxLength={orderTextLimits.wordsToInclude} value={form.wordsToInclude} onChange={(event) => setField("wordsToInclude", event.target.value)} />
-              </div>
-              <div className="field">
-                <label htmlFor="order-avoid">Éléments à éviter</label>
-                <textarea id="order-avoid" maxLength={orderTextLimits.avoid} value={form.avoid} onChange={(event) => setField("avoid", event.target.value)} />
-              </div>
-            </div>
-            <div className="field">
-              <label htmlFor="order-pronunciation">Prononciations ou noms particuliers</label>
-              <textarea id="order-pronunciation" maxLength={orderTextLimits.pronunciationNotes} value={form.pronunciationNotes} onChange={(event) => setField("pronunciationNotes", event.target.value)} />
-            </div>
           </>
         ) : null}
 
@@ -395,6 +391,7 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
                 <span>Je dispose du droit de communiquer ces photos à LNX Beats pour cette demande.</span>
               </label>
               <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>Ajouter les photos au brouillon</button>
+              {pendingFiles.length ? <p className="field__hint" role="status">{pendingFiles.length} photo{pendingFiles.length === 1 ? "" : "s"} sélectionnée{pendingFiles.length === 1 ? "" : "s"}. Elles seront aussi enregistrées automatiquement lors de la création de la demande.</p> : null}
               {photos.length ? (
                 <ul className="order-photo-list">
                   {photos.map((photo) => (
@@ -422,7 +419,7 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
               <div><dt>Direction</dt><dd>{form.musicalDirection}</dd></div>
               <div><dt>Usage compris</dt><dd>Personnel</dd></div>
               <div><dt>Options</dt><dd>{[form.coverIncluded ? "Cover" : "", form.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
-              <div><dt>Photos</dt><dd>{photos.length}</dd></div>
+              <div><dt>Photos</dt><dd>{photos.length + pendingFiles.length}{pendingFiles.length ? " (sélection en attente d’enregistrement)" : ""}</dd></div>
               <div><dt>Livraison future</dt><dd>WAV · disponible 6 mois à compter de la livraison</dd></div>
               <div><dt>Retour inclus</dt><dd>1 retour pour corriger un écart avec le brief initial</dd></div>
               <div><dt>Délai indicatif</dt><dd>{orderOffer.indicativeDelay} · point de départ confirmé lors de la prise en charge</dd></div>

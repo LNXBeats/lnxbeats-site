@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addInternalNoteAction, transitionOrderAction } from "@/app/admin/actions";
-import { getAllowedOrderTransitions } from "@/lib/admin/order-machine";
+import { addInternalNoteAction } from "@/app/admin/actions";
+import { AdminOrderActions } from "@/components/admin-order-actions";
+import { getAllowedOrderTransitions, getOrderDeletionEligibility } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
@@ -22,6 +23,7 @@ const stateMessages: Record<string, string> = {
   "transition-refusee": "Cette transition n’est pas autorisée depuis le statut actuel.",
   "note-ajoutee": "La note interne a été ajoutée. Elle reste invisible dans l’espace client.",
   "note-invalide": "La note n’a pas été ajoutée. Vérifiez sa longueur.",
+  "suppression-refusee": "Cette commande doit être conservée : la règle de suppression serveur a refusé l’action.",
 };
 
 const licenseStatusLabels = {
@@ -47,6 +49,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
   const order = await getAdminOrder(orderNumber);
   if (!order) notFound();
   const transitions = getAllowedOrderTransitions(order.status);
+  const deletion = getOrderDeletionEligibility(order);
   const message = stateMessages[(await searchParams).etat ?? ""];
   const currentStatus = orderStatusPresentation[order.status];
 
@@ -109,9 +112,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
 
           <section className="admin-side-window" aria-labelledby="admin-actions-title">
             <p className="admin-section-label">Prochaine étape</p><h2 id="admin-actions-title">Actions autorisées.</h2>
-            {transitions.length ? <div className="admin-actions">{transitions.map((transition) => transition.sensitive ? (
-              <details key={transition.to}><summary>{transition.label}</summary><p>Confirmez cette action : elle sera inscrite dans l’historique.</p><form action={transitionOrderAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="targetStatus" value={transition.to} /><button type="submit">Confirmer : {transition.label}</button></form></details>
-            ) : <form key={transition.to} action={transitionOrderAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="targetStatus" value={transition.to} /><button type="submit">{transition.label} <span aria-hidden="true">→</span></button></form>)}</div> : <p>Aucune transition métier disponible depuis ce statut.</p>}
+            <AdminOrderActions orderNumber={order.orderNumber} transitions={transitions} deletionEligible={deletion.eligible} deletionReason={deletion.reason} />
           </section>
 
           <details className="admin-side-window admin-note-panel">

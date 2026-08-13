@@ -2972,11 +2972,11 @@ main { position: relative; isolation: isolate; }
 .about-hero__copy > p:last-child { max-width: 35rem; margin: 3rem 0 0; color: var(--text-soft); }
 .about-hero__portrait { position: relative; min-height: 620px; overflow: hidden; }
 .about-hero__portrait::after { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg, #080807, transparent 28%), linear-gradient(0deg, rgba(8, 8, 7, 0.65), transparent 48%); }
-.about-hero__portrait img { object-fit: cover; object-position: 54% center; filter: saturate(0.72) contrast(1.08) brightness(0.8); }
+.about-hero__portrait img { object-fit: cover; object-position: 10% center; filter: saturate(0.72) contrast(1.08) brightness(0.8); }
 .about-hero__portrait span { position: absolute; z-index: 1; right: 1.5rem; bottom: 1.5rem; color: rgba(244, 240, 232, 0.68); font-size: 0.55rem; letter-spacing: 0.2em; text-transform: uppercase; }
 .about-teaser { align-items: center; }
 .about-teaser__image { min-height: 720px; border-radius: var(--radius-md); }
-.about-teaser__image img { object-position: 72% center; }
+.about-teaser__image img { object-position: 48% center; }
 
 .editorial-break { background: var(--paper); color: #171512; }
 .editorial-break .content-columns__label { color: #72552e; }
@@ -3142,6 +3142,7 @@ main { position: relative; isolation: isolate; }
   .about-hero__grid { grid-template-columns: 1fr; }
   .about-hero__copy { min-height: 600px; }
   .about-hero__portrait { min-height: 680px; margin-inline: -2rem; }
+  .about-hero__portrait img { object-position: 10% center; }
   .about-hero__portrait::after { background: linear-gradient(0deg, #080807, transparent 24%, transparent 74%, #080807); }
   .auth-shell--entry { align-items: stretch; padding-bottom: 0; }
   .auth-shell--entry .auth-shell__inner { grid-template-columns: 1fr; gap: 0; padding-inline: 0; }
@@ -3180,6 +3181,8 @@ main { position: relative; isolation: isolate; }
   .about-hero__copy { min-height: 540px; padding-top: 7rem; }
   .about-hero h1 { font-size: clamp(4.8rem, 22vw, 7rem); }
   .about-hero__portrait { min-height: 560px; margin-inline: -1.25rem; }
+  .about-hero__portrait img { object-position: 10% center; }
+  .about-teaser__image img { object-position: 48% center; }
   .about-teaser__image { min-height: 520px; }
   .contact-hero { min-height: 760px; }
   .contact-hero h1 { font-size: clamp(4rem, 18vw, 6rem); }

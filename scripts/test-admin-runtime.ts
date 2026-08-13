@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import sharp from "sharp";
 
 import {
   addInternalOrderNote,
+  deleteEligibleAdminOrder,
   getAdminOrder,
   getDatabaseCatalogueAudit,
   listAdminMembers,
@@ -12,8 +14,8 @@ import {
 import { createInternalAuthUser } from "@/lib/auth/internal-user";
 import { canAccessAdmin } from "@/lib/auth/roles";
 import type { OrderActor, OrderDraftInput } from "@/lib/orders/domain";
-import { createDraftOrder, finalizeOrder, getOrderForActor } from "@/lib/orders/service";
-import { clearQaOrderStorage } from "@/lib/orders/storage";
+import { addOrderPhotos, createDraftOrder, finalizeOrder, getOrderForActor } from "@/lib/orders/service";
+import { clearQaOrderStorage, readPrivateOrderFile } from "@/lib/orders/storage";
 import { prisma } from "@/lib/prisma";
 
 const EXPECTED_TARGET = "lnx-studio-v060-test";
@@ -105,7 +107,23 @@ async function run() {
     const transitioned = await getAdminOrder(draft.orderNumber);
     assert.equal(transitioned?.status, "ACCEPTED");
     assert.equal(transitioned?.events.filter(({ toStatus }) => toStatus === "ACCEPTED").length, 1);
+    await assert.rejects(deleteEligibleAdminOrder(draft.orderNumber));
     passed.push("valid transition atomic, invalid and concurrent duplicate transitions refused");
+
+    const removableDraft = await createDraftOrder(member, { ...input, title: "Suppression Admin QA" });
+    const photoBuffer = await sharp({ create: { width: 40, height: 30, channels: 3, background: "#6b5634" } }).jpeg().toBuffer();
+    const removableWithPhoto = await addOrderPhotos(member, removableDraft.orderNumber, [{ buffer: photoBuffer, originalFilename: "admin-delete.jpg", declaredMimeType: "image/jpeg" }]);
+    const removableAsset = await prisma.asset.findUniqueOrThrow({ where: { id: removableWithPhoto.photos[0]!.id } });
+    await finalizeOrder(member, removableDraft.orderNumber, input);
+    assert.equal(await transitionOrderStatus(removableDraft.orderNumber, "CANCELLED", adminUser.id), "CANCELLED");
+    const removableOrderId = (await prisma.order.findUniqueOrThrow({ where: { orderNumber: removableDraft.orderNumber }, select: { id: true } })).id;
+    await deleteEligibleAdminOrder(removableDraft.orderNumber);
+    assert.equal(await prisma.order.count({ where: { orderNumber: removableDraft.orderNumber } }), 0);
+    assert.equal(await prisma.orderEvent.count({ where: { orderId: removableOrderId } }), 0);
+    assert.equal(await prisma.orderAsset.count({ where: { orderId: removableOrderId } }), 0);
+    assert.equal(await prisma.asset.count({ where: { id: removableAsset.id } }), 0);
+    await assert.rejects(readPrivateOrderFile(removableAsset.storageKey));
+    passed.push("eligible cancelled order, timeline, asset relation and private file deleted without orphans");
 
     await addInternalOrderNote(draft.orderNumber, "Note réservée au cockpit.", adminUser.id);
     const adminDetail = await getAdminOrder(draft.orderNumber);

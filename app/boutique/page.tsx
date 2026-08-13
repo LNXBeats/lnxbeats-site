@@ -14,8 +14,8 @@ export default function ShopPage() {
     <>
       <header className="page-hero page-hero--shop">
         <Container className="page-hero__grid">
-          <div><p className="eyebrow">Ce qui prolonge la musique</p><h1>Les histoires peuvent laisser une trace.</h1></div>
-          <p className="page-hero__intro">Certains univers continuent au-delà de l’écoute. Les deux portes ci-dessous mènent aux espaces officiels de LNX Beats ; aucun achat n’est traité sur ce site.</p>
+          <div><p className="eyebrow">LNX Beats — au-delà du streaming</p><h1>La musique s’écoute.<br />Certaines histoires se gardent.</h1></div>
+          <p className="page-hero__intro">Les morceaux vivent en streaming. Certains projets vont plus loin : éditions physiques, objets et créations LNX Beats seront à retrouver dans les espaces officiels lorsqu’ils seront réellement disponibles. Aucun achat n’est traité sur ce site.</p>
           <div className="page-hero__visual page-hero__visual--shop" aria-hidden="true"><span>Hors scène</span></div>
         </Container>
       </header>

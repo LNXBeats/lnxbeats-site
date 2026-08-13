@@ -18,9 +18,9 @@ export default function ContactPage() {
         <Image src="/assets/hero-desktop.jpg" alt="" fill loading="eager" sizes="100vw" />
         <Container className="contact-hero__inner">
           <div>
-            <p className="eyebrow">Une porte ouverte</p>
-            <h1>Parlons avant de parler projet.</h1>
-            <p>Une collaboration, une question, une intuition encore difficile à nommer : quelques lignes suffisent pour commencer. C’est LNX Beats qui vous lit.</p>
+            <p className="eyebrow">Entrer en conversation</p>
+            <h1>Une idée mérite parfois d’être entendue avant d’être écrite.</h1>
+            <p>Collaboration musicale, demande professionnelle, adaptation, droits ou autre échange : écrivez directement à LNX Beats. Pour confier une histoire destinée à une création personnalisée, le parcours Commander reste le meilleur point de départ.</p>
           </div>
         </Container>
       </header>
@@ -36,8 +36,8 @@ export default function ContactPage() {
           <div className="contact-panel motion-reveal">
             <div>
               <p className="eyebrow">De vous à LNX Beats</p>
-              <h2>Quelques lignes suffisent.</h2>
-              <p>Racontez d’où vient votre idée, ce que vous imaginez et les éventuels repères de temps. L’échange commence directement par e-mail, sans passer par un support anonyme.</p>
+              <h2>La conversation commence sans intermédiaire.</h2>
+              <p>Donnez le contexte, l’intention et les repères utiles. Votre message arrive directement à LNX Beats, sans passer par un support anonyme.</p>
               <a className="contact-email" href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
             </div>
             <ButtonLink href={`mailto:${siteConfig.email}`} external>Écrire à LNX Beats</ButtonLink>

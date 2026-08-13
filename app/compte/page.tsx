@@ -43,6 +43,7 @@ export default async function AccountPage() {
           <p className="eyebrow">Votre espace</p>
           <h1>Bonjour, {session.user.name}.</h1>
           <p>Retrouvez vos créations et ce qui demande votre attention.</p>
+          {session.user.role === "ADMIN" ? <Link className="account-admin-link" href="/admin">Ouvrir l’administration <span aria-hidden="true">→</span></Link> : null}
         </div>
         <div className="auth-account-stack">
           <section className="member-orders" aria-labelledby="member-orders-title">
@@ -84,7 +85,6 @@ export default async function AccountPage() {
                 <summary>Modifier mon profil <span aria-hidden="true">＋</span></summary>
                 <div><ProfileForm initialName={session.user.name} /></div>
               </details>
-              {session.user.role === "ADMIN" ? <Link className="account-admin-link" href="/admin">Ouvrir l’administration <span aria-hidden="true">→</span></Link> : null}
             </div>
           </section>
           <details className="auth-panel account-disclosure">

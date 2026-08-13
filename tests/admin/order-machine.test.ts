@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   getAdminOrderTransition,
   getAllowedOrderTransitions,
+  getOrderDeletionEligibility,
   getOrderTransitionTimestamps,
   normalizeAdminNote,
 } from "@/lib/admin/order-machine";
@@ -37,4 +38,25 @@ test("internal notes are trimmed and bounded", () => {
   assert.equal(normalizeAdminNote(""), null);
   assert.equal(normalizeAdminNote("x".repeat(1_001)), null);
   assert.equal(normalizeAdminNote({ note: "forged" }), null);
+});
+
+const deletionFixture = (overrides: Partial<Parameters<typeof getOrderDeletionEligibility>[0]> = {}) => ({
+  status: "CANCELLED" as const,
+  serviceStartedAt: null,
+  deliveredAt: null,
+  events: [{ toStatus: "AWAITING_PAYMENT" as const }, { toStatus: "CANCELLED" as const }],
+  assets: [{ role: "REFERENCE" as const }],
+  commercialLicenses: [],
+  ...overrides,
+});
+
+test("only unpaid drafts or cancelled orders without legal retention signals are deletable", () => {
+  assert.equal(getOrderDeletionEligibility(deletionFixture()).eligible, true);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ status: "DRAFT" })).eligible, true);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ status: "IN_PROGRESS" })).eligible, false);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ serviceStartedAt: new Date() })).eligible, false);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ deliveredAt: new Date() })).eligible, false);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ commercialLicenses: [{}] })).eligible, false);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ assets: [{ role: "DELIVERY" }] })).eligible, false);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ events: [{ toStatus: "PAYMENT_CONFIRMED" }] })).eligible, false);
 });

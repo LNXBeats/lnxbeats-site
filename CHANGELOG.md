@@ -2,6 +2,27 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.6.2] — 2026-08-13
+
+### Ajouté
+
+- pilotage Admin de la visibilité publique, du placement et de la position dans les jukebox ;
+- édition du récit et CRUD des crédits musicaux facultatifs depuis la fiche catalogue ;
+- dialogues accessibles pour les transitions sensibles et suppression renforcée des seules commandes sans obligation de conservation ;
+- tests runtime de persistance catalogue, d’IDOR photo et de nettoyage transactionnel des commandes QA.
+
+### Modifié
+
+- Commander ne demande plus les mots à préserver, éléments à éviter ni prononciations ; les anciennes valeurs restent conservées en base ;
+- toute photo encore sélectionnée est enregistrée avant la finalisation, au lieu de pouvoir être oubliée lors du changement de page ;
+- récits publics, accès Admin du compte, Boutique, Contact et cadrage À propos clarifiés sans refonte générale.
+
+### Sécurité et périmètre
+
+- suppression serveur limitée aux brouillons ou commandes annulées sans paiement, service commencé, livraison, droits ni document ;
+- références client toujours privées, normalisées hors webroot et autorisées par propriétaire ou rôle Admin ;
+- aucune migration destructive, aucun paiement, stockage objet de production ou changement du moteur audio.
+
 ## [0.6.1] — 2026-08-12
 
 ### Ajouté

@@ -6,9 +6,10 @@ import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
+import { deleteCatalogCover } from "@/lib/catalog/cover";
 import {
-  addCatalogPlatformLink, addCatalogTrack, deleteCatalogPlatformLink, deleteCatalogTrack,
-  moveCatalogTrack, updateCatalogPlatformLink, updateCatalogProject, updateCatalogTrack,
+  addCatalogCredit, addCatalogPlatformLink, addCatalogTrack, deleteCatalogCredit, deleteCatalogPlatformLink, deleteCatalogTrack,
+  moveCatalogTrack, updateCatalogCredit, updateCatalogPlatformLink, updateCatalogProject, updateCatalogTrack,
 } from "@/lib/catalog/service";
 
 async function authorize() {
@@ -56,6 +57,26 @@ export async function deleteCatalogTrackAction(formData: FormData) {
   const { projectId, slug } = validIdentity(formData); await authorize();
   try { await deleteCatalogTrack(projectId, String(formData.get("trackId") ?? "")); } catch { redirect(path(slug, "suppression-refusee")); }
   refresh(slug); redirect(path(slug, "piste-supprimee"));
+}
+export async function addCatalogCreditAction(formData: FormData) {
+  const { projectId, slug } = validIdentity(formData); await authorize();
+  try { await addCatalogCredit(projectId, values(formData)); } catch { redirect(path(slug, "credit-refuse")); }
+  refresh(slug); redirect(path(slug, "credit-ajoute"));
+}
+export async function saveCatalogCreditAction(formData: FormData) {
+  const { projectId, slug } = validIdentity(formData); await authorize();
+  try { await updateCatalogCredit(projectId, String(formData.get("creditId") ?? ""), values(formData)); } catch { redirect(path(slug, "credit-refuse")); }
+  refresh(slug); redirect(path(slug, "credit-enregistre"));
+}
+export async function deleteCatalogCreditAction(formData: FormData) {
+  const { projectId, slug } = validIdentity(formData); await authorize();
+  try { await deleteCatalogCredit(projectId, String(formData.get("creditId") ?? "")); } catch { redirect(path(slug, "suppression-refusee")); }
+  refresh(slug); redirect(path(slug, "credit-supprime"));
+}
+export async function deleteCatalogCoverAction(formData: FormData) {
+  const { projectId, slug } = validIdentity(formData); await authorize();
+  try { await deleteCatalogCover(projectId, formData.get("expectedCoverAssetId")); } catch { redirect(path(slug, "cover-suppression-refusee")); }
+  refresh(slug); redirect(path(slug, "cover-supprimee"));
 }
 export async function addCatalogLinkAction(formData: FormData) {
   const { projectId, slug } = validIdentity(formData); await authorize();

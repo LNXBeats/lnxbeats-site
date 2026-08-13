@@ -168,3 +168,22 @@ export async function replaceCatalogCover(projectId: string, rawExpectedCoverAss
     catch { console.error("An obsolete catalogue cover could not be removed after replacement."); }
   }
 }
+
+export async function deleteCatalogCover(projectId: string, rawExpectedCoverAssetId: unknown) {
+  const expectedCoverAssetId = parseExpectedCoverAssetId(rawExpectedCoverAssetId);
+  let storageKey: string | null = null;
+  await prisma.$transaction(async (transaction) => {
+    const state = await lockedCoverState(transaction, projectId);
+    if (!catalogCoverVersionMatches(expectedCoverAssetId, state.currentCoverAssetId)) {
+      throw new CatalogCoverConflictError(state.currentCoverAssetId);
+    }
+    if (!state.currentCoverAssetId || !state.currentCoverStorageKey) return;
+    storageKey = state.currentCoverStorageKey;
+    await transaction.projectAsset.deleteMany({
+      where: { projectId, assetId: state.currentCoverAssetId, role: "COVER" },
+    });
+    await transaction.asset.delete({ where: { id: state.currentCoverAssetId } });
+    await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
+  });
+  if (storageKey) await removeCatalogCover(storageKey);
+}
