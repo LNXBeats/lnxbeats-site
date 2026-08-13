@@ -113,6 +113,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/admin` — cockpit protégé réservé à `ADMIN`
 - `/admin/commandes` — liste privée, filtres et transitions métier contextuelles
 - `/admin/catalogue` — liste, filtres et édition sécurisée du catalogue PostgreSQL
+- `/admin/catalogue/nouveau` — création sécurisée d’un projet, privé et brouillon par défaut
 - `/admin/catalogue/[slug]` — identité, visibilité, jukebox, récit, crédits, pistes, liens directs, cover et audio
 - `/admin/membres` — lecture limitée des comptes sans credentials ni sessions
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
@@ -157,9 +158,13 @@ Les pages et composants serveur sont privilégiés. Le menu mobile, le formulair
 
 ## Administrer le catalogue
 
-Le catalogue existant se modifie depuis `/admin/catalogue`. Le slug est stable et non modifiable. Chaque bloc est enregistré explicitement ; les changements concurrents d’une fiche sont refusés plutôt qu’écrasés. La visibilité publique, le statut, le placement et la position jukebox, le récit, la tracklist et les crédits facultatifs sont persistés dans PostgreSQL. Les profils artiste globaux restent dans `data/site.ts`, tandis que seuls les liens propres à une parution ou une boutique sont rattachés au projet.
+Le catalogue se gère depuis `/admin/catalogue`. « Nouveau projet » ouvre une création minimale ; le serveur normalise et réserve un slug unique, attribue la prochaine position disponible si aucune position n’est choisie et applique par défaut un brouillon masqué, sans mise en avant ni jukebox. L’Admin peut choisir explicitement un autre état cohérent lors de la création. La fiche créée réutilise ensuite les pipelines existants pour la cover, la preview audio, la tracklist, les crédits et les liens.
 
-`data/discography.ts` est figé comme source historique de migration V0.6.0.2. Il ne doit plus être importé par le runtime public ni modifié pour éditer le catalogue. La création ou suppression complète d’un projet reste volontairement hors périmètre de cette version.
+Le slug d’un projet existant reste stable et non modifiable. Chaque bloc est enregistré explicitement ; les changements concurrents d’une fiche sont refusés plutôt qu’écrasés. Enregistrer, rendre visible et placer dans un jukebox sont trois décisions distinctes. Le catalogue public, les fiches, le sitemap et les jukebox relisent automatiquement PostgreSQL ; les jukebox exigent en plus une cover et le statut correspondant.
+
+« Masquer du site » conserve les données et le statut. « Archiver et masquer » retire également le placement jukebox ; l’Admin peut restaurer le projet en modifiant de nouveau son statut et sa visibilité. La suppression définitive est disponible uniquement pour un projet déjà masqué, en brouillon ou archivé, jamais pour la mise en avant de l’accueil. Elle exige la saisie exacte du slug, nettoie les relations et les médias exclusivement rattachés, et conserve tout asset partagé avec un autre projet ou une commande.
+
+`data/discography.ts` est figé comme source historique de migration V0.6.0.2. Il ne doit plus être importé par le runtime public ni modifié pour éditer le catalogue. PostgreSQL couvre désormais le cycle de vie quotidien complet d’un projet.
 
 Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) pour le détail.
 

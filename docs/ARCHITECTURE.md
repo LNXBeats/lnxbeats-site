@@ -89,7 +89,7 @@ L’inventaire historique est consigné dans [`docs/CATALOG_AUDIT.md`](CATALOG_A
 
 ### Enrichir une fiche
 
-L’ADMIN utilise `/admin/catalogue/[slug]`. Les mutations choisissent explicitement les champs autorisés, contrôlent l’origine, valident les entrées côté serveur et sérialisent les opérations sensibles par projet. Le slug, le rôle, le compte et les autres domaines métier ne sont jamais modifiables par ces formulaires. La création et la suppression complète d’un projet sont différées.
+L’ADMIN utilise `/admin/catalogue/[slug]`. Les mutations choisissent explicitement les champs autorisés, contrôlent l’origine, valident les entrées côté serveur et sérialisent les opérations sensibles par projet. `/admin/catalogue/nouveau` crée par défaut un brouillon privé avec un slug normalisé unique, tout autre état devant être choisi explicitement ; le slug d’un projet existant, le rôle, le compte et les autres domaines métier ne sont jamais modifiables par ces formulaires. Le cycle de vie propose masquage, archivage réversible et suppression définitive fortement confirmée, avec conservation systématique des médias partagés.
 
 ### Fondation PostgreSQL
 

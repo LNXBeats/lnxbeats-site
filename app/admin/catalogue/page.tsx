@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Catalogue" };
 
 const statusLabels: Record<string, string> = { DRAFT: "Brouillon", IN_DEVELOPMENT: "En développement", PUBLISHED: "Publié", ARCHIVED: "Archivé" };
 
-export default async function AdminCataloguePage({ searchParams }: { searchParams: Promise<{ q?: string; statut?: string }> }) {
+export default async function AdminCataloguePage({ searchParams }: { searchParams: Promise<{ q?: string; statut?: string; etat?: string }> }) {
   await requireAdmin();
   const params = await searchParams;
   const query = params.q ?? "";
@@ -19,7 +19,10 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
 
   return (
     <div className="admin-main">
-      <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue PostgreSQL</p><h1>La discographie, éditable.</h1></div><p>Les pages publiques et cette administration lisent désormais la même source. Chaque enregistrement reste explicite et contrôlé.</p></header>
+      <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue PostgreSQL</p><h1>La discographie, éditable.</h1></div><div className="admin-page-heading__actions"><p>Les pages publiques et cette administration lisent désormais la même source. Chaque enregistrement reste explicite et contrôlé.</p><Link className="admin-primary-action" href="/admin/catalogue/nouveau"><span aria-hidden="true">+</span> Nouveau projet</Link></div></header>
+
+      {params.etat === "projet-supprime" ? <p className="admin-feedback" role="status">Projet supprimé définitivement.</p> : null}
+      {params.etat === "projet-supprime-media-a-verifier" ? <p className="admin-feedback" role="alert">Projet supprimé. Un objet média orphelin devra être réconcilié par la procédure de stockage.</p> : null}
 
       <section className="admin-catalogue-notice" id="mise-en-avant">
         <div><p className="admin-section-label">Projet mis en avant sur l’accueil</p><h2>{featured?.title ?? "Aucun projet sélectionné"}</h2></div>

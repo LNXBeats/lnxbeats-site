@@ -110,6 +110,9 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-page-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 0.48fr); gap: clamp(2rem, 7vw, 7rem); align-items: end; margin-bottom: clamp(2.25rem, 4.5vw, 4rem); }
 .admin-page-heading h1 { max-width: 11ch; }
 .admin-page-heading > p { margin: 0; padding-top: 1.4rem; border-top: 1px solid rgba(244, 240, 232, 0.15); color: #aaa59c; }
+.admin-page-heading__actions { display: grid; gap: 1.25rem; align-items: start; }
+.admin-page-heading__actions > p { margin: 0; padding-top: 1.4rem; border-top: 1px solid rgba(244, 240, 232, 0.15); color: #aaa59c; }
+.admin-primary-action { display: inline-flex; width: fit-content; min-height: 48px; align-items: center; gap: 0.7rem; padding: 0.75rem 1rem; border: 1px solid rgba(214, 179, 106, 0.48); border-radius: 13px; background: rgba(214, 179, 106, 0.1); color: #ead39f; font-size: 0.72rem; font-weight: 800; }
 .admin-page-heading code,
 .admin-overview-card code,
 .admin-catalogue-notice code,
@@ -284,6 +287,7 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-secondary-fields > summary { min-height: 30px; cursor: pointer; color: #d7c59f; font-size: 0.72rem; font-weight: 700; }
 .admin-secondary-fields > div { display: grid; gap: 1rem; margin-top: 1rem; }
 .admin-muted { color: #918d85; }
+.admin-form-note { margin: 0; padding: 0.85rem 1rem; border-left: 2px solid rgba(214, 179, 106, 0.48); color: #918d85; font-size: 0.7rem; line-height: 1.6; }
 .admin-track-editor label small,
 .admin-form-grid label small { color: #77736c; font-size: 0.6rem; }
 .admin-cover-preview { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: center; margin-bottom: 1rem; }
@@ -331,6 +335,19 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-inline-actions summary,
 .admin-link-editor summary { min-height: 32px; cursor: pointer; color: #d7c59f; font-size: 0.72rem; font-weight: 700; }
 .admin-add-panel > form { margin-top: 1rem; }
+.admin-project-management { display: grid; gap: 1.2rem; margin-top: clamp(1rem, 3vw, 2.5rem); border-color: rgba(214, 179, 106, 0.27); }
+.admin-project-management > h2 { margin-bottom: 0; }
+.admin-project-management > .admin-muted { max-width: 72rem; margin: 0; }
+.admin-project-management-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; padding-block: 1rem; border-block: 1px solid rgba(244, 240, 232, 0.09); }
+.admin-project-management-actions form { margin: 0; }
+.admin-project-management-actions button { width: 100%; min-height: 48px; padding: 0.75rem 1rem; border: 1px solid rgba(214, 179, 106, 0.35); border-radius: 13px; background: rgba(214, 179, 106, 0.07); color: #ead39f; cursor: pointer; font-size: 0.72rem; font-weight: 700; }
+.admin-project-management-actions p { margin: 0; padding: 0.8rem; color: #858179; font-size: 0.7rem; }
+.admin-project-delete-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem 2rem; align-items: center; }
+.admin-project-delete-panel h2 { margin: 0 0 0.35rem; font-size: 1.25rem; }
+.admin-project-delete-panel p { margin: 0; color: #918d85; font-size: 0.7rem; }
+.admin-project-delete-panel > button { min-height: 46px; padding: 0.7rem 1rem; border: 1px solid rgba(214, 179, 106, 0.42); border-radius: 12px; background: rgba(214, 179, 106, 0.06); cursor: pointer; font-weight: 700; }
+.admin-project-delete-panel > button:disabled { cursor: not-allowed; opacity: 0.42; }
+.admin-project-delete-panel .admin-action-reason { grid-column: 1 / -1; }
 
 @media (max-width: 1120px) {
   .admin-header { align-items: flex-start; flex-direction: column; gap: 0.6rem; }
@@ -395,6 +412,8 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-member-list dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-catalogue-filters,
   .admin-form-grid,
+  .admin-project-management-actions,
+  .admin-project-delete-panel,
   .admin-track-editor > li > form,
   .admin-link-editor > li > form { grid-template-columns: 1fr; }
   .admin-form-wide,

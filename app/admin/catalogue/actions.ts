@@ -8,8 +8,8 @@ import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { deleteCatalogCover } from "@/lib/catalog/cover";
 import {
-  addCatalogCredit, addCatalogPlatformLink, addCatalogTrack, deleteCatalogCredit, deleteCatalogPlatformLink, deleteCatalogTrack,
-  moveCatalogTrack, updateCatalogCredit, updateCatalogPlatformLink, updateCatalogProject, updateCatalogTrack,
+  addCatalogCredit, addCatalogPlatformLink, addCatalogTrack, archiveCatalogProject, createCatalogProject, deleteCatalogCredit, deleteCatalogPlatformLink, deleteCatalogProject, deleteCatalogTrack,
+  CatalogLifecycleError, hideCatalogProject, moveCatalogTrack, updateCatalogCredit, updateCatalogPlatformLink, updateCatalogProject, updateCatalogTrack,
 } from "@/lib/catalog/service";
 
 async function authorize() {
@@ -30,6 +30,40 @@ function validIdentity(formData: FormData) {
 function refresh(slug: string) {
   revalidatePath("/"); revalidatePath("/discographie"); revalidatePath(`/album/${slug}`);
   revalidatePath("/admin"); revalidatePath("/admin/catalogue"); revalidatePath(`/admin/catalogue/${slug}`); revalidatePath("/sitemap.xml");
+}
+
+export async function createCatalogProjectAction(formData: FormData) {
+  await authorize();
+  let project;
+  try { project = await createCatalogProject(values(formData)); }
+  catch (error) {
+    const state = error instanceof CatalogLifecycleError && error.code === "SLUG_TAKEN" ? "slug-occupe" : error instanceof CatalogLifecycleError && error.code === "POSITION_TAKEN" ? "position-occupee" : "creation-refusee";
+    redirect(`/admin/catalogue/nouveau?etat=${state}`);
+  }
+  refresh(project.slug);
+  redirect(path(project.slug, "projet-cree"));
+}
+
+export async function hideCatalogProjectAction(formData: FormData) {
+  const { projectId, slug } = validIdentity(formData); await authorize();
+  try { await hideCatalogProject(projectId); }
+  catch { redirect(path(slug, "cycle-refuse")); }
+  refresh(slug); redirect(path(slug, "projet-masque"));
+}
+
+export async function archiveCatalogProjectAction(formData: FormData) {
+  const { projectId, slug } = validIdentity(formData); await authorize();
+  try { await archiveCatalogProject(projectId); }
+  catch { redirect(path(slug, "cycle-refuse")); }
+  refresh(slug); redirect(path(slug, "projet-archive"));
+}
+
+export async function deleteCatalogProjectAction(formData: FormData) {
+  const { projectId, slug } = validIdentity(formData); await authorize();
+  let result;
+  try { result = await deleteCatalogProject(projectId, formData.get("confirmation")); }
+  catch { redirect(path(slug, "suppression-projet-refusee")); }
+  refresh(slug); redirect(`/admin/catalogue?etat=${result.cleanupFailed ? "projet-supprime-media-a-verifier" : "projet-supprime"}`);
 }
 
 export async function saveCatalogProjectAction(formData: FormData) {

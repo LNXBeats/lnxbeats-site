@@ -1,7 +1,9 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { deleteMediaObject } from "@/lib/media/storage";
+import { getCatalogDeletionEligibility, parseCatalogSlug } from "@/lib/catalog/lifecycle";
 import { platformLabelOverride } from "@/lib/catalog/platform-label";
 import {
   boundedInteger, optionalText, parseConfidence, parseDate, parseHttpsUrl, parsePlatform,
@@ -14,6 +16,13 @@ export class CatalogConflictError extends Error {
   constructor(message = "Ce projet a été modifié depuis l’ouverture de la page.") {
     super(message);
     this.name = "CatalogConflictError";
+  }
+}
+
+export class CatalogLifecycleError extends Error {
+  constructor(message: string, readonly code: "SLUG_TAKEN" | "POSITION_TAKEN" | "DELETE_FORBIDDEN" | "CONFIRMATION_INVALID" | "PROJECT_NOT_FOUND") {
+    super(message);
+    this.name = "CatalogLifecycleError";
   }
 }
 
@@ -59,6 +68,138 @@ export async function getAdminCatalogProject(slug: string) {
   return prisma.project.findUnique({ where: { slug }, include: adminInclude });
 }
 
+function createProjectValues(input: Record<string, unknown>) {
+  const status = parseProjectStatus(input.status ?? "draft");
+  const publicVisible = input.publicVisible === "on" || input.publicVisible === true;
+  const jukeboxPlacement = parseJukeboxPlacement(input.jukeboxPlacement ?? "none");
+  const jukeboxPosition = boundedInteger(input.jukeboxPosition, "La position jukebox", 1, 999, true);
+  const effectivePlacement = status === "archive" ? "none" : jukeboxPlacement;
+  if (effectivePlacement !== "none" && status === "draft") throw new Error("Un brouillon ne peut pas rejoindre un jukebox.");
+  if (effectivePlacement === "published" && status !== "published") throw new Error("Le jukebox des parutions exige un projet publié.");
+  if (effectivePlacement === "development" && status !== "in-development") throw new Error("Le jukebox développement exige le statut correspondant.");
+  return {
+    slug: parseCatalogSlug(input.slug),
+    title: requiredText(input.title, "Le titre", 240),
+    subtitle: optionalText(input.subtitle, "Le sous-titre", 240),
+    type: projectTypeDb[parseProjectType(input.type)],
+    status: projectStatusDb[status],
+    publicVisible: status === "archive" ? false : publicVisible,
+    jukeboxPlacement: effectivePlacement === "published" ? "PUBLISHED" as const : effectivePlacement === "development" ? "DEVELOPMENT" as const : null,
+    jukeboxPosition: effectivePlacement === "none" ? null : jukeboxPosition,
+    shortDescription: optionalText(input.shortDescription, "La description courte", 1_000),
+    description: optionalText(input.description, "La description", 10_000),
+    releaseDate: parseDate(input.releaseDate),
+  };
+}
+
+export async function createCatalogProject(input: Record<string, unknown>) {
+  assertDatabaseConfigured();
+  const values = createProjectValues(input);
+  const requestedPosition = boundedInteger(input.catalogPosition, "La position catalogue", 1, 1_000_000, true);
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('catalog-project-creation')) IS NULL AS locked`;
+      if (await transaction.project.findUnique({ where: { slug: values.slug }, select: { id: true } })) {
+        throw new CatalogLifecycleError("Ce slug est déjà utilisé.", "SLUG_TAKEN");
+      }
+      const maximum = await transaction.project.aggregate({ _max: { catalogPosition: true } });
+      const catalogPosition = requestedPosition ?? (maximum._max.catalogPosition ?? 0) + 1;
+      if (await transaction.project.findUnique({ where: { catalogPosition }, select: { id: true } })) {
+        throw new CatalogLifecycleError("Cette position catalogue est déjà utilisée.", "POSITION_TAKEN");
+      }
+      return transaction.project.create({
+        data: {
+          ...values,
+          catalogPosition,
+          featured: false,
+          highlighted: false,
+          trackCount: null,
+          confidence: "UNKNOWN",
+          legacySourceVersion: null,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof CatalogLifecycleError) throw error;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : String(error.meta?.target ?? "");
+      throw new CatalogLifecycleError(target.includes("slug") ? "Ce slug est déjà utilisé." : "Cette position catalogue est déjà utilisée.", target.includes("slug") ? "SLUG_TAKEN" : "POSITION_TAKEN");
+    }
+    throw error;
+  }
+}
+
+async function withLifecycleLocks<T>(transaction: Transaction, projectId: string, operation: () => Promise<T>) {
+  await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-cover:${projectId}`})) IS NULL AS locked`;
+  await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-audio:${projectId}`})) IS NULL AS locked`;
+  await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-project:${projectId}`})) IS NULL AS locked`;
+  return operation();
+}
+
+export async function hideCatalogProject(projectId: string) {
+  assertDatabaseConfigured();
+  return prisma.$transaction((transaction) => withLifecycleLocks(transaction, projectId, async () => {
+    const current = await transaction.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!current) throw new CatalogLifecycleError("Projet introuvable.", "PROJECT_NOT_FOUND");
+    return transaction.project.update({ where: { id: projectId }, data: { publicVisible: false, featured: false, legacySourceVersion: null } });
+  }));
+}
+
+export async function archiveCatalogProject(projectId: string) {
+  assertDatabaseConfigured();
+  return prisma.$transaction((transaction) => withLifecycleLocks(transaction, projectId, async () => {
+    const current = await transaction.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!current) throw new CatalogLifecycleError("Projet introuvable.", "PROJECT_NOT_FOUND");
+    return transaction.project.update({ where: { id: projectId }, data: { status: "ARCHIVED", publicVisible: false, featured: false, jukeboxPlacement: null, jukeboxPosition: null, legacySourceVersion: null } });
+  }));
+}
+
+export async function deleteCatalogProject(projectId: string, rawConfirmation: unknown) {
+  assertDatabaseConfigured();
+  const confirmation = typeof rawConfirmation === "string" ? rawConfirmation.trim() : "";
+  const removableAssets = await prisma.$transaction((transaction) => withLifecycleLocks(transaction, projectId, async () => {
+    const project = await transaction.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true, slug: true, featured: true, publicVisible: true, status: true,
+        tracks: { select: { id: true } },
+        assets: { select: { assetId: true } },
+      },
+    });
+    if (!project) throw new CatalogLifecycleError("Projet introuvable.", "PROJECT_NOT_FOUND");
+    if (confirmation !== project.slug) throw new CatalogLifecycleError("La confirmation ne correspond pas au slug.", "CONFIRMATION_INVALID");
+    const eligibility = getCatalogDeletionEligibility(project);
+    if (!eligibility.eligible) throw new CatalogLifecycleError(eligibility.reason, "DELETE_FORBIDDEN");
+
+    const trackIds = project.tracks.map(({ id }) => id);
+    const assetIds = [...new Set(project.assets.map(({ assetId }) => assetId))];
+    await transaction.credit.deleteMany({ where: { OR: [{ projectId }, ...(trackIds.length ? [{ trackId: { in: trackIds } }] : [])] } });
+    await transaction.platformLink.deleteMany({ where: { projectId } });
+    await transaction.confidenceAnnotation.deleteMany({ where: { projectId } });
+    await transaction.favorite.deleteMany({ where: { projectId } });
+    await transaction.projectAsset.deleteMany({ where: { projectId } });
+    await transaction.track.deleteMany({ where: { projectId } });
+    await transaction.project.delete({ where: { id: projectId } });
+
+    return assetIds.length ? transaction.asset.findMany({
+      where: { id: { in: assetIds }, projects: { none: {} }, orders: { none: {} } },
+      select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true },
+    }) : [];
+  }));
+
+  let cleanupFailed = false;
+  for (const asset of removableAssets) {
+    try {
+      const stillOrphaned = await prisma.asset.count({ where: { id: asset.id, projects: { none: {} }, orders: { none: {} } } });
+      if (!stillOrphaned) continue;
+      await deleteMediaObject(asset);
+      await prisma.asset.deleteMany({ where: { id: asset.id, projects: { none: {} }, orders: { none: {} } } });
+    }
+    catch { cleanupFailed = true; console.error("An orphaned catalogue media object could not be removed after project deletion."); }
+  }
+  return { deletedAssets: removableAssets.length, cleanupFailed };
+}
+
 async function withProjectLock<T>(projectId: string, operation: (transaction: Transaction) => Promise<T>) {
   return prisma.$transaction(async (transaction) => {
     await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-project:${projectId}`})) IS NULL AS locked`;
@@ -78,10 +219,16 @@ export async function updateCatalogProject(projectId: string, input: Record<stri
   const type = parseProjectType(input.type);
   const status = parseProjectStatus(input.status);
   const featured = input.featured === "on" || input.featured === true;
-  const publicVisible = input.publicVisible === "on" || input.publicVisible === true;
+  const requestedPublicVisible = input.publicVisible === "on" || input.publicVisible === true;
   const jukeboxPlacement = parseJukeboxPlacement(input.jukeboxPlacement);
   const jukeboxPosition = boundedInteger(input.jukeboxPosition, "La position jukebox", 1, 999, true);
-  if (featured && status !== "published") throw new Error("Seul un projet publié peut être mis en avant.");
+  const effectivePlacement = status === "archive" ? "none" : jukeboxPlacement;
+  if (status !== "archive" && featured && status !== "published") throw new Error("Seul un projet publié peut être mis en avant.");
+  if (status !== "archive" && featured && !requestedPublicVisible) throw new Error("Un projet masqué ne peut pas être mis en avant.");
+  if (effectivePlacement !== "none" && status === "draft") throw new Error("Un brouillon ne peut pas rejoindre un jukebox.");
+  if (effectivePlacement === "published" && status !== "published") throw new Error("Le jukebox des parutions exige un projet publié.");
+  if (effectivePlacement === "development" && status !== "in-development") throw new Error("Le jukebox développement exige le statut correspondant.");
+  const publicVisible = status === "archive" ? false : requestedPublicVisible;
   const trackCount = boundedInteger(input.trackCount, "Le nombre de pistes", 0, 999, true);
   return withProjectLock(projectId, async (transaction) => {
     const current = await transaction.project.findUnique({ where: { id: projectId }, select: { updatedAt: true, _count: { select: { tracks: true } } } });
@@ -96,9 +243,9 @@ export async function updateCatalogProject(projectId: string, input: Record<stri
         type: projectTypeDb[type], status: projectStatusDb[status],
         shortDescription: optionalText(input.shortDescription, "La description courte", 1_000),
         description: optionalText(input.description, "La description", 10_000),
-        releaseDate: parseDate(input.releaseDate), featured, publicVisible, trackCount,
-        jukeboxPlacement: jukeboxPlacement === "published" ? "PUBLISHED" : jukeboxPlacement === "development" ? "DEVELOPMENT" : null,
-        jukeboxPosition,
+        releaseDate: parseDate(input.releaseDate), featured: publicVisible ? featured : false, publicVisible, trackCount,
+        jukeboxPlacement: effectivePlacement === "published" ? "PUBLISHED" : effectivePlacement === "development" ? "DEVELOPMENT" : null,
+        jukeboxPosition: effectivePlacement === "none" ? null : jukeboxPosition,
         seoTitle: optionalText(input.seoTitle, "Le titre SEO", 240),
         seoDescription: optionalText(input.seoDescription, "La description SEO", 1_000),
         legacySourceVersion: null,

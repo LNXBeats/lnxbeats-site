@@ -43,7 +43,9 @@ En cas d’échec avant la bascule, restaurer les tables catalogue depuis la sau
 
 ## Administration
 
-`/admin/catalogue` liste et filtre les projets. `/admin/catalogue/[slug]` édite les champs autorisés, la publication, l’unique mise en avant, le SEO, les pistes, les liens directs et la cover. Les écritures exigent une session ADMIN et une origine valide. Les suppressions de piste ou de lien sont explicites ; la suppression d’un projet n’est pas proposée.
+`/admin/catalogue` liste et filtre les projets, y compris les brouillons privés et les archives. `/admin/catalogue/nouveau` crée un projet transactionnellement avec un slug normalisé unique ; les valeurs par défaut sûres sont `DRAFT`, `publicVisible = false`, aucun jukebox et aucune mise en avant. Tout autre état de création doit être choisi explicitement et rester cohérent. `/admin/catalogue/[slug]` édite ensuite les champs autorisés, la publication, l’unique mise en avant, le SEO, les pistes, les liens directs, la cover et la preview.
+
+Les écritures exigent une session `ADMIN`, une origine valide et une sélection explicite des champs. Masquer conserve les données. Archiver force le retrait public et du jukebox tout en restant réversible. La suppression définitive exige un projet masqué en brouillon ou archivé, refuse le projet mis en avant et demande la saisie exacte de son slug. Les relations `Restrict` sont nettoyées dans une transaction ; seuls les assets sans aucune autre relation projet ou commande sont supprimés, puis leur objet est retiré via l’abstraction média V0.6.3.
 
 La fiabilité affichée n’est plus une série de dix sélecteurs techniques. Elle est calculée à la lecture : présence d’une cover officielle, date, rapport entre nombre déclaré et pistes nommées, liens de sortie, SEO et crédits. Les annotations legacy restent en base pour la compatibilité et servent uniquement de contexte aux domaines qui ne peuvent pas être déduits objectivement, comme l’éditorial ou les genres. Le niveau global devient « Informations principales complètes » uniquement lorsque les domaines principaux sont tous confirmés.
 

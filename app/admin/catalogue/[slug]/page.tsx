@@ -7,11 +7,14 @@ import { CatalogEditGuard, CatalogSubmitButton } from "@/components/catalog-edit
 import { CatalogAudioForm } from "@/components/catalog-audio-form";
 import { CatalogCoverForm } from "@/components/catalog-cover-form";
 import { CatalogPlatformLinkFields } from "@/components/catalog-platform-link-fields";
+import { CatalogProjectDangerZone } from "@/components/catalog-project-danger-zone";
+import { CatalogProjectFields } from "@/components/catalog-project-fields";
 import { requireAdmin } from "@/lib/auth/session";
 import { catalogCoverAltOverride, resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import { deriveCatalogConfidence, projectCompletenessLabel } from "@/lib/catalog/confidence";
 import { platformLabelOverride, platformName, resolvePlatformLabel } from "@/lib/catalog/platform-label";
 import { catalogSeoMode, effectiveCatalogSeoDescription, effectiveCatalogSeoTitle } from "@/lib/catalog/seo";
+import { getCatalogDeletionEligibility } from "@/lib/catalog/lifecycle";
 import { getAdminCatalogProject } from "@/lib/catalog/service";
 import type { DataConfidence, PlatformId, ProjectDataConfidence } from "@/lib/catalog/types";
 import {
@@ -24,7 +27,8 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Modifier le catalogue" };
 
 const feedback: Record<string, string> = {
-  "projet-enregistre": "Les informations du projet sont enregistrées.", "projet-refuse": "Enregistrement refusé. Rechargez la fiche et vérifiez les valeurs.",
+  "projet-cree": "Projet créé avec les paramètres choisis.", "projet-enregistre": "Les informations du projet sont enregistrées.", "projet-refuse": "Enregistrement refusé. Rechargez la fiche et vérifiez les valeurs.",
+  "projet-masque": "Projet masqué du site. Ses données restent disponibles dans l’Admin.", "projet-archive": "Projet archivé et retiré des surfaces publiques.", "cycle-refuse": "Cette action n’a pas été appliquée.", "suppression-projet-refusee": "Suppression refusée. Vérifiez l’état du projet et la confirmation saisie.",
   "piste-ajoutee": "La piste est ajoutée.", "piste-enregistree": "La piste est enregistrée.", "piste-supprimee": "La piste est supprimée.", "piste-refusee": "La piste n’a pas été modifiée.",
   "ordre-enregistre": "L’ordre des pistes est enregistré.", "ordre-refuse": "Le déplacement n’a pas été appliqué.",
   "credit-ajoute": "Le crédit est ajouté.", "credit-enregistre": "Le crédit est enregistré.", "credit-supprime": "Le crédit est supprimé.", "credit-refuse": "Le crédit n’a pas été modifié.",
@@ -76,13 +80,14 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
   const projectCredits = project.credits.filter(({ trackId }) => trackId === null);
   const seoMode = catalogSeoMode(project);
   const seoStateLabel = seoMode === "custom" ? "✓ Personnalisé" : seoMode === "mixed" ? "✓ Effectif · mixte" : "✓ Automatique";
+  const deletion = getCatalogDeletionEligibility(project);
 
   return <div className="admin-main admin-catalogue-editor">
     <Link className="admin-back-link" href="/admin/catalogue"><span aria-hidden="true">←</span> Retour au catalogue</Link>
-    <header className="admin-page-heading"><div><p className="admin-kicker">Fiche catalogue</p><h1>{project.title}</h1></div><p>Le slug reste immuable. Chaque bloc possède sa propre validation explicite.</p></header>
-    <div className="admin-editor-actions"><Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir la fiche publique <span aria-hidden="true">↗</span></Link></div>
+    <header className="admin-page-heading"><div><p className="admin-kicker">Fiche catalogue</p><h1>{project.title}</h1></div><p>Le slug reste immuable. Enregistrer, rendre visible et placer dans un jukebox sont trois décisions distinctes.</p></header>
+    <div className="admin-editor-actions">{project.publicVisible && (project.status === "PUBLISHED" || project.status === "IN_DEVELOPMENT") ? <Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir la fiche publique <span aria-hidden="true">↗</span></Link> : <span className="admin-muted">Fiche publique masquée</span>}</div>
     <section className="admin-catalogue-summary" aria-label="État actuel des données">
-      <div><span>Publication</span><strong>{project.status === "PUBLISHED" ? "Publié" : project.status === "IN_DEVELOPMENT" ? "En développement" : "Archivé"}</strong></div>
+      <div><span>Publication</span><strong>{project.status === "PUBLISHED" ? "Publié" : project.status === "IN_DEVELOPMENT" ? "En développement" : project.status === "DRAFT" ? "Brouillon" : "Archivé"}</strong></div>
       <div><span>Cover</span><strong>{cover ? "Renseignée" : "Manquante"}</strong></div>
       <div><span>Extrait audio</span><strong>{audio?.durationMs ? `${Math.round(audio.durationMs / 1_000)} s` : "Facultatif"}</strong></div>
       <div><span>Date</span><strong>{project.releaseDate ? project.releaseDate.toLocaleDateString("fr-FR", { timeZone: "UTC" }) : "À compléter"}</strong></div>
@@ -92,25 +97,11 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
 
     <section className="admin-detail-window">
       <p className="admin-section-label">Identité, publication et SEO</p>
-      <SectionFeedback state={etat} accepted={["projet-enregistre", "projet-refuse"]} />
+      <SectionFeedback state={etat} accepted={["projet-cree", "projet-enregistre", "projet-refuse", "projet-masque", "projet-archive", "cycle-refuse", "suppression-projet-refusee"]} />
       <CatalogEditGuard action={saveCatalogProjectAction}>
         <Identity project={project} /><input type="hidden" name="updatedAt" value={project.updatedAt.toISOString()} />
-        <div className="admin-form-grid">
-          <label><span>Slug (non modifiable)</span><input value={project.slug} readOnly /></label>
-          <label><span>Titre</span><input name="title" defaultValue={project.title} maxLength={240} required autoFocus={etat === "projet-refuse"} /></label>
-          <label><span>Sous-titre</span><input name="subtitle" defaultValue={project.subtitle ?? ""} maxLength={240} /></label>
-          <label><span>Type</span><select name="type" defaultValue={project.type.toLowerCase()}><option value="album">Album</option><option value="single">Single</option><option value="project">Projet</option></select></label>
-          <label><span>Statut éditorial</span><select name="status" defaultValue={project.status === "IN_DEVELOPMENT" ? "in-development" : project.status.toLowerCase()}><option value="published">Publié</option><option value="in-development">En développement</option><option value="draft">Brouillon</option><option value="archive">Archivé</option></select></label>
-          <label><span>Date de parution</span><input name="releaseDate" type="date" defaultValue={project.releaseDate?.toISOString().slice(0, 10) ?? ""} /></label>
-          <label><span>Nombre de pistes annoncé</span><input name="trackCount" type="number" min="0" max="999" defaultValue={project.trackCount ?? ""} /></label>
-          <label className="admin-checkbox"><input name="publicVisible" type="checkbox" defaultChecked={project.publicVisible} /><span>Visible sur le site</span></label>
-          <label className="admin-checkbox"><input name="featured" type="checkbox" defaultChecked={project.featured} /><span>Mettre en avant sur l’accueil</span></label>
-          <label><span>Placement dans les jukebox</span><select name="jukeboxPlacement" defaultValue={project.jukeboxPlacement === "PUBLISHED" ? "published" : project.jukeboxPlacement === "DEVELOPMENT" ? "development" : "none"}><option value="none">Aucun jukebox</option><option value="published">Jukebox publié</option><option value="development">Jukebox développement</option></select></label>
-          <label><span>Position dans le jukebox</span><input name="jukeboxPosition" type="number" min="1" max="999" defaultValue={project.jukeboxPosition ?? ""} /><small>Facultatif : sans position, l’ordre du catalogue sert de repli.</small></label>
-          <label className="admin-form-wide"><span>Description courte</span><textarea name="shortDescription" rows={3} maxLength={1000} defaultValue={project.shortDescription ?? ""} /></label>
-          <label className="admin-form-wide"><span>Récit / présentation du projet</span><textarea name="description" rows={7} maxLength={10000} defaultValue={project.description ?? ""} /><small>Ce texte alimente le récit de la fiche publique. Laissez vide plutôt que d’ajouter une information incertaine.</small></label>
-          <details className="admin-form-wide admin-secondary-fields"><summary>Référencement</summary><div><label><span>Titre SEO personnalisé</span><input name="seoTitle" maxLength={240} defaultValue={project.seoTitle ?? ""} placeholder={effectiveCatalogSeoTitle(project)} /><small>Effectif : {effectiveCatalogSeoTitle(project)}</small></label><label><span>Description SEO personnalisée</span><textarea name="seoDescription" rows={3} maxLength={1000} defaultValue={project.seoDescription ?? ""} placeholder={effectiveCatalogSeoDescription(project)} /><small>Une description éditoriale existante sert automatiquement de fallback.</small></label></div></details>
-        </div>
+        <CatalogProjectFields mode="edit" autoFocusTitle={etat === "projet-refuse"} values={project} seoFallbacks={{ title: effectiveCatalogSeoTitle(project), description: effectiveCatalogSeoDescription(project) }} />
+        <p className="admin-form-note">Un brouillon enregistré reste privé si « Visible sur le site » n’est pas coché. Le jukebox exige en plus le bon statut, le placement choisi et une cover.</p>
         <CatalogSubmitButton>Enregistrer le projet</CatalogSubmitButton>
       </CatalogEditGuard>
     </section>
@@ -177,6 +168,17 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
       <p className="admin-muted">Les profils artiste globaux restent gérés séparément et ne sont pas dupliqués ici.</p>
       {project.platformLinks.length ? <ul className="admin-link-editor">{project.platformLinks.map((link) => { const platform = platformFromDb[link.platform] ?? "other"; const scope = link.scope === "STORE" ? "store" as const : "release" as const; const override = platformLabelOverride(link.label, platform, scope); return <li key={link.id}><div className="admin-link-summary"><strong>{platformName(platform)}</strong><span>{resolvePlatformLabel(link.label, platform, scope)}</span><small>{link.url}</small></div><div className="admin-inline-actions"><details><summary>Modifier</summary><form className="admin-catalogue-form" action={saveCatalogLinkAction}><Identity project={project} /><input type="hidden" name="linkId" value={link.id} /><CatalogPlatformLinkFields initialPlatform={platform} initialScope={scope} initialUrl={link.url} initialOverride={override ?? ""} /><CatalogSubmitButton>Enregistrer</CatalogSubmitButton></form></details><details><summary>Supprimer</summary><form action={deleteCatalogLinkAction}><Identity project={project} /><input type="hidden" name="linkId" value={link.id} /><button>Confirmer la suppression</button></form></details></div></li>; })}</ul> : <p className="admin-muted">Aucun lien de sortie documenté.</p>}
       <details className="admin-add-panel"><summary>Ajouter un lien de sortie</summary><form className="admin-catalogue-form" action={addCatalogLinkAction}><Identity project={project} /><CatalogPlatformLinkFields /><CatalogSubmitButton>Ajouter le lien</CatalogSubmitButton></form></details>
+    </section>
+
+    <section className="admin-detail-window admin-project-management">
+      <p className="admin-section-label">Gestion du projet</p>
+      <h2>Masquer, archiver ou supprimer.</h2>
+      <p className="admin-muted">Masquer retire le projet du public sans perdre son travail éditorial. Archiver le retire également des jukebox et reste réversible depuis les champs ci-dessus. La suppression définitive est réservée aux projets déjà masqués, en brouillon ou archivés.</p>
+      <CatalogProjectDangerZone
+        project={{ id: project.id, slug: project.slug, title: project.title, publicVisible: project.publicVisible, status: project.status }}
+        deletionEligible={deletion.eligible}
+        deletionReason={deletion.reason}
+      />
     </section>
   </div>;
 }
