@@ -35,7 +35,7 @@ export function PlatformDestination({ index, name, label, action, url, tone, log
         )}
       </span>
       <span className="platform-destination__copy">{label}</span>
-      <span className="platform-destination__action" aria-hidden="true">{action} <b>↗</b></span>
+      <span className="platform-destination__action" aria-hidden="true"><span>{action}</span><b>↗</b></span>
     </a>
   );
 }

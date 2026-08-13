@@ -142,6 +142,8 @@ test("navigation is bounded and exposes symmetric accessible 48px controls plus 
   assert.match(component, /Faites défiler les projets/);
   assert.match(component, /Glissez pour parcourir/);
   assert.match(css, /\.home-jukebox__arrow-symbol[\s\S]*?width: 48px;[\s\S]*?height: 48px;/);
+  assert.match(css, /--jukebox-arrow-vertical: -50%;/);
+  assert.match(css, /\.home-jukebox__arrow--previous:hover:not\(:disabled\),[\s\S]*?transform: translateY\(var\(--jukebox-arrow-vertical\)\);/);
 });
 
 test("the visual system preloads only immediate eager covers and neutralizes drag taps", async () => {

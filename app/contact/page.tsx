@@ -38,7 +38,6 @@ export default function ContactPage() {
               <p className="eyebrow">De vous à LNX Beats</p>
               <h2>La conversation commence sans intermédiaire.</h2>
               <p>Donnez le contexte, l’intention et les repères utiles. Votre message arrive directement à LNX Beats, sans passer par un support anonyme.</p>
-              <a className="contact-email" href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>
             </div>
             <ButtonLink href={`mailto:${siteConfig.email}`} external>Écrire à LNX Beats</ButtonLink>
           </div>
