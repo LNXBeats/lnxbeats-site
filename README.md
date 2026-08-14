@@ -1,8 +1,8 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. Le catalogue public et ses métadonnées vivent dans PostgreSQL ; les médias utilisent une abstraction locale/S3-compatible, sans ouvrir de paiement.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. Le catalogue public et ses métadonnées vivent dans PostgreSQL ; les médias utilisent une abstraction locale/S3-compatible. La fondation Stripe reste en mode test, désactivée et fermée au public.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement, email de commande, facture ou livraison WAV n’est actif.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement public, email de commande, facture ou livraison WAV n’est actif.
 
 ## Stack
 
@@ -12,6 +12,7 @@ Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergeme
 - Tailwind CSS 4 et CSS global pour le design system
 - ESLint avec les règles Next.js Core Web Vitals
 - PostgreSQL et Prisma ORM 7
+- Stripe Checkout Sessions via `stripe` 22.5.0, API `2026-07-29.dahlia`, désactivé par défaut
 - stockage média local en développement et objet S3-compatible en production
 - Better Auth avec sessions en base et mots de passe Argon2id
 - Node.js 20.19, 22.12 ou 24+
@@ -132,6 +133,12 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `EMAIL_FROM` | Expéditeur appartenant au domaine transactionnel vérifié | Non |
 | `EMAIL_REPLY_TO` | Adresse de réponse humaine des messages transactionnels | Non |
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
+| `PAYMENTS_ENABLED` | Garde globale ; `false` dans la fondation et tant que la QA sandbox n’est pas validée | Non |
+| `STRIPE_MODE` | Mode Stripe attendu ; limité à `test` dans cette fondation | Non |
+| `STRIPE_SECRET_KEY` | Clé Stripe sandbox côté serveur, vide dans le dépôt et jamais journalisée | Oui |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature propre au webhook sandbox ou à Stripe CLI | Oui |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Clé publiable facultative, inutile pour Checkout hébergé et réservée à une future UI Elements | Non |
+| `STRIPE_DIAGNOSTIC_CONFIRM` / `PAYMENT_QA_CONFIRM` | Confirmations non secrètes des QA Stripe Test opt-in | Non |
 | `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
 | `ORDER_UPLOAD_DIR` | Racine privée, hors `public/` ; QA limitée à `/private/tmp` | Non |
 | `MEDIA_STORAGE_ROOT` | Racine absolue privée des covers et previews audio normalisées, hors `public/` et hors Git | Non |
@@ -149,12 +156,20 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `FFMPEG_PATH` | Chemin absolu optionnel du FFmpeg système ; sinon le binaire reproductible du package est utilisé | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
-| `LNX_PRISMA_DEV_SERVER_FILE` | Preuve optionnelle explicite du runtime Prisma Dev ; la migration média utilise sinon la preuve locale portant le nom de `LNX_DATABASE_TARGET` | Non |
+| `LNX_PRISMA_DEV_SERVER_FILE` | Preuve explicite du runtime Prisma Dev ; obligatoire pour toute QA paiement et les opérations média sensibles | Non |
 | `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
 | `ALLOW_DATABASE_RESET` | Garde explicite requise pour la validation destructive locale | Non |
 | `PORT` | Port d’écoute ; fourni automatiquement par Railway | Non |
 
-Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés par Git ou dans un gestionnaire de secrets. Aucun secret SMTP, de paiement ou de production n’est commité.
+Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés par Git ou dans un gestionnaire de secrets. Aucun secret SMTP, Stripe ou de production n’est commité. `PAYMENTS_ENABLED=false` et `STRIPE_MODE=test` restent les valeurs obligatoires avant une validation sandbox dédiée ; cette fondation ne prouve pas que Stripe, PayPal ou Wero sont activés sur un compte réel.
+
+## Paiements
+
+La V0.7.0 prépare Stripe Checkout hébergé, sans l’ouvrir au public. Les prix sont relus et calculés côté serveur depuis PostgreSQL ; le navigateur ne fournit jamais le montant faisant foi. Le paiement ne peut être confirmé que par un webhook Stripe signé et traité de façon idempotente. La page de retour Checkout n’est pas une preuve de paiement.
+
+PayPal est compatible avec un compte Stripe français, mais son activation dans le Dashboard et la connexion d’un compte PayPal restent des actions humaines séparées. Wero reste un accès contrôlé/preview et n’est ni promis ni hardcodé. Aucun IBAN ou établissement bancaire n’est couplé au code.
+
+Voir [docs/PAYMENTS.md](docs/PAYMENTS.md) pour l’architecture, les versions verrouillées, les événements, la procédure Stripe CLI et les runbooks de sécurité.
 
 ## Architecture
 
@@ -201,6 +216,7 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Modèle de données](docs/DATA_MODEL.md)
 - [Authentification et sécurité](docs/AUTH.md)
 - [Commandes et sécurité des fichiers](docs/ORDER_MODEL.md)
+- [Paiements Stripe](docs/PAYMENTS.md)
 - [Vision produit](docs/PRODUCT_VISION.md)
 - [Audit produit et éditorial](docs/PAGE_AUDIT.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)

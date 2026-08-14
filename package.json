@@ -39,6 +39,11 @@
     "test:audio:browser-fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/audio-browser-fixtures.ts",
     "test:jukebox": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/jukebox/*.test.ts",
     "test:media": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/media/*.test.ts",
+    "test:payment": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/payments/*.test.ts",
+    "test:payment:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-payment-runtime.ts",
+    "stripe:browser-fixtures:setup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/stripe-browser-fixtures.ts setup",
+    "stripe:browser-fixtures:cleanup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/stripe-browser-fixtures.ts cleanup",
+    "stripe:check": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/stripe-test-diagnostic.ts",
     "test:media:r2-staging": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/test-media-r2-staging.ts",
     "test:media:r2-staging-runtime": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/test-media-r2-staging-runtime.ts",
     "media:backup": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/media-backup.ts",
@@ -69,7 +74,8 @@
     "react-dom": "19.2.8",
     "resend": "6.19.0",
     "server-only": "0.0.1",
-    "sharp": "0.35.3"
+    "sharp": "0.35.3",
+    "stripe": "22.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

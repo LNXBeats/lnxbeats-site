@@ -183,6 +183,41 @@ enum CommercialLicensePaymentStatus {
   REFUNDED
 }
 
+enum PaymentProvider {
+  STRIPE
+}
+
+enum PaymentMode {
+  TEST
+  LIVE
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  EXPIRED
+  REFUND_PENDING
+  PARTIALLY_REFUNDED
+  REFUNDED
+  REQUIRES_REVIEW
+}
+
+enum PaymentMethod {
+  CARD
+  PAYPAL
+  WERO
+  OTHER
+}
+
+enum ProviderEventOutcome {
+  PROCESSED
+  IGNORED
+  REQUIRES_REVIEW
+}
+
 model User {
   id                String                 @id @default(uuid()) @db.Uuid
   email             String                 @unique @db.VarChar(320)
@@ -501,12 +536,65 @@ model Order {
   events             OrderEvent[]
   assets             OrderAsset[]
   commercialLicenses CommercialLicense[]
+  payments           Payment[]
 
   @@index([status, createdAt])
   @@index([userId])
   @@index([userId, status, updatedAt])
   @@index([customerId])
   @@map("orders")
+}
+
+model Payment {
+  id                  String          @id @default(uuid()) @db.Uuid
+  orderId             String          @db.Uuid
+  provider            PaymentProvider @default(STRIPE)
+  mode                PaymentMode
+  status              PaymentStatus   @default(CREATED)
+  amountCents         Int
+  currency            String          @db.VarChar(3)
+  pricingVersion      String          @db.VarChar(32)
+  idempotencyKey      String          @unique @db.VarChar(255)
+  providerCheckoutId  String?         @db.VarChar(255)
+  providerPaymentId   String?         @db.VarChar(255)
+  paymentMethod       PaymentMethod?
+  failureCode         String?         @db.VarChar(120)
+  checkoutExpiresAt   DateTime?       @db.Timestamptz(3)
+  paidAt              DateTime?       @db.Timestamptz(3)
+  failedAt            DateTime?       @db.Timestamptz(3)
+  canceledAt          DateTime?       @db.Timestamptz(3)
+  expiredAt           DateTime?       @db.Timestamptz(3)
+  refundedAt          DateTime?       @db.Timestamptz(3)
+  refundedAmountCents Int             @default(0)
+  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
+  order               Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  events              ProviderEvent[]
+
+  @@unique([provider, providerCheckoutId])
+  @@unique([provider, providerPaymentId])
+  @@index([orderId, createdAt])
+  @@index([provider, mode, status, updatedAt])
+  @@map("payments")
+}
+
+model ProviderEvent {
+  id              String               @id @default(uuid()) @db.Uuid
+  provider        PaymentProvider
+  providerEventId String               @db.VarChar(255)
+  type            String               @db.VarChar(160)
+  livemode        Boolean
+  objectId        String?              @db.VarChar(255)
+  outcome         ProviderEventOutcome
+  paymentId       String?              @db.Uuid
+  processedAt     DateTime             @db.Timestamptz(3)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+  payment         Payment?             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerEventId])
+  @@index([paymentId, createdAt])
+  @@index([provider, livemode, createdAt])
+  @@map("provider_events")
 }
 
 model CommercialLicense {

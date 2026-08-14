@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { CommercialLicensePanel } from "@/components/commercial-license-panel";
 import { Container } from "@/components/container";
+import { PaymentReturnNotice } from "@/components/payment-return-notice";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { canRequestCommercialLicense, formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
@@ -17,10 +18,30 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-type OrderDetailPageProps = { params: Promise<{ orderNumber: string }> };
+type OrderDetailPageProps = {
+  params: Promise<{ orderNumber: string }>;
+  searchParams: Promise<{ paiement?: string }>;
+};
 
-export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
+const paymentConfirmedOrderStatuses = new Set([
+  "PAYMENT_CONFIRMED",
+  "RECEIVED",
+  "SUBMITTED",
+  "REVIEWING",
+  "ACCEPTED",
+  "IN_PROGRESS",
+  "FIRST_VERSION_READY",
+  "REVISION_REQUESTED",
+  "FINALIZING",
+  "DELIVERED",
+  "REFUSED",
+  "REFUND_PENDING",
+  "REFUNDED",
+]);
+
+export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
   const { orderNumber } = await params;
+  const paymentReturn = (await searchParams).paiement;
   const session = await requireVerifiedUser(`/compte/commandes/${orderNumber}`);
   const actor: OrderActor = {
     id: session.user.id,
@@ -47,6 +68,13 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           <div className="order-detail__status"><span>Statut actuel</span><strong>{status.label}</strong></div>
         </header>
 
+        {paymentReturn === "retour" || paymentReturn === "annule" ? (
+          <PaymentReturnNotice
+            state={paymentReturn === "retour" ? "return" : "cancel"}
+            confirmed={paymentConfirmedOrderStatuses.has(order.status)}
+          />
+        ) : null}
+
         <div className="order-detail__grid">
           <section className="order-detail__main" aria-labelledby="order-timeline-title">
             <p className="auth-panel__label">Progression</p>
@@ -64,7 +92,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           <aside className="order-detail__price" aria-label="Prix de la demande">
             <span>Total de la création</span><strong>{formatEuro(order.totalCents)}</strong>
             <p>{order.usage === "PERSONAL" ? "Usage personnel" : "Ancien snapshot commercial V0.6 — à régulariser"}</p>
-            <small>Version tarifaire {order.pricingVersion} · paiement non encore disponible</small>
+            <small>Version tarifaire {order.pricingVersion} · paiement public non ouvert ; fondation Stripe Test réservée à l’Admin QA</small>
           </aside>
         </div>
 

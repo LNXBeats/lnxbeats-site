@@ -24,9 +24,10 @@ export class AdminServiceError extends Error {
 export const adminOrderFilters = ["all", "attention", "active", "delivered", "closed"] as const;
 export type AdminOrderFilter = (typeof adminOrderFilters)[number];
 
-const attentionStatuses: KnownOrderStatus[] = ["AWAITING_PAYMENT", "RECEIVED", "SUBMITTED", "REVIEWING", "REVISION_REQUESTED", "FIRST_VERSION_READY"];
+const attentionStatuses: KnownOrderStatus[] = ["PAYMENT_CONFIRMED", "RECEIVED", "SUBMITTED", "REVIEWING", "REVISION_REQUESTED", "FIRST_VERSION_READY"];
 const activeStatuses: KnownOrderStatus[] = ["ACCEPTED", "IN_PROGRESS", "FIRST_VERSION_READY", "REVISION_REQUESTED", "FINALIZING"];
 const closedStatuses: KnownOrderStatus[] = ["REFUSED", "CANCELLED", "REFUND_PENDING", "REFUNDED"];
+const paymentReviewFailureCodeFilter = { startsWith: "WEBHOOK_" } as const;
 
 export function parseAdminOrderFilter(value: unknown): AdminOrderFilter {
   return typeof value === "string" && adminOrderFilters.includes(value as AdminOrderFilter)
@@ -46,7 +47,15 @@ export async function getAdminOverview() {
   assertDatabaseConfigured();
   const [orders, attention, active, delivered, members, databaseProjects, featuredProject] = await Promise.all([
     prisma.order.count(),
-    prisma.order.count({ where: { status: { in: attentionStatuses } } }),
+    prisma.order.count({
+      where: {
+        OR: [
+          { status: { in: attentionStatuses } },
+          { payments: { some: { OR: [{ status: "REQUIRES_REVIEW" }, { failureCode: paymentReviewFailureCodeFilter }] } } },
+          { payments: { some: { events: { some: { outcome: "REQUIRES_REVIEW" } } } } },
+        ],
+      },
+    }),
     prisma.order.count({ where: { status: { in: activeStatuses } } }),
     prisma.order.count({ where: { status: "DELIVERED" } }),
     prisma.user.count(),
@@ -68,7 +77,15 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
   assertDatabaseConfigured();
   const statuses = statusesForFilter(filter);
   return prisma.order.findMany({
-    where: statuses ? { status: { in: statuses } } : undefined,
+    where: filter === "attention"
+      ? {
+          OR: [
+            { status: { in: statuses } },
+            { payments: { some: { OR: [{ status: "REQUIRES_REVIEW" }, { failureCode: paymentReviewFailureCodeFilter }] } } },
+            { payments: { some: { events: { some: { outcome: "REQUIRES_REVIEW" } } } } },
+          ],
+        }
+      : statuses ? { status: { in: statuses } } : undefined,
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: 200,
     select: {
@@ -85,6 +102,16 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
       updatedAt: true,
       commercialLicenses: {
         where: { status: { in: ["REQUESTED", "CONTRACT_PENDING"] } },
+        select: { id: true },
+      },
+      payments: {
+        where: {
+          OR: [
+            { status: "REQUIRES_REVIEW" },
+            { failureCode: paymentReviewFailureCodeFilter },
+            { events: { some: { outcome: "REQUIRES_REVIEW" } } },
+          ],
+        },
         select: { id: true },
       },
     },
@@ -107,6 +134,28 @@ export async function getAdminOrder(orderNumber: string) {
       },
       commercialLicenses: {
         orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+      },
+      payments: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          provider: true,
+          mode: true,
+          status: true,
+          amountCents: true,
+          currency: true,
+          pricingVersion: true,
+          paymentMethod: true,
+          failureCode: true,
+          events: {
+            where: { outcome: "REQUIRES_REVIEW" },
+            select: { id: true },
+          },
+          providerCheckoutId: true,
+          providerPaymentId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       },
     },
   });
@@ -150,7 +199,9 @@ async function withOrderLock<T>(orderNumber: string, operation: (transaction: Tr
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (transaction) => {
-        await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`admin-order:${orderNumber}`})) IS NULL AS locked`;
+        // Payment checkout, webhooks and Admin lifecycle changes share this
+        // exact key so Order status cannot diverge from payment state.
+        await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`payments:order:${orderNumber}`})) IS NULL AS locked`;
         return operation(transaction);
       });
     } catch (error) {
@@ -219,6 +270,7 @@ export async function deleteEligibleAdminOrder(orderNumber: string) {
         events: { select: { toStatus: true } },
         assets: { include: { asset: true } },
         commercialLicenses: { select: { id: true } },
+        payments: { select: { id: true } },
       },
     });
     if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");

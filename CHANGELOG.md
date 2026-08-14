@@ -2,6 +2,24 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.7.0] — 2026-08-14
+
+### Fondation paiement
+
+- choix documenté de Stripe Checkout Sessions hébergé, moyens de paiement dynamiques et webhook signé comme source de vérité ;
+- SDK `stripe` verrouillé en 22.5.0 et API verrouillée sur `2026-07-29.dahlia` ;
+- configuration suivie limitée à des placeholders vides, `PAYMENTS_ENABLED=false` et `STRIPE_MODE=test` ;
+- prix serveur, tentative `Payment`, événements, idempotence, concurrence, retries et réception hors ordre cadrés avant toute ouverture publique ;
+- procédures Stripe CLI, webhook en échec, suspicion de double paiement et fuite de clé documentées.
+
+### Moyens de paiement et périmètre
+
+- cartes prévues uniquement avec les scénarios sandbox officiels ;
+- disponibilité de PayPal en France documentée sans prétendre à son activation sur le compte ;
+- Wero conservé comme possibilité future sous accès contrôlé/preview, sans promesse produit ni implémentation spécifique ;
+- aucun IBAN ou établissement bancaire couplé au code ;
+- aucune validation Stripe réelle, clé live, paiement public, push ou déploiement dans cette fondation.
+
 ## [0.6.4.1] — 2026-08-13
 
 ### Modifié

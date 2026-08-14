@@ -15,6 +15,8 @@ test("the admin state machine only exposes contextual transitions", () => {
   assert.equal(getAdminOrderTransition("REVIEWING", "ACCEPTED")?.label, "Accepter la création");
   assert.equal(getAdminOrderTransition("REVIEWING", "DELIVERED"), null);
   assert.equal(getAdminOrderTransition("AWAITING_PAYMENT", "PAYMENT_CONFIRMED"), null);
+  assert.equal(getAdminOrderTransition("AWAITING_PAYMENT", "RECEIVED"), null);
+  assert.equal(getAdminOrderTransition("PAYMENT_CONFIRMED", "RECEIVED")?.label, "Confirmer la réception");
 });
 
 test("payment and refund statuses cannot be forged by the admin cockpit", () => {
@@ -47,6 +49,7 @@ const deletionFixture = (overrides: Partial<Parameters<typeof getOrderDeletionEl
   events: [{ toStatus: "AWAITING_PAYMENT" as const }, { toStatus: "CANCELLED" as const }],
   assets: [{ role: "REFERENCE" as const }],
   commercialLicenses: [],
+  payments: [],
   ...overrides,
 });
 
@@ -57,6 +60,7 @@ test("only unpaid drafts or cancelled orders without legal retention signals are
   assert.equal(getOrderDeletionEligibility(deletionFixture({ serviceStartedAt: new Date() })).eligible, false);
   assert.equal(getOrderDeletionEligibility(deletionFixture({ deliveredAt: new Date() })).eligible, false);
   assert.equal(getOrderDeletionEligibility(deletionFixture({ commercialLicenses: [{}] })).eligible, false);
+  assert.equal(getOrderDeletionEligibility(deletionFixture({ payments: [{}] })).eligible, false);
   assert.equal(getOrderDeletionEligibility(deletionFixture({ assets: [{ role: "DELIVERY" }] })).eligible, false);
   assert.equal(getOrderDeletionEligibility(deletionFixture({ events: [{ toStatus: "PAYMENT_CONFIRMED" }] })).eligible, false);
 });

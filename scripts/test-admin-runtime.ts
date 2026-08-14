@@ -55,6 +55,8 @@ async function guards() {
 
 async function cleanup() {
   await prisma.$transaction(async (transaction) => {
+    await transaction.providerEvent.deleteMany();
+    await transaction.payment.deleteMany();
     await transaction.orderAsset.deleteMany();
     await transaction.commercialLicense.deleteMany();
     await transaction.orderEvent.deleteMany();
@@ -97,6 +99,27 @@ async function run() {
     passed.push("real order list and detail");
 
     await assert.rejects(transitionOrderStatus(draft.orderNumber, "DELIVERED", adminUser.id));
+    await assert.rejects(transitionOrderStatus(draft.orderNumber, "RECEIVED", adminUser.id));
+    const paymentOrder = await prisma.order.findUniqueOrThrow({ where: { orderNumber: draft.orderNumber } });
+    const paidAt = new Date();
+    await prisma.$transaction([
+      prisma.payment.create({
+        data: {
+          orderId: paymentOrder.id,
+          provider: "STRIPE",
+          mode: "TEST",
+          status: "SUCCEEDED",
+          amountCents: paymentOrder.totalCents,
+          currency: paymentOrder.currency,
+          pricingVersion: paymentOrder.pricingVersion,
+          idempotencyKey: `admin-runtime-success:${paymentOrder.id}`,
+          paidAt,
+        },
+      }),
+      prisma.order.update({ where: { id: paymentOrder.id }, data: { status: "PAYMENT_CONFIRMED" } }),
+      prisma.orderEvent.create({ data: { orderId: paymentOrder.id, fromStatus: "AWAITING_PAYMENT", toStatus: "PAYMENT_CONFIRMED", note: "Paiement Stripe Test confirmé par la fixture runtime.", visibility: "CLIENT" } }),
+    ]);
+    assert.equal((await listAdminOrders("attention")).some(({ orderNumber }) => orderNumber === draft.orderNumber), true);
     assert.equal(await transitionOrderStatus(draft.orderNumber, "RECEIVED", adminUser.id), "RECEIVED");
     assert.equal(await transitionOrderStatus(draft.orderNumber, "REVIEWING", adminUser.id), "REVIEWING");
     const competingTransitions = await Promise.allSettled([
@@ -108,7 +131,26 @@ async function run() {
     assert.equal(transitioned?.status, "ACCEPTED");
     assert.equal(transitioned?.events.filter(({ toStatus }) => toStatus === "ACCEPTED").length, 1);
     await assert.rejects(deleteEligibleAdminOrder(draft.orderNumber));
-    passed.push("valid transition atomic, invalid and concurrent duplicate transitions refused");
+    passed.push("unpaid bypass refused, paid order highlighted, valid and concurrent transitions protected");
+
+    const protectedDraft = await createDraftOrder(member, { ...input, title: "Conservation paiement Admin QA" });
+    await finalizeOrder(member, protectedDraft.orderNumber, input);
+    const protectedOrder = await prisma.order.findUniqueOrThrow({ where: { orderNumber: protectedDraft.orderNumber } });
+    await prisma.payment.create({
+      data: {
+        orderId: protectedOrder.id,
+        provider: "STRIPE",
+        mode: "TEST",
+        status: "PENDING",
+        amountCents: protectedOrder.totalCents,
+        currency: protectedOrder.currency,
+        pricingVersion: protectedOrder.pricingVersion,
+        idempotencyKey: `admin-runtime-pending:${protectedOrder.id}`,
+      },
+    });
+    assert.equal(await transitionOrderStatus(protectedDraft.orderNumber, "CANCELLED", adminUser.id), "CANCELLED");
+    await assert.rejects(deleteEligibleAdminOrder(protectedDraft.orderNumber));
+    passed.push("any payment attempt blocks destructive Admin deletion");
 
     const removableDraft = await createDraftOrder(member, { ...input, title: "Suppression Admin QA" });
     const photoBuffer = await sharp({ create: { width: 40, height: 30, channels: 3, background: "#6b5634" } }).jpeg().toBuffer();
@@ -128,6 +170,11 @@ async function run() {
     await addInternalOrderNote(draft.orderNumber, "Note réservée au cockpit.", adminUser.id);
     const adminDetail = await getAdminOrder(draft.orderNumber);
     assert.equal(adminDetail?.events.some(({ visibility }) => visibility === "INTERNAL"), true);
+    assert.equal(adminDetail?.payments.length, 1);
+    assert.deepEqual(Object.keys(adminDetail?.payments[0] ?? {}).sort(), [
+      "amountCents", "createdAt", "currency", "events", "failureCode", "id", "mode", "paymentMethod", "pricingVersion", "provider",
+      "providerCheckoutId", "providerPaymentId", "status", "updatedAt",
+    ].sort());
     const clientDetail = await getOrderForActor(member, draft.orderNumber);
     assert.equal(clientDetail?.events.some(({ note }) => note === "Note réservée au cockpit."), false);
     passed.push("internal event hidden from member serialization");

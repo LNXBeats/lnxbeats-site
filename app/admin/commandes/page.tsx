@@ -51,7 +51,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
                 <li key={order.orderNumber}>
                   <Link href={`/admin/commandes/${encodeURIComponent(order.orderNumber)}`}>
                     <span className="admin-order-list__identity"><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><em>{order.customerName || order.customerEmail}</em></span>
-                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{order.commercialLicenses.length ? <b>Droits à examiner</b> : null}</span>
+                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{order.payments.length ? <b>Paiement à examiner</b> : order.commercialLicenses.length ? <b>Droits à examiner</b> : null}</span>
                     <span className="admin-order-list__next"><strong>{formatEuro(order.totalCents)}</strong><small>{presentation.next}</small></span>
                     <span className="admin-order-list__arrow" aria-hidden="true">→</span>
                   </Link>

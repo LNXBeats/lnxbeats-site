@@ -4,10 +4,14 @@ import { notFound } from "next/navigation";
 
 import { addInternalNoteAction } from "@/app/admin/actions";
 import { AdminOrderActions } from "@/components/admin-order-actions";
+import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
 import { getAllowedOrderTransitions, getOrderDeletionEligibility } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
+import { assertPaymentServerEnvironment } from "@/lib/payments/config";
+import { paymentMethodPresentation, paymentStatusPresentation } from "@/lib/payments/presentation";
+import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
 import { orderStatusPresentation } from "@/lib/orders/status";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +48,7 @@ const licensePaymentLabels = {
 } as const;
 
 export default async function AdminOrderPage({ params, searchParams }: AdminOrderPageProps) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const { orderNumber } = await params;
   const order = await getAdminOrder(orderNumber);
   if (!order) notFound();
@@ -52,6 +56,18 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
   const deletion = getOrderDeletionEligibility(order);
   const message = stateMessages[(await searchParams).etat ?? ""];
   const currentStatus = orderStatusPresentation[order.status];
+  let paymentConfiguration;
+  try {
+    await loadAndAssertPaymentQaRuntimeEnvironment();
+    paymentConfiguration = assertPaymentServerEnvironment();
+  } catch {
+    paymentConfiguration = null;
+  }
+  const canRunStripeTest = paymentConfiguration?.enabled === true
+    && paymentConfiguration.mode === "test"
+    && order.status === "AWAITING_PAYMENT"
+    && order.userId === session.user.id
+    && !order.payments.some((payment) => ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED", "REQUIRES_REVIEW"].includes(payment.status));
 
   return (
     <div className="admin-main admin-order-detail">
@@ -107,7 +123,27 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
           <section className="admin-side-window">
             <p className="admin-section-label">Prix snapshot</p><strong className="admin-price">{formatEuro(order.totalCents)}</strong>
             <dl><div><dt>Création</dt><dd>{formatEuro(order.basePriceCents)}</dd></div><div><dt>Cover</dt><dd>{order.coverIncluded ? formatEuro(order.coverPriceCents) : "Non"}</dd></div><div><dt>Priorité</dt><dd>{order.priorityProcessing ? formatEuro(order.priorityPriceCents) : "Non"}</dd></div><div><dt>Révisions</dt><dd>{order.revisionUsed} / {order.revisionAllowance}</dd></div></dl>
-            <small>Tarif {order.pricingVersion}. Aucun paiement actif.</small>
+            <small>Tarif {order.pricingVersion}. Le montant du navigateur n’est jamais utilisé comme source de vérité.</small>
+          </section>
+
+          <section className="admin-side-window" aria-labelledby="admin-payments-title">
+            <p className="admin-section-label">Paiements</p><h2 id="admin-payments-title">{order.payments.length ? `${order.payments.length} tentative${order.payments.length > 1 ? "s" : ""}` : "Aucune tentative"}</h2>
+            {order.payments.map((payment) => (
+              <dl key={payment.id}>
+                <div><dt>Statut</dt><dd>{paymentStatusPresentation[payment.status]}</dd></div>
+                <div><dt>Montant</dt><dd>{formatEuro(payment.amountCents)} · {payment.currency}</dd></div>
+                <div><dt>Prestataire</dt><dd>{payment.provider === "STRIPE" ? "Stripe" : payment.provider}</dd></div>
+                <div><dt>Environnement</dt><dd>{payment.mode === "TEST" ? "MODE TEST" : "LIVE"}</dd></div>
+                <div><dt>Moyen</dt><dd>{payment.paymentMethod ? paymentMethodPresentation[payment.paymentMethod] : "Non déterminé"}</dd></div>
+                <div><dt>ID externe</dt><dd>{payment.providerPaymentId ?? payment.providerCheckoutId ?? "Non attribué"}</dd></div>
+                {payment.status === "REQUIRES_REVIEW" || payment.failureCode?.startsWith("WEBHOOK_") || payment.events.length ? <div><dt>Alerte</dt><dd>Réconciliation technique requise</dd></div> : null}
+                <div><dt>Tarif</dt><dd>{payment.pricingVersion}</dd></div>
+                <div><dt>Créée</dt><dd>{payment.createdAt.toLocaleString("fr-FR")}</dd></div>
+                <div><dt>Dernière mise à jour</dt><dd>{payment.updatedAt.toLocaleString("fr-FR")}</dd></div>
+              </dl>
+            ))}
+            {canRunStripeTest ? <AdminPaymentTestAction orderNumber={order.orderNumber} /> : null}
+            <small>Résumé PostgreSQL en lecture seule. Seul l’identifiant externe utile à la réconciliation est affiché ; aucun secret ni donnée carte ne l’est.</small>
           </section>
 
           <section className="admin-side-window" aria-labelledby="admin-actions-title">

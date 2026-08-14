@@ -11,7 +11,6 @@ export type AdminOrderTransition = {
 const transitions = {
   DRAFT: [],
   AWAITING_PAYMENT: [
-    { to: "RECEIVED", label: "Prendre en charge", eventNote: "L’histoire a été prise en charge par LNX Beats.", visibility: "CLIENT" },
     { to: "CANCELLED", label: "Annuler la demande", eventNote: "La demande a été annulée avant le début de la création.", visibility: "CLIENT", sensitive: true },
   ],
   PAYMENT_CONFIRMED: [
@@ -82,6 +81,7 @@ export type OrderDeletionSnapshot = {
   events: readonly { toStatus: KnownOrderStatus }[];
   assets: readonly { role: "REFERENCE" | "DELIVERY" | "DOCUMENT" }[];
   commercialLicenses: readonly unknown[];
+  payments: readonly unknown[];
 };
 
 export function getOrderDeletionEligibility(order: OrderDeletionSnapshot) {
@@ -93,6 +93,9 @@ export function getOrderDeletionEligibility(order: OrderDeletionSnapshot) {
   }
   if (order.commercialLicenses.length) {
     return { eligible: false, reason: "Une demande de droits est liée à cette commande." } as const;
+  }
+  if (order.payments.length) {
+    return { eligible: false, reason: "Un historique de paiement est lié à cette commande et doit être conservé." } as const;
   }
   if (order.assets.some(({ role }) => role !== "REFERENCE")) {
     return { eligible: false, reason: "Un document ou un fichier de livraison est lié à cette commande." } as const;
