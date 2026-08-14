@@ -73,6 +73,24 @@ export async function analyzeAudioSource(sourcePath: string) {
   return { durationMs: durationFromFfmpeg(result.stderr), elapsedMs: result.elapsedMs };
 }
 
+export async function validateCompleteAudioSource(sourcePath: string) {
+  const analysis = await analyzeAudioSource(sourcePath);
+  // Delivery masters are retained as uploaded, so parse-only validation is not
+  // sufficient. Decode the complete first audio stream into a null sink to
+  // reject truncated/corrupt payloads without producing a second file.
+  await runFfmpeg([
+    "-v", "error",
+    "-i", sourcePath,
+    "-map", "0:a:0",
+    "-vn",
+    "-sn",
+    "-dn",
+    "-f", "null",
+    "-",
+  ], 180_000);
+  return analysis;
+}
+
 export async function generateCatalogMp3Preview({
   sourcePath,
   outputPath,

@@ -59,7 +59,7 @@ test("fails closed before authentication when the mutation origin is not trusted
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
 
-test("requires a verified active ADMIN session", async () => {
+test("requires a verified active session and accepts a customer owner", async () => {
   const unauthenticated = await handleStripeCheckoutPost(
     request(),
     context,
@@ -72,7 +72,7 @@ test("requires a verified active ADMIN session", async () => {
     context,
     routeDependencies({ ...admin, role: "MEMBER" }),
   );
-  assert.equal(member.status, 403);
+  assert.equal(member.status, 200);
 });
 
 test("fails closed before authentication outside the isolated Stripe QA runtime", async () => {

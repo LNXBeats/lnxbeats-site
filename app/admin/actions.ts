@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -7,6 +8,8 @@ import { revalidatePath } from "next/cache";
 import { addInternalOrderNote, deleteEligibleAdminOrder, transitionOrderStatus } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
+import { expireCheckoutAfterCancellation } from "@/lib/payments/service";
+import { dispatchPendingOrderNotifications } from "@/lib/notifications/service";
 
 function adminOrderPath(orderNumber: string, state: string) {
   return `/admin/commandes/${encodeURIComponent(orderNumber)}?etat=${encodeURIComponent(state)}`;
@@ -29,6 +32,22 @@ export async function transitionOrderAction(formData: FormData) {
     await transitionOrderStatus(orderNumber, targetStatus, session.user.id);
   } catch {
     redirect(adminOrderPath(orderNumber, "transition-refusee"));
+  }
+  if (targetStatus === "CANCELLED") {
+    try {
+      await expireCheckoutAfterCancellation(orderNumber);
+    } catch {
+      revalidatePath("/admin");
+      revalidatePath("/admin/commandes");
+      revalidatePath(`/admin/commandes/${orderNumber}`);
+      revalidatePath(`/compte/commandes/${orderNumber}`);
+      redirect(adminOrderPath(orderNumber, "annulation-paiement-a-verifier"));
+    }
+  }
+  if (targetStatus === "DELIVERED") {
+    after(async () => {
+      await dispatchPendingOrderNotifications().catch(() => undefined);
+    });
   }
   revalidatePath("/admin");
   revalidatePath("/admin/commandes");

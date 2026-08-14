@@ -2,9 +2,12 @@ import "server-only";
 
 import { rm } from "node:fs/promises";
 import path from "node:path";
+import type { Readable } from "node:stream";
 
 import {
   deleteMediaObject,
+  getMediaObject,
+  headMediaObject,
   putMediaObject,
   readMediaObjectBytes,
   type MediaStorageReference,
@@ -28,15 +31,31 @@ function reference(value: string | PrivateOrderReference) {
 }
 
 export async function writePrivateOrderFile(storageKey: string, buffer: Buffer, checksumSha256: string) {
-  const stored = await putMediaObject({
-    scope: "private",
-    key: storageKey,
+  return writePrivateOrderMedia({
+    storageKey,
     body: buffer,
     contentLength: buffer.length,
     contentType: "image/webp",
     checksumSha256,
   });
-  return { ...stored, checksumSha256, visibility: "PRIVATE" as const };
+}
+
+export async function writePrivateOrderMedia(input: {
+  storageKey: string;
+  body: Uint8Array | Readable;
+  contentLength: number;
+  contentType: string;
+  checksumSha256: string;
+}) {
+  const stored = await putMediaObject({
+    scope: "private",
+    key: input.storageKey,
+    body: input.body,
+    contentLength: input.contentLength,
+    contentType: input.contentType,
+    checksumSha256: input.checksumSha256,
+  });
+  return { ...stored, checksumSha256: input.checksumSha256, visibility: "PRIVATE" as const };
 }
 
 export async function readPrivateOrderFile(input: string | PrivateOrderReference) {
@@ -45,6 +64,17 @@ export async function readPrivateOrderFile(input: string | PrivateOrderReference
 
 export function deletePrivateOrderFile(input: string | PrivateOrderReference) {
   return deleteMediaObject(reference(input));
+}
+
+export function statPrivateOrderFile(input: string | PrivateOrderReference) {
+  return headMediaObject(reference(input));
+}
+
+export function streamPrivateOrderFile(
+  input: string | PrivateOrderReference,
+  range?: { start: number; end: number },
+) {
+  return getMediaObject(reference(input), range);
 }
 
 export async function clearQaOrderStorage() {

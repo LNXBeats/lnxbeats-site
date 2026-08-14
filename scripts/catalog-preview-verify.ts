@@ -11,7 +11,8 @@ if (!backupDirectory?.startsWith("/private/tmp/lnx-studio-v0604-preview-backup-"
 const [{ assertApprovedCatalogDatabase }, { prisma }] = await Promise.all([
   import("@/scripts/catalog-guard"), import("@/lib/prisma"),
 ]);
-const protectedTables = ["users", "auth_sessions", "auth_accounts", "auth_verifications", "auth_rate_limits", "auth_registration_attempts", "customers", "orders", "order_events", "order_assets", "commercial_licenses"] as const;
+const protectedTables = ["users", "auth_sessions", "auth_accounts", "auth_verifications", "auth_rate_limits", "auth_registration_attempts", "customers", "orders", "order_events", "order_assets", "commercial_licenses", "payments", "provider_events"] as const;
+const expectedPostMigrationEmptyTables = ["order_notifications"] as const;
 function serialized(value: unknown) { return JSON.stringify(value, (_key, item) => typeof item === "bigint" ? item.toString() : item instanceof Date ? item.toISOString() : item); }
 
 async function run() {
@@ -22,6 +23,10 @@ async function run() {
     const content = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT * FROM "${table}" ORDER BY 1`);
     assert.deepEqual({ count: content.length, sha256: createHash("sha256").update(serialized(content)).digest("hex") }, expected[table], `${table} changed during catalogue migration.`);
   }
+  for (const table of expectedPostMigrationEmptyTables) {
+    const [{ count }] = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*) AS "count" FROM "${table}"`);
+    assert.equal(Number(count), 0, `${table} must be empty immediately after its additive migration.`);
+  }
   const ownerEmail = process.env.ADMIN_EMAIL;
   assert.ok(ownerEmail, "ADMIN_EMAIL must identify the owner for this local integrity check.");
   const owner = await prisma.user.findUnique({
@@ -30,7 +35,7 @@ async function run() {
   });
   assert.ok(owner);
   assert.equal(owner.emailVerified, true); assert.equal(owner.status, "ACTIVE"); assert.equal(owner.role, "ADMIN"); assert.ok(owner.displayName.trim().length > 0);
-  console.info(`Protected preview integrity passed: ${protectedTables.length}/${protectedTables.length} tables unchanged.`);
+  console.info(`Protected preview integrity passed: ${protectedTables.length}/${protectedTables.length} tables unchanged; ${expectedPostMigrationEmptyTables.length} new table(s) empty.`);
   console.info(`Owner account preserved: verified, ACTIVE, ADMIN, displayName present, ${owner.sessions.length} session(s).`);
 }
 

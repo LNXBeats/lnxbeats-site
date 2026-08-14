@@ -10,7 +10,8 @@ const [{ assertApprovedCatalogDatabase }, { prisma }] = await Promise.all([
 ]);
 
 const catalogTables = ["projects", "tracks", "platform_links", "credits", "confidence_annotations", "assets", "project_assets", "favorites"] as const;
-const protectedTables = ["users", "auth_sessions", "auth_accounts", "auth_verifications", "auth_rate_limits", "auth_registration_attempts", "customers", "orders", "order_events", "order_assets", "commercial_licenses"] as const;
+const protectedTables = ["users", "auth_sessions", "auth_accounts", "auth_verifications", "auth_rate_limits", "auth_registration_attempts", "customers", "orders", "order_events", "order_assets", "commercial_licenses", "payments", "provider_events"] as const;
+const expectedPostMigrationEmptyTables = ["order_notifications"] as const;
 
 function serialized(value: unknown) {
   return JSON.stringify(value, (_key, item) => typeof item === "bigint" ? item.toString() : item instanceof Date ? item.toISOString() : item);
@@ -43,7 +44,7 @@ async function run() {
   const catalogJson = serialized(catalog);
   await writeFile(join(directory, "catalog-logical-backup.json"), `${catalogJson}\n`, { mode: 0o600 });
   await writeFile(join(directory, "protected-integrity.json"), `${JSON.stringify(integrity, null, 2)}\n`, { mode: 0o600 });
-  await writeFile(join(directory, "manifest.json"), `${JSON.stringify({ target, createdAt: new Date().toISOString(), catalogSha256: createHash("sha256").update(catalogJson).digest("hex"), catalogTables, protectedTables }, null, 2)}\n`, { mode: 0o600 });
+  await writeFile(join(directory, "manifest.json"), `${JSON.stringify({ target, createdAt: new Date().toISOString(), catalogSha256: createHash("sha256").update(catalogJson).digest("hex"), catalogTables, protectedTables, expectedPostMigrationEmptyTables }, null, 2)}\n`, { mode: 0o600 });
   console.info(`Preview logical catalogue backup created: ${directory}`);
   console.info(`Protected integrity snapshot created for ${protectedTables.length} tables (no secret values written).`);
 }

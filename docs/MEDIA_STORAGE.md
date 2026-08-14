@@ -11,9 +11,9 @@ Le pilote local reste disponible pour le développement, les tests et la preview
 Deux buckets distincts sont obligatoires en production :
 
 - public : `catalog/covers/…`, `catalog/audio-previews/…` et futurs visuels publics ;
-- privé : `orders/<orderId>/…`, puis futurs `deliveries/` et `documents/`.
+- privé : `orders/<orderId>/…`, dont `deliveries/<uuid>.(mp3|wav)` et futurs documents.
 
-Les clés sont opaques, générées côté serveur et validées par une allowlist. Un nom client ne devient jamais une clé. Le bucket privé n’a aucune lecture anonyme. Les références de commande restent accessibles via la route authentifiée qui vérifie propriétaire ou `ADMIN`; connaître l’UUID ne suffit pas. L’interface sait générer des URLs signées privées de 30 à 900 secondes, mais aucune URL signée n’est persistée en base ni exposée tant que la future livraison ne l’exige pas.
+Les clés sont opaques, générées côté serveur et validées par une allowlist. Un nom client ne devient jamais une clé. Le bucket privé n’a aucune lecture anonyme. Les photos et livraisons de commande restent accessibles via les routes authentifiées qui vérifient propriétaire ou `ADMIN`; connaître l’UUID ne suffit pas. Les masters sont servis par l’application avec `private, no-store`, sans URL R2 publique ou signée persistée.
 
 ## Métadonnées PostgreSQL
 
@@ -23,7 +23,7 @@ Les anciens enregistrements reçoivent `LOCAL`/`local`. La migration déduit `PU
 
 ## Cohérence des remplacements
 
-Cover, preview audio et référence privée suivent la séquence :
+Cover, preview audio, photo privée et master de livraison suivent la séquence :
 
 1. valider/normaliser ;
 2. écrire le nouvel objet et vérifier sa taille ;
@@ -48,11 +48,13 @@ Le morceau source MP3/WAV (80 Mio maximum) est reçu en streaming dans un fichie
 
 La route publique conserve le même player et relaie le petit objet avec `GET`, `HEAD`, `Range`, `206`, `416`, `Accept-Ranges`, ETag SHA-256 et cache immutable. Elle ne charge pas le WAV en mémoire. Ce proxy même origine évite une configuration `next/image`/CORS et conserve les contrôles d’autorisation Admin. Une diffusion CDN directe pourra être activée plus tard pour les objets publics, après validation Safari d’un domaine précis.
 
-## Références de commande et futures livraisons
+## Références de commande et livraison privée
 
 Les images de référence restent limitées à 10 Mio, contrôlées par signature/MIME/extension, décodées, réencodées WebP sans métadonnées et enregistrées dans le bucket privé. Les réponses sont `private, no-store`, `nosniff` et utilisent un nom de téléchargement neutralisé. La route applique session active, email vérifié, relation commande et contrôle propriétaire/Admin centralisé.
 
-L’interface de stockage possède déjà les primitives de stream et URL signée courte nécessaires à un futur master WAV, mais V0.6.3 ne construit ni upload final, ni livraison, ni paiement. Un futur gros fichier devra préférer multipart ou PUT pré-signé avec taille/MIME/checksum imposés, plutôt qu’un buffer Node complet.
+V0.7.1 active le flux inverse `ADMIN → Client`. Un master MP3/WAV de 200 Mo maximum est reçu en multipart streamé vers un fichier temporaire privé, validé par taille, extension, MIME, signature et décodage FFmpeg, puis écrit dans le bucket R2 privé sous une clé opaque. La base conserve taille, type, durée et SHA-256 ; un seul `OrderAsset` de rôle `DELIVERY` peut être actif par commande. La publication `DELIVERED` reste impossible sans ce master.
+
+Le propriétaire d’une commande livrée et l’ADMIN lisent ou téléchargent le fichier uniquement via la route applicative authentifiée, compatible `HEAD` et `Range`. Les autres membres et les anonymes sont refusés de façon neutre. Aucune URL R2 publique ou signée n’est persistée, et aucun master n’est envoyé à Stripe ou joint aux notifications. Commander reste limité aux références image privées : aucun upload audio client n’est actif en V0.7.1.
 
 ## Configuration locale
 

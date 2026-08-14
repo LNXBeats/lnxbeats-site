@@ -31,6 +31,7 @@ lib/auth/           Validation, tokens, email, rôles, session et redirection
 lib/orders/         Domaine, prix, autorisations, stockage et services commande
 lib/catalog/        Requêtes, validation, mutations, migration et covers catalogue
 lib/email/          Templates transactionnels et transport capture QA
+lib/notifications/  Outbox idempotente et canaux EMAIL/SMS des commandes
 lib/auth.ts         Configuration Better Auth exclusivement serveur
 lib/prisma.ts       Singleton PostgreSQL exclusivement serveur
 prisma/             Schéma et migrations de la fondation de données
@@ -49,7 +50,9 @@ Les zones suivantes ont besoin de l’exécution client :
 - les formulaires d’authentification pour envoyer des mutations de même origine et annoncer des messages neutres ;
 - `LogoutButton` pour révoquer la session puis rafraîchir la navigation.
 
-Le formulaire Commander garde sa progression côté client mais enregistre explicitement les brouillons via des routes de même origine. Les prix, droits d’accès, limites et transitions sont recalculés côté serveur. Les photos passent par une validation binaire et un stockage privé ; elles ne sont jamais servies directement depuis `public/`.
+Le formulaire Commander garde sa progression côté client mais enregistre explicitement les brouillons via des routes de même origine. Les prix, droits d’accès, limites et transitions sont recalculés côté serveur. Les photos passent par une validation binaire et un stockage privé. Commander n’accepte aucun MP3/WAV client.
+
+La livraison suit le sens inverse : l’ADMIN dépose un master MP3/WAV validé par signature, MIME et FFmpeg, jusqu’à 200 Mo, dans R2 privé. Un seul `OrderAsset` `DELIVERY` reste actif ; le client propriétaire ne peut le télécharger qu’après publication et avant expiration via une route authentifiée avec Range. L’outbox `OrderNotification` sépare la confirmation Payment/Order de Resend et rend les emails propriétaire/livraison persistants et idempotents. Le canal SMS est préparé sans fournisseur configuré.
 
 ## Design system
 

@@ -9,6 +9,7 @@ import {
   normalizeAdminNote,
 } from "@/lib/admin/order-machine";
 import type { KnownOrderStatus } from "@/lib/orders/status";
+import { enqueueCustomerDeliveryNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deletePrivateOrderFile } from "@/lib/orders/storage";
 
@@ -21,26 +22,47 @@ export class AdminServiceError extends Error {
   }
 }
 
-export const adminOrderFilters = ["all", "attention", "active", "delivered", "closed"] as const;
+export const adminOrderFilters = ["attention", "active", "pending", "delivered", "closed", "all"] as const;
 export type AdminOrderFilter = (typeof adminOrderFilters)[number];
 
 const attentionStatuses: KnownOrderStatus[] = ["PAYMENT_CONFIRMED", "RECEIVED", "SUBMITTED", "REVIEWING", "REVISION_REQUESTED", "FIRST_VERSION_READY"];
 const activeStatuses: KnownOrderStatus[] = ["ACCEPTED", "IN_PROGRESS", "FIRST_VERSION_READY", "REVISION_REQUESTED", "FINALIZING"];
+const pendingStatuses: KnownOrderStatus[] = ["DRAFT", "AWAITING_PAYMENT"];
 const closedStatuses: KnownOrderStatus[] = ["REFUSED", "CANCELLED", "REFUND_PENDING", "REFUNDED"];
 const paymentReviewFailureCodeFilter = { startsWith: "WEBHOOK_" } as const;
 
 export function parseAdminOrderFilter(value: unknown): AdminOrderFilter {
   return typeof value === "string" && adminOrderFilters.includes(value as AdminOrderFilter)
     ? value as AdminOrderFilter
-    : "all";
+    : "attention";
 }
 
 function statusesForFilter(filter: AdminOrderFilter): KnownOrderStatus[] | undefined {
   if (filter === "attention") return attentionStatuses;
   if (filter === "active") return activeStatuses;
+  if (filter === "pending") return pendingStatuses;
   if (filter === "delivered") return ["DELIVERED"];
   if (filter === "closed") return closedStatuses;
   return undefined;
+}
+
+export async function listAdminPaymentReviewEvents() {
+  assertDatabaseConfigured();
+  return prisma.providerEvent.findMany({
+    where: { outcome: "REQUIRES_REVIEW" },
+    orderBy: [{ processedAt: "desc" }, { id: "desc" }],
+    take: 50,
+    select: {
+      id: true,
+      type: true,
+      processedAt: true,
+      payment: {
+        select: {
+          order: { select: { orderNumber: true, title: true, recipient: true } },
+        },
+      },
+    },
+  });
 }
 
 export async function getAdminOverview() {
@@ -128,7 +150,7 @@ export async function getAdminOrder(orderNumber: string) {
         include: { actor: { select: { displayName: true } } },
       },
       assets: {
-        where: { role: "REFERENCE" },
+        where: { role: { in: ["REFERENCE", "DELIVERY"] } },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
         include: { asset: true },
       },
@@ -153,6 +175,20 @@ export async function getAdminOrder(orderNumber: string) {
           },
           providerCheckoutId: true,
           providerPaymentId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      notifications: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true,
+          kind: true,
+          channel: true,
+          status: true,
+          attempts: true,
+          lastErrorCode: true,
+          sentAt: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -219,6 +255,14 @@ export async function transitionOrderStatus(orderNumber: string, requestedStatus
     if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");
     const transition = getAdminOrderTransition(order.status, requestedStatus);
     if (!transition) throw new AdminServiceError("Transition de statut interdite.", "TRANSITION_NOT_ALLOWED");
+    if (transition.to === "DELIVERED") {
+      const deliveries = await transaction.orderAsset.count({
+        where: { orderId: order.id, role: "DELIVERY", asset: { type: "AUDIO", visibility: "PRIVATE" } },
+      });
+      if (deliveries !== 1) {
+        throw new AdminServiceError("Un master privé valide est requis avant la publication.", "DELIVERY_REQUIRED");
+      }
+    }
     const now = new Date();
     const updated = await transaction.order.updateMany({
       where: { id: order.id, status: order.status },
@@ -238,6 +282,9 @@ export async function transitionOrderStatus(orderNumber: string, requestedStatus
         actorUserId,
       },
     });
+    if (transition.to === "DELIVERED") {
+      await enqueueCustomerDeliveryNotification(transaction, order);
+    }
     return transition.to;
   });
 }

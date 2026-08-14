@@ -151,6 +151,9 @@ async function cleanupFixtures() {
       });
     }
     if (scope.orderIds.length > 0) {
+      await transaction.orderNotification.deleteMany({
+        where: { orderId: { in: scope.orderIds } },
+      });
       await transaction.orderEvent.deleteMany({
         where: { orderId: { in: scope.orderIds } },
       });
@@ -190,7 +193,7 @@ async function cleanupFixtures() {
 
 async function assertNoFixtures() {
   fixtureStage = "cleanup-postcondition";
-  const [users, accounts, sessions, orders, events, assets, licenses, payments, providerEvents, rateLimits] = await Promise.all([
+  const [users, accounts, sessions, orders, events, assets, licenses, payments, providerEvents, notifications, rateLimits] = await Promise.all([
     prisma.user.count({ where: { OR: [{ id: QA_USER_ID }, { email: QA_EMAIL }] } }),
     prisma.account.count({ where: { OR: [{ id: QA_ACCOUNT_ID }, { userId: QA_USER_ID }] } }),
     prisma.session.count({ where: { userId: QA_USER_ID } }),
@@ -202,10 +205,13 @@ async function assertNoFixtures() {
     prisma.providerEvent.count({
       where: { payment: { orderId: { in: scenarios.map(({ orderId }) => orderId) } } },
     }),
+    prisma.orderNotification.count({
+      where: { orderId: { in: scenarios.map(({ orderId }) => orderId) } },
+    }),
     prisma.rateLimit.count({ where: { key: { in: [...fixtureRateLimitKeys] } } }),
   ]);
   assert.ok(
-    [users, accounts, sessions, orders, events, assets, licenses, payments, providerEvents, rateLimits]
+    [users, accounts, sessions, orders, events, assets, licenses, payments, providerEvents, notifications, rateLimits]
       .every((count) => count === 0),
     "Stripe browser QA fixture cleanup is incomplete.",
   );

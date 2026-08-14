@@ -25,6 +25,7 @@ export const orderOffer = {
   maxActiveDrafts: 10,
   maxPhotos: 10,
   maxPhotoBytes: 10 * 1024 * 1024,
+  maxDeliveryBytes: 200 * 1024 * 1024,
   maxImageWidth: 12_000,
   maxImageHeight: 12_000,
   maxImagePixels: 40_000_000,

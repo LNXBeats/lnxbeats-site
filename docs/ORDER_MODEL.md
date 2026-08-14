@@ -49,12 +49,12 @@ Chaque lecture ou mutation relit l’utilisateur depuis la session serveur. Un m
 
 Les routes privées et leurs images sont dynamiques, `noindex`, hors sitemap et protégées contre l’IDOR. Les notes `INTERNAL` d’un `OrderEvent` ne sont jamais sérialisées vers le client ; seuls les événements `CLIENT` alimentent la timeline membre.
 
-## Photos de référence
+## Références privées image
 
 Les règles sont cumulatives :
 
 - 10 photos maximum par commande ;
-- 10 Mio maximum par fichier avant décodage ;
+- 10 Mio maximum par photo avant décodage ;
 - JPEG, PNG ou WebP uniquement ;
 - extension, `Content-Type`, signature binaire et décodage réel cohérents ;
 - dimensions maximales 12 000 × 12 000 et 40 millions de pixels ;
@@ -66,7 +66,7 @@ Les règles sont cumulatives :
 
 La V0.6 fournit seulement un adaptateur de stockage privé local pour développement et QA. Il refuse la production. Un stockage objet privé futur devra conserver la même interface, des clés non prévisibles et des URLs éphémères ou un proxy autorisé.
 
-Le membre confirme qu’il peut communiquer les images et qu’elles concernent le projet. Cette confirmation ne remplace pas une analyse juridique des droits à l’image, de la conservation ni des demandes d’effacement.
+Le membre confirme qu’il peut communiquer les images et qu’elles concernent le projet. Cette confirmation ne remplace pas une analyse juridique des droits, de la conservation ni des demandes d’effacement. Commander ne propose aucun upload MP3/WAV client.
 
 Le décodage/réencodage réduit la surface d’attaque mais ne constitue pas une promesse « sans virus ». Un scan antivirus devra être évalué avant d’accepter d’autres formats ou documents.
 
@@ -80,7 +80,7 @@ L’histoire principale accepte 30 à 10 000 caractères. Le titre de repère es
 | --- | --- | --- |
 | `DRAFT` | Brouillon | Modifiable et supprimable par son propriétaire. |
 | `AWAITING_PAYMENT` | En attente de paiement | Demande finalisée ; aucun paiement encore disponible. |
-| `PAYMENT_CONFIRMED` | Paiement confirmé | Réservé à une future preuve serveur. |
+| `PAYMENT_CONFIRMED` | Paiement confirmé | Preuve Stripe serveur reçue ; création prête à être prise en charge. |
 | `SUBMITTED` / `RECEIVED` | Histoire reçue | Réception métier. |
 | `REVIEWING` | En cours d’étude | Analyse par LNX Beats. |
 | `ACCEPTED` | Projet accepté | Périmètre accepté. |
@@ -88,7 +88,7 @@ L’histoire principale accepte 30 à 10 000 caractères. Le titre de repère es
 | `FIRST_VERSION_READY` | Première version prête | Version soumise au retour prévu. |
 | `REVISION_REQUESTED` | Retour demandé | Retour inclus consommé selon les règles serveur. |
 | `FINALIZING` | Finalisation | Préparation de la livraison. |
-| `DELIVERED` | Livré | Livraison privée future. |
+| `DELIVERED` | Livré | Master privé publié pour le propriétaire. |
 | `REFUSED` | Demande refusée | Le projet n’est pas accepté. |
 | `CANCELLED` | Demande annulée | Projet arrêté. |
 | `REFUND_PENDING` / `REFUNDED` | Remboursement | Réservé à une architecture de paiement future. |
@@ -117,9 +117,11 @@ Le service `requestCommercialLicense` vérifie la session, la propriété, le st
 
 Le texte produit reste prudent : « Cession/licence exclusive de droits patrimoniaux d’exploitation, selon contrat spécifique. » Le droit moral reste hors du dispositif. Aucune part SACEM n’est attribuée automatiquement ; une éventuelle répartition suppose une contribution réelle et un accord distinct.
 
-## Livraison WAV future
+## Livraison audio privée
 
-La cible produit est un WAV privé lié à la commande, visible seulement par son propriétaire et l’administration, pendant six mois à partir de `deliveredAt`. Le modèle impose la cohérence de `downloadExpiresAt`, mais aucun fichier audio, bouton ou URL de livraison n’est actif en V0.6. Une purge ou révocation devra préserver les obligations comptables et la traçabilité minimale.
+V0.7.1 active un master MP3/WAV privé lié à la commande par le rôle `DELIVERY`. Seul l’ADMIN peut le déposer ou le remplacer, sur une Order payée encore en cours, après validation de la taille (200 Mo maximum), de l’extension, du MIME, de la signature et du flux audio par FFmpeg. Le binaire vit uniquement dans R2 privé sous une clé opaque et ne part jamais vers Stripe.
+
+La publication vers `DELIVERED` exige exactement un master actif. Le propriétaire et l’ADMIN le servent via l’application ; l’accès membre exige aussi la propriété, le statut livré et `downloadExpiresAt` futur. La fenêtre initiale est de six mois à partir de `deliveredAt`. Un remplacement avant clôture est audité et atomique ; une future purge devra toujours préserver les obligations comptables et la traçabilité minimale.
 
 ## Paiements, facture et LNX Gestion — futur
 
@@ -129,9 +131,9 @@ LNX Gestion pourra recevoir des événements métier via une intégration authen
 
 Avant toute activation commerciale, il faut confirmer le régime de TVA associé au numéro communiqué `FR14106870850`, les mentions obligatoires, la rétractation, le commencement anticipé d’une prestation personnalisée, les annulations, remboursements, preuves de consentement, délais, licence et médiation.
 
-## Notifications futures
+## Notifications de commande
 
-Les changements de commande peuvent justifier des messages transactionnels, séparés des alertes artistiques et du marketing. Chaque envoi futur devra être idempotent, traçable sans contenu sensible et déclenché seulement après commit de la transaction. Aucun email de commande n’est envoyé en V0.6.
+`OrderNotification` porte une outbox transactionnelle idempotente pour l’email propriétaire après paiement et l’email client après publication. Le transport s’exécute après la transaction métier ; son échec ne régresse ni Payment, ni Order. Aucun payload fournisseur, secret Stripe ou master n’est stocké/joint. Le canal SMS est préparé mais sans provider configuré.
 
 ## Tests et environnement jetable
 

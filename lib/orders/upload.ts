@@ -6,6 +6,7 @@ import { orderOffer } from "@/data/order-offer";
 import { sanitizeOriginalFilename } from "@/lib/orders/domain";
 
 export type DetectedImageType = "JPEG" | "PNG" | "WEBP";
+export type DetectedOrderAudioType = "MP3" | "WAV";
 
 export class OrderUploadError extends Error {
   constructor(message: string, readonly code: string) {
@@ -23,6 +24,13 @@ export type NormalizedOrderImage = {
   height: number;
   sizeBytes: number;
   checksum: string;
+};
+
+export type ValidatedOrderAudioIdentity = {
+  originalFilename: string;
+  detectedType: DetectedOrderAudioType;
+  mimeType: "audio/mpeg" | "audio/wav";
+  extension: "mp3" | "wav";
 };
 
 const acceptedExtensions: Record<DetectedImageType, ReadonlySet<string>> = {
@@ -56,6 +64,57 @@ export function detectImageType(buffer: Uint8Array): DetectedImageType | null {
     && Buffer.from(buffer.subarray(8, 12)).toString("ascii") === "WEBP"
   ) return "WEBP";
   return null;
+}
+
+export function detectOrderAudioType(buffer: Uint8Array): DetectedOrderAudioType | null {
+  if (
+    buffer.length >= 3
+    && Buffer.from(buffer.subarray(0, 3)).toString("ascii") === "ID3"
+  ) return "MP3";
+  if (buffer.length >= 2 && buffer[0] === 0xff && (buffer[1]! & 0xe0) === 0xe0) return "MP3";
+  if (
+    buffer.length >= 12
+    && Buffer.from(buffer.subarray(0, 4)).toString("ascii") === "RIFF"
+    && Buffer.from(buffer.subarray(8, 12)).toString("ascii") === "WAVE"
+  ) return "WAV";
+  return null;
+}
+
+export function validateOrderAudioIdentity(input: {
+  signature: Uint8Array;
+  originalFilename: string;
+  declaredMimeType: string;
+  sizeBytes: number;
+}): ValidatedOrderAudioIdentity {
+  if (!Number.isSafeInteger(input.sizeBytes) || input.sizeBytes <= 0) {
+    throw new OrderUploadError("Le fichier audio est vide.", "EMPTY_FILE");
+  }
+  if (input.sizeBytes > orderOffer.maxDeliveryBytes) {
+    throw new OrderUploadError("Le fichier de livraison doit peser au maximum 200 Mo.", "FILE_TOO_LARGE");
+  }
+  const detectedType = detectOrderAudioType(input.signature);
+  if (!detectedType) {
+    throw new OrderUploadError("Le fichier n’est pas un MP3 ou WAV authentique.", "UNSUPPORTED_SIGNATURE");
+  }
+  const originalFilename = sanitizeOriginalFilename(input.originalFilename);
+  const extension = originalFilename.includes(".") ? originalFilename.split(".").pop()?.toLowerCase() ?? "" : "";
+  const expectedExtension = detectedType === "MP3" ? "mp3" : "wav";
+  if (extension !== expectedExtension) {
+    throw new OrderUploadError("L’extension ne correspond pas au contenu réel du fichier audio.", "EXTENSION_MISMATCH");
+  }
+  const declaredMimeType = input.declaredMimeType.toLowerCase();
+  const acceptedMimeTypes = detectedType === "MP3"
+    ? new Set(["audio/mpeg", "audio/mp3", "audio/x-mpeg"])
+    : new Set(["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]);
+  if (!acceptedMimeTypes.has(declaredMimeType)) {
+    throw new OrderUploadError("Le type annoncé ne correspond pas au contenu réel du fichier audio.", "MIME_MISMATCH");
+  }
+  return {
+    originalFilename,
+    detectedType,
+    mimeType: detectedType === "MP3" ? "audio/mpeg" : "audio/wav",
+    extension: expectedExtension,
+  };
 }
 
 export async function normalizeOrderImage(input: {

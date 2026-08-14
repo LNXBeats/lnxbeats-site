@@ -205,6 +205,9 @@ test("local media storage separates scopes, streams ranges, replaces and deletes
 test("storage key and Content-Disposition policies refuse traversal and header injection", () => {
   assert.doesNotThrow(() => assertMediaStorageKey("public", "catalog/covers/00000000-0000-4000-8000-000000000001.webp"));
   assert.doesNotThrow(() => assertMediaStorageKey("private", "orders/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002.webp"));
+  const privateDelivery = "orders/00000000-0000-4000-8000-000000000001/deliveries/00000000-0000-4000-8000-000000000003.wav";
+  assert.doesNotThrow(() => assertMediaStorageKey("private", privateDelivery));
+  assert.throws(() => assertMediaStorageKey("public", privateDelivery), MediaStorageError);
   for (const key of ["../secret", "catalog/covers/cover.webp", "orders/id/../../secret", "catalog\\covers\\secret.webp"]) {
     assert.throws(() => assertMediaStorageKey("public", key), MediaStorageError);
     assert.throws(() => assertMediaStorageKey("private", key), MediaStorageError);

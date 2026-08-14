@@ -1,6 +1,6 @@
 export const orderStatusPresentation = {
   DRAFT: { label: "Brouillon", next: "Compléter ou finaliser le brief." },
-  AWAITING_PAYMENT: { label: "En attente de paiement", next: "Le paiement n’est pas encore disponible dans cette version." },
+  AWAITING_PAYMENT: { label: "En attente de paiement", next: "Finalisez ou reprenez le paiement de cette commande." },
   PAYMENT_CONFIRMED: { label: "Paiement confirmé", next: "L’histoire va être transmise à LNX Beats." },
   RECEIVED: { label: "Histoire reçue", next: "LNX Beats va étudier le brief." },
   SUBMITTED: { label: "Histoire reçue", next: "LNX Beats va étudier le brief." },

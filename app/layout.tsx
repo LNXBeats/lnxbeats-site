@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { QuickAccessBar } from "@/components/quick-access-bar";
+import { OrderJourneyProvider } from "@/components/order-journey-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteConfig } from "@/data/site";
@@ -58,10 +59,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="fr">
       <body>
         <a className="skip-link" href="#contenu">Aller au contenu</a>
-        <SiteHeader />
-        <QuickAccessBar />
-        <main id="contenu">{children}</main>
-        <SiteFooter />
+        <OrderJourneyProvider>
+          <SiteHeader />
+          <QuickAccessBar />
+          <main id="contenu">{children}</main>
+          <SiteFooter />
+        </OrderJourneyProvider>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializedStructuredData }} />
       </body>
     </html>

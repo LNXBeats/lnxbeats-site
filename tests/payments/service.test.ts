@@ -121,8 +121,8 @@ test("creates Checkout only after reserving a local server-priced attempt", asyn
       },
     ],
     customerEmail: admin.email,
-    successUrl: "https://lnxbeats.example.test/compte/commandes/LNX-2026-000001?paiement=retour&session_id={CHECKOUT_SESSION_ID}",
-    cancelUrl: "https://lnxbeats.example.test/compte/commandes/LNX-2026-000001?paiement=annule",
+    successUrl: "https://lnxbeats.example.test/commande/LNX-2026-000001/confirmation?paiement=retour&session_id={CHECKOUT_SESSION_ID}",
+    cancelUrl: "https://lnxbeats.example.test/commande/LNX-2026-000001/confirmation?paiement=annule",
   });
   assert.equal(fake.recorded[0]?.paymentId, attempt.paymentId);
   assert.equal(fake.recorded[0]?.session.paymentIntentId, "pi_test_payment");
@@ -156,16 +156,14 @@ test("retries and double clicks reuse the persisted payment idempotency key", as
   assert.equal(fake.recorded.length, 2);
 });
 
-test("rejects non-admin actors and malformed order numbers before any side effect", async () => {
+test("accepts a customer owner and rejects malformed order numbers before any side effect", async () => {
   const events: string[] = [];
   const fake = dependencies(events);
   const member = { ...admin, role: "MEMBER" } as const satisfies OrderActor;
 
-  await assert.rejects(
-    createStripeCheckoutForOrder(member, attempt.orderNumber, fake.value),
-    (error: unknown) => error instanceof PaymentServiceError
-      && error.code === "PAYMENT_ACCESS_DENIED",
-  );
+  await createStripeCheckoutForOrder(member, attempt.orderNumber, fake.value);
+  assert.equal(events.length > 0, true);
+  events.length = 0;
   await assert.rejects(
     createStripeCheckoutForOrder(admin, "../../another-order", fake.value),
     (error: unknown) => error instanceof PaymentServiceError
@@ -201,8 +199,8 @@ test("derives both return URLs from the canonical server origin", () => {
     AUTH_URL: "https://preview.example.test/base/path?ignored=yes",
     SITE_URL: "https://public.example.test",
   }), {
-    successUrl: "https://preview.example.test/compte/commandes/LNX-2026-000001?paiement=retour&session_id={CHECKOUT_SESSION_ID}",
-    cancelUrl: "https://preview.example.test/compte/commandes/LNX-2026-000001?paiement=annule",
+    successUrl: "https://preview.example.test/commande/LNX-2026-000001/confirmation?paiement=retour&session_id={CHECKOUT_SESSION_ID}",
+    cancelUrl: "https://preview.example.test/commande/LNX-2026-000001/confirmation?paiement=annule",
   });
   assert.throws(() => paymentReturnUrls(attempt.orderNumber, {
     AUTH_URL: "http://public.example.test",

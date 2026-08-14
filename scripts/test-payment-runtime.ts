@@ -4,12 +4,15 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
 import { transitionOrderStatus } from "@/lib/admin/service";
-import type { OrderActor } from "@/lib/orders/domain";
+import type { OrderActor, OrderDraftInput } from "@/lib/orders/domain";
+import { finalizeOrder, saveDraftOrder } from "@/lib/orders/service";
 import {
+  createPaymentDatabaseEditRepository,
   createStripeCheckoutForOrder,
   createPaymentDatabaseCheckoutRepository,
   paymentDatabaseCheckoutRepository,
   PaymentServiceError,
+  prepareOrderForEditing,
 } from "@/lib/payments/service";
 import type {
   HostedCheckoutRequest,
@@ -114,6 +117,7 @@ async function cleanupFixtures() {
       await transaction.payment.deleteMany({ where: { id: { in: paymentIds } } });
     }
     if (orderIds.length > 0) {
+      await transaction.orderNotification.deleteMany({ where: { orderId: { in: orderIds } } });
       await transaction.orderAsset.deleteMany({ where: { orderId: { in: orderIds } } });
       await transaction.commercialLicense.deleteMany({ where: { orderId: { in: orderIds } } });
       await transaction.orderEvent.deleteMany({ where: { orderId: { in: orderIds } } });
@@ -133,16 +137,18 @@ async function cleanupFixtures() {
 }
 
 async function assertFixturesClean(stage: string) {
-  const [users, orders, events] = await Promise.all([
+  const [users, orders, events, notifications] = await Promise.all([
     prisma.user.count({ where: { email: { in: [...QA_EMAILS] } } }),
     prisma.order.count({ where: { orderNumber: { in: [...QA_ORDER_NUMBERS] } } }),
     prisma.providerEvent.count({
       where: { providerEventId: { startsWith: QA_EVENT_PREFIX } },
     }),
+    prisma.orderNotification.count({ where: { order: { orderNumber: { in: [...QA_ORDER_NUMBERS] } } } }),
   ]);
   assert.equal(users, 0, `${stage}: the disposable payment user remains.`);
   assert.equal(orders, 0, `${stage}: disposable payment orders remain.`);
   assert.equal(events, 0, `${stage}: disposable Stripe event receipts remain.`);
+  assert.equal(notifications, 0, `${stage}: disposable Order notifications remain.`);
 }
 
 function createMockGateway() {
@@ -372,7 +378,7 @@ async function run() {
           displayName: "LNX Payment Runtime QA",
           emailVerified: true,
           emailVerifiedAt: new Date(),
-          role: "ADMIN",
+          role: "MEMBER",
           status: "ACTIVE",
         },
       }),
@@ -382,7 +388,7 @@ async function run() {
           displayName: "LNX Payment Other QA",
           emailVerified: true,
           emailVerifiedAt: new Date(),
-          role: "ADMIN",
+          role: "MEMBER",
           status: "ACTIVE",
         },
       }),
@@ -392,7 +398,7 @@ async function run() {
       id: user.id,
       email: user.email,
       name: user.displayName,
-      role: "ADMIN",
+      role: "MEMBER",
       status: "ACTIVE",
       emailVerified: true,
     } satisfies OrderActor;
@@ -403,7 +409,7 @@ async function run() {
       id: secondUser.id,
       email: secondUser.email,
       name: secondUser.displayName,
-      role: "ADMIN",
+      role: "MEMBER",
       status: "ACTIVE",
       emailVerified: true,
     } satisfies OrderActor;
@@ -428,7 +434,7 @@ async function run() {
     assert.equal(await prisma.payment.count({
       where: { order: { orderNumber: { in: [...QA_ORDER_NUMBERS] } } },
     }), 0);
-    passed.push("IDOR rejected for a second verified ADMIN without gateway side effects");
+    passed.push("IDOR rejected for a second verified MEMBER without gateway side effects");
 
     for (const fixture of pricingFixtures.slice(0, 3)) {
       const result = await createStripeCheckoutForOrder(
@@ -546,6 +552,47 @@ async function run() {
       },
     }));
     passed.push("Payment and ProviderEvent SQL checks plus one-active-attempt index");
+
+    let expiredCheckoutId = "";
+    await prepareOrderForEditing(actor, QA_ORDER_NUMBERS[3], {
+      repository: createPaymentDatabaseEditRepository(prisma),
+      gateway: {
+        async expireHostedCheckout(checkoutId) {
+          expiredCheckoutId = checkoutId;
+          return { id: checkoutId, status: "expired" };
+        },
+      },
+      assertQaRuntime: async () => {},
+    });
+    assert.equal(expiredCheckoutId, pendingNinety.providerCheckoutId);
+    const changedInput = {
+      title: "Payment runtime repriced",
+      recipient: "Personne fictive QA",
+      occasion: "Modification avant paiement",
+      brief: "Cette commande fictive vérifie que la session à 90 euros est expirée avant le nouveau snapshot.",
+      musicalDirection: "Pop",
+      emotion: "Lumineuse",
+      importantDetails: "Aucune donnée personnelle réelle.",
+      wordsToInclude: "",
+      avoid: "",
+      pronunciationNotes: "",
+      coverIncluded: true,
+      priorityProcessing: false,
+    } satisfies OrderDraftInput;
+    await saveDraftOrder(actor, QA_ORDER_NUMBERS[3], changedInput);
+    await finalizeOrder(actor, QA_ORDER_NUMBERS[3], changedInput);
+    await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[3], dependencies);
+    const repricedAttempts = await prisma.payment.findMany({
+      where: { orderId: pendingNinety.orderId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, status: true, amountCents: true, providerCheckoutId: true },
+    });
+    assert.deepEqual(repricedAttempts.map(({ status, amountCents }) => ({ status, amountCents })), [
+      { status: "EXPIRED", amountCents: 9_000 },
+      { status: "PENDING", amountCents: 6_000 },
+    ]);
+    assert.notEqual(repricedAttempts[0]?.providerCheckoutId, repricedAttempts[1]?.providerCheckoutId);
+    passed.push("editing expires the old Checkout before a new server-priced snapshot and Session");
 
     const fifty = attempts.find(({ amountCents }) => amountCents === 5_000);
     assert.ok(fifty?.providerCheckoutId && fifty.providerPaymentId);
@@ -706,6 +753,13 @@ async function run() {
       ["EXPIRED", "FAILED", "PENDING"],
     );
     passed.push("card refusal stays FAILED on the same Checkout until expiration; terminal failure permits a fresh retry");
+
+    // The runtime deliberately exercises more than the public quota of ten
+    // Checkout requests. Reset only this disposable actor's bucket before the
+    // independent Admin/webhook race scenario; production limits stay intact.
+    await prisma.rateLimit.deleteMany({
+      where: { key: `payments:checkout:${actor.id}` },
+    });
 
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[4], dependencies);
     const racedPayment = await prisma.payment.findFirstOrThrow({

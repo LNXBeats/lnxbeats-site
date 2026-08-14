@@ -30,7 +30,7 @@ export default function PrivacyPage() {
             { status: "À FOURNIR", text: "Hébergeur, fournisseur email futur et liste des sous-traitants de production." },
             { status: "À VALIDER", text: "Politique des cookies de session, sécurité, consentement et préférences de notifications." },
             { status: "À VALIDER", text: "Bases légales et durées de conservation des briefs, commandes, événements et photos, ainsi que la purge des brouillons abandonnés." },
-            { status: "À VALIDER", text: "Règles futures des paiements, factures, livraisons WAV privées et notifications ; aucun de ces traitements n’est actif dans cette version." },
+            { status: "À VALIDER", text: "Bases légales, durées et mentions définitives des paiements Test, livraisons audio privées et notifications transactionnelles avant toute activation publique." },
           ],
         },
       ]}

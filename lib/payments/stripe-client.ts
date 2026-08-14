@@ -33,6 +33,10 @@ export interface StripeCheckoutGateway {
   retrieveHostedCheckout(checkoutId: string): Promise<HostedCheckoutSession>;
 }
 
+export interface StripeCheckoutLifecycleGateway {
+  expireHostedCheckout(checkoutId: string, idempotencyKey: string): Promise<{ id: string; status: "expired" }>;
+}
+
 export class StripeCheckoutClientError extends Error {
   constructor(readonly code: "UNAVAILABLE" | "INVALID_RESPONSE") {
     super("Stripe Checkout is unavailable.");
@@ -144,6 +148,35 @@ export function createStripeCheckoutGateway(): StripeCheckoutGateway {
     async retrieveHostedCheckout(checkoutId) {
       try {
         return hostedCheckoutSession(await stripe.checkout.sessions.retrieve(checkoutId));
+      } catch (error) {
+        if (error instanceof StripeCheckoutClientError) throw error;
+        throw new StripeCheckoutClientError("UNAVAILABLE");
+      }
+    },
+  };
+}
+
+export function createStripeCheckoutLifecycleGateway(): StripeCheckoutLifecycleGateway {
+  let configuration;
+  try {
+    configuration = assertPaymentServerEnvironment();
+  } catch {
+    throw new StripeCheckoutClientError("UNAVAILABLE");
+  }
+  const stripe = new Stripe(configuration.secretKey, {
+    apiVersion: STRIPE_API_VERSION,
+    maxNetworkRetries: 2,
+    timeout: 20_000,
+    telemetry: false,
+  });
+  return {
+    async expireHostedCheckout(checkoutId, idempotencyKey) {
+      try {
+        const session = await stripe.checkout.sessions.expire(checkoutId, {}, { idempotencyKey });
+        if (session.id !== checkoutId || session.livemode || session.status !== "expired") {
+          throw new StripeCheckoutClientError("INVALID_RESPONSE");
+        }
+        return { id: session.id, status: "expired" };
       } catch (error) {
         if (error instanceof StripeCheckoutClientError) throw error;
         throw new StripeCheckoutClientError("UNAVAILABLE");

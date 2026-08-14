@@ -137,6 +137,23 @@ enum OrderAssetRole {
   DOCUMENT
 }
 
+enum OrderNotificationKind {
+  OWNER_NEW_ORDER
+  CUSTOMER_DELIVERY_READY
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
 enum OrderStatus {
   DRAFT
   AWAITING_PAYMENT
@@ -537,12 +554,33 @@ model Order {
   assets             OrderAsset[]
   commercialLicenses CommercialLicense[]
   payments           Payment[]
+  notifications      OrderNotification[]
 
   @@index([status, createdAt])
   @@index([userId])
   @@index([userId, status, updatedAt])
   @@index([customerId])
   @@map("orders")
+}
+
+model OrderNotification {
+  id             String                @id @default(uuid()) @db.Uuid
+  orderId        String                @db.Uuid
+  kind           OrderNotificationKind
+  channel        NotificationChannel
+  recipient      String?               @db.VarChar(320)
+  idempotencyKey String                @unique @db.VarChar(255)
+  status         NotificationStatus    @default(PENDING)
+  attempts       Int                   @default(0)
+  lastErrorCode  String?               @db.VarChar(80)
+  sentAt         DateTime?             @db.Timestamptz(3)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime              @updatedAt @db.Timestamptz(3)
+  order          Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt])
+  @@index([orderId, kind, channel])
+  @@map("order_notifications")
 }
 
 model Payment {

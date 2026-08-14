@@ -57,6 +57,7 @@ async function cleanup() {
   await prisma.$transaction(async (transaction) => {
     await transaction.providerEvent.deleteMany();
     await transaction.payment.deleteMany();
+    await transaction.orderNotification.deleteMany();
     await transaction.orderAsset.deleteMany();
     await transaction.commercialLicense.deleteMany();
     await transaction.orderEvent.deleteMany();
@@ -171,6 +172,7 @@ async function run() {
     const adminDetail = await getAdminOrder(draft.orderNumber);
     assert.equal(adminDetail?.events.some(({ visibility }) => visibility === "INTERNAL"), true);
     assert.equal(adminDetail?.payments.length, 1);
+    assert.deepEqual(adminDetail?.notifications, []);
     assert.deepEqual(Object.keys(adminDetail?.payments[0] ?? {}).sort(), [
       "amountCents", "createdAt", "currency", "events", "failureCode", "id", "mode", "paymentMethod", "pricingVersion", "provider",
       "providerCheckoutId", "providerPaymentId", "status", "updatedAt",

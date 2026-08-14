@@ -10,11 +10,12 @@ type Transition = {
   sensitive?: boolean;
 };
 
-export function AdminOrderActions({ orderNumber, transitions, deletionEligible, deletionReason }: {
+export function AdminOrderActions({ orderNumber, transitions, deletionEligible, deletionReason, emptyReason }: {
   orderNumber: string;
   transitions: readonly Transition[];
   deletionEligible: boolean;
   deletionReason: string;
+  emptyReason?: string;
 }) {
   const titleId = useId();
   const descriptionId = useId();
@@ -46,8 +47,8 @@ export function AdminOrderActions({ orderNumber, transitions, deletionEligible, 
         <form key={transition.to} action={transitionOrderAction}><input type="hidden" name="orderNumber" value={orderNumber} /><input type="hidden" name="targetStatus" value={transition.to} /><button type="submit">{transition.label} <span aria-hidden="true">→</span></button></form>
       ))}
       {deletionEligible ? <button type="button" className="admin-danger-action" onClick={(event) => openDeletion(event.currentTarget)}>Supprimer définitivement</button> : null}
-    </div> : <p>Aucune transition métier disponible depuis ce statut.</p>}
-    {!deletionEligible && (transitions.length === 0) ? <p className="admin-action-reason">{deletionReason}</p> : null}
+    </div> : <p>{emptyReason ?? "Aucune transition métier disponible depuis ce statut."}</p>}
+    {!deletionEligible && (transitions.length === 0) && !emptyReason ? <p className="admin-action-reason">{deletionReason}</p> : null}
 
     <dialog ref={transitionDialog} className="admin-confirm-dialog" aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={(event) => { event.preventDefault(); transitionDialog.current?.close(); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); transitionDialog.current?.close(); } }} onClose={restoreFocus}>
       <h2 id={titleId}>{selectedTransition?.to === "CANCELLED" ? "Confirmer l’annulation de cette commande ?" : `Confirmer : ${selectedTransition?.label ?? "cette action"} ?`}</h2>

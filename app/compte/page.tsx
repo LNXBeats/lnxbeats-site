@@ -6,6 +6,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { ProfileForm } from "@/components/auth/profile-form";
 import { Container } from "@/components/container";
 import { requireVerifiedUser } from "@/lib/auth/session";
+import { clientOrderAction, clientPaymentPresentation } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { listMemberOrders } from "@/lib/orders/service";
 import { completedOrderStatuses, orderStatusPresentation } from "@/lib/orders/status";
@@ -33,8 +34,9 @@ export default async function AccountPage() {
   };
   const orders = await listMemberOrders(actor);
   const drafts = orders.filter((order) => order.status === "DRAFT");
+  const awaitingPayment = orders.filter((order) => order.status === "AWAITING_PAYMENT");
   const completed = orders.filter((order) => completedOrderStatuses.has(order.status));
-  const active = orders.filter((order) => order.status !== "DRAFT" && !completedOrderStatuses.has(order.status));
+  const active = orders.filter((order) => !["DRAFT", "AWAITING_PAYMENT"].includes(order.status) && !completedOrderStatuses.has(order.status));
 
   return (
     <section className="auth-shell account-shell">
@@ -61,6 +63,7 @@ export default async function AccountPage() {
               </div>
             ) : (
               <div className="member-order-groups">
+                <OrderGroup title="Paiement et confirmation" orders={awaitingPayment} />
                 <OrderGroup title="Demandes actives" orders={active} />
                 <OrderGroup title="Brouillons" orders={drafts} draft />
                 <OrderGroup title="Terminées ou arrêtées" orders={completed} />
@@ -109,9 +112,9 @@ function OrderGroup({ title, orders, draft = false }: { title: string; orders: A
             <li key={order.orderNumber}>
               <Link href={href}>
                 <span><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small></span>
-                <span><em>{presentation.label}</em><strong>{formatEuro(order.totalCents)}</strong></span>
+                <span><em>{presentation.label}</em><small>{clientPaymentPresentation(order)}</small><strong>{formatEuro(order.totalCents)}</strong></span>
               </Link>
-              <p>{presentation.next}</p>
+              <p><strong>Options :</strong> {[order.coverIncluded ? "Cover" : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}. <strong>Action attendue :</strong> {clientOrderAction(order)}. {presentation.next}</p>
             </li>
           );
         })}

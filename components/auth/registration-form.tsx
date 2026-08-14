@@ -30,7 +30,7 @@ async function readPayload(response: Response) {
   }
 }
 
-export function RegistrationForm() {
+export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }) {
   const [stage, setStage] = useState<Stage>("email");
   const [email, setEmail] = useState("");
   const [attemptId, setAttemptId] = useState("");
@@ -169,7 +169,7 @@ export function RegistrationForm() {
     return (
       <div className="auth-form" aria-live="polite">
         <p className="auth-form__success">{message}</p>
-        <Link className="auth-submit" href="/connexion"><span>Me connecter</span><span aria-hidden="true">→</span></Link>
+        <Link className="auth-submit" href={`/connexion?retour=${encodeURIComponent(returnTo)}`}><span>Me connecter et reprendre</span><span aria-hidden="true">→</span></Link>
       </div>
     );
   }
@@ -178,7 +178,7 @@ export function RegistrationForm() {
     return (
       <div className="auth-form" aria-live="polite">
         <p className="auth-form__success">{message}</p>
-        <Link className="auth-submit" href="/connexion"><span>Revenir à la connexion</span><span aria-hidden="true">→</span></Link>
+        <Link className="auth-submit" href={`/connexion?retour=${encodeURIComponent(returnTo)}`}><span>Revenir à la connexion</span><span aria-hidden="true">→</span></Link>
         <p className="auth-panel__note"><Link href="/mot-de-passe-oublie">Mot de passe oublié&nbsp;?</Link></p>
       </div>
     );

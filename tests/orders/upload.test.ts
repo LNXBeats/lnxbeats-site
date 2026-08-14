@@ -4,7 +4,13 @@ import test from "node:test";
 import sharp from "sharp";
 
 import { orderOffer } from "@/data/order-offer";
-import { detectImageType, normalizeOrderImage, OrderUploadError } from "@/lib/orders/upload";
+import {
+  detectImageType,
+  detectOrderAudioType,
+  normalizeOrderImage,
+  OrderUploadError,
+  validateOrderAudioIdentity,
+} from "@/lib/orders/upload";
 
 async function raster(format: "jpeg" | "png" | "webp", width = 24, height = 18) {
   const image = sharp({ create: { width, height, channels: 3, background: { r: 25, g: 50, b: 75 } } });
@@ -60,4 +66,42 @@ test("refuse le poids et les dimensions excessifs", async () => {
 
   const tooWide = await raster("png", orderOffer.maxImageWidth + 1, 1);
   await expectUploadCode(normalizeOrderImage({ buffer: tooWide, originalFilename: "wide.png", declaredMimeType: "image/png" }), "DIMENSIONS_TOO_LARGE");
+});
+
+test("valide la signature, l’extension et le MIME réels des masters MP3/WAV", () => {
+  const mp3 = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00]);
+  const wav = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVEfmt ")]);
+  assert.equal(detectOrderAudioType(mp3), "MP3");
+  assert.equal(detectOrderAudioType(wav), "WAV");
+  assert.deepEqual(validateOrderAudioIdentity({
+    signature: mp3,
+    originalFilename: "../../master.mp3",
+    declaredMimeType: "audio/mpeg",
+    sizeBytes: 1024,
+  }), {
+    originalFilename: "master.mp3",
+    detectedType: "MP3",
+    mimeType: "audio/mpeg",
+    extension: "mp3",
+  });
+  assert.equal(validateOrderAudioIdentity({
+    signature: wav,
+    originalFilename: "voix.wav",
+    declaredMimeType: "audio/x-wav",
+    sizeBytes: 2048,
+  }).mimeType, "audio/wav");
+});
+
+test("refuse les faux audios, les incohérences MIME/extension et plus de 200 Mo", () => {
+  const mp3 = Buffer.from("ID3fixture");
+  const call = (input: Parameters<typeof validateOrderAudioIdentity>[0], code: string) => {
+    assert.throws(
+      () => validateOrderAudioIdentity(input),
+      (error: unknown) => error instanceof OrderUploadError && error.code === code,
+    );
+  };
+  call({ signature: Buffer.from("not audio"), originalFilename: "fake.mp3", declaredMimeType: "audio/mpeg", sizeBytes: 10 }, "UNSUPPORTED_SIGNATURE");
+  call({ signature: mp3, originalFilename: "fake.wav", declaredMimeType: "audio/mpeg", sizeBytes: 10 }, "EXTENSION_MISMATCH");
+  call({ signature: mp3, originalFilename: "fake.mp3", declaredMimeType: "application/octet-stream", sizeBytes: 10 }, "MIME_MISMATCH");
+  call({ signature: mp3, originalFilename: "large.mp3", declaredMimeType: "audio/mpeg", sizeBytes: orderOffer.maxDeliveryBytes + 1 }, "FILE_TOO_LARGE");
 });

@@ -30,7 +30,10 @@ test("payment and refund statuses cannot be forged by the admin cockpit", () => 
 test("business timestamps are derived from the target status", () => {
   const now = new Date("2026-08-11T12:00:00.000Z");
   assert.deepEqual(getOrderTransitionTimestamps("IN_PROGRESS", now), { serviceStartedAt: now });
-  assert.deepEqual(getOrderTransitionTimestamps("DELIVERED", now), { deliveredAt: now });
+  assert.deepEqual(getOrderTransitionTimestamps("DELIVERED", now), {
+    deliveredAt: now,
+    downloadExpiresAt: new Date("2027-02-11T12:00:00.000Z"),
+  });
   assert.deepEqual(getOrderTransitionTimestamps("CANCELLED", now), { cancelledAt: now });
   assert.deepEqual(getOrderTransitionTimestamps("REVIEWING", now), {});
 });

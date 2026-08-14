@@ -5,6 +5,7 @@ import type {
   CommercialLicenseStatus,
   OrderUsage,
 } from "@/data/order-offer";
+import type { PaymentMethod, PaymentStatus } from "@/lib/payments/types";
 
 export type SerializedOrderEvent = {
   id: string;
@@ -23,6 +24,15 @@ export type SerializedOrderPhoto = {
   position: number;
 };
 
+export type SerializedOrderDelivery = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  durationMs: number;
+  createdAt: string;
+};
+
 export type SerializedCommercialLicense = {
   id: string;
   status: CommercialLicenseStatus;
@@ -35,6 +45,20 @@ export type SerializedCommercialLicense = {
   requestedAt: string;
   approvedAt: string | null;
   activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SerializedOrderPayment = {
+  id: string;
+  status: PaymentStatus;
+  amountCents: number;
+  currency: string;
+  paymentMethod: PaymentMethod | null;
+  checkoutExpiresAt: string | null;
+  paidAt: string | null;
+  failedAt: string | null;
+  expiredAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -61,5 +85,7 @@ export type SerializedOrder = OrderDraftInput & {
   updatedAt: string;
   events: SerializedOrderEvent[];
   photos: SerializedOrderPhoto[];
+  delivery: SerializedOrderDelivery | null;
+  payments: SerializedOrderPayment[];
   commercialLicenses: SerializedCommercialLicense[];
 };

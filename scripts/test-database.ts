@@ -90,6 +90,7 @@ async function assertEmpty(stage: string) {
 async function cleanup() {
   await prisma.$transaction(async (transaction) => {
     await transaction.orderAsset.deleteMany();
+    await transaction.orderNotification.deleteMany();
     await transaction.orderEvent.deleteMany();
     await transaction.favorite.deleteMany();
     await transaction.projectAsset.deleteMany();

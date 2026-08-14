@@ -4,11 +4,13 @@ import { notFound } from "next/navigation";
 
 import { addInternalNoteAction } from "@/app/admin/actions";
 import { AdminOrderActions } from "@/components/admin-order-actions";
+import { AdminOrderDeliveryPanel } from "@/components/admin-order-delivery-panel";
 import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
 import { getAllowedOrderTransitions, getOrderDeletionEligibility } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
+import { orderAcceptsDeliveryUpload } from "@/lib/orders/delivery";
 import { assertPaymentServerEnvironment } from "@/lib/payments/config";
 import { paymentMethodPresentation, paymentStatusPresentation } from "@/lib/payments/presentation";
 import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
@@ -25,6 +27,7 @@ type AdminOrderPageProps = {
 const stateMessages: Record<string, string> = {
   "statut-mis-a-jour": "Le statut et son événement ont été enregistrés atomiquement.",
   "transition-refusee": "Cette transition n’est pas autorisée depuis le statut actuel.",
+  "annulation-paiement-a-verifier": "La commande est annulée. La session Stripe Test n’a pas pu être fermée automatiquement et a été placée en vérification.",
   "note-ajoutee": "La note interne a été ajoutée. Elle reste invisible dans l’espace client.",
   "note-invalide": "La note n’a pas été ajoutée. Vérifiez sa longueur.",
   "suppression-refusee": "Cette commande doit être conservée : la règle de suppression serveur a refusé l’action.",
@@ -47,12 +50,23 @@ const licensePaymentLabels = {
   REFUNDED: "Remboursé",
 } as const;
 
+const notificationKindPresentation = {
+  OWNER_NEW_ORDER: "Nouvelle commande — propriétaire",
+  CUSTOMER_DELIVERY_READY: "Livraison disponible — client",
+} as const;
+
+const notificationStatusPresentation = {
+  PENDING: "En attente",
+  PROCESSING: "En cours d’envoi",
+  SENT: "Envoyée",
+  FAILED: "À réessayer",
+} as const;
+
 export default async function AdminOrderPage({ params, searchParams }: AdminOrderPageProps) {
   const session = await requireAdmin();
   const { orderNumber } = await params;
   const order = await getAdminOrder(orderNumber);
   if (!order) notFound();
-  const transitions = getAllowedOrderTransitions(order.status);
   const deletion = getOrderDeletionEligibility(order);
   const message = stateMessages[(await searchParams).etat ?? ""];
   const currentStatus = orderStatusPresentation[order.status];
@@ -68,6 +82,19 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
     && order.status === "AWAITING_PAYMENT"
     && order.userId === session.user.id
     && !order.payments.some((payment) => ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED", "REQUIRES_REVIEW"].includes(payment.status));
+  const deliveryLink = order.assets.find(({ role, asset }) => role === "DELIVERY" && asset.type === "AUDIO") ?? null;
+  const delivery = deliveryLink ? {
+    id: deliveryLink.asset.id,
+    filename: deliveryLink.asset.filename,
+    mimeType: deliveryLink.asset.mimeType,
+    sizeBytes: Number(deliveryLink.asset.sizeBytes),
+    durationMs: deliveryLink.asset.durationMs,
+    createdAt: deliveryLink.createdAt.toISOString(),
+  } : null;
+  const hasSuccessfulPayment = order.payments.some((payment) => ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED"].includes(payment.status));
+  const deliveryRequiredToPublish = order.status === "FINALIZING" && !delivery;
+  const transitions = getAllowedOrderTransitions(order.status)
+    .filter(({ to }) => to !== "DELIVERED" || Boolean(delivery));
 
   return (
     <div className="admin-main admin-order-detail">
@@ -89,17 +116,14 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               <div><dt>Émotion</dt><dd>{order.emotion || "Non renseignée"}</dd></div>
               <div className="admin-detail-facts__wide"><dt>Histoire</dt><dd>{order.brief || "Non renseignée"}</dd></div>
               {order.importantDetails ? <div className="admin-detail-facts__wide"><dt>Détails importants</dt><dd>{order.importantDetails}</dd></div> : null}
-              {order.wordsToInclude ? <div><dt>Mots à inclure</dt><dd>{order.wordsToInclude}</dd></div> : null}
-              {order.avoid ? <div><dt>À éviter</dt><dd>{order.avoid}</dd></div> : null}
-              {order.pronunciationNotes ? <div><dt>Prononciations</dt><dd>{order.pronunciationNotes}</dd></div> : null}
             </dl>
           </section>
 
           <section className="admin-detail-window" aria-labelledby="admin-photos-title">
-            <p className="admin-section-label">Références privées</p><h2 id="admin-photos-title">Photos client.</h2>
-            {order.assets.length ? (
+            <p className="admin-section-label">Références privées</p><h2 id="admin-photos-title">Médias fournis par le client.</h2>
+            {order.assets.some(({ role, asset }) => role === "REFERENCE" && asset.type === "IMAGE") ? (
               <ul className="admin-private-photos">
-                {order.assets.map(({ asset, position }) => (
+                {order.assets.filter(({ role, asset }) => role === "REFERENCE" && asset.type === "IMAGE").map(({ asset, position }) => (
                   <li key={asset.id}>
                     {/* Private authenticated response: bypassing the public image optimizer is intentional. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -142,13 +166,19 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
                 <div><dt>Dernière mise à jour</dt><dd>{payment.updatedAt.toLocaleString("fr-FR")}</dd></div>
               </dl>
             ))}
-            {canRunStripeTest ? <AdminPaymentTestAction orderNumber={order.orderNumber} /> : null}
+            {canRunStripeTest ? <AdminPaymentTestAction orderNumber={order.orderNumber} amountCents={order.totalCents} /> : null}
             <small>Résumé PostgreSQL en lecture seule. Seul l’identifiant externe utile à la réconciliation est affiché ; aucun secret ni donnée carte ne l’est.</small>
           </section>
 
           <section className="admin-side-window" aria-labelledby="admin-actions-title">
             <p className="admin-section-label">Prochaine étape</p><h2 id="admin-actions-title">Actions autorisées.</h2>
-            <AdminOrderActions orderNumber={order.orderNumber} transitions={transitions} deletionEligible={deletion.eligible} deletionReason={deletion.reason} />
+            <AdminOrderActions
+              orderNumber={order.orderNumber}
+              transitions={transitions}
+              deletionEligible={deletion.eligible}
+              deletionReason={deletion.reason}
+              emptyReason={deliveryRequiredToPublish ? "Enregistrez d’abord un master audio valide dans le bloc Livraison. La publication sera ensuite disponible." : undefined}
+            />
           </section>
 
           <details className="admin-side-window admin-note-panel">
@@ -157,7 +187,29 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
           </details>
 
           <section className="admin-side-window">
-            <p className="admin-section-label">Livraison</p><h2>{order.deliveredAt ? "Marquée comme livrée" : "Non encore activée"}</h2><p>Aucun fichier WAV n’est simulé. Le stockage de livraison fera l’objet d’un sprint dédié.</p>
+            <AdminOrderDeliveryPanel
+              orderNumber={order.orderNumber}
+              delivery={delivery}
+              canUpload={orderAcceptsDeliveryUpload(order.status, hasSuccessfulPayment)}
+              published={order.status === "DELIVERED"}
+            />
+          </section>
+
+          <section className="admin-side-window" aria-labelledby="admin-notifications-title">
+            <p className="admin-section-label">Notifications</p>
+            <h2 id="admin-notifications-title">{order.notifications.length ? `${order.notifications.length} message${order.notifications.length > 1 ? "s" : ""}` : "Aucun message"}</h2>
+            {order.notifications.map((notification) => (
+              <dl key={notification.id}>
+                <div><dt>Objet</dt><dd>{notificationKindPresentation[notification.kind]}</dd></div>
+                <div><dt>Canal</dt><dd>{notification.channel}</dd></div>
+                <div><dt>Statut</dt><dd>{notificationStatusPresentation[notification.status]}</dd></div>
+                <div><dt>Tentatives</dt><dd>{notification.attempts}</dd></div>
+                <div><dt>Créée</dt><dd>{notification.createdAt.toLocaleString("fr-FR")}</dd></div>
+                {notification.sentAt ? <div><dt>Envoyée</dt><dd>{notification.sentAt.toLocaleString("fr-FR")}</dd></div> : null}
+                {notification.lastErrorCode ? <div><dt>Suivi</dt><dd>Envoi à réessayer séparément</dd></div> : null}
+              </dl>
+            ))}
+            <small>Aucun secret, payload fournisseur, lien R2 ou contenu de master n’est affiché.</small>
           </section>
 
           <section className="admin-side-window" aria-labelledby="admin-rights-title">

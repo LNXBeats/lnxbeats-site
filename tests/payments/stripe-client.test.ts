@@ -47,5 +47,9 @@ test("builds a hosted Checkout request with only the canonical internal metadata
     },
   }]);
   assert.equal("payment_method_types" in parameters, false);
-  assert.equal(JSON.stringify(parameters).includes("sk_test_"), false);
+  const serializedParameters = JSON.stringify(parameters);
+  assert.equal(serializedParameters.includes("sk_test_"), false);
+  assert.equal(serializedParameters.includes("storageKey"), false);
+  assert.equal(serializedParameters.includes("delivery"), false);
+  assert.equal(serializedParameters.includes("storageKey"), false);
 });

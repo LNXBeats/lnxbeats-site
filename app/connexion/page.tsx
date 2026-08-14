@@ -36,14 +36,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="auth-intro">
           <p className="eyebrow">Espace membre</p>
           <h1>Accéder à votre espace.</h1>
-          <p>Votre compte protège votre profil, vos brouillons et le suivi de vos demandes. Les paiements et livraisons n’apparaîtront que lorsqu’ils seront réellement disponibles.</p>
+          <p>Votre compte protège votre profil, vos brouillons et le suivi de vos commandes. Si vous arrivez depuis Commander, votre parcours reprend à l’étape où vous l’avez laissé.</p>
         </div>
         <div className="auth-panel">
           <p className="auth-panel__label">Connexion</p>
           <LoginForm returnTo={returnTo} />
           <div className="auth-panel__links auth-panel__links--login">
             <Link className="auth-panel__forgotten" href="/mot-de-passe-oublie">Mot de passe oublié&nbsp;?</Link>
-            <p>Première visite&nbsp;? <Link href="/inscription">Créer un espace membre</Link></p>
+            <p>Première visite&nbsp;? <Link href={`/inscription?retour=${encodeURIComponent(returnTo)}`}>Créer un espace membre</Link></p>
           </div>
         </div>
       </Container>

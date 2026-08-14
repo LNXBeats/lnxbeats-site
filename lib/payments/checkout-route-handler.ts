@@ -52,7 +52,7 @@ export async function handleStripeCheckoutPost(
   } catch {
     return paymentJson({ error: "Le paiement ne peut pas être préparé.", code: "PAYMENT_UNAVAILABLE" }, 503);
   }
-  if (!actor || actor.status !== "ACTIVE" || actor.emailVerified !== true || actor.role !== "ADMIN") {
+  if (!actor || actor.status !== "ACTIVE" || actor.emailVerified !== true) {
     return paymentJson({ error: "Le paiement ne peut pas être préparé.", code: "PAYMENT_ACCESS_DENIED" }, actor ? 403 : 401);
   }
 

@@ -1,4 +1,4 @@
-# Paiements — fondation Stripe V0.7.0
+# Paiements — fondation Stripe V0.7 et Checkout Commander V0.7.1
 
 ## Statut de cette fondation
 
@@ -103,7 +103,7 @@ Le prix payable provient exclusivement du snapshot serveur enregistré sur cette
 
 Le serveur valide la cohérence arithmétique de ce snapshot et sa conformité au registre tarifaire versionné. Chaque version publiée doit rester dans ce registre aussi longtemps qu’une commande correspondante peut être payable : changer l’offre courante ne réécrit donc pas une ancienne commande. Il réserve ensuite un `Payment` local avec `amountCents`, `currency` et `pricingVersion` **avant** l’appel Stripe. Cette copie devient le contrat de la tentative en cours : une modification ultérieure de la commande ne doit ni modifier silencieusement son montant, ni réutiliser cette tentative avec d’autres paramètres. Une version inconnue ou un conflit de snapshot échoue fermé et exige une décision métier explicite.
 
-Pendant cette fondation test-only, la création de Checkout reste limitée à un compte `ADMIN`, `ACTIVE` et vérifié. Elle ne constitue pas encore un bouton de paiement public.
+La V0.7.1 ouvre ce service au **propriétaire authentifié, actif et vérifié** de l’Order, quel que soit son rôle applicatif. Cette ouverture reste strictement confinée au runtime QA local `lnx-studio-v070-test`, aux confirmations explicites et au mode Stripe Test. Elle ne rend ni `lnxbeats.fr`, ni Railway, ni un environnement Live payables.
 
 Le serveur doit, au moment de créer une session :
 
@@ -331,10 +331,12 @@ stripe login
 stripe listen \
   --latest \
   --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,payment_intent.payment_failed \
-  --forward-to http://127.0.0.1:31700/api/payments/stripe/webhook
+  --forward-to http://localhost:31700/api/payments/stripe/webhook
 ```
 
-Le port `31700` est le port HTTP exact dédié à la QA paiement jetable. Le runtime QA doit donc être lancé avec `http://localhost:31700` dans `AUTH_URL`/`SITE_URL`, tandis que le listener peut transférer vers la même boucle locale via `127.0.0.1`. Il ne faut pas transférer ces événements vers le port personnel `3000`, ni vers `lnx-studio-local-preview`. Stripe CLI 1.50 utilise `--latest` pour demander la dernière version d’événement ; le webhook refuse ensuite toute valeur `event.api_version` différente de `2026-07-29.dahlia`. Une évolution future échoue donc de manière fermée jusqu’à la mise à jour explicite du SDK et des tests.
+Le port `31700` est le port HTTP exact dédié à la QA paiement jetable. Le runtime QA, `AUTH_URL`/`SITE_URL` et le listener doivent tous employer **exactement** `http://localhost:31700`. Cette identité est opérationnelle, pas cosmétique : sur macOS, Next peut résoudre `localhost` vers `[::1]`; un listener dirigé vers `127.0.0.1` reçoit alors un refus de connexion même si le port paraît identique. Cet incident a été reproduit pendant la QA V0.7.1 et corrigé sans nouveau paiement par rediffusion signée de l’événement existant. Vérifier systématiquement les HTTP `2xx` du listener. Après tout redémarrage de `stripe listen`, recopier son nouveau secret uniquement dans l’environnement QA puis redémarrer Next avant de reprendre un parcours.
+
+Il ne faut jamais transférer ces événements vers le port personnel `3000`, ni vers `lnx-studio-local-preview`. Stripe CLI 1.50 utilise `--latest` pour demander la dernière version d’événement ; le webhook refuse ensuite toute valeur `event.api_version` différente de `2026-07-29.dahlia`. Une évolution future échoue donc de manière fermée jusqu’à la mise à jour explicite du SDK et des tests.
 
 Le secret affiché par `stripe listen` est utilisé uniquement dans `.env.local` pour cette session de QA. Il ne doit pas être copié dans le dépôt ni confondu avec le secret d’un endpoint Dashboard.
 
@@ -416,4 +418,4 @@ Le passage en production n’appartient pas à V0.7.0. Il nécessitera un prompt
 - monitoring, alertes, réconciliation et runbooks exercés ;
 - bascule explicite de `STRIPE_MODE=live` puis de `PAYMENTS_ENABLED=true`, jamais l’inverse.
 
-La prochaine étape produit recommandée est **V0.7.1**, consacrée au Checkout Commander complet après validation sandbox de cette fondation. Elle ne doit pas commencer implicitement pendant la V0.7.0.
+Le parcours client V0.7.1, ses règles de reprise, d’édition et de confirmation sont décrits dans [CHECKOUT.md](CHECKOUT.md). Toute activation publique ou Live demeure un sprint séparé.

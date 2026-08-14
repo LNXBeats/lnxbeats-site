@@ -1,8 +1,8 @@
 # LNX Studio
 
-Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. Le catalogue public et ses métadonnées vivent dans PostgreSQL ; les médias utilisent une abstraction locale/S3-compatible. La fondation Stripe reste en mode test, désactivée et fermée au public.
+Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. Le catalogue public et ses métadonnées vivent dans PostgreSQL ; les médias utilisent une abstraction locale/S3-compatible. Le Checkout Commander Stripe reste en mode Test, désactivé par défaut et fermé aux environnements publics.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande réelle, puis la suivre dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement public, email de commande, facture ou livraison WAV n’est actif.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande, puis suivre son paiement et sa création dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement Live/public ni facture n’est actif. V0.7.1 prépare en QA la livraison privée Admin→Client et les notifications transactionnelles idempotentes ; le SMS reste sans fournisseur.
 
 ## Stack
 
@@ -55,6 +55,8 @@ npm run test:upload
 npm run test:admin
 npm run test:catalog
 npm run test:media
+npm run test:payment
+npm run test:checkout
 ```
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
@@ -94,7 +96,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/` — accueil
 - `/discographie` — catalogue PostgreSQL et sélection éditoriale
 - `/album/[slug]` — fiche dynamique d’un projet, avec metadata issues du catalogue
-- `/commander` — brief personnel sauvegardable, photos privées, prix serveur de 50 à 90 € et finalisation sans paiement
+- `/commander` — parcours complet du brief au récapitulatif, photos privées, prix serveur de 50 à 90 € et Checkout Stripe Test sous garde QA
 - `/boutique` — liens DistroKid Direct et Etsy
 - `/a-propos` — biographie officielle et démarche artistique
 - `/contact` — contact professionnel
@@ -111,6 +113,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/verifier-email` — résultat neutre de la vérification
 - `/compte` — profil, sécurité, brouillons et suivi des demandes pour les rôles actifs
 - `/compte/commandes/[orderNumber]` — détail privé, timeline, récapitulatif et extension de droits uniquement après livraison
+- `/commande/[orderNumber]/confirmation` — retour privé Checkout et état de confirmation lu exclusivement côté serveur
 - `/admin` — cockpit protégé réservé à `ADMIN`
 - `/admin/commandes` — liste privée, filtres et transitions métier contextuelles
 - `/admin/catalogue` — liste, filtres et édition sécurisée du catalogue PostgreSQL
@@ -119,6 +122,8 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/admin/membres` — lecture limitée des comptes sans credentials ni sessions
 - `/api/auth/*` — handlers Better Auth, côté serveur uniquement
 - `/api/orders/*` — brouillons et photos privés, protégés par session, origine et propriété
+- `/api/admin/orders/[orderNumber]/delivery` — dépôt/remplacement ADMIN d’un master R2 privé validé
+- `/api/orders/[orderNumber]/delivery/[assetId]` — téléchargement privé propriétaire/ADMIN avec `HEAD` et `Range`
 
 ## Variables d’environnement
 
@@ -133,6 +138,9 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `EMAIL_FROM` | Expéditeur appartenant au domaine transactionnel vérifié | Non |
 | `EMAIL_REPLY_TO` | Adresse de réponse humaine des messages transactionnels | Non |
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
+| `ORDER_NOTIFICATION_EMAIL_ENABLED` | Active l’adaptateur email de l’outbox commande | Non |
+| `ORDER_NOTIFICATION_CLIENT_EMAIL_ENABLED` | Opt-in serveur de l’email Resend de livraison client | Non |
+| `ORDER_NOTIFICATION_CAPTURE_PATH` | Capture QA mode 0600 des notifications de commande | Non |
 | `PAYMENTS_ENABLED` | Garde globale ; `false` dans la fondation et tant que la QA sandbox n’est pas validée | Non |
 | `STRIPE_MODE` | Mode Stripe attendu ; limité à `test` dans cette fondation | Non |
 | `STRIPE_SECRET_KEY` | Clé Stripe sandbox côté serveur, vide dans le dépôt et jamais journalisée | Oui |
@@ -165,11 +173,11 @@ Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés 
 
 ## Paiements
 
-La V0.7.0 prépare Stripe Checkout hébergé, sans l’ouvrir au public. Les prix sont relus et calculés côté serveur depuis PostgreSQL ; le navigateur ne fournit jamais le montant faisant foi. Le paiement ne peut être confirmé que par un webhook Stripe signé et traité de façon idempotente. La page de retour Checkout n’est pas une preuve de paiement.
+La V0.7.1 relie Commander à Stripe Checkout hébergé dans la seule QA locale Test gardée. Les prix sont relus et calculés côté serveur depuis PostgreSQL ; le navigateur ne fournit jamais le montant faisant foi. Le paiement ne peut être confirmé que par un webhook Stripe signé et traité de façon idempotente. La page de retour Checkout n’est pas une preuve de paiement.
 
 PayPal est compatible avec un compte Stripe français, mais son activation dans le Dashboard et la connexion d’un compte PayPal restent des actions humaines séparées. Wero reste un accès contrôlé/preview et n’est ni promis ni hardcodé. Aucun IBAN ou établissement bancaire n’est couplé au code.
 
-Voir [docs/PAYMENTS.md](docs/PAYMENTS.md) pour l’architecture, les versions verrouillées, les événements, la procédure Stripe CLI et les runbooks de sécurité.
+Voir [docs/PAYMENTS.md](docs/PAYMENTS.md) pour l’architecture Stripe et [docs/CHECKOUT.md](docs/CHECKOUT.md) pour le parcours Commander, la reprise et les états client.
 
 ## Architecture
 
@@ -217,6 +225,7 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Authentification et sécurité](docs/AUTH.md)
 - [Commandes et sécurité des fichiers](docs/ORDER_MODEL.md)
 - [Paiements Stripe](docs/PAYMENTS.md)
+- [Checkout Commander](docs/CHECKOUT.md)
 - [Vision produit](docs/PRODUCT_VISION.md)
 - [Audit produit et éditorial](docs/PAGE_AUDIT.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)

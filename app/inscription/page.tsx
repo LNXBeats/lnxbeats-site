@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { RegistrationForm } from "@/components/auth/registration-form";
 import { Container } from "@/components/container";
+import { safeInternalPath } from "@/lib/auth/redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RegistrationPage() {
+type RegistrationPageProps = { searchParams: Promise<{ retour?: string | string[] }> };
+
+export default async function RegistrationPage({ searchParams }: RegistrationPageProps) {
+  const parameters = await searchParams;
+  const returnTo = safeInternalPath(typeof parameters.retour === "string" ? parameters.retour : undefined);
   return (
     <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
@@ -23,8 +28,8 @@ export default function RegistrationPage() {
         </div>
         <div className="auth-panel">
           <p className="auth-panel__label">Inscription</p>
-          <RegistrationForm />
-          <p className="auth-panel__note">Déjà membre&nbsp;? <Link href="/connexion">Revenir à la connexion</Link>.</p>
+          <RegistrationForm returnTo={returnTo} />
+          <p className="auth-panel__note">Déjà membre&nbsp;? <Link href={`/connexion?retour=${encodeURIComponent(returnTo)}`}>Revenir à la connexion</Link>.</p>
         </div>
       </Container>
     </section>

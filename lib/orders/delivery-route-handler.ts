@@ -1,0 +1,92 @@
+import "server-only";
+
+import { readOrderDeliveryUpload, type OrderDeliveryUpload } from "@/lib/orders/audio-request";
+import { orderDeliveryResponse } from "@/lib/orders/audio-response";
+import { getOrderDeliveryForActor, putOrderDelivery } from "@/lib/orders/delivery";
+import type { OrderActor } from "@/lib/orders/domain";
+import { orderErrorResponse, orderJson } from "@/lib/orders/http";
+import { isAllowedOrderMutation, orderActorFromHeaders } from "@/lib/orders/request";
+import { enforceOrderRateLimit } from "@/lib/orders/service";
+
+export type DeliveryRouteAsset = NonNullable<Awaited<ReturnType<typeof getOrderDeliveryForActor>>>;
+
+export async function handleAdminDeliveryUpload(
+  request: Request,
+  orderNumber: string,
+  dependencies: {
+    isAllowed(request: Request): boolean;
+    actor(headers: Headers): Promise<OrderActor | null>;
+    rateLimit(actorId: string): Promise<void>;
+    read(request: Request): Promise<OrderDeliveryUpload>;
+    put(actor: OrderActor, orderNumber: string, source: OrderDeliveryUpload): Promise<{
+      id: string;
+      filename: string;
+      mimeType: string;
+      sizeBytes: bigint;
+      durationMs: number | null;
+      createdAt: Date;
+    }>;
+  } = {
+    isAllowed: isAllowedOrderMutation,
+    actor: orderActorFromHeaders,
+    rateLimit: (actorId) => enforceOrderRateLimit(actorId, "upload"),
+    read: readOrderDeliveryUpload,
+    put: putOrderDelivery,
+  },
+) {
+  if (!dependencies.isAllowed(request)) return orderJson({ error: "Origine refusée." }, 403);
+  const actor = await dependencies.actor(request.headers);
+  if (!actor) return orderJson({ error: "Authentification requise." }, 401);
+  if (actor.role !== "ADMIN") return orderJson({ error: "Action réservée à l’administration." }, 403);
+
+  let source: OrderDeliveryUpload | null = null;
+  try {
+    await dependencies.rateLimit(actor.id);
+    source = await dependencies.read(request);
+    const delivery = await dependencies.put(actor, orderNumber, source);
+    return orderJson({
+      delivery: {
+        id: delivery.id,
+        filename: delivery.filename,
+        mimeType: delivery.mimeType,
+        sizeBytes: Number(delivery.sizeBytes),
+        durationMs: delivery.durationMs,
+        createdAt: delivery.createdAt.toISOString(),
+      },
+    }, 201);
+  } catch (error) {
+    return orderErrorResponse(error);
+  } finally {
+    if (source) await source.cleanup().catch(() => undefined);
+  }
+}
+
+export async function handleOrderDeliveryDownload(
+  request: Request,
+  input: { orderNumber: string; assetId: string; head?: boolean; download?: boolean },
+  dependencies: {
+    actor(headers: Headers): Promise<OrderActor | null>;
+    get(actor: OrderActor, orderNumber: string, assetId: string): Promise<DeliveryRouteAsset | null>;
+    respond(request: Request, asset: DeliveryRouteAsset, options: { head: boolean; download: boolean }): Promise<Response>;
+  } = {
+    actor: orderActorFromHeaders,
+    get: getOrderDeliveryForActor,
+    respond: orderDeliveryResponse,
+  },
+) {
+  const actor = await dependencies.actor(request.headers);
+  if (!actor) return orderJson({ error: "Authentification requise." }, 401);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.assetId)) {
+    return orderJson({ error: "Livraison introuvable." }, 404);
+  }
+  try {
+    const asset = await dependencies.get(actor, input.orderNumber, input.assetId);
+    if (!asset) return orderJson({ error: "Livraison introuvable." }, 404);
+    return dependencies.respond(request, asset, {
+      head: input.head === true,
+      download: input.download !== false,
+    });
+  } catch (error) {
+    return orderErrorResponse(error);
+  }
+}

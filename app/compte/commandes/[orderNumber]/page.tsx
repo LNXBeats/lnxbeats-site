@@ -4,11 +4,15 @@ import { notFound } from "next/navigation";
 
 import { CommercialLicensePanel } from "@/components/commercial-license-panel";
 import { Container } from "@/components/container";
+import { ModifyUnpaidOrderAction } from "@/components/modify-unpaid-order-action";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
+import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
 import { requireVerifiedUser } from "@/lib/auth/session";
+import { clientOrderAction, clientPaymentState, orderCanStillBeEdited } from "@/lib/orders/checkout";
 import { canRequestCommercialLicense, formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { orderStatusPresentation } from "@/lib/orders/status";
+import { paymentQaAvailable } from "@/lib/payments/availability";
 
 export const dynamic = "force-dynamic";
 
@@ -22,22 +26,6 @@ type OrderDetailPageProps = {
   params: Promise<{ orderNumber: string }>;
   searchParams: Promise<{ paiement?: string }>;
 };
-
-const paymentConfirmedOrderStatuses = new Set([
-  "PAYMENT_CONFIRMED",
-  "RECEIVED",
-  "SUBMITTED",
-  "REVIEWING",
-  "ACCEPTED",
-  "IN_PROGRESS",
-  "FIRST_VERSION_READY",
-  "REVISION_REQUESTED",
-  "FINALIZING",
-  "DELIVERED",
-  "REFUSED",
-  "REFUND_PENDING",
-  "REFUNDED",
-]);
 
 export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
   const { orderNumber } = await params;
@@ -54,6 +42,9 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   const order = await getOrderForActor(actor, orderNumber);
   if (!order) notFound();
   const status = orderStatusPresentation[order.status];
+  const paymentState = clientPaymentState(order);
+  const paymentsAvailable = await paymentQaAvailable();
+  const canStartPayment = ["ready", "confirming", "failed", "expired"].includes(paymentState);
 
   return (
     <section className="auth-shell order-detail-shell">
@@ -64,6 +55,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             <p className="eyebrow">{order.orderNumber}</p>
             <h1>{order.title || order.recipient || "Votre histoire"}</h1>
             <p>{status.next}</p>
+            <p><strong>Action attendue :</strong> {clientOrderAction(order)}</p>
           </div>
           <div className="order-detail__status"><span>Statut actuel</span><strong>{status.label}</strong></div>
         </header>
@@ -71,8 +63,20 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
         {paymentReturn === "retour" || paymentReturn === "annule" ? (
           <PaymentReturnNotice
             state={paymentReturn === "retour" ? "return" : "cancel"}
-            confirmed={paymentConfirmedOrderStatuses.has(order.status)}
+            paymentState={paymentState}
+            orderNumber={order.orderNumber}
           />
+        ) : null}
+
+        {order.status === "AWAITING_PAYMENT" ? (
+          <section className="order-detail__section order-payment-panel" aria-labelledby="order-payment-title">
+            <p className="auth-panel__label">Paiement</p>
+            <h2 id="order-payment-title">{paymentState === "confirmed" ? "Paiement confirmé" : paymentState === "confirming" ? "Confirmation en cours" : paymentState === "review" ? "Vérification en cours" : "Commande prête à payer"}</h2>
+            <p>Le montant vient du snapshot PostgreSQL. Le navigateur ne peut ni le modifier ni confirmer un paiement.</p>
+            {paymentsAvailable && canStartPayment ? <StripeCheckoutAction orderNumber={order.orderNumber} amountCents={order.totalCents} /> : null}
+            {orderCanStillBeEdited(order) ? <Link className="form-button" href={`/commander?brouillon=${encodeURIComponent(order.orderNumber)}&etape=recap`}>Modifier avant paiement</Link> : null}
+            {paymentsAvailable && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
+          </section>
         ) : null}
 
         <div className="order-detail__grid">
@@ -92,7 +96,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           <aside className="order-detail__price" aria-label="Prix de la demande">
             <span>Total de la création</span><strong>{formatEuro(order.totalCents)}</strong>
             <p>{order.usage === "PERSONAL" ? "Usage personnel" : "Ancien snapshot commercial V0.6 — à régulariser"}</p>
-            <small>Version tarifaire {order.pricingVersion} · paiement public non ouvert ; fondation Stripe Test réservée à l’Admin QA</small>
+            <small>Version tarifaire {order.pricingVersion} · Stripe Hosted Checkout reste limité à l’environnement Test contrôlé.</small>
           </aside>
         </div>
 
@@ -114,9 +118,6 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             {order.emotion ? <div><dt>Émotion</dt><dd>{order.emotion}</dd></div> : null}
             <div className="order-detail__fact--wide"><dt>Histoire</dt><dd>{order.brief}</dd></div>
             {order.importantDetails ? <div className="order-detail__fact--wide"><dt>Détails</dt><dd>{order.importantDetails}</dd></div> : null}
-            {order.wordsToInclude ? <div><dt>Mots à préserver</dt><dd>{order.wordsToInclude}</dd></div> : null}
-            {order.avoid ? <div><dt>À éviter</dt><dd>{order.avoid}</dd></div> : null}
-            {order.pronunciationNotes ? <div><dt>Prononciations</dt><dd>{order.pronunciationNotes}</dd></div> : null}
             <div><dt>Cover</dt><dd>{order.coverIncluded ? "Incluse (+10 €)" : "Non"}</dd></div>
             <div><dt>Priorité</dt><dd>{order.priorityProcessing ? "Demandée (+30 €), délai à confirmer" : "Non"}</dd></div>
             <div><dt>Retour inclus</dt><dd>{order.revisionAllowance - order.revisionUsed} sur {order.revisionAllowance} restant</dd></div>
@@ -125,7 +126,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
 
         <section className="order-detail__section" aria-labelledby="order-photos-title">
           <p className="auth-panel__label">Références privées</p>
-          <h2 id="order-photos-title">Photos jointes.</h2>
+          <h2 id="order-photos-title">Médias de référence joints.</h2>
           {order.photos.length ? (
             <ul className="order-detail__photos">
               {order.photos.map((photo) => (
@@ -139,10 +140,25 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
         </section>
 
         <section className="order-detail__section order-delivery-future" aria-labelledby="order-delivery-title">
-          <p className="auth-panel__label">Livraison future</p>
-          <h2 id="order-delivery-title">Un WAV privé, jamais un lien public permanent.</h2>
-          <p>La livraison sera accessible uniquement au propriétaire et à l’administration, pendant six mois à compter de sa mise à disposition.</p>
-          {order.downloadExpiresAt ? <p>Date d’expiration : <time dateTime={order.downloadExpiresAt}>{new Date(order.downloadExpiresAt).toLocaleDateString("fr-FR")}</time>.</p> : <p>Aucun fichier n’est encore disponible.</p>}
+          <p className="auth-panel__label">Livraison</p>
+          {order.delivery ? (
+            <>
+              <h2 id="order-delivery-title">Votre création est prête.</h2>
+              <p>Le master reste privé et n’est jamais exposé par une URL R2 publique permanente.</p>
+              <dl className="order-detail__facts">
+                <div><dt>Format</dt><dd>{order.delivery.mimeType === "audio/wav" ? "WAV" : "MP3"}</dd></div>
+                <div><dt>Taille</dt><dd>{(order.delivery.sizeBytes / (1024 * 1024)).toFixed(1)} Mo</dd></div>
+                <div><dt>Livraison</dt><dd>{new Date(order.delivery.createdAt).toLocaleString("fr-FR")}</dd></div>
+                {order.downloadExpiresAt ? <div><dt>Disponible jusqu’au</dt><dd>{new Date(order.downloadExpiresAt).toLocaleDateString("fr-FR")}</dd></div> : null}
+              </dl>
+              <a className="form-button form-button--primary" href={`/api/orders/${encodeURIComponent(order.orderNumber)}/delivery/${order.delivery.id}`}>TÉLÉCHARGER MA CRÉATION</a>
+            </>
+          ) : (
+            <>
+              <h2 id="order-delivery-title">Votre création est en cours.</h2>
+              <p>Le fichier final apparaîtra ici après sa publication par LNX Beats. Aucun nouvel envoi ni paiement n’est nécessaire.</p>
+            </>
+          )}
         </section>
       </Container>
     </section>

@@ -71,6 +71,7 @@ async function validateSafetyGuards() {
 
 async function cleanup() {
   await prisma.$transaction(async (transaction) => {
+    await transaction.orderNotification.deleteMany();
     await transaction.orderAsset.deleteMany();
     await transaction.commercialLicense.deleteMany();
     await transaction.orderEvent.deleteMany();

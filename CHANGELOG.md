@@ -2,6 +2,27 @@
 
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
+## [0.7.1] — 2026-08-14
+
+### Checkout Commander
+
+- parcours Commander relié de bout en bout : projet, histoire, options, références privées, compte, récapitulatif et paiement Stripe hébergé ;
+- reprise en mémoire du brief et des fichiers sélectionnés pendant la connexion ou l’inscription, sans contenu sensible dans l’URL ni stockage persistant du navigateur ;
+- Commander conserve les photos privées mais ne propose aucun upload MP3/WAV client ;
+- livraison finale distincte Admin → Client avec un master MP3/WAV de 200 Mo maximum, validé, stocké dans R2 PRIVATE et servi par une route autorisée avec Range ;
+- un seul master actif par commande, remplacement audité avant publication et publication `DELIVERED` refusée sans livraison valide ;
+- création de l’`Order` avant Checkout, prix serveur 50/60/80/90 €, double clic borné et retour dédié `/commande/[orderNumber]/confirmation` ;
+- confirmation fondée exclusivement sur PostgreSQL après webhook signé, avec polling court, annulation douce, refus, reprise et expiration ;
+- modification avant paiement autorisée seulement après expiration de la Checkout Session active ; les commandes payées restent figées.
+
+### Compte, Admin et sécurité
+
+- espace Compte séparant les brouillons, paiements à finaliser, commandes actives et terminées, avec statut paiement, options et action attendue ;
+- vue Admin principale centrée sur les commandes payées/à examiner, paiements en attente séparés et événements de réconciliation visibles sans payload sensible ;
+- Checkout accessible au propriétaire actif et vérifié dans la seule QA Stripe Test gardée, avec same-origin, IDOR serveur, rate limit et pricing PostgreSQL ;
+- annulation métier fermant la Session active quand possible, sinon passage en revue explicite ; aucun remboursement, Stripe Tax, Live, PayPal ou Wero activé ;
+- outbox persistante et idempotente pour l’email propriétaire après paiement et l’email client après livraison ; abstraction SMS prête sans fournisseur configuré.
+
 ## [0.7.0] — 2026-08-14
 
 ### Fondation paiement

@@ -12,10 +12,12 @@ import {
 } from "@/lib/payments/domain";
 import {
   createStripeCheckoutGateway,
+  createStripeCheckoutLifecycleGateway,
   StripeCheckoutClientError,
   type HostedCheckoutRequest,
   type HostedCheckoutSession,
   type StripeCheckoutGateway,
+  type StripeCheckoutLifecycleGateway,
 } from "@/lib/payments/stripe-client";
 import type { OrderPaymentSnapshot } from "@/lib/payments/types";
 import { logPaymentEvent } from "@/lib/payments/observability";
@@ -67,6 +69,7 @@ export class PaymentServiceError extends Error {
       | "ORDER_NOT_PAYABLE"
       | "PAYMENT_ALREADY_COMPLETED"
       | "PAYMENT_SNAPSHOT_CONFLICT"
+      | "PAYMENT_SESSION_EXPIRATION_FAILED"
       | "RATE_LIMITED"
       | "PAYMENT_UNAVAILABLE",
     message = "Le paiement ne peut pas être préparé.",
@@ -75,6 +78,25 @@ export class PaymentServiceError extends Error {
     this.name = "PaymentServiceError";
   }
 }
+
+type ActiveCheckoutForEdit = Readonly<{
+  orderId: string;
+  paymentId?: string;
+  providerCheckoutId?: string;
+}>;
+
+export interface PaymentEditRepository {
+  findActiveCheckout(actor: OrderActor, orderNumber: string): Promise<ActiveCheckoutForEdit>;
+  findCancelledCheckout(orderNumber: string): Promise<ActiveCheckoutForEdit>;
+  markCheckoutExpired(orderId: string, paymentId?: string): Promise<void>;
+  markCheckoutReview(orderId: string, paymentId: string): Promise<void>;
+}
+
+export type PaymentEditDependencies = Readonly<{
+  repository: PaymentEditRepository;
+  gateway: StripeCheckoutLifecycleGateway;
+  assertQaRuntime(): Promise<void>;
+}>;
 
 async function inLockedTransaction<T>(
   client: PrismaClient,
@@ -357,6 +379,129 @@ export function createPaymentDatabaseCheckoutRepository(
 
 export const paymentDatabaseCheckoutRepository = createPaymentDatabaseCheckoutRepository(prisma);
 
+export function createPaymentDatabaseEditRepository(client: PrismaClient): PaymentEditRepository {
+  async function findCheckout(orderNumber: string, actor?: OrderActor, requiredStatus: "AWAITING_PAYMENT" | "CANCELLED" = "AWAITING_PAYMENT") {
+    return inLockedTransaction(client, async (transaction) => {
+      await lock(transaction, `payments:order:${orderNumber}`);
+      const order = await transaction.order.findFirst({
+        where: {
+          orderNumber,
+          ...(actor && actor.role !== "ADMIN" ? { userId: actor.id } : {}),
+          status: requiredStatus,
+        },
+        select: { id: true },
+      });
+      if (!order) throw new PaymentServiceError(404, "ORDER_NOT_PAYABLE");
+      const completed = await transaction.payment.findFirst({
+        where: { orderId: order.id, status: { in: [...paidPaymentStatuses, "REQUIRES_REVIEW"] } },
+        select: { id: true },
+      });
+      if (completed) throw new PaymentServiceError(409, "PAYMENT_ALREADY_COMPLETED");
+      const active = await transaction.payment.findFirst({
+        where: {
+          orderId: order.id,
+          provider: "STRIPE",
+          OR: [
+            { status: { in: ["CREATED", "PENDING"] } },
+            { status: "FAILED", failureCode: "STRIPE_PAYMENT_ATTEMPT_FAILED", providerCheckoutId: { not: null } },
+          ],
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true, providerCheckoutId: true },
+      });
+      if (active && !active.providerCheckoutId) {
+        await transaction.payment.update({ where: { id: active.id }, data: { status: "CANCELED", canceledAt: new Date(), failureCode: null } });
+        return { orderId: order.id };
+      }
+      return { orderId: order.id, ...(active ? { paymentId: active.id, providerCheckoutId: active.providerCheckoutId ?? undefined } : {}) };
+    });
+  }
+  return {
+    findActiveCheckout: (actor, orderNumber) => findCheckout(orderNumber, actor),
+    findCancelledCheckout: (orderNumber) => findCheckout(orderNumber, undefined, "CANCELLED"),
+    async markCheckoutExpired(orderId, paymentId) {
+      if (!paymentId) return;
+      await inLockedTransaction(client, async (transaction) => {
+        await lock(transaction, `payments:attempt:${paymentId}`);
+        const payment = await transaction.payment.findUnique({
+          where: { id: paymentId },
+          select: { orderId: true, status: true },
+        });
+        if (!payment || payment.orderId !== orderId) throw new PaymentServiceError(409, "PAYMENT_SNAPSHOT_CONFLICT");
+        if ([...paidPaymentStatuses, "REQUIRES_REVIEW"].includes(payment.status as typeof paidPaymentStatuses[number] | "REQUIRES_REVIEW")) {
+          throw new PaymentServiceError(409, "PAYMENT_ALREADY_COMPLETED");
+        }
+        if (payment.status === "EXPIRED") return;
+        await transaction.payment.update({
+          where: { id: paymentId },
+          data: { status: "EXPIRED", expiredAt: new Date(), failureCode: null },
+        });
+      });
+    },
+    async markCheckoutReview(orderId, paymentId) {
+      await inLockedTransaction(client, async (transaction) => {
+        await lock(transaction, `payments:attempt:${paymentId}`);
+        const payment = await transaction.payment.findUnique({ where: { id: paymentId }, select: { orderId: true, status: true } });
+        if (!payment || payment.orderId !== orderId || [...paidPaymentStatuses].includes(payment.status as typeof paidPaymentStatuses[number])) return;
+        await transaction.payment.update({
+          where: { id: paymentId },
+          data: { status: "REQUIRES_REVIEW", failureCode: "WEBHOOK_CANCEL_EXPIRATION_FAILED" },
+        });
+      });
+    },
+  };
+}
+
+export const paymentDatabaseEditRepository = createPaymentDatabaseEditRepository(prisma);
+
+export async function prepareOrderForEditing(
+  actor: OrderActor,
+  orderNumber: string,
+  dependencies: PaymentEditDependencies = {
+    repository: paymentDatabaseEditRepository,
+    gateway: createStripeCheckoutLifecycleGateway(),
+    assertQaRuntime: async () => {
+      await loadAndAssertPaymentQaRuntimeEnvironment();
+    },
+  },
+) {
+  if (!payableOrderNumber.test(orderNumber)) throw new PaymentServiceError(400, "INVALID_ORDER_NUMBER");
+  const active = await dependencies.repository.findActiveCheckout(actor, orderNumber);
+  if (!active.providerCheckoutId || !active.paymentId) return { editable: true as const };
+  try {
+    await dependencies.assertQaRuntime();
+    await dependencies.gateway.expireHostedCheckout(active.providerCheckoutId, `expire-checkout-session:${active.paymentId}`);
+    await dependencies.repository.markCheckoutExpired(active.orderId, active.paymentId);
+    return { editable: true as const };
+  } catch (error) {
+    if (error instanceof PaymentServiceError) throw error;
+    throw new PaymentServiceError(503, "PAYMENT_SESSION_EXPIRATION_FAILED", "La session de paiement ne peut pas encore être fermée.");
+  }
+}
+
+export async function expireCheckoutAfterCancellation(
+  orderNumber: string,
+  dependencies: PaymentEditDependencies = {
+    repository: paymentDatabaseEditRepository,
+    gateway: createStripeCheckoutLifecycleGateway(),
+    assertQaRuntime: async () => {
+      await loadAndAssertPaymentQaRuntimeEnvironment();
+    },
+  },
+) {
+  const active = await dependencies.repository.findCancelledCheckout(orderNumber);
+  if (!active.providerCheckoutId || !active.paymentId) return { expired: false as const };
+  try {
+    await dependencies.assertQaRuntime();
+    await dependencies.gateway.expireHostedCheckout(active.providerCheckoutId, `cancel-checkout-session:${active.paymentId}`);
+    await dependencies.repository.markCheckoutExpired(active.orderId, active.paymentId);
+    return { expired: true as const };
+  } catch {
+    await dependencies.repository.markCheckoutReview(active.orderId, active.paymentId);
+    throw new PaymentServiceError(503, "PAYMENT_SESSION_EXPIRATION_FAILED", "La commande est annulée, mais la session Stripe doit être vérifiée.");
+  }
+}
+
 type PaymentEnvironment = Readonly<Record<string, string | undefined>>;
 
 export function paymentReturnUrls(
@@ -384,7 +529,7 @@ export function paymentReturnUrls(
     throw new PaymentServiceError(503, "PAYMENT_UNAVAILABLE");
   }
 
-  const orderPath = `/compte/commandes/${encodeURIComponent(orderNumber)}`;
+  const orderPath = `/commande/${encodeURIComponent(orderNumber)}/confirmation`;
   const success = new URL(orderPath, origin);
   success.search = "?paiement=retour&session_id={CHECKOUT_SESSION_ID}";
   const cancel = new URL(orderPath, origin);
@@ -407,11 +552,7 @@ export async function createStripeCheckoutForOrder(
   orderNumber: string,
   dependencies?: CheckoutServiceDependencies,
 ): Promise<StripeCheckoutResult> {
-  if (
-    actor.role !== "ADMIN"
-    || actor.status !== "ACTIVE"
-    || actor.emailVerified !== true
-  ) {
+  if (actor.status !== "ACTIVE" || actor.emailVerified !== true) {
     throw new PaymentServiceError(403, "PAYMENT_ACCESS_DENIED");
   }
   if (!payableOrderNumber.test(orderNumber)) {

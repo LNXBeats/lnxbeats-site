@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { adminOrderFilters, listAdminOrders, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
+import { adminOrderFilters, listAdminOrders, listAdminPaymentReviewEvents, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
 import { orderStatusPresentation } from "@/lib/orders/status";
@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Commandes" };
 
 const filterLabels: Record<AdminOrderFilter, string> = {
-  all: "Toutes",
   attention: "À examiner",
   active: "En cours",
+  pending: "Brouillons / paiement",
   delivered: "Livrées",
   closed: "Annulées / refusées",
+  all: "Toutes (audit)",
 };
 
 type AdminOrdersPageProps = { searchParams: Promise<{ filtre?: string; etat?: string }> };
@@ -24,7 +25,10 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
   await requireAdmin();
   const params = await searchParams;
   const filter = parseAdminOrderFilter(params.filtre);
-  const orders = await listAdminOrders(filter);
+  const [orders, reviewEvents] = await Promise.all([
+    listAdminOrders(filter),
+    filter === "attention" ? listAdminPaymentReviewEvents() : Promise.resolve([]),
+  ]);
 
   return (
     <div className="admin-main">
@@ -36,9 +40,29 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
 
       <nav className="admin-filters" aria-label="Filtrer les commandes">
         {adminOrderFilters.map((value) => (
-          <Link key={value} href={value === "all" ? "/admin/commandes" : `/admin/commandes?filtre=${value}`} aria-current={filter === value ? "page" : undefined}>{filterLabels[value]}</Link>
+          <Link key={value} href={value === "attention" ? "/admin/commandes" : `/admin/commandes?filtre=${value}`} aria-current={filter === value ? "page" : undefined}>{filterLabels[value]}</Link>
         ))}
       </nav>
+
+      {reviewEvents.length ? (
+        <section className="admin-list-window" aria-labelledby="admin-payment-review-title">
+          <div className="admin-list-window__heading"><h2 id="admin-payment-review-title">Paiements à vérifier</h2><span>{reviewEvents.length}</span></div>
+          <ul className="admin-order-list">
+            {reviewEvents.map((event) => (
+              <li key={event.id}>
+                {event.payment?.order ? (
+                  <Link href={`/admin/commandes/${encodeURIComponent(event.payment.order.orderNumber)}`}>
+                    <span className="admin-order-list__identity"><small>{event.processedAt.toLocaleString("fr-FR")}</small><strong>{event.payment.order.title || event.payment.order.recipient || event.payment.order.orderNumber}</strong><em>Paiement à vérifier</em></span>
+                    <span className="admin-order-list__next"><small>Événement signé nécessitant une revue</small></span><span className="admin-order-list__arrow" aria-hidden="true">→</span>
+                  </Link>
+                ) : (
+                  <div className="admin-order-list__orphan"><strong>Paiement sans commande corrélée</strong><small>{event.processedAt.toLocaleString("fr-FR")} · revue technique requise</small></div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="admin-list-window" aria-labelledby="admin-order-list-title">
         <div className="admin-list-window__heading"><h2 id="admin-order-list-title">{filterLabels[filter]}</h2><span>{orders.length} résultat{orders.length === 1 ? "" : "s"}</span></div>

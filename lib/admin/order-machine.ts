@@ -44,7 +44,7 @@ const transitions = {
     { to: "IN_PROGRESS", label: "Reprendre la création", eventNote: "Le retour client est en cours d’intégration.", visibility: "CLIENT" },
   ],
   FINALIZING: [
-    { to: "DELIVERED", label: "Marquer comme livrée", eventNote: "La création a été marquée comme livrée. Aucun fichier n’est publié automatiquement.", visibility: "CLIENT", sensitive: true },
+    { to: "DELIVERED", label: "Publier la livraison", eventNote: "Votre création est disponible dans votre Compte.", visibility: "CLIENT", sensitive: true },
   ],
   DELIVERED: [],
   REFUSED: [],
@@ -63,7 +63,11 @@ export function getAdminOrderTransition(currentStatus: KnownOrderStatus, request
 
 export function getOrderTransitionTimestamps(targetStatus: KnownOrderStatus, now: Date) {
   if (targetStatus === "IN_PROGRESS") return { serviceStartedAt: now };
-  if (targetStatus === "DELIVERED") return { deliveredAt: now };
+  if (targetStatus === "DELIVERED") {
+    const downloadExpiresAt = new Date(now);
+    downloadExpiresAt.setUTCMonth(downloadExpiresAt.getUTCMonth() + 6);
+    return { deliveredAt: now, downloadExpiresAt };
+  }
   if (targetStatus === "CANCELLED") return { cancelledAt: now };
   return {};
 }

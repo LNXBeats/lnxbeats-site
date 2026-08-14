@@ -16,7 +16,11 @@ import {
   type OrderDraftInput,
   validateOrderForSubmission,
 } from "@/lib/orders/domain";
-import { deletePrivateOrderFile, readPrivateOrderFile, writePrivateOrderFile } from "@/lib/orders/storage";
+import {
+  deletePrivateOrderFile,
+  readPrivateOrderFile,
+  writePrivateOrderFile,
+} from "@/lib/orders/storage";
 import type { SerializedOrder } from "@/lib/orders/types";
 import { normalizeOrderImage, type NormalizedOrderImage } from "@/lib/orders/upload";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -35,12 +39,28 @@ const orderInclude = {
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   },
   assets: {
-    where: { role: "REFERENCE" },
+    where: { role: { in: ["REFERENCE", "DELIVERY"] } },
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
     include: { asset: true },
   },
   commercialLicenses: {
     orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+  },
+  payments: {
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      status: true,
+      amountCents: true,
+      currency: true,
+      paymentMethod: true,
+      checkoutExpiresAt: true,
+      paidAt: true,
+      failedAt: true,
+      expiredAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   },
 } satisfies Prisma.OrderInclude;
 
@@ -75,6 +95,28 @@ function dataFromInput(input: OrderDraftInput) {
     pricingVersion: pricing.pricingVersion,
     contractRequired: pricing.contractRequired,
   } as const;
+}
+
+const editableTerminalPaymentStatuses = ["CANCELED", "EXPIRED"] as const;
+
+async function assertOrderEditableForPayment(
+  transaction: Transaction,
+  order: { id: string; status: string },
+) {
+  if (order.status === "DRAFT") return;
+  if (order.status !== "AWAITING_PAYMENT") {
+    throw new OrderServiceError("Cette commande ne peut plus être modifiée.", 409, "ORDER_NOT_EDITABLE");
+  }
+  const blockingPayment = await transaction.payment.findFirst({
+    where: {
+      orderId: order.id,
+      status: { notIn: [...editableTerminalPaymentStatuses] },
+    },
+    select: { id: true },
+  });
+  if (blockingPayment) {
+    throw new OrderServiceError("Terminez ou annulez la session de paiement avant de modifier la commande.", 409, "PAYMENT_SESSION_ACTIVE");
+  }
 }
 
 export function serializeOrder(order: OrderWithRelations): SerializedOrder {
@@ -117,7 +159,7 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
       note: event.note,
       createdAt: event.createdAt.toISOString(),
     })),
-    photos: order.assets.map(({ asset, position }) => ({
+    photos: order.assets.filter(({ asset, role }) => role === "REFERENCE" && asset.type === "IMAGE").map(({ asset, position }) => ({
       id: asset.id,
       filename: asset.filename,
       mimeType: asset.mimeType,
@@ -125,6 +167,29 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
       width: asset.width,
       height: asset.height,
       position,
+    })),
+    delivery: order.status === "DELIVERED"
+      ? order.assets.filter(({ role, asset }) => role === "DELIVERY" && asset.type === "AUDIO").map(({ asset, createdAt }) => ({
+          id: asset.id,
+          filename: asset.filename,
+          mimeType: asset.mimeType,
+          sizeBytes: Number(asset.sizeBytes),
+          durationMs: asset.durationMs ?? 0,
+          createdAt: createdAt.toISOString(),
+        }))[0] ?? null
+      : null,
+    payments: order.payments.map((payment) => ({
+      id: payment.id,
+      status: payment.status,
+      amountCents: payment.amountCents,
+      currency: payment.currency,
+      paymentMethod: payment.paymentMethod,
+      checkoutExpiresAt: payment.checkoutExpiresAt?.toISOString() ?? null,
+      paidAt: payment.paidAt?.toISOString() ?? null,
+      failedAt: payment.failedAt?.toISOString() ?? null,
+      expiredAt: payment.expiredAt?.toISOString() ?? null,
+      createdAt: payment.createdAt.toISOString(),
+      updatedAt: payment.updatedAt.toISOString(),
     })),
     commercialLicenses: order.commercialLicenses.map((license) => ({
       id: license.id,
@@ -254,13 +319,17 @@ export async function createDraftOrder(actor: OrderActor, input: OrderDraftInput
 
 export async function saveDraftOrder(actor: OrderActor, orderNumber: string, input: OrderDraftInput) {
   assertDatabaseConfigured();
-  const updated = await prisma.order.updateMany({
-    where: { orderNumber, userId: actor.id, status: "DRAFT" },
-    data: dataFromInput(input),
+  return withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+    const current = await transaction.order.findFirst({
+      where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
+      select: { id: true, status: true },
+    });
+    if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
+    await assertOrderEditableForPayment(transaction, current);
+    await transaction.order.update({ where: { id: current.id }, data: dataFromInput(input) });
+    const order = await transaction.order.findUniqueOrThrow({ where: { id: current.id }, include: orderInclude });
+    return serializeOrder(order);
   });
-  if (updated.count !== 1) throw new OrderServiceError("Ce brouillon est introuvable.", 404, "ORDER_NOT_FOUND");
-  const order = await prisma.order.findUniqueOrThrow({ where: { orderNumber }, include: orderInclude });
-  return serializeOrder(order);
 }
 
 export async function finalizeOrder(actor: OrderActor, orderNumber: string, input: OrderDraftInput) {
@@ -268,28 +337,30 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
   const validation = validateOrderForSubmission(input);
   if (!validation.ok) throw new OrderServiceError(validation.message, 400, "INVALID_BRIEF");
 
-  return withOrderLock(`order:${orderNumber}`, async (transaction) => {
-    const draft = await transaction.order.findFirst({ where: { orderNumber, userId: actor.id, status: "DRAFT" } });
-    if (!draft) throw new OrderServiceError("Ce brouillon est introuvable.", 404, "ORDER_NOT_FOUND");
+  return withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+    const draft = await transaction.order.findFirst({ where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } } });
+    if (!draft) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
+    await assertOrderEditableForPayment(transaction, draft);
     const submittedAt = new Date();
     await transaction.order.update({
       where: { id: draft.id },
       data: {
         ...dataFromInput(input),
-        status: "AWAITING_PAYMENT",
-        submittedAt,
+        ...(draft.status === "DRAFT" ? { status: "AWAITING_PAYMENT" as const, submittedAt } : {}),
       },
     });
-    await transaction.orderEvent.create({
-      data: {
-        orderId: draft.id,
-        fromStatus: "DRAFT",
-        toStatus: "AWAITING_PAYMENT",
-        note: "Demande créée. Le paiement n’est pas encore disponible.",
-        visibility: "CLIENT",
-        actorUserId: actor.id,
-      },
-    });
+    if (draft.status === "DRAFT") {
+      await transaction.orderEvent.create({
+        data: {
+          orderId: draft.id,
+          fromStatus: "DRAFT",
+          toStatus: "AWAITING_PAYMENT",
+          note: "Demande enregistrée. Le paiement reste à finaliser.",
+          visibility: "CLIENT",
+          actorUserId: actor.id,
+        },
+      });
+    }
     const order = await transaction.order.findUniqueOrThrow({ where: { id: draft.id }, include: orderInclude });
     return serializeOrder(order);
   });
@@ -372,6 +443,21 @@ export async function getDraftForActor(actor: OrderActor, orderNumber?: string) 
   return order ? serializeOrder(order) : null;
 }
 
+export async function getCommanderOrderForActor(actor: OrderActor, orderNumber?: string) {
+  assertDatabaseConfigured();
+  const order = await prisma.order.findFirst({
+    where: {
+      userId: actor.id,
+      ...(orderNumber
+        ? { orderNumber, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } }
+        : { status: "DRAFT" }),
+    },
+    orderBy: { updatedAt: "desc" },
+    include: orderInclude,
+  });
+  return order ? serializeOrder(order) : null;
+}
+
 export async function deleteDraftOrder(actor: OrderActor, orderNumber: string) {
   assertDatabaseConfigured();
   const storageKeys = await withOrderLock(`order:${orderNumber}`, async (transaction) => {
@@ -405,9 +491,20 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
     throw new OrderServiceError("Sélectionnez entre une et dix photos.", 400, "INVALID_PHOTO_COUNT");
   }
 
-  const order = await prisma.order.findFirst({ where: { orderNumber, userId: actor.id, status: "DRAFT" } });
-  if (!order) throw new OrderServiceError("Ce brouillon est introuvable.", 404, "ORDER_NOT_FOUND");
-  const existingCount = await prisma.orderAsset.count({ where: { orderId: order.id, role: "REFERENCE" } });
+  const { order, existingCount } = await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+    const current = await transaction.order.findFirst({
+      where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
+      select: { id: true, status: true },
+    });
+    if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
+    await assertOrderEditableForPayment(transaction, current);
+    return {
+      order: current,
+      existingCount: await transaction.orderAsset.count({
+        where: { orderId: current.id, role: "REFERENCE", asset: { type: "IMAGE" } },
+      }),
+    };
+  });
   if (!assertPhotoCapacity(existingCount, files.length)) {
     throw new OrderServiceError("Une commande peut contenir au maximum dix photos.", 400, "PHOTO_LIMIT_REACHED");
   }
@@ -427,10 +524,16 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
       });
     }
 
-    await withOrderLock(`order:${orderNumber}`, async (transaction) => {
-      const current = await transaction.order.findFirst({ where: { id: order.id, userId: actor.id, status: "DRAFT" } });
-      if (!current) throw new OrderServiceError("Ce brouillon est introuvable.", 404, "ORDER_NOT_FOUND");
-      const count = await transaction.orderAsset.count({ where: { orderId: order.id, role: "REFERENCE" } });
+    await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+      const current = await transaction.order.findFirst({
+        where: { id: order.id, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
+        select: { id: true, status: true },
+      });
+      if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
+      await assertOrderEditableForPayment(transaction, current);
+      const count = await transaction.orderAsset.count({
+        where: { orderId: order.id, role: "REFERENCE", asset: { type: "IMAGE" } },
+      });
       if (!assertPhotoCapacity(count, pending.length)) {
         throw new OrderServiceError("Une commande peut contenir au maximum dix photos.", 400, "PHOTO_LIMIT_REACHED");
       }
@@ -487,10 +590,16 @@ export async function getOrderPhotoForActor(actor: OrderActor, orderNumber: stri
 
 export async function deleteOrderPhoto(actor: OrderActor, orderNumber: string, assetId: string) {
   assertDatabaseConfigured();
-  const mediaReference = await withOrderLock(`order:${orderNumber}`, async (transaction) => {
+  const mediaReference = await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+    const order = await transaction.order.findFirst({
+      where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
+      select: { id: true, status: true },
+    });
+    if (!order) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
+    await assertOrderEditableForPayment(transaction, order);
     const link = await transaction.orderAsset.findFirst({
       where: {
-        order: { orderNumber, userId: actor.id, status: "DRAFT" },
+        orderId: order.id,
         assetId,
         role: "REFERENCE",
         asset: { type: "IMAGE", visibility: "PRIVATE" },

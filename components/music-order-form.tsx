@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
+import { useOrderJourneyMemory } from "@/components/order-journey-provider";
 import { orderOffer } from "@/data/order-offer";
 import {
   calculateOrderPrice,
@@ -43,9 +45,12 @@ const emptyDraft: OrderDraftInput = {
   priorityProcessing: false,
 };
 
-const steps = ["Le repère", "L’histoire", "La création", "Récapitulatif"] as const;
+const steps = ["Projet", "Histoire", "Options", "Références", "Compte", "Récapitulatif & paiement"] as const;
+const stepQueryValues = ["projet", "histoire", "options", "references", "compte", "recap"] as const;
 
-type AccountState = { authenticated: false } | { authenticated: true; name: string };
+type AccountState =
+  | { authenticated: false }
+  | { authenticated: true; name: string; email: string };
 
 function draftFromOrder(order: SerializedOrder | null): OrderDraftInput {
   if (!order) return emptyDraft;
@@ -57,35 +62,53 @@ function draftFromOrder(order: SerializedOrder | null): OrderDraftInput {
     musicalDirection: order.musicalDirection,
     emotion: order.emotion,
     importantDetails: order.importantDetails,
-    wordsToInclude: order.wordsToInclude,
-    avoid: order.avoid,
-    pronunciationNotes: order.pronunciationNotes,
+    wordsToInclude: "",
+    avoid: "",
+    pronunciationNotes: "",
     coverIncluded: order.coverIncluded,
     priorityProcessing: order.priorityProcessing,
   };
 }
 
 async function responsePayload(response: Response) {
-  return response.json().catch(() => ({})) as Promise<{ order?: SerializedOrder; error?: string; field?: string }>;
+  return response.json().catch(() => ({})) as Promise<{
+    order?: SerializedOrder;
+    error?: string;
+    code?: string;
+    field?: string;
+  }>;
 }
 
-export function MusicOrderForm({ account, initialDraft }: { account: AccountState; initialDraft: SerializedOrder | null }) {
+export function MusicOrderForm({
+  account,
+  initialDraft,
+  initialStep = 0,
+  paymentsAvailable,
+}: {
+  account: AccountState;
+  initialDraft: SerializedOrder | null;
+  initialStep?: number;
+  paymentsAvailable: boolean;
+}) {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState<OrderDraftInput>(() => draftFromOrder(initialDraft));
+  const journey = useOrderJourneyMemory();
+  const remembered = journey.memory;
+  const [step, setStep] = useState(() => Math.min(Math.max(remembered?.step ?? initialStep, 0), steps.length - 1));
+  const [form, setForm] = useState<OrderDraftInput>(() => remembered?.form ?? draftFromOrder(initialDraft));
   const [orderNumber, setOrderNumber] = useState(initialDraft?.orderNumber ?? "");
+  const [orderStatus, setOrderStatus] = useState<SerializedOrder["status"] | null>(initialDraft?.status ?? null);
   const [photos, setPhotos] = useState<SerializedOrderPhoto[]>(initialDraft?.photos ?? []);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>(() => remembered?.pendingFiles ?? []);
+  const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(remembered?.photoRightsConfirmed ?? false);
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
   const [contentConfirmed, setContentConfirmed] = useState(false);
+  const [finalizedOrder, setFinalizedOrder] = useState<SerializedOrder | null>(null);
   const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">(initialDraft ? "saved" : "dirty");
-  const [message, setMessage] = useState(initialDraft ? `Brouillon ${initialDraft.orderNumber} repris.` : "");
+  const [message, setMessage] = useState(remembered ? "Votre brief et vos références ont été restaurés après la connexion." : initialDraft ? `Commande ${initialDraft.orderNumber} reprise.` : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(step);
-
   const pricing = calculateOrderPrice(form);
 
   useEffect(() => {
@@ -96,9 +119,32 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
 
   function setField<K extends keyof OrderDraftInput>(field: K, value: OrderDraftInput[K]) {
     setForm((current) => ({ ...current, [field]: value }));
+    setFinalizedOrder(null);
     setSaveState("dirty");
     setMessage("");
     setError("");
+  }
+
+  function preserveAndNavigate(destination: "/connexion" | "/inscription") {
+    journey.preserve({
+      form,
+      step: 4,
+      pendingFiles,
+      photoRightsConfirmed,
+    });
+    const returnTo = "/commander?reprendre=1&etape=compte";
+    router.push(`${destination}?retour=${encodeURIComponent(returnTo)}`);
+  }
+
+  function moveToStep(next: number, persistedOrderNumber = orderNumber) {
+    const bounded = Math.min(Math.max(next, 0), steps.length - 1);
+    setStep(bounded);
+    if (persistedOrderNumber) {
+      router.replace(
+        `/commander?brouillon=${encodeURIComponent(persistedOrderNumber)}&etape=${stepQueryValues[bounded]}`,
+        { scroll: false },
+      );
+    }
   }
 
   function validateCurrentStep() {
@@ -117,13 +163,31 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
       document.getElementById("order-musical-direction")?.focus();
       return false;
     }
+    if (step === 3 && pendingFiles.length && !photoRightsConfirmed) {
+      setError("Confirmez que vous avez le droit de communiquer les photos sélectionnées.");
+      return false;
+    }
+    if (step === 4 && !account.authenticated) {
+      setError("Connectez-vous ou créez un compte vérifié pour conserver et payer cette commande.");
+      return false;
+    }
     setError("");
     return true;
   }
 
-  function nextStep() {
+  async function nextStep() {
     if (!validateCurrentStep()) return;
-    setStep((current) => Math.min(current + 1, steps.length - 1));
+    let persistedOrderNumber = orderNumber;
+    if (step === 4 && account.authenticated) {
+      const saved = await saveDraft();
+      if (!saved) return;
+      persistedOrderNumber = saved.orderNumber;
+      if (pendingFiles.length) {
+        const uploaded = await uploadPhotos(saved.orderNumber);
+        if (!uploaded) return;
+      }
+    }
+    moveToStep(step + 1, persistedOrderNumber);
   }
 
   async function saveDraft() {
@@ -143,9 +207,11 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
       const payload = await responsePayload(response);
       if (!response.ok || !payload.order) throw new Error(payload.error ?? "Le brouillon n’a pas pu être enregistré.");
       setOrderNumber(payload.order.orderNumber);
+      setOrderStatus(payload.order.status);
       setPhotos(payload.order.photos);
       setSaveState("saved");
       setMessage(`Enregistré — ${payload.order.orderNumber}`);
+      journey.clear();
       router.refresh();
       return payload.order;
     } catch (caught) {
@@ -158,10 +224,16 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
   }
 
   async function uploadPhotos(targetOrderNumber?: string) {
-    if (!pendingFiles.length) return setError("Choisissez au moins une photo.");
-    if (!photoRightsConfirmed) return setError("Confirmez que vous avez le droit de communiquer ces photos.");
+    if (!pendingFiles.length) {
+      setError("Choisissez au moins une photo.");
+      return null;
+    }
+    if (!photoRightsConfirmed) {
+      setError("Confirmez que vous avez le droit de communiquer ces photos.");
+      return null;
+    }
     const current = targetOrderNumber ? { orderNumber: targetOrderNumber } : orderNumber ? { orderNumber } : await saveDraft();
-    if (!current) return;
+    if (!current) return null;
 
     setBusy(true);
     setError("");
@@ -200,7 +272,7 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
         throw new Error(payload.error ?? "La photo n’a pas pu être supprimée.");
       }
       setPhotos((current) => current.filter((photo) => photo.id !== assetId));
-      setMessage("Photo supprimée du brouillon.");
+      setMessage("Photo supprimée de la commande.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "La photo n’a pas pu être supprimée.");
     } finally {
@@ -215,24 +287,19 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
       return;
     }
     if (!summaryConfirmed || !contentConfirmed) {
-      setError("Confirmez le récapitulatif et les règles de contenu avant de créer la demande.");
+      setError("Confirmez le récapitulatif et les règles de contenu avant de continuer.");
       return;
     }
     if (!account.authenticated) {
-      setError("Connectez-vous avec un compte vérifié avant de créer la demande.");
+      setError("Connectez-vous avec un compte vérifié avant de créer la commande.");
       return;
     }
     const current = orderNumber ? { orderNumber } : await saveDraft();
     if (!current) return;
     if (pendingFiles.length) {
-      if (!photoRightsConfirmed) {
-        setError("Confirmez le droit de communiquer les photos sélectionnées avant de créer la demande.");
-        return;
-      }
       const uploaded = await uploadPhotos(current.orderNumber);
       if (!uploaded) return;
     }
-
     setBusy(true);
     setError("");
     try {
@@ -242,18 +309,23 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
         body: JSON.stringify(form),
       });
       const payload = await responsePayload(response);
-      if (!response.ok || !payload.order) throw new Error(payload.error ?? "La demande n’a pas pu être créée.");
-      router.push(`/compte/commandes/${encodeURIComponent(payload.order.orderNumber)}`);
+      if (!response.ok || !payload.order) throw new Error(payload.error ?? "La commande n’a pas pu être préparée.");
+      setOrderNumber(payload.order.orderNumber);
+      setOrderStatus(payload.order.status);
+      setFinalizedOrder(payload.order);
+      setSaveState("saved");
+      setMessage("Commande enregistrée. Le paiement sécurisé peut maintenant être ouvert.");
+      journey.clear();
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "La demande n’a pas pu être créée.");
+      setError(caught instanceof Error ? caught.message : "La commande n’a pas pu être préparée.");
     } finally {
       setBusy(false);
     }
   }
 
   async function deleteDraft() {
-    if (!orderNumber || !window.confirm("Supprimer définitivement ce brouillon et ses photos ?")) return;
+    if (!orderNumber || orderStatus !== "DRAFT" || !window.confirm("Supprimer définitivement ce brouillon et ses références privées ?")) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}`, { method: "DELETE" });
@@ -263,10 +335,13 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
       }
       setForm(emptyDraft);
       setOrderNumber("");
+      setOrderStatus(null);
       setPhotos([]);
+      setPendingFiles([]);
       setStep(0);
       setSaveState("dirty");
       setMessage("Brouillon supprimé.");
+      journey.clear();
       router.replace("/commander");
       router.refresh();
     } catch (caught) {
@@ -278,37 +353,37 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
 
   return (
     <form className="order-form order-form--connected" onSubmit={(event) => event.preventDefault()}>
-      <div className="order-progress" aria-label="Progression du brief">
+      <div className="order-progress" aria-label="Progression de la commande">
         {steps.map((label, index) => (
-          <div key={label} className={`order-progress__item ${index <= step ? "is-active" : ""}`} aria-current={index === step ? "step" : undefined}>
+          <button
+            key={label}
+            type="button"
+            className={`order-progress__item ${index <= step ? "is-active" : ""}`}
+            aria-current={index === step ? "step" : undefined}
+            onClick={() => { if (index < step) moveToStep(index); }}
+            disabled={busy || index > step}
+          >
             {String(index + 1).padStart(2, "0")} <span>· {label}</span>
-          </div>
+          </button>
         ))}
       </div>
 
       <div className="order-savebar" aria-live="polite">
         <div>
-          <strong>{orderNumber || "Nouveau brief"}</strong>
-          <span>{saveState === "saving" ? "Enregistrement…" : saveState === "saved" ? "Enregistré" : saveState === "error" ? "Échec de l’enregistrement" : "Modifications non enregistrées"}</span>
+          <strong>{orderNumber || "Nouvelle commande"}</strong>
+          <span>{saveState === "saving" ? "Enregistrement…" : saveState === "saved" ? "Enregistrée" : saveState === "error" ? "Échec de l’enregistrement" : "Modifications en mémoire"}</span>
         </div>
-        <button type="button" className="form-button" onClick={() => void saveDraft()} disabled={busy}>Enregistrer le brouillon</button>
+        {account.authenticated && !finalizedOrder ? <button type="button" className="form-button" onClick={() => void saveDraft()} disabled={busy}>Enregistrer</button> : null}
       </div>
-
-      {!account.authenticated ? (
-        <div className="order-auth-note">
-          <p><strong>Votre brief reste dans cette page tant qu’il n’est pas sauvegardé.</strong> Pour protéger son contenu, aucune donnée sensible n’est placée dans le stockage du navigateur.</p>
-          <p><Link href="/connexion?retour=%2Fcommander">Se connecter</Link> ou <Link href="/inscription">créer un compte</Link> avant la sauvegarde.</p>
-        </div>
-      ) : <p className="order-auth-note">Connecté en tant que <strong>{account.name}</strong>. Ce brouillon n’est accessible qu’à votre compte.</p>}
 
       <div className="form-step" key={step}>
         {step === 0 ? (
           <>
-            <p className="eyebrow">Étape 1 sur 4</p>
+            <p className="eyebrow">Étape 1 sur 6</p>
             <h2 ref={headingRef} tabIndex={-1}>Donnez un repère à cette histoire.</h2>
-            <p className="form-step__intro">Ce nom vous aidera à retrouver la demande. Il ne devient pas automatiquement le titre du morceau.</p>
+            <p className="form-step__intro">Ce nom vous aidera à retrouver la commande. Il ne devient pas automatiquement le titre du morceau.</p>
             <div className="field">
-              <label htmlFor="order-title">Nom de repère <span>(facultatif)</span></label>
+              <label htmlFor="order-title">Nom du projet <span>(facultatif)</span></label>
               <input id="order-title" maxLength={orderTextLimits.title} value={form.title} placeholder="Anniversaire de Julie" onChange={(event) => setField("title", event.target.value)} />
             </div>
             <div className="field-grid">
@@ -326,9 +401,9 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
 
         {step === 1 ? (
           <>
-            <p className="eyebrow">Étape 2 sur 4</p>
+            <p className="eyebrow">Étape 2 sur 6</p>
             <h2 ref={headingRef} tabIndex={-1}>Racontez ce qui ne doit pas être perdu.</h2>
-            <p className="form-step__intro">Le client apporte l’histoire et les intentions. LNX Beats choisit les mots, écrit et construit la création musicale.</p>
+            <p className="form-step__intro">Vous apportez l’histoire et les intentions. LNX Beats choisit les mots, écrit et construit la création musicale.</p>
             <div className="field">
               <label htmlFor="order-brief">Histoire principale *</label>
               <textarea id="order-brief" required minLength={orderTextLimits.briefMin} maxLength={orderTextLimits.brief} value={form.brief} onChange={(event) => setField("brief", event.target.value)} />
@@ -343,9 +418,8 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
 
         {step === 2 ? (
           <>
-            <p className="eyebrow">Étape 3 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur de la création.</h2>
-            <p className="form-step__intro">Cette première commande couvre une création à usage personnel. Une extension de droits distincte pourra être demandée depuis votre espace après la livraison.</p>
+            <p className="eyebrow">Étape 3 sur 6</p>
+            <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur et les options.</h2>
             <fieldset className="fieldset" id="order-musical-direction" tabIndex={-1}>
               <legend>Direction musicale *</legend>
               <div className="choice-grid">
@@ -361,7 +435,6 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
               <label htmlFor="order-emotion">Ce que la musique doit faire ressentir</label>
               <input id="order-emotion" maxLength={orderTextLimits.emotion} value={form.emotion} placeholder="Tendre, drôle, nostalgique…" onChange={(event) => setField("emotion", event.target.value)} />
             </div>
-
             <fieldset className="fieldset">
               <legend>Options</legend>
               <div className="choice-grid">
@@ -375,7 +448,14 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
                 </label>
               </div>
             </fieldset>
+            <div className="order-total order-total--compact"><span>Total actualisé</span><strong>{formatEuro(pricing.totalCents)}</strong><small>Calculé côté serveur au moment de l’enregistrement.</small></div>
+          </>
+        ) : null}
 
+        {step === 3 ? (
+          <>
+            <p className="eyebrow">Étape 4 sur 6</p>
+            <h2 ref={headingRef} tabIndex={-1}>Ajoutez vos références privées.</h2>
             <section className="order-photo-panel" aria-labelledby="order-photo-title">
               <div>
                 <p className="auth-panel__label">Photos de référence privées</p>
@@ -388,10 +468,10 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
               </div>
               <label className="choice choice--full">
                 <input type="checkbox" checked={photoRightsConfirmed} onChange={(event) => setPhotoRightsConfirmed(event.target.checked)} />
-                <span>Je dispose du droit de communiquer ces photos à LNX Beats pour cette demande.</span>
+                <span>Je dispose du droit de communiquer ces photos à LNX Beats pour cette commande.</span>
               </label>
-              <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>Ajouter les photos au brouillon</button>
-              {pendingFiles.length ? <p className="field__hint" role="status">{pendingFiles.length} photo{pendingFiles.length === 1 ? "" : "s"} sélectionnée{pendingFiles.length === 1 ? "" : "s"}. Elles seront aussi enregistrées automatiquement lors de la création de la demande.</p> : null}
+              {account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>Enregistrer les photos</button> : <p className="field__hint">Les photos sélectionnées restent uniquement en mémoire jusqu’à votre connexion.</p>}
+              {pendingFiles.length ? <p className="field__hint" role="status">{pendingFiles.length} photo{pendingFiles.length === 1 ? "" : "s"} sélectionnée{pendingFiles.length === 1 ? "" : "s"}.</p> : null}
               {photos.length ? (
                 <ul className="order-photo-list">
                   {photos.map((photo) => (
@@ -403,42 +483,74 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
                     </li>
                   ))}
                 </ul>
-              ) : <p className="field__hint">Aucune photo enregistrée.</p>}
+              ) : <p className="field__hint">Aucune photo enregistrée. Cette étape reste facultative.</p>}
             </section>
           </>
         ) : null}
 
-        {step === 3 ? (
+        {step === 4 ? (
           <>
-            <p className="eyebrow">Étape 4 sur 4</p>
-            <h2 ref={headingRef} tabIndex={-1}>Relisez avant de créer la demande.</h2>
+            <p className="eyebrow">Étape 5 sur 6</p>
+            <h2 ref={headingRef} tabIndex={-1}>{account.authenticated ? "Votre compte vérifié est prêt." : "Protégez votre brief avant le paiement."}</h2>
+            {account.authenticated ? (
+              <div className="order-auth-note order-auth-note--verified">
+                <p><strong>{account.name}</strong></p><p>{account.email}</p>
+                <p>Cette commande, ses références privées et son paiement seront rattachés uniquement à ce compte.</p>
+              </div>
+            ) : (
+              <div className="order-auth-note">
+                <p><strong>Votre brief et vos photos sélectionnées restent en mémoire pendant ce parcours de connexion.</strong></p>
+                <p>Aucune histoire, référence privée ou donnée sensible n’est placée dans l’URL, le localStorage ou le sessionStorage.</p>
+                <div className="order-auth-actions">
+                  <button className="form-button form-button--primary" type="button" onClick={() => preserveAndNavigate("/connexion")}>Me connecter</button>
+                  <button className="form-button" type="button" onClick={() => preserveAndNavigate("/inscription")}>Créer mon compte</button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {step === 5 ? (
+          <>
+            <p className="eyebrow">Étape 6 sur 6</p>
+            <h2 ref={headingRef} tabIndex={-1}>{finalizedOrder ? "Votre commande est prête à être payée." : "Relisez avant le paiement."}</h2>
             <dl className="summary order-summary">
-              <div><dt>Repère</dt><dd>{form.title || "Sans titre de repère"}</dd></div>
+              <div><dt>Projet</dt><dd>{form.title || "Sans titre de repère"}</dd></div>
               <div><dt>Histoire pour</dt><dd>{form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
               <div><dt>Histoire</dt><dd className="summary__long">{form.brief}</dd></div>
-              <div><dt>Direction</dt><dd>{form.musicalDirection}</dd></div>
+              {form.importantDetails ? <div><dt>Détails importants</dt><dd className="summary__long">{form.importantDetails}</dd></div> : null}
+              <div><dt>Direction</dt><dd>{form.musicalDirection}{form.emotion ? ` · ${form.emotion}` : ""}</dd></div>
               <div><dt>Usage compris</dt><dd>Personnel</dd></div>
-              <div><dt>Options</dt><dd>{[form.coverIncluded ? "Cover" : "", form.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
-              <div><dt>Photos</dt><dd>{photos.length + pendingFiles.length}{pendingFiles.length ? " (sélection en attente d’enregistrement)" : ""}</dd></div>
-              <div><dt>Livraison future</dt><dd>WAV · disponible 6 mois à compter de la livraison</dd></div>
-              <div><dt>Retour inclus</dt><dd>1 retour pour corriger un écart avec le brief initial</dd></div>
-              <div><dt>Délai indicatif</dt><dd>{orderOffer.indicativeDelay} · point de départ confirmé lors de la prise en charge</dd></div>
+              <div><dt>Options</dt><dd>{[form.coverIncluded ? "Cover +10 €" : "", form.priorityProcessing ? "Priorité +30 €" : ""].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
+              <div><dt>Photos privées</dt><dd>{photos.length + pendingFiles.length}{pendingFiles.length ? " sélectionnée(s), en attente d’enregistrement" : " enregistrée(s)"}</dd></div>
+              <div><dt>Compte</dt><dd>{account.authenticated ? `${account.name} · ${account.email}` : "Connexion requise"}</dd></div>
+              <div><dt>Délai indicatif</dt><dd>{orderOffer.indicativeDelay}</dd></div>
             </dl>
-
             <div className="order-total" aria-live="polite">
               <span>Total de la création</span><strong>{formatEuro(pricing.totalCents)}</strong>
-              <small>De 50 € à 90 € avec les options · les droits d’exploitation ne font pas partie de cette commande · paiement non encore disponible.</small>
+              <small>Base 50 €{form.coverIncluded ? " + cover 10 €" : ""}{form.priorityProcessing ? " + priorité 30 €" : ""} · aucun montant n’est accepté depuis le navigateur.</small>
             </div>
 
-            <label className="choice choice--full">
-              <input type="checkbox" checked={summaryConfirmed} onChange={(event) => setSummaryConfirmed(event.target.checked)} />
-              <span>J’ai relu le brief. Les droits, l’annulation et le remboursement seront détaillés dans les CGV applicables avant activation du paiement.</span>
-            </label>
-            <label className="choice choice--full">
-              <input type="checkbox" checked={contentConfirmed} onChange={(event) => setContentConfirmed(event.target.checked)} />
-              <span>Je comprends que LNX Beats peut refuser une demande illégale, haineuse, diffamatoire, harcelante ou portant atteinte aux droits d’un tiers.</span>
-            </label>
-            <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed}>Créer ma demande</button>
+            {!finalizedOrder ? (
+              <>
+                <label className="choice choice--full">
+                  <input type="checkbox" checked={summaryConfirmed} onChange={(event) => setSummaryConfirmed(event.target.checked)} />
+                  <span>J’ai relu le brief, les options et le total de cette commande.</span>
+                </label>
+                <label className="choice choice--full">
+                  <input type="checkbox" checked={contentConfirmed} onChange={(event) => setContentConfirmed(event.target.checked)} />
+                  <span>Je comprends que LNX Beats peut refuser une demande illégale, haineuse, diffamatoire, harcelante ou portant atteinte aux droits d’un tiers.</span>
+                </label>
+                <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed}>Enregistrer et passer au paiement</button>
+              </>
+            ) : paymentsAvailable ? (
+              <div className="order-checkout-panel">
+                <p>Vous allez quitter temporairement LNX Studio pour le Checkout hébergé Stripe en mode Test. Le retour navigateur ne confirme jamais seul le paiement.</p>
+                <StripeCheckoutAction orderNumber={finalizedOrder.orderNumber} amountCents={finalizedOrder.totalCents} />
+              </div>
+            ) : (
+              <div className="order-checkout-panel"><p><strong>Commande enregistrée.</strong> Stripe Test est fermé dans cet environnement. Retrouvez la commande dans votre espace sans perdre le brief.</p><Link className="form-button" href={`/compte/commandes/${encodeURIComponent(finalizedOrder.orderNumber)}`}>Voir ma commande</Link></div>
+            )}
           </>
         ) : null}
 
@@ -446,10 +558,10 @@ export function MusicOrderForm({ account, initialDraft }: { account: AccountStat
         {message ? <p className="form-message" role="status">{message}</p> : null}
 
         <div className="form-navigation">
-          {step > 0 ? <button className="form-button" type="button" onClick={() => setStep((current) => current - 1)} disabled={busy}>← Étape précédente</button> : <span />}
-          {step < steps.length - 1 ? <button className="form-button form-button--primary" type="button" onClick={nextStep} disabled={busy}>Étape suivante →</button> : null}
+          {step > 0 && !finalizedOrder ? <button className="form-button" type="button" onClick={() => moveToStep(step - 1)} disabled={busy}>← Étape précédente</button> : <span />}
+          {step < steps.length - 1 ? <button className="form-button form-button--primary" type="button" onClick={() => void nextStep()} disabled={busy}>Étape suivante →</button> : null}
         </div>
-        {orderNumber ? <button className="order-delete-draft" type="button" onClick={() => void deleteDraft()} disabled={busy}>Supprimer ce brouillon</button> : null}
+        {orderNumber && orderStatus === "DRAFT" ? <button className="order-delete-draft" type="button" onClick={() => void deleteDraft()} disabled={busy}>Supprimer ce brouillon</button> : null}
       </div>
     </form>
   );
