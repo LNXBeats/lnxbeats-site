@@ -411,7 +411,7 @@ export async function generatePreauthorization(
       { title: "Limites", paragraphs: ["Ce document n’accorde aucun droit tant qu’il n’a pas été approuvé, accepté et, dans une version ultérieure, payé.", request.type === "EXPLOITATION_PARTNERSHIP" ? "Étude individuelle obligatoire - aucune répartition définitive à ce stade." : "Cette demande ne transfère pas la qualité d’auteur, les droits moraux, la propriété de l’œuvre ou une quote-part SACEM.", "Les règles de rétractation et de commencement anticipé restent soumises à validation juridique. Aucune renonciation n’est précochée."] },
     ],
   });
-  const storageKey = `contracts/${request.id}/${randomUUID()}.pdf`;
+  const storageKey = `orders/${request.orderId}/documents/${randomUUID()}.pdf`;
   const stored = await dependencies.write({ storageKey, bytes: pdf.bytes, checksumSha256: pdf.sha256 });
   if (stored.storageBackend !== "OBJECT" || stored.storageProvider !== "r2" || stored.visibility !== "PRIVATE") {
     await dependencies.delete(stored).catch(() => undefined);

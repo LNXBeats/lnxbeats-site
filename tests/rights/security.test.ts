@@ -64,6 +64,17 @@ test("rights application code has no Stripe or rights payment creation path", as
   assert.doesNotMatch(joined, /checkout\.sessions|PaymentIntent/);
 });
 
+test("contract objects use the private order-document key allowlist", async () => {
+  const sources = await Promise.all([
+    readFile("lib/rights/service.ts", "utf8"),
+    readFile("lib/rights/workflow.ts", "utf8"),
+  ]);
+  const joined = sources.join("\n");
+  assert.doesNotMatch(joined, /`contracts\//);
+  assert.match(joined, /`orders\/\$\{request\.orderId\}\/documents\/\$\{randomUUID\(\)\}\.pdf`/);
+  assert.match(joined, /`orders\/\$\{candidate\.orderId\}\/documents\/\$\{randomUUID\(\)\}\.pdf`/);
+});
+
 test("new personal-use evidence is nullable for non-retroactivity but atomic when present", async () => {
   const migration = await readFile("prisma/migrations/20260820071034_rights_contracts/migration.sql", "utf8");
   assert.match(migration, /orders_personal_use_terms_complete/);

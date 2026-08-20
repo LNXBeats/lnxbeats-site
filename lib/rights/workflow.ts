@@ -407,7 +407,7 @@ export async function generateRightsDocument(actor: OrderActor, requestNumber: s
     kind,
     sections,
   });
-  const storageKey = `contracts/${request.id}/${randomUUID()}.pdf`;
+  const storageKey = `orders/${request.orderId}/documents/${randomUUID()}.pdf`;
   const storedResult = await writePrivateOrderMedia({ storageKey, body: pdf.bytes, contentLength: pdf.bytes.length, contentType: "application/pdf", checksumSha256: pdf.sha256 });
   const stored = { ...storedResult, storageKey };
   if (stored.storageBackend !== "OBJECT" || stored.storageProvider !== "r2" || stored.visibility !== "PRIVATE") {
@@ -511,7 +511,7 @@ export async function acceptRightsContract(
       { title: "Portée de la preuve", paragraphs: ["Cette preuve relie le compte, le consentement, la version du modèle et l’empreinte du document. Elle n’est pas présentée comme une signature électronique qualifiée.", "Aucun droit n’est actif et aucun paiement de droits n’est ouvert dans V0.7.2. Toute activation future exige les validations juridiques, administratives et techniques prévues."] },
     ],
   });
-  const storageKey = `contracts/${candidate.id}/${randomUUID()}.pdf`;
+  const storageKey = `orders/${candidate.orderId}/documents/${randomUUID()}.pdf`;
   const stored = await dependencies.write({ storageKey, bytes: pdf.bytes, checksumSha256: pdf.sha256 });
   if (stored.storageBackend !== "OBJECT" || stored.storageProvider !== "r2" || stored.visibility !== "PRIVATE") {
     await dependencies.delete(stored).catch(() => undefined);
