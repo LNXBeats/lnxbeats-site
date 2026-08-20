@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.7.2 — Droits, contrats et autorisations
+
+- sépare usage personnel, licence de publication 150 € et partenariat d’exploitation 1 500 € sans paiement de droits ;
+- ajoute demandes, coordonnées versionnées, contributions, paramètres structurés, propositions Admin, templates, documents, acceptations et audit ;
+- génère des PDF A4 privés, hashés et filigranés sur R2 PRIVATE ;
+- ajoute Legal Review Gate, double validation du partenariat et blocage PostgreSQL de toute activation ;
+- remplace le workflow `CommercialLicense` runtime par `RightsRequest` tout en conservant l’archive additive ;
+- maintient la production bloquée tant que l’advisory Prisma/deepmerge-ts n’a pas de correction stable compatible.
+
 Toutes les évolutions notables de LNX Studio sont consignées dans ce fichier.
 
 ## [0.7.1] — 2026-08-14

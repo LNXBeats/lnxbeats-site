@@ -83,7 +83,8 @@ export type OrderDeletionSnapshot = {
   serviceStartedAt: Date | null;
   deliveredAt: Date | null;
   events: readonly { toStatus: KnownOrderStatus }[];
-  assets: readonly { role: "REFERENCE" | "DELIVERY" | "DOCUMENT" }[];
+  assets: readonly { role: "REFERENCE" | "DELIVERY" | "DOCUMENT" | "CONTRACT" }[];
+  rightsRequests: readonly unknown[];
   commercialLicenses: readonly unknown[];
   payments: readonly unknown[];
 };
@@ -97,6 +98,9 @@ export function getOrderDeletionEligibility(order: OrderDeletionSnapshot) {
   }
   if (order.commercialLicenses.length) {
     return { eligible: false, reason: "Une demande de droits est liée à cette commande." } as const;
+  }
+  if (order.rightsRequests.length) {
+    return { eligible: false, reason: "Une demande de droits ou un document contractuel est lié à cette commande." } as const;
   }
   if (order.payments.length) {
     return { eligible: false, reason: "Un historique de paiement est lié à cette commande et doit être conservé." } as const;

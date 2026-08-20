@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
 import { useOrderJourneyMemory } from "@/components/order-journey-provider";
 import { orderOffer } from "@/data/order-offer";
+import { personalUseTerms } from "@/data/rights-offer";
 import {
   calculateOrderPrice,
   formatEuro,
@@ -102,6 +103,7 @@ export function MusicOrderForm({
   const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(remembered?.photoRightsConfirmed ?? false);
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
   const [contentConfirmed, setContentConfirmed] = useState(false);
+  const [personalUseTermsConfirmed, setPersonalUseTermsConfirmed] = useState(false);
   const [finalizedOrder, setFinalizedOrder] = useState<SerializedOrder | null>(null);
   const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">(initialDraft ? "saved" : "dirty");
   const [message, setMessage] = useState(remembered ? "Votre brief et vos références ont été restaurés après la connexion." : initialDraft ? `Commande ${initialDraft.orderNumber} reprise.` : "");
@@ -286,8 +288,8 @@ export function MusicOrderForm({
       setError(validation.message);
       return;
     }
-    if (!summaryConfirmed || !contentConfirmed) {
-      setError("Confirmez le récapitulatif et les règles de contenu avant de continuer.");
+    if (!summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed) {
+      setError("Confirmez le récapitulatif, l’usage personnel et les règles de contenu avant de continuer.");
       return;
     }
     if (!account.authenticated) {
@@ -306,7 +308,7 @@ export function MusicOrderForm({
       const response = await fetch(`/api/orders/${encodeURIComponent(current.orderNumber)}/finalize`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, personalUseTermsAccepted: true }),
       });
       const payload = await responsePayload(response);
       if (!response.ok || !payload.order) throw new Error(payload.error ?? "La commande n’a pas pu être préparée.");
@@ -541,7 +543,11 @@ export function MusicOrderForm({
                   <input type="checkbox" checked={contentConfirmed} onChange={(event) => setContentConfirmed(event.target.checked)} />
                   <span>Je comprends que LNX Beats peut refuser une demande illégale, haineuse, diffamatoire, harcelante ou portant atteinte aux droits d’un tiers.</span>
                 </label>
-                <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed}>Enregistrer et passer au paiement</button>
+                <label className="choice choice--full">
+                  <input type="checkbox" checked={personalUseTermsConfirmed} onChange={(event) => setPersonalUseTermsConfirmed(event.target.checked)} />
+                  <span><strong>Usage personnel.</strong> {personalUseTerms.text}</span>
+                </label>
+                <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed}>Enregistrer et passer au paiement</button>
               </>
             ) : paymentsAvailable ? (
               <div className="order-checkout-panel">

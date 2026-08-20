@@ -32,25 +32,3 @@ export const orderOffer = {
 } as const;
 
 export type OrderUsage = "PERSONAL" | "COMMERCIAL_EXTENDED";
-
-export const commercialRightsOffer = {
-  pricingVersion: "2026-08-rights-v1",
-  priceCents: 150_000,
-  currency: "EUR",
-  contractRequired: true,
-} as const;
-
-export type CommercialLicenseStatus =
-  | "REQUESTED"
-  | "CONTRACT_PENDING"
-  | "PAYMENT_PENDING"
-  | "ACTIVE"
-  | "REJECTED"
-  | "CANCELLED";
-
-export type CommercialLicensePaymentStatus =
-  | "NOT_STARTED"
-  | "PENDING"
-  | "CONFIRMED"
-  | "REFUND_PENDING"
-  | "REFUNDED";

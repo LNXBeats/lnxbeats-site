@@ -11,7 +11,7 @@ import { notificationChannelAvailability } from "@/lib/notifications/config";
 import { orderNotificationTemplate } from "@/lib/notifications/templates";
 import type { OrderNotificationMessage } from "@/lib/notifications/types";
 
-const DEFAULT_CAPTURE_PATH = "/private/tmp/lnx-studio-v071-order-notifications.jsonl";
+const DEFAULT_CAPTURE_PATH = "/private/tmp/lnx-studio-v072-order-notifications.jsonl";
 
 function validRecipient(value: string | null): value is string {
   if (!value || value.length > 320 || /[\r\n]/.test(value)) return false;
@@ -35,6 +35,9 @@ function assertResendOrderNotification(message: OrderNotificationMessage) {
   if (process.env.EMAIL_FROM?.trim() !== RESEND_PREVIEW_FROM) throw new Error("Notification sender is not approved.");
   if (process.env.EMAIL_REPLY_TO?.trim().toLowerCase() !== RESEND_PREVIEW_REPLY_TO) {
     throw new Error("Notification reply address is not approved.");
+  }
+  if (message.kind.includes("RIGHTS")) {
+    throw new Error("Real rights notification email is disabled pending legal and human validation.");
   }
   if (message.kind === "OWNER_NEW_ORDER") {
     if (message.recipient?.toLowerCase() !== configuredAdminEmail()) {

@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { CommercialLicensePanel } from "@/components/commercial-license-panel";
 import { Container } from "@/components/container";
 import { ModifyUnpaidOrderAction } from "@/components/modify-unpaid-order-action";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
 import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
+import { RightsOptionsSection } from "@/components/rights-options-section";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { clientOrderAction, clientPaymentState, orderCanStillBeEdited } from "@/lib/orders/checkout";
-import { canRequestCommercialLicense, formatEuro, type OrderActor } from "@/lib/orders/domain";
+import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { orderStatusPresentation } from "@/lib/orders/status";
 import { paymentQaAvailable } from "@/lib/payments/availability";
+import { listRightsRequestsForOrderActor } from "@/lib/rights/service";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   const status = orderStatusPresentation[order.status];
   const paymentState = clientPaymentState(order);
   const paymentsAvailable = await paymentQaAvailable();
+  const rightsRequests = order.status === "DELIVERED" ? await listRightsRequestsForOrderActor(actor, order.orderNumber) : [];
   const canStartPayment = ["ready", "confirming", "failed", "expired"].includes(paymentState);
 
   return (
@@ -100,13 +102,29 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           </aside>
         </div>
 
-        {order.status === "DELIVERED" ? (
-          <CommercialLicensePanel
-            orderNumber={order.orderNumber}
-            initialLicense={order.commercialLicenses[0] ?? null}
-            initialCanRequest={canRequestCommercialLicense(order.status, order.commercialLicenses.map(({ status: licenseStatus }) => licenseStatus))}
-          />
-        ) : null}
+        <section className="order-detail__section order-delivery-future" aria-labelledby="order-delivery-title">
+          <p className="auth-panel__label">Livraison</p>
+          {order.delivery ? (
+            <>
+              <h2 id="order-delivery-title">Votre création est prête.</h2>
+              <p>Le master reste privé et n’est jamais exposé par une URL R2 publique permanente.</p>
+              <dl className="order-detail__facts">
+                <div><dt>Format</dt><dd>{order.delivery.mimeType === "audio/wav" ? "WAV" : "MP3"}</dd></div>
+                <div><dt>Taille</dt><dd>{(order.delivery.sizeBytes / (1024 * 1024)).toFixed(1)} Mo</dd></div>
+                <div><dt>Livraison</dt><dd>{new Date(order.delivery.createdAt).toLocaleString("fr-FR")}</dd></div>
+                {order.downloadExpiresAt ? <div><dt>Disponible jusqu’au</dt><dd>{new Date(order.downloadExpiresAt).toLocaleDateString("fr-FR")}</dd></div> : null}
+              </dl>
+              <a className="form-button form-button--primary" href={`/api/orders/${encodeURIComponent(order.orderNumber)}/delivery/${order.delivery.id}`}>TÉLÉCHARGER MA CRÉATION</a>
+            </>
+          ) : (
+            <>
+              <h2 id="order-delivery-title">Votre création est en cours.</h2>
+              <p>Le fichier final apparaîtra ici après sa publication par LNX Beats. Aucun nouvel envoi ni paiement n’est nécessaire.</p>
+            </>
+          )}
+        </section>
+
+        {order.status === "DELIVERED" && order.delivery ? <RightsOptionsSection orderNumber={order.orderNumber} requests={rightsRequests} /> : null}
 
         <section className="order-detail__section" aria-labelledby="order-brief-title">
           <p className="auth-panel__label">Récapitulatif</p>
@@ -139,27 +157,6 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           ) : <p>Aucune photo jointe à cette demande.</p>}
         </section>
 
-        <section className="order-detail__section order-delivery-future" aria-labelledby="order-delivery-title">
-          <p className="auth-panel__label">Livraison</p>
-          {order.delivery ? (
-            <>
-              <h2 id="order-delivery-title">Votre création est prête.</h2>
-              <p>Le master reste privé et n’est jamais exposé par une URL R2 publique permanente.</p>
-              <dl className="order-detail__facts">
-                <div><dt>Format</dt><dd>{order.delivery.mimeType === "audio/wav" ? "WAV" : "MP3"}</dd></div>
-                <div><dt>Taille</dt><dd>{(order.delivery.sizeBytes / (1024 * 1024)).toFixed(1)} Mo</dd></div>
-                <div><dt>Livraison</dt><dd>{new Date(order.delivery.createdAt).toLocaleString("fr-FR")}</dd></div>
-                {order.downloadExpiresAt ? <div><dt>Disponible jusqu’au</dt><dd>{new Date(order.downloadExpiresAt).toLocaleDateString("fr-FR")}</dd></div> : null}
-              </dl>
-              <a className="form-button form-button--primary" href={`/api/orders/${encodeURIComponent(order.orderNumber)}/delivery/${order.delivery.id}`}>TÉLÉCHARGER MA CRÉATION</a>
-            </>
-          ) : (
-            <>
-              <h2 id="order-delivery-title">Votre création est en cours.</h2>
-              <p>Le fichier final apparaîtra ici après sa publication par LNX Beats. Aucun nouvel envoi ni paiement n’est nécessaire.</p>
-            </>
-          )}
-        </section>
       </Container>
     </section>
   );

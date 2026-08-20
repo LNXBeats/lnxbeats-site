@@ -138,7 +138,7 @@ Le service borne actuellement la création à **10 demandes par acteur sur 10 mi
 
 ## Modèle `Payment` et événements métier
 
-Le modèle local représente une **tentative de paiement**, pas une preuve bancaire brute. La migration additive V0.7.0 ne réalise aucun backfill et rattache chaque `Payment` à une `Order` avec suppression restreinte. Une future prise en charge du paiement d’une `CommercialLicense` exigera une relation explicite dédiée ; elle ne doit pas être simulée dans `orderId`.
+Le modèle local représente une **tentative de paiement**, pas une preuve bancaire brute. La migration additive V0.7.0 ne réalise aucun backfill et rattache chaque `Payment` à une `Order` avec suppression restreinte. V0.7.2 remplace le flux de droits runtime historique par `RightsRequest`, mais n’ajoute aucun paiement de droits. Une future prise en charge exigera une relation explicite dédiée à la demande contractuelle ; elle ne doit pas être simulée dans l’`orderId` du paiement initial.
 
 Le registre contient :
 

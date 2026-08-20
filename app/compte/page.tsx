@@ -10,6 +10,8 @@ import { clientOrderAction, clientPaymentPresentation } from "@/lib/orders/check
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { listMemberOrders } from "@/lib/orders/service";
 import { completedOrderStatuses, orderStatusPresentation } from "@/lib/orders/status";
+import { rightsStatusPresentation } from "@/lib/rights/domain";
+import { listRightsRequestsForActor } from "@/lib/rights/service";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +34,7 @@ export default async function AccountPage() {
     status: "ACTIVE",
     emailVerified: true,
   };
-  const orders = await listMemberOrders(actor);
+  const [orders, rightsRequests] = await Promise.all([listMemberOrders(actor), listRightsRequestsForActor(actor)]);
   const drafts = orders.filter((order) => order.status === "DRAFT");
   const awaitingPayment = orders.filter((order) => order.status === "AWAITING_PAYMENT");
   const completed = orders.filter((order) => completedOrderStatuses.has(order.status));
@@ -69,6 +71,11 @@ export default async function AccountPage() {
                 <OrderGroup title="Terminées ou arrêtées" orders={completed} />
               </div>
             )}
+          </section>
+
+          <section className="member-orders rights-account" aria-labelledby="account-rights-title">
+            <div className="member-orders__heading"><div><p className="auth-panel__label">Droits et autorisations</p><h2 id="account-rights-title">Vos demandes contractuelles.</h2></div></div>
+            {!rightsRequests.length ? <div className="member-orders__empty"><p><strong>Aucune demande de droits.</strong><br />Les options apparaissent après la livraison d’une création.</p></div> : <ul className="member-order-list">{rightsRequests.map((request) => { const presentation = rightsStatusPresentation[request.status]; return <li key={request.requestNumber}><Link href={`/compte/droits/${request.requestNumber}`}><span><strong>{request.type === "PUBLICATION_LICENSE" ? "Licence de publication" : "Partenariat d’exploitation"}</strong><small>{request.requestNumber} · {request.orderNumber}</small></span><span><em>{presentation.label}</em><small>{presentation.action}</small><strong>{formatEuro(request.requestedPriceCents)}</strong></span></Link><p><strong>Création :</strong> {request.workTitle}. <strong>Paiement :</strong> non disponible dans cette version.</p></li>; })}</ul>}
           </section>
 
           <section className="account-settings" aria-labelledby="account-settings-title">

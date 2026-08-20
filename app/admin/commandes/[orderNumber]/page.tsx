@@ -15,6 +15,7 @@ import { assertPaymentServerEnvironment } from "@/lib/payments/config";
 import { paymentMethodPresentation, paymentStatusPresentation } from "@/lib/payments/presentation";
 import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
 import { orderStatusPresentation } from "@/lib/orders/status";
+import { rightsStatusPresentation } from "@/lib/rights/domain";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Détail commande" };
@@ -33,26 +34,16 @@ const stateMessages: Record<string, string> = {
   "suppression-refusee": "Cette commande doit être conservée : la règle de suppression serveur a refusé l’action.",
 };
 
-const licenseStatusLabels = {
-  REQUESTED: "Demandée",
-  CONTRACT_PENDING: "Contrat à préparer",
-  PAYMENT_PENDING: "Paiement en attente",
-  ACTIVE: "Active",
-  REJECTED: "Refusée",
-  CANCELLED: "Annulée",
-} as const;
-
-const licensePaymentLabels = {
-  NOT_STARTED: "Non commencé",
-  PENDING: "En attente",
-  CONFIRMED: "Confirmé",
-  REFUND_PENDING: "Remboursement en attente",
-  REFUNDED: "Remboursé",
-} as const;
-
 const notificationKindPresentation = {
   OWNER_NEW_ORDER: "Nouvelle commande — propriétaire",
   CUSTOMER_DELIVERY_READY: "Livraison disponible — client",
+  OWNER_RIGHTS_REQUESTED: "Nouvelle demande de droits — propriétaire",
+  CUSTOMER_RIGHTS_INFORMATION_REQUIRED: "Informations demandées — client",
+  CUSTOMER_RIGHTS_PREAUTHORIZATION_READY: "Préautorisation disponible — client",
+  CUSTOMER_RIGHTS_CONTRACT_READY: "Contrat prêt — client",
+  OWNER_RIGHTS_CLIENT_ACCEPTED: "Contrat accepté — propriétaire",
+  CUSTOMER_RIGHTS_REJECTED: "Demande de droits rejetée — client",
+  CUSTOMER_RIGHTS_READY_FOR_PAYMENT: "Dossier prêt pour paiement futur — client",
 } as const;
 
 const notificationStatusPresentation = {
@@ -213,9 +204,9 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
           </section>
 
           <section className="admin-side-window" aria-labelledby="admin-rights-title">
-            <p className="admin-section-label">Droits commerciaux</p><h2 id="admin-rights-title">{order.commercialLicenses.length ? "Demande enregistrée" : "Aucune demande"}</h2>
-            {order.commercialLicenses.map((license) => <dl key={license.id}><div><dt>Prix</dt><dd>{formatEuro(license.priceCents)}</dd></div><div><dt>Statut</dt><dd>{licenseStatusLabels[license.status]}</dd></div><div><dt>Contrat</dt><dd>{license.contractRequired ? "Requis" : "Non"}</dd></div><div><dt>Paiement</dt><dd>{licensePaymentLabels[license.paymentStatus]}</dd></div></dl>)}
-            {order.commercialLicenses.length ? <p>Contrat spécifique requis avant activation. Le traitement reste en lecture seule tant qu’un historique contractuel dédié n’existe pas.</p> : null}
+            <p className="admin-section-label">Droits & contrats</p><h2 id="admin-rights-title">{order.rightsRequests.length ? `${order.rightsRequests.length} demande${order.rightsRequests.length > 1 ? "s" : ""}` : "Aucune demande"}</h2>
+            {order.rightsRequests.map((rights) => <dl key={rights.id}><div><dt>Référence</dt><dd><Link href={`/admin/droits/${rights.requestNumber}`}>{rights.requestNumber}</Link></dd></div><div><dt>Offre</dt><dd>{rights.type === "PUBLICATION_LICENSE" ? "Licence 150 €" : "Partenariat 1 500 €"}</dd></div><div><dt>Statut</dt><dd>{rightsStatusPresentation[rights.status].label}</dd></div><div><dt>Paiement</dt><dd>Désactivé</dd></div></dl>)}
+            {order.rightsRequests.length ? <p>Ouvrir la rubrique Droits & contrats pour la revue, les documents et l’historique.</p> : null}
           </section>
         </aside>
       </div>

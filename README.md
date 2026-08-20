@@ -2,7 +2,7 @@
 
 Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. Le catalogue public et ses métadonnées vivent dans PostgreSQL ; les médias utilisent une abstraction locale/S3-compatible. Le Checkout Commander Stripe reste en mode Test, désactivé par défaut et fermé aux environnements publics.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande, puis suivre son paiement et sa création dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement Live/public ni facture n’est actif. V0.7.1 prépare en QA la livraison privée Admin→Client et les notifications transactionnelles idempotentes ; le SMS reste sans fournisseur.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande, puis suivre son paiement et sa création dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement Live/public ni facture n’est actif. V0.7.2 ajoute localement les demandes de droits, modèles juridiques versionnés, PDF privés et preuves d’acceptation, sans paiement de droits ni activation contractuelle ; la production reste bloquée par la revue juridique et l’advisory Prisma/deepmerge-ts.
 
 ## Stack
 
@@ -55,8 +55,12 @@ npm run test:upload
 npm run test:admin
 npm run test:catalog
 npm run test:media
+npm run test:audio
+npm run test:jukebox
 npm run test:payment
 npm run test:checkout
+npm run test:notification
+npm run test:contracts
 ```
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
@@ -74,7 +78,7 @@ Le script contrôle le schéma physique, les opérations Prisma, les contraintes
 
 La validation runtime de l’inscription possède des gardes supplémentaires liées à l’instance Prisma Dev locale jetable `lnx-studio-v062-auth-test`. Elle utilise un transport email capturé sans réseau et couvre code OTP, expiration, tentatives, anti-énumération, concurrence, compte membre, bootstrap admin et invalidation de session, puis nettoie exclusivement cette base et sa boîte QA. La preview personnelle `lnx-studio-local-preview` reste persistante et ne doit jamais être ciblée par ce nettoyage. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
 
-La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, prix serveur plafonné à 90 €, finalisation atomique, demande de droits après livraison à 1 500 €, propriété, anti-doublon, références concurrentes, événements, IDOR, photos normalisées et nettoyage. La procédure et les limites sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md).
+La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, prix serveur plafonné à 90 €, finalisation atomique, propriété, références concurrentes, événements, IDOR, photos normalisées et nettoyage. Les droits post-livraison possèdent leur propre suite gardée `test:contracts:runtime` sur `lnx-studio-v072-test`, avec PDF et R2 simulés, transport email capturé, Stripe neutralisé et postcondition vide. Les procédures sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md) et [docs/RIGHTS.md](docs/RIGHTS.md).
 
 Pour les smoke tests, lancer d’abord le build et le serveur de production :
 
@@ -116,6 +120,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/commande/[orderNumber]/confirmation` — retour privé Checkout et état de confirmation lu exclusivement côté serveur
 - `/admin` — cockpit protégé réservé à `ADMIN`
 - `/admin/commandes` — liste privée, filtres et transitions métier contextuelles
+- `/admin/droits` — demandes de droits, revue, paramètres structurés, modèles et documents privés
 - `/admin/catalogue` — liste, filtres et édition sécurisée du catalogue PostgreSQL
 - `/admin/catalogue/nouveau` — création sécurisée d’un projet, privé et brouillon par défaut
 - `/admin/catalogue/[slug]` — identité, visibilité, jukebox, récit, crédits, pistes, liens directs, cover et audio
@@ -226,6 +231,12 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Commandes et sécurité des fichiers](docs/ORDER_MODEL.md)
 - [Paiements Stripe](docs/PAYMENTS.md)
 - [Checkout Commander](docs/CHECKOUT.md)
+- [Droits et autorisations](docs/RIGHTS.md)
+- [Contrats électroniques](docs/CONTRACTS.md)
+- [PDF et archivage](docs/PDF_ARCHIVING.md)
+- [Legal review gate](docs/LEGAL_REVIEW_GATE.md)
+- [Préparation SACEM](docs/SACEM_WORKFLOW.md)
+- [Security gates](docs/SECURITY_GATES.md)
 - [Vision produit](docs/PRODUCT_VISION.md)
 - [Audit produit et éditorial](docs/PAGE_AUDIT.md)
 - [Audit du catalogue et des assets](docs/CATALOG_AUDIT.md)

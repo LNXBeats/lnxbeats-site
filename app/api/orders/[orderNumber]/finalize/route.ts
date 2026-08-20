@@ -15,9 +15,11 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const { orderNumber } = await context.params;
     await enforceOrderRateLimit(actor.id, "finalize");
-    const parsed = parseOrderDraftInput(await readOrderJson(request));
+    const body = await readOrderJson(request);
+    const parsed = parseOrderDraftInput(body);
     if (!parsed.ok) return orderJson({ error: parsed.message, field: parsed.field }, 400);
-    return orderJson({ order: await finalizeOrder(actor, orderNumber, parsed.value) });
+    const personalUseTermsAccepted = Boolean(body && typeof body === "object" && !Array.isArray(body) && (body as Record<string, unknown>).personalUseTermsAccepted === true);
+    return orderJson({ order: await finalizeOrder(actor, orderNumber, parsed.value, personalUseTermsAccepted) });
   } catch (error) {
     return orderErrorResponse(error);
   }

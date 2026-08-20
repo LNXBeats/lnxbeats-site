@@ -135,11 +135,19 @@ enum OrderAssetRole {
   REFERENCE
   DELIVERY
   DOCUMENT
+  CONTRACT
 }
 
 enum OrderNotificationKind {
   OWNER_NEW_ORDER
   CUSTOMER_DELIVERY_READY
+  OWNER_RIGHTS_REQUESTED
+  CUSTOMER_RIGHTS_INFORMATION_REQUIRED
+  CUSTOMER_RIGHTS_PREAUTHORIZATION_READY
+  CUSTOMER_RIGHTS_CONTRACT_READY
+  OWNER_RIGHTS_CLIENT_ACCEPTED
+  CUSTOMER_RIGHTS_REJECTED
+  CUSTOMER_RIGHTS_READY_FOR_PAYMENT
 }
 
 enum NotificationChannel {
@@ -183,6 +191,134 @@ enum OrderEventVisibility {
   INTERNAL
 }
 
+enum RightsRequestType {
+  PUBLICATION_LICENSE
+  EXPLOITATION_PARTNERSHIP
+}
+
+enum RightsRequestStatus {
+  DRAFT
+  SUBMITTED
+  INFORMATION_REQUIRED
+  UNDER_REVIEW
+  PREAUTHORIZATION_GENERATED
+  CONTRACT_PREPARATION
+  CONTRACT_READY
+  CLIENT_ACCEPTED
+  ADMIN_VALIDATED
+  READY_FOR_PAYMENT
+  REJECTED
+  CANCELLED
+  ACTIVE
+}
+
+enum ContractPartyType {
+  INDIVIDUAL
+  SOLE_PROPRIETOR
+  COMPANY
+  ASSOCIATION_OR_OTHER
+}
+
+enum RightsContributionKind {
+  NONE
+  STORY_BRIEF_ONLY
+  LYRICS_FULL
+  LYRICS_PARTIAL
+  LYRICS_CO_WRITTEN
+  MELODY
+  MUSICAL_COMPOSITION
+  ARRANGEMENT
+  INSTRUMENTAL
+  ARTISTIC_DIRECTION
+  VOICE
+  MIX_MASTER
+  INSTRUMENTS
+  PRODUCTION
+  OTHER
+}
+
+enum AiContributionAssessment {
+  NOT_REVIEWED
+  HUMAN_CONTRIBUTION_DOCUMENTED
+  LEGAL_REVIEW_REQUIRED
+  DECLARATION_NOT_RECOMMENDED
+  POTENTIALLY_ELIGIBLE
+}
+
+enum RightsGrantKind {
+  PUBLICATION
+  DISTRIBUTION
+  PUBLIC_COMMUNICATION
+  REPRODUCTION
+  MONETIZATION
+  ADAPTATION
+  ADVERTISING
+  AUDIOVISUAL_SYNCHRONIZATION
+  CONTENT_ID
+  SUBLICENSE
+  CREDIT
+  OTHER
+}
+
+enum ContractTemplateType {
+  PUBLICATION_LICENSE
+  EXPLOITATION_PARTNERSHIP
+  SACEM_PREPARATION
+}
+
+enum ContractTemplateStatus {
+  DRAFT
+  AWAITING_LEGAL_REVIEW
+  APPROVED
+  RETIRED
+}
+
+enum ContractDocumentKind {
+  PREAUTHORIZATION
+  CONTRACT
+  ACCEPTANCE_RECEIPT
+  SACEM_PREPARATION
+}
+
+enum ContractDocumentStatus {
+  DRAFT
+  READY_FOR_CLIENT
+  CLIENT_ACCEPTED
+  ADMIN_VALIDATED
+  SUPERSEDED
+  ACTIVE
+}
+
+enum ContractAcceptanceKind {
+  CLIENT
+  ADMIN
+}
+
+enum RightsEventType {
+  REQUEST_CREATED
+  CONTACT_CONFIRMED
+  REQUEST_SUBMITTED
+  INFORMATION_REQUESTED
+  INFORMATION_PROVIDED
+  REVIEW_STARTED
+  PREAUTHORIZATION_GENERATED
+  CONTRACT_PARAMETERS_UPDATED
+  DOCUMENT_GENERATED
+  DOCUMENT_SUPERSEDED
+  DOCUMENT_VIEWED
+  CLIENT_ACCEPTED
+  ADMIN_VALIDATED
+  READY_FOR_PAYMENT
+  REQUEST_REJECTED
+  REQUEST_CANCELLED
+}
+
+enum RightsMessageKind {
+  ADMIN_REQUEST
+  CLIENT_RESPONSE
+}
+
+// Legacy V0.6 compatibility only. V0.7.2 uses RightsRequest.
 enum CommercialLicenseStatus {
   REQUESTED
   CONTRACT_PENDING
@@ -236,25 +372,32 @@ enum ProviderEventOutcome {
 }
 
 model User {
-  id                String                 @id @default(uuid()) @db.Uuid
-  email             String                 @unique @db.VarChar(320)
-  emailVerified     Boolean                @default(false)
-  emailVerifiedAt   DateTime?              @db.Timestamptz(3)
-  displayName       String                 @default("") @db.VarChar(120)
-  firstName         String?                @db.VarChar(100)
-  lastName          String?                @db.VarChar(100)
-  image             String?                @db.VarChar(500)
-  role              UserRole               @default(MEMBER)
-  status            UserStatus             @default(PENDING)
-  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
-  customerProfile   Customer?
-  orders            Order[]                @relation("OrderAccount")
-  orderEvents       OrderEvent[]           @relation("OrderEventActor")
-  confidenceReviews ConfidenceAnnotation[] @relation("ConfidenceReviewer")
-  favorites         Favorite[]
-  sessions          Session[]
-  accounts          Account[]
+  id                  String                  @id @default(uuid()) @db.Uuid
+  email               String                  @unique @db.VarChar(320)
+  emailVerified       Boolean                 @default(false)
+  emailVerifiedAt     DateTime?               @db.Timestamptz(3)
+  displayName         String                  @default("") @db.VarChar(120)
+  firstName           String?                 @db.VarChar(100)
+  lastName            String?                 @db.VarChar(100)
+  image               String?                 @db.VarChar(500)
+  role                UserRole                @default(MEMBER)
+  status              UserStatus              @default(PENDING)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                @updatedAt @db.Timestamptz(3)
+  customerProfile     Customer?
+  orders              Order[]                 @relation("OrderAccount")
+  orderEvents         OrderEvent[]            @relation("OrderEventActor")
+  confidenceReviews   ConfidenceAnnotation[]  @relation("ConfidenceReviewer")
+  favorites           Favorite[]
+  sessions            Session[]
+  accounts            Account[]
+  rightsRequests      RightsRequest[]         @relation("RightsRequestOwner")
+  partyConfirmations  ContractPartySnapshot[] @relation("ContractPartyConfirmedBy")
+  rightsEvents        RightsRequestEvent[]    @relation("RightsEventActor")
+  rightsMessages      RightsMessage[]         @relation("RightsMessageAuthor")
+  templateApprovals   ContractTemplate[]      @relation("ContractTemplateApprover")
+  contractAcceptances ContractAcceptance[]    @relation("ContractAcceptanceActor")
+  splitProposals      RightsSplitProposal[]   @relation("RightsSplitProposer")
 
   @@index([role, status])
   @@map("users")
@@ -468,27 +611,28 @@ model ConfidenceAnnotation {
 }
 
 model Asset {
-  id              String              @id @default(uuid()) @db.Uuid
-  type            AssetType
-  storageKey      String              @unique @db.VarChar(500)
-  storageBackend  MediaStorageBackend @default(LOCAL)
-  storageProvider String              @default("local") @db.VarChar(80)
-  visibility      MediaVisibility     @default(PRIVATE)
-  checksumSha256  String?             @db.VarChar(64)
-  filename        String              @db.VarChar(255)
-  mimeType        String              @db.VarChar(160)
-  sizeBytes       BigInt
-  width           Int?
-  height          Int?
-  durationMs      Int?                @map("duration_ms")
-  alt             String?             @db.VarChar(500)
-  rightsStatus    RightsStatus        @default(UNKNOWN)
-  rightsNote      String?             @db.Text
-  confidence      DataConfidence      @default(UNKNOWN)
-  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
-  projects        ProjectAsset[]
-  orders          OrderAsset[]
+  id                String              @id @default(uuid()) @db.Uuid
+  type              AssetType
+  storageKey        String              @unique @db.VarChar(500)
+  storageBackend    MediaStorageBackend @default(LOCAL)
+  storageProvider   String              @default("local") @db.VarChar(80)
+  visibility        MediaVisibility     @default(PRIVATE)
+  checksumSha256    String?             @db.VarChar(64)
+  filename          String              @db.VarChar(255)
+  mimeType          String              @db.VarChar(160)
+  sizeBytes         BigInt
+  width             Int?
+  height            Int?
+  durationMs        Int?                @map("duration_ms")
+  alt               String?             @db.VarChar(500)
+  rightsStatus      RightsStatus        @default(UNKNOWN)
+  rightsNote        String?             @db.Text
+  confidence        DataConfidence      @default(UNKNOWN)
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+  projects          ProjectAsset[]
+  orders            OrderAsset[]
+  contractDocuments ContractDocument[]
 
   @@index([type, rightsStatus])
   @@index([storageBackend, visibility])
@@ -511,50 +655,54 @@ model ProjectAsset {
 }
 
 model Order {
-  id                 String              @id @default(uuid()) @db.Uuid
-  orderNumber        String              @unique @db.VarChar(32)
-  userId             String?             @db.Uuid
-  customerId         String?             @db.Uuid
-  customerEmail      String              @db.VarChar(320)
-  customerName       String?             @db.VarChar(200)
-  status             OrderStatus         @default(DRAFT)
-  title              String?             @db.VarChar(240)
-  recipient          String?             @db.VarChar(200)
-  occasion           String?             @db.VarChar(200)
-  brief              String              @db.Text
-  musicalDirection   String?             @db.Text
-  emotion            String?             @db.Text
-  importantDetails   String?             @db.Text
-  wordsToInclude     String?             @db.Text
-  avoid              String?             @db.Text
-  pronunciationNotes String?             @db.Text
-  notes              String?             @db.Text
-  usage              OrderUsage          @default(PERSONAL)
-  coverIncluded      Boolean             @default(false)
-  priorityProcessing Boolean             @default(false)
-  basePriceCents     Int                 @default(5000)
-  coverPriceCents    Int                 @default(0)
-  priorityPriceCents Int                 @default(0)
-  totalCents         Int                 @default(5000)
-  currency           String              @default("EUR") @db.VarChar(3)
-  pricingVersion     String              @default("2026-08-v1") @db.VarChar(32)
-  contractRequired   Boolean             @default(false)
-  revisionAllowance  Int                 @default(1)
-  revisionUsed       Int                 @default(0)
-  submittedAt        DateTime?           @db.Timestamptz(3)
-  serviceStartedAt   DateTime?           @db.Timestamptz(3)
-  deliveredAt        DateTime?           @db.Timestamptz(3)
-  downloadExpiresAt  DateTime?           @db.Timestamptz(3)
-  cancelledAt        DateTime?           @db.Timestamptz(3)
-  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
-  account            User?               @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
-  customer           Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  events             OrderEvent[]
-  assets             OrderAsset[]
-  commercialLicenses CommercialLicense[]
-  payments           Payment[]
-  notifications      OrderNotification[]
+  id                         String              @id @default(uuid()) @db.Uuid
+  orderNumber                String              @unique @db.VarChar(32)
+  userId                     String?             @db.Uuid
+  customerId                 String?             @db.Uuid
+  customerEmail              String              @db.VarChar(320)
+  customerName               String?             @db.VarChar(200)
+  status                     OrderStatus         @default(DRAFT)
+  title                      String?             @db.VarChar(240)
+  recipient                  String?             @db.VarChar(200)
+  occasion                   String?             @db.VarChar(200)
+  brief                      String              @db.Text
+  musicalDirection           String?             @db.Text
+  emotion                    String?             @db.Text
+  importantDetails           String?             @db.Text
+  wordsToInclude             String?             @db.Text
+  avoid                      String?             @db.Text
+  pronunciationNotes         String?             @db.Text
+  notes                      String?             @db.Text
+  usage                      OrderUsage          @default(PERSONAL)
+  coverIncluded              Boolean             @default(false)
+  priorityProcessing         Boolean             @default(false)
+  basePriceCents             Int                 @default(5000)
+  coverPriceCents            Int                 @default(0)
+  priorityPriceCents         Int                 @default(0)
+  totalCents                 Int                 @default(5000)
+  currency                   String              @default("EUR") @db.VarChar(3)
+  pricingVersion             String              @default("2026-08-v1") @db.VarChar(32)
+  personalUseTermsVersion    String?             @db.VarChar(48)
+  personalUseTermsHashSha256 String?             @db.VarChar(64)
+  personalUseTermsAcceptedAt DateTime?           @db.Timestamptz(3)
+  contractRequired           Boolean             @default(false)
+  revisionAllowance          Int                 @default(1)
+  revisionUsed               Int                 @default(0)
+  submittedAt                DateTime?           @db.Timestamptz(3)
+  serviceStartedAt           DateTime?           @db.Timestamptz(3)
+  deliveredAt                DateTime?           @db.Timestamptz(3)
+  downloadExpiresAt          DateTime?           @db.Timestamptz(3)
+  cancelledAt                DateTime?           @db.Timestamptz(3)
+  createdAt                  DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime            @updatedAt @db.Timestamptz(3)
+  account                    User?               @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
+  customer                   Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  events                     OrderEvent[]
+  assets                     OrderAsset[]
+  rightsRequests             RightsRequest[]
+  commercialLicenses         CommercialLicense[]
+  payments                   Payment[]
+  notifications              OrderNotification[]
 
   @@index([status, createdAt])
   @@index([userId])
@@ -635,6 +783,254 @@ model ProviderEvent {
   @@map("provider_events")
 }
 
+model RightsRequest {
+  id                        String                   @id @default(uuid()) @db.Uuid
+  requestNumber             String                   @unique @db.VarChar(32)
+  orderId                   String                   @db.Uuid
+  userId                    String                   @db.Uuid
+  type                      RightsRequestType
+  status                    RightsRequestStatus      @default(DRAFT)
+  requestedPriceCents       Int
+  currency                  String                   @default("EUR") @db.VarChar(3)
+  pricingVersion            String                   @db.VarChar(48)
+  workTitle                 String                   @db.VarChar(240)
+  artistName                String?                  @db.VarChar(180)
+  formVersion               String                   @db.VarChar(48)
+  formData                  Json
+  aiAssessment              AiContributionAssessment @default(NOT_REVIEWED)
+  submittedAt               DateTime?                @db.Timestamptz(3)
+  reviewedAt                DateTime?                @db.Timestamptz(3)
+  approvedAt                DateTime?                @db.Timestamptz(3)
+  rejectedAt                DateTime?                @db.Timestamptz(3)
+  cancelledAt               DateTime?                @db.Timestamptz(3)
+  rejectionReason           String?                  @db.Text
+  needsInformationMessage   String?                  @db.Text
+  legacyCommercialLicenseId String?                  @unique @db.Uuid
+  createdAt                 DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                 @updatedAt @db.Timestamptz(3)
+  order                     Order                    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  owner                     User                     @relation("RightsRequestOwner", fields: [userId], references: [id], onDelete: Restrict)
+  partySnapshots            ContractPartySnapshot[]
+  contributions             RightsContribution[]
+  grants                    RightsGrant[]
+  splitProposals            RightsSplitProposal[]
+  events                    RightsRequestEvent[]
+  messages                  RightsMessage[]
+  documents                 ContractDocument[]
+
+  @@index([orderId, createdAt])
+  @@index([userId, updatedAt])
+  @@index([type, status, updatedAt])
+  @@map("rights_requests")
+}
+
+model ContractPartySnapshot {
+  id                  String            @id @default(uuid()) @db.Uuid
+  rightsRequestId     String            @db.Uuid
+  version             Int
+  partyType           ContractPartyType
+  firstName           String?           @db.VarChar(100)
+  lastName            String?           @db.VarChar(100)
+  artistName          String?           @db.VarChar(180)
+  companyName         String?           @db.VarChar(240)
+  legalForm           String?           @db.VarChar(120)
+  legalRepresentative String?           @db.VarChar(200)
+  streetAddress       String            @db.VarChar(300)
+  postalCode          String            @db.VarChar(24)
+  city                String            @db.VarChar(140)
+  country             String            @db.VarChar(2)
+  siret               String?           @db.VarChar(14)
+  vatNumber           String?           @db.VarChar(32)
+  contractEmail       String            @db.VarChar(320)
+  phone               String?           @db.VarChar(40)
+  confirmedAt         DateTime?         @db.Timestamptz(3)
+  confirmedByUserId   String?           @db.Uuid
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  request             RightsRequest     @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  confirmedBy         User?             @relation("ContractPartyConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([rightsRequestId, version])
+  @@index([confirmedByUserId])
+  @@map("contract_party_snapshots")
+}
+
+model RightsContribution {
+  id                String                 @id @default(uuid()) @db.Uuid
+  rightsRequestId   String                 @db.Uuid
+  kind              RightsContributionKind
+  description       String                 @db.Text
+  claimedPercentage Int?
+  evidenceNote      String?                @db.Text
+  position          Int                    @default(0)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  request           RightsRequest          @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+
+  @@index([rightsRequestId, position])
+  @@map("rights_contributions")
+}
+
+model RightsGrant {
+  id              String          @id @default(uuid()) @db.Uuid
+  rightsRequestId String          @db.Uuid
+  kind            RightsGrantKind
+  authorized      Boolean         @default(false)
+  exclusive       Boolean         @default(false)
+  destination     String?         @db.Text
+  platforms       Json
+  territory       String?         @db.VarChar(240)
+  duration        String?         @db.VarChar(240)
+  effectiveDate   DateTime?       @db.Date
+  monetization    Boolean         @default(false)
+  adaptation      Boolean         @default(false)
+  advertising     Boolean         @default(false)
+  audiovisualSync Boolean         @default(false)
+  contentId       Boolean         @default(false)
+  sublicense      Boolean         @default(false)
+  credit          String?         @db.Text
+  restrictions    String?         @db.Text
+  position        Int             @default(0)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(3)
+  request         RightsRequest   @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+
+  @@unique([rightsRequestId, kind])
+  @@index([rightsRequestId, position])
+  @@map("rights_grants")
+}
+
+model RightsSplitProposal {
+  id                    String        @id @default(uuid()) @db.Uuid
+  rightsRequestId       String        @db.Uuid
+  version               Int
+  clientSharePercent    Int
+  lnxSharePercent       Int
+  nature                String        @db.VarChar(200)
+  comment               String?       @db.Text
+  contributionRationale String        @db.Text
+  proposedRoles         Json
+  proposedByAdminId     String        @db.Uuid
+  createdAt             DateTime      @default(now()) @db.Timestamptz(3)
+  request               RightsRequest @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  proposedBy            User          @relation("RightsSplitProposer", fields: [proposedByAdminId], references: [id], onDelete: Restrict)
+
+  @@unique([rightsRequestId, version])
+  @@index([proposedByAdminId])
+  @@map("rights_split_proposals")
+}
+
+model ContractTemplate {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  type                 ContractTemplateType
+  version              Int
+  title                String                 @db.VarChar(240)
+  status               ContractTemplateStatus @default(DRAFT)
+  sourceMarkup         String                 @db.Text
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+  approvedAt           DateTime?              @db.Timestamptz(3)
+  retiredAt            DateTime?              @db.Timestamptz(3)
+  approvedByAdminId    String?                @db.Uuid
+  legalReviewReference String?                @db.VarChar(240)
+  approvedBy           User?                  @relation("ContractTemplateApprover", fields: [approvedByAdminId], references: [id], onDelete: Restrict)
+  documents            ContractDocument[]
+
+  @@unique([type, version])
+  @@index([type, status, version])
+  @@index([approvedByAdminId])
+  @@map("contract_templates")
+}
+
+model ContractDocument {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  contractNumber       String                 @unique @db.VarChar(32)
+  rightsRequestId      String                 @db.Uuid
+  templateId           String                 @db.Uuid
+  templateVersion      Int
+  documentVersion      Int
+  kind                 ContractDocumentKind
+  status               ContractDocumentStatus @default(DRAFT)
+  generatedAt          DateTime               @db.Timestamptz(3)
+  acceptedAt           DateTime?              @db.Timestamptz(3)
+  adminAcceptedAt      DateTime?              @db.Timestamptz(3)
+  activatedAt          DateTime?              @db.Timestamptz(3)
+  priceSnapshotCents   Int
+  currency             String                 @db.VarChar(3)
+  sourceSnapshot       Json
+  documentHashSha256   String                 @db.VarChar(64)
+  assetId              String                 @unique @db.Uuid
+  retentionUntil       DateTime?              @db.Timestamptz(3)
+  supersedesDocumentId String?                @unique @db.Uuid
+  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
+  request              RightsRequest          @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  template             ContractTemplate       @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  asset                Asset                  @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  supersedes           ContractDocument?      @relation("ContractDocumentVersions", fields: [supersedesDocumentId], references: [id], onDelete: Restrict)
+  supersededBy         ContractDocument?      @relation("ContractDocumentVersions")
+  acceptances          ContractAcceptance[]
+
+  @@unique([rightsRequestId, kind, documentVersion])
+  @@index([rightsRequestId, createdAt])
+  @@index([templateId])
+  @@index([status, generatedAt])
+  @@map("contract_documents")
+}
+
+model ContractAcceptance {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  contractDocumentId   String                 @db.Uuid
+  acceptedByUserId     String                 @db.Uuid
+  kind                 ContractAcceptanceKind
+  typedFullName        String                 @db.VarChar(200)
+  documentHashSha256   String                 @db.VarChar(64)
+  templateVersion      Int
+  orderId              String                 @db.Uuid
+  rightsRequestId      String                 @db.Uuid
+  sessionReferenceHash String                 @db.VarChar(64)
+  userAgentHash        String?                @db.VarChar(64)
+  acceptedAt           DateTime               @default(now()) @db.Timestamptz(3)
+  document             ContractDocument       @relation(fields: [contractDocumentId], references: [id], onDelete: Restrict)
+  acceptedBy           User                   @relation("ContractAcceptanceActor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([contractDocumentId, kind])
+  @@index([acceptedByUserId, acceptedAt])
+  @@index([rightsRequestId, acceptedAt])
+  @@map("contract_acceptances")
+}
+
+model RightsRequestEvent {
+  id              String          @id @default(uuid()) @db.Uuid
+  rightsRequestId String          @db.Uuid
+  type            RightsEventType
+  idempotencyKey  String          @unique @db.VarChar(255)
+  actorUserId     String?         @db.Uuid
+  note            String?         @db.Text
+  metadata        Json?
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  request         RightsRequest   @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  actor           User?           @relation("RightsEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([rightsRequestId, createdAt])
+  @@index([actorUserId])
+  @@map("rights_request_events")
+}
+
+model RightsMessage {
+  id              String            @id @default(uuid()) @db.Uuid
+  rightsRequestId String            @db.Uuid
+  kind            RightsMessageKind
+  authorUserId    String            @db.Uuid
+  body            String            @db.Text
+  requestedFields Json?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  request         RightsRequest     @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  author          User              @relation("RightsMessageAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([rightsRequestId, createdAt])
+  @@index([authorUserId])
+  @@map("rights_messages")
+}
+
+// Legacy archive retained for additive migration and bounded QA cleanup only.
+// No V0.7.2 route or UI writes this model.
 model CommercialLicense {
   id                 String                         @id @default(uuid()) @db.Uuid
   orderId            String                         @db.Uuid

@@ -95,27 +95,13 @@ L’histoire principale accepte 30 à 10 000 caractères. Le titre de repère es
 
 Les transitions futures doivent passer par un service central, valider l’état précédent, appliquer les règles de révision et produire un `OrderEvent` dans la même transaction. Un bouton client ne peut jamais déclarer `PAYMENT_CONFIRMED`.
 
-## Extension de droits après livraison
+## Droits et contrats après livraison
 
-`CommercialLicense` appartient à l’`Order` d’origine sans en modifier le snapshot. Une demande est créée exclusivement côté serveur avec :
+V0.7.2 remplace le flux runtime historique `CommercialLicense` par `RightsRequest`. L’ancien modèle demeure une archive additive en lecture seule afin de ne pas effacer l’historique ; aucune route ne l’écrit. Une commande `DELIVERED`, payée et dotée d’un master privé publié peut ouvrir une licence de publication à 150 € ou un partenariat d’exploitation à 1 500 €. Les montants sont des snapshots serveur et aucun paiement de droits n’est disponible.
 
-- `priceCents = 150000`, `currency = EUR` et `pricingVersion = 2026-08-rights-v1` ;
-- `contractRequired = true` et aucun contrat accepté par défaut ;
-- `paymentStatus = NOT_STARTED` ;
-- un horodatage de demande et des jalons futurs optionnels d’approbation, acceptation et activation.
+Les coordonnées confirmées, contributions déclarées, paramètres structurés, échanges, modèles versionnés, PDF privés, acceptations et événements disposent de relations distinctes. Une contrainte partielle interdit deux demandes actives du même type pour une Order. Un brouillon sans document peut être supprimé ; une demande soumise peut être annulée en conservant son historique. Les documents acceptés sont protégés contre la suppression et toute correction crée une nouvelle version.
 
-Le service `requestCommercialLicense` vérifie la session, la propriété, le statut `DELIVERED` et l’absence de demande déjà ouverte ou active. Une contrainte PostgreSQL partielle empêche également deux états `REQUESTED`, `CONTRACT_PENDING`, `PAYMENT_PENDING` ou `ACTIVE` simultanés pour la même commande. Les états terminaux `REJECTED` et `CANCELLED` autorisent une nouvelle demande documentée.
-
-| Statut des droits | Sens |
-| --- | --- |
-| `REQUESTED` | Demande reçue, sans contrat ni paiement déclenché. |
-| `CONTRACT_PENDING` | Contrat spécifique en préparation. |
-| `PAYMENT_PENDING` | Paiement futur attendu, sans preuve actuelle. |
-| `ACTIVE` | Extension activée après validations futures. |
-| `REJECTED` | Demande refusée. |
-| `CANCELLED` | Demande arrêtée. |
-
-Le texte produit reste prudent : « Cession/licence exclusive de droits patrimoniaux d’exploitation, selon contrat spécifique. » Le droit moral reste hors du dispositif. Aucune part SACEM n’est attribuée automatiquement ; une éventuelle répartition suppose une contribution réelle et un accord distinct.
+Le Legal Review Gate conserve les modèles en `DRAFT` ou `AWAITING_LEGAL_REVIEW` tant qu’un ADMIN n’enregistre pas une revue juridique professionnelle référencée. Aucun état `ACTIVE` n’est accessible dans V0.7.2, y compris directement en base. Aucun rôle d’auteur, transfert de droit moral, quote-part SACEM ou proposition 70/30 n’est déduit automatiquement. Voir [`docs/RIGHTS.md`](RIGHTS.md), [`docs/CONTRACTS.md`](CONTRACTS.md) et [`docs/LEGAL_REVIEW_GATE.md`](LEGAL_REVIEW_GATE.md).
 
 ## Livraison audio privée
 
@@ -123,9 +109,9 @@ V0.7.1 active un master MP3/WAV privé lié à la commande par le rôle `DELIVER
 
 La publication vers `DELIVERED` exige exactement un master actif. Le propriétaire et l’ADMIN le servent via l’application ; l’accès membre exige aussi la propriété, le statut livré et `downloadExpiresAt` futur. La fenêtre initiale est de six mois à partir de `deliveredAt`. Un remplacement avant clôture est audité et atomique ; une future purge devra toujours préserver les obligations comptables et la traçabilité minimale.
 
-## Paiements, facture et LNX Gestion — futur
+## Paiements, facture et LNX Gestion
 
-Un futur modèle `Payment` devra séparer deux relations explicites : le paiement de la création lié à `Order`, et le paiement de l’extension lié à `CommercialLicense`. Il devra distinguer intention, preuve fournisseur, montant, devise, idempotence, remboursements et rapprochement. La V0.6.0.1 n’ajoute volontairement aucune table `Payment`. Un futur modèle `Invoice` devra avoir sa propre séquence légale, être immuable après émission et refléter le régime fiscal réellement validé. Une référence de commande n’est pas un numéro de facture.
+Le paiement Stripe de la création reste lié exclusivement à `Order`. V0.7.2 ne crée aucun `Payment`, Checkout ou PaymentIntent pour `RightsRequest`; `READY_FOR_PAYMENT` signifie seulement que les validations internes sont réunies pour une future étape encore fermée. Un futur modèle de facturation devra avoir sa propre séquence légale, être immuable après émission et refléter le régime fiscal réellement validé. Une référence de commande ou de contrat n’est pas un numéro de facture.
 
 LNX Gestion pourra recevoir des événements métier via une intégration authentifiée et idempotente, jamais par accès direct à la base. Les données minimales, la responsabilité du système source, les reprises et les échecs devront être spécifiés séparément.
 
@@ -137,7 +123,7 @@ Avant toute activation commerciale, il faut confirmer le régime de TVA associé
 
 ## Tests et environnement jetable
 
-Les tests purs couvrent le plafond 90 €, l’ignorance d’un usage forgé, le prix 1 500 €, l’éligibilité post-livraison, la validation, la référence, l’accès, la révision et les fichiers. La suite runtime exige l’instance locale Prisma Dev jetable `lnx-studio-v060-test`, des identités `@example.invalid`, un stockage sous `/private/tmp` et des gardes interdisant toute base distante ou production. Elle vérifie notamment refus avant livraison, propriété, doublon, snapshot inchangé, contraintes SQL, concurrence, rollback, IDOR et nettoyage.
+Les tests de commande couvrent le plafond initial de 90 €, l’usage personnel versionné et le workflow de livraison. Les tests de contrats couvrent les tarifs serveur 150/1 500 €, l’éligibilité post-livraison, l’ownership, la concurrence, les snapshots, l’idempotence, le PDF privé, le hash, la réauthentification, la double validation, l’interdiction d’activation et l’absence de paiement. La suite runtime exige l’instance jetable exacte `lnx-studio-v072-test`, des identités `@example.invalid`, un stockage R2 simulé et Stripe absent ; elle nettoie cette base dans un `finally` et vérifie une postcondition vide.
 
 ## Données professionnelles confirmées
 

@@ -92,7 +92,7 @@ async function run() {
     passed.push("visitor and MEMBER refused, ADMIN authorized");
 
     const draft = await createDraftOrder(member, input);
-    await finalizeOrder(member, draft.orderNumber, input);
+    await finalizeOrder(member, draft.orderNumber, input, true);
     const listed = await listAdminOrders("all");
     assert.equal(listed.length, 1);
     assert.equal(listed[0]?.orderNumber, draft.orderNumber);
@@ -135,7 +135,7 @@ async function run() {
     passed.push("unpaid bypass refused, paid order highlighted, valid and concurrent transitions protected");
 
     const protectedDraft = await createDraftOrder(member, { ...input, title: "Conservation paiement Admin QA" });
-    await finalizeOrder(member, protectedDraft.orderNumber, input);
+    await finalizeOrder(member, protectedDraft.orderNumber, input, true);
     const protectedOrder = await prisma.order.findUniqueOrThrow({ where: { orderNumber: protectedDraft.orderNumber } });
     await prisma.payment.create({
       data: {
@@ -157,7 +157,7 @@ async function run() {
     const photoBuffer = await sharp({ create: { width: 40, height: 30, channels: 3, background: "#6b5634" } }).jpeg().toBuffer();
     const removableWithPhoto = await addOrderPhotos(member, removableDraft.orderNumber, [{ buffer: photoBuffer, originalFilename: "admin-delete.jpg", declaredMimeType: "image/jpeg" }]);
     const removableAsset = await prisma.asset.findUniqueOrThrow({ where: { id: removableWithPhoto.photos[0]!.id } });
-    await finalizeOrder(member, removableDraft.orderNumber, input);
+    await finalizeOrder(member, removableDraft.orderNumber, input, true);
     assert.equal(await transitionOrderStatus(removableDraft.orderNumber, "CANCELLED", adminUser.id), "CANCELLED");
     const removableOrderId = (await prisma.order.findUniqueOrThrow({ where: { orderNumber: removableDraft.orderNumber }, select: { id: true } })).id;
     await deleteEligibleAdminOrder(removableDraft.orderNumber);

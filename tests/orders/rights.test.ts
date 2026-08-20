@@ -1,27 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  canRequestCommercialLicense,
-  commercialLicensePricingSnapshot,
-} from "@/lib/orders/domain";
+import { canCreateRightsRequest, rightsPriceSnapshot } from "@/lib/rights/domain";
 
-test("fige l'extension de droits à 1 500 euros et exige un contrat", () => {
-  assert.deepEqual(commercialLicensePricingSnapshot(), {
-    pricingVersion: "2026-08-rights-v1",
-    priceCents: 150_000,
-    currency: "EUR",
-    contractRequired: true,
-  });
+test("fige les deux tarifs de demandes de droits côté serveur", () => {
+  assert.equal(rightsPriceSnapshot("PUBLICATION_LICENSE").priceCents, 15_000);
+  assert.equal(rightsPriceSnapshot("EXPLOITATION_PARTNERSHIP").priceCents, 150_000);
+  assert.equal(rightsPriceSnapshot("EXPLOITATION_PARTNERSHIP").currency, "EUR");
 });
 
-test("autorise une demande seulement après livraison sans extension ouverte", () => {
-  assert.equal(canRequestCommercialLicense("IN_PROGRESS", []), false);
-  assert.equal(canRequestCommercialLicense("DELIVERED", []), true);
-  assert.equal(canRequestCommercialLicense("DELIVERED", ["REQUESTED"]), false);
-  assert.equal(canRequestCommercialLicense("DELIVERED", ["CONTRACT_PENDING"]), false);
-  assert.equal(canRequestCommercialLicense("DELIVERED", ["PAYMENT_PENDING"]), false);
-  assert.equal(canRequestCommercialLicense("DELIVERED", ["ACTIVE"]), false);
-  assert.equal(canRequestCommercialLicense("DELIVERED", ["REJECTED"]), true);
-  assert.equal(canRequestCommercialLicense("DELIVERED", ["CANCELLED"]), true);
+test("autorise une demande seulement après livraison publiée sans demande active", () => {
+  assert.equal(canCreateRightsRequest({ orderStatus: "IN_PROGRESS", hasPublishedDelivery: true, existingStatuses: [] }), false);
+  assert.equal(canCreateRightsRequest({ orderStatus: "DELIVERED", hasPublishedDelivery: false, existingStatuses: [] }), false);
+  assert.equal(canCreateRightsRequest({ orderStatus: "DELIVERED", hasPublishedDelivery: true, existingStatuses: [] }), true);
+  assert.equal(canCreateRightsRequest({ orderStatus: "DELIVERED", hasPublishedDelivery: true, existingStatuses: ["SUBMITTED"] }), false);
+  assert.equal(canCreateRightsRequest({ orderStatus: "DELIVERED", hasPublishedDelivery: true, existingStatuses: ["ACTIVE"] }), false);
+  assert.equal(canCreateRightsRequest({ orderStatus: "DELIVERED", hasPublishedDelivery: true, existingStatuses: ["REJECTED"] }), true);
 });

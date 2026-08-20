@@ -9,8 +9,6 @@ import {
   assertPhotoCapacity,
   calculateOrderPrice,
   canAccessOrder,
-  canRequestCommercialLicense,
-  commercialLicensePricingSnapshot,
   formatOrderNumber,
   type OrderActor,
   type OrderDraftInput,
@@ -25,6 +23,7 @@ import type { SerializedOrder } from "@/lib/orders/types";
 import { normalizeOrderImage, type NormalizedOrderImage } from "@/lib/orders/upload";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { canReadOrderMedia } from "@/lib/media/authorization";
+import { personalUseTermsSnapshot } from "@/lib/rights/domain";
 
 export class OrderServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -42,9 +41,6 @@ const orderInclude = {
     where: { role: { in: ["REFERENCE", "DELIVERY"] } },
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
     include: { asset: true },
-  },
-  commercialLicenses: {
-    orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
   },
   payments: {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -144,6 +140,9 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
     totalCents: order.totalCents,
     currency: order.currency,
     pricingVersion: order.pricingVersion,
+    personalUseTermsVersion: order.personalUseTermsVersion,
+    personalUseTermsHashSha256: order.personalUseTermsHashSha256,
+    personalUseTermsAcceptedAt: order.personalUseTermsAcceptedAt?.toISOString() ?? null,
     contractRequired: order.contractRequired,
     revisionAllowance: order.revisionAllowance,
     revisionUsed: order.revisionUsed,
@@ -190,21 +189,6 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
       expiredAt: payment.expiredAt?.toISOString() ?? null,
       createdAt: payment.createdAt.toISOString(),
       updatedAt: payment.updatedAt.toISOString(),
-    })),
-    commercialLicenses: order.commercialLicenses.map((license) => ({
-      id: license.id,
-      status: license.status,
-      priceCents: license.priceCents,
-      currency: license.currency,
-      pricingVersion: license.pricingVersion,
-      contractRequired: license.contractRequired,
-      contractAcceptedAt: license.contractAcceptedAt?.toISOString() ?? null,
-      paymentStatus: license.paymentStatus,
-      requestedAt: license.requestedAt.toISOString(),
-      approvedAt: license.approvedAt?.toISOString() ?? null,
-      activatedAt: license.activatedAt?.toISOString() ?? null,
-      createdAt: license.createdAt.toISOString(),
-      updatedAt: license.updatedAt.toISOString(),
     })),
   };
 }
@@ -332,7 +316,7 @@ export async function saveDraftOrder(actor: OrderActor, orderNumber: string, inp
   });
 }
 
-export async function finalizeOrder(actor: OrderActor, orderNumber: string, input: OrderDraftInput) {
+export async function finalizeOrder(actor: OrderActor, orderNumber: string, input: OrderDraftInput, personalUseTermsAccepted: boolean) {
   assertDatabaseConfigured();
   const validation = validateOrderForSubmission(input);
   if (!validation.ok) throw new OrderServiceError(validation.message, 400, "INVALID_BRIEF");
@@ -341,12 +325,22 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
     const draft = await transaction.order.findFirst({ where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } } });
     if (!draft) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     await assertOrderEditableForPayment(transaction, draft);
+    if (draft.status === "DRAFT" && !personalUseTermsAccepted) {
+      throw new OrderServiceError("Confirmez les conditions d’usage personnel avant le paiement.", 400, "PERSONAL_USE_TERMS_REQUIRED");
+    }
     const submittedAt = new Date();
+    const terms = personalUseTermsSnapshot();
     await transaction.order.update({
       where: { id: draft.id },
       data: {
         ...dataFromInput(input),
-        ...(draft.status === "DRAFT" ? { status: "AWAITING_PAYMENT" as const, submittedAt } : {}),
+        ...(draft.status === "DRAFT" ? {
+          status: "AWAITING_PAYMENT" as const,
+          submittedAt,
+          personalUseTermsVersion: terms.version,
+          personalUseTermsHashSha256: terms.hashSha256,
+          personalUseTermsAcceptedAt: submittedAt,
+        } : {}),
       },
     });
     if (draft.status === "DRAFT") {
@@ -381,52 +375,6 @@ export async function getOrderForActor(actor: OrderActor, orderNumber: string) {
   const order = await prisma.order.findUnique({ where: { orderNumber }, include: orderInclude });
   if (!order || !canAccessOrder(actor, order.userId)) return null;
   return serializeOrder(order);
-}
-
-export async function requestCommercialLicense(actor: OrderActor, orderNumber: string) {
-  assertDatabaseConfigured();
-  return withOrderLock(`commercial-license:${orderNumber}`, async (transaction) => {
-    const order = await transaction.order.findFirst({
-      where: { orderNumber, userId: actor.id },
-      include: { commercialLicenses: { select: { status: true } } },
-    });
-    if (!order) {
-      throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
-    }
-    if (order.status !== "DELIVERED") {
-      throw new OrderServiceError(
-        "Les droits d’exploitation peuvent être demandés après la livraison.",
-        409,
-        "ORDER_NOT_DELIVERED",
-      );
-    }
-    if (!canRequestCommercialLicense(order.status, order.commercialLicenses.map(({ status }) => status))) {
-      throw new OrderServiceError(
-        "Une demande de droits est déjà en cours ou active pour cette création.",
-        409,
-        "COMMERCIAL_LICENSE_ALREADY_OPEN",
-      );
-    }
-
-    const pricing = commercialLicensePricingSnapshot();
-    await transaction.commercialLicense.create({
-      data: {
-        orderId: order.id,
-        status: "REQUESTED",
-        priceCents: pricing.priceCents,
-        currency: pricing.currency,
-        pricingVersion: pricing.pricingVersion,
-        contractRequired: pricing.contractRequired,
-        paymentStatus: "NOT_STARTED",
-      },
-    });
-
-    const refreshed = await transaction.order.findUniqueOrThrow({
-      where: { id: order.id },
-      include: orderInclude,
-    });
-    return serializeOrder(refreshed);
-  });
 }
 
 export async function getDraftForActor(actor: OrderActor, orderNumber?: string) {

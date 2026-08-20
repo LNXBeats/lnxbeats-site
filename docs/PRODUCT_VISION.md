@@ -113,9 +113,9 @@ Chaque changement important doit produire un événement horodaté et compréhen
 
 Commander porte uniquement la création personnelle, de 50 à 90 € selon les options. Aucun choix commercial ni tarif à 1 500 € ne doit détourner la rencontre artistique initiale.
 
-Une fois l’`Order` livrée, le propriétaire peut ouvrir une demande distincte à 1 500 €. Le détail privé conserve deux lectures séparées : total de la création d’origine, puis état et prix de l’extension. Le produit présente cette dernière comme une cession/licence exclusive de droits patrimoniaux d’exploitation selon contrat spécifique, sans inclure le droit moral ni attribuer automatiquement une part SACEM.
+Une fois l’`Order` livrée, le propriétaire peut ouvrir soit une demande de licence de publication à 150 €, soit une étude de partenariat d’exploitation à 1 500 €. Le détail privé sépare le paiement initial, le dossier de droits et ses documents. Ces montants restent des cibles futures : aucun paiement de droits, droit actif ou déclaration SACEM n’est ouvert dans V0.7.2.
 
-Les statuts de droits (`REQUESTED`, contrat en préparation, paiement futur, actif, refusé ou annulé) ne valent jamais preuve de paiement ou de contrat signé par eux-mêmes. L’administration, la génération du contrat, son acceptation et l’activation restent des travaux futurs explicites.
+Les demandes disposent de coordonnées confirmées, contributions, paramètres structurés, modèles versionnés, PDF privés et preuves d’acceptation. Une proposition 70/30 ne peut apparaître qu’après action volontaire de l’Admin et ne constitue jamais une clé SACEM automatique. Le droit moral, la qualité d’auteur et les contributions reconnues restent soumis à une analyse et une validation juridiques distinctes.
 
 ## Favoris, alertes et préférences
 
@@ -159,7 +159,7 @@ La boutique actuelle ne traite aucun achat : elle renvoie vers les espaces offic
 
 ### Architecture à choisir
 
-Une future intégration doit créer l’intention côté serveur, vérifier la confirmation via API ou webhook, appliquer l’idempotence et ne jamais prendre le succès d’une redirection navigateur comme preuve de règlement. Elle devra distinguer le paiement de la création lié à `Order` du paiement des droits lié à `CommercialLicense`. Aucun bouton réel, secret, identifiant marchand, SDK ou fournisseur n’est ajouté en V0.6.0.1. Wero est une possibilité souhaitée pour le futur ; il n’est ni implémenté ni simulé.
+Le paiement de création est confirmé côté serveur par le webhook Stripe et reste lié à `Order`. Un futur sprint devra concevoir séparément le paiement d’une `RightsRequest`, après validation juridique, sans réutiliser une redirection navigateur comme preuve. V0.7.2 n’ajoute aucun bouton de paiement de droits, Checkout ou PaymentIntent. Wero reste une possibilité future, ni implémentée ni simulée pour les droits.
 
 ### Virement bancaire et RIB
 

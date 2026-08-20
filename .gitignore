@@ -9,5 +9,7 @@ out/
 .DS_Store
 playwright-report/
 test-results/
+tmp/pdfs/
+output/pdf/*.pdf
 .private/
 .local-media/

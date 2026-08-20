@@ -1,10 +1,6 @@
 import type { OrderDraftInput } from "@/lib/orders/domain";
 import type { KnownOrderStatus } from "@/lib/orders/status";
-import type {
-  CommercialLicensePaymentStatus,
-  CommercialLicenseStatus,
-  OrderUsage,
-} from "@/data/order-offer";
+import type { OrderUsage } from "@/data/order-offer";
 import type { PaymentMethod, PaymentStatus } from "@/lib/payments/types";
 
 export type SerializedOrderEvent = {
@@ -33,22 +29,6 @@ export type SerializedOrderDelivery = {
   createdAt: string;
 };
 
-export type SerializedCommercialLicense = {
-  id: string;
-  status: CommercialLicenseStatus;
-  priceCents: number;
-  currency: string;
-  pricingVersion: string;
-  contractRequired: boolean;
-  contractAcceptedAt: string | null;
-  paymentStatus: CommercialLicensePaymentStatus;
-  requestedAt: string;
-  approvedAt: string | null;
-  activatedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type SerializedOrderPayment = {
   id: string;
   status: PaymentStatus;
@@ -75,6 +55,9 @@ export type SerializedOrder = OrderDraftInput & {
   totalCents: number;
   currency: string;
   pricingVersion: string;
+  personalUseTermsVersion: string | null;
+  personalUseTermsHashSha256: string | null;
+  personalUseTermsAcceptedAt: string | null;
   contractRequired: boolean;
   revisionAllowance: number;
   revisionUsed: number;
@@ -87,5 +70,4 @@ export type SerializedOrder = OrderDraftInput & {
   photos: SerializedOrderPhoto[];
   delivery: SerializedOrderDelivery | null;
   payments: SerializedOrderPayment[];
-  commercialLicenses: SerializedCommercialLicense[];
 };

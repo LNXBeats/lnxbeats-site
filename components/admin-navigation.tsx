@@ -3,6 +3,7 @@ import Link from "next/link";
 const adminNavigation = [
   { href: "/admin", label: "Vue d’ensemble" },
   { href: "/admin/commandes", label: "Commandes" },
+  { href: "/admin/droits", label: "Droits & contrats" },
   { href: "/admin/catalogue", label: "Catalogue" },
   { href: "/admin/membres", label: "Membres" },
 ] as const;

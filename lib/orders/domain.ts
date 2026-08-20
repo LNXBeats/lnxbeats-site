@@ -1,8 +1,4 @@
-import {
-  commercialRightsOffer,
-  orderOffer,
-  type CommercialLicenseStatus,
-} from "@/data/order-offer";
+import { orderOffer } from "@/data/order-offer";
 
 export const orderTextLimits = {
   title: 120,
@@ -145,25 +141,6 @@ export function calculateOrderPrice(selection: {
     pricingVersion: orderOffer.pricingVersion,
     contractRequired: false,
   };
-}
-
-export function commercialLicensePricingSnapshot() {
-  return { ...commercialRightsOffer };
-}
-
-const openCommercialLicenseStatuses = new Set<CommercialLicenseStatus>([
-  "REQUESTED",
-  "CONTRACT_PENDING",
-  "PAYMENT_PENDING",
-  "ACTIVE",
-]);
-
-export function canRequestCommercialLicense(
-  orderStatus: string,
-  existingStatuses: CommercialLicenseStatus[],
-) {
-  return orderStatus === "DELIVERED"
-    && !existingStatuses.some((status) => openCommercialLicenseStatuses.has(status));
 }
 
 export function canAccessOrder(actor: Pick<OrderActor, "id" | "role">, ownerUserId: string | null) {

@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createInternalAuthUser } from "@/lib/auth/internal-user";
 import type { OrderActor, OrderDraftInput } from "@/lib/orders/domain";
 import { clearQaOrderStorage } from "@/lib/orders/storage";
-import { createDraftOrder, finalizeOrder, requestCommercialLicense } from "@/lib/orders/service";
+import { createDraftOrder, finalizeOrder } from "@/lib/orders/service";
 import { prisma } from "@/lib/prisma";
 
 const EXPECTED_TARGET = "lnx-studio-v060-test";
@@ -71,11 +71,11 @@ async function run() {
   const member = actor(memberUser);
   const draft = await createDraftOrder(member, { ...input, title: "Brouillon à reprendre" });
   const submitted = await createDraftOrder(member, { ...input, title: "Commande non livrée" });
-  await finalizeOrder(member, submitted.orderNumber, input);
+  await finalizeOrder(member, submitted.orderNumber, input, true);
   const delivered = await createDraftOrder(member, { ...input, title: "Création livrée" });
-  await finalizeOrder(member, delivered.orderNumber, input);
+  await finalizeOrder(member, delivered.orderNumber, input, true);
   const requested = await createDraftOrder(member, { ...input, title: "Droits demandés" });
-  await finalizeOrder(member, requested.orderNumber, input);
+  await finalizeOrder(member, requested.orderNumber, input, true);
 
   async function markDelivered(orderNumber: string) {
     await prisma.$transaction(async (transaction) => {
@@ -95,8 +95,7 @@ async function run() {
 
   await markDelivered(delivered.orderNumber);
   await markDelivered(requested.orderNumber);
-  await requestCommercialLicense(member, requested.orderNumber);
-  console.info(`Order browser fixtures created: draft ${draft.orderNumber}, undelivered ${submitted.orderNumber}, delivered ${delivered.orderNumber}, rights requested ${requested.orderNumber}.`);
+  console.info(`Order browser fixtures created: draft ${draft.orderNumber}, undelivered ${submitted.orderNumber}, delivered ${delivered.orderNumber}, rights-eligible ${requested.orderNumber}.`);
 }
 
 run().finally(() => prisma.$disconnect()).catch((error: unknown) => {

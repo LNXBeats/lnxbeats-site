@@ -1,8 +1,8 @@
-# Modèle de données — V0.6.1
+# Modèle de données — V0.7.2
 
 ## Périmètre
 
-La V0.4 crée la fondation PostgreSQL avec Prisma ORM. La V0.6.0.3 migre les 25 projets de façon contrôlée et choisit PostgreSQL comme source runtime unique du site public. `data/discography.ts` reste une fixture historique figée, jamais un fallback.
+La V0.4 crée la fondation PostgreSQL avec Prisma ORM. La V0.6.0.3 migre les 25 projets de façon contrôlée et choisit PostgreSQL comme source runtime unique du site public. V0.7 ajoute les paiements test, la livraison privée et les droits post-livraison versionnés.
 
 Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers et la traçabilité. La V0.6 active les brouillons, commandes et photos de référence privées. La V0.6.0.1 ajoute les demandes de droits post-livraison, sans back-office complet, paiement, facture, contrat électronique ni livraison audio.
 
@@ -18,7 +18,11 @@ erDiagram
   Customer o|--o{ Order : passe
   User o|--o{ Order : "utilise un compte"
   Order ||--o{ OrderEvent : conserve
-  Order ||--o{ CommercialLicense : "ouvre après livraison"
+  Order ||--o{ RightsRequest : "ouvre après livraison"
+  RightsRequest ||--o{ ContractDocument : archive
+  RightsRequest ||--o{ ContractPartySnapshot : fige
+  RightsRequest ||--o{ RightsRequestEvent : audite
+  ContractDocument ||--o{ ContractAcceptance : prouve
   Project ||--o{ Track : contient
   Project ||--o{ PlatformLink : publie
   Project ||--o{ ConfidenceAnnotation : qualifie
@@ -122,9 +126,9 @@ La V0.6.0.4 ajoute `AUDIO_PREVIEW` aux types et rôles catalogue. Un projet poss
 
 Une séquence PostgreSQL indépendante produit les numéros `LNX-AAAA-NNNNNN` sans collision concurrente. Les contrôles SQL imposent prix non négatifs, somme du snapshot, cohérence usage/contrat, bornes de révision et expiration postérieure à la livraison. Les détails d’autorisation et de workflow sont dans [`docs/ORDER_MODEL.md`](ORDER_MODEL.md).
 
-### Droits commerciaux post-livraison
+### Droits et contrats post-livraison
 
-`CommercialLicense` représente une demande distincte rattachée à la commande livrée. Son snapshot serveur conserve 1 500 €, EUR, la version tarifaire et l’obligation de contrat. Ses statuts, son paiement futur et ses dates n’altèrent ni `Order.totalCents` ni l’usage personnel initial. Une contrainte unique partielle interdit plusieurs demandes ouvertes ou actives sur la même commande, tout en conservant les refus ou annulations historiques.
+`RightsRequest` représente une licence de publication à 150 € ou une étude de partenariat à 1 500 €, sans modifier le snapshot de l’Order. Les prix et la devise sont calculés côté serveur. Les coordonnées, contributions, matrice de droits, proposition commerciale, messages et audit sont structurés. `ContractTemplate` est versionné et soumis au Legal Review Gate. `ContractDocument` référence un Asset PDF R2 PRIVATE, son hash et son snapshot immuable ; `ContractAcceptance` relie consentement, utilisateur, document, version et preuve de session. L’ancien `CommercialLicense` est conservé uniquement comme archive de migration et n’est plus une source de vérité runtime.
 
 ### Historique
 
@@ -132,7 +136,7 @@ Une séquence PostgreSQL indépendante produit les numéros `LNX-AAAA-NNNNNN` sa
 
 ### Paiements
 
-Le paiement est différé. `AWAITING_PAYMENT` signifie uniquement qu’un brief est finalisé. Un futur modèle `Payment` devra distinguer le paiement de la création (`Order`) de celui des droits (`CommercialLicense`) avec fournisseur, référence externe, montant en unité mineure, devise, idempotence et statut. La facture gardera une numérotation distincte. Aucune donnée bancaire sensible ne devra être stockée.
+`Payment` prouve le paiement initial de l’Order. Aucun Payment n’est créé pour une `RightsRequest` dans V0.7.2 ; `READY_FOR_PAYMENT` est un état préparatoire sans bouton ni appel Stripe. Le paiement des droits, sa facture et ses règles de remboursement exigent un sprint ultérieur après revue juridique. Aucune donnée bancaire sensible n’est stockée dans les modèles contractuels.
 
 ## Favoris
 

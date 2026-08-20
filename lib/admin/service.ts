@@ -122,8 +122,8 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
       totalCents: true,
       createdAt: true,
       updatedAt: true,
-      commercialLicenses: {
-        where: { status: { in: ["REQUESTED", "CONTRACT_PENDING"] } },
+      rightsRequests: {
+        where: { status: { in: ["SUBMITTED", "INFORMATION_REQUIRED", "UNDER_REVIEW", "PREAUTHORIZATION_GENERATED", "CONTRACT_PREPARATION", "CONTRACT_READY", "CLIENT_ACCEPTED", "ADMIN_VALIDATED", "READY_FOR_PAYMENT"] } },
         select: { id: true },
       },
       payments: {
@@ -156,6 +156,10 @@ export async function getAdminOrder(orderNumber: string) {
       },
       commercialLicenses: {
         orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+      },
+      rightsRequests: {
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        select: { id: true, requestNumber: true, type: true, status: true, requestedPriceCents: true, currency: true, workTitle: true },
       },
       payments: {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -317,6 +321,7 @@ export async function deleteEligibleAdminOrder(orderNumber: string) {
         events: { select: { toStatus: true } },
         assets: { include: { asset: true } },
         commercialLicenses: { select: { id: true } },
+        rightsRequests: { select: { id: true } },
         payments: { select: { id: true } },
       },
     });

@@ -8,6 +8,7 @@ import "./globals.css";
 import "./visual-phase2.css";
 import "./visual-phase3.css";
 import "./v064-quick-access.css";
+import "./v072-rights.css";
 
 const siteUrl = process.env.SITE_URL ?? siteConfig.url;
 const socialImage = new URL("/og.png", siteUrl).toString();
