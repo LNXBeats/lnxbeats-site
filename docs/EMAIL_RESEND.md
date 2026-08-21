@@ -22,6 +22,71 @@ Resend documente les adresses `delivered@resend.dev`, `bounced@resend.dev`, `com
 
 Une clé, un domaine, un endpoint ou une destination manquants donnent `BLOQUÉ — ACTION HUMAINE REQUISE`. Aucune configuration DNS, Resend ou Railway n’est mutée par le code.
 
+## Harness V0.7.3.1 — procédure humaine Railway
+
+Le harness n'est disponible que si toutes les conditions suivantes sont vraies dans le même déploiement :
+
+- `NODE_ENV=production` fourni par Next/Railway ;
+- `RAILWAY_ENVIRONMENT_NAME=staging` fourni par Railway ;
+- `NOTIFICATION_DEPLOYMENT_ENV=staging` ;
+- `NOTIFICATION_EMAIL_TRANSPORT=resend` ;
+- `NOTIFICATION_STAGING_QA_CONFIRM=resend-v073-qa-approved` ;
+- `EMAIL_NOTIFICATIONS_ENABLED=true` ;
+- `OWNER_EMAIL_NOTIFICATIONS_ENABLED=true` ;
+- `CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false` ;
+- `PAYMENTS_ENABLED=false` ;
+- `SMS_TRANSPORT=disabled` et `SMS_NOTIFICATIONS_ENABLED=false` ;
+- `EMAIL_OWNER_RECIPIENT` exactement égal à la destination officielle du scénario ;
+- Bearer `NOTIFICATION_WORKER_SECRET` valide.
+
+La variable `NOTIFICATION_STAGING_RECIPIENT_ALLOWLIST` n'est pas utilisée par ce harness. Le payload accepté contient seulement `scenario`. Toute autre clé est refusée.
+
+### Commandes sûres
+
+Les commandes suivantes lisent le secret worker depuis l'environnement du conteneur sans l'afficher. Toujours vérifier qu'il n'existe aucune autre notification `PENDING` avant le dispatcher, car celui-ci traite un lot global borné.
+
+Création de la fixture, en remplaçant uniquement la constante locale `scenario` par l'un des quatre noms autorisés :
+
+```bash
+node -e 'const scenario="delivered";fetch("http://127.0.0.1:"+process.env.PORT+"/api/internal/notifications/qa/resend",{method:"POST",headers:{authorization:"Bearer "+process.env.NOTIFICATION_WORKER_SECRET,"content-type":"application/json"},body:JSON.stringify({scenario})}).then(async r=>console.log(JSON.stringify({http:r.status,...await r.json()})))'
+```
+
+Lecture sans destinataire ni identifiant fournisseur :
+
+```bash
+node -e 'const scenario="delivered";fetch("http://127.0.0.1:"+process.env.PORT+"/api/internal/notifications/qa/resend?scenario="+scenario,{headers:{authorization:"Bearer "+process.env.NOTIFICATION_WORKER_SECRET}}).then(async r=>console.log(JSON.stringify({http:r.status,...await r.json()})))'
+```
+
+Dispatch séparé, une seule fois après constat `PENDING`, `attempts=0` et inventaire global propre :
+
+```bash
+node -e 'fetch("http://127.0.0.1:"+process.env.PORT+"/api/internal/notifications/dispatch",{method:"POST",headers:{authorization:"Bearer "+process.env.NOTIFICATION_WORKER_SECRET}}).then(async r=>console.log(JSON.stringify({http:r.status,...await r.json()})))'
+```
+
+### Ordre exact par scénario
+
+Pour chacun des scénarios ci-dessous :
+
+1. définir `EMAIL_OWNER_RECIPIENT` à la valeur exacte indiquée et conserver `OWNER_EMAIL_NOTIFICATIONS_ENABLED=true` ;
+2. déployer la nouvelle configuration staging ;
+3. appeler `POST /api/internal/notifications/qa/resend` une fois ;
+4. rappeler le même POST et exiger `created=false` avec le même `notificationId` ;
+5. appeler `GET` et exiger `PENDING`, `attempts=0`, aucun provider/message/timestamp ;
+6. exécuter `npm run notifications:check` et exiger que cette fixture soit la seule ligne dispatchable ;
+7. appeler le dispatcher exactement une fois ;
+8. appeler `GET` jusqu'au statut terminal attendu, sans redéclencher le dispatcher ;
+9. vérifier le webhook HTTP 200 et les types d'événements ;
+10. ne passer au scénario suivant qu'après l'état terminal et l'absence de retry en attente.
+
+| Scénario | `EMAIL_OWNER_RECIPIENT` exact | État final | Suppression attendue |
+| --- | --- | --- | --- |
+| `delivered` | `delivered+lnx-v073-qa-01@resend.dev` | `DELIVERED` | inactive / aucune |
+| `bounced` | `bounced+lnx-v073-qa-01@resend.dev` | `BOUNCED` | `HARD_BOUNCE` active |
+| `complained` | `complained+lnx-v073-qa-01@resend.dev` | `COMPLAINED` | `COMPLAINT` active |
+| `suppressed` | `suppressed@resend.dev` | `SUPPRESSED` | `PROVIDER_SUPPRESSED` active |
+
+Après le dernier contrôle, remettre `OWNER_EMAIL_NOTIFICATIONS_ENABLED=false`, retirer `EMAIL_OWNER_RECIPIENT` et `NOTIFICATION_STAGING_QA_CONFIRM`, puis redéployer. Conserver les quatre fixtures pour l'audit jusqu'à une procédure de cleanup distincte : aucune route destructive n'est fournie par le harness.
+
 Références officielles :
 
 - envoi et idempotence : https://resend.com/docs/api-reference/emails/send-email et https://resend.com/docs/dashboard/emails/idempotency-keys

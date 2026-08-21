@@ -100,3 +100,27 @@ test("un événement suppression normalise la destination et la source", async (
     providerMessageId: "email_01", recipient: "Client@Example.com", suppressionOrigin: "complaint",
   });
 });
+
+test("un événement Resend QA conserve le providerMessageId nécessaire à la corrélation", async () => {
+  configure();
+  let snapshot: unknown;
+  const dependencies: ResendWebhookRouteDependencies = {
+    verify() {
+      return {
+        type: "email.delivered",
+        created_at: "2026-08-21T12:00:00.000Z",
+        data: { email_id: "email_resend_qa_01", to: ["delivered+lnx-v073-qa-01@resend.dev"] },
+      };
+    },
+    async process(event) { snapshot = event; return { outcome: "PROCESSED", duplicate: false }; },
+  };
+  assert.equal((await handleResendWebhookPost(request(), dependencies)).status, 200);
+  assert.deepEqual(snapshot, {
+    providerEventId: "msg_webhook_01",
+    type: "email.delivered",
+    occurredAt: new Date("2026-08-21T12:00:00.000Z"),
+    providerMessageId: "email_resend_qa_01",
+    recipient: "delivered+lnx-v073-qa-01@resend.dev",
+    suppressionOrigin: null,
+  });
+});

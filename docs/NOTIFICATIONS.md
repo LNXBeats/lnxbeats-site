@@ -27,3 +27,9 @@ Les e-mails droits ne disent jamais qu’un contrat DRAFT ou qu’un droit est a
 - aucun e-mail n’est une preuve métier.
 
 La vue `/admin/notifications` affiche les statuts humains, tentatives, erreurs assainies et ressources. Un retry manuel réutilise la même notification logique et reste interdit après livraison ou suppression du destinataire.
+
+## Harness Resend staging
+
+La route interne `POST /api/internal/notifications/qa/resend` ne sert qu'à créer une fixture d'outbox synthétique. Elle n'appelle jamais Resend : l'envoi reste une seconde action humaine via le dispatcher existant. `GET` sur la même route retourne seulement des booléens de présence, statuts et types d'événements, jamais le destinataire ou l'identifiant fournisseur.
+
+Le harness est indisponible hors `NODE_ENV=production` sur Railway `staging`, exige la confirmation dédiée et le Bearer worker, et refuse tout client activé, paiement ou SMS. Les quatre destinataires sont codés en dur dans le serveur ; aucun champ `recipient`, `email` ou `to` n'est accepté. Les Orders associées sont des lignes `CANCELLED`, sans utilisateur, client, Payment ou droit, avec un numéro `LNX-QA-RS-*` reconnaissable.
