@@ -9,6 +9,7 @@ import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
 import { canReadOrderMedia } from "@/lib/media/authorization";
 import type { OrderActor } from "@/lib/orders/domain";
 import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/storage";
+import { enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { activeRightsStatuses, canCreateRightsRequest, formatRightsNumber, rightsPriceSnapshot } from "@/lib/rights/domain";
 import { buildRightsDocumentSections, formatRightsCurrency, humanRightsContribution, humanRightsPlatform } from "@/lib/rights/document-presentation";
@@ -575,10 +576,16 @@ export async function generatePreauthorization(
         create: { rightsRequestId: request.id, type: "PREAUTHORIZATION_GENERATED", idempotencyKey: `rights:${request.id}:preauthorization:1`, actorUserId: actor.id, note: "Projet de préautorisation généré et archivé en privé." },
       });
       const idempotencyKey = `rights:${request.id}:preauthorization-ready:email`;
-      await transaction.orderNotification.upsert({
-        where: { idempotencyKey },
-        update: {},
-        create: { orderId: request.orderId, kind: "CUSTOMER_RIGHTS_PREAUTHORIZATION_READY", channel: "EMAIL", recipient: request.partySnapshots[0]?.contractEmail ?? null, idempotencyKey },
+      await enqueueOrderNotification(transaction, {
+        orderId: request.orderId,
+        kind: "CUSTOMER_RIGHTS_PREAUTHORIZATION_READY",
+        recipient: request.partySnapshots[0]?.contractEmail ?? null,
+        idempotencyKey,
+        resource: {
+          type: "RIGHTS_REQUEST", id: request.id, reference: request.requestNumber,
+          rightsRequestNumber: request.requestNumber, rightsRequestType: request.type,
+          requestedPriceCents: request.requestedPriceCents, workTitle: request.workTitle,
+        },
       });
       return false;
     });
@@ -739,7 +746,7 @@ async function confirmRightsCoordinatesUnlocked(actor: OrderActor, requestNumber
   const confirmation = await withRightsLock(`request:${requestNumber}:confirm`, async (transaction) => {
     const current = await transaction.rightsRequest.findFirst({
       where: { requestNumber, userId: actor.id },
-      select: { id: true, requestNumber: true, orderId: true, status: true },
+      select: { id: true, requestNumber: true, orderId: true, status: true, type: true, requestedPriceCents: true, workTitle: true },
     });
     if (!current) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
     const party = await transaction.contractPartySnapshot.findFirst({
@@ -767,10 +774,16 @@ async function confirmRightsCoordinatesUnlocked(actor: OrderActor, requestNumber
         create: { rightsRequestId: current.id, type: "REQUEST_SUBMITTED", idempotencyKey: `rights:${current.id}:submitted`, actorUserId: actor.id, note: "Demande envoyée pour étude." },
       });
       const idempotencyKey = `rights:${current.id}:owner-requested:email`;
-      await transaction.orderNotification.upsert({
-        where: { idempotencyKey },
-        update: {},
-        create: { orderId: current.orderId, kind: "OWNER_RIGHTS_REQUESTED", channel: "EMAIL", recipient: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null, idempotencyKey },
+      await enqueueOrderNotification(transaction, {
+        orderId: current.orderId,
+        kind: "OWNER_RIGHTS_REQUESTED",
+        recipient: process.env.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null,
+        idempotencyKey,
+        resource: {
+          type: "RIGHTS_REQUEST", id: current.id, reference: current.requestNumber,
+          rightsRequestNumber: current.requestNumber, rightsRequestType: current.type,
+          requestedPriceCents: current.requestedPriceCents, workTitle: current.workTitle,
+        },
       });
     }
     return { requestNumber: current.requestNumber, alreadyGenerated: current.status === "PREAUTHORIZATION_GENERATED" };

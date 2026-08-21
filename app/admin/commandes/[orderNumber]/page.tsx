@@ -36,6 +36,9 @@ const stateMessages: Record<string, string> = {
 
 const notificationKindPresentation = {
   OWNER_NEW_ORDER: "Nouvelle commande — propriétaire",
+  CUSTOMER_PAYMENT_CONFIRMED: "Paiement confirmé — client",
+  CUSTOMER_ORDER_ACCEPTED: "Commande acceptée — client",
+  CUSTOMER_CREATION_STARTED: "Création démarrée — client",
   CUSTOMER_DELIVERY_READY: "Livraison disponible — client",
   OWNER_RIGHTS_REQUESTED: "Nouvelle demande de droits — propriétaire",
   CUSTOMER_RIGHTS_INFORMATION_REQUIRED: "Informations demandées — client",
@@ -51,6 +54,13 @@ const notificationStatusPresentation = {
   PROCESSING: "En cours d’envoi",
   SENT: "Envoyée",
   FAILED: "À réessayer",
+  DELIVERED: "Livrée",
+  FAILED_RETRYABLE: "Nouvelle tentative planifiée",
+  FAILED_FINAL: "Échec définitif",
+  BOUNCED: "Adresse rejetée",
+  COMPLAINED: "Plainte reçue",
+  SUPPRESSED: "Adresse supprimée",
+  CANCELED: "Annulée",
 } as const;
 
 export default async function AdminOrderPage({ params, searchParams }: AdminOrderPageProps) {

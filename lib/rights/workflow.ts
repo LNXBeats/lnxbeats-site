@@ -13,6 +13,7 @@ import { verifyPassword } from "@/lib/auth/password";
 import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
 import type { OrderActor } from "@/lib/orders/domain";
 import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/storage";
+import { enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { assertRightsSplit, canGenerateContractDraft, canStartRightsReview, isLegalTemplateUsable } from "@/lib/rights/domain";
 import { buildRightsDocumentSections } from "@/lib/rights/document-presentation";
@@ -162,12 +163,27 @@ function event(
 
 function notification(
   transaction: Transaction,
-  input: { orderId: string; kind: Prisma.OrderNotificationUncheckedCreateInput["kind"]; recipient: string | null; key: string },
+  input: {
+    request: { id: string; requestNumber: string; orderId: string; type: "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP"; requestedPriceCents: number; workTitle: string };
+    kind: Prisma.OrderNotificationUncheckedCreateInput["kind"];
+    recipient: string | null;
+    key: string;
+  },
 ) {
-  return transaction.orderNotification.upsert({
-    where: { idempotencyKey: input.key },
-    update: {},
-    create: { orderId: input.orderId, kind: input.kind, channel: "EMAIL", recipient: input.recipient, idempotencyKey: input.key },
+  return enqueueOrderNotification(transaction, {
+    orderId: input.request.orderId,
+    kind: input.kind,
+    recipient: input.recipient,
+    idempotencyKey: input.key,
+    resource: {
+      type: "RIGHTS_REQUEST",
+      id: input.request.id,
+      reference: input.request.requestNumber,
+      rightsRequestNumber: input.request.requestNumber,
+      rightsRequestType: input.request.type,
+      requestedPriceCents: input.request.requestedPriceCents,
+      workTitle: input.request.workTitle,
+    },
   });
 }
 
@@ -215,7 +231,7 @@ export async function requestRightsInformation(actor: OrderActor, requestNumber:
     });
     await transaction.rightsRequest.update({ where: { id: request.id }, data: { status: "INFORMATION_REQUIRED", needsInformationMessage: message } });
     await event(transaction, { requestId: request.id, type: "INFORMATION_REQUESTED", key: `rights:${request.id}:information:${created.id}`, actorId: actor.id, note: "Informations complémentaires demandées au client." });
-    await notification(transaction, { orderId: request.orderId, kind: "CUSTOMER_RIGHTS_INFORMATION_REQUIRED", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:information:${created.id}:email` });
+    await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_INFORMATION_REQUIRED", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:information:${created.id}:email` });
     return request.requestNumber;
   });
 }
@@ -230,7 +246,8 @@ export async function respondRightsInformation(actor: OrderActor, requestNumber:
     const created = await transaction.rightsMessage.create({ data: { rightsRequestId: request.id, kind: "CLIENT_RESPONSE", authorUserId: actor.id, body: message } });
     await transaction.rightsRequest.update({ where: { id: request.id }, data: { status: "SUBMITTED", needsInformationMessage: null } });
     await event(transaction, { requestId: request.id, type: "INFORMATION_PROVIDED", key: `rights:${request.id}:response:${created.id}`, actorId: actor.id, note: "Le client a répondu à la demande de précision." });
-    await notification(transaction, { orderId: request.orderId, kind: "OWNER_RIGHTS_REQUESTED", recipient: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null, key: `rights:${request.id}:response:${created.id}:email` });
+    const resource = await adminRequest(transaction, requestNumber);
+    await notification(transaction, { request: resource, kind: "OWNER_RIGHTS_REQUESTED", recipient: process.env.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null, key: `rights:${request.id}:response:${created.id}:email` });
     return request.requestNumber;
   });
 }
@@ -246,7 +263,7 @@ export async function rejectRightsRequest(actor: OrderActor, requestNumber: stri
     }
     await transaction.rightsRequest.update({ where: { id: request.id }, data: { status: "REJECTED", rejectedAt: new Date(), rejectionReason: reason } });
     await event(transaction, { requestId: request.id, type: "REQUEST_REJECTED", key: `rights:${request.id}:rejected`, actorId: actor.id, note: "Demande non retenue. Le motif est communiqué au client." });
-    await notification(transaction, { orderId: request.orderId, kind: "CUSTOMER_RIGHTS_REJECTED", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:rejected:email` });
+    await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_REJECTED", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:rejected:email` });
     return request.requestNumber;
   });
 }
@@ -515,7 +532,7 @@ export async function generateRightsDocument(
       // rewriting the earlier row.
       if (kind === "CONTRACT" && legalTemplateApproved) {
         await transaction.rightsRequest.update({ where: { id: current.id }, data: { status: "CONTRACT_READY" } });
-        await notification(transaction, { orderId: current.orderId, kind: "CUSTOMER_RIGHTS_CONTRACT_READY", recipient: current.partySnapshots[0]?.contractEmail ?? current.owner.email, key: `rights:${current.id}:contract:${documentVersion}:email` });
+        await notification(transaction, { request: current, kind: "CUSTOMER_RIGHTS_CONTRACT_READY", recipient: current.partySnapshots[0]?.contractEmail ?? current.owner.email, key: `rights:${current.id}:contract:${documentVersion}:email` });
       }
       await event(transaction, { requestId: current.id, type: currentPrevious ? "DOCUMENT_SUPERSEDED" : "DOCUMENT_GENERATED", key: `rights:${current.id}:${kind}:${documentVersion}`, actorId: actor.id, note: `${kind === "CONTRACT" ? "Projet de contrat" : "Fiche de préparation SACEM"} version ${documentVersion} généré ${legalTemplateApproved ? "pour revue client" : "en DRAFT filigrané"}, sans activation.` });
       return { duplicate: false as const, documentStatus };
@@ -645,7 +662,7 @@ export async function acceptRightsContract(
       await transaction.contractDocument.update({ where: { id: currentDocument.id }, data: { status: "CLIENT_ACCEPTED", acceptedAt } });
       await transaction.rightsRequest.update({ where: { id: current.id }, data: { status: "CLIENT_ACCEPTED" } });
       await event(transaction, { requestId: current.id, type: "CLIENT_ACCEPTED", key: `rights:${current.id}:document:${currentDocument.id}:client-accepted`, actorId: actor.id, note: "Acceptation électronique QA enregistrée avec réauthentification, empreinte du document et PDF de preuve privé." });
-      await notification(transaction, { orderId: current.orderId, kind: "OWNER_RIGHTS_CLIENT_ACCEPTED", recipient: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null, key: `rights:${current.id}:client-accepted:email` });
+      await notification(transaction, { request: current, kind: "OWNER_RIGHTS_CLIENT_ACCEPTED", recipient: process.env.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null, key: `rights:${current.id}:client-accepted:email` });
       return { duplicate: false as const };
     });
     if (result.duplicate) await dependencies.delete(stored).catch(() => undefined);
@@ -678,7 +695,7 @@ export async function adminValidateRightsContract(actor: OrderActor, requestNumb
       await transaction.rightsRequest.update({ where: { id: request.id }, data: { status: "READY_FOR_PAYMENT", approvedAt: now } });
       await event(transaction, { requestId: request.id, type: "ADMIN_VALIDATED", key: `rights:${request.id}:document:${document.id}:admin-validated`, actorId: actor.id, note: "Double validation enregistrée. Aucun paiement ni droit actif n’est créé." });
       await event(transaction, { requestId: request.id, type: "READY_FOR_PAYMENT", key: `rights:${request.id}:ready-for-future-payment`, actorId: actor.id, note: "Dossier prêt pour une future étape de paiement, actuellement désactivée." });
-      await notification(transaction, { orderId: request.orderId, kind: "CUSTOMER_RIGHTS_READY_FOR_PAYMENT", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:ready-for-payment:email` });
+      await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_READY_FOR_PAYMENT", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:ready-for-payment:email` });
     }
     return request.requestNumber;
   });

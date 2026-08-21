@@ -9,6 +9,7 @@ import {
   paymentHealthSummary,
 } from "@/lib/payments/config";
 import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
+import { notificationHealthSummary, parseNotificationConfiguration } from "@/lib/notifications/config";
 
 export type HealthDependencies = Readonly<{
   assertPaymentQaRuntime(): Promise<void>;
@@ -47,8 +48,17 @@ export async function healthResponse(
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
+  let notifications;
+  try {
+    notifications = notificationHealthSummary(parseNotificationConfiguration());
+  } catch {
+    return NextResponse.json(
+      { ok: false, service: "lnx-studio", check: "notifications" },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   return NextResponse.json(
-    { ok: true, service: "lnx-studio", mediaStorage, payments },
+    { ok: true, service: "lnx-studio", mediaStorage, payments, notifications },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }
