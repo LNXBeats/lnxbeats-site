@@ -11,11 +11,29 @@ import type { OrderActor } from "@/lib/orders/domain";
 import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/storage";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { activeRightsStatuses, canCreateRightsRequest, formatRightsNumber, rightsPriceSnapshot } from "@/lib/rights/domain";
+import { buildRightsDocumentSections, formatRightsCurrency, humanRightsContribution, humanRightsPlatform } from "@/lib/rights/document-presentation";
 import type { RightsDraftInput } from "@/lib/rights/input";
 import { generateContractPdf } from "@/lib/rights/pdf";
 import type { SerializedRightsRequest } from "@/lib/rights/types";
 
 type Transaction = Prisma.TransactionClient;
+
+const rightsConfirmationQueues = new Map<string, Promise<void>>();
+
+async function withLocalConfirmationLock<T>(requestNumber: string, operation: () => Promise<T>) {
+  const previous = rightsConfirmationQueues.get(requestNumber) ?? Promise.resolve();
+  let release: () => void = () => undefined;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.catch(() => undefined).then(() => current);
+  rightsConfirmationQueues.set(requestNumber, tail);
+  await previous.catch(() => undefined);
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (rightsConfirmationQueues.get(requestNumber) === tail) rightsConfirmationQueues.delete(requestNumber);
+  }
+}
 
 export class RightsServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -51,6 +69,44 @@ const requestInclude = {
 } satisfies Prisma.RightsRequestInclude;
 
 type RequestWithRelations = Prisma.RightsRequestGetPayload<{ include: typeof requestInclude }>;
+
+type RightsReader = Pick<
+  typeof prisma,
+  | "rightsRequest"
+  | "order"
+  | "contractPartySnapshot"
+  | "rightsContribution"
+  | "rightsGrant"
+  | "rightsSplitProposal"
+  | "contractDocument"
+  | "rightsRequestEvent"
+  | "rightsMessage"
+>;
+
+async function findRequestWithRelations(database: RightsReader, where: Prisma.RightsRequestWhereInput) {
+  const request = await database.rightsRequest.findFirst({ where });
+  if (!request) return null;
+  // Prisma's query relation loader can fan several SELECTs out concurrently.
+  // That is unsafe on the single PostgreSQL wire connection used by Prisma Dev
+  // transactions, so the confirmation path deliberately loads each relation in
+  // sequence. Production keeps the same deterministic behavior.
+  const order = await database.order.findUniqueOrThrow({
+    where: { id: request.orderId },
+    select: { id: true, orderNumber: true, userId: true, status: true },
+  });
+  const partySnapshots = await database.contractPartySnapshot.findMany({ where: { rightsRequestId: request.id }, orderBy: { version: "desc" } });
+  const contributions = await database.rightsContribution.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ position: "asc" }, { id: "asc" }] });
+  const grants = await database.rightsGrant.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ position: "asc" }, { id: "asc" }] });
+  const splitProposals = await database.rightsSplitProposal.findMany({ where: { rightsRequestId: request.id }, orderBy: { version: "desc" } });
+  const documents = await database.contractDocument.findMany({
+    where: { rightsRequestId: request.id },
+    orderBy: [{ documentVersion: "desc" }, { generatedAt: "desc" }],
+    select: requestInclude.documents.select,
+  });
+  const events = await database.rightsRequestEvent.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  const messages = await database.rightsMessage.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  return { ...request, order, partySnapshots, contributions, grants, splitProposals, documents, events, messages } as RequestWithRelations;
+}
 
 export function serializeRightsRequest(request: RequestWithRelations): SerializedRightsRequest {
   const party = request.partySnapshots[0] ?? null;
@@ -204,18 +260,18 @@ function formData(input: RightsDraftInput): Prisma.InputJsonValue {
 export async function createRightsDraft(actor: OrderActor, orderNumber: string, input: RightsDraftInput) {
   assertDatabaseConfigured();
   return withRightsLock(`order:${orderNumber}:${input.type}`, async (transaction) => {
-    const order = await transaction.order.findFirst({
-      where: { orderNumber, userId: actor.id },
-      include: {
-        payments: { where: { status: "SUCCEEDED" }, select: { id: true } },
-        assets: { where: { role: "DELIVERY" }, select: { assetId: true } },
-        rightsRequests: { where: { type: input.type, status: { in: [...activeRightsStatuses] } }, orderBy: { createdAt: "desc" } },
-      },
-    });
+    const order = await transaction.order.findFirst({ where: { orderNumber, userId: actor.id } });
     if (!order) throw new RightsServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
-    if (!order.payments.length) throw new RightsServiceError("La commande doit être payée avant une demande de droits.", 409, "ORDER_NOT_PAID");
-    const existing = order.rightsRequests[0] ?? null;
-    if (!canCreateRightsRequest({ orderStatus: order.status, hasPublishedDelivery: order.assets.length > 0, existingStatuses: existing ? [existing.status] : [] }) && existing?.status !== "DRAFT") {
+    // Keep relation reads sequential on Prisma Dev's single PostgreSQL wire
+    // connection. A nested include here can fan out during the transaction.
+    const successfulPayment = await transaction.payment.findFirst({ where: { orderId: order.id, status: "SUCCEEDED" }, select: { id: true } });
+    if (!successfulPayment) throw new RightsServiceError("La commande doit être payée avant une demande de droits.", 409, "ORDER_NOT_PAID");
+    const publishedDelivery = await transaction.orderAsset.findFirst({ where: { orderId: order.id, role: "DELIVERY" }, select: { assetId: true } });
+    const existing = await transaction.rightsRequest.findFirst({
+      where: { orderId: order.id, type: input.type, status: { in: [...activeRightsStatuses] } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!canCreateRightsRequest({ orderStatus: order.status, hasPublishedDelivery: Boolean(publishedDelivery), existingStatuses: existing ? [existing.status] : [] }) && existing?.status !== "DRAFT") {
       throw new RightsServiceError("Une demande active existe déjà ou la livraison n’est pas publiée.", 409, "RIGHTS_REQUEST_NOT_ELIGIBLE");
     }
 
@@ -234,10 +290,11 @@ export async function createRightsDraft(actor: OrderActor, orderNumber: string, 
           artistName: input.project.artistName,
           formVersion: rightsFormVersion,
           formData: formData(input),
-          partySnapshots: { create: { version: 1, ...partyData(input.party) } },
-          contributions: { create: contributionData(input.contributions) },
         },
       });
+      await transaction.contractPartySnapshot.create({ data: { rightsRequestId: requestId, version: 1, ...partyData(input.party) } });
+      const contributions = contributionData(input.contributions);
+      if (contributions.length) await transaction.rightsContribution.createMany({ data: contributions.map((item) => ({ rightsRequestId: requestId, ...item })) });
     } else {
       const pricing = rightsPriceSnapshot(input.type);
       const requestNumber = await nextRightsNumber(transaction, input.type);
@@ -255,11 +312,12 @@ export async function createRightsDraft(actor: OrderActor, orderNumber: string, 
           artistName: input.project.artistName,
           formVersion: rightsFormVersion,
           formData: formData(input),
-          partySnapshots: { create: { version: 1, ...partyData(input.party) } },
-          contributions: { create: contributionData(input.contributions) },
         },
       });
       requestId = created.id;
+      await transaction.contractPartySnapshot.create({ data: { rightsRequestId: requestId, version: 1, ...partyData(input.party) } });
+      const contributions = contributionData(input.contributions);
+      if (contributions.length) await transaction.rightsContribution.createMany({ data: contributions.map((item) => ({ rightsRequestId: requestId, ...item })) });
       await transaction.rightsRequestEvent.create({
         data: {
           rightsRequestId: requestId,
@@ -270,7 +328,9 @@ export async function createRightsDraft(actor: OrderActor, orderNumber: string, 
         },
       });
     }
-    return serializeRightsRequest(await transaction.rightsRequest.findUniqueOrThrow({ where: { id: requestId }, include: requestInclude }));
+    const persisted = await findRequestWithRelations(transaction, { id: requestId });
+    if (!persisted) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
+    return serializeRightsRequest(persisted);
   });
 }
 
@@ -286,25 +346,16 @@ function nestedRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function textValue(value: unknown, fallback = "À définir") {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
-
-function arrayValue(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").join(", ") : "À définir";
-}
-
-async function preauthorizationSnapshot(request: RequestWithRelations, template: { id: string; version: number; status: string; sourceMarkup: string }) {
+async function preauthorizationSnapshot(
+  request: RequestWithRelations,
+  template: { id: string; version: number; status: string; sourceMarkup: string },
+  documentVersion: number,
+) {
   const party = request.partySnapshots[0];
   if (!party?.confirmedAt) throw new RightsServiceError("Les coordonnées doivent être confirmées.", 409, "CONTACT_NOT_CONFIRMED");
-  const root = formObject(request.formData);
-  const project = nestedRecord(root.project);
-  const partnership = nestedRecord(root.partnership);
-  const contributions = request.contributions.map(({ kind, description, claimedPercentage }) => `${kind} : ${description}${claimedPercentage === null ? "" : ` (${claimedPercentage} % revendiqués)`}`);
-  const proposed = request.type === "EXPLOITATION_PARTNERSHIP"
-    ? "Aucune répartition n’est retenue automatiquement. Une proposition éventuelle exige une action Admin volontaire et une étude des contributions."
-    : "Sans objet pour cette demande de licence.";
   return {
+    generationSchemaVersion: 2,
+    documentVersion,
     templateId: template.id,
     templateVersion: template.version,
     templateStatus: template.status,
@@ -324,18 +375,43 @@ async function preauthorizationSnapshot(request: RequestWithRelations, template:
       address: `${party.streetAddress}, ${party.postalCode} ${party.city}, ${party.country}`,
       contractEmail: party.contractEmail,
     },
-    project: {
-      platforms: arrayValue(project.platforms),
-      territory: textValue(project.territory),
-      duration: textValue(project.duration),
-      targetDate: textValue(project.targetDate, "Non renseignée"),
-      monetized: project.monetized === true,
-      contentId: project.contentId === true,
-      advertising: project.advertising === true,
+    clientDeclarations: request.formData,
+    contributions: request.contributions.map(({ kind, description, claimedPercentage, evidenceNote, position }) => ({
+      kind,
+      description,
+      claimedPercentage,
+      evidenceNote,
+      position,
+    })),
+    adminDecisions: {
+      grants: request.grants.map(({ kind, authorized, exclusive, destination, platforms, territory, duration, monetization, adaptation, advertising, audiovisualSync, contentId, sublicense, credit, restrictions, position }) => ({
+        kind,
+        authorized,
+        exclusive,
+        destination,
+        platforms,
+        territory,
+        duration,
+        monetization,
+        adaptation,
+        advertising,
+        audiovisualSync,
+        contentId,
+        sublicense,
+        credit,
+        restrictions,
+        position,
+      })),
+      splitProposal: request.splitProposals[0] ? {
+        version: request.splitProposals[0].version,
+        clientSharePercent: request.splitProposals[0].clientSharePercent,
+        lnxSharePercent: request.splitProposals[0].lnxSharePercent,
+        nature: request.splitProposals[0].nature,
+        comment: request.splitProposals[0].comment,
+        contributionRationale: request.splitProposals[0].contributionRationale,
+        proposedRoles: request.splitProposals[0].proposedRoles,
+      } : null,
     },
-    partnership: request.type === "EXPLOITATION_PARTNERSHIP" ? partnership : null,
-    contributions,
-    proposedSplit: proposed,
     legalWarnings: {
       noRightsGranted: true,
       noAutomaticSacem: true,
@@ -343,6 +419,37 @@ async function preauthorizationSnapshot(request: RequestWithRelations, template:
       withdrawalLegalReviewRequired: true,
     },
   } as const;
+}
+
+function preauthorizationSections(request: RequestWithRelations, sourceSnapshot: Awaited<ReturnType<typeof preauthorizationSnapshot>>) {
+  const party = request.partySnapshots[0];
+  if (!party) throw new RightsServiceError("Les coordonnées sont incomplètes.", 409, "CONTACT_MISSING");
+  if (request.type === "EXPLOITATION_PARTNERSHIP") {
+    return buildRightsDocumentSections({
+      kind: "PREAUTHORIZATION",
+      requestType: request.type,
+      workTitle: request.workTitle,
+      orderNumber: request.order.orderNumber,
+      requestedPriceCents: request.requestedPriceCents,
+      formData: request.formData,
+      party,
+      grants: request.grants,
+      contributions: request.contributions,
+      splitProposal: request.splitProposals[0] ?? null,
+      aiAssessment: request.aiAssessment,
+    });
+  }
+
+  const project = nestedRecord(formObject(request.formData).project);
+  const platforms = Array.isArray(project.platforms)
+    ? project.platforms.filter((item): item is string => typeof item === "string").map(humanRightsPlatform).join(", ")
+    : "Non renseignées";
+  return [
+    { title: "Parties et création", paragraphs: [`LNX Beats et ${sourceSnapshot.party.name}, ${sourceSnapshot.party.address}.`, `Création : ${request.workTitle}. Référence ${request.order.orderNumber}.`] },
+    { title: "Demande préparée", paragraphs: [`Offre : Licence de publication. Plateformes souhaitées : ${platforms}. Territoire souhaité : ${typeof project.territory === "string" && project.territory.trim() ? project.territory.trim() : "Non renseigné"}. Durée souhaitée : ${typeof project.duration === "string" && project.duration.trim() ? project.duration.trim() : "Non renseignée"}.`, `Montant cible futur : ${formatRightsCurrency(request.requestedPriceCents)}. Aucun paiement n’est effectué à cette étape.`] },
+    { title: "Contributions déclarées", paragraphs: request.contributions.length ? request.contributions.map((item) => `${humanRightsContribution(item.kind)} : ${item.description}${item.claimedPercentage === null ? "" : ` (${item.claimedPercentage} % revendiqués par le client)`}. Cette déclaration reste à vérifier.`) : ["Aucune contribution reconnue automatiquement."] },
+    { title: "Limites", paragraphs: ["Ce document n’accorde aucun droit tant qu’il n’a pas été approuvé, accepté et, dans une version ultérieure, payé.", "Cette demande ne transfère pas la qualité d’auteur, les droits moraux, la propriété de l’œuvre ou une quote-part SACEM.", "Les règles de rétractation et de commencement anticipé restent soumises à validation juridique. Aucune renonciation n’est précochée."] },
+  ];
 }
 
 type StoredPrivateDocument = Readonly<{
@@ -378,7 +485,7 @@ export async function generatePreauthorization(
   if (configuration.backend !== "OBJECT" || configuration.provider !== "r2") {
     throw new RightsServiceError("Le stockage contractuel privé est indisponible.", 503, "CONTRACT_STORAGE_UNAVAILABLE");
   }
-  const request = await prisma.rightsRequest.findFirst({ where: { requestNumber, userId: actor.id }, include: requestInclude });
+  const request = await findRequestWithRelations(prisma, { requestNumber, userId: actor.id });
   if (!request) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
   const existing = request.documents.find(({ kind }) => kind === "PREAUTHORIZATION");
   if (existing) return serializeRightsRequest(request);
@@ -391,7 +498,7 @@ export async function generatePreauthorization(
     orderBy: { version: "desc" },
   });
   if (!template) throw new RightsServiceError("Aucun modèle contractuel n’est disponible.", 503, "CONTRACT_TEMPLATE_UNAVAILABLE");
-  const sourceSnapshot = await preauthorizationSnapshot(request, template);
+  const sourceSnapshot = await preauthorizationSnapshot(request, template, 1);
   const generatedAt = new Date();
   const contractNumber = `${request.requestNumber}-P01`;
   const pdf = await generateContractPdf({
@@ -404,12 +511,7 @@ export async function generatePreauthorization(
     generatedAt,
     legalTemplateApproved: template.status === "APPROVED",
     kind: "PREAUTHORIZATION",
-    sections: [
-      { title: "Parties et création", paragraphs: [`LNX Beats et ${sourceSnapshot.party.name}, ${sourceSnapshot.party.address}.`, `Création : ${request.workTitle}. Référence ${request.order.orderNumber}.`] },
-      { title: "Demande préparée", paragraphs: [`Offre : ${request.type === "PUBLICATION_LICENSE" ? "Licence de publication" : "Partenariat d’exploitation"}. Plateformes : ${sourceSnapshot.project.platforms}. Territoire : ${sourceSnapshot.project.territory}. Durée : ${sourceSnapshot.project.duration}.`, `Montant cible futur : ${(request.requestedPriceCents / 100).toLocaleString("fr-FR")} €. Aucun paiement n’est effectué à cette étape.`] },
-      { title: "Contributions déclarées", paragraphs: sourceSnapshot.contributions.length ? sourceSnapshot.contributions : ["Aucune contribution reconnue automatiquement."] },
-      { title: "Limites", paragraphs: ["Ce document n’accorde aucun droit tant qu’il n’a pas été approuvé, accepté et, dans une version ultérieure, payé.", request.type === "EXPLOITATION_PARTNERSHIP" ? "Étude individuelle obligatoire - aucune répartition définitive à ce stade." : "Cette demande ne transfère pas la qualité d’auteur, les droits moraux, la propriété de l’œuvre ou une quote-part SACEM.", "Les règles de rétractation et de commencement anticipé restent soumises à validation juridique. Aucune renonciation n’est précochée."] },
-    ],
+    sections: preauthorizationSections(request, sourceSnapshot),
   });
   const storageKey = `orders/${request.orderId}/documents/${randomUUID()}.pdf`;
   const stored = await dependencies.write({ storageKey, bytes: pdf.bytes, checksumSha256: pdf.sha256 });
@@ -417,11 +519,17 @@ export async function generatePreauthorization(
     await dependencies.delete(stored).catch(() => undefined);
     throw new RightsServiceError("Le stockage contractuel privé est indisponible.", 503, "CONTRACT_STORAGE_UNAVAILABLE");
   }
+  let duplicate: boolean;
   try {
-    const result = await withRightsLock(`request:${request.id}:preauthorization`, async (transaction) => {
-      const current = await transaction.rightsRequest.findUniqueOrThrow({ where: { id: request.id }, include: requestInclude });
-      if (current.documents.some(({ kind }) => kind === "PREAUTHORIZATION")) {
-        return { duplicate: true as const, request: serializeRightsRequest(current) };
+    duplicate = await withRightsLock(`request:${request.id}:preauthorization`, async (transaction) => {
+      const current = await transaction.rightsRequest.findUniqueOrThrow({ where: { id: request.id }, select: { id: true, status: true } });
+      const existingDocument = await transaction.contractDocument.findFirst({
+        where: { rightsRequestId: current.id, kind: "PREAUTHORIZATION" },
+        select: { id: true },
+      });
+      if (existingDocument) return true;
+      if (current.status !== "SUBMITTED") {
+        throw new RightsServiceError("La demande doit d’abord être soumise.", 409, "RIGHTS_REQUEST_NOT_SUBMITTED");
       }
       const asset = await transaction.asset.create({
         data: {
@@ -472,22 +580,172 @@ export async function generatePreauthorization(
         update: {},
         create: { orderId: request.orderId, kind: "CUSTOMER_RIGHTS_PREAUTHORIZATION_READY", channel: "EMAIL", recipient: request.partySnapshots[0]?.contractEmail ?? null, idempotencyKey },
       });
-      return { duplicate: false as const, request: serializeRightsRequest(await transaction.rightsRequest.findUniqueOrThrow({ where: { id: request.id }, include: requestInclude })) };
+      return false;
     });
-    if (result.duplicate) await dependencies.delete(stored).catch(() => undefined);
-    return result.request;
   } catch (error) {
     await dependencies.delete(stored).catch(() => undefined);
     throw error;
   }
+  if (duplicate) await dependencies.delete(stored).catch(() => undefined);
+  const persisted = await findRequestWithRelations(prisma, { id: request.id, userId: actor.id });
+  if (!persisted) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
+  return serializeRightsRequest(persisted);
 }
 
-export async function confirmRightsCoordinates(actor: OrderActor, requestNumber: string, dependencies: PreauthorizationDependencies = defaultPrivateDocumentDependencies) {
+async function generatePartnershipPreauthorizationRevisionUnlocked(
+  actor: OrderActor,
+  requestNumber: string,
+  dependencies: PreauthorizationDependencies,
+) {
   assertDatabaseConfigured();
-  const request = await withRightsLock(`request:${requestNumber}:confirm`, async (transaction) => {
-    const current = await transaction.rightsRequest.findFirst({ where: { requestNumber, userId: actor.id }, include: requestInclude });
+  const configuration = dependencies.validateStorage();
+  if (configuration.backend !== "OBJECT" || configuration.provider !== "r2") {
+    throw new RightsServiceError("Le stockage contractuel privé est indisponible.", 503, "CONTRACT_STORAGE_UNAVAILABLE");
+  }
+  const request = await findRequestWithRelations(prisma, { requestNumber, userId: actor.id });
+  if (!request) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
+  if (request.type !== "EXPLOITATION_PARTNERSHIP") {
+    throw new RightsServiceError("Cette révision est réservée au partenariat d’exploitation.", 409, "PREAUTHORIZATION_REVISION_NOT_ALLOWED");
+  }
+  const existingRevision = request.documents.find(({ kind, documentVersion }) => kind === "PREAUTHORIZATION" && documentVersion === 2);
+  if (existingRevision) return serializeRightsRequest(request);
+  const original = request.documents.find(({ kind, documentVersion }) => kind === "PREAUTHORIZATION" && documentVersion === 1);
+  if (!original || original.status !== "DRAFT" || request.status !== "PREAUTHORIZATION_GENERATED") {
+    throw new RightsServiceError("La préautorisation d’origine n’est pas révisable.", 409, "PREAUTHORIZATION_REVISION_NOT_ALLOWED");
+  }
+  const acceptedOriginal = await prisma.contractAcceptance.count({ where: { contractDocumentId: original.id } });
+  if (acceptedOriginal !== 0) {
+    throw new RightsServiceError("Un document accepté ne peut pas être remplacé.", 409, "ACCEPTED_DOCUMENT_IMMUTABLE");
+  }
+  const template = await prisma.contractTemplate.findFirst({
+    where: { type: "EXPLOITATION_PARTNERSHIP", status: { in: ["DRAFT", "AWAITING_LEGAL_REVIEW", "APPROVED"] } },
+    orderBy: { version: "desc" },
+  });
+  if (!template) throw new RightsServiceError("Aucun modèle contractuel n’est disponible.", 503, "CONTRACT_TEMPLATE_UNAVAILABLE");
+
+  const sourceSnapshot = await preauthorizationSnapshot(request, template, 2);
+  const generatedAt = new Date();
+  const contractNumber = `${request.requestNumber}-P02`;
+  const pdf = await generateContractPdf({
+    contractNumber,
+    requestNumber: request.requestNumber,
+    orderNumber: request.order.orderNumber,
+    title: `Projet de préautorisation - ${request.workTitle}`,
+    statusLabel: "Projet de préautorisation",
+    templateVersion: template.version,
+    generatedAt,
+    legalTemplateApproved: template.status === "APPROVED",
+    kind: "PREAUTHORIZATION",
+    sections: preauthorizationSections(request, sourceSnapshot),
+  });
+  const storageKey = `orders/${request.orderId}/documents/${randomUUID()}.pdf`;
+  const stored = await dependencies.write({ storageKey, bytes: pdf.bytes, checksumSha256: pdf.sha256 });
+  if (stored.storageBackend !== "OBJECT" || stored.storageProvider !== "r2" || stored.visibility !== "PRIVATE") {
+    await dependencies.delete(stored).catch(() => undefined);
+    throw new RightsServiceError("Le stockage contractuel privé est indisponible.", 503, "CONTRACT_STORAGE_UNAVAILABLE");
+  }
+
+  let duplicate: boolean;
+  try {
+    duplicate = await withRightsLock(`request:${request.id}:preauthorization`, async (transaction) => {
+      const current = await transaction.rightsRequest.findUniqueOrThrow({
+        where: { id: request.id },
+        select: { id: true, type: true, status: true },
+      });
+      const currentRevision = await transaction.contractDocument.findFirst({
+        where: { rightsRequestId: current.id, kind: "PREAUTHORIZATION", documentVersion: 2 },
+        select: { id: true },
+      });
+      if (currentRevision) return true;
+      const currentOriginal = await transaction.contractDocument.findFirst({
+        where: { rightsRequestId: current.id, kind: "PREAUTHORIZATION", documentVersion: 1 },
+        select: { id: true, status: true },
+      });
+      if (current.type !== "EXPLOITATION_PARTNERSHIP" || current.status !== "PREAUTHORIZATION_GENERATED" || !currentOriginal || currentOriginal.status !== "DRAFT") {
+        throw new RightsServiceError("La préautorisation d’origine n’est pas révisable.", 409, "PREAUTHORIZATION_REVISION_NOT_ALLOWED");
+      }
+      const acceptanceCount = await transaction.contractAcceptance.count({ where: { contractDocumentId: currentOriginal.id } });
+      if (acceptanceCount !== 0) {
+        throw new RightsServiceError("Un document accepté ne peut pas être remplacé.", 409, "ACCEPTED_DOCUMENT_IMMUTABLE");
+      }
+      const asset = await transaction.asset.create({
+        data: {
+          type: "DOCUMENT",
+          storageKey,
+          storageBackend: "OBJECT",
+          storageProvider: "r2",
+          visibility: "PRIVATE",
+          checksumSha256: pdf.sha256,
+          filename: `${contractNumber}.pdf`,
+          mimeType: "application/pdf",
+          sizeBytes: BigInt(pdf.bytes.length),
+          rightsStatus: "RESTRICTED",
+          rightsNote: "Document contractuel privé - accès propriétaire/Admin uniquement.",
+          confidence: "CONFIRMED",
+        },
+      });
+      await transaction.orderAsset.create({ data: { orderId: request.orderId, assetId: asset.id, role: "CONTRACT", position: 1 } });
+      await transaction.contractDocument.create({
+        data: {
+          contractNumber,
+          rightsRequestId: request.id,
+          templateId: template.id,
+          templateVersion: template.version,
+          documentVersion: 2,
+          kind: "PREAUTHORIZATION",
+          status: "DRAFT",
+          generatedAt,
+          priceSnapshotCents: request.requestedPriceCents,
+          currency: request.currency,
+          sourceSnapshot: JSON.parse(JSON.stringify(sourceSnapshot)) as Prisma.InputJsonValue,
+          documentHashSha256: pdf.sha256,
+          assetId: asset.id,
+          supersedesDocumentId: currentOriginal.id,
+        },
+      });
+      await transaction.rightsRequestEvent.upsert({
+        where: { idempotencyKey: `rights:${request.id}:preauthorization:2` },
+        update: {},
+        create: {
+          rightsRequestId: request.id,
+          type: "PREAUTHORIZATION_GENERATED",
+          idempotencyKey: `rights:${request.id}:preauthorization:2`,
+          actorUserId: actor.id,
+          note: "Projet de préautorisation P02 généré sans modification de P01.",
+        },
+      });
+      return false;
+    });
+  } catch (error) {
+    await dependencies.delete(stored).catch(() => undefined);
+    throw error;
+  }
+  if (duplicate) await dependencies.delete(stored).catch(() => undefined);
+  const persisted = await findRequestWithRelations(prisma, { id: request.id, userId: actor.id });
+  if (!persisted) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
+  return serializeRightsRequest(persisted);
+}
+
+export function generatePartnershipPreauthorizationRevision(
+  actor: OrderActor,
+  requestNumber: string,
+  dependencies: PreauthorizationDependencies = defaultPrivateDocumentDependencies,
+) {
+  return withLocalConfirmationLock(requestNumber, () => generatePartnershipPreauthorizationRevisionUnlocked(actor, requestNumber, dependencies));
+}
+
+async function confirmRightsCoordinatesUnlocked(actor: OrderActor, requestNumber: string, dependencies: PreauthorizationDependencies) {
+  assertDatabaseConfigured();
+  const confirmation = await withRightsLock(`request:${requestNumber}:confirm`, async (transaction) => {
+    const current = await transaction.rightsRequest.findFirst({
+      where: { requestNumber, userId: actor.id },
+      select: { id: true, requestNumber: true, orderId: true, status: true },
+    });
     if (!current) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
-    const party = current.partySnapshots[0];
+    const party = await transaction.contractPartySnapshot.findFirst({
+      where: { rightsRequestId: current.id },
+      orderBy: { version: "desc" },
+    });
     if (!party) throw new RightsServiceError("Les coordonnées sont incomplètes.", 409, "CONTACT_MISSING");
     if (current.status !== "DRAFT" && current.status !== "SUBMITTED" && current.status !== "PREAUTHORIZATION_GENERATED") {
       throw new RightsServiceError("Ces coordonnées ne peuvent plus être modifiées.", 409, "CONTACT_IMMUTABLE");
@@ -515,10 +773,21 @@ export async function confirmRightsCoordinates(actor: OrderActor, requestNumber:
         create: { orderId: current.orderId, kind: "OWNER_RIGHTS_REQUESTED", channel: "EMAIL", recipient: process.env.ADMIN_EMAIL?.trim().toLowerCase() || null, idempotencyKey },
       });
     }
-    return transaction.rightsRequest.findUniqueOrThrow({ where: { id: current.id }, include: requestInclude });
+    return { requestNumber: current.requestNumber, alreadyGenerated: current.status === "PREAUTHORIZATION_GENERATED" };
   });
-  if (request.status === "PREAUTHORIZATION_GENERATED") return serializeRightsRequest(request);
-  return generatePreauthorization(actor, request.requestNumber, dependencies);
+  if (confirmation.alreadyGenerated) {
+    const persisted = await findRequestWithRelations(prisma, { requestNumber: confirmation.requestNumber, userId: actor.id });
+    if (!persisted) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
+    return serializeRightsRequest(persisted);
+  }
+  return generatePreauthorization(actor, confirmation.requestNumber, dependencies);
+}
+
+export function confirmRightsCoordinates(actor: OrderActor, requestNumber: string, dependencies: PreauthorizationDependencies = defaultPrivateDocumentDependencies) {
+  // The database constraints remain the cross-process source of truth. This
+  // same-process queue additionally prevents Prisma Dev/PGlite from executing
+  // two relation reads on one wire client when Safari retries a confirmation.
+  return withLocalConfirmationLock(requestNumber, () => confirmRightsCoordinatesUnlocked(actor, requestNumber, dependencies));
 }
 
 export async function listRightsRequestsForActor(actor: OrderActor) {
@@ -576,12 +845,15 @@ export async function recordContractDocumentViewed(actor: OrderActor, documentId
 export async function deleteRightsDraft(actor: OrderActor, requestNumber: string) {
   assertDatabaseConfigured();
   return withRightsLock(`request:${requestNumber}:delete`, async (transaction) => {
-    const request = await transaction.rightsRequest.findFirst({
-      where: { requestNumber, userId: actor.id },
-      include: { _count: { select: { documents: true, messages: true, splitProposals: true, grants: true } } },
-    });
+    const request = await transaction.rightsRequest.findFirst({ where: { requestNumber, userId: actor.id } });
     if (!request) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
-    if (request.status !== "DRAFT" || Object.values(request._count).some((count) => count > 0)) {
+    const relatedCounts = [
+      await transaction.contractDocument.count({ where: { rightsRequestId: request.id } }),
+      await transaction.rightsMessage.count({ where: { rightsRequestId: request.id } }),
+      await transaction.rightsSplitProposal.count({ where: { rightsRequestId: request.id } }),
+      await transaction.rightsGrant.count({ where: { rightsRequestId: request.id } }),
+    ];
+    if (request.status !== "DRAFT" || relatedCounts.some((count) => count > 0)) {
       throw new RightsServiceError("Seul un brouillon sans document peut être supprimé.", 409, "RIGHTS_DRAFT_NOT_DELETABLE");
     }
     await transaction.rightsRequestEvent.deleteMany({ where: { rightsRequestId: request.id } });

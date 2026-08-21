@@ -22,9 +22,10 @@ const nextConfig: NextConfig = {
   agentRules: false,
   poweredByHeader: false,
   reactStrictMode: true,
-  // FFmpeg is spawned as a real executable. Keeping its package external
-  // prevents Turbopack/Webpack from rewriting the runtime binary path.
-  serverExternalPackages: ["ffmpeg-static"],
+  // FFmpeg is spawned as a real executable and PDFKit reads its bundled AFM
+  // font data at runtime. Keeping both packages external prevents the server
+  // bundlers from rewriting those filesystem paths.
+  serverExternalPackages: ["ffmpeg-static", "pdfkit"],
   images: {
     formats: ["image/avif", "image/webp"],
   },

@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 
 import { Container } from "@/components/container";
 import { ContractAcceptanceForm } from "@/components/contract-acceptance-form";
+import { PartnershipPreauthorizationRevision } from "@/components/partnership-preauthorization-revision";
 import { RightsInformationResponse } from "@/components/rights-information-response";
 import { RightsRequestCloseActions } from "@/components/rights-request-close-actions";
 import { requireVerifiedUser } from "@/lib/auth/session";
-import { formatEuro, type OrderActor } from "@/lib/orders/domain";
+import type { OrderActor } from "@/lib/orders/domain";
+import { formatRightsCurrency, humanRightsPlatform } from "@/lib/rights/document-presentation";
 import { rightsEventPresentation, rightsStatusPresentation } from "@/lib/rights/domain";
 import { getRightsRequestForActor } from "@/lib/rights/service";
 
@@ -34,6 +36,23 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
   const project = request.formData && typeof request.formData === "object" && !Array.isArray(request.formData)
     ? (request.formData as { project?: Record<string, unknown> }).project
     : undefined;
+  const authorizedGrants = request.grants.filter((grant) => grant.authorized);
+  const administrativeDurations = [...new Set(authorizedGrants.map((grant) => grant.duration).filter(Boolean))];
+  const administrativeTerritories = [...new Set(authorizedGrants.map((grant) => grant.territory).filter(Boolean))];
+  const latestDocumentIds = new Set<string>();
+  for (const document of request.documents) {
+    if (!request.documents.some((candidate) => candidate.kind === document.kind && candidate.documentVersion > document.documentVersion)) latestDocumentIds.add(document.id);
+  }
+  const preauthorizations = request.documents.filter((document) => document.kind === "PREAUTHORIZATION");
+  const canGeneratePartnershipP02 = request.type === "EXPLOITATION_PARTNERSHIP"
+    && request.status === "PREAUTHORIZATION_GENERATED"
+    && preauthorizations.length === 1
+    && preauthorizations[0]?.documentVersion === 1
+    && preauthorizations[0]?.status === "DRAFT";
+  const documentVersionLabel = (contractNumber: string, version: number) => {
+    const suffix = contractNumber.match(/-([A-Z]\d{2})$/)?.[1] ?? `V${String(version).padStart(2, "0")}`;
+    return `Version ${version} — ${suffix}`;
+  };
 
   return (
     <section className="auth-shell rights-shell">
@@ -50,10 +69,10 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
           <div><dt>Commande</dt><dd>{request.orderNumber}</dd></div>
           <div><dt>Création</dt><dd>{request.workTitle}</dd></div>
           <div><dt>Offre</dt><dd>{request.type === "PUBLICATION_LICENSE" ? "Licence de publication" : "Partenariat d’exploitation"}</dd></div>
-          <div><dt>Montant cible futur</dt><dd>{formatEuro(request.requestedPriceCents)}</dd></div>
-          <div><dt>Territoire</dt><dd>{typeof project?.territory === "string" ? project.territory : "À définir"}</dd></div>
-          <div><dt>Durée</dt><dd>{typeof project?.duration === "string" ? project.duration : "À définir"}</dd></div>
-          <div><dt>Plateformes</dt><dd>{Array.isArray(project?.platforms) ? project.platforms.join(", ") : "À définir"}</dd></div>
+          <div><dt>Montant cible futur</dt><dd>{formatRightsCurrency(request.requestedPriceCents)}</dd></div>
+          <div><dt>{administrativeTerritories.length ? "Territoire retenu pour étude" : "Territoire souhaité"}</dt><dd>{administrativeTerritories.length ? administrativeTerritories.join(" ; ") : typeof project?.territory === "string" ? project.territory : "À définir"}</dd></div>
+          <div><dt>{administrativeDurations.length ? "Durée retenue pour étude" : "Durée souhaitée"}</dt><dd>{administrativeDurations.length ? administrativeDurations.join(" ; ") : typeof project?.duration === "string" ? project.duration : "À définir"}</dd></div>
+          <div><dt>Plateformes souhaitées</dt><dd>{Array.isArray(project?.platforms) ? project.platforms.filter((item): item is string => typeof item === "string").map(humanRightsPlatform).join(", ") : "À définir"}</dd></div>
           <div><dt>Paiement</dt><dd>Non disponible - validation juridique et technique requise</dd></div>
         </dl>
 
@@ -62,7 +81,7 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
           <ul className="rights-document-list">{request.grants.map((grant) => <li key={grant.kind}><div>
             <strong>{grantLabels[grant.kind] ?? "Droit étudié"}</strong>
             <small>{grant.authorized ? `${grant.exclusive ? "Exclusif" : "Non exclusif"} · ${grant.territory || "territoire à définir"} · ${grant.duration || "durée à définir"}` : "Non accordé"}</small>
-            {grant.authorized && grant.platforms.length ? <small>Supports : {grant.platforms.join(", ")}</small> : null}
+            {grant.authorized && grant.platforms.length ? <small>Supports : {grant.platforms.map(humanRightsPlatform).join(", ")}</small> : null}
             {grant.restrictions ? <small>Restrictions : {grant.restrictions}</small> : null}
           </div></li>)}</ul>
           <p>Tout droit non expressément autorisé reste non accordé.</p>
@@ -75,9 +94,10 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
         <section>
           <h2>Documents privés</h2>
           {request.documents.length ? <ul className="rights-document-list">{request.documents.map((document) => <li key={document.id}><div>
-            <strong>{document.kind === "PREAUTHORIZATION" ? "Projet de préautorisation" : document.kind === "CONTRACT" ? "Projet de contrat" : document.kind === "ACCEPTANCE_RECEIPT" ? "Preuve d’acceptation" : "Fiche de préparation SACEM"}</strong>
-            <small>{document.contractNumber} · version {document.documentVersion} · hash {document.hashShort}</small>
+            <strong>{document.kind === "PREAUTHORIZATION" ? "Projet de préautorisation" : document.kind === "CONTRACT" ? "Projet de contrat" : document.kind === "ACCEPTANCE_RECEIPT" ? "Preuve d’acceptation" : "Fiche de préparation SACEM"}{latestDocumentIds.has(document.id) ? " · Dernière version" : ""}</strong>
+            <small>{document.contractNumber} · {documentVersionLabel(document.contractNumber, document.documentVersion)} · {new Date(document.generatedAt).toLocaleDateString("fr-FR", { dateStyle: "long" })} · Projet non actif · hash {document.hashShort}</small>
           </div><div><a className="form-button" href={`/api/rights/documents/${document.id}`} target="_blank" rel="noreferrer">CONSULTER</a><a className="text-link" href={`/api/rights/documents/${document.id}?telecharger=1`}>Télécharger</a></div></li>)}</ul> : <p>Aucun document généré.</p>}
+          {canGeneratePartnershipP02 ? <PartnershipPreauthorizationRevision requestNumber={request.requestNumber} /> : null}
         </section>
         {latestContract?.status === "READY_FOR_CLIENT" && expectedName ? <ContractAcceptanceForm requestNumber={request.requestNumber} expectedName={expectedName} documentId={latestContract.id} documentVersion={latestContract.documentVersion} hashShort={latestContract.hashShort} /> : null}
         {cancellable.has(request.status) ? <RightsRequestCloseActions requestNumber={request.requestNumber} orderNumber={request.orderNumber} draft={false} /> : null}

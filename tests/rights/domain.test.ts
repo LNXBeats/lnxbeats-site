@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   assertRightsSplit,
   canCreateRightsRequest,
+  canGenerateContractDraft,
+  canStartRightsReview,
   canTransitionRightsRequest,
   formatRightsNumber,
   isLegalTemplateUsable,
@@ -36,16 +38,41 @@ test("workflow is explicit and cannot activate rights", () => {
   assert.equal(canTransitionRightsRequest("REJECTED", "SUBMITTED"), false);
 });
 
-test("70/30 is valid only as a deliberate proposal totaling 100", () => {
-  assert.equal(assertRightsSplit(70, 30), true);
-  assert.equal(assertRightsSplit(50, 40), false);
+test("a contract draft requires review state and structured parameters", () => {
+  assert.equal(canGenerateContractDraft("SUBMITTED", 1), false);
+  assert.equal(canGenerateContractDraft("INFORMATION_REQUIRED", 1), false);
+  assert.equal(canGenerateContractDraft("UNDER_REVIEW", 0), false);
+  assert.equal(canGenerateContractDraft("UNDER_REVIEW", 1), true);
+  assert.equal(canGenerateContractDraft("CONTRACT_PREPARATION", 1), true);
+  assert.equal(canGenerateContractDraft("READY_FOR_PAYMENT", 1), false);
+});
+
+test("the Admin review action is hidden once contract preparation has started", () => {
+  assert.equal(canStartRightsReview("SUBMITTED"), true);
+  assert.equal(canStartRightsReview("PREAUTHORIZATION_GENERATED"), true);
+  assert.equal(canStartRightsReview("UNDER_REVIEW"), false);
+  assert.equal(canStartRightsReview("INFORMATION_REQUIRED"), false);
+  assert.equal(canStartRightsReview("CONTRACT_PREPARATION"), false);
+  assert.equal(canStartRightsReview("CONTRACT_READY"), false);
+});
+
+test("a commercial split accepts bounded integer totals of exactly 100 only", () => {
+  assert.equal(assertRightsSplit(30, 70), true);
+  assert.equal(assertRightsSplit(0, 100), true);
+  assert.equal(assertRightsSplit(50, 50), true);
+  assert.equal(assertRightsSplit(30, 60), false);
+  assert.equal(assertRightsSplit(30, 80), false);
+  assert.equal(assertRightsSplit(-10, 110), false);
+  assert.equal(assertRightsSplit(101, -1), false);
+  assert.equal(assertRightsSplit(Number.NaN, 100), false);
   assert.equal(assertRightsSplit(70.5, 29.5), false);
 });
 
 test("legal approval requires an admin and a timestamp", () => {
-  assert.equal(isLegalTemplateUsable("DRAFT", null, null), false);
-  assert.equal(isLegalTemplateUsable("APPROVED", new Date(), null), false);
-  assert.equal(isLegalTemplateUsable("APPROVED", new Date(), "admin-id"), true);
+  assert.equal(isLegalTemplateUsable("DRAFT", null, null, null), false);
+  assert.equal(isLegalTemplateUsable("APPROVED", new Date(), null, "LEGAL-2026-001"), false);
+  assert.equal(isLegalTemplateUsable("APPROVED", new Date(), "admin-id", null), false);
+  assert.equal(isLegalTemplateUsable("APPROVED", new Date(), "admin-id", "LEGAL-2026-001"), true);
 });
 
 test("numbering, terms hash, and ten-year retention are deterministic", () => {

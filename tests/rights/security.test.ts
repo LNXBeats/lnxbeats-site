@@ -30,15 +30,21 @@ test("the contract route exposes authenticated GET and HEAD with no public URL",
 });
 
 test("rights mutations require same-origin authentication before parsing or writes", async () => {
-  const [createRoute, lifecycleRoute] = await Promise.all([
+  const [createRoute, lifecycleRoute, revisionRoute] = await Promise.all([
     readFile("app/api/orders/[orderNumber]/rights/route.ts", "utf8"),
     readFile("app/api/rights/[requestNumber]/route.ts", "utf8"),
+    readFile("app/api/rights/[requestNumber]/preauthorization/revise/route.ts", "utf8"),
   ]);
   assert.ok(createRoute.indexOf("isAllowed(request)") < createRoute.indexOf("actor(request.headers)"));
   assert.ok(createRoute.indexOf("actor(request.headers)") < createRoute.indexOf("readRightsJson(request)"));
   assert.ok(lifecycleRoute.indexOf("isAllowed(request)") < lifecycleRoute.indexOf("actor(request.headers)"));
+  assert.ok(revisionRoute.indexOf("isAllowed(request)") < revisionRoute.indexOf("actor(request.headers)"));
   assert.match(createRoute, /enforceOrderRateLimit/);
   assert.match(lifecycleRoute, /enforceOrderRateLimit/);
+  assert.match(revisionRoute, /enforceOrderRateLimit/);
+  assert.match(revisionRoute, /generatePartnershipPreauthorizationRevision/);
+  assert.match(revisionRoute, /withPartnershipRevisionRouteLock/);
+  assert.doesNotMatch(revisionRoute, /request\.json|readRightsJson|price|amount|currency/);
 });
 
 test("database gates make legal approval and activation non-bypassable", async () => {
@@ -62,6 +68,42 @@ test("rights application code has no Stripe or rights payment creation path", as
   assert.doesNotMatch(joined, /from ["']stripe["']/);
   assert.doesNotMatch(joined, /\.payment\.(?:create|upsert|update)/);
   assert.doesNotMatch(joined, /checkout\.sessions|PaymentIntent/);
+});
+
+test("contract generation is guarded by workflow state and structured parameters", async () => {
+  const workflow = await readFile("lib/rights/workflow.ts", "utf8");
+  assert.match(workflow, /canGenerateContractDraft\(request\.status, request\.grants\.length\)/);
+  assert.match(workflow, /canGenerateContractDraft\(current\.status, current\.grants\.length\)/);
+  assert.match(workflow, /RIGHTS_PARAMETERS_REQUIRED/);
+  assert.match(workflow, /validateContractTemplate\(template\.sourceMarkup\)/);
+  assert.match(workflow, /kind === "CONTRACT" && legalTemplateApproved \? "READY_FOR_CLIENT" as const : "DRAFT" as const/);
+  assert.match(workflow, /kind === "CONTRACT" && legalTemplateApproved/);
+  assert.match(workflow, /isLegalTemplateUsable\(template\.status, template\.approvedAt, template\.approvedByAdminId, template\.legalReviewReference\)/);
+  assert.match(workflow, /LEGAL_REVIEW_REQUIRED/);
+});
+
+test("document generation serializes Prisma Dev relation reads and concurrent retries", async () => {
+  const workflow = await readFile("lib/rights/workflow.ts", "utf8");
+  assert.match(workflow, /withLocalDocumentGenerationLock/);
+  assert.match(workflow, /contractPartySnapshot\.findMany/);
+  assert.match(workflow, /rightsGrant\.findMany/);
+  assert.doesNotMatch(workflow.slice(workflow.indexOf("async function adminRequest"), workflow.indexOf("function event")), /include:/);
+  assert.match(workflow, /CONTRACT_VERSION_CHANGED/);
+});
+
+test("the Safari Server Action shares its tested entrypoint and PDFKit stays external", async () => {
+  const [action, entrypoint, nextConfig] = await Promise.all([
+    readFile("app/admin/droits/actions.ts", "utf8"),
+    readFile("lib/rights/admin-generation-entrypoint.ts", "utf8"),
+    readFile("next.config.ts", "utf8"),
+  ]);
+  assert.match(action, /return handleAdminRightsDocumentGeneration\(formData/);
+  assert.match(entrypoint, /authenticateAdmin/);
+  assert.match(entrypoint, /expectedDocumentVersion/);
+  assert.match(entrypoint, /generation-page-obsolete/);
+  assert.match(entrypoint, /dependencies\.refresh/);
+  assert.match(entrypoint, /dependencies\.redirect/);
+  assert.match(nextConfig, /serverExternalPackages: \["ffmpeg-static", "pdfkit"\]/);
 });
 
 test("contract objects use the private order-document key allowlist", async () => {

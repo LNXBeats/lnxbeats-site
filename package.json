@@ -21,6 +21,7 @@
     "test:contracts": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/rights/*.test.ts",
     "test:contracts:pdf-render": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/generate-contract-pdf-sample.ts",
     "test:contracts:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-contracts-runtime.ts",
+    "test:contracts:partnership-http": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/test-partnership-preauthorization-http.ts",
     "rights:browser-fixtures:setup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/rights-browser-fixtures.ts setup",
     "rights:browser-fixtures:cleanup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/rights-browser-fixtures.ts cleanup",
     "test:upload": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/upload.test.ts tests/orders/audio-request.test.ts tests/orders/audio-response.test.ts tests/orders/delivery.test.ts",

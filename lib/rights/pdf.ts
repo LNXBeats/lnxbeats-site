@@ -24,7 +24,18 @@ export type ContractPdfInput = Readonly<{
 
 const A4 = { width: 595.28, height: 841.89 } as const;
 const PAGE_MARGIN = 56;
-const CONTENT_BOTTOM = A4.height - 70;
+// Keep a safety band above PDFKit's automatic bottom-margin page break. Text
+// metrics can differ by fractions of a point once WinAnsi glyphs are encoded;
+// an explicit band ensures every continuation goes through addPage(), which
+// redraws the branded header and keeps body text clear of the footer.
+const CONTENT_BOTTOM = A4.height - 92;
+const CONTENT_WIDTH = A4.width - PAGE_MARGIN * 2;
+const SECTION_TITLE_SIZE = 11.5;
+const SECTION_BODY_SIZE = 9.3;
+const SECTION_LINE_GAP = 1.6;
+const SECTION_PARAGRAPH_GAP = 3;
+const SECTION_HEADING_GAP = 3.5;
+const SECTION_GAP = 5;
 const WATERMARK = "PROJET - NON ACTIF - VALIDATION JURIDIQUE REQUISE";
 
 function parisDate(value: Date) {
@@ -121,6 +132,18 @@ export async function generateContractPdf(input: ContractPdfInput) {
     if (document.y + height > CONTENT_BOTTOM) addPage();
   }
 
+  function sectionHeight(section: ContractPdfSection) {
+    document.font("Helvetica-Bold").fontSize(SECTION_TITLE_SIZE);
+    let height = document.heightOfString(section.title, { width: CONTENT_WIDTH });
+    height += SECTION_HEADING_GAP;
+    document.font("Helvetica").fontSize(SECTION_BODY_SIZE);
+    for (const paragraph of section.paragraphs) {
+      height += document.heightOfString(paragraph, { width: CONTENT_WIDTH, lineGap: SECTION_LINE_GAP });
+      height += SECTION_PARAGRAPH_GAP;
+    }
+    return height + SECTION_GAP;
+  }
+
   addPage();
   document.fillColor("#1d2026").font("Helvetica-Bold").fontSize(21).text(input.title, { align: "left" });
   document.moveDown(0.35);
@@ -144,20 +167,62 @@ export async function generateContractPdf(input: ContractPdfInput) {
     document.moveDown(1.4);
   }
 
-  for (const section of input.sections) {
-    ensureSpace(62);
-    document.fillColor("#1d2026").font("Helvetica-Bold").fontSize(13).text(section.title, { continued: false });
-    document.moveDown(0.35);
-    for (const paragraph of section.paragraphs) {
-      const measured = document.heightOfString(paragraph, { width: A4.width - PAGE_MARGIN * 2, lineGap: 2 });
-      ensureSpace(Math.min(measured + 18, 180));
-      document.fillColor("#30343b").font("Helvetica").fontSize(10).text(paragraph, {
-        align: "left",
-        lineGap: 2,
-        paragraphGap: 7,
-      });
+  const firstSectionY = document.y;
+  const measuredSections = input.sections.map(sectionHeight);
+  const totalSectionHeight = measuredSections.reduce((sum, height) => sum + height, 0);
+  const firstPageCapacity = CONTENT_BOTTOM - firstSectionY;
+  const followingPageCapacity = CONTENT_BOTTOM - 70;
+  let balancedBreakIndex: number | null = null;
+
+  // When the document needs exactly two pages, choose a section boundary that
+  // fills both available areas proportionally. This avoids a nearly empty
+  // second page while preserving every section as a coherent block.
+  if (totalSectionHeight > firstPageCapacity && totalSectionHeight <= firstPageCapacity + followingPageCapacity) {
+    const targetFirstPageHeight = totalSectionHeight * firstPageCapacity / (firstPageCapacity + followingPageCapacity);
+    let cumulative = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 1; index < measuredSections.length; index += 1) {
+      cumulative += measuredSections[index - 1]!;
+      const remaining = totalSectionHeight - cumulative;
+      if (cumulative > firstPageCapacity || remaining > followingPageCapacity) continue;
+      const distance = Math.abs(cumulative - targetFirstPageHeight);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        balancedBreakIndex = index;
+      }
     }
-    document.moveDown(0.55);
+  }
+
+  for (const [index, section] of input.sections.entries()) {
+    if (balancedBreakIndex === index) addPage();
+    const measuredHeight = measuredSections[index]!;
+    if (measuredHeight <= followingPageCapacity) ensureSpace(measuredHeight);
+    document.x = PAGE_MARGIN;
+    document.fillColor("#1d2026").font("Helvetica-Bold").fontSize(SECTION_TITLE_SIZE);
+    const titleY = document.y;
+    const titleHeight = document.heightOfString(section.title, { width: CONTENT_WIDTH });
+    document.text(section.title, PAGE_MARGIN, titleY, {
+      width: CONTENT_WIDTH,
+      continued: false,
+    });
+    document.y = titleY + titleHeight + SECTION_HEADING_GAP;
+    for (const paragraph of section.paragraphs) {
+      const paragraphHeight = document.font("Helvetica").fontSize(SECTION_BODY_SIZE).heightOfString(paragraph, {
+        width: CONTENT_WIDTH,
+        lineGap: SECTION_LINE_GAP,
+      });
+      if (paragraphHeight <= followingPageCapacity) ensureSpace(paragraphHeight + SECTION_PARAGRAPH_GAP);
+      document.x = PAGE_MARGIN;
+      document.fillColor("#30343b").font("Helvetica").fontSize(SECTION_BODY_SIZE);
+      const paragraphY = document.y;
+      document.text(paragraph, PAGE_MARGIN, paragraphY, {
+        width: CONTENT_WIDTH,
+        align: "left",
+        lineGap: SECTION_LINE_GAP,
+      });
+      document.y = paragraphY + paragraphHeight + SECTION_PARAGRAPH_GAP;
+    }
+    document.y += SECTION_GAP;
   }
 
   const range = document.bufferedPageRange();
@@ -189,6 +254,7 @@ export async function generateContractPdf(input: ContractPdfInput) {
     sha256: createHash("sha256").update(output).digest("hex"),
     sourceHashSha256: contractPdfSourceHash(input),
     visibleHash,
+    pageCount: range.count,
   };
 }
 

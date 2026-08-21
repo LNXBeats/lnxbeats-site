@@ -85,6 +85,15 @@ export const rightsAllowedTransitions = {
 
 export type RightsStatus = keyof typeof rightsAllowedTransitions;
 
+const contractDraftGenerationStatuses = new Set<RightsStatus>([
+  "UNDER_REVIEW",
+  "PREAUTHORIZATION_GENERATED",
+  "CONTRACT_PREPARATION",
+  "CONTRACT_READY",
+  "CLIENT_ACCEPTED",
+  "ADMIN_VALIDATED",
+]);
+
 export function rightsPriceSnapshot(type: RightsOfferType) {
   return { ...rightsOffers[type] };
 }
@@ -109,6 +118,14 @@ export function canCreateRightsRequest(input: {
 
 export function canTransitionRightsRequest(from: RightsStatus, to: RightsStatus) {
   return (rightsAllowedTransitions[from] as readonly string[]).includes(to);
+}
+
+export function canGenerateContractDraft(status: string, structuredGrantCount: number) {
+  return contractDraftGenerationStatuses.has(status as RightsStatus) && structuredGrantCount > 0;
+}
+
+export function canStartRightsReview(status: string) {
+  return status === "SUBMITTED" || status === "PREAUTHORIZATION_GENERATED";
 }
 
 export function assertRightsSplit(clientSharePercent: number, lnxSharePercent: number) {
@@ -136,8 +153,16 @@ export function formatRightsNumber(type: RightsOfferType, sequence: bigint | num
   return `${rightsRequestPrefix(type)}-${date.getUTCFullYear()}-${numeric.toString().padStart(6, "0")}`;
 }
 
-export function isLegalTemplateUsable(status: string, approvedAt: Date | null, approvedByAdminId: string | null) {
-  return status === "APPROVED" && approvedAt !== null && approvedByAdminId !== null;
+export function isLegalTemplateUsable(
+  status: string,
+  approvedAt: Date | null,
+  approvedByAdminId: string | null,
+  legalReviewReference: string | null,
+) {
+  return status === "APPROVED"
+    && approvedAt !== null
+    && approvedByAdminId !== null
+    && Boolean(legalReviewReference?.trim());
 }
 
 export function rightsPaymentEnabled() {

@@ -1,51 +1,63 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { buildRightsDocumentSections } from "@/lib/rights/document-presentation";
 import { generateContractPdf } from "@/lib/rights/pdf";
 
-const output = path.resolve("output/pdf/v072-preauthorization-sample.pdf");
+const output = path.resolve(process.env.LNX_CONTRACT_PDF_SAMPLE_PATH || "/private/tmp/lnx-v072-partnership-c02-render.pdf");
 await mkdir(path.dirname(output), { recursive: true });
 
 const result = await generateContractPdf({
-  contractNumber: "LNX-LIC-2026-000001",
-  requestNumber: "LNX-LIC-2026-000001",
-  orderNumber: "LNX-2026-000001",
-  title: "Projet de préautorisation - Élégie d’été",
-  statusLabel: "Projet de préautorisation",
+  contractNumber: "LNX-PART-2026-999999-C02",
+  requestNumber: "LNX-PART-2026-999999",
+  orderNumber: "LNX-2072-999999",
+  title: "Conditions particulières - Élégie d’été",
+  statusLabel: "Projet de contrat - non actif",
   templateVersion: 1,
   generatedAt: new Date("2026-08-20T12:00:00.000Z"),
   legalTemplateApproved: false,
-  kind: "PREAUTHORIZATION",
-  sections: [
-    {
-      title: "Parties et création",
-      paragraphs: [
-        "LNX Beats et Client Exemple, 1 rue de l’Été, 75000 Paris, France.",
-        "Création concernée : Élégie d’été. Référence de commande LNX-2026-000001.",
-      ],
+  kind: "CONTRACT",
+  sections: buildRightsDocumentSections({
+    kind: "CONTRACT",
+    requestType: "EXPLOITATION_PARTNERSHIP",
+    workTitle: "Élégie d’été",
+    orderNumber: "LNX-2072-999999",
+    requestedPriceCents: 150_000,
+    formData: {
+      project: { publicationName: "Élégie d’été", distributor: "distrokid", platforms: ["SPOTIFY", "APPLE_MUSIC", "DEEZER"], territory: "France", duration: "À définir avec LNX Beats" },
+      partnership: { humanCreativeContribution: "Le client a imaginé l’histoire de départ, le thème et les intentions générales." },
     },
-    {
-      title: "Demande préparée",
-      paragraphs: [
-        "Licence de publication envisagée pour Spotify, Apple Music et Deezer, sur le territoire français, pour une durée restant à définir par LNX Beats après revue.",
-        "Montant cible futur : 150 €. Aucun paiement n’est proposé ni effectué dans cette version.",
-      ],
+    party: { firstName: "Camille", lastName: "Navigateur", streetAddress: "12 rue de la Musique", postalCode: "75001", city: "Paris", country: "FR" },
+    grants: [{
+      kind: "PUBLICATION",
+      authorized: true,
+      exclusive: false,
+      destination: "Publication et monétisation de la création sur Spotify, Apple Music et Deezer.",
+      platforms: ["Spotify", "Apple Music", "Deezer"],
+      territory: "France",
+      duration: "2 ans",
+      monetization: true,
+      adaptation: false,
+      advertising: false,
+      audiovisualSync: false,
+      contentId: false,
+      sublicense: false,
+      credit: "LNX Beats — création musicale",
+      restrictions: "Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID, adaptation ou sous-licence sans autorisation contractuelle distincte de LNX Beats.",
+    }],
+    contributions: [{ kind: "STORY_BRIEF_ONLY", description: "Le client a fourni l’histoire de départ, le thème et les intentions générales.", claimedPercentage: null }],
+    splitProposal: {
+      version: 1,
+      clientSharePercent: 30,
+      lnxSharePercent: 70,
+      nature: "Proposition de répartition contractuelle à étudier",
+      contributionRationale: "Le client a fourni le concept initial. LNX Beats a réalisé la création musicale, la mise en forme artistique finale et la production artistique.",
+      proposedRoles: ["Apport narratif et concept initial", "création musicale", "production artistique"],
+      comment: "Proposition commerciale non contraignante, soumise à validation contractuelle et juridique.",
     },
-    {
-      title: "Limites et gestion collective",
-      paragraphs: [
-        "Ce document n’accorde aucun droit tant qu’il n’a pas été approuvé, accepté et, dans une version ultérieure, payé.",
-        "Il ne transfère pas la qualité d’auteur, les droits moraux, la propriété de l’œuvre ou une quote-part SACEM. Aucune déclaration n’est effectuée automatiquement.",
-      ],
-    },
-    {
-      title: "Rétractation et revue juridique",
-      paragraphs: [
-        "Les règles de rétractation, de commencement anticipé et d’éventuelle perte du droit restent à valider juridiquement selon la qualification du service. Aucune renonciation n’est précochée.",
-      ],
-    },
-  ],
+    aiAssessment: "HUMAN_CONTRIBUTION_DOCUMENTED",
+  }),
 });
 
 await writeFile(output, result.bytes, { mode: 0o600 });
-process.stdout.write(`PDF_SAMPLE_OK bytes=${result.bytes.length} pages=verify-with-poppler\n`);
+process.stdout.write(`PDF_SAMPLE_OK bytes=${result.bytes.length} pages=${result.pageCount}\n`);

@@ -14,11 +14,42 @@ import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
 import type { OrderActor } from "@/lib/orders/domain";
 import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/storage";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
-import { assertRightsSplit } from "@/lib/rights/domain";
+import { assertRightsSplit, canGenerateContractDraft, canStartRightsReview, isLegalTemplateUsable } from "@/lib/rights/domain";
+import { buildRightsDocumentSections } from "@/lib/rights/document-presentation";
 import { generateContractPdf } from "@/lib/rights/pdf";
 import { defaultPrivateDocumentDependencies, RightsServiceError, type PreauthorizationDependencies } from "@/lib/rights/service";
+import { validateContractTemplate } from "@/lib/rights/templates";
 
 type Transaction = Prisma.TransactionClient;
+
+type RightsWorkflowReader = Pick<
+  typeof prisma,
+  | "rightsRequest"
+  | "order"
+  | "user"
+  | "contractPartySnapshot"
+  | "rightsContribution"
+  | "rightsGrant"
+  | "rightsSplitProposal"
+  | "contractDocument"
+>;
+
+const rightsDocumentGenerationQueues = new Map<string, Promise<void>>();
+
+async function withLocalDocumentGenerationLock<T>(requestNumber: string, operation: () => Promise<T>) {
+  const previous = rightsDocumentGenerationQueues.get(requestNumber) ?? Promise.resolve();
+  let release: () => void = () => undefined;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.catch(() => undefined).then(() => current);
+  rightsDocumentGenerationQueues.set(requestNumber, tail);
+  await previous.catch(() => undefined);
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (rightsDocumentGenerationQueues.get(requestNumber) === tail) rightsDocumentGenerationQueues.delete(requestNumber);
+  }
+}
 
 const aiAssessments = [
   "NOT_REVIEWED",
@@ -89,21 +120,27 @@ async function withWorkflowLock<T>(requestNumber: string, operation: (transactio
   throw lastError;
 }
 
-async function adminRequest(transaction: Transaction, requestNumber: string) {
-  const request = await transaction.rightsRequest.findUnique({
-    where: { requestNumber },
-    include: {
-      order: { select: { id: true, orderNumber: true, customerEmail: true } },
-      owner: { select: { id: true, email: true, displayName: true } },
-      partySnapshots: { orderBy: { version: "desc" } },
-      contributions: { orderBy: [{ position: "asc" }, { id: "asc" }] },
-      grants: { orderBy: [{ position: "asc" }, { id: "asc" }] },
-      splitProposals: { orderBy: { version: "desc" } },
-      documents: { orderBy: [{ kind: "asc" }, { documentVersion: "desc" }] },
-    },
-  });
+async function adminRequest(database: RightsWorkflowReader, requestNumber: string) {
+  const request = await database.rightsRequest.findUnique({ where: { requestNumber } });
   if (!request) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
-  return request;
+  // Prisma's relation query loader may dispatch relation SELECTs concurrently.
+  // Prisma Dev/PGlite exposes a single PostgreSQL wire connection, so a nested
+  // include inside an interactive transaction can corrupt the unnamed prepared
+  // statement. Keep every relation read explicitly sequential in all runtimes.
+  const order = await database.order.findUniqueOrThrow({
+    where: { id: request.orderId },
+    select: { id: true, orderNumber: true, customerEmail: true },
+  });
+  const owner = await database.user.findUniqueOrThrow({
+    where: { id: request.userId },
+    select: { id: true, email: true, displayName: true },
+  });
+  const partySnapshots = await database.contractPartySnapshot.findMany({ where: { rightsRequestId: request.id }, orderBy: { version: "desc" } });
+  const contributions = await database.rightsContribution.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ position: "asc" }, { id: "asc" }] });
+  const grants = await database.rightsGrant.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ position: "asc" }, { id: "asc" }] });
+  const splitProposals = await database.rightsSplitProposal.findMany({ where: { rightsRequestId: request.id }, orderBy: { version: "desc" } });
+  const documents = await database.contractDocument.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ kind: "asc" }, { documentVersion: "desc" }] });
+  return { ...request, order, owner, partySnapshots, contributions, grants, splitProposals, documents };
 }
 
 function event(
@@ -143,7 +180,7 @@ export async function startRightsReview(actor: OrderActor, requestNumber: string
   assertAdmin(actor);
   return withWorkflowLock(requestNumber, async (transaction) => {
     const request = await adminRequest(transaction, requestNumber);
-    if (!["SUBMITTED", "PREAUTHORIZATION_GENERATED", "INFORMATION_REQUIRED", "UNDER_REVIEW"].includes(request.status)) {
+    if (!canStartRightsReview(request.status) && request.status !== "UNDER_REVIEW") {
       throw new RightsServiceError("Cette demande ne peut pas être placée en étude.", 409, "RIGHTS_TRANSITION_FORBIDDEN");
     }
     if (request.status !== "UNDER_REVIEW") {
@@ -187,7 +224,7 @@ export async function respondRightsInformation(actor: OrderActor, requestNumber:
   assertDatabaseConfigured();
   const message = cleanText(rawMessage, 6_000, "La réponse");
   return withWorkflowLock(requestNumber, async (transaction) => {
-    const request = await transaction.rightsRequest.findFirst({ where: { requestNumber, userId: actor.id }, include: { owner: { select: { email: true } } } });
+    const request = await transaction.rightsRequest.findFirst({ where: { requestNumber, userId: actor.id } });
     if (!request) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
     if (request.status !== "INFORMATION_REQUIRED") throw new RightsServiceError("Aucune information n’est demandée.", 409, "RIGHTS_TRANSITION_FORBIDDEN");
     const created = await transaction.rightsMessage.create({ data: { rightsRequestId: request.id, kind: "CLIENT_RESPONSE", authorUserId: actor.id, body: message } });
@@ -323,43 +360,30 @@ export async function saveSplitProposal(actor: OrderActor, requestNumber: string
   });
 }
 
-function jsonRecord(value: Prisma.JsonValue): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function textFrom(value: unknown, fallback = "À définir") {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
-
 function contractSections(request: Awaited<ReturnType<typeof adminRequest>>, kind: ContractDocumentKind) {
   const party = request.partySnapshots[0];
   if (!party?.confirmedAt) throw new RightsServiceError("Les coordonnées doivent être confirmées.", 409, "CONTACT_NOT_CONFIRMED");
-  const form = jsonRecord(request.formData);
-  const project = jsonRecord((form.project ?? {}) as Prisma.JsonValue);
-  const split = request.splitProposals[0];
-  const grants = request.grants.map((grant) => `${grant.kind} : ${grant.authorized ? "autorisé" : "non accordé"}${grant.authorized ? ` ; ${grant.exclusive ? "exclusif" : "non exclusif"} ; ${grant.territory || "territoire à définir"} ; ${grant.duration || "durée à définir"}` : ""}. ${grant.restrictions || ""}`);
-  if (kind === "SACEM_PREPARATION") {
-    return [
-      { title: "Nature du document", paragraphs: ["FICHE DE PRÉPARATION - DÉCLARATION ÉVENTUELLE. Ce document n’est pas une déclaration SACEM et n’est envoyé automatiquement à aucun organisme."] },
-      { title: "Œuvre et parties", paragraphs: [`Création : ${request.workTitle}. Client : ${party.companyName || [party.firstName, party.lastName].filter(Boolean).join(" ")}.`] },
-      { title: "Contributions et rôles envisagés", paragraphs: request.contributions.map((item) => `${item.kind} : ${item.description}`) },
-      { title: "Proposition commerciale", paragraphs: [split ? `${split.clientSharePercent} % client / ${split.lnxSharePercent} % LNX Beats. ${split.contributionRationale}` : "Aucune proposition validée.", "Cette proposition n’est pas automatiquement une clé de répartition SACEM."] },
-      { title: "Éligibilité interne", paragraphs: [`Évaluation : ${request.aiAssessment}. Points à vérifier juridiquement avant toute déclaration.`] },
-    ];
-  }
-  return [
-    { title: "Parties et œuvre concernée", paragraphs: [`LNX Beats et ${party.companyName || [party.firstName, party.lastName].filter(Boolean).join(" ")}, ${party.streetAddress}, ${party.postalCode} ${party.city}, ${party.country}.`, `Œuvre : ${request.workTitle}. Commande ${request.order.orderNumber}.`] },
-    { title: "Objet et destination", paragraphs: [`Offre : ${request.type === "PUBLICATION_LICENSE" ? "licence de publication" : "partenariat d’exploitation"}. Nom de publication : ${textFrom(project.publicationName)}. Distributeur : ${textFrom(project.distributor)}.`] },
-    { title: "Droits expressément paramétrés", paragraphs: grants.length ? grants : ["Aucun droit n’est expressément accordé dans ce projet. Les droits non listés restent non accordés."] },
-    { title: "Territoire, durée et supports", paragraphs: [`Territoire : ${textFrom(project.territory)}. Durée : ${textFrom(project.duration)}. Plateformes/supports : ${Array.isArray(project.platforms) ? project.platforms.join(", ") : "À définir"}.`] },
-    { title: "Rémunération et état", paragraphs: [`Montant cible futur : ${(request.requestedPriceCents / 100).toLocaleString("fr-FR")} €. Aucun paiement de droits n’est ouvert dans cette version. Aucun droit n’est actif.`] },
-    { title: "Contributions, crédits et garanties", paragraphs: request.contributions.map((item) => `${item.kind} : ${item.description}${item.claimedPercentage === null ? "" : ` (${item.claimedPercentage} % revendiqués par le client)`}. Cette déclaration reste à vérifier.`) },
-    { title: "SACEM et gestion collective", paragraphs: ["Ce document ne transfère ni la qualité d’auteur, ni les droits moraux, ni une quote-part SACEM. Une proposition entre les parties n’est pas une répartition SACEM automatique.", request.type === "EXPLOITATION_PARTNERSHIP" && split ? `Proposition commerciale : ${split.clientSharePercent} % client / ${split.lnxSharePercent} % LNX Beats, sous réserve d’étude et de validation.` : "Aucune répartition n’est promise."] },
-    { title: "Rétractation, entrée en vigueur et limites", paragraphs: ["Les règles de rétractation et de commencement anticipé sont en attente de validation juridique. Aucune renonciation n’est précochée.", "Une acceptation QA ne suffit pas à activer les droits : un modèle juridiquement approuvé, une validation Admin, un futur paiement confirmé, l’absence d’anomalie et une date d’entrée en vigueur seront nécessaires."] },
-  ];
+  return buildRightsDocumentSections({
+    kind: kind === "SACEM_PREPARATION" ? "SACEM_PREPARATION" : "CONTRACT",
+    requestType: request.type,
+    workTitle: request.workTitle,
+    orderNumber: request.order.orderNumber,
+    requestedPriceCents: request.requestedPriceCents,
+    formData: request.formData,
+    party,
+    grants: request.grants,
+    contributions: request.contributions,
+    splitProposal: request.splitProposals[0] ?? null,
+    aiAssessment: request.aiAssessment,
+  });
 }
 
-function sourceSnapshot(request: Awaited<ReturnType<typeof adminRequest>>, kind: ContractDocumentKind, template: { id: string; version: number; status: string; sourceMarkup: string }) {
+function sourceSnapshot(
+  request: Awaited<ReturnType<typeof adminRequest>>,
+  kind: ContractDocumentKind,
+  template: { id: string; version: number; status: string; sourceMarkup: string },
+  legalTemplateApproved: boolean,
+) {
   return {
     kind,
     request: { id: request.id, requestNumber: request.requestNumber, orderNumber: request.order.orderNumber, type: request.type, priceCents: request.requestedPriceCents, currency: request.currency, workTitle: request.workTitle },
@@ -370,27 +394,66 @@ function sourceSnapshot(request: Awaited<ReturnType<typeof adminRequest>>, kind:
     splitProposal: request.splitProposals[0] ?? null,
     aiAssessment: request.aiAssessment,
     template: { id: template.id, version: template.version, status: template.status, sourceMarkup: template.sourceMarkup },
-    legalWarnings: { noRightsActive: true, noRightsPayment: true, noAutomaticSacem: true, legalReviewRequired: template.status !== "APPROVED" },
+    legalWarnings: { noRightsActive: true, noRightsPayment: true, noAutomaticSacem: true, legalReviewRequired: !legalTemplateApproved },
   };
 }
 
-export async function generateRightsDocument(actor: OrderActor, requestNumber: string, kind: "CONTRACT" | "SACEM_PREPARATION") {
+export type RightsDocumentGenerationResult = Readonly<{
+  requestNumber: string;
+  documentVersion: number;
+  documentStatus: "DRAFT" | "READY_FOR_CLIENT";
+  duplicate: boolean;
+  legalTemplateApproved: boolean;
+}>;
+
+export async function generateRightsDocument(
+  actor: OrderActor,
+  requestNumber: string,
+  kind: "CONTRACT" | "SACEM_PREPARATION",
+  expectedDocumentVersion?: number,
+): Promise<RightsDocumentGenerationResult> {
   assertDatabaseConfigured();
   assertAdmin(actor);
+  if (expectedDocumentVersion !== undefined && (!Number.isInteger(expectedDocumentVersion) || expectedDocumentVersion < 1)) {
+    throw new RightsServiceError("La version de document attendue est invalide.", 400, "INVALID_DOCUMENT_VERSION");
+  }
+  return withLocalDocumentGenerationLock(requestNumber, async () => {
   const configuration = validateMediaStorageConfiguration();
   if (configuration.backend !== "OBJECT" || configuration.provider !== "r2") throw new RightsServiceError("Le stockage contractuel privé est indisponible.", 503, "CONTRACT_STORAGE_UNAVAILABLE");
-  const request = await prisma.$transaction((transaction) => adminRequest(transaction, requestNumber));
+  const request = await adminRequest(prisma, requestNumber);
   if (!["UNDER_REVIEW", "PREAUTHORIZATION_GENERATED", "CONTRACT_PREPARATION", "CONTRACT_READY", "CLIENT_ACCEPTED", "ADMIN_VALIDATED"].includes(request.status)) {
     throw new RightsServiceError("Le document ne peut pas être généré dans cet état.", 409, "RIGHTS_TRANSITION_FORBIDDEN");
   }
+  if (kind === "CONTRACT" && !canGenerateContractDraft(request.status, request.grants.length)) {
+    throw new RightsServiceError("Enregistrez au moins un paramètre structuré avant de préparer le contrat.", 409, "RIGHTS_PARAMETERS_REQUIRED");
+  }
+  if (!request.partySnapshots[0]?.confirmedAt) throw new RightsServiceError("Les coordonnées doivent être confirmées.", 409, "CONTACT_NOT_CONFIRMED");
   if (kind === "SACEM_PREPARATION" && (request.type !== "EXPLOITATION_PARTNERSHIP" || !["ADMIN_VALIDATED", "READY_FOR_PAYMENT"].includes(request.status))) {
     throw new RightsServiceError("La fiche SACEM reste réservée à un partenariat validé.", 409, "SACEM_PREPARATION_FORBIDDEN");
   }
   const templateType = kind === "SACEM_PREPARATION" ? "SACEM_PREPARATION" : request.type;
   const template = await prisma.contractTemplate.findFirst({ where: { type: templateType }, orderBy: { version: "desc" } });
   if (!template || template.status === "RETIRED") throw new RightsServiceError("Aucun modèle n’est disponible.", 503, "CONTRACT_TEMPLATE_UNAVAILABLE");
+  if (!validateContractTemplate(template.sourceMarkup).ok) {
+    throw new RightsServiceError("Le modèle contractuel est invalide et doit être corrigé.", 409, "CONTRACT_TEMPLATE_INVALID");
+  }
+  const legalTemplateApproved = isLegalTemplateUsable(template.status, template.approvedAt, template.approvedByAdminId, template.legalReviewReference);
   const previous = request.documents.find((document) => document.kind === kind) ?? null;
-  const documentVersion = (previous?.documentVersion ?? 0) + 1;
+  const nextDocumentVersion = (previous?.documentVersion ?? 0) + 1;
+  if (expectedDocumentVersion !== undefined) {
+    const existing = request.documents.find((document) => document.kind === kind && document.documentVersion === expectedDocumentVersion);
+    if (existing) return {
+      requestNumber,
+      documentVersion: existing.documentVersion,
+      documentStatus: existing.status === "READY_FOR_CLIENT" ? "READY_FOR_CLIENT" : "DRAFT",
+      duplicate: true,
+      legalTemplateApproved,
+    };
+    if (expectedDocumentVersion !== nextDocumentVersion) {
+      throw new RightsServiceError("La page n’est plus à jour. Rechargez la demande avant de générer une nouvelle version.", 409, "CONTRACT_VERSION_CHANGED");
+    }
+  }
+  const documentVersion = expectedDocumentVersion ?? nextDocumentVersion;
   const suffix = kind === "CONTRACT" ? `C${String(documentVersion).padStart(2, "0")}` : `S${String(documentVersion).padStart(2, "0")}`;
   const contractNumber = `${request.requestNumber}-${suffix}`;
   const generatedAt = new Date();
@@ -403,7 +466,7 @@ export async function generateRightsDocument(actor: OrderActor, requestNumber: s
     statusLabel: kind === "CONTRACT" ? "Projet de contrat - non actif" : "Préparation SACEM éventuelle - document privé Admin",
     templateVersion: template.version,
     generatedAt,
-    legalTemplateApproved: template.status === "APPROVED",
+    legalTemplateApproved,
     kind,
     sections,
   });
@@ -417,33 +480,55 @@ export async function generateRightsDocument(actor: OrderActor, requestNumber: s
   try {
     const result = await withWorkflowLock(requestNumber, async (transaction) => {
       const current = await adminRequest(transaction, requestNumber);
+      if (kind === "CONTRACT" && !canGenerateContractDraft(current.status, current.grants.length)) {
+        throw new RightsServiceError("Enregistrez au moins un paramètre structuré avant de préparer le contrat.", 409, "RIGHTS_PARAMETERS_REQUIRED");
+      }
       const currentPrevious = current.documents.find((document) => document.kind === kind) ?? null;
-      const expectedVersion = (currentPrevious?.documentVersion ?? 0) + 1;
-      if (expectedVersion !== documentVersion) return { duplicate: true as const };
+      const duplicate = current.documents.find((document) => document.kind === kind && document.documentVersion === documentVersion);
+      if (duplicate) return { duplicate: true as const, documentStatus: duplicate.status === "READY_FOR_CLIENT" ? "READY_FOR_CLIENT" as const : "DRAFT" as const };
+      const currentNextVersion = (currentPrevious?.documentVersion ?? 0) + 1;
+      if (currentNextVersion !== documentVersion) {
+        throw new RightsServiceError("La version du document a changé. Rechargez la demande.", 409, "CONTRACT_VERSION_CHANGED");
+      }
+      const persistedTemplate = await transaction.contractTemplate.findUnique({ where: { id: template.id } });
+      if (
+        !persistedTemplate
+        || persistedTemplate.version !== template.version
+        || persistedTemplate.status !== template.status
+        || persistedTemplate.sourceMarkup !== template.sourceMarkup
+        || persistedTemplate.approvedAt?.getTime() !== template.approvedAt?.getTime()
+        || persistedTemplate.approvedByAdminId !== template.approvedByAdminId
+        || persistedTemplate.legalReviewReference !== template.legalReviewReference
+      ) {
+        throw new RightsServiceError("Le modèle contractuel a changé. Relancez la génération depuis la fiche actualisée.", 409, "CONTRACT_TEMPLATE_CHANGED");
+      }
+      const documentStatus = kind === "CONTRACT" && legalTemplateApproved ? "READY_FOR_CLIENT" as const : "DRAFT" as const;
       const asset = await transaction.asset.create({
         data: { type: "DOCUMENT", storageKey, storageBackend: "OBJECT", storageProvider: "r2", visibility: "PRIVATE", checksumSha256: pdf.sha256, filename: `${contractNumber}.pdf`, mimeType: "application/pdf", sizeBytes: BigInt(pdf.bytes.length), rightsStatus: "RESTRICTED", rightsNote: "Document contractuel privé - propriétaire/Admin.", confidence: "CONFIRMED" },
       });
       await transaction.orderAsset.create({ data: { orderId: current.orderId, assetId: asset.id, role: "CONTRACT", position: documentVersion } });
       await transaction.contractDocument.create({
-        data: { contractNumber, rightsRequestId: current.id, templateId: template.id, templateVersion: template.version, documentVersion, kind, status: kind === "CONTRACT" ? "READY_FOR_CLIENT" : "DRAFT", generatedAt, priceSnapshotCents: current.requestedPriceCents, currency: current.currency, sourceSnapshot: JSON.parse(JSON.stringify(sourceSnapshot(current, kind, template))) as Prisma.InputJsonValue, documentHashSha256: pdf.sha256, assetId: asset.id, supersedesDocumentId: currentPrevious?.id ?? null },
+        data: { contractNumber, rightsRequestId: current.id, templateId: template.id, templateVersion: template.version, documentVersion, kind, status: documentStatus, generatedAt, priceSnapshotCents: current.requestedPriceCents, currency: current.currency, sourceSnapshot: JSON.parse(JSON.stringify(sourceSnapshot(current, kind, template, legalTemplateApproved))) as Prisma.InputJsonValue, documentHashSha256: pdf.sha256, assetId: asset.id, supersedesDocumentId: currentPrevious?.id ?? null },
       });
-      if (currentPrevious && !["ACTIVE", "SUPERSEDED"].includes(currentPrevious.status)) await transaction.contractDocument.update({ where: { id: currentPrevious.id }, data: { status: "SUPERSEDED" } });
-      if (kind === "CONTRACT") {
+      // Prior versions and their metadata remain immutable. The new document
+      // records its predecessor through supersedesDocumentId instead of
+      // rewriting the earlier row.
+      if (kind === "CONTRACT" && legalTemplateApproved) {
         await transaction.rightsRequest.update({ where: { id: current.id }, data: { status: "CONTRACT_READY" } });
         await notification(transaction, { orderId: current.orderId, kind: "CUSTOMER_RIGHTS_CONTRACT_READY", recipient: current.partySnapshots[0]?.contractEmail ?? current.owner.email, key: `rights:${current.id}:contract:${documentVersion}:email` });
       }
-      await event(transaction, { requestId: current.id, type: currentPrevious ? "DOCUMENT_SUPERSEDED" : "DOCUMENT_GENERATED", key: `rights:${current.id}:${kind}:${documentVersion}`, actorId: actor.id, note: `${kind === "CONTRACT" ? "Projet de contrat" : "Fiche de préparation SACEM"} version ${documentVersion} généré sans activation.` });
-      return { duplicate: false as const };
+      await event(transaction, { requestId: current.id, type: currentPrevious ? "DOCUMENT_SUPERSEDED" : "DOCUMENT_GENERATED", key: `rights:${current.id}:${kind}:${documentVersion}`, actorId: actor.id, note: `${kind === "CONTRACT" ? "Projet de contrat" : "Fiche de préparation SACEM"} version ${documentVersion} généré ${legalTemplateApproved ? "pour revue client" : "en DRAFT filigrané"}, sans activation.` });
+      return { duplicate: false as const, documentStatus };
     });
     if (result.duplicate) {
       await deletePrivateOrderFile(stored).catch(() => undefined);
-      return requestNumber;
     }
-    return requestNumber;
+    return { requestNumber, documentVersion, documentStatus: result.documentStatus, duplicate: result.duplicate, legalTemplateApproved };
   } catch (error) {
     await deletePrivateOrderFile(stored).catch(() => undefined);
     throw error;
   }
+  });
 }
 
 export async function approveContractTemplate(actor: OrderActor, templateId: string, rawReference: unknown) {
@@ -481,7 +566,7 @@ export async function acceptRightsContract(
   if (!credential?.password || !await verifyPassword(credential.password, password)) throw new RightsServiceError("Le mot de passe est incorrect.", 403, "REAUTHENTICATION_FAILED");
   const configuration = dependencies.validateStorage();
   if (configuration.backend !== "OBJECT" || configuration.provider !== "r2") throw new RightsServiceError("Le stockage contractuel privé est indisponible.", 503, "CONTRACT_STORAGE_UNAVAILABLE");
-  const candidate = await prisma.$transaction((transaction) => adminRequest(transaction, requestNumber));
+  const candidate = await adminRequest(prisma, requestNumber);
   if (candidate.owner.id !== actor.id) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
   const party = candidate.partySnapshots[0];
   const expectedName = party?.companyName || [party?.firstName, party?.lastName].filter(Boolean).join(" ");
@@ -492,6 +577,9 @@ export async function acceptRightsContract(
   if (existing) return requestNumber;
   const template = await prisma.contractTemplate.findUnique({ where: { id: document.templateId } });
   if (!template) throw new RightsServiceError("Le modèle du contrat est introuvable.", 409, "CONTRACT_TEMPLATE_UNAVAILABLE");
+  if (!isLegalTemplateUsable(template.status, template.approvedAt, template.approvedByAdminId, template.legalReviewReference)) {
+    throw new RightsServiceError("Ce projet DRAFT ne peut pas être accepté avant la revue juridique du modèle.", 409, "LEGAL_REVIEW_REQUIRED");
+  }
   const acceptedAt = new Date();
   const receiptNumber = `${document.contractNumber}-ACC`;
   const pdf = await generateContractPdf({
@@ -502,7 +590,7 @@ export async function acceptRightsContract(
     statusLabel: "Acceptation électronique enregistrée - droits non actifs",
     templateVersion: document.templateVersion,
     generatedAt: acceptedAt,
-    legalTemplateApproved: template.status === "APPROVED",
+    legalTemplateApproved: true,
     kind: "ACCEPTANCE_RECEIPT",
     sections: [
       { title: "Document accepté", paragraphs: [`Conditions particulières ${document.contractNumber}, version ${document.documentVersion}, modèle version ${document.templateVersion}.`, `Empreinte SHA-256 du document accepté : ${document.documentHashSha256}.`] },
@@ -523,6 +611,10 @@ export async function acceptRightsContract(
       if (current.owner.id !== actor.id) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
       const currentDocument = current.documents.find((item) => item.id === document.id && item.kind === "CONTRACT" && ["READY_FOR_CLIENT", "CLIENT_ACCEPTED", "ADMIN_VALIDATED"].includes(item.status));
       if (!currentDocument) throw new RightsServiceError("Le document a changé. Rechargez la page.", 409, "CONTRACT_VERSION_CHANGED");
+      const currentTemplate = await transaction.contractTemplate.findUnique({ where: { id: currentDocument.templateId } });
+      if (!currentTemplate || !isLegalTemplateUsable(currentTemplate.status, currentTemplate.approvedAt, currentTemplate.approvedByAdminId, currentTemplate.legalReviewReference)) {
+        throw new RightsServiceError("Ce projet DRAFT ne peut pas être accepté avant la revue juridique du modèle.", 409, "LEGAL_REVIEW_REQUIRED");
+      }
       const viewed = await transaction.rightsRequestEvent.findUnique({ where: { idempotencyKey: `rights:${current.id}:document:${currentDocument.id}:viewed:${actor.id}` }, select: { id: true } });
       if (!viewed) throw new RightsServiceError("Consultez le document intégral avant de l’accepter.", 409, "CONTRACT_NOT_VIEWED");
       const duplicate = await transaction.contractAcceptance.findUnique({ where: { contractDocumentId_kind: { contractDocumentId: currentDocument.id, kind: "CLIENT" } } });
@@ -574,6 +666,10 @@ export async function adminValidateRightsContract(actor: OrderActor, requestNumb
     if (request.status !== "CLIENT_ACCEPTED") throw new RightsServiceError("L’acceptation client est requise.", 409, "CLIENT_ACCEPTANCE_REQUIRED");
     const document = request.documents.find((candidate) => candidate.kind === "CONTRACT" && candidate.status === "CLIENT_ACCEPTED");
     if (!document) throw new RightsServiceError("Le contrat accepté est introuvable.", 409, "CONTRACT_NOT_READY");
+    const template = await transaction.contractTemplate.findUnique({ where: { id: document.templateId } });
+    if (!template || !isLegalTemplateUsable(template.status, template.approvedAt, template.approvedByAdminId, template.legalReviewReference)) {
+      throw new RightsServiceError("La validation juridique du modèle est requise.", 409, "LEGAL_REVIEW_REQUIRED");
+    }
     const existing = await transaction.contractAcceptance.findUnique({ where: { contractDocumentId_kind: { contractDocumentId: document.id, kind: "ADMIN" } } });
     if (!existing) {
       const now = new Date();

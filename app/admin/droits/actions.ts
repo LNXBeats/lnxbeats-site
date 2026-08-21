@@ -9,6 +9,7 @@ import type { OrderActor } from "@/lib/orders/domain";
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { dispatchPendingOrderNotifications } from "@/lib/notifications/service";
+import { handleAdminRightsDocumentGeneration } from "@/lib/rights/admin-generation-entrypoint";
 import {
   adminValidateRightsContract,
   approveContractTemplate,
@@ -115,10 +116,16 @@ export async function saveSplitProposalAction(formData: FormData) {
 }
 
 export async function generateRightsDocumentAction(formData: FormData) {
-  const value = requestNumber(formData);
-  const kind = formData.get("kind") === "SACEM_PREPARATION" ? "SACEM_PREPARATION" : "CONTRACT";
-  try { await generateRightsDocument(await adminActor(), value, kind); } catch { redirect(path(value, "generation-refusee")); }
-  refresh(value); dispatchNotifications(); redirect(path(value, kind === "CONTRACT" ? "contrat-genere" : "fiche-sacem-generee"));
+  return handleAdminRightsDocumentGeneration(formData, {
+    authenticateAdmin: adminActor,
+    generate: generateRightsDocument,
+    refresh,
+    dispatchNotifications,
+    redirect,
+    logUnexpectedFailure(diagnostic) {
+      console.error("rights.admin.document_generation_failed", JSON.stringify(diagnostic));
+    },
+  });
 }
 
 export async function adminValidateRightsContractAction(formData: FormData) {
