@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { NotificationProvider, NotificationStatus, NotificationSuppressionReason } from "@/generated/prisma/client";
+import type { NotificationProvider, NotificationStatus, NotificationSuppressionReason, Prisma } from "@/generated/prisma/client";
 
 import { parseNotificationConfiguration, type NotificationConfiguration } from "@/lib/notifications/config";
 import { enqueueOrderNotification } from "@/lib/notifications/service";
@@ -107,6 +107,27 @@ function fixtureTitle(scenario: ResendQaScenario) {
   return `Resend staging QA — ${scenario}`;
 }
 
+export function resendQaOrderData(
+  scenario: ResendQaScenario,
+  cancelledAt: Date = new Date(),
+): Prisma.OrderCreateInput {
+  const definition = RESEND_QA_SCENARIOS[scenario];
+  return {
+    orderNumber: definition.orderNumber,
+    customerEmail: definition.recipient,
+    customerName: `Resend QA ${scenario}`,
+    status: "CANCELLED",
+    title: fixtureTitle(scenario),
+    brief: "Fixture synthétique V0.7.3.1 réservée au test Resend staging.",
+    basePriceCents: 0,
+    coverPriceCents: 0,
+    priorityPriceCents: 0,
+    totalCents: 0,
+    pricingVersion: "qa-resend-v073",
+    cancelledAt,
+  };
+}
+
 type FixtureIdentity = Readonly<{
   recipient: string | null;
   kind: string;
@@ -175,20 +196,7 @@ export const databaseResendQaHarnessRepository: ResendQaHarnessRepository = {
         throw new Error("Resend QA order identity mismatch.");
       }
       const order = existingOrder ?? await transaction.order.create({
-        data: {
-          orderNumber: definition.orderNumber,
-          customerEmail: definition.recipient,
-          customerName: `Resend QA ${scenario}`,
-          status: "CANCELLED",
-          title: fixtureTitle(scenario),
-          brief: "Fixture synthétique V0.7.3.1 réservée au test Resend staging.",
-          basePriceCents: 0,
-          coverPriceCents: 0,
-          priorityPriceCents: 0,
-          totalCents: 0,
-          pricingVersion: "qa-resend-v073",
-          canceledAt: new Date(),
-        },
+        data: resendQaOrderData(scenario),
         select: { id: true },
       });
       const notification = await enqueueOrderNotification(transaction, {

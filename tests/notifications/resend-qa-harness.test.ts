@@ -6,6 +6,7 @@ import {
   RESEND_QA_CONFIRMATION,
   RESEND_QA_SCENARIOS,
   resendQaIdempotencyKey,
+  resendQaOrderData,
   type ResendQaFixtureResult,
   type ResendQaHarnessRepository,
   type ResendQaScenario,
@@ -15,6 +16,13 @@ import { dispatchOrderNotification, type NotificationDispatchRepository } from "
 import type { OrderNotificationMessage } from "@/lib/notifications/types";
 
 const WORKER_SECRET = "w".repeat(40);
+
+test("la fixture Prisma utilise le timestamp Order cancelledAt", () => {
+  const cancelledAt = new Date("2026-08-21T12:00:00.000Z");
+  const data = resendQaOrderData("delivered", cancelledAt);
+  assert.equal(data.cancelledAt, cancelledAt);
+  assert.equal("canceledAt" in data, false);
+});
 
 function environment(scenario: ResendQaScenario = "delivered") {
   return {
