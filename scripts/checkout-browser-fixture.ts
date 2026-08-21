@@ -169,7 +169,7 @@ async function setup(password: string) {
 async function run() {
   stage = "guard";
   const runtime = await loadAndAssertPaymentQaDatabaseEnvironment();
-  assert.equal(runtime.baseUrl, "http://localhost:31700", "V0.7.1 browser QA requires localhost:31700.");
+  assert.equal(runtime.baseUrl, "http://localhost:31740", "V0.7.4 browser QA requires localhost:31740.");
   const operation = process.argv[2];
   assert.ok(operation === "setup" || operation === "cleanup", "Use setup or cleanup.");
   await cleanup();

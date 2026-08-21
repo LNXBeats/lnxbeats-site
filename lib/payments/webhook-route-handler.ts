@@ -6,7 +6,7 @@ import { assertPaymentServerEnvironment, STRIPE_API_VERSION } from "@/lib/paymen
 import { normalizePaymentMethod } from "@/lib/payments/domain";
 import type { PaymentConfiguration } from "@/lib/payments/types";
 import { logPaymentEvent } from "@/lib/payments/observability";
-import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
+import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import {
   findProcessedStripeWebhookEvent,
   processVerifiedStripeWebhookEvent,
@@ -193,7 +193,7 @@ export async function enrichStripeWebhookEvent(
 
 const routeDependencies: StripeWebhookRouteDependencies = {
   assertQaRuntime: async () => {
-    await loadAndAssertPaymentQaRuntimeEnvironment();
+    await assertPaymentsRuntimeEnvironment();
   },
   configuration: assertPaymentServerEnvironment,
   constructEvent: constructStripeWebhookEvent,

@@ -1,20 +1,35 @@
-# Paiements — fondation Stripe V0.7 et Checkout Commander V0.7.1
+# Paiements — Stripe Checkout et PayPal Orders V0.7.4
 
 ## Statut de cette fondation
 
-La V0.7.0 prépare un paiement Stripe **uniquement en environnement de test**. Elle ne constitue ni une validation réelle par Stripe, ni une ouverture des paiements au public, ni une autorisation de passer en production.
+La V0.7.4 conserve Stripe Hosted Checkout et ajoute une intégration PayPal Orders v2 **uniquement en Stripe Test / PayPal Sandbox**. Elle ne constitue ni une ouverture des paiements au public, ni une autorisation de passer en production.
 
 Les garde-fous par défaut sont :
 
 - `PAYMENTS_ENABLED=false` ;
+- `STRIPE_PAYMENTS_ENABLED=false` et `PAYPAL_PAYMENTS_ENABLED=false` ;
 - `STRIPE_MODE=test` ;
+- `PAYPAL_ENVIRONMENT=sandbox` ;
 - aucune clé réelle dans Git, les logs, la documentation ou le navigateur ;
 - aucune action sur Stripe live, Railway, OVH, le DNS ou un compte bancaire ;
 - aucune commande locale considérée payée à partir d’un retour navigateur.
 
 Tant que la QA sandbox et une validation humaine dédiée ne sont pas terminées, le parcours public conserve son comportement sans paiement. Une configuration incomplète doit échouer fermée et ne doit jamais révéler si une clé existe.
 
-## Choix d’intégration
+## Architecture multi-provider
+
+Le domaine reste commun : une `Order` porte plusieurs tentatives `Payment`, chaque tentative identifie son `provider`, et les réponses ou webhooks signés sont normalisés avant une réconciliation PostgreSQL. Aucun provider ne modifie directement l’état client.
+
+```text
+Order AWAITING_PAYMENT
+  ├─ Payment STRIPE → Hosted Checkout → webhook Stripe signé ┐
+  └─ Payment PAYPAL → Orders v2 → capture + webhook signé    ├─ transaction + verrous
+                                                            └─ Order PAYMENT_CONFIRMED + outbox idempotente
+```
+
+Une seule tentative active est autorisée **par Order et par provider**. Une seule réussite est autorisée globalement par Order. Le premier succès vérifié gagne sous verrou ; les tentatives sœurs ouvertes sont annulées localement. Une capture PayPal déclenchée depuis le navigateur relit et verrouille d’abord l’Order : si Stripe a déjà gagné, aucun appel PayPal n’est effectué. Un succès fournisseur réellement reçu malgré cette barrière n’est jamais masqué : il est enregistré en `REQUIRES_REVIEW` pour traitement humain, sans deuxième confirmation de l’Order ni deuxième notification.
+
+## Choix d’intégration Stripe
 
 LNX Studio retient :
 
@@ -56,12 +71,20 @@ Variables prévues :
 | Variable | Valeur de fondation | Exposition autorisée |
 | --- | --- | --- |
 | `PAYMENTS_ENABLED` | `false` | serveur uniquement ; garde fonctionnelle |
+| `PAYMENT_DEPLOYMENT_ENV` | `development` | `development` ou `staging`, jamais production en V0.7.4 |
+| `PAYMENT_STAGING_CONFIRM` | vide | confirmation non secrète exigée en staging |
+| `STRIPE_PAYMENTS_ENABLED` | `false` | activation explicite du seul adapter Stripe |
 | `STRIPE_MODE` | `test` | serveur uniquement ; `live` est refusé à ce stade |
 | `STRIPE_SECRET_KEY` | vide dans le dépôt | secret serveur sandbox, jamais journalisé |
 | `STRIPE_WEBHOOK_SECRET` | vide dans le dépôt | secret `whsec_…` propre à l’endpoint sandbox/CLI |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | facultative et vide | uniquement si une future UI Elements l’exige |
 | `STRIPE_DIAGNOSTIC_CONFIRM` | vide par défaut | confirmation locale non secrète du diagnostic réseau Stripe Test |
 | `PAYMENT_QA_CONFIRM` | vide par défaut | confirmation locale non secrète de la QA paiement sur base jetable |
+| `PAYPAL_PAYMENTS_ENABLED` | `false` | activation explicite du seul adapter PayPal |
+| `PAYPAL_ENVIRONMENT` | `sandbox` | `live` et `production` sont refusés |
+| `PAYPAL_CLIENT_ID` | vide | secret/configuration serveur Sandbox |
+| `PAYPAL_CLIENT_SECRET` | vide | secret serveur Sandbox |
+| `PAYPAL_WEBHOOK_ID` | vide | identifiant serveur de l’endpoint webhook Sandbox |
 
 Préfixes Stripe à reconnaître sans jamais publier les valeurs :
 
@@ -103,7 +126,7 @@ Le prix payable provient exclusivement du snapshot serveur enregistré sur cette
 
 Le serveur valide la cohérence arithmétique de ce snapshot et sa conformité au registre tarifaire versionné. Chaque version publiée doit rester dans ce registre aussi longtemps qu’une commande correspondante peut être payable : changer l’offre courante ne réécrit donc pas une ancienne commande. Il réserve ensuite un `Payment` local avec `amountCents`, `currency` et `pricingVersion` **avant** l’appel Stripe. Cette copie devient le contrat de la tentative en cours : une modification ultérieure de la commande ne doit ni modifier silencieusement son montant, ni réutiliser cette tentative avec d’autres paramètres. Une version inconnue ou un conflit de snapshot échoue fermé et exige une décision métier explicite.
 
-La V0.7.1 ouvre ce service au **propriétaire authentifié, actif et vérifié** de l’Order, quel que soit son rôle applicatif. Cette ouverture reste strictement confinée au runtime QA local `lnx-studio-v070-test`, aux confirmations explicites et au mode Stripe Test. Elle ne rend ni `lnxbeats.fr`, ni Railway, ni un environnement Live payables.
+Le service est ouvert au **propriétaire authentifié, actif et vérifié** de l’Order, quel que soit son rôle applicatif. La QA locale V0.7.4 reste strictement confinée au runtime `lnx-studio-v074-test`, aux confirmations explicites et aux modes Stripe Test/PayPal Sandbox. Elle ne rend ni `lnxbeats.fr`, ni un environnement Live payables.
 
 Le serveur doit, au moment de créer une session :
 
@@ -144,7 +167,7 @@ Le registre contient :
 
 - une clé primaire interne ;
 - `orderId`, vers la commande concernée ;
-- `provider=STRIPE` et `mode=TEST|LIVE` ;
+- `provider=STRIPE|PAYPAL` et `mode=TEST|LIVE` (V0.7.4 n’autorise que `TEST`) ;
 - `status`, selon l’énumération ci-dessous ;
 - `amountCents`, `currency` et `pricingVersion`, tous issus du serveur ;
 - une clé d’idempotence unique ;
@@ -155,7 +178,7 @@ Le registre contient :
 - le montant remboursé, borné entre zéro et le montant payé ;
 - les informations de diagnostic non sensibles strictement nécessaires.
 
-> La présence de `PAYPAL` ou `WERO` dans l’énumération permet de représenter une méthode réellement renvoyée par Stripe. Elle ne signifie pas que ces méthodes sont activées, disponibles ou promises.
+> `provider=PAYPAL` identifie l’adapter PayPal Orders v2. `paymentMethod=PAYPAL` identifie le moyen effectivement capturé. La présence de `WERO` dans `PaymentMethod` ne signifie pas qu’il est activé ou promis.
 
 Les statuts prévus sont `CREATED`, `PENDING`, `SUCCEEDED`, `FAILED`, `CANCELED`, `EXPIRED`, `REFUND_PENDING`, `PARTIALLY_REFUNDED`, `REFUNDED` et `REQUIRES_REVIEW`. Le flux nominal reste monotone :
 
@@ -169,7 +192,7 @@ CREATED → PENDING ──────→ SUCCEEDED → REFUND_PENDING → PARTI
 
 `SUCCEEDED` est définitif quant au fait que le paiement a réussi ; un remboursement ultérieur ne réécrit pas cette histoire mais fait progresser la tentative vers ses statuts de remboursement. `FAILED`, `CANCELED` ou `EXPIRED` clôt normalement la tentative, pas nécessairement la commande : une nouvelle tentative, avec un nouvel identifiant et une nouvelle clé d’idempotence, peut être créée si la commande reste payable. Une exception bornée existe pour le code `STRIPE_PAYMENT_ATTEMPT_FAILED` : il représente un refus immédiat dans une Checkout Session encore ouverte. Ce paiement reste la tentative active et le bouton reprend strictement la même Session ; aucune deuxième Session ne peut être créée avant expiration ou échec terminal. Une réussite Stripe authentique reçue tardivement pour les mêmes identifiants ne doit jamais être ignorée au seul motif qu’un événement d’échec est arrivé avant elle. `REQUIRES_REVIEW` bloque toute automatisation jusqu’à une réconciliation sûre.
 
-La base impose notamment une seule tentative active (`CREATED`, `PENDING`, `REQUIRES_REVIEW`, ou `FAILED` avec le code retryable exact ci-dessus) et un seul paiement `SUCCEEDED` par commande. Les contraintes vérifient aussi les montants, la devise sur trois lettres, les identifiants non vides et la cohérence des timestamps. Ces protections complètent, sans remplacer, les transactions applicatives.
+La base impose notamment une seule tentative active par couple `(orderId, provider)` (`CREATED`, `PENDING`, `REQUIRES_REVIEW`, ou Stripe `FAILED` avec le code retryable exact ci-dessus) et un seul paiement réussi par commande, tous providers confondus. Les contraintes vérifient aussi les montants, la devise sur trois lettres, les identifiants non vides et la cohérence des timestamps. Ces protections complètent, sans remplacer, les transactions applicatives.
 
 Les transitions visibles par le membre doivent aussi produire un événement métier horodaté, distinct du payload Stripe. La timeline ne doit jamais exposer d’identifiant Stripe sensible, de secret, de cookie ou de détail bancaire. Le statut `AWAITING_PAYMENT` de la commande ne prouve pas un paiement ; seule une réconciliation serveur signée peut faire progresser le métier.
 
@@ -268,7 +291,7 @@ Références officielles :
 
 La sandbox doit couvrir un paiement réussi, un refus, une authentification 3D Secure et les retours/annulations à partir des scénarios officiels Stripe. Aucun numéro de carte réel ne doit être utilisé ou stocké. La documentation de test officielle reste la seule source des valeurs de simulation : [Tester une intégration Stripe](https://docs.stripe.com/testing).
 
-### PayPal
+### PayPal via Stripe
 
 PayPal via Stripe est disponible pour un compte Stripe établi en France et accepte notamment l’euro. Checkout et Elements sont compatibles, mais l’activation live exige une action dans le Dashboard, la connexion d’un compte PayPal et le choix du mode de règlement.
 
@@ -277,6 +300,29 @@ Cette fondation ne prétend pas que PayPal est activé sur le compte LNX Beats. 
 Références officielles :
 
 - [Paiements PayPal](https://docs.stripe.com/payments/paypal)
+
+### PayPal Orders API directe
+
+V0.7.4 ajoute parallèlement un adapter PayPal direct, limité à `https://api-m.sandbox.paypal.com`. Le navigateur ne transmet que le numéro d’Order dans la route et le token PayPal opaque lors du retour ; le montant, la devise, `paymentId`, `return_url` et `cancel_url` proviennent du serveur.
+
+Flux prévu :
+
+1. `POST /api/orders/[orderNumber]/payments/paypal/checkout` réserve la tentative locale sous verrou ;
+2. le serveur crée ou relit une Order PayPal avec `PayPal-Request-Id=paypal-order:<paymentId>` ;
+3. le client est redirigé vers l’approval URL Sandbox ;
+4. au retour, `POST /api/orders/[orderNumber]/payments/paypal/capture` verrouille d’abord l’Order et refuse tout appel fournisseur si un autre paiement a déjà gagné ;
+5. le serveur capture avec `PayPal-Request-Id=paypal-capture:<paymentId>` et vérifie Order, capture, `custom_id`, montant et devise ;
+6. `POST /api/payments/paypal/webhook` vérifie les cinq en-têtes PayPal, l’événement brut exact et le `webhook_id` par l’API officielle, puis réconcilie `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.PENDING`, `PAYMENT.CAPTURE.COMPLETED` ou `PAYMENT.CAPTURE.DECLINED` ; un événement Capture sans `custom_id` est corrélé par l’Order PayPal persistée ;
+7. `ProviderEvent(provider=PAYPAL, providerEventId)` déduplique durablement les replays.
+
+Le corps webhook est borné à 256 Kio. `paypal-cert-url` doit être HTTPS, appartenir au domaine API Sandbox et viser `/v1/notifications/certs/`; l’algorithme admis est `SHA256withRSA`. Une signature invalide, un endpoint live, une preuve de montant/devise divergente ou une configuration incomplète échoue fermé. Le payload brut, la signature, les credentials OAuth et les URLs d’approbation ne sont jamais journalisés.
+
+Références officielles :
+
+- [PayPal Orders v2](https://developer.paypal.com/docs/api/orders/v2/)
+- [Idempotence REST PayPal](https://developer.paypal.com/api/rest/reference/idempotency/)
+- [Vérification des signatures webhook](https://developer.paypal.com/api/rest/webhooks/rest/)
+- [Événements de paiement PayPal](https://developer.paypal.com/api/rest/webhooks/event-names/)
 
 ### Wero
 
@@ -299,14 +345,14 @@ L’intégration ne contient aucun IBAN et ne dépend ni de BoursoBank ni d’un
 ## QA locale avec Stripe CLI
 
 Les validations automatisées destructives utilisent exclusivement la cible jetable
-`lnx-studio-v070-test`, un runtime PostgreSQL loopback sur un port non standard et
+`lnx-studio-v074-test`, un runtime PostgreSQL loopback sur le port `51254` et
 une origine HTTP loopback distincte du port personnel `3000`. La preuve Prisma est
 obligatoire et doit correspondre exactement à `DATABASE_URL`. Elles exigent en plus
 `NODE_ENV=test`, `EMAIL_PROVIDER=capture` et
-`PAYMENT_QA_CONFIRM=run-stripe-test-payment-qa`. La base
+`PAYMENT_QA_CONFIRM=run-v074-sandbox-payment-qa`. La base
 `lnx-studio-local-preview` est explicitement refusée.
 
-Le parcours navigateur doit être servi par `next dev` sur le port QA dédié (par exemple `31700`) avec exactement cette base, ces gardes et `PAYMENTS_ENABLED=true`. `next start` et tout runtime `NODE_ENV=production` restent refusés par la fondation Test ; le bouton Admin, Checkout, le webhook et la santé utilisent la même garde et restent invisibles ou indisponibles ailleurs.
+Le parcours local doit être servi sur un port QA dédié avec la preuve de base jetable et `PAYMENTS_ENABLED=true`. Chaque provider exige aussi son flag explicite. En staging, le runtime accepte uniquement Railway `staging`, une origine HTTPS canonique, `PAYMENT_DEPLOYMENT_ENV=staging` et `PAYMENT_STAGING_CONFIRM=payments-staging-sandbox-approved`; Stripe reste Test et PayPal Sandbox. Tout environnement production ou toute configuration ambiguë est refusé.
 
 Le diagnostic réseau est séparé des tests mocks et s'exécute uniquement après la
 confirmation non secrète prévue :
@@ -331,10 +377,10 @@ stripe login
 stripe listen \
   --latest \
   --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,payment_intent.payment_failed \
-  --forward-to http://localhost:31700/api/payments/stripe/webhook
+  --forward-to http://localhost:31740/api/payments/stripe/webhook
 ```
 
-Le port `31700` est le port HTTP exact dédié à la QA paiement jetable. Le runtime QA, `AUTH_URL`/`SITE_URL` et le listener doivent tous employer **exactement** `http://localhost:31700`. Cette identité est opérationnelle, pas cosmétique : sur macOS, Next peut résoudre `localhost` vers `[::1]`; un listener dirigé vers `127.0.0.1` reçoit alors un refus de connexion même si le port paraît identique. Cet incident a été reproduit pendant la QA V0.7.1 et corrigé sans nouveau paiement par rediffusion signée de l’événement existant. Vérifier systématiquement les HTTP `2xx` du listener. Après tout redémarrage de `stripe listen`, recopier son nouveau secret uniquement dans l’environnement QA puis redémarrer Next avant de reprendre un parcours.
+Le port `31740` est le port HTTP exact dédié à la QA paiement jetable V0.7.4. Le runtime QA, `AUTH_URL`/`SITE_URL` et le listener doivent tous employer **exactement** `http://localhost:31740`. Cette identité est opérationnelle, pas cosmétique : sur macOS, Next peut résoudre `localhost` vers `[::1]`; un listener dirigé vers `127.0.0.1` reçoit alors un refus de connexion même si le port paraît identique. Vérifier systématiquement les HTTP `2xx` du listener. Après tout redémarrage de `stripe listen`, recopier son nouveau secret uniquement dans l’environnement QA puis redémarrer Next avant de reprendre un parcours.
 
 Il ne faut jamais transférer ces événements vers le port personnel `3000`, ni vers `lnx-studio-local-preview`. Stripe CLI 1.50 utilise `--latest` pour demander la dernière version d’événement ; le webhook refuse ensuite toute valeur `event.api_version` différente de `2026-07-29.dahlia`. Une évolution future échoue donc de manière fermée jusqu’à la mise à jour explicite du SDK et des tests.
 
@@ -357,6 +403,21 @@ Références officielles :
 - [Installer Stripe CLI](https://docs.stripe.com/stripe-cli/install)
 - [Utiliser Stripe CLI et transférer les événements](https://docs.stripe.com/stripe-cli/use-cli)
 - [Clés et permissions de Stripe CLI](https://docs.stripe.com/stripe-cli/keys)
+
+## Ordre de QA staging V0.7.4
+
+Cette procédure est humaine et future ; aucun de ces appels n’est exécuté pendant la construction de la feature.
+
+1. Déployer d’abord avec `PAYMENTS_ENABLED=false`, les deux flags provider à `false` et les secrets absents ; `/api/health` doit rester `200` avec les providers désactivés.
+2. Créer une base et des Orders staging strictement fictives, activer le transport notification `capture`, puis renseigner `PAYMENT_DEPLOYMENT_ENV=staging` et la confirmation non secrète.
+3. Configurer Stripe Test, son endpoint signé et `STRIPE_PAYMENTS_ENABLED=true`; valider succès, refus, reprise, annulation, expiration et replay avant d’activer PayPal.
+4. Créer une application **PayPal Developer Sandbox**, un compte business sandbox et un compte buyer sandbox. Ne jamais utiliser de compte ou moyen de paiement réel.
+5. Configurer les trois valeurs serveur PayPal et l’endpoint `POST /api/payments/paypal/webhook` pour les quatre événements allowlistés, puis activer `PAYPAL_PAYMENTS_ENABLED=true`.
+6. Valider create Order, approval, cancel, capture, webhook, replay, amount/currency mismatch et IDOR avec des Orders séparées.
+7. Ouvrir Stripe et PayPal sur la même Order fictive ; confirmer Stripe, puis vérifier qu’une capture PayPal ultérieure est refusée avant l’appel provider et qu’un éventuel événement tardif est quarantiné sans deuxième notification.
+8. Vérifier les deux notifications logiques en transport capture uniquement, puis nettoyer les fixtures PostgreSQL et les objets sandbox ciblés selon leur runbook, sans toucher aux données personnelles.
+
+La QA s’arrête au premier écart d’identifiant, montant, devise, signature, environnement ou compteur. Elle ne bascule jamais Stripe Live ni PayPal Live.
 
 ## Santé et observabilité
 
@@ -406,9 +467,9 @@ Stripe réessaie automatiquement les webhooks live jusqu’à trois jours avec b
 5. Examiner les request logs Stripe et l’historique Git ; si une valeur a été commitée, révoquer d’abord puis traiter l’historique séparément.
 6. Relancer le scan de secrets et les tests sandbox avant réactivation.
 
-## Passage futur en live
+## Gates de production
 
-Le passage en production n’appartient pas à V0.7.0. Il nécessitera un prompt et une validation séparés comprenant au minimum :
+Le passage en production n’appartient pas à V0.7.4. Il nécessitera un sprint et une validation séparés comprenant au minimum :
 
 - activation du compte Stripe, informations légales et compte de règlement validés ;
 - clés live et webhook live dans le coffre Railway, jamais dans `.env.local` partagé ou Git ;
@@ -416,6 +477,11 @@ Le passage en production n’appartient pas à V0.7.0. Il nécessitera un prompt
 - vérification des méthodes réellement activées, des CGV, de la confidentialité, des remboursements, taxes et factures ;
 - test live contrôlé avec un montant minimal autorisé, validation humaine et procédure de remboursement ;
 - monitoring, alertes, réconciliation et runbooks exercés ;
-- bascule explicite de `STRIPE_MODE=live` puis de `PAYMENTS_ENABLED=true`, jamais l’inverse.
+- compte marchand PayPal production, application Live, credentials et webhook Live distincts, jamais réutilisés depuis Sandbox ;
+- stratégie explicite de remboursement/réconciliation d’un succès tardif entre providers ;
+- résolution ou décision formelle sur l’advisory `deepmerge-ts` transitif de Prisma ;
+- maintien du Legal Review Gate pour les droits et contrats ;
+- modification volontaire du code qui refuse actuellement Stripe Live, PayPal Live et `PAYMENT_DEPLOYMENT_ENV=production`, suivie d’une nouvelle revue ;
+- bascule des flags provider seulement après ces preuves, puis de `PAYMENTS_ENABLED=true`, jamais l’inverse.
 
 Le parcours client V0.7.1, ses règles de reprise, d’édition et de confirmation sont décrits dans [CHECKOUT.md](CHECKOUT.md). Toute activation publique ou Live demeure un sprint séparé.

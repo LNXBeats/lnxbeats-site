@@ -157,7 +157,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               <dl key={payment.id}>
                 <div><dt>Statut</dt><dd>{paymentStatusPresentation[payment.status]}</dd></div>
                 <div><dt>Montant</dt><dd>{formatEuro(payment.amountCents)} · {payment.currency}</dd></div>
-                <div><dt>Prestataire</dt><dd>{payment.provider === "STRIPE" ? "Stripe" : payment.provider}</dd></div>
+                <div><dt>Prestataire</dt><dd>{payment.provider === "STRIPE" ? "Stripe" : "PayPal"}</dd></div>
                 <div><dt>Environnement</dt><dd>{payment.mode === "TEST" ? "MODE TEST" : "LIVE"}</dd></div>
                 <div><dt>Moyen</dt><dd>{payment.paymentMethod ? paymentMethodPresentation[payment.paymentMethod] : "Non déterminé"}</dd></div>
                 <div><dt>ID externe</dt><dd>{payment.providerPaymentId ?? payment.providerCheckoutId ?? "Non attribué"}</dd></div>

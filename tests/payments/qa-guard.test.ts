@@ -21,7 +21,7 @@ function valid() {
       EMAIL_PROVIDER: "capture",
       LNX_DATABASE_TARGET: PAYMENT_QA_TARGET,
       DATABASE_URL: databaseUrl,
-      AUTH_URL: "http://127.0.0.1:31700",
+      AUTH_URL: "http://127.0.0.1:31740",
       PAYMENTS_ENABLED: "true",
       STRIPE_MODE: "test",
       STRIPE_SECRET_KEY: ["sk", "test", "fixture-not-a-real-credential"].join("_"),
@@ -73,7 +73,7 @@ test("refuse la preview personnelle, Railway, le port par défaut et les overrid
   for (const mutate of [
     (environment: Record<string, string | undefined>) => { environment.LNX_DATABASE_TARGET = "lnx-studio-local-preview"; },
     (environment: Record<string, string | undefined>) => { environment.RAILWAY_ENVIRONMENT = "production"; },
-    (environment: Record<string, string | undefined>) => { environment.DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:5432/lnx-studio-v070-test"; },
+    (environment: Record<string, string | undefined>) => { environment.DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:5432/lnx-studio-v074-test"; },
     (environment: Record<string, string | undefined>) => { environment.DATABASE_URL = `${databaseUrl}&host=database.example.invalid`; },
   ]) {
     const fixture = valid();
@@ -128,7 +128,7 @@ test("ne divulgue aucune valeur sensible dans les erreurs de garde QA", () => {
       createFailure() {
         const fixture = valid();
         fixture.environment.AUTH_URL =
-          `http://${this.sentinel}:${this.sentinel}@127.0.0.1:31700/?token=${this.sentinel}`;
+          `http://${this.sentinel}:${this.sentinel}@127.0.0.1:31740/?token=${this.sentinel}`;
         return () => assertPaymentQaEnvironment(fixture.environment, fixture.proof);
       },
     },
@@ -136,7 +136,7 @@ test("ne divulgue aucune valeur sensible dans les erreurs de garde QA", () => {
       sentinel: "auth-path-sentinel",
       createFailure() {
         const fixture = valid();
-        fixture.environment.AUTH_URL = `http://127.0.0.1:31700/${this.sentinel}`;
+        fixture.environment.AUTH_URL = `http://127.0.0.1:31740/${this.sentinel}`;
         return () => assertPaymentQaEnvironment(fixture.environment, fixture.proof);
       },
     },

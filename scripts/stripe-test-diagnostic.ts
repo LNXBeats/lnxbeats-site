@@ -16,6 +16,7 @@ async function run() {
   const configured = parsePaymentConfiguration({
     ...process.env,
     PAYMENTS_ENABLED: "true",
+    STRIPE_PAYMENTS_ENABLED: "true",
   });
   if (!configured.enabled) throw new Error("Stripe Test diagnostic configuration is incomplete.");
   const configuration = configured;

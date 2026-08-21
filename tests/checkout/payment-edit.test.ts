@@ -26,14 +26,14 @@ function dependencies(active = true) {
       async findActiveCheckout(receivedActor, orderNumber) {
         events.push(`find:${receivedActor.id}:${orderNumber}`);
         return active
-          ? { orderId: "order-id", paymentId: "payment-id", providerCheckoutId: "cs_test_fixture" }
-          : { orderId: "order-id" };
+          ? { orderId: "order-id", stripePaymentId: "payment-id", stripeCheckoutId: "cs_test_fixture", paypalAttemptsCanceled: false }
+          : { orderId: "order-id", paypalAttemptsCanceled: false };
       },
       async findCancelledCheckout(orderNumber) {
         events.push(`cancelled:${orderNumber}`);
         return active
-          ? { orderId: "order-id", paymentId: "payment-id", providerCheckoutId: "cs_test_fixture" }
-          : { orderId: "order-id" };
+          ? { orderId: "order-id", stripePaymentId: "payment-id", stripeCheckoutId: "cs_test_fixture", paypalAttemptsCanceled: false }
+          : { orderId: "order-id", paypalAttemptsCanceled: false };
       },
       async markCheckoutExpired(orderId, paymentId) {
         events.push(`expired:${orderId}:${paymentId}`);
@@ -64,6 +64,16 @@ test("expires the active Checkout before allowing the owner to edit", async () =
     "stripe:cs_test_fixture:expire-checkout-session:payment-id",
     "expired:order-id:payment-id",
   ]);
+});
+
+test("invalidates a PayPal approval before an Order can be edited", async () => {
+  const fake = dependencies(false);
+  fake.value.repository.findActiveCheckout = async () => ({
+    orderId: "order-id",
+    paypalAttemptsCanceled: true,
+  });
+  assert.deepEqual(await prepareOrderForEditing(actor, "LNX-2026-000001", fake.value), { editable: true });
+  assert.deepEqual(fake.events, []);
 });
 
 test("does not call Stripe when no active Checkout exists", async () => {

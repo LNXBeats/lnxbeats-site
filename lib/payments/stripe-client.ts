@@ -21,7 +21,7 @@ export type HostedCheckoutRequest = Readonly<{
 export type HostedCheckoutSession = Readonly<{
   id: string;
   url: string;
-  expiresAt: number;
+  expiresAt?: number;
   paymentIntentId?: string;
 }>;
 

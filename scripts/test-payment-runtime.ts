@@ -27,19 +27,27 @@ import {
   processVerifiedStripeWebhookEvent,
   type VerifiedStripeWebhookEvent,
 } from "@/lib/payments/webhook";
+import {
+  capturePaypalOrderForOrder,
+  createPaymentDatabasePaypalCaptureRepository,
+  createPaypalOrderForOrder,
+} from "@/lib/payments/paypal-service";
+import type { PaypalGateway } from "@/lib/payments/paypal-client";
+import { processVerifiedPaypalWebhookEvent } from "@/lib/payments/paypal-webhook";
 import { prisma } from "@/lib/prisma";
 
-const QA_EMAIL = "lnx-v070-payments-admin@example.invalid";
-const QA_SECOND_EMAIL = "lnx-v070-payments-other@example.invalid";
+const QA_EMAIL = "lnx-v074-payments-admin@example.invalid";
+const QA_SECOND_EMAIL = "lnx-v074-payments-other@example.invalid";
 const QA_EMAILS = [QA_EMAIL, QA_SECOND_EMAIL] as const;
 const QA_ORDER_NUMBERS = [
-  "LNX-2099-070001",
-  "LNX-2099-070002",
-  "LNX-2099-070003",
-  "LNX-2099-070004",
-  "LNX-2099-070005",
+  "LNX-2099-074001",
+  "LNX-2099-074002",
+  "LNX-2099-074003",
+  "LNX-2099-074004",
+  "LNX-2099-074005",
+  "LNX-2099-074006",
 ] as const;
-const QA_EVENT_PREFIX = "evt_v070_qa_";
+const QA_EVENT_PREFIX = "evt_v074_qa_";
 
 type PricingFixture = Readonly<{
   orderNumber: (typeof QA_ORDER_NUMBERS)[number];
@@ -167,10 +175,10 @@ function createMockGateway() {
       if (existing) return existing;
       const shortId = request.paymentId.replaceAll("-", "");
       const session = {
-        id: `cs_test_v070_${shortId}`,
-        url: `https://checkout.example.invalid/v070/${shortId}`,
+        id: `cs_test_v074_${shortId}`,
+        url: `https://checkout.example.invalid/v074/${shortId}`,
         expiresAt: Math.floor(Date.now() / 1_000) + 3_600,
-        paymentIntentId: `pi_test_v070_${shortId}`,
+        paymentIntentId: `pi_test_v074_${shortId}`,
       } satisfies HostedCheckoutSession;
       sessionsByKey.set(idempotencyKey, session);
       sessionsById.set(session.id, session);
@@ -185,6 +193,40 @@ function createMockGateway() {
   };
 
   return { gateway, requests, retrieved };
+}
+
+function createMockPaypalGateway() {
+  let createCalls = 0;
+  let retrieveCalls = 0;
+  let captureCalls = 0;
+  const gateway: PaypalGateway = {
+    async createOrder(request) {
+      createCalls += 1;
+      const id = `PAYPAL-ORDER-${request.paymentId.replaceAll("-", "")}`;
+      return {
+        id,
+        status: "CREATED",
+        approvalUrl: `https://www.sandbox.paypal.com/checkoutnow?token=${id}`,
+      };
+    },
+    async retrieveOrder(providerOrderId) {
+      retrieveCalls += 1;
+      return {
+        id: providerOrderId,
+        status: "CREATED",
+        approvalUrl: `https://www.sandbox.paypal.com/checkoutnow?token=${providerOrderId}`,
+      };
+    },
+    async captureOrder(providerOrderId) {
+      captureCalls += 1;
+      throw new Error(`Unexpected PayPal capture for ${providerOrderId.length} character identifier.`);
+    },
+    async verifyWebhook() { return true; },
+  };
+  return {
+    gateway,
+    counts: () => ({ createCalls, retrieveCalls, captureCalls }),
+  };
 }
 
 function observedRepository(
@@ -313,7 +355,7 @@ function paymentIntentFailureEvent(input: {
         },
         last_payment_error: {
           payment_method: {
-            id: `pm_test_v070_${input.paymentId.replaceAll("-", "")}`,
+            id: `pm_test_v074_${input.paymentId.replaceAll("-", "")}`,
             object: "payment_method",
             type: "card",
           },
@@ -356,6 +398,26 @@ async function createOrders(userId: string) {
         brief: "Commande strictement fictive pour les contraintes SQL de paiement.",
         usage: "PERSONAL" as const,
         totalCents: 5_000,
+        submittedAt: new Date(),
+      },
+      {
+        orderNumber: QA_ORDER_NUMBERS[5],
+        userId,
+        customerEmail: QA_EMAIL,
+        customerName: "LNX PayPal QA",
+        status: "AWAITING_PAYMENT" as const,
+        title: "PayPal runtime reconciliation",
+        brief: "Commande strictement fictive pour la réconciliation PayPal PostgreSQL.",
+        usage: "PERSONAL" as const,
+        coverIncluded: false,
+        priorityProcessing: false,
+        basePriceCents: 5_000,
+        coverPriceCents: 0,
+        priorityPriceCents: 0,
+        totalCents: 5_000,
+        currency: "EUR",
+        pricingVersion: "2026-08-v1",
+        contractRequired: false,
         submittedAt: new Date(),
       },
     ],
@@ -475,8 +537,8 @@ async function run() {
       && attempt.mode === "TEST"
       && attempt.status === "PENDING"
       && attempt.currency === "EUR"
-      && attempt.providerCheckoutId?.startsWith("cs_test_v070_")
-      && attempt.providerPaymentId?.startsWith("pi_test_v070_")
+      && attempt.providerCheckoutId?.startsWith("cs_test_v074_")
+      && attempt.providerPaymentId?.startsWith("pi_test_v074_")
     )));
     assert.equal(new Set(mock.requests.map(({ request }) => request.paymentId)).size, 4);
     for (const paymentId of new Set(mock.requests.map(({ request }) => request.paymentId))) {
@@ -506,7 +568,7 @@ async function run() {
         amountCents: 0,
         currency: "EUR",
         pricingVersion: "2026-08-v1",
-        idempotencyKey: "v070-runtime:invalid-zero",
+        idempotencyKey: "v074-runtime:invalid-zero",
       },
     }));
     await assert.rejects(prisma.payment.create({
@@ -516,7 +578,7 @@ async function run() {
         amountCents: 5_000,
         currency: "USD",
         pricingVersion: "2026-08-v1",
-        idempotencyKey: "v070-runtime:invalid-currency",
+        idempotencyKey: "v074-runtime:invalid-currency",
       },
     }));
     await assert.rejects(prisma.payment.create({
@@ -538,7 +600,7 @@ async function run() {
         amountCents: 9_000,
         currency: "EUR",
         pricingVersion: "2026-08-v1",
-        idempotencyKey: "v070-runtime:second-active",
+        idempotencyKey: "v074-runtime:second-active",
       },
     }));
     await assert.rejects(prisma.providerEvent.create({
@@ -593,6 +655,75 @@ async function run() {
     ]);
     assert.notEqual(repricedAttempts[0]?.providerCheckoutId, repricedAttempts[1]?.providerCheckoutId);
     passed.push("editing expires the old Checkout before a new server-priced snapshot and Session");
+
+    const repricedStripe = await prisma.payment.findFirstOrThrow({
+      where: { orderId: pendingNinety.orderId, provider: "STRIPE", status: "PENDING" },
+    });
+    assert.ok(repricedStripe.providerCheckoutId && repricedStripe.providerPaymentId);
+    const paypal = createMockPaypalGateway();
+    await createPaypalOrderForOrder(actor, QA_ORDER_NUMBERS[3], {
+      repository: createPaymentDatabaseCheckoutRepository(prisma, "PAYPAL"),
+      gateway: paypal.gateway,
+      baseUrl: runtime.baseUrl,
+    });
+    const paypalAttempt = await prisma.payment.findFirstOrThrow({
+      where: { orderId: pendingNinety.orderId, provider: "PAYPAL", status: "PENDING" },
+    });
+    assert.ok(paypalAttempt.providerCheckoutId);
+    assert.deepEqual(paypal.counts(), { createCalls: 1, retrieveCalls: 0, captureCalls: 0 });
+
+    const stripeWins = await processVerifiedStripeWebhookEvent(checkoutEvent({
+      eventId: `${QA_EVENT_PREFIX}stripe_wins_double_provider`,
+      paymentId: repricedStripe.id,
+      orderId: repricedStripe.orderId,
+      checkoutId: repricedStripe.providerCheckoutId,
+      paymentIntentId: repricedStripe.providerPaymentId,
+      amountCents: repricedStripe.amountCents,
+    }));
+    assert.equal(stripeWins.outcome, "PROCESSED");
+    const [doubleProviderOrder, doubleProviderStripe, doubleProviderPaypal] = await Promise.all([
+      prisma.order.findUniqueOrThrow({ where: { id: pendingNinety.orderId } }),
+      prisma.payment.findUniqueOrThrow({ where: { id: repricedStripe.id } }),
+      prisma.payment.findUniqueOrThrow({ where: { id: paypalAttempt.id } }),
+    ]);
+    assert.equal(doubleProviderOrder.status, "PAYMENT_CONFIRMED");
+    assert.equal(doubleProviderStripe.status, "SUCCEEDED");
+    assert.equal(doubleProviderPaypal.status, "CANCELED");
+    assert.equal(doubleProviderPaypal.failureCode, "ORDER_PAID_BY_OTHER_PROVIDER");
+    assert.equal(await prisma.payment.count({
+      where: { orderId: pendingNinety.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+    }), 1);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: pendingNinety.orderId } }), 2);
+    const latePaypalCapture = await processVerifiedPaypalWebhookEvent({
+      id: `${QA_EVENT_PREFIX}paypal_after_stripe`,
+      event_type: "PAYMENT.CAPTURE.COMPLETED",
+      create_time: new Date().toISOString(),
+      resource: {
+        id: "PAYPAL-CAPTURE-AFTER-STRIPE",
+        status: "COMPLETED",
+        amount: { currency_code: "EUR", value: "60.00" },
+        supplementary_data: {
+          related_ids: { order_id: paypalAttempt.providerCheckoutId },
+        },
+      },
+    });
+    assert.equal(latePaypalCapture.outcome, "REQUIRES_REVIEW");
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: paypalAttempt.id } })).status, "REQUIRES_REVIEW");
+    assert.equal(await prisma.payment.count({
+      where: { orderId: pendingNinety.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+    }), 1);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: pendingNinety.orderId } }), 2);
+    await assert.rejects(
+      capturePaypalOrderForOrder(actor, QA_ORDER_NUMBERS[3], paypalAttempt.providerCheckoutId, {
+        repository: createPaymentDatabasePaypalCaptureRepository(prisma),
+        gateway: paypal.gateway,
+      }),
+      (error: unknown) => error instanceof PaymentServiceError
+        && error.code === "PAYMENT_ALREADY_COMPLETED",
+    );
+    assert.equal(paypal.counts().captureCalls, 0);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: pendingNinety.orderId } }), 2);
+    passed.push("Stripe and PayPal may be prepared concurrently; Stripe wins once and late PayPal capture is quarantined without duplicate notifications");
 
     const fifty = attempts.find(({ amountCents }) => amountCents === 5_000);
     assert.ok(fifty?.providerCheckoutId && fifty.providerPaymentId);
@@ -661,7 +792,7 @@ async function run() {
         amountCents: 5_000,
         currency: "EUR",
         pricingVersion: "2026-08-v1",
-        idempotencyKey: "v070-runtime:second-success",
+        idempotencyKey: "v074-runtime:second-success",
         paidAt: new Date(),
       },
     }));
@@ -743,6 +874,12 @@ async function run() {
     }));
     assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: secondEighty.id } })).status, "FAILED");
 
+    // The new PayPal preparation adds one request to this intentionally broad
+    // runtime scenario. Reset only the disposable actor before the independent
+    // fresh-retry assertion; the production quota itself is tested elsewhere.
+    await prisma.rateLimit.deleteMany({
+      where: { key: `payments:checkout:${actor.id}` },
+    });
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[2], dependencies);
     assert.deepEqual(
       (await prisma.payment.findMany({
@@ -808,8 +945,8 @@ async function run() {
       eventId: `${QA_EVENT_PREFIX}missing_payment`,
       paymentId: unknownPayment,
       orderId: unknownOrder,
-      checkoutId: "cs_test_v070_missing",
-      paymentIntentId: "pi_test_v070_missing",
+      checkoutId: "cs_test_v074_missing",
+      paymentIntentId: "pi_test_v074_missing",
       amountCents: 5_000,
     }));
     assert.equal(missing.outcome, "REQUIRES_REVIEW");
@@ -825,6 +962,51 @@ async function run() {
     await assert.rejects(prisma.order.delete({ where: { id: pendingNinety.orderId } }));
     await assert.rejects(prisma.payment.delete({ where: { id: fifty.id } }));
     passed.push("unknown payment review receipt and restrictive payment foreign keys");
+
+    await prisma.rateLimit.deleteMany({
+      where: { key: `payments:checkout:${actor.id}` },
+    });
+    const paypalWebhookGateway = createMockPaypalGateway();
+    await createPaypalOrderForOrder(actor, QA_ORDER_NUMBERS[5], {
+      repository: createPaymentDatabaseCheckoutRepository(prisma, "PAYPAL"),
+      gateway: paypalWebhookGateway.gateway,
+      baseUrl: runtime.baseUrl,
+    });
+    const paypalWebhookPayment = await prisma.payment.findFirstOrThrow({
+      where: { order: { orderNumber: QA_ORDER_NUMBERS[5] }, provider: "PAYPAL" },
+    });
+    assert.ok(paypalWebhookPayment.providerCheckoutId);
+    const paypalWebhookEvent = {
+      id: `${QA_EVENT_PREFIX}paypal_completed`,
+      event_type: "PAYMENT.CAPTURE.COMPLETED",
+      create_time: new Date().toISOString(),
+      resource: {
+        id: "PAYPAL-CAPTURE-RUNTIME",
+        status: "COMPLETED",
+        amount: { currency_code: "EUR", value: "50.00" },
+        supplementary_data: {
+          related_ids: { order_id: paypalWebhookPayment.providerCheckoutId },
+        },
+      },
+    } as const;
+    const paypalWebhookResults = [
+      await processVerifiedPaypalWebhookEvent(paypalWebhookEvent),
+      await processVerifiedPaypalWebhookEvent(paypalWebhookEvent),
+    ];
+    assert.deepEqual(paypalWebhookResults.map(({ duplicate }) => duplicate).sort(), [false, true]);
+    assert.ok(paypalWebhookResults.every(({ outcome }) => outcome === "PROCESSED"));
+    const [paypalPaid, paypalOrder] = await Promise.all([
+      prisma.payment.findUniqueOrThrow({ where: { id: paypalWebhookPayment.id } }),
+      prisma.order.findUniqueOrThrow({ where: { orderNumber: QA_ORDER_NUMBERS[5] } }),
+    ]);
+    assert.equal(paypalPaid.status, "SUCCEEDED");
+    assert.equal(paypalPaid.paymentMethod, "PAYPAL");
+    assert.equal(paypalOrder.status, "PAYMENT_CONFIRMED");
+    assert.equal(await prisma.providerEvent.count({
+      where: { provider: "PAYPAL", providerEventId: paypalWebhookEvent.id },
+    }), 1);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: paypalOrder.id } }), 2);
+    passed.push("PayPal webhook success and replay produce one Payment, one receipt, one Order transition and one notification pair");
 
     console.info(`V0.7 payment runtime passed (${passed.length} groups):`);
     for (const label of passed) console.info(`- ${label}`);

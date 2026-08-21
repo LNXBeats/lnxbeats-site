@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 
-export const PAYMENT_QA_TARGET = "lnx-studio-v070-test";
-export const PAYMENT_QA_CONFIRMATION = "run-stripe-test-payment-qa";
-export const PAYMENT_QA_DATABASE_PORT = "51250";
-export const PAYMENT_QA_HTTP_PORT = "31700";
-export const PAYMENT_QA_PROOF_FILE = "/Users/lnxbeats/Library/Application Support/prisma-dev-nodejs/lnx-studio-v070-test/server.json";
+export const PAYMENT_QA_TARGET = "lnx-studio-v074-test";
+export const PAYMENT_QA_CONFIRMATION = "run-v074-sandbox-payment-qa";
+export const PAYMENT_QA_DATABASE_PORT = "51254";
+export const PAYMENT_QA_HTTP_PORT = "31740";
+export const PAYMENT_QA_PROOF_FILE = "/Users/lnxbeats/Library/Application Support/prisma-dev-nodejs/lnx-studio-v074-test/server.json";
 
 type PaymentQaEnvironment = Record<string, string | undefined>;
 
@@ -19,7 +19,7 @@ type PrismaRuntimeProof = {
 
 function required(environment: PaymentQaEnvironment, name: string) {
   const value = environment[name]?.trim();
-  if (!value) throw new Error(`${name} is required for the Stripe test QA.`);
+  if (!value) throw new Error(`${name} is required for the payment sandbox QA.`);
   return value;
 }
 
@@ -32,49 +32,49 @@ function assertPaymentQaBaseEnvironment(
   proof: PrismaRuntimeProof,
   allowedNodeEnvironments: readonly string[],
 ) {
-  assert.equal(environment.PAYMENT_QA_CONFIRM, PAYMENT_QA_CONFIRMATION, "Stripe test QA requires its explicit confirmation.");
+  assert.equal(environment.PAYMENT_QA_CONFIRM, PAYMENT_QA_CONFIRMATION, "Payment sandbox QA requires its explicit confirmation.");
   assert.ok(
     environment.NODE_ENV && allowedNodeEnvironments.includes(environment.NODE_ENV),
-    "Stripe test QA requires an explicitly allowed local Node environment.",
+    "Payment sandbox QA requires an explicitly allowed local Node environment.",
   );
-  assert.equal(environment.EMAIL_PROVIDER, "capture", "Stripe test QA requires captured email transport.");
-  assert.ok(!environment.RAILWAY_ENVIRONMENT, "Stripe test QA refuses Railway environments.");
-  assert.equal(required(environment, "LNX_DATABASE_TARGET"), PAYMENT_QA_TARGET, "Stripe test QA refuses every non-disposable database target.");
+  assert.equal(environment.EMAIL_PROVIDER, "capture", "Payment sandbox QA requires captured email transport.");
+  assert.ok(!environment.RAILWAY_ENVIRONMENT, "Payment sandbox QA refuses Railway environments.");
+  assert.equal(required(environment, "LNX_DATABASE_TARGET"), PAYMENT_QA_TARGET, "Payment sandbox QA refuses every non-disposable database target.");
 
   const rawDatabaseUrl = required(environment, "DATABASE_URL");
   const databaseUrl = assertSafeLocalPostgresUrl(rawDatabaseUrl);
   assert.ok(
     databaseUrl.port === PAYMENT_QA_DATABASE_PORT,
-    "Stripe test QA requires its dedicated PostgreSQL port.",
+    "Payment sandbox QA requires its dedicated PostgreSQL port.",
   );
   assert.ok(
     decodeURIComponent(databaseUrl.pathname) === "/template1",
-    "Stripe test QA requires the Prisma Dev database path.",
+    "Payment sandbox QA requires the Prisma Dev database path.",
   );
-  assert.equal(proof.name, PAYMENT_QA_TARGET, "The Prisma runtime proof does not match the Stripe test database.");
+  assert.equal(proof.name, PAYMENT_QA_TARGET, "The Prisma runtime proof does not match the payment sandbox database.");
   assert.ok(
     proof.exports?.database?.connectionString === rawDatabaseUrl,
-    "The Prisma runtime proof does not match DATABASE_URL.",
+    "The Prisma runtime proof does not match the payment sandbox DATABASE_URL.",
   );
   assert.ok(Number.isInteger(proof.pid) && Number(proof.pid) > 0, "The Prisma runtime proof has no valid process identifier.");
 
   const authUrl = new URL(required(environment, "AUTH_URL"));
-  assert.ok(authUrl.protocol === "http:", "Stripe test QA requires a loopback HTTP origin.");
-  assert.ok(loopback(authUrl.hostname), "Stripe test QA requires a loopback HTTP origin.");
+  assert.ok(authUrl.protocol === "http:", "Payment sandbox QA requires a loopback HTTP origin.");
+  assert.ok(loopback(authUrl.hostname), "Payment sandbox QA requires a loopback HTTP origin.");
   assert.ok(
     authUrl.port === PAYMENT_QA_HTTP_PORT,
-    "Stripe test QA requires its dedicated HTTP origin.",
+    "Payment sandbox QA requires its dedicated HTTP origin.",
   );
-  assert.ok(authUrl.pathname === "/", "Stripe test QA AUTH_URL must not contain a path.");
+  assert.ok(authUrl.pathname === "/", "Payment sandbox QA AUTH_URL must not contain a path.");
   assert.ok(
     !authUrl.username && !authUrl.password && !authUrl.search && !authUrl.hash,
-    "Stripe test QA AUTH_URL must be canonical.",
+    "Payment sandbox QA AUTH_URL must be canonical.",
   );
 
   const authSecret = required(environment, "AUTH_SECRET");
-  assert.ok(authSecret.length >= 32, "Stripe test QA AUTH_SECRET is too short.");
+  assert.ok(authSecret.length >= 32, "Payment sandbox QA AUTH_SECRET is too short.");
   const password = required(environment, "LNX_AUTH_QA_PASSWORD");
-  assert.ok(password.length >= 12, "Stripe test QA password is too short.");
+  assert.ok(password.length >= 12, "Payment sandbox QA password is too short.");
 
   return {
     target: PAYMENT_QA_TARGET,
@@ -112,12 +112,7 @@ export function assertPaymentQaRuntimeEnvironment(
   environment: PaymentQaEnvironment,
   proof: PrismaRuntimeProof,
 ) {
-  const runtime = assertPaymentQaBaseEnvironment(
-    environment,
-    proof,
-    ["development", "test"],
-  );
-  assert.equal(environment.PAYMENTS_ENABLED, "true", "Stripe test QA requires the payment feature flag.");
+  const runtime = assertPaymentQaRuntimeBaseEnvironment(environment, proof);
   assert.equal(environment.STRIPE_MODE, "test", "Stripe test QA refuses Stripe live mode.");
   const secretKey = required(environment, "STRIPE_SECRET_KEY");
   assert.ok(/^(?:sk|rk)_test_/.test(secretKey), "Stripe test QA requires a test API key.");
@@ -126,6 +121,19 @@ export function assertPaymentQaRuntimeEnvironment(
     /^whsec_/.test(required(environment, "STRIPE_WEBHOOK_SECRET")),
     "Stripe test QA requires a webhook signing secret.",
   );
+  return runtime;
+}
+
+export function assertPaymentQaRuntimeBaseEnvironment(
+  environment: PaymentQaEnvironment,
+  proof: PrismaRuntimeProof,
+) {
+  const runtime = assertPaymentQaBaseEnvironment(
+    environment,
+    proof,
+    ["development", "test"],
+  );
+  assert.equal(environment.PAYMENTS_ENABLED, "true", "Payment QA requires the global feature flag.");
   return runtime;
 }
 
@@ -171,4 +179,14 @@ export async function loadAndAssertPaymentQaRuntimeEnvironment(
   const proof = JSON.parse(await readFile(proofPath, "utf8")) as PrismaRuntimeProof;
   assertProofProcessIsAlive(proof);
   return assertPaymentQaRuntimeEnvironment(environment, proof);
+}
+
+export async function loadAndAssertPaymentQaRuntimeBaseEnvironment(
+  environment: PaymentQaEnvironment = process.env,
+) {
+  const proofPath = required(environment, "LNX_PRISMA_DEV_SERVER_FILE");
+  assert.equal(proofPath, PAYMENT_QA_PROOF_FILE, "Payment QA requires its dedicated Prisma runtime proof file.");
+  const proof = JSON.parse(await readFile(proofPath, "utf8")) as PrismaRuntimeProof;
+  assertProofProcessIsAlive(proof);
+  return assertPaymentQaRuntimeBaseEnvironment(environment, proof);
 }

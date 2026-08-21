@@ -1,14 +1,25 @@
 import "server-only";
 
-import { assertPaymentServerEnvironment } from "@/lib/payments/config";
-import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
+import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
+
+export type PaymentProviderAvailability = Readonly<{
+  stripe: boolean;
+  paypal: boolean;
+}>;
+
+export async function paymentProvidersAvailable(): Promise<PaymentProviderAvailability> {
+  try {
+    const configuration = await assertPaymentsRuntimeEnvironment();
+    return {
+      stripe: configuration.stripe.enabled,
+      paypal: configuration.paypal.enabled,
+    };
+  } catch {
+    return { stripe: false, paypal: false };
+  }
+}
 
 export async function paymentQaAvailable() {
-  try {
-    await loadAndAssertPaymentQaRuntimeEnvironment();
-    const configuration = assertPaymentServerEnvironment();
-    return configuration.enabled && configuration.mode === "test";
-  } catch {
-    return false;
-  }
+  const providers = await paymentProvidersAvailable();
+  return providers.stripe || providers.paypal;
 }

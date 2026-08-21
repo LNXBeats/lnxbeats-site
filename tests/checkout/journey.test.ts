@@ -16,6 +16,7 @@ function order(status: OrderState["status"], paymentStatus?: OrderState["payment
     status,
     payments: paymentStatus ? [{
       id: "payment-fixture",
+      provider: "STRIPE",
       status: paymentStatus,
       amountCents: 5_000,
       currency: "EUR",
@@ -67,10 +68,15 @@ test("Commander keeps a six-step brief in memory across authentication without s
 test("recap and confirmation use server Orders while the client sends no amount", () => {
   const form = readFileSync("components/music-order-form.tsx", "utf8");
   const checkoutAction = readFileSync("components/stripe-checkout-action.tsx", "utf8");
+  const providerActions = readFileSync("components/payment-checkout-actions.tsx", "utf8");
+  const paypalAction = readFileSync("components/paypal-checkout-action.tsx", "utf8");
   const confirmation = readFileSync("app/commande/[orderNumber]/confirmation/page.tsx", "utf8");
   assert.match(form, /Enregistrer et passer au paiement/);
-  assert.match(form, /StripeCheckoutAction/);
+  assert.match(form, /PaymentCheckoutActions/);
+  assert.match(providerActions, /Carte bancaire — Stripe/);
+  assert.match(providerActions, /PayPal/);
   assert.doesNotMatch(checkoutAction, /body:\s*JSON\.stringify\([^)]*(?:amount|currency)/s);
+  assert.doesNotMatch(paypalAction, /body:\s*JSON\.stringify\([^)]*(?:amount|currency)/s);
   assert.match(confirmation, /getOrderForActor\(actor, orderNumber\)/);
   assert.match(confirmation, /clientPaymentState\(order\)/);
   assert.match(confirmation, /returnState === "cancel" && paymentState === "confirming"/);

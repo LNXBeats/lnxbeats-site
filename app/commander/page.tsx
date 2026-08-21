@@ -6,7 +6,7 @@ import { MusicOrderForm } from "@/components/music-order-form";
 import { orderOffer } from "@/data/order-offer";
 import { orderActorFromHeaders } from "@/lib/orders/request";
 import { getCommanderOrderForActor } from "@/lib/orders/service";
-import { paymentQaAvailable } from "@/lib/payments/availability";
+import { paymentProvidersAvailable } from "@/lib/payments/availability";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
   const requestedDraft = query.brouillon;
   const draft = actor ? await getCommanderOrderForActor(actor, requestedDraft) : null;
   const initialStep = query.etape && query.etape in stepFromQuery ? stepFromQuery[query.etape] : 0;
-  const paymentsAvailable = await paymentQaAvailable();
+  const paymentProviders = await paymentProvidersAvailable();
 
   return (
     <>
@@ -61,7 +61,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             <p>Vous n’avez pas besoin d’apporter des paroles finales. Racontez les personnes, la scène et ce que la musique devra préserver.</p>
             <p>Préparez le brief librement, puis connectez-vous pour l’enregistrer. Le parcours reprend après l’authentification sans placer votre histoire dans l’URL.</p>
             <p>La demande initiale reste personnelle et son total ne dépasse pas 90 €. Une extension d’exploitation séparée ne peut être envisagée qu’après livraison.</p>
-            <p>Le paiement Test s’ouvre uniquement après le récapitulatif, sur la page Checkout hébergée de Stripe. Le serveur reste la seule source du montant et de la confirmation.</p>
+            <p>Le paiement sandbox s’ouvre uniquement après le récapitulatif, chez le provider activé. Le serveur reste la seule source du montant et de la confirmation.</p>
           </div>
         </Container>
       </section>
@@ -71,7 +71,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             account={actor ? { authenticated: true, name: actor.name, email: actor.email } : { authenticated: false }}
             initialDraft={draft}
             initialStep={initialStep}
-            paymentsAvailable={paymentsAvailable}
+            paymentProviders={paymentProviders}
           />
           <aside className="order-aside" aria-label="Règles de la création">
             <p className="eyebrow">Repères du projet</p>
@@ -83,7 +83,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
               <li>Traitement prioritaire : +30 €</li>
               <li>Total maximum de la création : 90 €</li>
               <li>Droits d’exploitation exclus de cette première commande</li>
-              <li>{paymentsAvailable ? "Checkout Stripe hébergé · mode Test" : "Paiement Test fermé dans cet environnement"}</li>
+              <li>{paymentProviders.stripe || paymentProviders.paypal ? "Paiement sandbox sécurisé selon les moyens activés" : "Paiement fermé dans cet environnement"}</li>
             </ul>
             <p className="order-aside__note">Après livraison, une demande distincte pourra ouvrir un échange sur les droits d’exploitation, selon contrat spécifique.</p>
           </aside>

@@ -731,7 +731,7 @@ test("rejects contradictory Checkout lifecycle states", () => {
   }
 });
 
-test("routes conflicting order state and a second successful attempt to manual review", () => {
+test("lets the first provider success win but routes an already-paid Order to manual review", () => {
   const secondPayment = planStripeCheckoutReconciliation(
     payment({ orderHasOtherSuccessfulPayment: true }),
     normalized(),
@@ -745,10 +745,10 @@ test("routes conflicting order state and a second successful attempt to manual r
     payment({ status: "FAILED", orderHasOtherActivePayment: true }),
     normalized(),
   );
-  assert.equal(staleAttempt.outcome, "REQUIRES_REVIEW");
-  assert.equal(staleAttempt.mismatch, "WEBHOOK_OTHER_ACTIVE_ATTEMPT");
-  assert.equal(staleAttempt.paymentUpdate.status, undefined);
-  assert.equal(staleAttempt.confirmOrder, false);
+  assert.equal(staleAttempt.outcome, "PROCESSED");
+  assert.equal(staleAttempt.mismatch, undefined);
+  assert.equal(staleAttempt.paymentUpdate.status, "SUCCEEDED");
+  assert.equal(staleAttempt.confirmOrder, true);
 
   const impossibleOrder = planStripeCheckoutReconciliation(
     payment({ status: "SUCCEEDED", orderStatus: "DRAFT", paidAt: processedAt }),

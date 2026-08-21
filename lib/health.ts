@@ -4,20 +4,19 @@ import { NextResponse } from "next/server";
 
 import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
 import {
-  assertPaymentServerEnvironment,
-  parsePaymentConfiguration,
-  paymentHealthSummary,
+  parsePaymentsConfiguration,
+  paymentsHealthSummary,
 } from "@/lib/payments/config";
-import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
+import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import { notificationHealthSummary, parseNotificationConfiguration } from "@/lib/notifications/config";
 
 export type HealthDependencies = Readonly<{
-  assertPaymentQaRuntime(): Promise<void>;
+  assertPaymentRuntime(): Promise<void>;
 }>;
 
 const healthDependencies: HealthDependencies = {
-  assertPaymentQaRuntime: async () => {
-    await loadAndAssertPaymentQaRuntimeEnvironment();
+  assertPaymentRuntime: async () => {
+    await assertPaymentsRuntimeEnvironment();
   },
 };
 
@@ -35,13 +34,11 @@ export async function healthResponse(
   }
   let payments;
   try {
-    const configuration = parsePaymentConfiguration();
+    const configuration = parsePaymentsConfiguration();
     if (configuration.enabled) {
-      await dependencies.assertPaymentQaRuntime();
+      await dependencies.assertPaymentRuntime();
     }
-    payments = paymentHealthSummary(configuration.enabled
-      ? assertPaymentServerEnvironment()
-      : configuration);
+    payments = paymentsHealthSummary(configuration);
   } catch {
     return NextResponse.json(
       { ok: false, service: "lnx-studio", check: "payments" },

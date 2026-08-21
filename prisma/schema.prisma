@@ -372,6 +372,7 @@ enum CommercialLicensePaymentStatus {
 
 enum PaymentProvider {
   STRIPE
+  PAYPAL
 }
 
 enum PaymentMode {

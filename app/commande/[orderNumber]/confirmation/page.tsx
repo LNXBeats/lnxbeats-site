@@ -4,20 +4,21 @@ import { notFound } from "next/navigation";
 
 import { Container } from "@/components/container";
 import { ModifyUnpaidOrderAction } from "@/components/modify-unpaid-order-action";
+import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
-import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
+import { PaypalReturnCapture } from "@/components/paypal-return-capture";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { clientPaymentState } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
-import { paymentQaAvailable } from "@/lib/payments/availability";
+import { paymentProvidersAvailable } from "@/lib/payments/availability";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Confirmation de paiement", robots: { index: false, follow: false } };
 
 type ConfirmationPageProps = {
   params: Promise<{ orderNumber: string }>;
-  searchParams: Promise<{ paiement?: string }>;
+  searchParams: Promise<{ paiement?: string; token?: string }>;
 };
 
 export default async function OrderConfirmationPage({ params, searchParams }: ConfirmationPageProps) {
@@ -26,9 +27,10 @@ export default async function OrderConfirmationPage({ params, searchParams }: Co
   const actor: OrderActor = { id: session.user.id, email: session.user.email, name: session.user.name, role: session.user.role, status: "ACTIVE", emailVerified: true };
   const order = await getOrderForActor(actor, orderNumber);
   if (!order) notFound();
-  const returnState = (await searchParams).paiement === "annule" ? "cancel" : "return";
+  const query = await searchParams;
+  const returnState = query.paiement === "annule" || query.paiement === "paypal-annule" ? "cancel" : "return";
   const paymentState = clientPaymentState(order);
-  const paymentsAvailable = await paymentQaAvailable();
+  const paymentProviders = await paymentProvidersAvailable();
   const canRetry = ["ready", "failed", "expired"].includes(paymentState)
     || (returnState === "cancel" && paymentState === "confirming");
 
@@ -38,13 +40,16 @@ export default async function OrderConfirmationPage({ params, searchParams }: Co
         <p className="eyebrow">{order.orderNumber}</p>
         <h1>Suivi du paiement.</h1>
         <PaymentReturnNotice state={returnState} paymentState={paymentState} orderNumber={order.orderNumber} />
+        {query.paiement === "paypal-retour" && query.token && paymentProviders.paypal ? (
+          <PaypalReturnCapture orderNumber={order.orderNumber} providerOrderId={query.token} />
+        ) : null}
         <dl className="order-confirmation__summary">
           <div><dt>Projet</dt><dd>{order.title || order.recipient || "Votre création"}</dd></div>
           <div><dt>Total</dt><dd>{formatEuro(order.totalCents)}</dd></div>
           <div><dt>Options</dt><dd>{[order.coverIncluded ? "Cover" : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
         </dl>
-        {paymentsAvailable && canRetry ? <StripeCheckoutAction orderNumber={order.orderNumber} amountCents={order.totalCents} /> : null}
-        {paymentsAvailable && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
+        {(paymentProviders.stripe || paymentProviders.paypal) && canRetry ? <PaymentCheckoutActions orderNumber={order.orderNumber} amountCents={order.totalCents} providers={paymentProviders} /> : null}
+        {paymentProviders.stripe && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
         <div className="form-navigation">
           <Link className="form-button" href={`/compte/commandes/${encodeURIComponent(order.orderNumber)}`}>Voir ma commande</Link>
           <Link className="form-button" href="/compte">Mon espace</Link>

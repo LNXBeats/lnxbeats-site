@@ -1,7 +1,7 @@
 import type { OrderDraftInput } from "@/lib/orders/domain";
 import type { KnownOrderStatus } from "@/lib/orders/status";
 import type { OrderUsage } from "@/data/order-offer";
-import type { PaymentMethod, PaymentStatus } from "@/lib/payments/types";
+import type { PaymentMethod, PaymentProvider, PaymentStatus } from "@/lib/payments/types";
 
 export type SerializedOrderEvent = {
   id: string;
@@ -31,6 +31,7 @@ export type SerializedOrderDelivery = {
 
 export type SerializedOrderPayment = {
   id: string;
+  provider: PaymentProvider;
   status: PaymentStatus;
   amountCents: number;
   currency: string;

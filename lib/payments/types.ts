@@ -1,6 +1,8 @@
 export type StripePaymentMode = "test";
+export type PaypalPaymentEnvironment = "sandbox";
+export type PaymentDeploymentEnvironment = "development" | "staging";
 
-export type PaymentProvider = "STRIPE";
+export type PaymentProvider = "STRIPE" | "PAYPAL";
 
 export type PaymentStatus =
   | "CREATED"
@@ -53,7 +55,7 @@ export type CheckoutPaymentEvent =
     type: "checkout.session.expired";
   }>;
 
-export type PaymentConfiguration =
+export type StripePaymentConfiguration =
   | Readonly<{
     provider: "stripe";
     enabled: false;
@@ -72,10 +74,56 @@ export type PaymentConfiguration =
     publishableKey?: string;
   }>;
 
-export type PaymentHealthSummary = Readonly<{
+/** @deprecated Prefer StripePaymentConfiguration in new provider-neutral code. */
+export type PaymentConfiguration = StripePaymentConfiguration;
+
+export type PaypalPaymentConfiguration =
+  | Readonly<{
+    provider: "paypal";
+    enabled: false;
+    configured: boolean;
+    environment: "disabled" | PaypalPaymentEnvironment;
+  }>
+  | Readonly<{
+    provider: "paypal";
+    enabled: true;
+    configured: true;
+    environment: PaypalPaymentEnvironment;
+    clientId: string;
+    clientSecret: string;
+    webhookId: string;
+  }>;
+
+export type PaymentsConfiguration = Readonly<{
+  enabled: boolean;
+  deploymentEnvironment: PaymentDeploymentEnvironment;
+  stripe: StripePaymentConfiguration;
+  paypal: PaypalPaymentConfiguration;
+}>;
+
+export type StripePaymentHealthSummary = Readonly<{
   provider: "stripe";
   enabled: boolean;
   configured: boolean;
   mode: "disabled" | StripePaymentMode;
   apiVersion: "2026-07-29.dahlia";
+}>;
+
+/** @deprecated Prefer StripePaymentHealthSummary in new provider-neutral code. */
+export type PaymentHealthSummary = StripePaymentHealthSummary;
+
+export type PaypalPaymentHealthSummary = Readonly<{
+  provider: "paypal";
+  enabled: boolean;
+  configured: boolean;
+  environment: "disabled" | PaypalPaymentEnvironment;
+}>;
+
+export type PaymentsHealthSummary = Readonly<{
+  enabled: boolean;
+  deploymentEnvironment: PaymentDeploymentEnvironment;
+  providers: Readonly<{
+    stripe: StripePaymentHealthSummary;
+    paypal: PaypalPaymentHealthSummary;
+  }>;
 }>;

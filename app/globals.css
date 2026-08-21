@@ -1444,6 +1444,11 @@ a {
 .checkout-action { justify-items: start; }
 .checkout-action small, .modify-unpaid-order p { color: var(--text-soft); font-size: 0.72rem; }
 .checkout-action--compact { margin-top: 1rem; }
+.payment-methods { display: grid; gap: 1rem; margin-top: 1rem; }
+.payment-methods h3, .payment-methods p { margin: 0; }
+.payment-methods__actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 0.9rem; }
+.payment-methods__choice { display: grid; align-content: start; gap: 0.8rem; padding: 1rem; border: 1px solid rgba(198, 161, 91, 0.25); border-radius: var(--radius-sm); background: rgba(8, 8, 8, 0.35); }
+.payment-methods__choice > strong { color: var(--text); font-size: 0.86rem; letter-spacing: 0.02em; }
 .modify-unpaid-order { justify-items: start; margin-top: 0.75rem; }
 .order-confirmation-shell { min-height: 100svh; padding-block: calc(var(--header-height) + 5rem) 5rem; background: linear-gradient(180deg, #15110c, #080807 32rem); }
 .order-confirmation { display: grid; gap: 1.5rem; max-width: 920px; }

@@ -459,10 +459,6 @@ export function planStripeCheckoutReconciliation(
   if (successful && current.orderHasOtherSuccessfulPayment) {
     return reviewPlan(current, "WEBHOOK_ORDER_ALREADY_PAID");
   }
-  if (successful && current.orderHasOtherActivePayment) {
-    return reviewPlan(current, "WEBHOOK_OTHER_ACTIVE_ATTEMPT");
-  }
-
   if (
     successful
     && current.status !== "REQUIRES_REVIEW"
@@ -832,6 +828,21 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
           // next reconciliation will see the now-current Order status.
           throw new Error("The Order changed while its payment was confirmed.");
         }
+        await transaction.payment.updateMany({
+          where: {
+            orderId: payment.orderId,
+            id: { not: payment.id },
+            OR: [
+              { status: { in: ["CREATED", "PENDING"] } },
+              { status: "FAILED", failureCode: "STRIPE_PAYMENT_ATTEMPT_FAILED" },
+            ],
+          },
+          data: {
+            status: "CANCELED",
+            canceledAt: new Date(),
+            failureCode: "ORDER_PAID_BY_OTHER_PROVIDER",
+          },
+        });
         await transaction.orderEvent.create({
           data: {
             orderId: payment.orderId,

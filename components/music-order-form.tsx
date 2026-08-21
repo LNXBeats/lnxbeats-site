@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
+import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { useOrderJourneyMemory } from "@/components/order-journey-provider";
 import { orderOffer } from "@/data/order-offer";
 import { personalUseTerms } from "@/data/rights-offer";
@@ -16,6 +16,7 @@ import {
   validateOrderForSubmission,
 } from "@/lib/orders/domain";
 import type { SerializedOrder, SerializedOrderPhoto } from "@/lib/orders/types";
+import type { PaymentProviderAvailability } from "@/lib/payments/availability";
 
 const musicalDirections = [
   "Rap français",
@@ -84,12 +85,12 @@ export function MusicOrderForm({
   account,
   initialDraft,
   initialStep = 0,
-  paymentsAvailable,
+  paymentProviders,
 }: {
   account: AccountState;
   initialDraft: SerializedOrder | null;
   initialStep?: number;
-  paymentsAvailable: boolean;
+  paymentProviders: PaymentProviderAvailability;
 }) {
   const router = useRouter();
   const journey = useOrderJourneyMemory();
@@ -549,13 +550,13 @@ export function MusicOrderForm({
                 </label>
                 <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed}>Enregistrer et passer au paiement</button>
               </>
-            ) : paymentsAvailable ? (
+            ) : paymentProviders.stripe || paymentProviders.paypal ? (
               <div className="order-checkout-panel">
-                <p>Vous allez quitter temporairement LNX Studio pour le Checkout hébergé Stripe en mode Test. Le retour navigateur ne confirme jamais seul le paiement.</p>
-                <StripeCheckoutAction orderNumber={finalizedOrder.orderNumber} amountCents={finalizedOrder.totalCents} />
+                <p>Vous allez quitter temporairement LNX Studio pour le provider sandbox choisi. Le retour navigateur ne confirme jamais seul le paiement.</p>
+                <PaymentCheckoutActions orderNumber={finalizedOrder.orderNumber} amountCents={finalizedOrder.totalCents} providers={paymentProviders} />
               </div>
             ) : (
-              <div className="order-checkout-panel"><p><strong>Commande enregistrée.</strong> Stripe Test est fermé dans cet environnement. Retrouvez la commande dans votre espace sans perdre le brief.</p><Link className="form-button" href={`/compte/commandes/${encodeURIComponent(finalizedOrder.orderNumber)}`}>Voir ma commande</Link></div>
+              <div className="order-checkout-panel"><p><strong>Commande enregistrée.</strong> Les paiements sont fermés dans cet environnement. Retrouvez la commande dans votre espace sans perdre le brief.</p><Link className="form-button" href={`/compte/commandes/${encodeURIComponent(finalizedOrder.orderNumber)}`}>Voir ma commande</Link></div>
             )}
           </>
         ) : null}

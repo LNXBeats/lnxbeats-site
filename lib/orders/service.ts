@@ -46,6 +46,7 @@ const orderInclude = {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: {
       id: true,
+      provider: true,
       status: true,
       amountCents: true,
       currency: true,
@@ -179,6 +180,7 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
       : null,
     payments: order.payments.map((payment) => ({
       id: payment.id,
+      provider: payment.provider,
       status: payment.status,
       amountCents: payment.amountCents,
       currency: payment.currency,

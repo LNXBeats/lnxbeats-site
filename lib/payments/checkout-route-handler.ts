@@ -7,7 +7,7 @@ import {
   PaymentServiceError,
   type StripeCheckoutResult,
 } from "@/lib/payments/service";
-import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
+import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 
 type RouteContext = { params: Promise<{ orderNumber: string }> };
 
@@ -21,7 +21,7 @@ export type CheckoutRouteDependencies = Readonly<{
 const checkoutRouteDependencies: CheckoutRouteDependencies = {
   isAllowedMutation: isAllowedOrderMutation,
   assertQaRuntime: async () => {
-    await loadAndAssertPaymentQaRuntimeEnvironment();
+    await assertPaymentsRuntimeEnvironment();
   },
   actorFromHeaders: orderActorFromHeaders,
   createCheckout: createStripeCheckoutForOrder,

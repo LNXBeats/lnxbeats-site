@@ -4,15 +4,16 @@ import { notFound } from "next/navigation";
 
 import { Container } from "@/components/container";
 import { ModifyUnpaidOrderAction } from "@/components/modify-unpaid-order-action";
+import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
-import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
+import { PaypalReturnCapture } from "@/components/paypal-return-capture";
 import { RightsOptionsSection } from "@/components/rights-options-section";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { clientOrderAction, clientPaymentState, orderCanStillBeEdited } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { orderStatusPresentation } from "@/lib/orders/status";
-import { paymentQaAvailable } from "@/lib/payments/availability";
+import { paymentProvidersAvailable } from "@/lib/payments/availability";
 import { listRightsRequestsForOrderActor } from "@/lib/rights/service";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +26,13 @@ export const metadata: Metadata = {
 
 type OrderDetailPageProps = {
   params: Promise<{ orderNumber: string }>;
-  searchParams: Promise<{ paiement?: string }>;
+  searchParams: Promise<{ paiement?: string; token?: string }>;
 };
 
 export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
   const { orderNumber } = await params;
-  const paymentReturn = (await searchParams).paiement;
+  const query = await searchParams;
+  const paymentReturn = query.paiement;
   const session = await requireVerifiedUser(`/compte/commandes/${orderNumber}`);
   const actor: OrderActor = {
     id: session.user.id,
@@ -44,7 +46,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   if (!order) notFound();
   const status = orderStatusPresentation[order.status];
   const paymentState = clientPaymentState(order);
-  const paymentsAvailable = await paymentQaAvailable();
+  const paymentProviders = await paymentProvidersAvailable();
   const rightsRequests = order.status === "DELIVERED" ? await listRightsRequestsForOrderActor(actor, order.orderNumber) : [];
   const canStartPayment = ["ready", "confirming", "failed", "expired"].includes(paymentState);
 
@@ -62,12 +64,15 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           <div className="order-detail__status"><span>Statut actuel</span><strong>{status.label}</strong></div>
         </header>
 
-        {paymentReturn === "retour" || paymentReturn === "annule" ? (
+        {paymentReturn === "retour" || paymentReturn === "annule" || paymentReturn === "paypal-retour" || paymentReturn === "paypal-annule" ? (
           <PaymentReturnNotice
-            state={paymentReturn === "retour" ? "return" : "cancel"}
+            state={paymentReturn === "retour" || paymentReturn === "paypal-retour" ? "return" : "cancel"}
             paymentState={paymentState}
             orderNumber={order.orderNumber}
           />
+        ) : null}
+        {paymentReturn === "paypal-retour" && query.token && paymentProviders.paypal ? (
+          <PaypalReturnCapture orderNumber={order.orderNumber} providerOrderId={query.token} />
         ) : null}
 
         {order.status === "AWAITING_PAYMENT" ? (
@@ -75,9 +80,9 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             <p className="auth-panel__label">Paiement</p>
             <h2 id="order-payment-title">{paymentState === "confirmed" ? "Paiement confirmé" : paymentState === "confirming" ? "Confirmation en cours" : paymentState === "review" ? "Vérification en cours" : "Commande prête à payer"}</h2>
             <p>Le montant vient du snapshot PostgreSQL. Le navigateur ne peut ni le modifier ni confirmer un paiement.</p>
-            {paymentsAvailable && canStartPayment ? <StripeCheckoutAction orderNumber={order.orderNumber} amountCents={order.totalCents} /> : null}
+            {(paymentProviders.stripe || paymentProviders.paypal) && canStartPayment ? <PaymentCheckoutActions orderNumber={order.orderNumber} amountCents={order.totalCents} providers={paymentProviders} /> : null}
             {orderCanStillBeEdited(order) ? <Link className="form-button" href={`/commander?brouillon=${encodeURIComponent(order.orderNumber)}&etape=recap`}>Modifier avant paiement</Link> : null}
-            {paymentsAvailable && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
+            {paymentProviders.stripe && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
           </section>
         ) : null}
 
@@ -98,7 +103,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           <aside className="order-detail__price" aria-label="Prix de la demande">
             <span>Total de la création</span><strong>{formatEuro(order.totalCents)}</strong>
             <p>{order.usage === "PERSONAL" ? "Usage personnel" : "Ancien snapshot commercial V0.6 — à régulariser"}</p>
-            <small>Version tarifaire {order.pricingVersion} · Stripe Hosted Checkout reste limité à l’environnement Test contrôlé.</small>
+            <small>Version tarifaire {order.pricingVersion} · les providers restent limités aux environnements sandbox contrôlés.</small>
           </aside>
         </div>
 

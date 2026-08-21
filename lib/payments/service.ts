@@ -19,14 +19,14 @@ import {
   type StripeCheckoutGateway,
   type StripeCheckoutLifecycleGateway,
 } from "@/lib/payments/stripe-client";
-import type { OrderPaymentSnapshot } from "@/lib/payments/types";
+import type { OrderPaymentSnapshot, PaymentProvider } from "@/lib/payments/types";
 import { logPaymentEvent } from "@/lib/payments/observability";
-import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
+import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 const checkoutRateLimit = { max: 10, windowMs: 10 * 60_000 } as const;
 const payableOrderNumber = /^LNX-[0-9]{4}-[0-9]{6}$/;
-const paidPaymentStatuses = [
+export const paidPaymentStatuses = [
   "SUCCEEDED",
   "REFUND_PENDING",
   "PARTIALLY_REFUNDED",
@@ -81,8 +81,9 @@ export class PaymentServiceError extends Error {
 
 type ActiveCheckoutForEdit = Readonly<{
   orderId: string;
-  paymentId?: string;
-  providerCheckoutId?: string;
+  stripePaymentId?: string;
+  stripeCheckoutId?: string;
+  paypalAttemptsCanceled: boolean;
 }>;
 
 export interface PaymentEditRepository {
@@ -98,7 +99,7 @@ export type PaymentEditDependencies = Readonly<{
   assertQaRuntime(): Promise<void>;
 }>;
 
-async function inLockedTransaction<T>(
+export async function inLockedPaymentTransaction<T>(
   client: PrismaClient,
   operation: (transaction: Transaction) => Promise<T>,
 ) {
@@ -131,17 +132,17 @@ async function inLockedTransaction<T>(
   throw lastError;
 }
 
-async function lock(transaction: Transaction, key: string) {
+export async function lockPaymentTransaction(transaction: Transaction, key: string) {
   await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key})) IS NULL AS locked`;
 }
 
-async function enforcePaymentRateLimit(client: PrismaClient, actorId: string) {
+export async function enforcePaymentRateLimit(client: PrismaClient, actorId: string) {
   assertDatabaseConfigured();
   const key = `payments:checkout:${actorId}`;
   const now = BigInt(Date.now());
 
-  const allowed = await inLockedTransaction(client, async (transaction) => {
-    await lock(transaction, key);
+  const allowed = await inLockedPaymentTransaction(client, async (transaction) => {
+    await lockPaymentTransaction(transaction, key);
     const current = await transaction.rateLimit.findUnique({ where: { key } });
     if (!current) {
       await transaction.rateLimit.create({
@@ -195,10 +196,15 @@ function paymentSnapshot(order: {
   };
 }
 
-async function reservePaymentAttempt(client: PrismaClient, actorId: string, orderNumber: string) {
+export async function reserveProviderPaymentAttempt(
+  client: PrismaClient,
+  actorId: string,
+  orderNumber: string,
+  provider: PaymentProvider,
+) {
   assertDatabaseConfigured();
-  return inLockedTransaction(client, async (transaction) => {
-    await lock(transaction, `payments:order:${orderNumber}`);
+  return inLockedPaymentTransaction(client, async (transaction) => {
+    await lockPaymentTransaction(transaction, `payments:order:${orderNumber}`);
     const order = await transaction.order.findFirst({
       where: {
         orderNumber,
@@ -227,7 +233,6 @@ async function reservePaymentAttempt(client: PrismaClient, actorId: string, orde
     const completed = await transaction.payment.findFirst({
       where: {
         orderId: order.id,
-        provider: "STRIPE",
         status: { in: [...paidPaymentStatuses] },
       },
       select: { id: true },
@@ -248,7 +253,7 @@ async function reservePaymentAttempt(client: PrismaClient, actorId: string, orde
     const active = await transaction.payment.findFirst({
       where: {
         orderId: order.id,
-        provider: "STRIPE",
+        provider,
         OR: [
           { status: { in: ["CREATED", "PENDING", "REQUIRES_REVIEW"] } },
           {
@@ -295,12 +300,14 @@ async function reservePaymentAttempt(client: PrismaClient, actorId: string, orde
     }
 
     const paymentId = randomUUID();
-    const idempotencyKey = `checkout-session:${paymentId}`;
+    const idempotencyKey = provider === "STRIPE"
+      ? `checkout-session:${paymentId}`
+      : `paypal-order:${paymentId}`;
     await transaction.payment.create({
       data: {
         id: paymentId,
         orderId: order.id,
-        provider: "STRIPE",
+        provider,
         mode: "TEST",
         status: "CREATED",
         amountCents: pricing.amountCents,
@@ -321,23 +328,25 @@ async function reservePaymentAttempt(client: PrismaClient, actorId: string, orde
   });
 }
 
-async function recordHostedCheckoutSession(
+export async function recordProviderCheckoutSession(
   client: PrismaClient,
   paymentId: string,
   session: HostedCheckoutSession,
+  provider: PaymentProvider,
 ) {
   assertDatabaseConfigured();
-  await inLockedTransaction(client, async (transaction) => {
-    await lock(transaction, `payments:attempt:${paymentId}`);
+  await inLockedPaymentTransaction(client, async (transaction) => {
+    await lockPaymentTransaction(transaction, `payments:attempt:${paymentId}`);
     const current = await transaction.payment.findUnique({
       where: { id: paymentId },
       select: {
+        provider: true,
         status: true,
         providerCheckoutId: true,
         providerPaymentId: true,
       },
     });
-    if (!current) {
+    if (!current || current.provider !== provider) {
       throw new PaymentServiceError(503, "PAYMENT_UNAVAILABLE");
     }
     if (
@@ -359,7 +368,9 @@ async function recordHostedCheckoutSession(
         ...(session.paymentIntentId
           ? { providerPaymentId: session.paymentIntentId }
           : {}),
-        checkoutExpiresAt: new Date(session.expiresAt * 1_000),
+        ...(session.expiresAt
+          ? { checkoutExpiresAt: new Date(session.expiresAt * 1_000) }
+          : {}),
         ...(mayAdvanceToPending ? { status: "PENDING" as const } : {}),
       },
       select: { id: true },
@@ -369,11 +380,12 @@ async function recordHostedCheckoutSession(
 
 export function createPaymentDatabaseCheckoutRepository(
   client: PrismaClient,
+  provider: PaymentProvider = "STRIPE",
 ): PaymentCheckoutRepository {
   return {
     enforceRateLimit: (actorId) => enforcePaymentRateLimit(client, actorId),
-    reserveAttempt: (actorId, orderNumber) => reservePaymentAttempt(client, actorId, orderNumber),
-    recordSession: (paymentId, session) => recordHostedCheckoutSession(client, paymentId, session),
+    reserveAttempt: (actorId, orderNumber) => reserveProviderPaymentAttempt(client, actorId, orderNumber, provider),
+    recordSession: (paymentId, session) => recordProviderCheckoutSession(client, paymentId, session, provider),
   };
 }
 
@@ -381,8 +393,8 @@ export const paymentDatabaseCheckoutRepository = createPaymentDatabaseCheckoutRe
 
 export function createPaymentDatabaseEditRepository(client: PrismaClient): PaymentEditRepository {
   async function findCheckout(orderNumber: string, actor?: OrderActor, requiredStatus: "AWAITING_PAYMENT" | "CANCELLED" = "AWAITING_PAYMENT") {
-    return inLockedTransaction(client, async (transaction) => {
-      await lock(transaction, `payments:order:${orderNumber}`);
+    return inLockedPaymentTransaction(client, async (transaction) => {
+      await lockPaymentTransaction(transaction, `payments:order:${orderNumber}`);
       const order = await transaction.order.findFirst({
         where: {
           orderNumber,
@@ -397,23 +409,52 @@ export function createPaymentDatabaseEditRepository(client: PrismaClient): Payme
         select: { id: true },
       });
       if (completed) throw new PaymentServiceError(409, "PAYMENT_ALREADY_COMPLETED");
-      const active = await transaction.payment.findFirst({
+      const active = await transaction.payment.findMany({
         where: {
           orderId: order.id,
-          provider: "STRIPE",
           OR: [
             { status: { in: ["CREATED", "PENDING"] } },
             { status: "FAILED", failureCode: "STRIPE_PAYMENT_ATTEMPT_FAILED", providerCheckoutId: { not: null } },
           ],
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        select: { id: true, providerCheckoutId: true },
+        select: { id: true, provider: true, providerCheckoutId: true },
       });
-      if (active && !active.providerCheckoutId) {
-        await transaction.payment.update({ where: { id: active.id }, data: { status: "CANCELED", canceledAt: new Date(), failureCode: null } });
-        return { orderId: order.id };
+      const uninitialized = active.filter((payment) => !payment.providerCheckoutId).map(({ id }) => id);
+      if (uninitialized.length > 0) {
+        await transaction.payment.updateMany({
+          where: { id: { in: uninitialized } },
+          data: { status: "CANCELED", canceledAt: new Date(), failureCode: null },
+        });
       }
-      return { orderId: order.id, ...(active ? { paymentId: active.id, providerCheckoutId: active.providerCheckoutId ?? undefined } : {}) };
+      const initialized = active.filter((payment) => payment.providerCheckoutId);
+      const stripe = initialized.find((payment) => payment.provider === "STRIPE");
+      const paypalPaymentIds = initialized
+        .filter((payment) => payment.provider === "PAYPAL")
+        .map(({ id }) => id);
+      if (paypalPaymentIds.length > 0) {
+        await transaction.payment.updateMany({
+          where: {
+            id: { in: paypalPaymentIds },
+            orderId: order.id,
+            provider: "PAYPAL",
+            status: { in: ["CREATED", "PENDING"] },
+          },
+          data: {
+            status: "CANCELED",
+            canceledAt: new Date(),
+            failureCode: "ORDER_CHANGED_OR_CANCELED",
+          },
+        });
+      }
+      return {
+        orderId: order.id,
+        ...(stripe ? {
+          stripePaymentId: stripe.id,
+          stripeCheckoutId: stripe.providerCheckoutId ?? undefined,
+        } : {}),
+        paypalAttemptsCanceled: active.some((payment) => payment.provider === "PAYPAL"),
+      };
     });
   }
   return {
@@ -421,8 +462,8 @@ export function createPaymentDatabaseEditRepository(client: PrismaClient): Payme
     findCancelledCheckout: (orderNumber) => findCheckout(orderNumber, undefined, "CANCELLED"),
     async markCheckoutExpired(orderId, paymentId) {
       if (!paymentId) return;
-      await inLockedTransaction(client, async (transaction) => {
-        await lock(transaction, `payments:attempt:${paymentId}`);
+      await inLockedPaymentTransaction(client, async (transaction) => {
+        await lockPaymentTransaction(transaction, `payments:attempt:${paymentId}`);
         const payment = await transaction.payment.findUnique({
           where: { id: paymentId },
           select: { orderId: true, status: true },
@@ -439,8 +480,8 @@ export function createPaymentDatabaseEditRepository(client: PrismaClient): Payme
       });
     },
     async markCheckoutReview(orderId, paymentId) {
-      await inLockedTransaction(client, async (transaction) => {
-        await lock(transaction, `payments:attempt:${paymentId}`);
+      await inLockedPaymentTransaction(client, async (transaction) => {
+        await lockPaymentTransaction(transaction, `payments:attempt:${paymentId}`);
         const payment = await transaction.payment.findUnique({ where: { id: paymentId }, select: { orderId: true, status: true } });
         if (!payment || payment.orderId !== orderId || [...paidPaymentStatuses].includes(payment.status as typeof paidPaymentStatuses[number])) return;
         await transaction.payment.update({
@@ -461,17 +502,17 @@ export async function prepareOrderForEditing(
     repository: paymentDatabaseEditRepository,
     gateway: createStripeCheckoutLifecycleGateway(),
     assertQaRuntime: async () => {
-      await loadAndAssertPaymentQaRuntimeEnvironment();
+      await assertPaymentsRuntimeEnvironment();
     },
   },
 ) {
   if (!payableOrderNumber.test(orderNumber)) throw new PaymentServiceError(400, "INVALID_ORDER_NUMBER");
   const active = await dependencies.repository.findActiveCheckout(actor, orderNumber);
-  if (!active.providerCheckoutId || !active.paymentId) return { editable: true as const };
+  if (!active.stripeCheckoutId || !active.stripePaymentId) return { editable: true as const };
   try {
     await dependencies.assertQaRuntime();
-    await dependencies.gateway.expireHostedCheckout(active.providerCheckoutId, `expire-checkout-session:${active.paymentId}`);
-    await dependencies.repository.markCheckoutExpired(active.orderId, active.paymentId);
+    await dependencies.gateway.expireHostedCheckout(active.stripeCheckoutId, `expire-checkout-session:${active.stripePaymentId}`);
+    await dependencies.repository.markCheckoutExpired(active.orderId, active.stripePaymentId);
     return { editable: true as const };
   } catch (error) {
     if (error instanceof PaymentServiceError) throw error;
@@ -485,19 +526,21 @@ export async function expireCheckoutAfterCancellation(
     repository: paymentDatabaseEditRepository,
     gateway: createStripeCheckoutLifecycleGateway(),
     assertQaRuntime: async () => {
-      await loadAndAssertPaymentQaRuntimeEnvironment();
+      await assertPaymentsRuntimeEnvironment();
     },
   },
 ) {
   const active = await dependencies.repository.findCancelledCheckout(orderNumber);
-  if (!active.providerCheckoutId || !active.paymentId) return { expired: false as const };
+  if (!active.stripeCheckoutId || !active.stripePaymentId) {
+    return { expired: active.paypalAttemptsCanceled } as const;
+  }
   try {
     await dependencies.assertQaRuntime();
-    await dependencies.gateway.expireHostedCheckout(active.providerCheckoutId, `cancel-checkout-session:${active.paymentId}`);
-    await dependencies.repository.markCheckoutExpired(active.orderId, active.paymentId);
+    await dependencies.gateway.expireHostedCheckout(active.stripeCheckoutId, `cancel-checkout-session:${active.stripePaymentId}`);
+    await dependencies.repository.markCheckoutExpired(active.orderId, active.stripePaymentId);
     return { expired: true as const };
   } catch {
-    await dependencies.repository.markCheckoutReview(active.orderId, active.paymentId);
+    await dependencies.repository.markCheckoutReview(active.orderId, active.stripePaymentId);
     throw new PaymentServiceError(503, "PAYMENT_SESSION_EXPIRATION_FAILED", "La commande est annulée, mais la session Stripe doit être vérifiée.");
   }
 }
@@ -508,7 +551,7 @@ export function paymentReturnUrls(
   orderNumber: string,
   environment: PaymentEnvironment = process.env,
 ) {
-  const configuredBaseUrl = environment.AUTH_URL ?? environment.SITE_URL;
+  const configuredBaseUrl = environment.APP_CANONICAL_URL ?? environment.AUTH_URL ?? environment.SITE_URL;
   if (!configuredBaseUrl) {
     throw new PaymentServiceError(503, "PAYMENT_UNAVAILABLE");
   }
@@ -538,7 +581,7 @@ export function paymentReturnUrls(
 }
 
 async function defaultDependencies(orderNumber: string): Promise<CheckoutServiceDependencies> {
-  await loadAndAssertPaymentQaRuntimeEnvironment();
+  await assertPaymentsRuntimeEnvironment();
   const urls = paymentReturnUrls(orderNumber);
   return {
     repository: paymentDatabaseCheckoutRepository,

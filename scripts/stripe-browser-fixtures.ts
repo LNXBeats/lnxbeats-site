@@ -322,7 +322,7 @@ async function run() {
   const runtime = await loadAndAssertPaymentQaDatabaseEnvironment();
   assert.equal(
     runtime.baseUrl,
-    "http://localhost:31700",
+    "http://localhost:31740",
     "Stripe browser QA requires its isolated localhost origin.",
   );
   const operation = process.argv[2];
