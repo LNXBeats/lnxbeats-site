@@ -12,6 +12,7 @@ import {
   NOTIFICATION_TEMPLATE_VERSION,
   notificationBackoffMs,
   notificationDefinition,
+  OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
   normalizeNotificationRecipient,
   parseNotificationPayload,
 } from "@/lib/notifications/domain";
@@ -327,19 +328,24 @@ export async function dispatchOrderNotification(
   }
 }
 
+export function globalNotificationDispatchWhere(now: Date): Prisma.OrderNotificationWhereInput {
+  return {
+    idempotencyKey: { not: OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY },
+    attempts: { lt: MAXIMUM_NOTIFICATION_ATTEMPTS },
+    availableAt: { lte: now },
+    OR: [
+      { status: "PENDING" },
+      { status: "FAILED_RETRYABLE" },
+      { status: "PROCESSING", leaseExpiresAt: { lte: now } },
+    ],
+  };
+}
+
 export async function dispatchPendingOrderNotifications(limit = 10) {
   assertDatabaseConfigured();
   const now = new Date();
   const pending = await prisma.orderNotification.findMany({
-    where: {
-      attempts: { lt: MAXIMUM_NOTIFICATION_ATTEMPTS },
-      availableAt: { lte: now },
-      OR: [
-        { status: "PENDING" },
-        { status: "FAILED_RETRYABLE" },
-        { status: "PROCESSING", leaseExpiresAt: { lte: now } },
-      ],
-    },
+    where: globalNotificationDispatchWhere(now),
     orderBy: [{ priority: "asc" }, { availableAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     take: Math.min(Math.max(limit, 1), 25),
     select: { id: true },

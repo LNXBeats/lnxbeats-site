@@ -11,6 +11,7 @@ export const MAXIMUM_NOTIFICATION_ATTEMPTS = 5;
 export const NOTIFICATION_LEASE_MS = 5 * 60_000;
 export const NOTIFICATION_TEMPLATE_VERSION = 1;
 export const NOTIFICATION_PAYLOAD_VERSION = 1;
+export const OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY = "qa:owner-smoke:v0732:01";
 
 const definitions: Record<OrderNotificationKind, Readonly<{
   audience: "OWNER" | "CLIENT";

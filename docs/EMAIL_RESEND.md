@@ -87,6 +87,68 @@ Pour chacun des scénarios ci-dessous :
 
 Après le dernier contrôle, remettre `OWNER_EMAIL_NOTIFICATIONS_ENABLED=false`, retirer `EMAIL_OWNER_RECIPIENT` et `NOTIFICATION_STAGING_QA_CONFIRM`, puis redéployer. Conserver les quatre fixtures pour l'audit jusqu'à une procédure de cleanup distincte : aucune route destructive n'est fournie par le harness.
 
+## STAGING OWNER EMAIL SMOKE TEST ONLY — V0.7.3.2
+
+Ce mécanisme ne réouvre pas le harness fournisseur. Il exige simultanément : Railway `staging`, Resend staging confirmé, `EMAIL_NOTIFICATIONS_ENABLED=true`, `OWNER_EMAIL_NOTIFICATIONS_ENABLED=true`, `CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false`, paiements et SMS désactivés, `NOTIFICATION_STAGING_QA_CONFIRM` absente, Bearer worker valide et :
+
+```text
+NOTIFICATION_OWNER_SMOKE_TEST_CONFIRM=I_UNDERSTAND_THIS_SENDS_ONE_REAL_OWNER_EMAIL
+```
+
+`EMAIL_OWNER_RECIPIENT` doit contenir l'unique adresse propriétaire autorisée. Cette valeur ne doit jamais être passée dans une commande, un body ou un log. Les adresses fictives et les destinations techniques `resend.dev` sont refusées.
+
+La création et l'envoi sont deux intentions séparées. Toutes les commandes ci-dessous lisent le secret worker depuis l'environnement sans l'afficher.
+
+### PRE-CHECK
+
+```bash
+npm run notifications:check
+```
+
+Exiger `pending=0`, `retryable=0` et `final=0` avant de poursuivre. Les suppressions historiques ne sont pas dispatchables.
+
+### CREATE
+
+```bash
+node -e 'fetch("http://127.0.0.1:"+process.env.PORT+"/api/internal/notifications/qa/owner-email-smoke",{method:"POST",headers:{authorization:"Bearer "+process.env.NOTIFICATION_WORKER_SECRET,"content-type":"application/json"},body:"{}"}).then(async r=>console.log(JSON.stringify({http:r.status,...await r.json()})))'
+```
+
+Exiger HTTP 200, `created=true`, `status=PENDING`, `attempts=0` et `providerMessageIdPresent=false`. Un second CREATE doit retourner `created=false` avec le même `notificationId`.
+
+### VERIFY
+
+```bash
+node -e 'fetch("http://127.0.0.1:"+process.env.PORT+"/api/internal/notifications/qa/owner-email-smoke",{headers:{authorization:"Bearer "+process.env.NOTIFICATION_WORKER_SECRET}}).then(async r=>console.log(JSON.stringify({http:r.status,...await r.json()})))'
+```
+
+### TARGETED DISPATCH
+
+À exécuter une fois seulement après la vérification PENDING :
+
+```bash
+node -e 'fetch("http://127.0.0.1:"+process.env.PORT+"/api/internal/notifications/qa/owner-email-smoke/dispatch",{method:"POST",headers:{authorization:"Bearer "+process.env.NOTIFICATION_WORKER_SECRET,"content-type":"application/json"},body:"{}"}).then(async r=>console.log(JSON.stringify({http:r.status,...await r.json()})))'
+```
+
+Cette route ne scanne jamais l'outbox. Elle cible uniquement l'identifiant retrouvé par la clé one-shot. Ne jamais utiliser `npm run notifications:dispatch` pour ce test.
+
+### VERIFY FINAL
+
+Répéter uniquement la commande GET de vérification, sans redéclencher le dispatch. Attendre `SENT`, puis le webhook signé doit faire apparaître `DELIVERED` et `email.delivered`. Un second appel à la route ciblée retourne `dispatched=false` sans appel fournisseur.
+
+### CLEANUP DE CONFIGURATION
+
+Après la preuve humaine, redéployer avec :
+
+```text
+EMAIL_NOTIFICATIONS_ENABLED=false
+OWNER_EMAIL_NOTIFICATIONS_ENABLED=false
+CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false
+SMS_NOTIFICATIONS_ENABLED=false
+PAYMENTS_ENABLED=false
+```
+
+Supprimer `EMAIL_OWNER_RECIPIENT` et `NOTIFICATION_OWNER_SMOKE_TEST_CONFIRM`. Conserver `NOTIFICATION_STAGING_QA_CONFIRM` absente. La fixture one-shot reste archivée comme preuve et aucune route destructive n'est fournie.
+
 Références officielles :
 
 - envoi et idempotence : https://resend.com/docs/api-reference/emails/send-email et https://resend.com/docs/dashboard/emails/idempotency-keys
