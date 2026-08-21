@@ -143,9 +143,12 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `EMAIL_FROM` | Expéditeur appartenant au domaine transactionnel vérifié | Non |
 | `EMAIL_REPLY_TO` | Adresse de réponse humaine des messages transactionnels | Non |
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
-| `ORDER_NOTIFICATION_EMAIL_ENABLED` | Active l’adaptateur email de l’outbox commande | Non |
-| `ORDER_NOTIFICATION_CLIENT_EMAIL_ENABLED` | Opt-in serveur de l’email Resend de livraison client | Non |
-| `ORDER_NOTIFICATION_CAPTURE_PATH` | Capture QA mode 0600 des notifications de commande | Non |
+| `NOTIFICATION_EMAIL_TRANSPORT` / `NOTIFICATION_DEPLOYMENT_ENV` | `capture`, `resend` staging confirmé ou `disabled` ; production fermée en V0.7.3 | Non |
+| `EMAIL_NOTIFICATIONS_ENABLED` / `OWNER_EMAIL_NOTIFICATIONS_ENABLED` / `CLIENT_EMAIL_NOTIFICATIONS_ENABLED` | Flags serveur de l’outbox transactionnelle | Non |
+| `EMAIL_OWNER_RECIPIENT` / `APP_CANONICAL_URL` | Destination propriétaire et origine des liens, serveur uniquement | Oui / Non |
+| `RESEND_WEBHOOK_SECRET` / `NOTIFICATION_WORKER_SECRET` | Signature du webhook et protection du dispatcher interne | Oui |
+| `NOTIFICATION_CAPTURE_PATH` | Capture QA mode 0600, hors dépôt | Non |
+| `SMS_TRANSPORT` / `SMS_NOTIFICATIONS_ENABLED` | `disabled` ou capture seulement ; aucun SMS réel | Non |
 | `PAYMENTS_ENABLED` | Garde globale ; `false` dans la fondation et tant que la QA sandbox n’est pas validée | Non |
 | `STRIPE_MODE` | Mode Stripe attendu ; limité à `test` dans cette fondation | Non |
 | `STRIPE_SECRET_KEY` | Clé Stripe sandbox côté serveur, vide dans le dépôt et jamais journalisée | Oui |

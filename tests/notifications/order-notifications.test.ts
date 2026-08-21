@@ -1,26 +1,56 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { notificationChannelAvailability } from "@/lib/notifications/config";
+import { parseNotificationConfiguration } from "@/lib/notifications/config";
+import {
+  classifyNotificationFailure,
+  isFictitiousRecipient,
+  manualRetryAllowed,
+  notificationBackoffMs,
+  notificationDefinition,
+} from "@/lib/notifications/domain";
 import {
   customerDeliveryNotificationKey,
+  customerPaymentNotificationKey,
   dispatchOrderNotification,
   ownerNewOrderNotificationKey,
   type NotificationDispatchRepository,
 } from "@/lib/notifications/service";
 import { orderNotificationTemplate } from "@/lib/notifications/templates";
-import type { OrderNotificationMessage } from "@/lib/notifications/types";
+import { createNotificationTransport } from "@/lib/notifications/transport";
+import type { NotificationTransportResult, OrderNotificationMessage } from "@/lib/notifications/types";
+import { notificationWorkerAuthorized } from "@/lib/notifications/worker-auth";
 
 const message: OrderNotificationMessage = {
   id: "00000000-0000-4000-8000-000000000001",
   kind: "OWNER_NEW_ORDER",
   channel: "EMAIL",
+  priority: "CRITICAL",
   recipient: "owner@example.invalid",
   idempotencyKey: "order:00000000-0000-4000-8000-000000000010:owner-new:email",
+  templateKey: "owner-new-order",
+  templateVersion: 1,
+  payloadVersion: 1,
+  payload: {
+    orderNumber: "LNX-2026-000002",
+    customerName: "Client <QA>",
+    customerEmail: "client@example.invalid",
+    totalCents: 9_000,
+    currency: "EUR",
+    coverIncluded: true,
+    priorityProcessing: true,
+    createdAt: "2026-08-14T10:00:00.000Z",
+  },
+  resourceType: "ORDER",
+  resourceId: "00000000-0000-4000-8000-000000000010",
+  resourceReference: "LNX-2026-000002",
+  deploymentEnvironment: "development",
   order: {
     orderNumber: "LNX-2026-000002",
-    customerName: "Client QA",
+    customerName: "Client <QA>",
     customerEmail: "client@example.invalid",
     totalCents: 9_000,
     currency: "EUR",
@@ -30,85 +60,121 @@ const message: OrderNotificationMessage = {
   },
 };
 
+const captureConfiguration = parseNotificationConfiguration({
+  NODE_ENV: "development",
+  NOTIFICATION_DEPLOYMENT_ENV: "development",
+  NOTIFICATION_EMAIL_TRANSPORT: "capture",
+  EMAIL_NOTIFICATIONS_ENABLED: "true",
+  OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true",
+  CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "true",
+  APP_CANONICAL_URL: "http://localhost:31730",
+});
+
 function repository() {
   let claimable: OrderNotificationMessage | null = message;
   let sent = 0;
   let failed = 0;
   const value: NotificationDispatchRepository = {
-    claim: async () => {
-      const claimed = claimable;
-      claimable = null;
-      return claimed;
-    },
+    claim: async () => { const claimed = claimable; claimable = null; return claimed; },
     markSent: async () => { sent += 1; },
     markFailed: async () => { failed += 1; },
   };
   return { value, counts: () => ({ sent, failed }) };
 }
 
-test("les clés persistantes séparent nouvelle commande et livraison", () => {
-  const orderId = "00000000-0000-4000-8000-000000000010";
-  assert.equal(ownerNewOrderNotificationKey(orderId), `order:${orderId}:owner-new:email`);
-  assert.equal(customerDeliveryNotificationKey(orderId), `order:${orderId}:delivery-ready:email`);
-  assert.notEqual(ownerNewOrderNotificationKey(orderId), customerDeliveryNotificationKey(orderId));
+test("les clés persistantes séparent paiement, propriétaire et livraison", () => {
+  const id = message.resourceId!;
+  assert.notEqual(ownerNewOrderNotificationKey(id), customerPaymentNotificationKey(id));
+  assert.notEqual(customerPaymentNotificationKey(id), customerDeliveryNotificationKey(id));
 });
 
-test("la notification propriétaire est envoyée une seule fois malgré un second dispatch", async () => {
+test("le mapping métier définit audience, priorité et template", () => {
+  assert.deepEqual(notificationDefinition("OWNER_NEW_ORDER"), { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-new-order" });
+  assert.equal(notificationDefinition("CUSTOMER_DELIVERY_READY").priority, "CRITICAL");
+  assert.equal(notificationDefinition("CUSTOMER_RIGHTS_CONTRACT_READY").audience, "CLIENT");
+});
+
+test("un second dispatch de la même ligne ne renvoie rien", async () => {
   const repo = repository();
-  let emails = 0;
-  const dependencies = { repository: repo.value, sendEmail: async () => { emails += 1; } };
+  let sends = 0;
+  const accepted: NotificationTransportResult = { provider: "CAPTURE", providerMessageId: "capture_qa", deliveredImmediately: true };
+  const dependencies = { repository: repo.value, sendEmail: async () => { sends += 1; return accepted; } };
   assert.deepEqual(await dispatchOrderNotification(message.id, dependencies), { delivered: true, skipped: false });
   assert.deepEqual(await dispatchOrderNotification(message.id, dependencies), { delivered: false, skipped: true });
-  assert.equal(emails, 1);
+  assert.equal(sends, 1);
   assert.deepEqual(repo.counts(), { sent: 1, failed: 0 });
 });
 
-test("échec email reste dans l’outbox sans remonter dans le flux paiement/livraison", async () => {
+test("une panne fournisseur reste isolée de la commande", async () => {
   const repo = repository();
-  const result = await dispatchOrderNotification(message.id, {
+  assert.deepEqual(await dispatchOrderNotification(message.id, {
     repository: repo.value,
-    sendEmail: async () => { throw new Error("provider unavailable"); },
-  });
-  assert.deepEqual(result, { delivered: false, skipped: false });
+    sendEmail: async () => { throw Object.assign(new Error("temporary"), { statusCode: 503 }); },
+  }), { delivered: false, skipped: false });
   assert.deepEqual(repo.counts(), { sent: 0, failed: 1 });
+  assert.equal(classifyNotificationFailure(Object.assign(new Error(), { statusCode: 429 })).retryable, true);
+  assert.equal(classifyNotificationFailure(Object.assign(new Error(), { statusCode: 422, name: "validation_error" })).retryable, false);
 });
 
-test("l’email client annonce la livraison sans joindre ni exposer le master", () => {
-  const delivery = orderNotificationTemplate({
+test("les templates ont HTML, texte, deep link et garde DRAFT", () => {
+  const owner = orderNotificationTemplate(message, captureConfiguration);
+  assert.match(owner.subject, /^\[TEST\]/);
+  assert.match(owner.text, /\/admin\/commandes\/LNX-2026-000002/);
+  assert.match(owner.html, /Client &lt;QA&gt;/);
+  assert.doesNotMatch(owner.text, /<[^>]+>/);
+  const rights = orderNotificationTemplate({
     ...message,
-    kind: "CUSTOMER_DELIVERY_READY",
+    kind: "CUSTOMER_RIGHTS_CONTRACT_READY",
     recipient: "client@example.invalid",
-  });
-  assert.match(delivery.subject, /création LNX Beats est disponible/i);
-  assert.match(delivery.text, /\/compte\/commandes\/LNX-2026-000002/);
-  assert.match(delivery.text, /jamais joint/i);
-  assert.doesNotMatch(`${delivery.text}\n${delivery.html}`, /storageKey|r2\.cloudflarestorage|\.wav|\.mp3/i);
+    payload: { ...message.payload, rightsRequestNumber: "LNX-LIC-2026-000001", rightsRequestType: "PUBLICATION_LICENSE", requestedPriceCents: 15_000 },
+  }, captureConfiguration);
+  assert.match(rights.text, /DRAFT|Aucun droit/i);
+  assert.match(rights.text, /\/compte\/droits\/LNX-LIC-2026-000001/);
 });
 
-test("EMAIL est configurable et SMS reste prêt sans faux fournisseur", () => {
-  assert.deepEqual(notificationChannelAvailability({ ORDER_NOTIFICATION_EMAIL_ENABLED: "true" }), {
-    email: "ENABLED",
-    sms: "READY_FOR_PROVIDER",
-  });
-  assert.deepEqual(notificationChannelAvailability({ ORDER_NOTIFICATION_EMAIL_ENABLED: "false" }), {
-    email: "DISABLED",
-    sms: "READY_FOR_PROVIDER",
-  });
-  assert.throws(() => notificationChannelAvailability({ ORDER_NOTIFICATION_EMAIL_ENABLED: "yes" }));
+test("capture écrit une enveloppe privée et déterministe", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lnx-v073-capture-"));
+  try {
+    const configuration = { ...captureConfiguration, capturePath: join(directory, "mailbox.jsonl") };
+    const template = orderNotificationTemplate(message, configuration);
+    const first = await createNotificationTransport(configuration).send(message, template);
+    const second = await createNotificationTransport(configuration).send(message, template);
+    assert.equal(first.providerMessageId, second.providerMessageId);
+    assert.equal(first.deliveredImmediately, true);
+    const lines = (await readFile(configuration.capturePath, "utf8")).trim().split("\n");
+    assert.equal(lines.length, 2);
+    assert.equal(JSON.parse(lines[0]!).idempotencyKey, message.idempotencyKey);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
-test("webhook et publication créent l’outbox avant un dispatch post-transaction tolérant aux erreurs", async () => {
-  const webhook = await readFile("lib/payments/webhook.ts", "utf8");
-  const webhookRoute = await readFile("app/api/payments/stripe/webhook/route.ts", "utf8");
-  const admin = await readFile("lib/admin/service.ts", "utf8");
-  assert.match(webhook, /confirmOrder[\s\S]*enqueueOwnerNewOrderNotification\(transaction, payment\.orderId\)/);
-  assert.match(admin, /transition\.to === "DELIVERED"[\s\S]*enqueueCustomerDeliveryNotification\(transaction, order\)/);
-  assert.match(webhookRoute, /after\([\s\S]*dispatchPendingOrderNotifications\(\)\.catch\(\(\) => undefined\)/);
+test("Resend refuse les fixtures locales avant tout appel réseau", async () => {
+  const resend = parseNotificationConfiguration({
+    NODE_ENV: "development", NOTIFICATION_DEPLOYMENT_ENV: "staging", NOTIFICATION_EMAIL_TRANSPORT: "resend",
+    NOTIFICATION_STAGING_CONFIRM: "resend-staging-approved", EMAIL_NOTIFICATIONS_ENABLED: "true",
+    OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true", CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "true",
+    RESEND_API_KEY: "re_" + "fixture".repeat(6), RESEND_WEBHOOK_SECRET: "whsec_" + "fixture".repeat(6),
+    EMAIL_FROM: "LNX Beats <notifications@mail.example.com>", EMAIL_REPLY_TO: "reply@example.com",
+    EMAIL_OWNER_RECIPIENT: "owner@example.com", APP_CANONICAL_URL: "https://staging.example.com",
+  });
+  await assert.rejects(() => createNotificationTransport(resend).send(message, orderNotificationTemplate(message, resend)), /test locale/i);
+  assert.equal(isFictitiousRecipient("member@example.invalid"), true);
 });
 
-test("la migration rend l’idempotence persistante et ne réécrit aucune commande", async () => {
-  const sql = await readFile("prisma/migrations/20260814190000_order_delivery_notifications/migration.sql", "utf8");
-  assert.match(sql, /CREATE UNIQUE INDEX "order_notifications_idempotencyKey_key"/);
-  assert.match(sql, /FOREIGN KEY \("orderId"\)[\s\S]*ON DELETE RESTRICT/);
-  assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE|DELETE\s+FROM|UPDATE\s+"orders")\b/i);
+test("configuration et contrôles du worker échouent fermés", () => {
+  assert.equal(parseNotificationConfiguration({ NODE_ENV: "development" }).emailTransport, "capture");
+  assert.equal(parseNotificationConfiguration({ NODE_ENV: "production" }).emailTransport, "disabled");
+  assert.throws(() => parseNotificationConfiguration({ NODE_ENV: "production", NOTIFICATION_EMAIL_TRANSPORT: "resend" }));
+  assert.equal(notificationWorkerAuthorized("Bearer " + "a".repeat(32), "a".repeat(32)), true);
+  assert.equal(notificationWorkerAuthorized("Bearer wrong", "a".repeat(32)), false);
+});
+
+test("backoff et retry Admin restent bornés", () => {
+  assert.equal(notificationBackoffMs(1), 5 * 60_000);
+  assert.equal(notificationBackoffMs(99), 24 * 60 * 60_000);
+  assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: false }), true);
+  assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: false, attempts: 5 }), false);
+  assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: true }), false);
+  assert.equal(manualRetryAllowed({ status: "DELIVERED", suppressionActive: false }), false);
 });

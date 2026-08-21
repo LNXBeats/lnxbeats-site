@@ -2,151 +2,404 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 
+import { parseNotificationConfiguration } from "@/lib/notifications/config";
+import {
+  classifyNotificationFailure,
+  manualRetryAllowed,
+  MAXIMUM_NOTIFICATION_ATTEMPTS,
+  NOTIFICATION_LEASE_MS,
+  NOTIFICATION_PAYLOAD_VERSION,
+  NOTIFICATION_TEMPLATE_VERSION,
+  notificationBackoffMs,
+  notificationDefinition,
+  OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+  normalizeNotificationRecipient,
+  parseNotificationPayload,
+} from "@/lib/notifications/domain";
 import { sendOrderNotificationEmail } from "@/lib/notifications/email";
-import type { OrderNotificationMessage } from "@/lib/notifications/types";
+import type {
+  NotificationFailure,
+  NotificationTransportResult,
+  OrderNotificationKind,
+  OrderNotificationMessage,
+} from "@/lib/notifications/types";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 type Transaction = Prisma.TransactionClient;
-const MAXIMUM_NOTIFICATION_ATTEMPTS = 5;
-const NOTIFICATION_RETRY_DELAY_MS = 5 * 60_000;
 
 export const ownerNewOrderNotificationKey = (orderId: string) => `order:${orderId}:owner-new:email`;
+export const customerPaymentNotificationKey = (orderId: string) => `order:${orderId}:payment-confirmed:email`;
 export const customerDeliveryNotificationKey = (orderId: string) => `order:${orderId}:delivery-ready:email`;
 
-export function enqueueOwnerNewOrderNotification(transaction: Transaction, orderId: string) {
-  const recipient = process.env.ADMIN_EMAIL?.trim().toLowerCase() || null;
-  const idempotencyKey = ownerNewOrderNotificationKey(orderId);
+type ResourceSnapshot = Readonly<{
+  type?: "ORDER" | "RIGHTS_REQUEST";
+  id?: string | null;
+  reference?: string | null;
+  workTitle?: string;
+  rightsRequestNumber?: string;
+  rightsRequestType?: "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP";
+  requestedPriceCents?: number;
+}>;
+
+export async function enqueueOrderNotification(
+  transaction: Transaction,
+  input: Readonly<{
+    orderId: string;
+    kind: OrderNotificationKind;
+    recipient: string | null;
+    idempotencyKey: string;
+    resource?: ResourceSnapshot;
+  }>,
+) {
+  const definition = notificationDefinition(input.kind);
+  const order = await transaction.order.findUniqueOrThrow({
+    where: { id: input.orderId },
+    select: {
+      id: true,
+      orderNumber: true,
+      customerName: true,
+      customerEmail: true,
+      totalCents: true,
+      currency: true,
+      coverIncluded: true,
+      priorityProcessing: true,
+      createdAt: true,
+      title: true,
+    },
+  });
+  const workTitle = input.resource?.workTitle ?? order.title;
+  const payload = {
+    orderNumber: order.orderNumber,
+    customerName: order.customerName,
+    customerEmail: order.customerEmail,
+    totalCents: order.totalCents,
+    currency: order.currency,
+    coverIncluded: order.coverIncluded,
+    priorityProcessing: order.priorityProcessing,
+    createdAt: order.createdAt.toISOString(),
+    ...(workTitle ? { workTitle } : {}),
+    ...(input.resource?.rightsRequestNumber ? {
+      rightsRequestNumber: input.resource.rightsRequestNumber,
+      rightsRequestType: input.resource.rightsRequestType,
+      requestedPriceCents: input.resource.requestedPriceCents,
+    } : {}),
+  } satisfies Prisma.InputJsonObject;
+  const recipient = input.recipient?.trim().toLowerCase() || null;
+  const resourceType = input.resource?.type ?? "ORDER";
+  const resourceId = input.resource?.id ?? order.id;
+  const resourceReference = input.resource?.reference ?? order.orderNumber;
   return transaction.orderNotification.upsert({
-    where: { idempotencyKey },
+    where: { idempotencyKey: input.idempotencyKey },
     update: {},
-    create: { orderId, kind: "OWNER_NEW_ORDER", channel: "EMAIL", recipient, idempotencyKey },
+    create: {
+      orderId: order.id,
+      kind: input.kind,
+      channel: "EMAIL",
+      priority: definition.priority,
+      recipient,
+      idempotencyKey: input.idempotencyKey,
+      templateKey: definition.templateKey,
+      templateVersion: NOTIFICATION_TEMPLATE_VERSION,
+      payloadVersion: NOTIFICATION_PAYLOAD_VERSION,
+      payload,
+      resourceType,
+      resourceId,
+      resourceReference,
+      deploymentEnvironment: process.env.NOTIFICATION_DEPLOYMENT_ENV ?? (process.env.NODE_ENV === "production" ? "production" : "development"),
+    },
     select: { id: true },
   });
 }
 
-export function enqueueCustomerDeliveryNotification(
-  transaction: Transaction,
-  order: { id: string; customerEmail: string },
-) {
-  const idempotencyKey = customerDeliveryNotificationKey(order.id);
-  return transaction.orderNotification.upsert({
-    where: { idempotencyKey },
-    update: {},
-    create: {
-      orderId: order.id,
-      kind: "CUSTOMER_DELIVERY_READY",
-      channel: "EMAIL",
-      recipient: order.customerEmail.trim().toLowerCase(),
-      idempotencyKey,
-    },
-    select: { id: true },
+export function enqueueOwnerNewOrderNotification(transaction: Transaction, orderId: string) {
+  return enqueueOrderNotification(transaction, {
+    orderId,
+    kind: "OWNER_NEW_ORDER",
+    recipient: process.env.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null,
+    idempotencyKey: ownerNewOrderNotificationKey(orderId),
+  });
+}
+
+export async function enqueuePaymentConfirmedNotifications(transaction: Transaction, orderId: string) {
+  const order = await transaction.order.findUniqueOrThrow({ where: { id: orderId }, select: { customerEmail: true } });
+  await enqueueOwnerNewOrderNotification(transaction, orderId);
+  await enqueueOrderNotification(transaction, {
+    orderId,
+    kind: "CUSTOMER_PAYMENT_CONFIRMED",
+    recipient: order.customerEmail,
+    idempotencyKey: customerPaymentNotificationKey(orderId),
+  });
+}
+
+export function enqueueCustomerDeliveryNotification(transaction: Transaction, order: { id: string; customerEmail: string }) {
+  return enqueueOrderNotification(transaction, {
+    orderId: order.id,
+    kind: "CUSTOMER_DELIVERY_READY",
+    recipient: order.customerEmail,
+    idempotencyKey: customerDeliveryNotificationKey(order.id),
   });
 }
 
 export interface NotificationDispatchRepository {
   claim(id: string): Promise<OrderNotificationMessage | null>;
-  markSent(id: string): Promise<void>;
-  markFailed(id: string, code: string): Promise<void>;
+  markSent(id: string, result: NotificationTransportResult): Promise<void>;
+  markFailed(id: string, failure: NotificationFailure): Promise<void>;
 }
 
-const databaseDispatchRepository: NotificationDispatchRepository = {
+function logNotification(event: string, fields: Record<string, string | number | boolean | null>) {
+  console.info(JSON.stringify({ event, ...fields }));
+}
+
+export const databaseNotificationDispatchRepository: NotificationDispatchRepository = {
   async claim(id) {
     assertDatabaseConfigured();
     return prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`notifications:${id}`})) IS NULL AS locked`;
+      const now = new Date();
       const notification = await transaction.orderNotification.findUnique({
         where: { id },
         include: {
           order: {
             select: {
-              orderNumber: true,
-              customerName: true,
-              customerEmail: true,
-              totalCents: true,
-              currency: true,
-              coverIncluded: true,
-              priorityProcessing: true,
-              createdAt: true,
+              orderNumber: true, customerName: true, customerEmail: true, totalCents: true, currency: true,
+              coverIncluded: true, priorityProcessing: true, createdAt: true,
             },
           },
         },
       });
-      if (!notification || notification.status === "SENT") return null;
-      if (notification.attempts >= MAXIMUM_NOTIFICATION_ATTEMPTS) return null;
-      const staleProcessing = notification.status === "PROCESSING"
-        && notification.updatedAt.getTime() < Date.now() - 10 * 60_000;
-      if (notification.status === "PROCESSING" && !staleProcessing) return null;
-      if (
-        notification.status === "FAILED"
-        && notification.updatedAt.getTime() >= Date.now() - NOTIFICATION_RETRY_DELAY_MS
-      ) return null;
-      await transaction.orderNotification.update({
-        where: { id },
-        data: { status: "PROCESSING", attempts: { increment: 1 }, lastErrorCode: null },
+      if (!notification) return null;
+      const claimable = notification.status === "PENDING"
+        || notification.status === "FAILED_RETRYABLE"
+        || (notification.status === "PROCESSING" && notification.leaseExpiresAt !== null && notification.leaseExpiresAt <= now);
+      if (!claimable || notification.availableAt > now) return null;
+      if (notification.attempts >= MAXIMUM_NOTIFICATION_ATTEMPTS) {
+        await transaction.orderNotification.update({
+          where: { id },
+          data: {
+            status: "FAILED_FINAL", failedAt: notification.failedAt ?? now,
+            processingStartedAt: null, leaseExpiresAt: null,
+            lastErrorCode: notification.lastErrorCode ?? "ATTEMPTS_EXHAUSTED",
+            lastErrorMessage: "Le nombre maximal de tentatives est atteint.",
+          },
+        });
+        return null;
+      }
+      if (notification.recipient) {
+        const suppression = await transaction.notificationSuppression.findUnique({
+          where: { channel_recipient: { channel: notification.channel, recipient: notification.recipient } },
+          select: { active: true },
+        });
+        if (suppression?.active) {
+          await transaction.orderNotification.update({
+            where: { id },
+            data: {
+              status: "SUPPRESSED", failedAt: now, processingStartedAt: null, leaseExpiresAt: null,
+              lastErrorCode: "RECIPIENT_SUPPRESSED", lastErrorMessage: "L’adresse destinataire est supprimée.",
+            },
+          });
+          return null;
+        }
+      }
+      let payload;
+      try {
+        payload = parseNotificationPayload(notification.payload);
+      } catch {
+        await transaction.orderNotification.update({
+          where: { id },
+          data: {
+            status: "FAILED_FINAL", failedAt: now, processingStartedAt: null, leaseExpiresAt: null,
+            lastErrorCode: "INVALID_PAYLOAD", lastErrorMessage: "Le snapshot de notification est invalide.",
+          },
+        });
+        return null;
+      }
+      const claimed = await transaction.orderNotification.updateMany({
+        where: { id, status: notification.status, updatedAt: notification.updatedAt },
+        data: {
+          status: "PROCESSING",
+          attempts: { increment: 1 },
+          processingStartedAt: now,
+          leaseExpiresAt: new Date(now.getTime() + NOTIFICATION_LEASE_MS),
+          failedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
+      });
+      if (claimed.count !== 1) return null;
+      await transaction.notificationEvent.create({
+        data: { notificationId: id, outcome: "PROCESSED", code: "DISPATCH_CLAIMED", occurredAt: now },
       });
       return {
         id: notification.id,
         kind: notification.kind,
         channel: notification.channel,
+        priority: notification.priority,
         recipient: notification.recipient,
         idempotencyKey: notification.idempotencyKey,
+        templateKey: notification.templateKey,
+        templateVersion: notification.templateVersion,
+        payloadVersion: notification.payloadVersion,
+        payload,
+        resourceType: notification.resourceType,
+        resourceId: notification.resourceId,
+        resourceReference: notification.resourceReference,
+        deploymentEnvironment: notification.deploymentEnvironment as OrderNotificationMessage["deploymentEnvironment"],
         order: notification.order,
       };
     }, { isolationLevel: "ReadCommitted" });
   },
-  async markSent(id) {
-    await prisma.orderNotification.updateMany({
-      where: { id, status: "PROCESSING" },
-      data: { status: "SENT", sentAt: new Date(), lastErrorCode: null },
+  async markSent(id, result) {
+    const now = new Date();
+    await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.orderNotification.updateMany({
+        where: { id, status: "PROCESSING" },
+        data: {
+          status: result.deliveredImmediately ? "DELIVERED" : "SENT",
+          provider: result.provider,
+          providerMessageId: result.providerMessageId,
+          sentAt: now,
+          deliveredAt: result.deliveredImmediately ? now : null,
+          processingStartedAt: null,
+          leaseExpiresAt: null,
+          failedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
+      });
+      if (updated.count !== 1) throw new Error("Notification claim is no longer current.");
+      await transaction.notificationEvent.create({
+        data: {
+          notificationId: id, providerMessageId: result.providerMessageId,
+          outcome: "PROCESSED", code: result.deliveredImmediately ? "CAPTURE_DELIVERED" : "PROVIDER_ACCEPTED", occurredAt: now,
+        },
+      });
     });
   },
-  async markFailed(id, code) {
-    await prisma.orderNotification.updateMany({
-      where: { id, status: "PROCESSING" },
-      data: { status: "FAILED", lastErrorCode: code },
+  async markFailed(id, failure) {
+    const now = new Date();
+    await prisma.$transaction(async (transaction) => {
+      const notification = await transaction.orderNotification.findUnique({ where: { id }, select: { status: true, attempts: true } });
+      if (!notification || notification.status !== "PROCESSING") return;
+      const retryable = failure.retryable && notification.attempts < MAXIMUM_NOTIFICATION_ATTEMPTS;
+      await transaction.orderNotification.update({
+        where: { id },
+        data: {
+          status: retryable ? "FAILED_RETRYABLE" : "FAILED_FINAL",
+          availableAt: retryable ? new Date(now.getTime() + notificationBackoffMs(notification.attempts)) : now,
+          processingStartedAt: null,
+          leaseExpiresAt: null,
+          failedAt: now,
+          lastErrorCode: failure.code.slice(0, 80),
+          lastErrorMessage: failure.message.slice(0, 240),
+        },
+      });
+      await transaction.notificationEvent.create({
+        data: { notificationId: id, outcome: retryable ? "IGNORED" : "REQUIRES_REVIEW", code: failure.code.slice(0, 80), occurredAt: now },
+      });
     });
   },
 };
-
-function failureCode(message: OrderNotificationMessage) {
-  return message.channel === "SMS" ? "SMS_PROVIDER_NOT_CONFIGURED" : "EMAIL_DELIVERY_FAILED";
-}
 
 export async function dispatchOrderNotification(
   id: string,
   dependencies: {
     repository: NotificationDispatchRepository;
-    sendEmail(message: OrderNotificationMessage): Promise<void>;
-  } = { repository: databaseDispatchRepository, sendEmail: sendOrderNotificationEmail },
+    sendEmail(message: OrderNotificationMessage): Promise<NotificationTransportResult>;
+  } = { repository: databaseNotificationDispatchRepository, sendEmail: sendOrderNotificationEmail },
 ) {
   const message = await dependencies.repository.claim(id);
   if (!message) return { delivered: false, skipped: true } as const;
   try {
-    if (message.channel !== "EMAIL") throw new Error("SMS provider is not configured.");
-    await dependencies.sendEmail(message);
-    await dependencies.repository.markSent(id);
+    if (message.channel !== "EMAIL") throw new Error("No real SMS provider is configured.");
+    if (!message.recipient) {
+      await dependencies.repository.markFailed(id, { code: "RECIPIENT_MISSING", message: "La destination est absente.", retryable: false });
+      return { delivered: false, skipped: false } as const;
+    }
+    normalizeNotificationRecipient(message.recipient);
+    const result = await dependencies.sendEmail(message);
+    await dependencies.repository.markSent(id, result);
+    logNotification("notification.dispatch.accepted", { notificationId: id, provider: result.provider, delivered: result.deliveredImmediately });
     return { delivered: true, skipped: false } as const;
-  } catch {
-    await dependencies.repository.markFailed(id, failureCode(message));
+  } catch (error) {
+    const failure = classifyNotificationFailure(error);
+    await dependencies.repository.markFailed(id, failure);
+    logNotification("notification.dispatch.failed", { notificationId: id, code: failure.code, retryable: failure.retryable });
     return { delivered: false, skipped: false } as const;
   }
 }
 
+export function globalNotificationDispatchWhere(now: Date): Prisma.OrderNotificationWhereInput {
+  return {
+    idempotencyKey: { not: OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY },
+    attempts: { lt: MAXIMUM_NOTIFICATION_ATTEMPTS },
+    availableAt: { lte: now },
+    OR: [
+      { status: "PENDING" },
+      { status: "FAILED_RETRYABLE" },
+      { status: "PROCESSING", leaseExpiresAt: { lte: now } },
+    ],
+  };
+}
+
 export async function dispatchPendingOrderNotifications(limit = 10) {
   assertDatabaseConfigured();
-  const stale = new Date(Date.now() - 10 * 60_000);
-  const retryable = new Date(Date.now() - NOTIFICATION_RETRY_DELAY_MS);
+  const now = new Date();
   const pending = await prisma.orderNotification.findMany({
-    where: {
-      OR: [
-        { status: "PENDING", attempts: { lt: MAXIMUM_NOTIFICATION_ATTEMPTS } },
-        { status: "FAILED", attempts: { lt: MAXIMUM_NOTIFICATION_ATTEMPTS }, updatedAt: { lt: retryable } },
-        { status: "PROCESSING", attempts: { lt: MAXIMUM_NOTIFICATION_ATTEMPTS }, updatedAt: { lt: stale } },
-      ],
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    where: globalNotificationDispatchWhere(now),
+    orderBy: [{ priority: "asc" }, { availableAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     take: Math.min(Math.max(limit, 1), 25),
     select: { id: true },
   });
-  for (const notification of pending) await dispatchOrderNotification(notification.id);
+  let delivered = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const notification of pending) {
+    const result = await dispatchOrderNotification(notification.id);
+    if (result.skipped) skipped += 1;
+    else if (result.delivered) delivered += 1;
+    else failed += 1;
+  }
+  return { claimed: pending.length, delivered, failed, skipped } as const;
+}
+
+export async function retryNotificationManually(id: string, actorUserId: string) {
+  assertDatabaseConfigured();
+  return prisma.$transaction(async (transaction) => {
+    await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`notifications:${id}`})) IS NULL AS locked`;
+    const notification = await transaction.orderNotification.findUnique({ where: { id } });
+    if (!notification) throw new Error("Notification introuvable.");
+    let recipient = notification.recipient;
+    if (!recipient && notificationDefinition(notification.kind).audience === "OWNER") {
+      const configuredRecipient = parseNotificationConfiguration().ownerRecipient;
+      recipient = configuredRecipient ? normalizeNotificationRecipient(configuredRecipient) : null;
+    }
+    const suppression = recipient ? await transaction.notificationSuppression.findUnique({
+      where: { channel_recipient: { channel: notification.channel, recipient } },
+      select: { active: true },
+    }) : null;
+    if (!manualRetryAllowed({
+      status: notification.status,
+      suppressionActive: suppression?.active ?? false,
+      attempts: notification.attempts,
+    })) {
+      throw new Error("Cette notification ne peut pas être rejouée.");
+    }
+    if (notification.providerMessageId) {
+      const delivered = await transaction.orderNotification.count({
+        where: { idempotencyKey: notification.idempotencyKey, status: { in: ["SENT", "DELIVERED", "COMPLAINED"] } },
+      });
+      if (delivered > 0) throw new Error("Une notification identique a déjà été acceptée.");
+    }
+    await transaction.orderNotification.update({
+      where: { id },
+      data: {
+        recipient,
+        status: "PENDING", availableAt: new Date(), processingStartedAt: null, leaseExpiresAt: null,
+        failedAt: null, lastErrorCode: null, lastErrorMessage: null,
+      },
+    });
+    await transaction.notificationEvent.create({
+      data: { notificationId: id, actorUserId, outcome: "PROCESSED", code: "ADMIN_MANUAL_RETRY", occurredAt: new Date() },
+    });
+  });
 }

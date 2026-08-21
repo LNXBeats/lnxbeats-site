@@ -9,7 +9,7 @@ import {
   normalizeAdminNote,
 } from "@/lib/admin/order-machine";
 import type { KnownOrderStatus } from "@/lib/orders/status";
-import { enqueueCustomerDeliveryNotification } from "@/lib/notifications/service";
+import { enqueueCustomerDeliveryNotification, enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deletePrivateOrderFile } from "@/lib/orders/storage";
 
@@ -288,6 +288,14 @@ export async function transitionOrderStatus(orderNumber: string, requestedStatus
     });
     if (transition.to === "DELIVERED") {
       await enqueueCustomerDeliveryNotification(transaction, order);
+    } else if (transition.to === "ACCEPTED" || transition.to === "IN_PROGRESS") {
+      const kind = transition.to === "ACCEPTED" ? "CUSTOMER_ORDER_ACCEPTED" : "CUSTOMER_CREATION_STARTED";
+      await enqueueOrderNotification(transaction, {
+        orderId: order.id,
+        kind,
+        recipient: order.customerEmail,
+        idempotencyKey: `order:${order.id}:${transition.to.toLowerCase()}:email`,
+      });
     }
     return transition.to;
   });

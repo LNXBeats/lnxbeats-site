@@ -1,6 +1,5 @@
 "use server";
 
-import { after } from "next/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -9,7 +8,6 @@ import { addInternalOrderNote, deleteEligibleAdminOrder, transitionOrderStatus }
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { expireCheckoutAfterCancellation } from "@/lib/payments/service";
-import { dispatchPendingOrderNotifications } from "@/lib/notifications/service";
 
 function adminOrderPath(orderNumber: string, state: string) {
   return `/admin/commandes/${encodeURIComponent(orderNumber)}?etat=${encodeURIComponent(state)}`;
@@ -43,11 +41,6 @@ export async function transitionOrderAction(formData: FormData) {
       revalidatePath(`/compte/commandes/${orderNumber}`);
       redirect(adminOrderPath(orderNumber, "annulation-paiement-a-verifier"));
     }
-  }
-  if (targetStatus === "DELIVERED") {
-    after(async () => {
-      await dispatchPendingOrderNotifications().catch(() => undefined);
-    });
   }
   revalidatePath("/admin");
   revalidatePath("/admin/commandes");

@@ -140,6 +140,9 @@ enum OrderAssetRole {
 
 enum OrderNotificationKind {
   OWNER_NEW_ORDER
+  CUSTOMER_PAYMENT_CONFIRMED
+  CUSTOMER_ORDER_ACCEPTED
+  CUSTOMER_CREATION_STARTED
   CUSTOMER_DELIVERY_READY
   OWNER_RIGHTS_REQUESTED
   CUSTOMER_RIGHTS_INFORMATION_REQUIRED
@@ -159,7 +162,38 @@ enum NotificationStatus {
   PENDING
   PROCESSING
   SENT
+  DELIVERED
   FAILED
+  FAILED_RETRYABLE
+  FAILED_FINAL
+  BOUNCED
+  COMPLAINED
+  SUPPRESSED
+  CANCELED
+}
+
+enum NotificationProvider {
+  CAPTURE
+  RESEND
+}
+
+enum NotificationPriority {
+  CRITICAL
+  INFORMATIONAL
+  INTERNAL
+}
+
+enum NotificationEventOutcome {
+  PROCESSED
+  IGNORED
+  REQUIRES_REVIEW
+}
+
+enum NotificationSuppressionReason {
+  HARD_BOUNCE
+  COMPLAINT
+  PROVIDER_SUPPRESSED
+  MANUAL
 }
 
 enum OrderStatus {
@@ -398,6 +432,7 @@ model User {
   templateApprovals   ContractTemplate[]      @relation("ContractTemplateApprover")
   contractAcceptances ContractAcceptance[]    @relation("ContractAcceptanceActor")
   splitProposals      RightsSplitProposal[]   @relation("RightsSplitProposer")
+  notificationEvents  NotificationEvent[]     @relation("NotificationEventActor")
 
   @@index([role, status])
   @@map("users")
@@ -712,23 +747,83 @@ model Order {
 }
 
 model OrderNotification {
-  id             String                @id @default(uuid()) @db.Uuid
-  orderId        String                @db.Uuid
-  kind           OrderNotificationKind
-  channel        NotificationChannel
-  recipient      String?               @db.VarChar(320)
-  idempotencyKey String                @unique @db.VarChar(255)
-  status         NotificationStatus    @default(PENDING)
-  attempts       Int                   @default(0)
-  lastErrorCode  String?               @db.VarChar(80)
-  sentAt         DateTime?             @db.Timestamptz(3)
-  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime              @updatedAt @db.Timestamptz(3)
-  order          Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  id                    String                @id @default(uuid()) @db.Uuid
+  orderId               String                @db.Uuid
+  kind                  OrderNotificationKind
+  channel               NotificationChannel
+  priority              NotificationPriority  @default(INFORMATIONAL)
+  recipient             String?               @db.VarChar(320)
+  idempotencyKey        String                @unique @db.VarChar(255)
+  templateKey           String                @default("legacy-order-notification") @db.VarChar(80)
+  templateVersion       Int                   @default(1)
+  payloadVersion        Int                   @default(1)
+  payload               Json                  @default("{}")
+  resourceType          String                @default("ORDER") @db.VarChar(32)
+  resourceId            String?               @db.Uuid
+  resourceReference     String?               @db.VarChar(80)
+  deploymentEnvironment String                @default("development") @db.VarChar(16)
+  status                NotificationStatus    @default(PENDING)
+  attempts              Int                   @default(0)
+  availableAt           DateTime              @default(now()) @db.Timestamptz(3)
+  processingStartedAt   DateTime?             @db.Timestamptz(3)
+  leaseExpiresAt        DateTime?             @db.Timestamptz(3)
+  sentAt                DateTime?             @db.Timestamptz(3)
+  deliveredAt           DateTime?             @db.Timestamptz(3)
+  failedAt              DateTime?             @db.Timestamptz(3)
+  provider              NotificationProvider?
+  providerMessageId     String?               @unique @db.VarChar(255)
+  lastErrorCode         String?               @db.VarChar(80)
+  lastErrorMessage      String?               @db.VarChar(240)
+  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
+  order                 Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  events                NotificationEvent[]
 
-  @@index([status, updatedAt])
+  @@index([status, availableAt])
+  @@index([status, leaseExpiresAt])
   @@index([orderId, kind, channel])
+  @@index([resourceType, resourceId])
   @@map("order_notifications")
+}
+
+model NotificationEvent {
+  id                String                   @id @default(uuid()) @db.Uuid
+  notificationId    String?                  @db.Uuid
+  providerEventId   String?                  @unique @db.VarChar(255)
+  providerMessageId String?                  @db.VarChar(255)
+  providerEventType String?                  @db.VarChar(80)
+  outcome           NotificationEventOutcome
+  code              String?                  @db.VarChar(80)
+  actorUserId       String?                  @db.Uuid
+  occurredAt        DateTime                 @db.Timestamptz(3)
+  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
+  notification      OrderNotification?       @relation(fields: [notificationId], references: [id], onDelete: Restrict)
+  actor             User?                    @relation("NotificationEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([notificationId, createdAt])
+  @@index([providerMessageId, occurredAt])
+  @@index([outcome, createdAt])
+  @@map("notification_events")
+}
+
+model NotificationSuppression {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  channel             NotificationChannel
+  recipient           String                        @db.VarChar(320)
+  recipientHashSha256 String                        @db.Char(64)
+  reason              NotificationSuppressionReason
+  provider            NotificationProvider?
+  active              Boolean                       @default(true)
+  sourceEventId       String?                       @db.VarChar(255)
+  lastEventAt         DateTime                      @db.Timestamptz(3)
+  removedAt           DateTime?                     @db.Timestamptz(3)
+  createdAt           DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                      @updatedAt @db.Timestamptz(3)
+
+  @@unique([channel, recipient])
+  @@unique([channel, recipientHashSha256])
+  @@index([active, reason, updatedAt])
+  @@map("notification_suppressions")
 }
 
 model Payment {

@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.7.3 — Notifications transactionnelles
+
+- consolide l’outbox PostgreSQL existante avec leases, retries bornés, statuts fournisseur, événements et suppressions persistantes ;
+- isole Resend derrière un transport serveur, conserve `capture`/`disabled` et refuse toute fixture `.invalid` en envoi réel ;
+- ajoute les e-mails propriétaire, client, livraison et droits/contrats sans rendre l’e-mail source de vérité métier ;
+- ajoute le webhook Resend signé, l’Admin Notifications, le dispatcher CLI/route interne et les diagnostics sans secret ;
+- prépare uniquement l’abstraction SMS `disabled`/`capture`, sans fournisseur ni envoi réel ;
+- maintient fermés les gates production Prisma/deepmerge-ts, revue juridique et QA e-mail transactionnel staging.
+
 ## V0.7.2 — Droits, contrats et autorisations
 
 - sépare usage personnel, licence de publication 150 € et partenariat d’exploitation 1 500 € sans paiement de droits ;

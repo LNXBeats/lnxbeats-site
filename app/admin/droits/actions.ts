@@ -1,6 +1,5 @@
 "use server";
 
-import { after } from "next/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -8,7 +7,6 @@ import { revalidatePath } from "next/cache";
 import type { OrderActor } from "@/lib/orders/domain";
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
-import { dispatchPendingOrderNotifications } from "@/lib/notifications/service";
 import { handleAdminRightsDocumentGeneration } from "@/lib/rights/admin-generation-entrypoint";
 import {
   adminValidateRightsContract,
@@ -48,9 +46,7 @@ function refresh(value: string) {
   revalidatePath(`/compte/droits/${value}`);
 }
 
-function dispatchNotifications() {
-  after(async () => { await dispatchPendingOrderNotifications().catch(() => undefined); });
-}
+function dispatchNotifications() {}
 
 export async function startRightsReviewAction(formData: FormData) {
   const value = requestNumber(formData);
