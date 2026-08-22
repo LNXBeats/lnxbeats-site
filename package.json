@@ -26,6 +26,8 @@
     "rights:browser-fixtures:setup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/rights-browser-fixtures.ts setup",
     "rights:browser-fixtures:cleanup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/rights-browser-fixtures.ts cleanup",
     "test:upload": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/upload.test.ts tests/orders/audio-request.test.ts tests/orders/audio-response.test.ts tests/orders/delivery.test.ts",
+    "test:delivery": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/orders/audio-request.test.ts tests/orders/audio-response.test.ts tests/orders/delivery.test.ts",
+    "test:delivery:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-delivery-runtime.ts",
     "test:order:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-order-runtime.ts",
     "test:admin": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/admin/*.test.ts",
     "test:admin:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-admin-runtime.ts",

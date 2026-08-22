@@ -11,6 +11,7 @@ import {
   manualRetryAllowed,
   notificationBackoffMs,
   notificationDefinition,
+  NotificationTransportError,
 } from "@/lib/notifications/domain";
 import {
   customerDeliveryNotificationKey,
@@ -114,6 +115,29 @@ test("une panne fournisseur reste isolée de la commande", async () => {
   assert.deepEqual(repo.counts(), { sent: 0, failed: 1 });
   assert.equal(classifyNotificationFailure(Object.assign(new Error(), { statusCode: 429 })).retryable, true);
   assert.equal(classifyNotificationFailure(Object.assign(new Error(), { statusCode: 422, name: "validation_error" })).retryable, false);
+});
+
+test("la livraison reste en outbox sans appel provider lorsque les e-mails client sont désactivés", async () => {
+  const disabled = parseNotificationConfiguration({
+    NODE_ENV: "development",
+    NOTIFICATION_DEPLOYMENT_ENV: "development",
+    NOTIFICATION_EMAIL_TRANSPORT: "capture",
+    EMAIL_NOTIFICATIONS_ENABLED: "true",
+    OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true",
+    CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
+    APP_CANONICAL_URL: "http://localhost:31730",
+  });
+  const deliveryMessage: OrderNotificationMessage = {
+    ...message,
+    kind: "CUSTOMER_DELIVERY_READY",
+    recipient: "client@example.invalid",
+    idempotencyKey: customerDeliveryNotificationKey(message.resourceId!),
+    templateKey: "customer-delivery-ready",
+  };
+  await assert.rejects(
+    () => createNotificationTransport(disabled).send(deliveryMessage, orderNotificationTemplate(deliveryMessage, disabled)),
+    (error: unknown) => error instanceof NotificationTransportError && error.failure.code === "CLIENT_EMAIL_DISABLED",
+  );
 });
 
 test("les templates ont HTML, texte, deep link et garde DRAFT", () => {

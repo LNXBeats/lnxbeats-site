@@ -83,19 +83,26 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
     && order.status === "AWAITING_PAYMENT"
     && order.userId === session.user.id
     && !order.payments.some((payment) => ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED", "REQUIRES_REVIEW"].includes(payment.status));
-  const deliveryLink = order.assets.find(({ role, asset }) => role === "DELIVERY" && asset.type === "AUDIO") ?? null;
-  const delivery = deliveryLink ? {
-    id: deliveryLink.asset.id,
-    filename: deliveryLink.asset.filename,
-    mimeType: deliveryLink.asset.mimeType,
-    sizeBytes: Number(deliveryLink.asset.sizeBytes),
-    durationMs: deliveryLink.asset.durationMs,
-    createdAt: deliveryLink.createdAt.toISOString(),
-  } : null;
-  const hasSuccessfulPayment = order.payments.some((payment) => ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED"].includes(payment.status));
-  const deliveryRequiredToPublish = order.status === "FINALIZING" && !delivery;
+  const deliveries = order.assets
+    .filter(({ role, asset }) => role === "DELIVERY" && ["AUDIO", "DOCUMENT", "IMAGE"].includes(asset.type))
+    .map(({ asset, createdAt }) => ({
+      id: asset.id,
+      assetType: asset.type as "AUDIO" | "DOCUMENT" | "IMAGE",
+      filename: asset.filename,
+      mimeType: asset.mimeType,
+      sizeBytes: Number(asset.sizeBytes),
+      durationMs: asset.durationMs,
+      width: asset.width,
+      height: asset.height,
+      storageBackend: asset.storageBackend,
+      storageProvider: asset.storageProvider,
+      visibility: asset.visibility,
+      createdAt: createdAt.toISOString(),
+    }));
+  const hasSuccessfulPayment = order.payments.some((payment) => ["SUCCEEDED", "PARTIALLY_REFUNDED"].includes(payment.status));
+  const deliveryRequiredToPublish = order.status === "FINALIZING" && deliveries.length === 0;
   const transitions = getAllowedOrderTransitions(order.status)
-    .filter(({ to }) => to !== "DELIVERED" || Boolean(delivery));
+    .filter(({ to }) => to !== "DELIVERED" || deliveries.length > 0);
 
   return (
     <div className="admin-main admin-order-detail">
@@ -139,7 +146,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
           <section className="admin-detail-window" aria-labelledby="admin-timeline-title">
             <p className="admin-section-label">Historique réel</p><h2 id="admin-timeline-title">Timeline.</h2>
             <ol className="admin-timeline">
-              {order.events.map((event) => <li key={event.id}><span aria-hidden="true" /><div><time dateTime={event.createdAt.toISOString()}>{event.createdAt.toLocaleString("fr-FR")}</time><p><strong>{orderStatusPresentation[event.toStatus].label}</strong>{event.visibility === "INTERNAL" ? <em>Interne</em> : <em>Client</em>}</p>{event.note ? <blockquote>{event.note}</blockquote> : null}{event.actor?.displayName ? <small>Par {event.actor.displayName}</small> : null}</div></li>)}
+              {order.events.map((event) => <li key={event.id}><span aria-hidden="true" /><div><time dateTime={event.createdAt.toISOString()}>{event.createdAt.toLocaleString("fr-FR")}</time><p><strong>{orderStatusPresentation[event.toStatus].label}</strong>{event.visibility === "INTERNAL" ? <em>Interne</em> : <em>Client</em>}</p>{event.note ? <blockquote>{event.note}</blockquote> : null}<small>{event.actor ? `Par ${event.actor.displayName} · ${event.actor.role === "ADMIN" ? "Administrateur" : "Client"}` : "Par le système"}</small></div></li>)}
             </ol>
           </section>
         </div>
@@ -178,7 +185,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               transitions={transitions}
               deletionEligible={deletion.eligible}
               deletionReason={deletion.reason}
-              emptyReason={deliveryRequiredToPublish ? "Enregistrez d’abord un master audio valide dans le bloc Livraison. La publication sera ensuite disponible." : undefined}
+              emptyReason={deliveryRequiredToPublish ? "Ajoutez d’abord au moins un livrable privé valide. La publication sera ensuite disponible." : undefined}
             />
           </section>
 
@@ -190,9 +197,10 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
           <section className="admin-side-window">
             <AdminOrderDeliveryPanel
               orderNumber={order.orderNumber}
-              delivery={delivery}
+              deliveries={deliveries}
               canUpload={orderAcceptsDeliveryUpload(order.status, hasSuccessfulPayment)}
               published={order.status === "DELIVERED"}
+              publishedAt={order.deliveredAt?.toISOString() ?? null}
             />
           </section>
 

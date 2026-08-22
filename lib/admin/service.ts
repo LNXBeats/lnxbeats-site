@@ -12,6 +12,8 @@ import type { KnownOrderStatus } from "@/lib/orders/status";
 import { enqueueCustomerDeliveryNotification, enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deletePrivateOrderFile } from "@/lib/orders/storage";
+import { ORDER_DELIVERY_MIME_TYPES } from "@/lib/orders/audio-request";
+import { MAXIMUM_ORDER_DELIVERIES } from "@/lib/orders/delivery";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -30,6 +32,10 @@ const activeStatuses: KnownOrderStatus[] = ["ACCEPTED", "IN_PROGRESS", "FIRST_VE
 const pendingStatuses: KnownOrderStatus[] = ["DRAFT", "AWAITING_PAYMENT"];
 const closedStatuses: KnownOrderStatus[] = ["REFUSED", "CANCELLED", "REFUND_PENDING", "REFUNDED"];
 const paymentReviewFailureCodeFilter = { startsWith: "WEBHOOK_" } as const;
+const paidFulfillmentTargets = new Set<KnownOrderStatus>([
+  "RECEIVED", "REVIEWING", "ACCEPTED", "IN_PROGRESS", "FIRST_VERSION_READY",
+  "REVISION_REQUESTED", "FINALIZING", "DELIVERED",
+]);
 
 export function parseAdminOrderFilter(value: unknown): AdminOrderFilter {
   return typeof value === "string" && adminOrderFilters.includes(value as AdminOrderFilter)
@@ -147,7 +153,7 @@ export async function getAdminOrder(orderNumber: string) {
     include: {
       events: {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        include: { actor: { select: { displayName: true } } },
+        include: { actor: { select: { displayName: true, role: true } } },
       },
       assets: {
         where: { role: { in: ["REFERENCE", "DELIVERY"] } },
@@ -257,14 +263,36 @@ export async function transitionOrderStatus(orderNumber: string, requestedStatus
   return withOrderLock(orderNumber, async (transaction) => {
     const order = await transaction.order.findUnique({ where: { orderNumber } });
     if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");
+    if (order.status === "DELIVERED" && requestedStatus === "DELIVERED") return "DELIVERED";
     const transition = getAdminOrderTransition(order.status, requestedStatus);
     if (!transition) throw new AdminServiceError("Transition de statut interdite.", "TRANSITION_NOT_ALLOWED");
-    if (transition.to === "DELIVERED") {
-      const deliveries = await transaction.orderAsset.count({
-        where: { orderId: order.id, role: "DELIVERY", asset: { type: "AUDIO", visibility: "PRIVATE" } },
+    if (paidFulfillmentTargets.has(transition.to)) {
+      const successfulPayments = await transaction.payment.count({
+        where: { orderId: order.id, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] } },
       });
-      if (deliveries !== 1) {
-        throw new AdminServiceError("Un master privé valide est requis avant la publication.", "DELIVERY_REQUIRED");
+      if (successfulPayments < 1) {
+        throw new AdminServiceError("Cette étape exige un paiement confirmé.", "PAYMENT_REQUIRED");
+      }
+    }
+    if (transition.to === "DELIVERED") {
+      const [deliveries, validDeliveries] = await Promise.all([
+        transaction.orderAsset.count({
+          where: { orderId: order.id, role: "DELIVERY" },
+        }),
+        transaction.orderAsset.count({
+          where: {
+            orderId: order.id,
+            role: "DELIVERY",
+            asset: {
+              type: { in: ["AUDIO", "DOCUMENT", "IMAGE"] },
+              visibility: "PRIVATE",
+              mimeType: { in: [...ORDER_DELIVERY_MIME_TYPES] },
+            },
+          },
+        }),
+      ]);
+      if (deliveries < 1 || deliveries > MAXIMUM_ORDER_DELIVERIES || validDeliveries !== deliveries) {
+        throw new AdminServiceError("Au moins un livrable privé valide est requis avant la publication.", "DELIVERY_REQUIRED");
       }
     }
     const now = new Date();

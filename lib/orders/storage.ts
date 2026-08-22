@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Readable } from "node:stream";
 
 import {
+  createPrivateMediaSignedUrl,
   deleteMediaObject,
   getMediaObject,
   headMediaObject,
@@ -18,6 +19,17 @@ export class OrderStorageError extends Error {
     super(message);
     this.name = "OrderStorageError";
   }
+}
+
+export function createPrivateOrderDownloadUrl(
+  input: PrivateOrderReference,
+  options: { expiresInSeconds: number; downloadFilename?: string },
+) {
+  return createPrivateMediaSignedUrl(input, {
+    operation: "get",
+    expiresInSeconds: options.expiresInSeconds,
+    ...(options.downloadFilename ? { downloadFilename: options.downloadFilename } : {}),
+  });
 }
 
 type PrivateOrderReference = Pick<MediaStorageReference, "storageKey" | "storageBackend" | "storageProvider" | "visibility">;

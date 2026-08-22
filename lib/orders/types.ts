@@ -22,10 +22,13 @@ export type SerializedOrderPhoto = {
 
 export type SerializedOrderDelivery = {
   id: string;
+  assetType: "AUDIO" | "DOCUMENT" | "IMAGE";
   filename: string;
   mimeType: string;
   sizeBytes: number;
-  durationMs: number;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
   createdAt: string;
 };
 
@@ -69,6 +72,8 @@ export type SerializedOrder = OrderDraftInput & {
   updatedAt: string;
   events: SerializedOrderEvent[];
   photos: SerializedOrderPhoto[];
+  deliveries: SerializedOrderDelivery[];
+  /** Compatibility alias for the V0.7.2 rights surfaces. */
   delivery: SerializedOrderDelivery | null;
   payments: SerializedOrderPayment[];
 };

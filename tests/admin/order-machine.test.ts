@@ -19,6 +19,24 @@ test("the admin state machine only exposes contextual transitions", () => {
   assert.equal(getAdminOrderTransition("PAYMENT_CONFIRMED", "RECEIVED")?.label, "Confirmer la réception");
 });
 
+test("the fulfillment transition matrix is closed and cannot skip payment or production", () => {
+  const expected = {
+    DRAFT: [], AWAITING_PAYMENT: ["CANCELLED"], PAYMENT_CONFIRMED: ["RECEIVED"],
+    RECEIVED: ["REVIEWING", "REFUSED"], SUBMITTED: ["REVIEWING", "REFUSED"],
+    REVIEWING: ["ACCEPTED", "REFUSED"], ACCEPTED: ["IN_PROGRESS", "CANCELLED"],
+    IN_PROGRESS: ["FIRST_VERSION_READY", "CANCELLED"],
+    FIRST_VERSION_READY: ["REVISION_REQUESTED", "FINALIZING"],
+    REVISION_REQUESTED: ["IN_PROGRESS"], FINALIZING: ["DELIVERED"],
+    DELIVERED: [], REFUSED: [], CANCELLED: [], REFUND_PENDING: [], REFUNDED: [],
+  } as const;
+  for (const [status, targets] of Object.entries(expected)) {
+    assert.deepEqual(getAllowedOrderTransitions(status as keyof typeof expected).map(({ to }) => to), targets);
+  }
+  assert.equal(getAdminOrderTransition("AWAITING_PAYMENT", "IN_PROGRESS"), null);
+  assert.equal(getAdminOrderTransition("AWAITING_PAYMENT", "DELIVERED"), null);
+  assert.equal(getAdminOrderTransition("DELIVERED", "DRAFT"), null);
+});
+
 test("payment and refund statuses cannot be forged by the admin cockpit", () => {
   const sourceStatuses = ["AWAITING_PAYMENT", "RECEIVED", "REVIEWING", "ACCEPTED", "IN_PROGRESS", "FINALIZING"] as const;
   for (const status of sourceStatuses) {

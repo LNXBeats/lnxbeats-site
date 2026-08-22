@@ -29,6 +29,23 @@ type OrderDetailPageProps = {
   searchParams: Promise<{ paiement?: string; token?: string }>;
 };
 
+const fulfillmentSteps = ["Commande reçue", "Création en cours", "Finalisation", "Livraison disponible"] as const;
+
+function fulfillmentStep(status: string) {
+  if (status === "DELIVERED") return 3;
+  if (status === "FINALIZING") return 2;
+  if (["IN_PROGRESS", "FIRST_VERSION_READY", "REVISION_REQUESTED"].includes(status)) return 1;
+  return 0;
+}
+
+function deliveryFormat(mimeType: string) {
+  return ({
+    "audio/mpeg": "MP3", "audio/wav": "WAV", "audio/flac": "FLAC",
+    "application/zip": "ZIP", "application/pdf": "PDF",
+    "image/jpeg": "JPEG", "image/png": "PNG",
+  } as Record<string, string>)[mimeType] ?? "Fichier";
+}
+
 export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
   const { orderNumber } = await params;
   const query = await searchParams;
@@ -49,6 +66,8 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   const paymentProviders = await paymentProvidersAvailable();
   const rightsRequests = order.status === "DELIVERED" ? await listRightsRequestsForOrderActor(actor, order.orderNumber) : [];
   const canStartPayment = ["ready", "confirming", "failed", "expired"].includes(paymentState);
+  const activeFulfillmentStep = fulfillmentStep(order.status);
+  const confirmedPayment = order.payments.find((payment) => payment.status === "SUCCEEDED");
 
   return (
     <section className="auth-shell order-detail-shell">
@@ -63,6 +82,12 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           </div>
           <div className="order-detail__status"><span>Statut actuel</span><strong>{status.label}</strong></div>
         </header>
+
+        {!orderCanStillBeEdited(order) ? <nav className="order-fulfillment-progress" aria-label="Progression de la commande">
+          <ol>
+            {fulfillmentSteps.map((step, index) => <li key={step} data-state={index < activeFulfillmentStep ? "complete" : index === activeFulfillmentStep ? "current" : "future"} aria-current={index === activeFulfillmentStep ? "step" : undefined}><span aria-hidden="true">{index + 1}</span><strong>{step}</strong></li>)}
+          </ol>
+        </nav> : null}
 
         {paymentReturn === "retour" || paymentReturn === "annule" || paymentReturn === "paypal-retour" || paymentReturn === "paypal-annule" ? (
           <PaymentReturnNotice
@@ -109,17 +134,22 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
 
         <section className="order-detail__section order-delivery-future" aria-labelledby="order-delivery-title">
           <p className="auth-panel__label">Livraison</p>
-          {order.delivery ? (
+          {order.deliveries.length ? (
             <>
               <h2 id="order-delivery-title">Votre création est prête.</h2>
-              <p>Le master reste privé et n’est jamais exposé par une URL R2 publique permanente.</p>
+              <p>Vos livrables restent privés. Chaque téléchargement passe par votre session LNX Studio et utilise un accès R2 court, jamais une URL publique permanente.</p>
+              <ul className="order-delivery-list">
+                {order.deliveries.map((delivery, index) => <li key={delivery.id}>
+                  <div><span>Livrable {index + 1}</span><strong>{delivery.filename}</strong><small>{deliveryFormat(delivery.mimeType)} · {(delivery.sizeBytes / (1024 * 1024)).toFixed(1)} Mo</small></div>
+                  {delivery.assetType === "AUDIO" ? <audio controls preload="metadata" src={`/api/orders/${encodeURIComponent(order.orderNumber)}/delivery/${delivery.id}?lecture=1`}>Votre navigateur ne peut pas lire ce fichier audio.</audio> : null}
+                  <a className="form-button form-button--primary" href={`/api/orders/${encodeURIComponent(order.orderNumber)}/delivery/${delivery.id}`}>TÉLÉCHARGER</a>
+                </li>)}
+              </ul>
               <dl className="order-detail__facts">
-                <div><dt>Format</dt><dd>{order.delivery.mimeType === "audio/wav" ? "WAV" : "MP3"}</dd></div>
-                <div><dt>Taille</dt><dd>{(order.delivery.sizeBytes / (1024 * 1024)).toFixed(1)} Mo</dd></div>
-                <div><dt>Livraison</dt><dd>{new Date(order.delivery.createdAt).toLocaleString("fr-FR")}</dd></div>
+                {confirmedPayment?.paidAt ? <div><dt>Paiement confirmé</dt><dd>{new Date(confirmedPayment.paidAt).toLocaleString("fr-FR")}</dd></div> : null}
+                <div><dt>Livraison</dt><dd>{order.deliveredAt ? new Date(order.deliveredAt).toLocaleString("fr-FR") : "Disponible"}</dd></div>
                 {order.downloadExpiresAt ? <div><dt>Disponible jusqu’au</dt><dd>{new Date(order.downloadExpiresAt).toLocaleDateString("fr-FR")}</dd></div> : null}
               </dl>
-              <a className="form-button form-button--primary" href={`/api/orders/${encodeURIComponent(order.orderNumber)}/delivery/${order.delivery.id}`}>TÉLÉCHARGER MA CRÉATION</a>
             </>
           ) : (
             <>
@@ -129,7 +159,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           )}
         </section>
 
-        {order.status === "DELIVERED" && order.delivery ? <RightsOptionsSection orderNumber={order.orderNumber} requests={rightsRequests} /> : null}
+        {order.status === "DELIVERED" && order.deliveries.length ? <RightsOptionsSection orderNumber={order.orderNumber} requests={rightsRequests} /> : null}
 
         <section className="order-detail__section" aria-labelledby="order-brief-title">
           <p className="auth-panel__label">Récapitulatif</p>

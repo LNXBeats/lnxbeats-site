@@ -24,6 +24,7 @@ import { normalizeOrderImage, type NormalizedOrderImage } from "@/lib/orders/upl
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { canReadOrderMedia } from "@/lib/media/authorization";
 import { personalUseTermsSnapshot } from "@/lib/rights/domain";
+import { ORDER_DELIVERY_MIME_TYPES } from "@/lib/orders/audio-request";
 
 export class OrderServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -117,6 +118,24 @@ async function assertOrderEditableForPayment(
 }
 
 export function serializeOrder(order: OrderWithRelations): SerializedOrder {
+  const deliveries = order.status === "DELIVERED"
+    ? order.assets
+        .filter(({ role, asset }) => role === "DELIVERY"
+          && ["AUDIO", "DOCUMENT", "IMAGE"].includes(asset.type)
+          && asset.visibility === "PRIVATE"
+          && ORDER_DELIVERY_MIME_TYPES.includes(asset.mimeType as (typeof ORDER_DELIVERY_MIME_TYPES)[number]))
+        .map(({ asset, createdAt }) => ({
+          id: asset.id,
+          assetType: asset.type as "AUDIO" | "DOCUMENT" | "IMAGE",
+          filename: asset.filename,
+          mimeType: asset.mimeType,
+          sizeBytes: Number(asset.sizeBytes),
+          durationMs: asset.durationMs,
+          width: asset.width,
+          height: asset.height,
+          createdAt: createdAt.toISOString(),
+        }))
+    : [];
   return {
     orderNumber: order.orderNumber,
     status: order.status,
@@ -168,16 +187,8 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
       height: asset.height,
       position,
     })),
-    delivery: order.status === "DELIVERED"
-      ? order.assets.filter(({ role, asset }) => role === "DELIVERY" && asset.type === "AUDIO").map(({ asset, createdAt }) => ({
-          id: asset.id,
-          filename: asset.filename,
-          mimeType: asset.mimeType,
-          sizeBytes: Number(asset.sizeBytes),
-          durationMs: asset.durationMs ?? 0,
-          createdAt: createdAt.toISOString(),
-        }))[0] ?? null
-      : null,
+    deliveries,
+    delivery: deliveries[0] ?? null,
     payments: order.payments.map((payment) => ({
       id: payment.id,
       provider: payment.provider,

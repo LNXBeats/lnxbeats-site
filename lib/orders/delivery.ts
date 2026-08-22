@@ -5,7 +5,7 @@ import { createReadStream } from "node:fs";
 
 import type { Prisma } from "@/generated/prisma/client";
 
-import type { OrderDeliveryUpload } from "@/lib/orders/audio-request";
+import { ORDER_DELIVERY_MIME_TYPES, type OrderDeliveryUpload } from "@/lib/orders/audio-request";
 import type { OrderActor } from "@/lib/orders/domain";
 import { canReadOrderMedia } from "@/lib/media/authorization";
 import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
@@ -26,10 +26,13 @@ type StoredPrivateDelivery = PrivateDeliveryReference & { checksumSha256: string
 
 export type PersistedOrderDelivery = {
   id: string;
+  type: "AUDIO" | "DOCUMENT" | "IMAGE";
   filename: string;
   mimeType: string;
   sizeBytes: bigint;
   durationMs: number | null;
+  width: number | null;
+  height: number | null;
   createdAt: Date;
 };
 
@@ -45,7 +48,12 @@ export type OrderDeliveryDependencies = {
     orderNumber: string;
     source: OrderDeliveryUpload;
     stored: StoredPrivateDelivery;
-  }): Promise<{ delivery: PersistedOrderDelivery; previousReference: PrivateDeliveryReference | null }>;
+  }): Promise<{ delivery: PersistedOrderDelivery }>;
+  delete(reference: PrivateDeliveryReference): Promise<void>;
+};
+
+export type OrderDeliveryRemovalDependencies = {
+  detach(input: { actor: OrderActor; orderNumber: string; assetId: string }): Promise<PrivateDeliveryReference>;
   delete(reference: PrivateDeliveryReference): Promise<void>;
 };
 
@@ -67,6 +75,8 @@ const deliveryPreparationStatuses = new Set([
   "REVISION_REQUESTED",
   "FINALIZING",
 ]);
+
+export const MAXIMUM_ORDER_DELIVERIES = 8;
 
 export function orderAcceptsDeliveryUpload(status: string, hasSuccessfulPayment: boolean) {
   return hasSuccessfulPayment && deliveryPreparationStatuses.has(status);
@@ -93,12 +103,12 @@ async function withDeliveryOrderLock<T>(
   throw lastError;
 }
 
-async function paidOrderForDelivery(transaction: Transaction, orderNumber: string) {
+async function paidOrderForDelivery(transaction: Transaction, orderNumber: string, requireCapacity = true) {
   const order = await transaction.order.findUnique({
     where: { orderNumber },
     include: {
       payments: {
-        where: { status: "SUCCEEDED" },
+        where: { status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] } },
         select: { id: true },
       },
       assets: {
@@ -110,6 +120,9 @@ async function paidOrderForDelivery(transaction: Transaction, orderNumber: strin
   if (!order) throw new OrderDeliveryError("Commande introuvable.", 404, "ORDER_NOT_FOUND");
   if (!orderAcceptsDeliveryUpload(order.status, order.payments.length > 0)) {
     throw new OrderDeliveryError("Une livraison exige une commande payée encore en cours.", 409, "ORDER_NOT_DELIVERABLE");
+  }
+  if (requireCapacity && order.assets.length >= MAXIMUM_ORDER_DELIVERIES) {
+    throw new OrderDeliveryError("Cette commande contient déjà le maximum de huit livrables.", 409, "DELIVERY_LIMIT_REACHED");
   }
   return order;
 }
@@ -130,52 +143,52 @@ async function persistOrderDelivery(input: {
 }) {
   return withDeliveryOrderLock(input.orderNumber, async (transaction) => {
     const order = await paidOrderForDelivery(transaction, input.orderNumber);
-    const previous = order.assets[0]?.asset ?? null;
-    let previousReference: PrivateDeliveryReference | null = null;
-    if (previous) {
-      await transaction.orderAsset.delete({
-        where: { orderId_assetId_role: { orderId: order.id, assetId: previous.id, role: "DELIVERY" } },
-      });
-      await transaction.asset.delete({ where: { id: previous.id } });
-      previousReference = {
-        storageKey: previous.storageKey,
-        storageBackend: previous.storageBackend,
-        storageProvider: previous.storageProvider,
-        visibility: previous.visibility,
-      };
-    }
+    const position = order.assets.reduce((highest, link) => Math.max(highest, link.position), -1) + 1;
     const delivery = await transaction.asset.create({
       data: {
-        type: "AUDIO",
+        type: input.source.assetType,
         storageKey: input.stored.storageKey,
         filename: input.source.originalFilename,
         mimeType: input.source.mimeType,
         sizeBytes: BigInt(input.source.sizeBytes),
         durationMs: input.source.durationMs,
+        width: input.source.width,
+        height: input.source.height,
         storageBackend: input.stored.storageBackend,
         storageProvider: input.stored.storageProvider,
         visibility: "PRIVATE",
         checksumSha256: input.source.checksumSha256,
         rightsStatus: "CLEARED",
-        rightsNote: "Master privé déposé par l’administration pour cette commande.",
+        rightsNote: "Livrable privé déposé par l’administration pour cette commande.",
         confidence: "CONFIRMED",
       },
     });
     await transaction.orderAsset.create({
-      data: { orderId: order.id, assetId: delivery.id, role: "DELIVERY", position: 0 },
+      data: { orderId: order.id, assetId: delivery.id, role: "DELIVERY", position },
     });
     await transaction.orderEvent.create({
       data: {
         orderId: order.id,
+        fromStatus: order.status,
         toStatus: order.status,
-        note: previous
-          ? `Master de livraison remplacé par l’administration (${input.source.extension.toUpperCase()}).`
-          : `Master de livraison ajouté par l’administration (${input.source.extension.toUpperCase()}).`,
+        note: `Livrable privé ajouté par l’administration (${input.source.extension.toUpperCase()}).`,
         visibility: "INTERNAL",
         actorUserId: input.actor.id,
       },
     });
-    return { delivery, previousReference };
+    return {
+      delivery: {
+        id: delivery.id,
+        type: input.source.assetType,
+        filename: delivery.filename,
+        mimeType: delivery.mimeType,
+        sizeBytes: delivery.sizeBytes,
+        durationMs: delivery.durationMs,
+        width: delivery.width,
+        height: delivery.height,
+        createdAt: delivery.createdAt,
+      },
+    };
   });
 }
 
@@ -221,17 +234,61 @@ export async function putOrderDelivery(
   }
 
   try {
-    const { delivery, previousReference } = await dependencies.persist({ actor, orderNumber, source, stored });
-    if (previousReference) {
-      await dependencies.delete(previousReference).catch(() => {
-        console.warn("A replaced private delivery object requires storage reconciliation.");
-      });
-    }
+    const { delivery } = await dependencies.persist({ actor, orderNumber, source, stored });
     return delivery;
   } catch (error) {
     await dependencies.delete(newReference).catch(() => undefined);
     throw error;
   }
+}
+
+async function detachOrderDelivery(input: { actor: OrderActor; orderNumber: string; assetId: string }) {
+  return withDeliveryOrderLock(input.orderNumber, async (transaction) => {
+    const order = await paidOrderForDelivery(transaction, input.orderNumber, false);
+    const link = order.assets.find(({ asset }) => asset.id === input.assetId);
+    if (!link) throw new OrderDeliveryError("Livrable introuvable.", 404, "DELIVERY_NOT_FOUND");
+    await transaction.orderAsset.delete({
+      where: { orderId_assetId_role: { orderId: order.id, assetId: link.asset.id, role: "DELIVERY" } },
+    });
+    await transaction.asset.delete({ where: { id: link.asset.id } });
+    await transaction.orderEvent.create({
+      data: {
+        orderId: order.id,
+        fromStatus: order.status,
+        toStatus: order.status,
+        note: "Livrable privé retiré avant publication par l’administration.",
+        visibility: "INTERNAL",
+        actorUserId: input.actor.id,
+      },
+    });
+    return {
+      storageKey: link.asset.storageKey,
+      storageBackend: link.asset.storageBackend,
+      storageProvider: link.asset.storageProvider,
+      visibility: link.asset.visibility,
+    };
+  });
+}
+
+const databaseOrderDeliveryRemovalDependencies: OrderDeliveryRemovalDependencies = {
+  detach: detachOrderDelivery,
+  delete: deletePrivateOrderFile,
+};
+
+export async function removeOrderDelivery(
+  actor: OrderActor,
+  orderNumber: string,
+  assetId: string,
+  dependencies: OrderDeliveryRemovalDependencies = databaseOrderDeliveryRemovalDependencies,
+) {
+  if (actor.role !== "ADMIN") throw new OrderDeliveryError("Action réservée à l’administration.", 403, "ADMIN_REQUIRED");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assetId)) {
+    throw new OrderDeliveryError("Livrable introuvable.", 404, "DELIVERY_NOT_FOUND");
+  }
+  const reference = await dependencies.detach({ actor, orderNumber, assetId });
+  await dependencies.delete(reference).catch(() => {
+    console.warn("A detached private delivery object requires storage reconciliation.");
+  });
 }
 
 export function canDownloadOrderDelivery(
@@ -256,7 +313,11 @@ export async function getOrderDeliveryForActor(
     where: {
       assetId,
       role: "DELIVERY",
-      asset: { type: "AUDIO", visibility: "PRIVATE", mimeType: { in: ["audio/mpeg", "audio/wav"] } },
+      asset: {
+        type: { in: ["AUDIO", "DOCUMENT", "IMAGE"] },
+        visibility: "PRIVATE",
+        mimeType: { in: [...ORDER_DELIVERY_MIME_TYPES] },
+      },
       order: {
         orderNumber,
       },

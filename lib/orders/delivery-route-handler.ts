@@ -2,7 +2,7 @@ import "server-only";
 
 import { readOrderDeliveryUpload, type OrderDeliveryUpload } from "@/lib/orders/audio-request";
 import { orderDeliveryResponse } from "@/lib/orders/audio-response";
-import { getOrderDeliveryForActor, putOrderDelivery } from "@/lib/orders/delivery";
+import { getOrderDeliveryForActor, putOrderDelivery, removeOrderDelivery } from "@/lib/orders/delivery";
 import type { OrderActor } from "@/lib/orders/domain";
 import { orderErrorResponse, orderJson } from "@/lib/orders/http";
 import { isAllowedOrderMutation, orderActorFromHeaders } from "@/lib/orders/request";
@@ -20,10 +20,13 @@ export async function handleAdminDeliveryUpload(
     read(request: Request): Promise<OrderDeliveryUpload>;
     put(actor: OrderActor, orderNumber: string, source: OrderDeliveryUpload): Promise<{
       id: string;
+      type: "AUDIO" | "DOCUMENT" | "IMAGE";
       filename: string;
       mimeType: string;
       sizeBytes: bigint;
       durationMs: number | null;
+      width: number | null;
+      height: number | null;
       createdAt: Date;
     }>;
   } = {
@@ -47,10 +50,13 @@ export async function handleAdminDeliveryUpload(
     return orderJson({
       delivery: {
         id: delivery.id,
+        type: delivery.type,
         filename: delivery.filename,
         mimeType: delivery.mimeType,
         sizeBytes: Number(delivery.sizeBytes),
         durationMs: delivery.durationMs,
+        width: delivery.width,
+        height: delivery.height,
         createdAt: delivery.createdAt.toISOString(),
       },
     }, 201);
@@ -58,6 +64,34 @@ export async function handleAdminDeliveryUpload(
     return orderErrorResponse(error);
   } finally {
     if (source) await source.cleanup().catch(() => undefined);
+  }
+}
+
+export async function handleAdminDeliveryDelete(
+  request: Request,
+  input: { orderNumber: string; assetId: string },
+  dependencies: {
+    isAllowed(request: Request): boolean;
+    actor(headers: Headers): Promise<OrderActor | null>;
+    rateLimit(actorId: string): Promise<void>;
+    remove(actor: OrderActor, orderNumber: string, assetId: string): Promise<void>;
+  } = {
+    isAllowed: isAllowedOrderMutation,
+    actor: orderActorFromHeaders,
+    rateLimit: (actorId) => enforceOrderRateLimit(actorId, "delete"),
+    remove: removeOrderDelivery,
+  },
+) {
+  if (!dependencies.isAllowed(request)) return orderJson({ error: "Origine refusée." }, 403);
+  const actor = await dependencies.actor(request.headers);
+  if (!actor) return orderJson({ error: "Authentification requise." }, 401);
+  if (actor.role !== "ADMIN") return orderJson({ error: "Action réservée à l’administration." }, 403);
+  try {
+    await dependencies.rateLimit(actor.id);
+    await dependencies.remove(actor, input.orderNumber, input.assetId);
+    return orderJson({ removed: true });
+  } catch (error) {
+    return orderErrorResponse(error);
   }
 }
 

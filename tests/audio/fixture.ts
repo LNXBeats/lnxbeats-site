@@ -14,7 +14,7 @@ export async function createAudioFixture({
   outputPath,
 }: {
   seconds: number;
-  format: "mp3" | "wav";
+  format: "mp3" | "wav" | "flac";
   outputPath?: string;
 }) {
   if (!ffmpegStatic) throw new Error("FFmpeg fixture generator is unavailable.");
@@ -22,7 +22,7 @@ export async function createAudioFixture({
   const target = outputPath ?? path.join(temporaryDirectory!, `source.${format}`);
   const codecArgs = format === "mp3"
     ? ["-c:a", "libmp3lame", "-b:a", "256k", "-metadata", "title=QA PRIVATE SOURCE"]
-    : ["-c:a", "pcm_s24le"];
+    : format === "wav" ? ["-c:a", "pcm_s24le"] : ["-c:a", "flac"];
   await execFileAsync(ffmpegStatic, [
     "-nostdin", "-hide_banner", "-loglevel", "error",
     "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",

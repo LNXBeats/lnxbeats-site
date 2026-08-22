@@ -1,0 +1,78 @@
+# Livraison privée des commandes
+
+## Portée V0.7.5
+
+La livraison prolonge le paiement confirmé sans devenir une seconde source de vérité. PostgreSQL conserve l’état métier, les relations entre commande et fichiers, l’historique et la notification. R2 ne contient que les objets privés.
+
+Le workflow actif réutilise les statuts historiques :
+
+`PAYMENT_CONFIRMED → RECEIVED → REVIEWING → ACCEPTED → IN_PROGRESS → FIRST_VERSION_READY → FINALIZING → DELIVERED`
+
+Les variantes `SUBMITTED` et `REVISION_REQUESTED` restent prises en charge par la matrice fermée existante. L’Admin ne fournit jamais un statut libre : chaque transition est résolue côté serveur et partage le verrou de commande utilisé par les paiements.
+
+Toute progression de production exige une `Payment` confirmée (`SUCCEEDED` ou `PARTIALLY_REFUNDED`). Une commande impayée ne peut ni recevoir un livrable ni progresser dans la production. `DELIVERED` ne peut pas revenir vers un ancien état.
+
+## Audit de l’existant
+
+Avant V0.7.5, l’application disposait déjà de :
+
+- la machine d’état et des `OrderEvent` atomiques ;
+- un upload Admin MP3/WAV de 200 Mo vers R2 privé ;
+- un lien `OrderAsset` de rôle `DELIVERY` ;
+- une publication séparée par le passage à `DELIVERED` ;
+- un téléchargement authentifié avec ownership, `HEAD`, `Range` et `private, no-store` ;
+- une notification idempotente `CUSTOMER_DELIVERY_READY` ;
+- une durée de disponibilité de six mois.
+
+Le modèle était cependant limité par un index à un seul master, l’interface n’affichait qu’un fichier et les téléchargements R2 étaient relayés par l’application. V0.7.5 étend ce socle au lieu de créer un second domaine `Delivery`.
+
+## Dépôt et publication
+
+Une commande accepte au maximum huit livrables, chacun limité à 200 Mo. Les formats autorisés sont :
+
+- MP3 (`audio/mpeg`) ;
+- WAV (`audio/wav`) ;
+- FLAC (`audio/flac`) ;
+- ZIP (`application/zip`) ;
+- PDF (`application/pdf`) ;
+- JPEG (`image/jpeg`) ;
+- PNG (`image/png`).
+
+`application/octet-stream`, HTML, SVG et les formats exécutables sont refusés. Le navigateur effectue uniquement une vérification ergonomique. Le serveur impose la taille, normalise le nom original, compare extension/MIME/signature, décode entièrement l’audio avec FFmpeg et décode les images avec Sharp. Les clés R2 sont générées côté serveur sous `orders/<uuid>/deliveries/<uuid>.<extension>` ; un chemin client n’est jamais accepté.
+
+L’upload écrit d’abord l’objet privé puis crée l’`Asset` et l’`OrderAsset` dans une transaction verrouillée. Une erreur R2 ne crée aucune ligne. Une erreur PostgreSQL après l’écriture déclenche la suppression compensatoire de l’objet. Le fichier reste invisible au MEMBER tant que la commande n’est pas `DELIVERED`.
+
+Avant publication, l’Admin peut retirer un fichier. Le lien et l’asset sont retirés sous verrou puis l’objet privé est supprimé ; un échec de suppression laisse seulement un objet privé orphelin à réconcilier et ne rend jamais le fichier accessible. Après publication, aucune suppression silencieuse n’est autorisée.
+
+Le clic de publication vérifie dans une même transaction :
+
+1. la transition `FINALIZING → DELIVERED` ;
+2. un paiement confirmé ;
+3. un à huit livrables privés aux types autorisés ;
+4. la mise à jour de l’Order et de ses dates ;
+5. un `OrderEvent` client ;
+6. une seule notification outbox `CUSTOMER_DELIVERY_READY`.
+
+Une répétition ou deux clics concurrents retournent l’état déjà livré sans créer un second événement ni une seconde notification.
+
+## Accès et stockage
+
+Les objets sont toujours dans le bucket privé configuré par l’infrastructure média existante. Aucune nouvelle variable n’est requise.
+
+La route applicative vérifie successivement la session, l’état actif, le rôle, l’ownership de l’Order, son état `DELIVERED`, la fenêtre de téléchargement et la relation exacte `OrderAsset`. Un autre MEMBER, un visiteur, un UUID d’une autre Order ou une clé arbitraire obtient un refus sans révéler l’existence du fichier. L’ADMIN conserve un accès de contrôle.
+
+Pour R2, un `GET` autorisé reçoit une redirection vers une URL signée HTTPS valable dix minutes. Cette URL n’est ni persistée, ni journalisée, ni envoyée par e-mail. `HEAD` reste traité par l’application. Le backend local de test et le repli contrôlé conservent le streaming `Range`. Toutes les réponses applicatives utilisent `Cache-Control: private, no-store` et `X-Content-Type-Options: nosniff`.
+
+## Notification
+
+La publication ne contacte pas directement Resend. Elle crée l’outbox dans la transaction métier. Le dispatcher séparé respecte les flags client et les retries existants. Une panne ou une désactivation de l’e-mail n’annule jamais la livraison et n’empêche jamais le téléchargement.
+
+## Évolutions hors V0.7.5
+
+Une nouvelle version après livraison nécessitera une entité ou un numéro de version explicite, une nouvelle période de disponibilité et une politique de conservation. V0.7.5 rend la livraison publiée immuable et n’invente pas de remplacement postérieur.
+
+Une analyse antivirus asynchrone et une reprise multipart des très gros fichiers pourront être ajoutées avant une montée importante de volume. Les fichiers actuels sont bornés, non exécutables et servis en téléchargement privé avec `nosniff`.
+
+## QA locale
+
+`npm run test:delivery` couvre les formats, les signatures, les limites, la compensation, l’IDOR, les headers et l’URL signée. `npm run test:delivery:runtime` exige une base Prisma Dev jetable exacte `lnx-studio-v075-test` sur le port TCP attribué 51254 et des notifications client/propriétaire désactivées. Il ne contacte ni R2, ni Stripe, ni Resend : ses assets sont des métadonnées fictives et son nettoyage cible uniquement ses UUID déterministes.

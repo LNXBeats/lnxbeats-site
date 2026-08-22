@@ -6,7 +6,7 @@ import { orderOffer } from "@/data/order-offer";
 import { sanitizeOriginalFilename } from "@/lib/orders/domain";
 
 export type DetectedImageType = "JPEG" | "PNG" | "WEBP";
-export type DetectedOrderAudioType = "MP3" | "WAV";
+export type DetectedOrderAudioType = "MP3" | "WAV" | "FLAC";
 
 export class OrderUploadError extends Error {
   constructor(message: string, readonly code: string) {
@@ -29,8 +29,8 @@ export type NormalizedOrderImage = {
 export type ValidatedOrderAudioIdentity = {
   originalFilename: string;
   detectedType: DetectedOrderAudioType;
-  mimeType: "audio/mpeg" | "audio/wav";
-  extension: "mp3" | "wav";
+  mimeType: "audio/mpeg" | "audio/wav" | "audio/flac";
+  extension: "mp3" | "wav" | "flac";
 };
 
 const acceptedExtensions: Record<DetectedImageType, ReadonlySet<string>> = {
@@ -77,6 +77,10 @@ export function detectOrderAudioType(buffer: Uint8Array): DetectedOrderAudioType
     && Buffer.from(buffer.subarray(0, 4)).toString("ascii") === "RIFF"
     && Buffer.from(buffer.subarray(8, 12)).toString("ascii") === "WAVE"
   ) return "WAV";
+  if (
+    buffer.length >= 4
+    && Buffer.from(buffer.subarray(0, 4)).toString("ascii") === "fLaC"
+  ) return "FLAC";
   return null;
 }
 
@@ -94,25 +98,27 @@ export function validateOrderAudioIdentity(input: {
   }
   const detectedType = detectOrderAudioType(input.signature);
   if (!detectedType) {
-    throw new OrderUploadError("Le fichier n’est pas un MP3 ou WAV authentique.", "UNSUPPORTED_SIGNATURE");
+    throw new OrderUploadError("Le fichier n’est pas un MP3, WAV ou FLAC authentique.", "UNSUPPORTED_SIGNATURE");
   }
   const originalFilename = sanitizeOriginalFilename(input.originalFilename);
   const extension = originalFilename.includes(".") ? originalFilename.split(".").pop()?.toLowerCase() ?? "" : "";
-  const expectedExtension = detectedType === "MP3" ? "mp3" : "wav";
+  const expectedExtension = detectedType === "MP3" ? "mp3" : detectedType === "WAV" ? "wav" : "flac";
   if (extension !== expectedExtension) {
     throw new OrderUploadError("L’extension ne correspond pas au contenu réel du fichier audio.", "EXTENSION_MISMATCH");
   }
   const declaredMimeType = input.declaredMimeType.toLowerCase();
   const acceptedMimeTypes = detectedType === "MP3"
     ? new Set(["audio/mpeg", "audio/mp3", "audio/x-mpeg"])
-    : new Set(["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]);
+    : detectedType === "WAV"
+      ? new Set(["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"])
+      : new Set(["audio/flac", "audio/x-flac"]);
   if (!acceptedMimeTypes.has(declaredMimeType)) {
     throw new OrderUploadError("Le type annoncé ne correspond pas au contenu réel du fichier audio.", "MIME_MISMATCH");
   }
   return {
     originalFilename,
     detectedType,
-    mimeType: detectedType === "MP3" ? "audio/mpeg" : "audio/wav",
+    mimeType: detectedType === "MP3" ? "audio/mpeg" : detectedType === "WAV" ? "audio/wav" : "audio/flac",
     extension: expectedExtension,
   };
 }

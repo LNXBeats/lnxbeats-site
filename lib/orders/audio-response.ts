@@ -2,7 +2,9 @@ import "server-only";
 
 import { CatalogAudioRangeError, parseCatalogAudioRange } from "@/lib/catalog/audio-range";
 import { safeContentDisposition } from "@/lib/media/storage/policy";
-import { statPrivateOrderFile, streamPrivateOrderFile } from "@/lib/orders/storage";
+import { createPrivateOrderDownloadUrl, statPrivateOrderFile, streamPrivateOrderFile } from "@/lib/orders/storage";
+
+export const ORDER_DELIVERY_SIGNED_URL_SECONDS = 600;
 
 type PrivateOrderDeliveryAsset = {
   id: string;
@@ -29,11 +31,18 @@ function headersFor(asset: PrivateOrderDeliveryAsset, size: number, download: bo
   };
 }
 
+type OrderDeliveryResponseDependencies = {
+  sign?: typeof createPrivateOrderDownloadUrl;
+  stat: typeof statPrivateOrderFile;
+  stream: typeof streamPrivateOrderFile;
+};
+
 export async function orderDeliveryResponse(
   request: Request,
   asset: PrivateOrderDeliveryAsset,
   { head = false, download = true } = {},
-  dependencies = {
+  dependencies: OrderDeliveryResponseDependencies = {
+    sign: createPrivateOrderDownloadUrl,
     stat: statPrivateOrderFile,
     stream: streamPrivateOrderFile,
   },
@@ -65,6 +74,25 @@ export async function orderDeliveryResponse(
         return new Response(null, { status: 404 });
       }
       return new Response(null, { status: 200, headers: { ...headers, "content-length": String(size) } });
+    }
+    if (asset.storageBackend === "OBJECT" && "sign" in dependencies && dependencies.sign) {
+      const signedUrl = await dependencies.sign(asset, {
+        expiresInSeconds: ORDER_DELIVERY_SIGNED_URL_SECONDS,
+        ...(download ? { downloadFilename: asset.filename } : {}),
+      });
+      if (signedUrl) {
+        const target = new URL(signedUrl);
+        if (target.protocol !== "https:") return new Response(null, { status: 404 });
+        return new Response(null, {
+          status: 307,
+          headers: {
+            "cache-control": "private, no-store",
+            location: target.toString(),
+            "referrer-policy": "no-referrer",
+            "x-content-type-options": "nosniff",
+          },
+        });
+      }
     }
     const object = await dependencies.stream(asset, range ?? undefined);
     const expectedLength = range ? range.end - range.start + 1 : size;

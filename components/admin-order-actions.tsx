@@ -51,8 +51,8 @@ export function AdminOrderActions({ orderNumber, transitions, deletionEligible, 
     {!deletionEligible && (transitions.length === 0) && !emptyReason ? <p className="admin-action-reason">{deletionReason}</p> : null}
 
     <dialog ref={transitionDialog} className="admin-confirm-dialog" aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={(event) => { event.preventDefault(); transitionDialog.current?.close(); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); transitionDialog.current?.close(); } }} onClose={restoreFocus}>
-      <h2 id={titleId}>{selectedTransition?.to === "CANCELLED" ? "Confirmer l’annulation de cette commande ?" : `Confirmer : ${selectedTransition?.label ?? "cette action"} ?`}</h2>
-      <p id={descriptionId}>Cette action modifiera le statut et sera inscrite une seule fois dans l’historique.</p>
+      <h2 id={titleId}>{selectedTransition?.to === "CANCELLED" ? "Confirmer l’annulation de cette commande ?" : selectedTransition?.to === "DELIVERED" ? "Confirmer la livraison au client ?" : `Confirmer : ${selectedTransition?.label ?? "cette action"} ?`}</h2>
+      <p id={descriptionId}>{selectedTransition?.to === "DELIVERED" ? "Tous les livrables enregistrés deviendront accessibles au client et une notification unique sera préparée." : "Cette action modifiera le statut et sera inscrite une seule fois dans l’historique."}</p>
       <div className="admin-dialog-actions">
         <button type="button" onClick={() => transitionDialog.current?.close()}>Conserver la commande</button>
         {selectedTransition ? <form action={transitionOrderAction}><input type="hidden" name="orderNumber" value={orderNumber} /><input type="hidden" name="targetStatus" value={selectedTransition.to} /><button type="submit" className="admin-danger-action">Confirmer : {selectedTransition.label}</button></form> : null}

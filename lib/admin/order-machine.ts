@@ -38,7 +38,7 @@ const transitions = {
   ],
   FIRST_VERSION_READY: [
     { to: "REVISION_REQUESTED", label: "Enregistrer un retour client", eventNote: "Un retour sur la première version a été pris en compte.", visibility: "CLIENT" },
-    { to: "FINALIZING", label: "Passer en finalisation", eventNote: "La version finale est en préparation.", visibility: "CLIENT" },
+    { to: "FINALIZING", label: "Préparer la livraison", eventNote: "La version finale est en préparation.", visibility: "CLIENT" },
   ],
   REVISION_REQUESTED: [
     { to: "IN_PROGRESS", label: "Reprendre la création", eventNote: "Le retour client est en cours d’intégration.", visibility: "CLIENT" },

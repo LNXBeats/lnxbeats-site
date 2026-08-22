@@ -9,9 +9,12 @@ import {
   orderAcceptsDeliveryUpload,
   OrderDeliveryError,
   putOrderDelivery,
+  removeOrderDelivery,
   type OrderDeliveryDependencies,
+  type OrderDeliveryRemovalDependencies,
 } from "@/lib/orders/delivery";
 import {
+  handleAdminDeliveryDelete,
   handleAdminDeliveryUpload,
   handleOrderDeliveryDownload,
 } from "@/lib/orders/delivery-route-handler";
@@ -29,16 +32,19 @@ const member: OrderActor = { ...admin, id: "00000000-0000-4000-8000-000000000002
 const source: OrderDeliveryUpload = {
   path: "/private/tmp/not-read-by-unit-test",
   originalFilename: "master-final.wav",
+  assetType: "AUDIO",
   mimeType: "audio/wav",
   extension: "wav",
   sizeBytes: 1_024,
   durationMs: 12_000,
+  width: null,
+  height: null,
   checksumSha256: "a".repeat(64),
   cleanup: async () => undefined,
 };
 const orderId = "00000000-0000-4000-8000-000000000010";
 
-test("la sélection UI accepte MP3/WAV Safari et refuse type ou taille invalides", () => {
+test("la sélection UI accepte tous les formats de livraison et refuse type ou taille invalides", () => {
   assert.deepEqual(
     validateDeliveryFileSelection({ name: "master.mp3", type: "audio/mpeg", size: 1_024 }),
     { ok: true, format: "MP3" },
@@ -52,7 +58,10 @@ test("la sélection UI accepte MP3/WAV Safari et refuse type ou taille invalides
     { ok: true, format: "WAV" },
     "Safari peut laisser File.type vide; le serveur reste l’autorité sur le contenu réel.",
   );
-  assert.equal(validateDeliveryFileSelection({ name: "master.pdf", type: "application/pdf", size: 2_048 }).ok, false);
+  for (const [name, type] of [["master.flac", "audio/flac"], ["sources.zip", "application/zip"], ["notes.pdf", "application/pdf"], ["cover.jpg", "image/jpeg"], ["cover.png", "image/png"]]) {
+    assert.equal(validateDeliveryFileSelection({ name, type, size: 2_048 }).ok, true);
+  }
+  assert.equal(validateDeliveryFileSelection({ name: "script.js", type: "text/javascript", size: 2_048 }).ok, false);
   assert.equal(validateDeliveryFileSelection({ name: "master.mp3", type: "audio/wav", size: 2_048 }).ok, false);
   assert.equal(validateDeliveryFileSelection({ name: "master.wav", type: "audio/wav", size: 200 * 1024 * 1024 + 1 }).ok, false);
 });
@@ -72,13 +81,15 @@ function dependencies(overrides: Partial<OrderDeliveryDependencies> = {}) {
     persist: async () => ({
       delivery: {
         id: "00000000-0000-4000-8000-000000000020",
+        type: source.assetType,
         filename: source.originalFilename,
         mimeType: source.mimeType,
         sizeBytes: BigInt(source.sizeBytes),
         durationMs: source.durationMs,
+        width: source.width,
+        height: source.height,
         createdAt: new Date("2026-08-14T00:00:00Z"),
       },
-      previousReference: null,
     }),
     delete: async (reference) => { deleted.push(reference.storageKey); },
     ...overrides,
@@ -140,33 +151,40 @@ test("un backend non R2 ou un objet non privé est refusé et compensé", async 
   assert.equal(wrongVisibility.deleted.length, 1);
 });
 
-test("le remplacement retire l’ancien master après persistance et compense un échec DB", async () => {
-  const previousKey = `orders/${orderId}/deliveries/00000000-0000-4000-8000-000000000030.mp3`;
-  const replacement = dependencies({
+test("un nouvel upload s’ajoute sans retirer les précédents et compense un échec DB", async () => {
+  const appended = dependencies({
     persist: async () => ({
       delivery: {
         id: "00000000-0000-4000-8000-000000000040",
+        type: source.assetType,
         filename: source.originalFilename,
         mimeType: source.mimeType,
         sizeBytes: BigInt(source.sizeBytes),
         durationMs: source.durationMs,
+        width: source.width,
+        height: source.height,
         createdAt: new Date(0),
-      },
-      previousReference: {
-        storageKey: previousKey,
-        storageBackend: "OBJECT",
-        storageProvider: "r2",
-        visibility: "PRIVATE",
       },
     }),
   });
-  await putOrderDelivery(admin, "LNX-2026-000001", source, replacement.value);
-  assert.deepEqual(replacement.deleted, [previousKey]);
+  await putOrderDelivery(admin, "LNX-2026-000001", source, appended.value);
+  assert.deepEqual(appended.deleted, []);
 
   const failed = dependencies({ persist: async () => { throw new Error("database failure"); } });
   await assert.rejects(putOrderDelivery(admin, "LNX-2026-000001", source, failed.value), /database failure/);
   assert.equal(failed.deleted.length, 1);
   assert.match(failed.deleted[0]!, /\/deliveries\/[0-9a-f-]{36}\.wav$/i);
+});
+
+test("un ADMIN peut retirer un livrable avant publication, jamais via un profil MEMBER", async () => {
+  const deleted: string[] = [];
+  const removal: OrderDeliveryRemovalDependencies = {
+    detach: async () => ({ storageKey: `orders/${orderId}/deliveries/00000000-0000-4000-8000-000000000020.wav`, storageBackend: "OBJECT", storageProvider: "r2", visibility: "PRIVATE" }),
+    delete: async (reference) => { deleted.push(reference.storageKey); },
+  };
+  await assert.rejects(removeOrderDelivery(member, "LNX-2026-000001", "00000000-0000-4000-8000-000000000020", removal), (error: unknown) => error instanceof OrderDeliveryError && error.code === "ADMIN_REQUIRED");
+  await removeOrderDelivery(admin, "LNX-2026-000001", "00000000-0000-4000-8000-000000000020", removal);
+  assert.equal(deleted.length, 1);
 });
 
 test("propriétaire et ADMIN lisent une livraison publiée; autre membre et expiration sont refusés", () => {
@@ -205,13 +223,23 @@ test("les handlers refusent anonyme/MEMBER à l’upload et masquent l’IDOR au
     respond: async () => new Response(),
   });
   assert.equal(idor.status, 404);
+
+  let removeCalls = 0;
+  const deniedDelete = await handleAdminDeliveryDelete(new Request("http://localhost/delete", { method: "DELETE" }), { orderNumber: "LNX-2026-000001", assetId }, {
+    isAllowed: () => true,
+    actor: async () => member,
+    rateLimit: async () => undefined,
+    remove: async () => { removeCalls += 1; },
+  });
+  assert.equal(deniedDelete.status, 403);
+  assert.equal(removeCalls, 0);
 });
 
-test("la migration est additive et impose un seul master actif", async () => {
-  const sql = await readFile("prisma/migrations/20260814190000_order_delivery_notifications/migration.sql", "utf8");
-  assert.match(sql, /CREATE UNIQUE INDEX "order_assets_one_delivery_per_order"[\s\S]*WHERE "role" = 'DELIVERY'/);
-  assert.match(sql, /ON DELETE RESTRICT/);
-  assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE|DELETE\s+FROM|UPDATE\s+"orders")\b/i);
+test("la migration multi-livrables ne supprime aucune donnée et protège les positions", async () => {
+  const sql = await readFile("prisma/migrations/20260822120000_multiple_order_deliveries/migration.sql", "utf8");
+  assert.match(sql, /DROP INDEX IF EXISTS "order_assets_one_delivery_per_order"/);
+  assert.match(sql, /CREATE UNIQUE INDEX "order_assets_delivery_position_unique"[\s\S]*\("orderId", "position"\)[\s\S]*WHERE "role" = 'DELIVERY'/);
+  assert.doesNotMatch(sql, /\b(?:DROP\s+(?:TABLE|COLUMN)|TRUNCATE|DELETE\s+FROM|UPDATE\s+"orders")\b/i);
 });
 
 test("Compte et Admin exposent le workflow livraison sans réintroduire un upload audio client", async () => {
@@ -225,13 +253,13 @@ test("Compte et Admin exposent le workflow livraison sans réintroduire un uploa
   ]);
   assert.match(account, /Votre création est en cours/);
   assert.match(account, /Votre création est prête/);
-  assert.match(account, /TÉLÉCHARGER MA CRÉATION/);
+  assert.match(account, /order\.deliveries\.map/);
   assert.match(adminPage, /AdminOrderDeliveryPanel/);
-  assert.match(adminPanel, /MP3 ou WAV · maximum 200 Mo · stockage R2 privé/);
+  assert.match(adminPanel, /MP3, WAV, FLAC, ZIP, PDF, JPEG ou PNG/);
   assert.match(adminPanel, /\?lecture=1/);
   assert.match(adminPanel, /<label className="admin-delivery-picker" htmlFor=\{inputId\}/);
   assert.match(adminPanel, /className="admin-delivery-picker__input"[\s\S]*type="file"[\s\S]*aria-describedby=\{helpId\}/);
-  assert.match(adminPanel, /disabled=\{!file \|\| selection\?\.ok !== true \|\| busy\}/);
+  assert.match(adminPanel, /disabled=\{!file \|\| selection\?\.ok !== true \|\| busy \|\| removingId !== null\}/);
   assert.match(adminPanel, /Nom[\s\S]*Format[\s\S]*Taille/);
   const fileInputRule = adminCss.match(/\.admin-delivery-picker__input\s*\{([\s\S]*?)\}/)?.[1] ?? "";
   assert.match(fileInputRule, /position:\s*absolute/);
@@ -239,7 +267,7 @@ test("Compte et Admin exposent le workflow livraison sans réintroduire un uploa
   assert.match(fileInputRule, /pointer-events:\s*auto/);
   assert.doesNotMatch(fileInputRule, /display:\s*none|visibility:\s*hidden|pointer-events:\s*none/);
   assert.match(adminCss, /\.admin-delivery-picker:focus-within/);
-  assert.match(adminPage, /to !== "DELIVERED" \|\| Boolean\(delivery\)/);
+  assert.match(adminPage, /to !== "DELIVERED" \|\| deliveries\.length > 0/);
   assert.match(adminActions, /emptyReason/);
   assert.doesNotMatch(commander, /accept=[^>]*(?:audio|\.mp3|\.wav)|references\/audio/i);
 });
