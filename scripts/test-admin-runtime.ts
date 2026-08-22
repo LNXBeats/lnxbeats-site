@@ -172,14 +172,17 @@ async function run() {
     const adminDetail = await getAdminOrder(draft.orderNumber);
     assert.equal(adminDetail?.events.some(({ visibility }) => visibility === "INTERNAL"), true);
     assert.equal(adminDetail?.payments.length, 1);
-    assert.deepEqual(adminDetail?.notifications, []);
+    assert.deepEqual(
+      adminDetail?.notifications.map(({ kind, status, attempts }) => ({ kind, status, attempts })),
+      [{ kind: "CUSTOMER_ORDER_ACCEPTED", status: "PENDING", attempts: 0 }],
+    );
     assert.deepEqual(Object.keys(adminDetail?.payments[0] ?? {}).sort(), [
       "amountCents", "createdAt", "currency", "events", "failureCode", "id", "mode", "paymentMethod", "pricingVersion", "provider",
       "providerCheckoutId", "providerPaymentId", "status", "updatedAt",
     ].sort());
     const clientDetail = await getOrderForActor(member, draft.orderNumber);
     assert.equal(clientDetail?.events.some(({ note }) => note === "Note réservée au cockpit."), false);
-    passed.push("internal event hidden from member serialization");
+    passed.push("internal event hidden from member serialization and accepted notification visible in Admin outbox");
 
     const members = await listAdminMembers();
     assert.equal(members.length, 2);

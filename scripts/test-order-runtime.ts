@@ -170,11 +170,19 @@ async function run() {
     assert.ok(finalized.submittedAt);
     assert.equal(finalized.usage, "PERSONAL");
     assert.equal(finalized.totalCents, 9_000);
-    await assert.rejects(saveDraftOrder(member, draft.orderNumber, baseInput));
+    const editableBeforeCheckout = await saveDraftOrder(member, draft.orderNumber, baseInput);
+    assert.equal(editableBeforeCheckout.status, "AWAITING_PAYMENT");
+    assert.equal(editableBeforeCheckout.totalCents, 5_000);
+    const restoredBeforeCheckout = await saveDraftOrder(member, draft.orderNumber, {
+      ...baseInput,
+      coverIncluded: true,
+      priorityProcessing: true,
+    });
+    assert.equal(restoredBeforeCheckout.totalCents, 9_000);
     assert.equal(await getOrderForActor(other, draft.orderNumber), null);
     assert.ok(await getOrderForActor(admin, draft.orderNumber));
     assert.deepEqual((await listMemberOrders(other)).map((order) => order.orderNumber), [invalid.orderNumber]);
-    passed.push("atomic finalization, immutable submitted brief and access control validated");
+    passed.push("atomic finalization, pre-Checkout editing and access control validated");
 
     const deliveredAt = new Date();
     await prisma.$transaction(async (transaction) => {
