@@ -62,6 +62,9 @@ export class MediaStorageError extends Error {
   constructor(
     readonly code: "CONFIGURATION" | "INVALID_KEY" | "NOT_FOUND" | "INTEGRITY" | "PROVIDER",
     message = "Media storage operation failed.",
+    readonly providerCode: string | null = null,
+    readonly providerStatusCode: number | null = null,
+    readonly cleanupOutcome: "not_required" | "succeeded" | "failed" = "not_required",
   ) {
     super(message);
     this.name = "MediaStorageError";

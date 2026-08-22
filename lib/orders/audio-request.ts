@@ -49,6 +49,16 @@ type PendingAudioFile = {
   checksumSha256: string;
 };
 
+function isEarlyStreamClose(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error && typeof error.code === "string" ? error.code : "";
+  const name = "name" in error && typeof error.name === "string" ? error.name : "";
+  return code === "ERR_STREAM_PREMATURE_CLOSE"
+    || code === "ECONNRESET"
+    || code === "EPIPE"
+    || name === "AbortError";
+}
+
 async function signature(target: string) {
   const handle = await open(target, "r");
   try {
@@ -126,6 +136,7 @@ export async function readOrderDeliveryUpload(request: Request): Promise<OrderDe
   let receivedFile = false;
   let fileInfo: PendingAudioFile | null = null;
   let filePromise: Promise<void> | null = null;
+  let filePipelineError: unknown = null;
   let parserError: OrderUploadError | null = null;
   const parser = Busboy({
     headers: { "content-type": contentType },
@@ -164,7 +175,11 @@ export async function readOrderDeliveryUpload(request: Request): Promise<OrderDe
         sizeBytes,
         checksumSha256: hash.digest("hex"),
       };
-    })();
+    })().catch((error: unknown) => {
+      // Attach the rejection handler immediately. A destination failure can
+      // otherwise reject while Busboy is still parsing the outer request.
+      filePipelineError = error;
+    });
   });
   const invalidMultipart = () => {
     parserError = new OrderUploadError("La demande de livrable est invalide.", "INVALID_MULTIPART");
@@ -187,6 +202,7 @@ export async function readOrderDeliveryUpload(request: Request): Promise<OrderDe
   try {
     await pipeline(Readable.fromWeb(request.body as never), counter, parser);
     if (filePromise) await filePromise;
+    if (filePipelineError) throw filePipelineError;
     if (parserError) throw parserError;
     if (!fileInfo) throw new OrderUploadError("Sélectionnez un livrable.", "EMPTY_FILE");
     const completedFile = fileInfo as PendingAudioFile;
@@ -252,8 +268,12 @@ export async function readOrderDeliveryUpload(request: Request): Promise<OrderDe
       cleanup: () => rm(temporaryDirectory, { recursive: true, force: true }),
     };
   } catch (error) {
+    await (filePromise as Promise<void> | null)?.catch(() => undefined);
     await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined);
     if (error instanceof OrderUploadError) throw error;
+    if (isEarlyStreamClose(error)) {
+      throw new OrderUploadError("Le transfert du livrable a été interrompu. Réessayez avec le même fichier.", "STREAM_CLOSED_EARLY");
+    }
     throw new OrderUploadError("La demande de livrable est invalide.", "INVALID_MULTIPART");
   }
 }

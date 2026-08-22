@@ -8,7 +8,9 @@ import {
   PutObjectCommand,
   S3Client,
   type S3ClientConfig,
+  type PutObjectCommandInput,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { assertMediaStorageKey, safeContentDisposition } from "@/lib/media/storage/policy";
@@ -26,6 +28,8 @@ import {
 type S3LikeClient = Pick<S3Client, "send">;
 
 const DEFAULT_OBJECT_OPERATION_TIMEOUT_MS = 180_000;
+export const S3_MULTIPART_PART_SIZE_BYTES = 8 * 1024 * 1024;
+export const S3_MULTIPART_QUEUE_SIZE = 2;
 
 export type S3MediaStorageOptions = {
   provider: string;
@@ -47,10 +51,38 @@ async function streamSha256(body: ReadableStream<Uint8Array>) {
   return hash.digest("hex");
 }
 
-function providerError(error: unknown): never {
+function safeProviderCode(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const candidate = "code" in error && typeof error.code === "string"
+    ? error.code
+    : "name" in error && typeof error.name === "string"
+      ? error.name
+      : null;
+  return candidate && /^[A-Za-z0-9_.:-]{1,80}$/.test(candidate) ? candidate : null;
+}
+
+function safeProviderStatusCode(error: unknown) {
+  if (!error || typeof error !== "object" || !("$metadata" in error)) return null;
+  const metadata = error.$metadata;
+  if (!metadata || typeof metadata !== "object" || !("httpStatusCode" in metadata)) return null;
+  return typeof metadata.httpStatusCode === "number" && Number.isSafeInteger(metadata.httpStatusCode)
+    ? metadata.httpStatusCode
+    : null;
+}
+
+function providerError(
+  error: unknown,
+  cleanupOutcome: MediaStorageError["cleanupOutcome"] = "not_required",
+): never {
   const name = error && typeof error === "object" && "name" in error ? String(error.name) : "";
   if (name === "NoSuchKey" || name === "NotFound") throw new MediaStorageError("NOT_FOUND", "Media object not found.");
-  throw new MediaStorageError("PROVIDER", "The object storage provider rejected the media operation.");
+  throw new MediaStorageError(
+    "PROVIDER",
+    "The object storage provider rejected the media operation.",
+    safeProviderCode(error),
+    safeProviderStatusCode(error),
+    cleanupOutcome,
+  );
 }
 
 export class S3MediaStorage implements MediaStorage {
@@ -88,6 +120,25 @@ export class S3MediaStorage implements MediaStorage {
     return this.buckets[scope];
   }
 
+  private async uploadStream(parameters: PutObjectCommandInput) {
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), this.operationTimeoutMs);
+    timeout.unref();
+    try {
+      const upload = new Upload({
+        client: this.client as S3Client,
+        params: parameters,
+        queueSize: S3_MULTIPART_QUEUE_SIZE,
+        partSize: S3_MULTIPART_PART_SIZE_BYTES,
+        leavePartsOnError: false,
+        abortController,
+      });
+      return await upload.done();
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   async put(input: MediaStoragePutInput): Promise<MediaObjectMetadata> {
     const bucket = this.bucket(input.scope, input.key);
     // Application writes always use a fresh, server-generated object key. Mark
@@ -96,7 +147,7 @@ export class S3MediaStorage implements MediaStorage {
     let putAttempted = false;
     try {
       putAttempted = true;
-      const result = await this.client.send(new PutObjectCommand({
+      const parameters: PutObjectCommandInput = {
         Bucket: bucket,
         Key: input.key,
         Body: input.body,
@@ -105,7 +156,16 @@ export class S3MediaStorage implements MediaStorage {
         CacheControl: input.scope === "public" ? "public, max-age=31536000, immutable" : "private, no-store",
         ...(input.contentDisposition ? { ContentDisposition: input.contentDisposition } : {}),
         Metadata: { "sha256": input.checksumSha256 },
-      }), { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) });
+      };
+      // A raw Node Readable is not replayable by Smithy's retry middleware.
+      // The managed uploader buffers only bounded parts, so each UploadPart
+      // request is retryable without ever loading a 200 MiB delivery in RAM.
+      const result = input.body instanceof Uint8Array
+        ? await this.client.send(
+            new PutObjectCommand(parameters),
+            { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+          )
+        : await this.uploadStream(parameters);
       const verified = await this.head({ scope: input.scope, key: input.key });
       if (verified.contentLength !== input.contentLength) {
         throw new MediaStorageError("INTEGRITY", "The stored media size does not match its metadata.");
@@ -122,14 +182,28 @@ export class S3MediaStorage implements MediaStorage {
       }
       return { ...verified, etag: result.ETag ?? verified.etag };
     } catch (error) {
+      let cleanupOutcome: MediaStorageError["cleanupOutcome"] = "not_required";
       if (putAttempted) {
-        await this.client.send(
-          new DeleteObjectCommand({ Bucket: bucket, Key: input.key }),
-          { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
-        ).catch(() => undefined);
+        try {
+          await this.client.send(
+            new DeleteObjectCommand({ Bucket: bucket, Key: input.key }),
+            { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+          );
+          cleanupOutcome = "succeeded";
+        } catch {
+          cleanupOutcome = "failed";
+        }
       }
-      if (error instanceof MediaStorageError) throw error;
-      return providerError(error);
+      if (error instanceof MediaStorageError) {
+        throw new MediaStorageError(
+          error.code,
+          error.message,
+          error.providerCode,
+          error.providerStatusCode,
+          cleanupOutcome,
+        );
+      }
+      return providerError(error, cleanupOutcome);
     }
   }
 

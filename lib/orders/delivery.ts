@@ -9,6 +9,7 @@ import { ORDER_DELIVERY_MIME_TYPES, type OrderDeliveryUpload } from "@/lib/order
 import type { OrderActor } from "@/lib/orders/domain";
 import { canReadOrderMedia } from "@/lib/media/authorization";
 import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
+import { MediaStorageError } from "@/lib/media/storage/types";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/storage";
 import { orderOffer } from "@/data/order-offer";
@@ -62,6 +63,42 @@ export class OrderDeliveryError extends Error {
     super(message);
     this.name = "OrderDeliveryError";
   }
+}
+
+export type OrderDeliveryFailureStage =
+  | "storage_configuration"
+  | "database_prepare"
+  | "storage_upload"
+  | "database_persist";
+
+export class OrderDeliveryProcessingError extends OrderDeliveryError {
+  constructor(
+    readonly stage: OrderDeliveryFailureStage,
+    readonly originalError: unknown,
+    readonly cleanupOutcome: "not_required" | "succeeded" | "failed",
+    readonly orderId: string | null = null,
+  ) {
+    super(
+      stage === "storage_configuration" || stage === "storage_upload"
+        ? "Le stockage privé de livraison est momentanément indisponible."
+        : "La livraison n’a pas pu être enregistrée.",
+      stage === "storage_configuration" || stage === "storage_upload" ? 503 : 500,
+      stage === "storage_configuration" || stage === "storage_upload"
+        ? "DELIVERY_STORAGE_UNAVAILABLE"
+        : "DELIVERY_PERSISTENCE_FAILED",
+    );
+    this.name = "OrderDeliveryProcessingError";
+  }
+}
+
+function processingFailure(
+  stage: OrderDeliveryFailureStage,
+  error: unknown,
+  cleanupOutcome: OrderDeliveryProcessingError["cleanupOutcome"] = "not_required",
+  orderId: string | null = null,
+): never {
+  if (error instanceof OrderDeliveryError) throw error;
+  throw new OrderDeliveryProcessingError(stage, error, cleanupOutcome, orderId);
 }
 
 const deliveryPreparationStatuses = new Set([
@@ -219,14 +256,34 @@ export async function putOrderDelivery(
   if (source.sizeBytes <= 0 || source.sizeBytes > orderOffer.maxDeliveryBytes) {
     throw new OrderDeliveryError("Le fichier de livraison doit peser au maximum 200 Mo.", 413, "DELIVERY_TOO_LARGE");
   }
-  const configuration = dependencies.validateStorage();
+  let configuration: { backend: string; provider: string };
+  try {
+    configuration = dependencies.validateStorage();
+  } catch (error) {
+    processingFailure("storage_configuration", error);
+  }
   if (configuration.backend !== "OBJECT" || configuration.provider !== "r2") {
     throw new OrderDeliveryError("Le stockage privé de livraison est indisponible.", 503, "DELIVERY_STORAGE_UNAVAILABLE");
   }
 
-  const prepared = await dependencies.prepareOrder(orderNumber);
+  let prepared: { id: string };
+  try {
+    prepared = await dependencies.prepareOrder(orderNumber);
+  } catch (error) {
+    processingFailure("database_prepare", error);
+  }
   const storageKey = `orders/${prepared.id}/deliveries/${randomUUID()}.${source.extension}`;
-  const stored = await dependencies.write({ storageKey, source });
+  let stored: StoredPrivateDelivery;
+  try {
+    stored = await dependencies.write({ storageKey, source });
+  } catch (error) {
+    processingFailure(
+      "storage_upload",
+      error,
+      error instanceof MediaStorageError ? error.cleanupOutcome : "not_required",
+      prepared.id,
+    );
+  }
   const newReference: PrivateDeliveryReference = stored;
   if (stored.storageBackend !== "OBJECT" || stored.storageProvider !== "r2" || stored.visibility !== "PRIVATE") {
     await dependencies.delete(newReference).catch(() => undefined);
@@ -237,8 +294,9 @@ export async function putOrderDelivery(
     const { delivery } = await dependencies.persist({ actor, orderNumber, source, stored });
     return delivery;
   } catch (error) {
-    await dependencies.delete(newReference).catch(() => undefined);
-    throw error;
+    let cleanupOutcome: OrderDeliveryProcessingError["cleanupOutcome"] = "succeeded";
+    await dependencies.delete(newReference).catch(() => { cleanupOutcome = "failed"; });
+    processingFailure("database_persist", error, cleanupOutcome, prepared.id);
   }
 }
 

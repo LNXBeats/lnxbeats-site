@@ -3,6 +3,7 @@ import "server-only";
 import { readOrderDeliveryUpload, type OrderDeliveryUpload } from "@/lib/orders/audio-request";
 import { orderDeliveryResponse } from "@/lib/orders/audio-response";
 import { getOrderDeliveryForActor, putOrderDelivery, removeOrderDelivery } from "@/lib/orders/delivery";
+import { logOrderDeliveryUploadFailure } from "@/lib/orders/delivery-observability";
 import type { OrderActor } from "@/lib/orders/domain";
 import { orderErrorResponse, orderJson } from "@/lib/orders/http";
 import { isAllowedOrderMutation, orderActorFromHeaders } from "@/lib/orders/request";
@@ -29,12 +30,19 @@ export async function handleAdminDeliveryUpload(
       height: number | null;
       createdAt: Date;
     }>;
+    logFailure?(input: {
+      orderNumber: string;
+      error: unknown;
+      source: OrderDeliveryUpload | null;
+      declaredLength: string | null;
+    }): void;
   } = {
     isAllowed: isAllowedOrderMutation,
     actor: orderActorFromHeaders,
     rateLimit: (actorId) => enforceOrderRateLimit(actorId, "upload"),
     read: readOrderDeliveryUpload,
     put: putOrderDelivery,
+    logFailure: logOrderDeliveryUploadFailure,
   },
 ) {
   if (!dependencies.isAllowed(request)) return orderJson({ error: "Origine refusée." }, 403);
@@ -61,6 +69,12 @@ export async function handleAdminDeliveryUpload(
       },
     }, 201);
   } catch (error) {
+    (dependencies.logFailure ?? logOrderDeliveryUploadFailure)({
+      orderNumber,
+      error,
+      source,
+      declaredLength: request.headers.get("content-length"),
+    });
     return orderErrorResponse(error);
   } finally {
     if (source) await source.cleanup().catch(() => undefined);

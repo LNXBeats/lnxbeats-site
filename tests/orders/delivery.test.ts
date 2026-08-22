@@ -2,23 +2,27 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { orderOffer } from "@/data/order-offer";
 import type { OrderDeliveryUpload } from "@/lib/orders/audio-request";
 import { validateDeliveryFileSelection } from "@/lib/orders/delivery-file-selection";
 import {
   canDownloadOrderDelivery,
   orderAcceptsDeliveryUpload,
   OrderDeliveryError,
+  OrderDeliveryProcessingError,
   putOrderDelivery,
   removeOrderDelivery,
   type OrderDeliveryDependencies,
   type OrderDeliveryRemovalDependencies,
 } from "@/lib/orders/delivery";
+import { orderDeliveryFailureDiagnostic } from "@/lib/orders/delivery-observability";
 import {
   handleAdminDeliveryDelete,
   handleAdminDeliveryUpload,
   handleOrderDeliveryDownload,
 } from "@/lib/orders/delivery-route-handler";
 import type { OrderActor } from "@/lib/orders/domain";
+import { MediaStorageError } from "@/lib/media/storage/types";
 
 const admin: OrderActor = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -171,9 +175,126 @@ test("un nouvel upload s’ajoute sans retirer les précédents et compense un �
   assert.deepEqual(appended.deleted, []);
 
   const failed = dependencies({ persist: async () => { throw new Error("database failure"); } });
-  await assert.rejects(putOrderDelivery(admin, "LNX-2026-000001", source, failed.value), /database failure/);
+  await assert.rejects(
+    putOrderDelivery(admin, "LNX-2026-000001", source, failed.value),
+    (error: unknown) => error instanceof OrderDeliveryProcessingError
+      && error.stage === "database_persist"
+      && error.cleanupOutcome === "succeeded"
+      && !error.message.includes("database failure"),
+  );
   assert.equal(failed.deleted.length, 1);
   assert.match(failed.deleted[0]!, /\/deliveries\/[0-9a-f-]{36}\.wav$/i);
+});
+
+test("la borne serveur accepte exactement 200 Mio et refuse un octet de plus avant tout stockage", async () => {
+  let validations = 0;
+  let writes = 0;
+  const boundary = { ...source, sizeBytes: orderOffer.maxDeliveryBytes };
+  const accepted = dependencies({
+    validateStorage: () => { validations += 1; return { backend: "OBJECT", provider: "r2" }; },
+    write: async ({ storageKey }) => {
+      writes += 1;
+      return {
+        storageKey,
+        storageBackend: "OBJECT",
+        storageProvider: "r2",
+        visibility: "PRIVATE",
+        checksumSha256: boundary.checksumSha256,
+      };
+    },
+  });
+  await putOrderDelivery(admin, "LNX-2026-000001", boundary, accepted.value);
+  assert.deepEqual([validations, writes], [1, 1]);
+
+  await assert.rejects(
+    putOrderDelivery(admin, "LNX-2026-000001", { ...source, sizeBytes: orderOffer.maxDeliveryBytes + 1 }, accepted.value),
+    (error: unknown) => error instanceof OrderDeliveryError && error.code === "DELIVERY_TOO_LARGE",
+  );
+  assert.deepEqual([validations, writes], [1, 1]);
+});
+
+test("un échec R2 ne persiste rien et un retry explicite crée une seule livraison", async () => {
+  let writes = 0;
+  let persists = 0;
+  const retry = dependencies({
+    write: async ({ storageKey }) => {
+      writes += 1;
+      if (writes === 1) {
+        throw new MediaStorageError(
+          "PROVIDER",
+          "generic",
+          "SlowDown",
+          503,
+          "succeeded",
+        );
+      }
+      return {
+        storageKey,
+        storageBackend: "OBJECT",
+        storageProvider: "r2",
+        visibility: "PRIVATE",
+        checksumSha256: source.checksumSha256,
+      };
+    },
+    persist: async () => {
+      persists += 1;
+      return {
+        delivery: {
+          id: "00000000-0000-4000-8000-000000000050",
+          type: source.assetType,
+          filename: source.originalFilename,
+          mimeType: source.mimeType,
+          sizeBytes: BigInt(source.sizeBytes),
+          durationMs: source.durationMs,
+          width: source.width,
+          height: source.height,
+          createdAt: new Date(0),
+        },
+      };
+    },
+  });
+  await assert.rejects(
+    putOrderDelivery(admin, "LNX-2026-000001", source, retry.value),
+    (error: unknown) => error instanceof OrderDeliveryProcessingError
+      && error.stage === "storage_upload"
+      && error.cleanupOutcome === "succeeded",
+  );
+  assert.equal(persists, 0);
+  await putOrderDelivery(admin, "LNX-2026-000001", source, retry.value);
+  assert.deepEqual([writes, persists], [2, 1]);
+});
+
+test("le diagnostic d’échec est structuré et n’expose ni message fournisseur ni clé objet", () => {
+  const providerFailure = new MediaStorageError(
+    "PROVIDER",
+    "https://secret.example.invalid/orders/private-key — credential sentinel",
+    "SlowDown",
+    503,
+    "succeeded",
+  );
+  const error = new OrderDeliveryProcessingError("storage_upload", providerFailure, "succeeded", orderId);
+  const diagnostic = orderDeliveryFailureDiagnostic({
+    orderNumber: "LNX-2026-000007",
+    error,
+    source: { ...source, sizeBytes: 60 * 1024 * 1024 },
+    declaredLength: null,
+  });
+  assert.deepEqual(diagnostic, {
+    event: "order.delivery.upload.failed",
+    stage: "storage_upload",
+    orderNumber: "LNX-2026-000007",
+    orderId,
+    sizeBytes: 60 * 1024 * 1024,
+    mimeType: "audio/wav",
+    errorClass: "OrderDeliveryProcessingError",
+    causeClass: "MediaStorageError",
+    errorCode: "DELIVERY_STORAGE_UNAVAILABLE",
+    providerCode: "SlowDown",
+    providerStatusCode: 503,
+    cleanupOutcome: "succeeded",
+  });
+  const serialized = JSON.stringify(diagnostic);
+  assert.doesNotMatch(serialized, /secret|private-key|credential|https:/i);
 });
 
 test("un ADMIN peut retirer un livrable avant publication, jamais via un profil MEMBER", async () => {

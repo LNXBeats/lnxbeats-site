@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
 
 import sharp from "sharp";
@@ -23,6 +28,33 @@ async function multipartRequest(file: File) {
   });
 }
 
+function multipartStreamRequest(input: {
+  source: Readable;
+  sourceBytes: number;
+  filename: string;
+  mimeType: string;
+}) {
+  const boundary = "lnx-v0751-fragmented-boundary";
+  const prefix = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="delivery"; filename="${input.filename}"\r\nContent-Type: ${input.mimeType}\r\n\r\n`,
+  );
+  const suffix = Buffer.from(`\r\n--${boundary}--\r\n`);
+  const fragmented = Readable.from((async function* () {
+    for (let offset = 0; offset < prefix.length; offset += 7) yield prefix.subarray(offset, offset + 7);
+    for await (const chunk of input.source) yield chunk;
+    for (let offset = 0; offset < suffix.length; offset += 5) yield suffix.subarray(offset, offset + 5);
+  })());
+  return new Request("http://localhost/upload", {
+    method: "POST",
+    headers: {
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+      "content-length": String(prefix.length + input.sourceBytes + suffix.length),
+    },
+    body: Readable.toWeb(fragmented) as never,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+}
+
 test("streame, identifie et analyse un WAV réel sans le conserver après cleanup", async () => {
   const fixture = await createAudioFixture({ seconds: 1, format: "wav" });
   try {
@@ -40,6 +72,60 @@ test("streame, identifie et analyse un WAV réel sans le conserver après cleanu
   } finally {
     await fixture.cleanup();
   }
+});
+
+test("streame un WAV réel de 60 Mio fragmenté, puis garde la source réutilisable après FFmpeg", { timeout: 120_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "lnx-delivery-large-test-"));
+  const fixturePath = path.join(directory, "walkman-vs-spotify.wav");
+  await createAudioFixture({ seconds: 238, format: "wav", outputPath: fixturePath });
+  try {
+    const fixtureSize = (await stat(fixturePath)).size;
+    assert.ok(fixtureSize >= 59 * 1024 * 1024 && fixtureSize <= 61 * 1024 * 1024);
+    const upload = await readOrderDeliveryUpload(multipartStreamRequest({
+      source: createReadStream(fixturePath, { highWaterMark: 65_537 }),
+      sourceBytes: fixtureSize,
+      filename: "walkman vs Spotify.wav",
+      mimeType: "audio/wav",
+    }));
+    try {
+      assert.equal(upload.sizeBytes, fixtureSize);
+      assert.equal(upload.mimeType, "audio/wav");
+      assert.ok(upload.durationMs !== null && upload.durationMs >= 237_000 && upload.durationMs <= 239_000);
+      const reopenedHash = createHash("sha256");
+      let reopenedBytes = 0;
+      for await (const chunk of createReadStream(upload.path, { highWaterMark: 131_071 })) {
+        reopenedBytes += chunk.length;
+        reopenedHash.update(chunk);
+      }
+      assert.equal(reopenedBytes, fixtureSize);
+      assert.equal(reopenedHash.digest("hex"), upload.checksumSha256);
+    } finally {
+      await upload.cleanup();
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("classe une fermeture prématurée du flux navigateur sans laisser de fichier temporaire exploitable", async () => {
+  const failure = Object.assign(new Error("destination sentinel must never be returned"), {
+    code: "ERR_STREAM_PREMATURE_CLOSE",
+  });
+  const source = Readable.from((async function* () {
+    yield Buffer.from("RIFF0000WAVE");
+    throw failure;
+  })());
+  await assert.rejects(
+    readOrderDeliveryUpload(multipartStreamRequest({
+      source,
+      sourceBytes: 64,
+      filename: "interrupted.wav",
+      mimeType: "audio/wav",
+    })),
+    (error: unknown) => error instanceof OrderUploadError
+      && error.code === "STREAM_CLOSED_EARLY"
+      && !error.message.includes("sentinel"),
+  );
 });
 
 test("refuse un faux WAV malgré son extension et son MIME annoncés", async () => {
