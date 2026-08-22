@@ -9,7 +9,13 @@ const adminNavigation = [
   { href: "/admin/membres", label: "Membres" },
 ] as const;
 
-export function AdminNavigation({ displayName }: { displayName?: string | null }) {
+export function AdminNavigation({
+  displayName,
+  qaProfileSwitchAvailable = false,
+}: {
+  displayName?: string | null;
+  qaProfileSwitchAvailable?: boolean;
+}) {
   const identity = displayName?.trim();
 
   return (
@@ -20,6 +26,7 @@ export function AdminNavigation({ displayName }: { displayName?: string | null }
       </div>
       <nav aria-label="Navigation de l’administration">
         {adminNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+        {qaProfileSwitchAvailable ? <Link href="/qa/access">Changer de profil QA</Link> : null}
         <Link className="admin-header__site-link" href="/">Retour au site <span aria-hidden="true">↗</span></Link>
       </nav>
     </header>

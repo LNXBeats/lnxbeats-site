@@ -4,12 +4,14 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { qaAccessIdentityAllowed } from "@/lib/auth/qa-access";
 import { canAccessRole, isActiveStatus, type UserRole } from "@/lib/auth/roles";
 import { assertDatabaseConfigured } from "@/lib/prisma";
 
 export async function getAuthSession() {
   assertDatabaseConfigured();
-  return auth.api.getSession({ headers: await headers() });
+  const session = await auth.api.getSession({ headers: await headers() });
+  return session && qaAccessIdentityAllowed(session.user.id) ? session : null;
 }
 
 export async function requireUser(returnTo = "/compte") {

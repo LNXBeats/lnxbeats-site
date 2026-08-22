@@ -2,6 +2,7 @@ import "server-only";
 
 import { auth } from "@/lib/auth";
 import { isSameOriginMutation } from "@/lib/auth/origin";
+import { qaAccessIdentityAllowed } from "@/lib/auth/qa-access";
 import { isActiveStatus, isUserRole } from "@/lib/auth/roles";
 import type { OrderActor } from "@/lib/orders/domain";
 import { assertDatabaseConfigured } from "@/lib/prisma";
@@ -53,6 +54,7 @@ export async function orderActorFromHeaders(headers: Headers): Promise<OrderActo
   assertDatabaseConfigured();
   const session = await auth.api.getSession({ headers });
   if (!session) return null;
+  if (!qaAccessIdentityAllowed(session.user.id)) return null;
   if (!isActiveStatus(session.user.status) || !isUserRole(session.user.role) || session.user.emailVerified !== true) return null;
   return {
     id: session.user.id,

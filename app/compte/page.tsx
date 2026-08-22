@@ -6,6 +6,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { ProfileForm } from "@/components/auth/profile-form";
 import { Container } from "@/components/container";
 import { requireVerifiedUser } from "@/lib/auth/session";
+import { qaAccessAvailable } from "@/lib/auth/qa-access";
 import { clientOrderAction, clientPaymentPresentation } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { listMemberOrders } from "@/lib/orders/service";
@@ -26,6 +27,7 @@ const statusLabels = { ACTIVE: "Actif", DEACTIVATED: "Désactivé", PENDING: "En
 
 export default async function AccountPage() {
   const session = await requireVerifiedUser("/compte");
+  const qaProfileSwitchAvailable = qaAccessAvailable();
   const actor: OrderActor = {
     id: session.user.id,
     email: session.user.email,
@@ -46,8 +48,15 @@ export default async function AccountPage() {
         <div className="auth-intro">
           <p className="eyebrow">Votre espace</p>
           <h1>Bonjour, {session.user.name}.</h1>
-          <p>Retrouvez vos créations et ce qui demande votre attention.</p>
-          {session.user.role === "ADMIN" ? <Link className="account-admin-link" href="/admin">Ouvrir l’administration <span aria-hidden="true">→</span></Link> : null}
+          <div className="account-intro__summary">
+            <p>Retrouvez vos créations et ce qui demande votre attention.</p>
+            {session.user.role === "ADMIN" || qaProfileSwitchAvailable ? (
+              <div className="account-intro__actions">
+                {session.user.role === "ADMIN" ? <Link className="account-admin-link" href="/admin">Ouvrir l’administration <span aria-hidden="true">→</span></Link> : null}
+                {qaProfileSwitchAvailable ? <Link className="account-admin-link" href="/qa/access">Changer de profil QA <span aria-hidden="true">→</span></Link> : null}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="auth-account-stack">
           <section className="member-orders" aria-labelledby="member-orders-title">

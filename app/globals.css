@@ -2969,7 +2969,11 @@ main { position: relative; isolation: isolate; }
 .account-shell .auth-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.55fr); gap: 2rem; align-items: end; padding-bottom: clamp(2rem, 5vw, 4rem); border-bottom: 1px solid var(--line); }
 .account-shell .auth-intro .eyebrow { grid-column: 1 / -1; }
 .account-shell .auth-intro h1 { max-width: 12ch; font-family: var(--font-sans); font-size: clamp(3.6rem, 7vw, 7.2rem); font-weight: 550; }
-.account-shell .auth-intro > p:last-child { margin: 0; }
+.account-intro__summary { display: grid; gap: 1.25rem; }
+.account-intro__summary > p { margin: 0; color: var(--text-soft); }
+.account-intro__actions { display: flex; flex-wrap: wrap; gap: 0.7rem 1.25rem; }
+.account-admin-link { color: var(--gold-light); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; text-underline-offset: 0.3em; }
+.account-admin-link:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 4px; }
 .auth-account-stack { gap: 1.25rem; }
 .member-orders { order: -2; padding: clamp(1.5rem, 4vw, 3.5rem); overflow: hidden; border-radius: var(--radius-md); background: linear-gradient(145deg, #1b1813, #11100e); box-shadow: var(--shadow); }
 .member-orders__heading h2 { max-width: 22ch; }
@@ -3000,6 +3004,45 @@ main { position: relative; isolation: isolate; }
 .commercial-license__status > div { border-color: rgba(23, 21, 18, 0.2); }
 .commercial-license__status dt { color: #716b61; }
 .commercial-license .form-button--primary { background: #171512; color: var(--text); }
+
+.qa-access-shell {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 86% 18%, rgba(202, 168, 97, 0.14), transparent 27rem),
+    linear-gradient(145deg, #15120e, #070706 68%);
+}
+.qa-access-shell::before { position: absolute; right: -12rem; bottom: -18rem; width: 42rem; height: 42rem; border: 1px solid rgba(202, 168, 97, 0.12); border-radius: 50%; content: ""; pointer-events: none; }
+.qa-access-shell__inner { position: relative; z-index: 1; display: grid; gap: clamp(2rem, 5vw, 4.5rem); }
+.qa-access__header { display: grid; max-width: 900px; gap: 1.2rem; }
+.qa-access__header .eyebrow { margin: 0; color: var(--gold-light); }
+.qa-access__header h1 { max-width: 11ch; margin: 0; font-family: var(--font-display), Georgia, serif; font-size: clamp(3.3rem, 8vw, 7rem); font-weight: 500; letter-spacing: -0.06em; line-height: 0.94; }
+.qa-access__header > p:last-child { max-width: 54rem; margin: 0; color: var(--text-soft); font-size: clamp(1rem, 2vw, 1.2rem); line-height: 1.7; }
+.qa-access { display: grid; max-width: 1100px; gap: 1.25rem; }
+.qa-access__secret { display: grid; gap: 0.65rem; padding: clamp(1.4rem, 3vw, 2rem); border: 1px solid rgba(202, 168, 97, 0.28); border-radius: var(--radius-md); background: rgba(14, 13, 11, 0.86); }
+.qa-access__secret label { color: var(--gold-light); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+.qa-access__secret input { width: 100%; min-height: 54px; padding: 0.9rem 1rem; border: 1px solid var(--line); border-radius: 8px; background: #0a0908; color: var(--text); font: inherit; }
+.qa-access__secret input:focus-visible { outline: 3px solid rgba(214, 179, 106, 0.5); outline-offset: 3px; border-color: var(--gold-light); }
+.qa-access__secret small { max-width: 70rem; color: var(--text-soft); line-height: 1.55; }
+.qa-access__profiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+.qa-access__profiles article { display: grid; min-width: 0; min-height: 330px; align-content: start; gap: 1rem; padding: clamp(1.5rem, 4vw, 3rem); border: 1px solid var(--line); border-radius: var(--radius-md); background: linear-gradient(145deg, rgba(29, 26, 21, 0.96), rgba(13, 12, 10, 0.96)); box-shadow: var(--shadow); }
+.qa-access__profiles article:nth-child(2) { background: linear-gradient(145deg, rgba(33, 27, 20, 0.96), rgba(13, 12, 10, 0.96)); }
+.qa-access__profiles .auth-panel__label { margin-bottom: 0.4rem; }
+.qa-access__profiles h2 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: clamp(2rem, 4vw, 3rem); font-weight: 500; }
+.qa-access__profiles p:not(.auth-panel__label) { margin: 0 0 1rem; color: var(--text-soft); line-height: 1.65; }
+.qa-access__profiles .form-button { width: 100%; min-height: 58px; margin-top: auto; white-space: normal; }
+.qa-access .form-message { margin: 0; }
+
+@media (max-width: 760px) {
+  .qa-access__profiles { grid-template-columns: 1fr; }
+  .qa-access__profiles article { min-height: 0; }
+}
+
+@media (max-width: 420px) {
+  .qa-access-shell { padding-top: calc(var(--header-height) + 2.5rem); }
+  .qa-access__header h1 { font-size: clamp(3rem, 16vw, 4.4rem); }
+  .qa-access__secret, .qa-access__profiles article { padding: 1.25rem; }
+}
 
 .site-footer {
   position: relative;
