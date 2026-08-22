@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, readdir } from "node:fs/promises";
 
 import { transitionOrderStatus, AdminServiceError } from "@/lib/admin/service";
 import type { OrderDeliveryUpload } from "@/lib/orders/audio-request";
@@ -34,6 +35,12 @@ const REMOVAL_NOTE = "Livrable privé retiré avant publication par l’administ
 
 type RuntimeProof = { name?: string; pid?: number; exports?: { database?: { connectionString?: string } } };
 type ErrorRecord = Record<string, unknown>;
+type MigrationRecord = {
+  migrationName: string;
+  checksum: string;
+  finishedAt: Date | null;
+  rolledBackAt: Date | null;
+};
 
 async function assertDisposableRuntime() {
   assert.equal(process.env.NODE_ENV, "test");
@@ -111,11 +118,78 @@ function databaseFailure(error: unknown) {
 }
 
 async function assertFreshDatabase() {
-  const counts = await Promise.all([
-    prisma.user.count(), prisma.order.count(), prisma.payment.count(), prisma.providerEvent.count(),
-    prisma.orderAsset.count(), prisma.asset.count(), prisma.orderEvent.count(), prisma.orderNotification.count(),
-  ]);
+  const counts = [
+    await prisma.user.count(),
+    await prisma.order.count(),
+    await prisma.payment.count(),
+    await prisma.providerEvent.count(),
+    await prisma.orderAsset.count(),
+    await prisma.asset.count(),
+    await prisma.orderEvent.count(),
+    await prisma.orderNotification.count(),
+  ];
   assert.ok(counts.every((count) => count === 0), "The V0.7.5 disposable database is not fresh.");
+}
+
+async function assertPrismaMigrationsCurrent() {
+  const migrationsDirectory = new URL("../prisma/migrations/", import.meta.url);
+  const migrationEntries = await readdir(migrationsDirectory, { withFileTypes: true });
+  const expectedMigrations = await Promise.all(
+    migrationEntries
+      .filter((entry) => entry.isDirectory())
+      .map(async ({ name }) => ({
+        name,
+        checksum: createHash("sha256")
+          .update(await readFile(new URL(`${name}/migration.sql`, migrationsDirectory)))
+          .digest("hex"),
+      })),
+  );
+  expectedMigrations.sort((left, right) => left.name.localeCompare(right.name));
+  assert.ok(expectedMigrations.length > 0, "No Prisma migrations were found on disk.");
+
+  const databaseMigrations = await prisma.$queryRaw<MigrationRecord[]>`
+    SELECT
+      migration_name AS "migrationName",
+      checksum,
+      finished_at AS "finishedAt",
+      rolled_back_at AS "rolledBackAt"
+    FROM "_prisma_migrations"
+  `;
+  const expectedNames = expectedMigrations.map(({ name }) => name);
+  const expectedNameSet = new Set(expectedNames);
+  const unknownNames = [...new Set(
+    databaseMigrations
+      .map(({ migrationName }) => migrationName)
+      .filter((migrationName) => !expectedNameSet.has(migrationName)),
+  )].sort();
+  assert.deepEqual(unknownNames, [], "The database contains migrations that are absent from prisma/migrations.");
+
+  const unresolvedFailures = databaseMigrations
+    .filter(({ finishedAt, rolledBackAt }) => finishedAt === null && rolledBackAt === null)
+    .map(({ migrationName }) => migrationName)
+    .sort();
+  assert.deepEqual(unresolvedFailures, [], "The database contains unfinished Prisma migrations.");
+
+  const appliedMigrations = databaseMigrations
+    .filter(({ finishedAt, rolledBackAt }) => finishedAt !== null && rolledBackAt === null);
+  const appliedNames = appliedMigrations.map(({ migrationName }) => migrationName).sort();
+  assert.equal(
+    new Set(appliedNames).size,
+    appliedNames.length,
+    "The database contains duplicate successfully applied Prisma migrations.",
+  );
+  assert.deepEqual(appliedNames, expectedNames, "The database schema is not current with prisma/migrations.");
+
+  const appliedChecksums = new Map(
+    appliedMigrations.map(({ migrationName, checksum }) => [migrationName, checksum]),
+  );
+  for (const migration of expectedMigrations) {
+    assert.equal(
+      appliedChecksums.get(migration.name),
+      migration.checksum,
+      `The applied checksum differs from prisma/migrations/${migration.name}/migration.sql.`,
+    );
+  }
 }
 
 async function cleanup() {
@@ -167,13 +241,7 @@ async function run() {
   const simulatedRemovalOverrides: Partial<OrderDeliveryRemovalDependencies> = { delete: simulateDelete };
 
   try {
-    const migrationState = await prisma.$queryRaw<Array<{ total: number; applied: number }>>`
-      SELECT
-        COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL)::int AS applied
-      FROM "_prisma_migrations"
-    `;
-    assert.deepEqual(migrationState, [{ total: 16, applied: 16 }]);
+    await assertPrismaMigrationsCurrent();
 
     await prisma.user.createMany({ data: [
       { id: IDS.admin, email: EMAILS[0]!, displayName: "Delivery Admin QA", role: "ADMIN", status: "ACTIVE", emailVerified: true, emailVerifiedAt: new Date() },
@@ -200,23 +268,27 @@ async function run() {
       assert.equal(await transitionOrderStatus(ORDER_NUMBERS[0]!, target, IDS.admin), target);
     }
     const eventCountBeforeConstraintProof = await prisma.orderEvent.count({ where: { orderId: IDS.paidOrder } });
-    await assert.rejects(
-      prisma.orderEvent.create({ data: {
-        orderId: IDS.paidOrder,
-        fromStatus: "FINALIZING",
-        toStatus: "FINALIZING",
-        note: "Invalid same-status transition QA",
-        visibility: "INTERNAL",
-        actorUserId: IDS.admin,
-      } }),
-      (error: unknown) => {
-        const failure = databaseFailure(error);
-        return failure.prismaCode === "P2039"
-          && failure.sqlState === "23514"
-          && failure.modelName === "OrderEvent"
-          && failure.constraintName === "order_events_status_changes";
-      },
-    );
+    try {
+      await assert.rejects(
+        prisma.orderEvent.create({ data: {
+          orderId: IDS.paidOrder,
+          fromStatus: "FINALIZING",
+          toStatus: "FINALIZING",
+          note: "Invalid same-status transition QA",
+          visibility: "INTERNAL",
+          actorUserId: IDS.admin,
+        } }),
+        (error: unknown) => {
+          const failure = databaseFailure(error);
+          return failure.prismaCode === "P2039"
+            && failure.sqlState === "23514"
+            && failure.modelName === "OrderEvent"
+            && failure.constraintName === "order_events_status_changes";
+        },
+      );
+    } finally {
+      await prisma.$disconnect();
+    }
     const acceptedAnnotation = await prisma.orderEvent.create({ data: {
       orderId: IDS.paidOrder,
       fromStatus: null,
@@ -240,16 +312,20 @@ async function run() {
         return simulateWrite(input);
       },
     };
-    await assert.rejects(
-      putOrderDelivery(actor(IDS.missingAdmin, "ADMIN"), ORDER_NUMBERS[0]!, rollbackSource, rollbackOverrides),
-      (error: unknown) => {
-        if (!(error instanceof OrderDeliveryProcessingError) || error.stage !== "database_persist" || error.cleanupOutcome !== "succeeded") return false;
-        const failure = databaseFailure(error);
-        return failure.modelName === "OrderEvent"
-          && (failure.prismaCode === "P2003" || failure.sqlState === "23503")
-          && (failure.constraintName === null || failure.constraintName === "order_events_actorUserId_fkey");
-      },
-    );
+    try {
+      await assert.rejects(
+        putOrderDelivery(actor(IDS.missingAdmin, "ADMIN"), ORDER_NUMBERS[0]!, rollbackSource, rollbackOverrides),
+        (error: unknown) => {
+          if (!(error instanceof OrderDeliveryProcessingError) || error.stage !== "database_persist" || error.cleanupOutcome !== "succeeded") return false;
+          const failure = databaseFailure(error);
+          return failure.modelName === "OrderEvent"
+            && (failure.prismaCode === "P2003" || failure.sqlState === "23503")
+            && (failure.constraintName === null || failure.constraintName === "order_events_actorUserId_fkey");
+        },
+      );
+    } finally {
+      await prisma.$disconnect();
+    }
     assert.ok(failedStorageKey);
     assert.equal(await prisma.asset.count({ where: { storageKey: failedStorageKey } }), 0);
     assert.equal(await prisma.orderAsset.count({ where: { orderId: IDS.paidOrder, role: "DELIVERY" } }), 0);
@@ -340,6 +416,7 @@ async function run() {
   } finally {
     await cleanup();
     storedObjects.clear();
+    await prisma.$disconnect();
     await assertFreshDatabase();
   }
 }

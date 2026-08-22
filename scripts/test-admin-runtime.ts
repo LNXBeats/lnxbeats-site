@@ -55,7 +55,10 @@ async function guards() {
 
 async function cleanup() {
   await prisma.$transaction(async (transaction) => {
+    await transaction.paymentAuditEvent.deleteMany();
     await transaction.providerEvent.deleteMany();
+    await transaction.paymentIncident.deleteMany();
+    await transaction.refundAttempt.deleteMany();
     await transaction.payment.deleteMany();
     await transaction.orderNotification.deleteMany();
     await transaction.orderAsset.deleteMany();
@@ -169,6 +172,73 @@ async function run() {
     passed.push("eligible cancelled order, timeline, asset relation and private file deleted without orphans");
 
     await addInternalOrderNote(draft.orderNumber, "Note réservée au cockpit.", adminUser.id);
+    const payment = await prisma.payment.findFirstOrThrow({ where: { orderId: paymentOrder.id } });
+    const refundedAt = new Date();
+    const { refundAttempt, incident } = await prisma.$transaction(async (transaction) => {
+      const createdRefundAttempt = await transaction.refundAttempt.create({
+        data: {
+          paymentId: payment.id,
+          provider: "STRIPE",
+          source: "ADMIN",
+          amountCents: 1_000,
+          currency: payment.currency,
+          requestedByUserId: adminUser.id,
+          localIdempotencyKey: `admin-runtime-refund-local:${payment.id}`,
+          providerIdempotencyKey: `admin-runtime-refund-provider:${payment.id}`,
+          providerRefundId: "re_admin_runtime_confirmed",
+          status: "SUCCEEDED",
+          attempts: 1,
+          lastAttemptAt: refundedAt,
+          confirmedAt: refundedAt,
+        },
+      });
+      const createdIncident = await transaction.paymentIncident.create({
+        data: {
+          paymentId: payment.id,
+          provider: "STRIPE",
+          type: "DISPUTE",
+          providerIncidentId: "dp_admin_runtime_open",
+          status: "OPEN",
+          amountCents: 1_500,
+          currency: payment.currency,
+          requiresOperatorReview: true,
+          openedAt: refundedAt,
+        },
+      });
+      await transaction.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "PARTIALLY_REFUNDED",
+          refundedAmountCents: createdRefundAttempt.amountCents,
+          refundedAt,
+        },
+      });
+      await transaction.paymentAuditEvent.createMany({
+        data: [
+          {
+            paymentId: payment.id,
+            refundAttemptId: createdRefundAttempt.id,
+            actorUserId: adminUser.id,
+            actorRole: "ADMIN",
+            provider: "STRIPE",
+            action: "REFUND_CONFIRMED",
+            amountCents: createdRefundAttempt.amountCents,
+            result: "SUCCEEDED",
+            createdAt: refundedAt,
+          },
+          {
+            paymentId: payment.id,
+            incidentId: createdIncident.id,
+            provider: "STRIPE",
+            action: "INCIDENT_OPENED",
+            amountCents: createdIncident.amountCents,
+            result: "REQUIRES_REVIEW",
+            createdAt: refundedAt,
+          },
+        ],
+      });
+      return { refundAttempt: createdRefundAttempt, incident: createdIncident };
+    });
     const adminDetail = await getAdminOrder(draft.orderNumber);
     assert.equal(adminDetail?.events.some(({ visibility }) => visibility === "INTERNAL"), true);
     assert.equal(adminDetail?.payments.length, 1);
@@ -177,12 +247,58 @@ async function run() {
       [{ kind: "CUSTOMER_ORDER_ACCEPTED", status: "PENDING", attempts: 0 }],
     );
     assert.deepEqual(Object.keys(adminDetail?.payments[0] ?? {}).sort(), [
-      "amountCents", "createdAt", "currency", "events", "failureCode", "id", "mode", "paymentMethod", "pricingVersion", "provider",
-      "providerCheckoutId", "providerPaymentId", "status", "updatedAt",
+      "amountCents", "auditEvents", "createdAt", "currency", "events", "failureCode", "id", "incidents", "mode", "paymentMethod",
+      "pricingVersion", "provider", "providerCheckoutId", "providerPaymentId", "refundAttempts", "refundedAmountCents", "refundedAt", "status", "updatedAt",
     ].sort());
+    const adminPayment = adminDetail?.payments[0];
+    assert.equal(adminPayment?.status, "PARTIALLY_REFUNDED");
+    assert.equal(adminPayment?.refundedAmountCents, 1_000);
+    assert.equal(adminPayment?.refundedAt?.toISOString(), refundedAt.toISOString());
+    assert.equal(adminPayment?.refundAttempts.length, 1);
+    assert.deepEqual(
+      adminPayment?.refundAttempts.map(({ source, amountCents, currency, status, providerRefundId, failureCode, attempts, confirmedAt }) => ({
+        source, amountCents, currency, status, providerRefundId, failureCode, attempts, confirmedAt: confirmedAt?.toISOString(),
+      })),
+      [{
+        source: "ADMIN", amountCents: 1_000, currency: payment.currency, status: "SUCCEEDED",
+        providerRefundId: refundAttempt.providerRefundId, failureCode: null, attempts: 1, confirmedAt: refundedAt.toISOString(),
+      }],
+    );
+    assert.deepEqual(
+      adminPayment?.incidents.map(({ type, providerIncidentId, status, amountCents, currency, outcome, requiresOperatorReview, openedAt, resolvedAt }) => ({
+        type, providerIncidentId, status, amountCents, currency, outcome, requiresOperatorReview,
+        openedAt: openedAt.toISOString(), resolvedAt: resolvedAt?.toISOString() ?? null,
+      })),
+      [{
+        type: "DISPUTE", providerIncidentId: incident.providerIncidentId, status: "OPEN", amountCents: 1_500,
+        currency: payment.currency, outcome: null, requiresOperatorReview: true, openedAt: refundedAt.toISOString(), resolvedAt: null,
+      }],
+    );
+    assert.deepEqual(
+      adminPayment?.auditEvents.map(({ action, amountCents, result, actorRole }) => ({ action, amountCents, result, actorRole }))
+        .sort((left, right) => left.action.localeCompare(right.action)),
+      [
+        { action: "INCIDENT_OPENED", amountCents: 1_500, result: "REQUIRES_REVIEW", actorRole: null },
+        { action: "REFUND_CONFIRMED", amountCents: 1_000, result: "SUCCEEDED", actorRole: "ADMIN" },
+      ],
+    );
+    const adminPaymentPayload = JSON.stringify(adminPayment);
+    for (const forbiddenKey of ["idempotencyKey", "localIdempotencyKey", "providerIdempotencyKey", "requestedByUserId", "rawPayload", "webhookSecret", "apiKey", "clientSecret", "accessToken", "refreshToken"]) {
+      assert.equal(adminPaymentPayload.includes(`\"${forbiddenKey}\"`), false);
+    }
+    assert.equal(adminPaymentPayload.includes(`admin-runtime-refund-local:${payment.id}`), false);
+    assert.equal(adminPaymentPayload.includes(`admin-runtime-refund-provider:${payment.id}`), false);
     const clientDetail = await getOrderForActor(member, draft.orderNumber);
     assert.equal(clientDetail?.events.some(({ note }) => note === "Note réservée au cockpit."), false);
-    passed.push("internal event hidden from member serialization and accepted notification visible in Admin outbox");
+    const memberPayment = clientDetail?.payments[0];
+    assert.deepEqual(Object.keys(memberPayment ?? {}).sort(), [
+      "amountCents", "checkoutExpiresAt", "createdAt", "currency", "expiredAt", "failedAt", "id", "paidAt", "paymentMethod", "provider", "status", "updatedAt",
+    ].sort());
+    const memberPaymentPayload = JSON.stringify(memberPayment);
+    for (const adminOnlyField of ["refundedAmountCents", "refundedAt", "refundAttempts", "incidents", "auditEvents", "providerCheckoutId", "providerPaymentId", "providerRefundId", "providerIncidentId"]) {
+      assert.equal(memberPaymentPayload.includes(`\"${adminOnlyField}\"`), false);
+    }
+    passed.push("V0.7.6 financial review exposed only to Admin, internal details hidden from MEMBER, and accepted notification visible in Admin outbox");
 
     const members = await listAdminMembers();
     assert.equal(members.length, 2);

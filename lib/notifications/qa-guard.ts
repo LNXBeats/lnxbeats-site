@@ -35,6 +35,11 @@ export function assertNotificationQaEnvironment(environment: Environment, proof:
   assert.ok(environment.NOTIFICATION_DEPLOYMENT_ENV === "development", "Notification QA requires development mode.");
   assert.ok(environment.NOTIFICATION_EMAIL_TRANSPORT === "capture", "Notification QA requires capture transport.");
   assert.ok(environment.EMAIL_NOTIFICATIONS_ENABLED === "true", "Notification QA requires the email flag.");
+  assert.ok(environment.OWNER_EMAIL_NOTIFICATIONS_ENABLED === "true", "Notification QA requires the owner email flag.");
+  assert.ok(environment.CLIENT_EMAIL_NOTIFICATIONS_ENABLED === "true", "Notification QA requires the client email flag.");
+  assert.ok(!environment.EMAIL_OWNER_RECIPIENT?.trim(), "Notification QA must keep the real owner destination absent.");
+  assert.ok(environment.SMS_TRANSPORT === "disabled", "Notification QA requires the SMS transport to remain disabled.");
+  assert.ok(environment.SMS_NOTIFICATIONS_ENABLED === "false", "Notification QA requires SMS notifications to remain disabled.");
 
   const rawDatabaseUrl = required(environment, "DATABASE_URL");
   const databaseUrl = assertSafeLocalPostgresUrl(rawDatabaseUrl);

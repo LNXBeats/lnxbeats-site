@@ -13,6 +13,10 @@ const environment = {
   NOTIFICATION_DEPLOYMENT_ENV: "development",
   NOTIFICATION_EMAIL_TRANSPORT: "capture",
   EMAIL_NOTIFICATIONS_ENABLED: "true",
+  OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true",
+  CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "true",
+  SMS_TRANSPORT: "disabled",
+  SMS_NOTIFICATIONS_ENABLED: "false",
 };
 const proof = { name: NOTIFICATION_QA_TARGET, pid: process.pid, exports: { database: { connectionString: connection } } };
 
@@ -22,4 +26,7 @@ test("la garde accepte uniquement la cible notification jetable exacte", () => {
   assert.throws(() => assertNotificationQaEnvironment({ ...environment, DATABASE_URL: connection.replace("51254", "51238") }, proof));
   assert.throws(() => assertNotificationQaEnvironment({ ...environment, AUTH_URL: "http://localhost:3000" }, proof));
   assert.throws(() => assertNotificationQaEnvironment({ ...environment, NOTIFICATION_EMAIL_TRANSPORT: "resend" }, proof));
+  assert.throws(() => assertNotificationQaEnvironment({ ...environment, CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false" }, proof));
+  assert.throws(() => assertNotificationQaEnvironment({ ...environment, EMAIL_OWNER_RECIPIENT: "owner@example.invalid" }, proof));
+  assert.throws(() => assertNotificationQaEnvironment({ ...environment, SMS_NOTIFICATIONS_ENABLED: "true" }, proof));
 });
