@@ -2,6 +2,17 @@ import type { Readable } from "node:stream";
 
 export type MediaScope = "public" | "private";
 export type MediaStorageBackend = "LOCAL" | "OBJECT";
+export type MediaStorageProviderOperation =
+  | "MULTIPART_SOURCE"
+  | "MULTIPART_CREATE"
+  | "MULTIPART_UPLOAD_PART"
+  | "MULTIPART_COMPLETE";
+export type MediaStorageObjectState =
+  | "none"
+  | "multipart_aborted"
+  | "multipart_incomplete"
+  | "final_object_deleted"
+  | "final_object_possible";
 
 export type MediaStorageReference = {
   storageKey: string;
@@ -65,6 +76,8 @@ export class MediaStorageError extends Error {
     readonly providerCode: string | null = null,
     readonly providerStatusCode: number | null = null,
     readonly cleanupOutcome: "not_required" | "succeeded" | "failed" = "not_required",
+    readonly providerOperation: MediaStorageProviderOperation | null = null,
+    readonly objectState: MediaStorageObjectState | null = null,
   ) {
     super(message);
     this.name = "MediaStorageError";

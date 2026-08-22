@@ -2,11 +2,15 @@ import { Readable } from "node:stream";
 import { createHash } from "node:crypto";
 
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
   type S3ClientConfig,
   type PutObjectCommandInput,
 } from "@aws-sdk/client-s3";
@@ -18,6 +22,8 @@ import {
   MediaStorageError,
   type MediaObject,
   type MediaObjectMetadata,
+  type MediaStorageObjectState,
+  type MediaStorageProviderOperation,
   type MediaScope,
   type MediaSignedUrlInput,
   type MediaStorage,
@@ -25,7 +31,7 @@ import {
   type MediaStoragePutInput,
 } from "@/lib/media/storage/types";
 
-type S3LikeClient = Pick<S3Client, "send">;
+type S3LikeClient = Pick<S3Client, "config" | "send">;
 
 const DEFAULT_OBJECT_OPERATION_TIMEOUT_MS = 180_000;
 export const S3_MULTIPART_PART_SIZE_BYTES = 8 * 1024 * 1024;
@@ -43,6 +49,7 @@ export type S3MediaStorageOptions = {
   client?: S3LikeClient;
   signer?: typeof getSignedUrl;
   operationTimeoutMs?: number;
+  requestHandler?: S3ClientConfig["requestHandler"];
 };
 
 async function streamSha256(body: ReadableStream<Uint8Array>) {
@@ -73,6 +80,8 @@ function safeProviderStatusCode(error: unknown) {
 function providerError(
   error: unknown,
   cleanupOutcome: MediaStorageError["cleanupOutcome"] = "not_required",
+  providerOperation: MediaStorageProviderOperation | null = null,
+  objectState: MediaStorageObjectState | null = null,
 ): never {
   const name = error && typeof error === "object" && "name" in error ? String(error.name) : "";
   if (name === "NoSuchKey" || name === "NotFound") throw new MediaStorageError("NOT_FOUND", "Media object not found.");
@@ -82,7 +91,35 @@ function providerError(
     safeProviderCode(error),
     safeProviderStatusCode(error),
     cleanupOutcome,
+    providerOperation,
+    objectState,
   );
+}
+
+function multipartOperation(command: unknown): MediaStorageProviderOperation | null {
+  if (command instanceof CreateMultipartUploadCommand) return "MULTIPART_CREATE";
+  if (command instanceof UploadPartCommand) return "MULTIPART_UPLOAD_PART";
+  if (command instanceof CompleteMultipartUploadCommand) return "MULTIPART_COMPLETE";
+  return null;
+}
+
+function isNoSuchUpload(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error && typeof error.code === "string" ? error.code : null;
+  const name = "name" in error && typeof error.name === "string" ? error.name : null;
+  return code === "NoSuchUpload" || name === "NoSuchUpload";
+}
+
+class ManagedMultipartUploadError extends Error {
+  constructor(
+    readonly originalError: unknown,
+    readonly providerOperation: MediaStorageProviderOperation,
+    readonly cleanupOutcome: MediaStorageError["cleanupOutcome"],
+    readonly objectState: MediaStorageObjectState,
+  ) {
+    super("Managed multipart upload failed.");
+    this.name = "ManagedMultipartUploadError";
+  }
 }
 
 export class S3MediaStorage implements MediaStorage {
@@ -104,8 +141,12 @@ export class S3MediaStorage implements MediaStorage {
       requestChecksumCalculation: "WHEN_REQUIRED",
       responseChecksumValidation: "WHEN_REQUIRED",
       credentials: { accessKeyId: options.accessKeyId, secretAccessKey: options.secretAccessKey },
+      // Cloudflare R2 does not support HTTP 100 Continue. AWS SDK v3 adds
+      // Expect: 100-continue to bodies >= 2 MiB unless this is disabled.
+      ...(options.provider === "r2" ? { expectContinueHeader: false } : {}),
       ...(options.endpoint ? { endpoint: options.endpoint } : {}),
       ...(options.forcePathStyle !== undefined ? { forcePathStyle: options.forcePathStyle } : {}),
+      ...(options.requestHandler ? { requestHandler: options.requestHandler } : {}),
     };
     this.client = options.client ?? new S3Client(config);
     this.signer = options.signer ?? getSignedUrl;
@@ -124,16 +165,64 @@ export class S3MediaStorage implements MediaStorage {
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), this.operationTimeoutMs);
     timeout.unref();
+    let failedOperation: MediaStorageProviderOperation | null = null;
+    const trackedClient = {
+      config: this.client.config,
+      send: async (command: unknown) => {
+        try {
+          return await this.client.send(command as never);
+        } catch (error) {
+          failedOperation ??= multipartOperation(command);
+          throw error;
+        }
+      },
+    } as unknown as S3Client;
+    let upload: Upload | null = null;
     try {
-      const upload = new Upload({
-        client: this.client as S3Client,
+      upload = new Upload({
+        client: trackedClient,
         params: parameters,
         queueSize: S3_MULTIPART_QUEUE_SIZE,
         partSize: S3_MULTIPART_PART_SIZE_BYTES,
-        leavePartsOnError: false,
+        // Cleanup is explicit below so the application can distinguish an
+        // initiation failure from an incomplete or possibly completed upload.
+        leavePartsOnError: true,
         abortController,
       });
       return await upload.done();
+    } catch (error) {
+      const operation =
+        (failedOperation as MediaStorageProviderOperation | null) ?? "MULTIPART_SOURCE";
+      const uploadId = upload?.uploadId;
+      if (!uploadId) {
+        throw new ManagedMultipartUploadError(error, operation, "not_required", "none");
+      }
+      try {
+        await this.client.send(
+          new AbortMultipartUploadCommand({
+            Bucket: parameters.Bucket,
+            Key: parameters.Key,
+            UploadId: uploadId,
+          }),
+          { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+        );
+        throw new ManagedMultipartUploadError(error, operation, "succeeded", "multipart_aborted");
+      } catch (abortError) {
+        if (abortError instanceof ManagedMultipartUploadError) throw abortError;
+        if (operation === "MULTIPART_COMPLETE" && isNoSuchUpload(abortError)) {
+          try {
+            await this.client.send(
+              new DeleteObjectCommand({ Bucket: parameters.Bucket, Key: parameters.Key }),
+              { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+            );
+            throw new ManagedMultipartUploadError(error, operation, "succeeded", "final_object_deleted");
+          } catch (deleteError) {
+            if (deleteError instanceof ManagedMultipartUploadError) throw deleteError;
+            throw new ManagedMultipartUploadError(error, operation, "failed", "final_object_possible");
+          }
+        }
+        throw new ManagedMultipartUploadError(error, operation, "failed", "multipart_incomplete");
+      }
     } finally {
       clearTimeout(timeout);
     }
@@ -182,6 +271,14 @@ export class S3MediaStorage implements MediaStorage {
       }
       return { ...verified, etag: result.ETag ?? verified.etag };
     } catch (error) {
+      if (error instanceof ManagedMultipartUploadError) {
+        return providerError(
+          error.originalError,
+          error.cleanupOutcome,
+          error.providerOperation,
+          error.objectState,
+        );
+      }
       let cleanupOutcome: MediaStorageError["cleanupOutcome"] = "not_required";
       if (putAttempted) {
         try {
@@ -201,9 +298,16 @@ export class S3MediaStorage implements MediaStorage {
           error.providerCode,
           error.providerStatusCode,
           cleanupOutcome,
+          error.providerOperation,
+          cleanupOutcome === "succeeded" ? "final_object_deleted" : "final_object_possible",
         );
       }
-      return providerError(error, cleanupOutcome);
+      return providerError(
+        error,
+        cleanupOutcome,
+        null,
+        cleanupOutcome === "succeeded" ? "final_object_deleted" : "final_object_possible",
+      );
     }
   }
 

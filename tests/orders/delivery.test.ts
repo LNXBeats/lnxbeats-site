@@ -291,6 +291,8 @@ test("le diagnostic d’échec est structuré et n’expose ni message fournisse
     errorCode: "DELIVERY_STORAGE_UNAVAILABLE",
     providerCode: "SlowDown",
     providerStatusCode: 503,
+    providerOperation: null,
+    objectState: null,
     cleanupOutcome: "succeeded",
   });
   const serialized = JSON.stringify(diagnostic);

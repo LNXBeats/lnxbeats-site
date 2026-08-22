@@ -79,6 +79,8 @@ export function orderDeliveryFailureDiagnostic(input: {
     errorCode,
     providerCode: safeCode(storageError?.providerCode),
     providerStatusCode: storageError?.providerStatusCode ?? null,
+    providerOperation: storageError?.providerOperation ?? null,
+    objectState: storageError?.objectState ?? null,
     cleanupOutcome: input.error instanceof OrderDeliveryProcessingError
       ? input.error.cleanupOutcome
       : "not_required",

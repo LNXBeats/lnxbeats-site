@@ -68,6 +68,13 @@ function multipartClient(send: (command: unknown) => Promise<unknown>) {
   };
 }
 
+function multipartProviderFailure(code: string, statusCode: number) {
+  return Object.assign(new Error("provider detail sentinel"), {
+    code,
+    $metadata: { httpStatusCode: statusCode },
+  });
+}
+
 test("production media migration is additive and classifies catalogue assets as public", async () => {
   const sql = await readFile(path.join(process.cwd(), "prisma/migrations/20260813120000_production_media_foundation/migration.sql"), "utf8");
   assert.match(sql, /ADD COLUMN "storageBackend"/);
@@ -421,7 +428,150 @@ test("S3 adapter uploads a fragmented 60 MiB Readable with bounded managed multi
   assert.equal(partSizes.reduce((total, partSize) => total + partSize, 0), size);
 });
 
-test("S3 adapter aborts multipart and deletes the opaque object after an R2 part failure", async () => {
+test("R2 multipart requests omit Expect 100-continue and unsupported S3 headers on the actual SDK wire request", { timeout: 30_000 }, async () => {
+  const size = 18 * 1024 * 1024;
+  const digest = repeatedBytesChecksum(size);
+  const createHeaders: Array<Record<string, string>> = [];
+  const partHeaders: Array<Record<string, string>> = [];
+  let retryInjected = false;
+  const requestHandler = {
+    async handle(request: {
+      method: string;
+      headers: Record<string, string>;
+      query?: Record<string, string | string[] | null>;
+    }) {
+      const headers = Object.fromEntries(
+        Object.entries(request.headers).map(([name, value]) => [name.toLowerCase(), value]),
+      );
+      const query = request.query ?? {};
+      if (request.method === "POST" && "uploads" in query) {
+        createHeaders.push(headers);
+        return {
+          response: {
+            statusCode: 200,
+            headers: { "content-type": "application/xml" },
+            body: Readable.from("<InitiateMultipartUploadResult><Bucket>lnx-private-test</Bucket><Key>opaque.wav</Key><UploadId>wire-upload</UploadId></InitiateMultipartUploadResult>"),
+          },
+        };
+      }
+      if (request.method === "PUT" && "partNumber" in query) {
+        partHeaders.push(headers);
+        if (!retryInjected && String(query.partNumber) === "1") {
+          retryInjected = true;
+          return {
+            response: {
+              statusCode: 503,
+              headers: { "content-type": "application/xml" },
+              body: Readable.from("<Error><Code>SlowDown</Code><Message>retry</Message></Error>"),
+            },
+          };
+        }
+        return { response: { statusCode: 200, headers: { etag: `\"part-${String(query.partNumber)}\"` } } };
+      }
+      if (request.method === "POST" && "uploadId" in query) {
+        return {
+          response: {
+            statusCode: 200,
+            headers: { "content-type": "application/xml" },
+            body: Readable.from("<CompleteMultipartUploadResult><Bucket>lnx-private-test</Bucket><Key>opaque.wav</Key><ETag>\"wire-etag\"</ETag></CompleteMultipartUploadResult>"),
+          },
+        };
+      }
+      if (request.method === "HEAD") {
+        return {
+          response: {
+            statusCode: 200,
+            headers: {
+              "content-length": String(size),
+              "content-type": "audio/wav",
+              "x-amz-meta-sha256": digest,
+              etag: "\"wire-etag\"",
+            },
+          },
+        };
+      }
+      if (request.method === "GET") {
+        return {
+          response: {
+            statusCode: 200,
+            headers: {
+              "content-length": String(size),
+              "content-type": "audio/wav",
+              "x-amz-meta-sha256": digest,
+            },
+            body: repeatedBytes(size),
+          },
+        };
+      }
+      throw new Error(`Unexpected wire request ${request.method}`);
+    },
+  };
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    requestHandler: requestHandler as never,
+  });
+
+  await storage.put({
+    scope: "private",
+    key: "orders/00000000-0000-4000-8000-000000000001/deliveries/00000000-0000-4000-8000-000000000005.wav",
+    body: repeatedBytes(size),
+    contentLength: size,
+    contentType: "audio/wav",
+    checksumSha256: digest,
+  });
+
+  assert.equal(createHeaders.length, 1);
+  assert.equal(retryInjected, true);
+  assert.equal(partHeaders.length, Math.ceil(size / S3_MULTIPART_PART_SIZE_BYTES) + 1);
+  for (const headers of [...createHeaders, ...partHeaders]) {
+    assert.equal(headers.expect, undefined);
+    assert.equal(headers["x-amz-acl"], undefined);
+    assert.equal(headers["x-amz-tagging"], undefined);
+    assert.equal(headers["x-amz-server-side-encryption"], undefined);
+    assert.equal(headers["x-amz-request-payer"], undefined);
+    assert.equal(headers["x-amz-expected-bucket-owner"], undefined);
+    assert.equal(headers["x-amz-sdk-checksum-algorithm"], undefined);
+    assert.equal(Object.keys(headers).some((name) => name.startsWith("x-amz-checksum-")), false);
+  }
+  assert.equal(createHeaders[0]!["content-type"], "audio/wav");
+  assert.equal(createHeaders[0]!["cache-control"], "private, no-store");
+  assert.equal(createHeaders[0]!["x-amz-meta-sha256"], digest);
+  assert.equal(createHeaders[0]!["content-length"], undefined);
+  assert.ok(partHeaders.every((headers) => Number(headers["content-length"]) <= S3_MULTIPART_PART_SIZE_BYTES));
+});
+
+test("S3 adapter reports an R2 CreateMultipartUpload failure without cleanup or object deletion", async () => {
+  const calls: unknown[] = [];
+  const fakeClient = multipartClient(async (command) => {
+    calls.push(command);
+    if (command instanceof CreateMultipartUploadCommand) throw multipartProviderFailure("InvalidArgument", 400);
+    throw new Error("Unexpected command");
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: fakeClient as never,
+  });
+
+  await assert.rejects(storage.put({
+    scope: "private",
+    key: "orders/00000000-0000-4000-8000-000000000001/deliveries/00000000-0000-4000-8000-000000000006.wav",
+    body: repeatedBytes(18 * 1024 * 1024),
+    contentLength: 18 * 1024 * 1024,
+    contentType: "audio/wav",
+    checksumSha256: repeatedBytesChecksum(18 * 1024 * 1024),
+  }), (error) => error instanceof MediaStorageError
+    && error.providerCode === "InvalidArgument"
+    && error.providerStatusCode === 400
+    && error.providerOperation === "MULTIPART_CREATE"
+    && error.cleanupOutcome === "not_required"
+    && error.objectState === "none");
+  assert.equal(calls.filter((call) => call instanceof AbortMultipartUploadCommand).length, 0);
+  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 0);
+});
+
+test("S3 adapter aborts multipart without deleting a non-final object after an R2 part failure", async () => {
   const size = 18 * 1024 * 1024;
   const calls: unknown[] = [];
   const fakeClient = multipartClient(async (command) => {
@@ -429,10 +579,7 @@ test("S3 adapter aborts multipart and deletes the opaque object after an R2 part
     if (command instanceof CreateMultipartUploadCommand) return { UploadId: "qa-failing-upload" };
     if (command instanceof UploadPartCommand) {
       if (command.input.PartNumber === 2) {
-        throw Object.assign(new Error("provider detail sentinel"), {
-          code: "SlowDown",
-          $metadata: { httpStatusCode: 503 },
-        });
+        throw multipartProviderFailure("SlowDown", 503);
       }
       return { ETag: `\"part-${command.input.PartNumber}\"` };
     }
@@ -455,10 +602,12 @@ test("S3 adapter aborts multipart and deletes the opaque object after an R2 part
     && error.code === "PROVIDER"
     && error.providerCode === "SlowDown"
     && error.providerStatusCode === 503
+    && error.providerOperation === "MULTIPART_UPLOAD_PART"
     && error.cleanupOutcome === "succeeded"
+    && error.objectState === "multipart_aborted"
     && !error.message.includes("sentinel"));
   assert.equal(calls.filter((call) => call instanceof AbortMultipartUploadCommand).length, 1);
-  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 1);
+  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 0);
   assert.equal(calls.filter((call) => call instanceof CompleteMultipartUploadCommand).length, 0);
 });
 
@@ -491,9 +640,107 @@ test("S3 adapter aborts and cleans a multipart upload when its source closes ear
   }), (error) => error instanceof MediaStorageError
     && error.code === "PROVIDER"
     && error.providerCode === "ERR_STREAM_PREMATURE_CLOSE"
-    && error.cleanupOutcome === "succeeded");
+    && error.providerOperation === "MULTIPART_SOURCE"
+    && error.cleanupOutcome === "succeeded"
+    && error.objectState === "multipart_aborted");
+  assert.equal(calls.filter((call) => call instanceof AbortMultipartUploadCommand).length, 1);
+  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 0);
+});
+
+test("S3 adapter classifies CompleteMultipartUpload failure and aborts the still-open upload", async () => {
+  const calls: unknown[] = [];
+  const fakeClient = multipartClient(async (command) => {
+    calls.push(command);
+    if (command instanceof CreateMultipartUploadCommand) return { UploadId: "qa-complete-failure" };
+    if (command instanceof UploadPartCommand) return { ETag: `\"part-${command.input.PartNumber}\"` };
+    if (command instanceof CompleteMultipartUploadCommand) throw multipartProviderFailure("InvalidArgument", 400);
+    if (command instanceof AbortMultipartUploadCommand) return {};
+    throw new Error("Unexpected command");
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: fakeClient as never,
+  });
+
+  await assert.rejects(storage.put({
+    scope: "private",
+    key: "orders/00000000-0000-4000-8000-000000000001/deliveries/00000000-0000-4000-8000-000000000007.wav",
+    body: repeatedBytes(18 * 1024 * 1024),
+    contentLength: 18 * 1024 * 1024,
+    contentType: "audio/wav",
+    checksumSha256: repeatedBytesChecksum(18 * 1024 * 1024),
+  }), (error) => error instanceof MediaStorageError
+    && error.providerCode === "InvalidArgument"
+    && error.providerOperation === "MULTIPART_COMPLETE"
+    && error.cleanupOutcome === "succeeded"
+    && error.objectState === "multipart_aborted");
+  assert.equal(calls.filter((call) => call instanceof AbortMultipartUploadCommand).length, 1);
+  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 0);
+});
+
+test("S3 adapter removes a possibly finalized object when Complete response is lost and the upload no longer exists", async () => {
+  const calls: unknown[] = [];
+  const fakeClient = multipartClient(async (command) => {
+    calls.push(command);
+    if (command instanceof CreateMultipartUploadCommand) return { UploadId: "qa-ambiguous-complete" };
+    if (command instanceof UploadPartCommand) return { ETag: `\"part-${command.input.PartNumber}\"` };
+    if (command instanceof CompleteMultipartUploadCommand) throw multipartProviderFailure("TimeoutError", 504);
+    if (command instanceof AbortMultipartUploadCommand) throw Object.assign(new Error("gone"), { name: "NoSuchUpload" });
+    if (command instanceof DeleteObjectCommand) return {};
+    throw new Error("Unexpected command");
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: fakeClient as never,
+  });
+
+  await assert.rejects(storage.put({
+    scope: "private",
+    key: "orders/00000000-0000-4000-8000-000000000001/deliveries/00000000-0000-4000-8000-000000000008.wav",
+    body: repeatedBytes(18 * 1024 * 1024),
+    contentLength: 18 * 1024 * 1024,
+    contentType: "audio/wav",
+    checksumSha256: repeatedBytesChecksum(18 * 1024 * 1024),
+  }), (error) => error instanceof MediaStorageError
+    && error.providerCode === "TimeoutError"
+    && error.providerOperation === "MULTIPART_COMPLETE"
+    && error.cleanupOutcome === "succeeded"
+    && error.objectState === "final_object_deleted");
   assert.equal(calls.filter((call) => call instanceof AbortMultipartUploadCommand).length, 1);
   assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 1);
+});
+
+test("S3 adapter reports a remaining incomplete multipart when abort cleanup fails", async () => {
+  const calls: unknown[] = [];
+  const fakeClient = multipartClient(async (command) => {
+    calls.push(command);
+    if (command instanceof CreateMultipartUploadCommand) return { UploadId: "qa-abort-failure" };
+    if (command instanceof UploadPartCommand) throw multipartProviderFailure("InvalidArgument", 400);
+    if (command instanceof AbortMultipartUploadCommand) throw multipartProviderFailure("ServiceUnavailable", 503);
+    throw new Error("Unexpected command");
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: fakeClient as never,
+  });
+
+  await assert.rejects(storage.put({
+    scope: "private",
+    key: "orders/00000000-0000-4000-8000-000000000001/deliveries/00000000-0000-4000-8000-000000000009.wav",
+    body: repeatedBytes(18 * 1024 * 1024),
+    contentLength: 18 * 1024 * 1024,
+    contentType: "audio/wav",
+    checksumSha256: repeatedBytesChecksum(18 * 1024 * 1024),
+  }), (error) => error instanceof MediaStorageError
+    && error.providerCode === "InvalidArgument"
+    && error.providerOperation === "MULTIPART_UPLOAD_PART"
+    && error.cleanupOutcome === "failed"
+    && error.objectState === "multipart_incomplete");
+  assert.equal(calls.filter((call) => call instanceof AbortMultipartUploadCommand).length, 1);
+  assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 0);
 });
 
 test("S3 adapter rejects and removes uploads whose remote checksum or MIME metadata differs", async (context) => {
