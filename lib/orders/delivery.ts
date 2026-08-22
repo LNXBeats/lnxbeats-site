@@ -206,7 +206,7 @@ async function persistOrderDelivery(input: {
     await transaction.orderEvent.create({
       data: {
         orderId: order.id,
-        fromStatus: order.status,
+        fromStatus: null,
         toStatus: order.status,
         note: `Livrable privé ajouté par l’administration (${input.source.extension.toUpperCase()}).`,
         visibility: "INTERNAL",
@@ -250,8 +250,9 @@ export async function putOrderDelivery(
   actor: OrderActor,
   orderNumber: string,
   source: OrderDeliveryUpload,
-  dependencies: OrderDeliveryDependencies = databaseOrderDeliveryDependencies,
+  overrides: Partial<OrderDeliveryDependencies> = {},
 ) {
+  const dependencies = { ...databaseOrderDeliveryDependencies, ...overrides };
   if (actor.role !== "ADMIN") throw new OrderDeliveryError("Action réservée à l’administration.", 403, "ADMIN_REQUIRED");
   if (source.sizeBytes <= 0 || source.sizeBytes > orderOffer.maxDeliveryBytes) {
     throw new OrderDeliveryError("Le fichier de livraison doit peser au maximum 200 Mo.", 413, "DELIVERY_TOO_LARGE");
@@ -312,7 +313,7 @@ async function detachOrderDelivery(input: { actor: OrderActor; orderNumber: stri
     await transaction.orderEvent.create({
       data: {
         orderId: order.id,
-        fromStatus: order.status,
+        fromStatus: null,
         toStatus: order.status,
         note: "Livrable privé retiré avant publication par l’administration.",
         visibility: "INTERNAL",
@@ -337,8 +338,9 @@ export async function removeOrderDelivery(
   actor: OrderActor,
   orderNumber: string,
   assetId: string,
-  dependencies: OrderDeliveryRemovalDependencies = databaseOrderDeliveryRemovalDependencies,
+  overrides: Partial<OrderDeliveryRemovalDependencies> = {},
 ) {
+  const dependencies = { ...databaseOrderDeliveryRemovalDependencies, ...overrides };
   if (actor.role !== "ADMIN") throw new OrderDeliveryError("Action réservée à l’administration.", 403, "ADMIN_REQUIRED");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assetId)) {
     throw new OrderDeliveryError("Livrable introuvable.", 404, "DELIVERY_NOT_FOUND");
