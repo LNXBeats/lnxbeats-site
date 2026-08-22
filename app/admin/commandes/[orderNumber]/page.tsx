@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addInternalNoteAction } from "@/app/admin/actions";
+import { addInternalNoteAction, reconcilePaymentRefundAction, requestPaymentRefundAction } from "@/app/admin/actions";
 import { AdminOrderActions } from "@/components/admin-order-actions";
 import { AdminOrderDeliveryPanel } from "@/components/admin-order-delivery-panel";
 import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
@@ -13,6 +13,7 @@ import { formatEuro } from "@/lib/orders/domain";
 import { orderAcceptsDeliveryUpload } from "@/lib/orders/delivery";
 import { assertPaymentServerEnvironment } from "@/lib/payments/config";
 import { paymentMethodPresentation, paymentStatusPresentation } from "@/lib/payments/presentation";
+import { newRefundRequestToken } from "@/lib/payments/refund";
 import { loadAndAssertPaymentQaRuntimeEnvironment } from "@/lib/payments/qa-guard";
 import { orderStatusPresentation } from "@/lib/orders/status";
 import { rightsStatusPresentation } from "@/lib/rights/domain";
@@ -32,6 +33,10 @@ const stateMessages: Record<string, string> = {
   "note-ajoutee": "La note interne a été ajoutée. Elle reste invisible dans l’espace client.",
   "note-invalide": "La note n’a pas été ajoutée. Vérifiez sa longueur.",
   "suppression-refusee": "Cette commande doit être conservée : la règle de suppression serveur a refusé l’action.",
+  "remboursement-confirme": "Le prestataire a confirmé le remboursement. Le statut métier de la commande est inchangé.",
+  "remboursement-en-cours": "Le remboursement est en cours. Aucun nouvel ordre de remboursement ne doit être créé.",
+  "remboursement-a-verifier": "Le remboursement nécessite une réconciliation opérateur avant toute nouvelle tentative.",
+  "remboursement-refuse": "La demande de remboursement a été refusée par les garde-fous serveur.",
 };
 
 const notificationKindPresentation = {
@@ -47,6 +52,9 @@ const notificationKindPresentation = {
   OWNER_RIGHTS_CLIENT_ACCEPTED: "Contrat accepté — propriétaire",
   CUSTOMER_RIGHTS_REJECTED: "Demande de droits rejetée — client",
   CUSTOMER_RIGHTS_READY_FOR_PAYMENT: "Dossier prêt pour paiement futur — client",
+  CUSTOMER_PARTIAL_REFUND: "Remboursement partiel — client",
+  CUSTOMER_REFUND_COMPLETED: "Remboursement total — client",
+  OWNER_PAYMENT_INCIDENT: "Incident de paiement — propriétaire",
 } as const;
 
 const notificationStatusPresentation = {
@@ -61,6 +69,26 @@ const notificationStatusPresentation = {
   COMPLAINED: "Plainte reçue",
   SUPPRESSED: "Adresse supprimée",
   CANCELED: "Annulée",
+} as const;
+
+const paymentAuditActionPresentation = {
+  REFUND_REQUESTED: "Remboursement demandé",
+  REFUND_PROVIDER_ACCEPTED: "Remboursement accepté par le prestataire",
+  REFUND_CONFIRMED: "Remboursement confirmé",
+  REFUND_FAILED: "Remboursement échoué",
+  REFUND_RECONCILIATION_REQUIRED: "Réconciliation requise",
+  INCIDENT_OPENED: "Incident ouvert",
+  INCIDENT_UPDATED: "Incident mis à jour",
+  INCIDENT_RESOLVED: "Incident résolu",
+  RECONCILIATION_CHECKED: "Réconciliation contrôlée",
+} as const;
+
+const paymentAuditResultPresentation = {
+  PENDING: "En attente",
+  SUCCEEDED: "Confirmé",
+  FAILED: "Échoué",
+  REQUIRES_REVIEW: "Revue requise",
+  NO_CHANGE: "Aucun changement",
 } as const;
 
 export default async function AdminOrderPage({ params, searchParams }: AdminOrderPageProps) {
@@ -161,9 +189,12 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
           <section className="admin-side-window" aria-labelledby="admin-payments-title">
             <p className="admin-section-label">Paiements</p><h2 id="admin-payments-title">{order.payments.length ? `${order.payments.length} tentative${order.payments.length > 1 ? "s" : ""}` : "Aucune tentative"}</h2>
             {order.payments.map((payment) => (
-              <dl key={payment.id}>
+              <div key={payment.id} className="admin-payment-record">
+              <dl>
                 <div><dt>Statut</dt><dd>{paymentStatusPresentation[payment.status]}</dd></div>
                 <div><dt>Montant</dt><dd>{formatEuro(payment.amountCents)} · {payment.currency}</dd></div>
+                <div><dt>Remboursé</dt><dd>{formatEuro(payment.refundedAmountCents)}</dd></div>
+                <div><dt>Solde remboursable</dt><dd>{formatEuro(Math.max(0, payment.amountCents - payment.refundedAmountCents - payment.refundAttempts.filter((attempt) => ["PROCESSING", "PENDING", "REQUIRES_REVIEW"].includes(attempt.status)).reduce((sum, attempt) => sum + attempt.amountCents, 0)))}</dd></div>
                 <div><dt>Prestataire</dt><dd>{payment.provider === "STRIPE" ? "Stripe" : "PayPal"}</dd></div>
                 <div><dt>Environnement</dt><dd>{payment.mode === "TEST" ? "MODE TEST" : "LIVE"}</dd></div>
                 <div><dt>Moyen</dt><dd>{payment.paymentMethod ? paymentMethodPresentation[payment.paymentMethod] : "Non déterminé"}</dd></div>
@@ -173,6 +204,11 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
                 <div><dt>Créée</dt><dd>{payment.createdAt.toLocaleString("fr-FR")}</dd></div>
                 <div><dt>Dernière mise à jour</dt><dd>{payment.updatedAt.toLocaleString("fr-FR")}</dd></div>
               </dl>
+              {payment.refundAttempts.length ? <details className="admin-refund-history"><summary>Historique remboursements ({payment.refundAttempts.length})</summary>{payment.refundAttempts.map((attempt) => <div key={attempt.id} className="admin-refund-attempt"><p><strong>{formatEuro(attempt.amountCents)}</strong> · {attempt.status === "SUCCEEDED" ? "Confirmé" : attempt.status === "PENDING" || attempt.status === "PROCESSING" ? "En cours" : attempt.status === "FAILED" ? "Échoué" : "À réconcilier"}</p><small>{attempt.createdAt.toLocaleString("fr-FR")} · {attempt.source === "ADMIN" ? "Demandé par Admin" : "Détecté chez le prestataire"}{attempt.providerRefundId ? ` · Réf. ${attempt.providerRefundId}` : ""}{attempt.failureCode ? ` · Diagnostic ${attempt.failureCode}` : ""}</small>{["PENDING", "PROCESSING", "REQUIRES_REVIEW"].includes(attempt.status) ? <form action={reconcilePaymentRefundAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="attemptId" value={attempt.id} /><input type="hidden" name="confirmation" value="CONFIRM_REFUND_RECONCILIATION" /><button type="submit">Réconcilier cette tentative</button></form> : null}</div>)}</details> : null}
+              {payment.incidents.length ? <details className="admin-refund-history" open><summary>Incidents financiers ({payment.incidents.length})</summary>{payment.incidents.map((incident) => <div key={incident.id} className="admin-refund-attempt"><p><strong>{incident.type === "DISPUTE" ? "Litige" : incident.type === "CHARGEBACK" ? "Chargeback" : "Reversal"}</strong> · {incident.status === "RESOLVED" ? "Résolu" : incident.status === "UNDER_REVIEW" ? "En revue" : "Ouvert"}</p><small>{incident.amountCents ? formatEuro(incident.amountCents) : "Montant à vérifier"} · Revue opérateur {incident.requiresOperatorReview ? "requise" : "terminée"} · Réf. {incident.providerIncidentId}</small></div>)}</details> : null}
+              {payment.auditEvents.length ? <details className="admin-refund-history"><summary>Journal financier ({payment.auditEvents.length})</summary>{payment.auditEvents.map((event) => <div key={event.id} className="admin-refund-attempt"><p><strong>{paymentAuditActionPresentation[event.action]}</strong> · {paymentAuditResultPresentation[event.result]}</p><small>{event.createdAt.toLocaleString("fr-FR")}{event.amountCents ? ` · ${formatEuro(event.amountCents)}` : ""} · {event.actorRole === "ADMIN" ? "Administrateur" : "Système"}</small></div>)}</details> : null}
+              {payment.mode === "TEST" && ["SUCCEEDED", "PARTIALLY_REFUNDED"].includes(payment.status) ? <details className="admin-refund-panel"><summary>Rembourser ce paiement TEST</summary><p><strong>Le remboursement modifie l’état financier mais ne modifie pas automatiquement l’état de la commande.</strong></p><form action={requestPaymentRefundAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="refundKind" value="FULL" /><input type="hidden" name="requestToken" value={newRefundRequestToken()} /><label><input type="checkbox" name="confirmation" value="CONFIRM_FINANCIAL_REFUND" required /> Je confirme le remboursement total auprès du prestataire.</label><button type="submit">Rembourser totalement</button></form><form action={requestPaymentRefundAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="refundKind" value="PARTIAL" /><input type="hidden" name="requestToken" value={newRefundRequestToken()} /><label htmlFor={`refund-amount-${payment.id}`}>Montant partiel en euros</label><input id={`refund-amount-${payment.id}`} name="amount" inputMode="decimal" placeholder="10,00" required /><label><input type="checkbox" name="confirmation" value="CONFIRM_FINANCIAL_REFUND" required /> Je confirme ce remboursement partiel.</label><button type="submit">Rembourser partiellement</button></form></details> : null}
+              </div>
             ))}
             {canRunStripeTest ? <AdminPaymentTestAction orderNumber={order.orderNumber} amountCents={order.totalCents} /> : null}
             <small>Résumé PostgreSQL en lecture seule. Seul l’identifiant externe utile à la réconciliation est affiché ; aucun secret ni donnée carte ne l’est.</small>

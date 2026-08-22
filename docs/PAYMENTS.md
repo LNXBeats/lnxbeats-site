@@ -1,5 +1,7 @@
 # Paiements — Stripe Checkout et PayPal Orders V0.7.4
 
+> V0.7.6 ajoute un moteur commun de remboursements Stripe Test / PayPal Sandbox et un registre séparé des disputes, reversals et chargebacks. La règle approuvée est stricte : `Payment` porte l'état financier ; un remboursement ou incident ne modifie jamais automatiquement `Order.status`. Les procédures opérateur sont décrites dans [PAYMENT_REFUND_RUNBOOK.md](./PAYMENT_REFUND_RUNBOOK.md).
+
 ## Statut de cette fondation
 
 La V0.7.4 conserve Stripe Hosted Checkout et ajoute une intégration PayPal Orders v2 **uniquement en Stripe Test / PayPal Sandbox**. Elle ne constitue ni une ouverture des paiements au public, ni une autorisation de passer en production.

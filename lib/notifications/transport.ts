@@ -75,7 +75,7 @@ function assertResendRecipient(message: OrderNotificationMessage, configuration:
   if (isFictitiousRecipient(recipient)) {
     throw new NotificationTransportError({ code: "FICTITIOUS_RECIPIENT", message: "Une adresse de test locale ne peut pas être envoyée au fournisseur.", retryable: false });
   }
-  const owner = message.kind === "OWNER_NEW_ORDER" || message.kind === "OWNER_RIGHTS_REQUESTED" || message.kind === "OWNER_RIGHTS_CLIENT_ACCEPTED";
+  const owner = message.kind === "OWNER_NEW_ORDER" || message.kind === "OWNER_RIGHTS_REQUESTED" || message.kind === "OWNER_RIGHTS_CLIENT_ACCEPTED" || message.kind === "OWNER_PAYMENT_INCIDENT";
   if (owner) {
     if (!configuration.ownerEmailEnabled || recipient !== configuration.ownerRecipient) {
       throw new NotificationTransportError({ code: "OWNER_DESTINATION_NOT_APPROVED", message: "La destination propriétaire n’est pas approuvée.", retryable: false });

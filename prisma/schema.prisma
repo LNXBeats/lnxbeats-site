@@ -151,6 +151,9 @@ enum OrderNotificationKind {
   OWNER_RIGHTS_CLIENT_ACCEPTED
   CUSTOMER_RIGHTS_REJECTED
   CUSTOMER_RIGHTS_READY_FOR_PAYMENT
+  CUSTOMER_PARTIAL_REFUND
+  CUSTOMER_REFUND_COMPLETED
+  OWNER_PAYMENT_INCIDENT
 }
 
 enum NotificationChannel {
@@ -393,6 +396,61 @@ enum PaymentStatus {
   REQUIRES_REVIEW
 }
 
+enum RefundAttemptSource {
+  ADMIN
+  PROVIDER
+}
+
+enum RefundAttemptStatus {
+  PROCESSING
+  PENDING
+  SUCCEEDED
+  FAILED
+  REQUIRES_REVIEW
+}
+
+enum PaymentIncidentType {
+  REVERSAL
+  DISPUTE
+  CHARGEBACK
+}
+
+enum PaymentIncidentStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+}
+
+enum PaymentIncidentOutcome {
+  BUYER_FAVOUR
+  SELLER_FAVOUR
+  REVERSED
+  RESTORED
+  ACCEPTED
+  DENIED
+  OTHER
+}
+
+enum PaymentAuditAction {
+  REFUND_REQUESTED
+  REFUND_PROVIDER_ACCEPTED
+  REFUND_CONFIRMED
+  REFUND_FAILED
+  REFUND_RECONCILIATION_REQUIRED
+  INCIDENT_OPENED
+  INCIDENT_UPDATED
+  INCIDENT_RESOLVED
+  RECONCILIATION_CHECKED
+}
+
+enum PaymentAuditResult {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REQUIRES_REVIEW
+  NO_CHANGE
+}
+
 enum PaymentMethod {
   CARD
   PAYPAL
@@ -434,6 +492,8 @@ model User {
   contractAcceptances ContractAcceptance[]    @relation("ContractAcceptanceActor")
   splitProposals      RightsSplitProposal[]   @relation("RightsSplitProposer")
   notificationEvents  NotificationEvent[]     @relation("NotificationEventActor")
+  refundRequests      RefundAttempt[]         @relation("RefundRequestedBy")
+  paymentAuditEvents  PaymentAuditEvent[]     @relation("PaymentAuditActor")
 
   @@index([role, status])
   @@map("users")
@@ -828,36 +888,116 @@ model NotificationSuppression {
 }
 
 model Payment {
-  id                  String          @id @default(uuid()) @db.Uuid
-  orderId             String          @db.Uuid
-  provider            PaymentProvider @default(STRIPE)
+  id                  String              @id @default(uuid()) @db.Uuid
+  orderId             String              @db.Uuid
+  provider            PaymentProvider     @default(STRIPE)
   mode                PaymentMode
-  status              PaymentStatus   @default(CREATED)
+  status              PaymentStatus       @default(CREATED)
   amountCents         Int
-  currency            String          @db.VarChar(3)
-  pricingVersion      String          @db.VarChar(32)
-  idempotencyKey      String          @unique @db.VarChar(255)
-  providerCheckoutId  String?         @db.VarChar(255)
-  providerPaymentId   String?         @db.VarChar(255)
+  currency            String              @db.VarChar(3)
+  pricingVersion      String              @db.VarChar(32)
+  idempotencyKey      String              @unique @db.VarChar(255)
+  providerCheckoutId  String?             @db.VarChar(255)
+  providerPaymentId   String?             @db.VarChar(255)
   paymentMethod       PaymentMethod?
-  failureCode         String?         @db.VarChar(120)
-  checkoutExpiresAt   DateTime?       @db.Timestamptz(3)
-  paidAt              DateTime?       @db.Timestamptz(3)
-  failedAt            DateTime?       @db.Timestamptz(3)
-  canceledAt          DateTime?       @db.Timestamptz(3)
-  expiredAt           DateTime?       @db.Timestamptz(3)
-  refundedAt          DateTime?       @db.Timestamptz(3)
-  refundedAmountCents Int             @default(0)
-  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
-  order               Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  failureCode         String?             @db.VarChar(120)
+  checkoutExpiresAt   DateTime?           @db.Timestamptz(3)
+  paidAt              DateTime?           @db.Timestamptz(3)
+  failedAt            DateTime?           @db.Timestamptz(3)
+  canceledAt          DateTime?           @db.Timestamptz(3)
+  expiredAt           DateTime?           @db.Timestamptz(3)
+  refundedAt          DateTime?           @db.Timestamptz(3)
+  refundedAmountCents Int                 @default(0)
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @db.Timestamptz(3)
+  order               Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
   events              ProviderEvent[]
+  refundAttempts      RefundAttempt[]
+  incidents           PaymentIncident[]
+  auditEvents         PaymentAuditEvent[]
 
   @@unique([provider, providerCheckoutId])
   @@unique([provider, providerPaymentId])
   @@index([orderId, createdAt])
   @@index([provider, mode, status, updatedAt])
   @@map("payments")
+}
+
+model RefundAttempt {
+  id                     String              @id @default(uuid()) @db.Uuid
+  paymentId              String              @db.Uuid
+  provider               PaymentProvider
+  source                 RefundAttemptSource @default(ADMIN)
+  amountCents            Int
+  currency               String              @db.VarChar(3)
+  requestedByUserId      String?             @db.Uuid
+  localIdempotencyKey    String              @unique @db.VarChar(255)
+  providerRefundId       String?             @db.VarChar(255)
+  providerIdempotencyKey String              @db.VarChar(255)
+  status                 RefundAttemptStatus @default(PROCESSING)
+  failureCode            String?             @db.VarChar(120)
+  attempts               Int                 @default(0)
+  lastAttemptAt          DateTime?           @db.Timestamptz(3)
+  confirmedAt            DateTime?           @db.Timestamptz(3)
+  createdAt              DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime            @updatedAt @db.Timestamptz(3)
+  payment                Payment             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  requestedBy            User?               @relation("RefundRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  providerEvents         ProviderEvent[]
+  auditEvents            PaymentAuditEvent[]
+
+  @@unique([provider, providerRefundId])
+  @@unique([provider, providerIdempotencyKey])
+  @@index([paymentId, status, createdAt])
+  @@map("refund_attempts")
+}
+
+model PaymentIncident {
+  id                     String                  @id @default(uuid()) @db.Uuid
+  paymentId              String                  @db.Uuid
+  provider               PaymentProvider
+  type                   PaymentIncidentType
+  providerIncidentId     String                  @db.VarChar(255)
+  status                 PaymentIncidentStatus
+  amountCents            Int?
+  currency               String?                 @db.VarChar(3)
+  outcome                PaymentIncidentOutcome?
+  requiresOperatorReview Boolean                 @default(true)
+  openedAt               DateTime                @db.Timestamptz(3)
+  resolvedAt             DateTime?               @db.Timestamptz(3)
+  createdAt              DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                @updatedAt @db.Timestamptz(3)
+  payment                Payment                 @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  providerEvents         ProviderEvent[]
+  auditEvents            PaymentAuditEvent[]
+
+  @@unique([provider, type, providerIncidentId])
+  @@index([paymentId, status, createdAt])
+  @@index([requiresOperatorReview, updatedAt])
+  @@map("payment_incidents")
+}
+
+model PaymentAuditEvent {
+  id              String             @id @default(uuid()) @db.Uuid
+  paymentId       String             @db.Uuid
+  refundAttemptId String?            @db.Uuid
+  incidentId      String?            @db.Uuid
+  actorUserId     String?            @db.Uuid
+  actorRole       UserRole?
+  provider        PaymentProvider
+  action          PaymentAuditAction
+  amountCents     Int?
+  result          PaymentAuditResult
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  payment         Payment            @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  refundAttempt   RefundAttempt?     @relation(fields: [refundAttemptId], references: [id], onDelete: Restrict)
+  incident        PaymentIncident?   @relation(fields: [incidentId], references: [id], onDelete: Restrict)
+  actor           User?              @relation("PaymentAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId, createdAt])
+  @@index([refundAttemptId, createdAt])
+  @@index([incidentId, createdAt])
+  @@map("payment_audit_events")
 }
 
 model ProviderEvent {
@@ -869,12 +1009,18 @@ model ProviderEvent {
   objectId        String?              @db.VarChar(255)
   outcome         ProviderEventOutcome
   paymentId       String?              @db.Uuid
+  refundAttemptId String?              @db.Uuid
+  incidentId      String?              @db.Uuid
   processedAt     DateTime             @db.Timestamptz(3)
   createdAt       DateTime             @default(now()) @db.Timestamptz(3)
   payment         Payment?             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  refundAttempt   RefundAttempt?       @relation(fields: [refundAttemptId], references: [id], onDelete: Restrict)
+  incident        PaymentIncident?     @relation(fields: [incidentId], references: [id], onDelete: Restrict)
 
   @@unique([provider, providerEventId])
   @@index([paymentId, createdAt])
+  @@index([refundAttemptId, createdAt])
+  @@index([incidentId, createdAt])
   @@index([provider, livemode, createdAt])
   @@map("provider_events")
 }

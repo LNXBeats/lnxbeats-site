@@ -55,6 +55,7 @@
     "notifications:check": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-check.ts",
     "test:notification:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-notifications-runtime.ts",
     "test:payment:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-payment-runtime.ts",
+    "test:refund:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-refund-runtime.ts",
     "stripe:browser-fixtures:setup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/stripe-browser-fixtures.ts setup",
     "stripe:browser-fixtures:cleanup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/stripe-browser-fixtures.ts cleanup",
     "checkout:browser-fixture:setup": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/checkout-browser-fixture.ts setup",

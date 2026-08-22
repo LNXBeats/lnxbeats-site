@@ -29,7 +29,7 @@ function canonicalOrigin(configuration: NotificationConfiguration) {
 }
 
 function resourceUrl(message: OrderNotificationMessage, configuration: NotificationConfiguration) {
-  const owner = message.kind === "OWNER_NEW_ORDER" || message.kind === "OWNER_RIGHTS_REQUESTED" || message.kind === "OWNER_RIGHTS_CLIENT_ACCEPTED";
+  const owner = message.kind === "OWNER_NEW_ORDER" || message.kind === "OWNER_RIGHTS_REQUESTED" || message.kind === "OWNER_RIGHTS_CLIENT_ACCEPTED" || message.kind === "OWNER_PAYMENT_INCIDENT";
   const rightsReference = message.kind.includes("RIGHTS") ? message.payload.rightsRequestNumber : undefined;
   const pathname = rightsReference
     ? `${owner ? "/admin/droits/" : "/compte/droits/"}${encodeURIComponent(rightsReference)}`
@@ -88,6 +88,18 @@ function copy(message: OrderNotificationMessage) {
       "Votre dossier est prêt pour une étape future", "Paiement non ouvert", "Votre dossier a franchi l’étape de revue",
       "Le paiement des droits restera fermé jusqu’aux validations juridique et technique. Aucun droit n’est actif.", "Consulter le dossier",
     ],
+    CUSTOMER_PARTIAL_REFUND: [
+      "Remboursement partiel confirmé — LNX Beats", "Paiement", "Votre remboursement partiel est confirmé",
+      "Le remboursement a été confirmé par le prestataire. L’état de votre création reste visible séparément dans votre Compte.", "Voir ma commande",
+    ],
+    CUSTOMER_REFUND_COMPLETED: [
+      "Remboursement total confirmé — LNX Beats", "Paiement", "Votre remboursement est confirmé",
+      "Le remboursement total a été confirmé par le prestataire. Il ne réécrit pas l’historique de votre commande.", "Voir ma commande",
+    ],
+    OWNER_PAYMENT_INCIDENT: [
+      "Incident de paiement à examiner — LNX Studio", "Paiement", "Une réconciliation opérateur est requise",
+      "Un incident fournisseur a été enregistré sans modifier automatiquement l’état de la commande.", "Ouvrir la commande",
+    ],
   } as const;
   const [subject, eyebrow, title, body, cta] = values[message.kind];
   return { subject, eyebrow, title, body, cta };
@@ -116,6 +128,9 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
       `Montant : ${formatEuro(message.payload.totalCents, message.payload.currency)}`,
       `Options : ${options}`,
       `Date : ${formatDate(message.payload.createdAt)}`,
+    ] : []),
+    ...(message.payload.refundAmountCents ? [
+      `Montant remboursé : ${formatEuro(message.payload.refundAmountCents, message.payload.currency)}`,
     ] : []),
   ];
   const environmentLabel = configuration.deploymentEnvironment === "production" ? null : configuration.deploymentEnvironment === "staging" ? "STAGING · MODE TEST" : "DÉVELOPPEMENT · CAPTURE";

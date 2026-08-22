@@ -376,6 +376,21 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-note-panel label { color: #aaa59c; font-size: 0.68rem; }
 .admin-note-panel textarea { width: 100%; padding: 0.8rem; resize: vertical; border: 1px solid rgba(244, 240, 232, 0.16); border-radius: 13px; background: #0b0b0a; color: #f4f0e8; }
 
+.admin-payment-record + .admin-payment-record { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(214, 179, 106, 0.24); }
+.admin-refund-history,
+.admin-refund-panel { margin-top: 1rem; padding: 0.9rem; border: 1px solid rgba(244, 240, 232, 0.12); border-radius: 14px; background: rgba(0, 0, 0, 0.2); }
+.admin-refund-history > summary,
+.admin-refund-panel > summary { cursor: pointer; color: #ead39f; font-size: 0.74rem; font-weight: 700; }
+.admin-refund-attempt { padding-block: 0.8rem; border-top: 1px solid rgba(244, 240, 232, 0.08); }
+.admin-refund-attempt p { margin: 0 0 0.3rem; }
+.admin-refund-attempt small { display: block; color: #918d85; overflow-wrap: anywhere; }
+.admin-refund-panel form { display: grid; gap: 0.65rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(244, 240, 232, 0.1); }
+.admin-refund-panel label { color: #aaa59c; font-size: 0.72rem; line-height: 1.5; }
+.admin-refund-panel input[type="text"],
+.admin-refund-panel input:not([type]) { width: 100%; min-height: 46px; padding: 0.75rem; border: 1px solid rgba(244, 240, 232, 0.16); border-radius: 12px; background: #0b0b0a; color: #f4f0e8; }
+.admin-refund-panel button,
+.admin-refund-attempt button { min-height: 44px; padding: 0.7rem 0.9rem; border: 1px solid rgba(232, 136, 125, 0.45); border-radius: 12px; background: rgba(109, 34, 26, 0.2); color: #f0c6c1; cursor: pointer; font-weight: 700; }
+
 .admin-catalogue-notice,
 .admin-migration-window { display: grid; grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr); gap: 2rem; align-items: center; margin-bottom: 1.2rem; padding: clamp(1.5rem, 3vw, 2.5rem); }
 .admin-catalogue-notice h2,

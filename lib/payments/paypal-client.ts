@@ -36,6 +36,15 @@ export type PaypalCaptureEvidence = Readonly<{
   occurredAt: Date;
 }>;
 
+export type PaypalRefundEvidence = Readonly<{
+  providerRefundId: string;
+  captureId: string;
+  status: "PENDING" | "SUCCEEDED" | "FAILED";
+  amountCents: number;
+  currency: "EUR";
+  occurredAt: Date;
+}>;
+
 export type PaypalWebhookHeaders = Readonly<{
   transmissionId: string;
   transmissionTime: string;
@@ -51,8 +60,13 @@ export interface PaypalGateway {
   verifyWebhook(headers: PaypalWebhookHeaders, webhookEventBody: string): Promise<boolean>;
 }
 
+export interface PaypalRefundGateway {
+  refundCapture(captureId: string, amountCents: number, idempotencyKey: string): Promise<PaypalRefundEvidence>;
+  retrieveRefund(providerRefundId: string): Promise<PaypalRefundEvidence>;
+}
+
 export class PaypalClientError extends Error {
-  constructor(readonly code: "UNAVAILABLE" | "INVALID_RESPONSE" | "NOT_APPROVED") {
+  constructor(readonly code: "UNAVAILABLE" | "INVALID_RESPONSE" | "NOT_APPROVED" | "INVALID_REQUEST" | "AUTHENTICATION" | "CONFLICT" | "RATE_LIMITED") {
     super("PayPal Sandbox is unavailable.");
     this.name = "PaypalClientError";
   }
@@ -193,6 +207,53 @@ export function paypalCaptureEvidence(value: unknown): PaypalCaptureEvidence {
   };
 }
 
+function paypalCaptureIdFromLinks(value: unknown) {
+  const link = array(value)
+    .map(record)
+    .find((candidate) => candidate?.rel === "up" && candidate?.method === "GET");
+  const href = nonEmptyString(link?.href, 2_048);
+  if (!href) return null;
+  try {
+    const url = new URL(href);
+    if (
+      url.protocol !== "https:"
+      || !["api-m.sandbox.paypal.com", "api.sandbox.paypal.com"].includes(url.hostname)
+      || url.username
+      || url.password
+    ) return null;
+    const match = url.pathname.match(/^\/v2\/payments\/captures\/([^/]+)$/);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function paypalRefundEvidence(value: unknown): PaypalRefundEvidence {
+  const body = record(value);
+  const providerRefundId = nonEmptyString(body?.id);
+  const amount = record(body?.amount);
+  const status = body?.status;
+  const captureId = paypalCaptureIdFromLinks(body?.links);
+  const updateTime = nonEmptyString(body?.update_time, 80) ?? nonEmptyString(body?.create_time, 80);
+  if (
+    !providerRefundId
+    || !captureId
+    || !updateTime
+    || amount?.currency_code !== "EUR"
+    || !["PENDING", "COMPLETED", "FAILED", "CANCELLED"].includes(String(status))
+  ) throw new PaypalClientError("INVALID_RESPONSE");
+  const occurredAt = new Date(updateTime);
+  if (Number.isNaN(occurredAt.getTime())) throw new PaypalClientError("INVALID_RESPONSE");
+  return {
+    providerRefundId,
+    captureId,
+    status: status === "COMPLETED" ? "SUCCEEDED" : status === "PENDING" ? "PENDING" : "FAILED",
+    amountCents: paypalCentsFromAmount(amount.value),
+    currency: "EUR",
+    occurredAt,
+  };
+}
+
 async function boundedJson(response: Response) {
   const declaredLength = response.headers.get("content-length");
   if (declaredLength && Number(declaredLength) > PAYPAL_RESPONSE_MAX_BYTES) {
@@ -212,7 +273,7 @@ async function boundedJson(response: Response) {
 function createPaypalGatewayWithConfiguration(
   configuration: EnabledPaypalConfiguration,
   fetchImplementation: Fetch,
-): PaypalGateway {
+): PaypalGateway & PaypalRefundGateway {
   async function accessToken() {
     let response: Response;
     try {
@@ -255,7 +316,18 @@ function createPaypalGatewayWithConfiguration(
       throw new PaypalClientError("UNAVAILABLE");
     }
     if (!response.ok) {
-      throw new PaypalClientError(response.status === 422 ? "NOT_APPROVED" : "UNAVAILABLE");
+      const code = response.status === 400
+        ? "INVALID_REQUEST"
+        : response.status === 401 || response.status === 403
+          ? "AUTHENTICATION"
+          : response.status === 409
+            ? "CONFLICT"
+            : response.status === 422
+              ? "NOT_APPROVED"
+              : response.status === 429
+                ? "RATE_LIMITED"
+                : "UNAVAILABLE";
+      throw new PaypalClientError(code);
     }
     return boundedJson(response);
   }
@@ -278,6 +350,25 @@ function createPaypalGatewayWithConfiguration(
         `/v2/checkout/orders/${encodeURIComponent(providerOrderId)}/capture`,
         { method: "POST", body: "{}" },
         idempotencyKey,
+      ));
+    },
+    async refundCapture(captureId, amountCents, idempotencyKey) {
+      return paypalRefundEvidence(await api(
+        `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`,
+        {
+          method: "POST",
+          headers: { prefer: "return=representation" },
+          body: JSON.stringify({
+            amount: { currency_code: "EUR", value: paypalAmountFromCents(amountCents) },
+          }),
+        },
+        idempotencyKey,
+      ));
+    },
+    async retrieveRefund(providerRefundId) {
+      return paypalRefundEvidence(await api(
+        `/v2/payments/refunds/${encodeURIComponent(providerRefundId)}`,
+        { method: "GET" },
       ));
     },
     async verifyWebhook(headers, webhookEventBody) {
@@ -303,7 +394,7 @@ function createPaypalGatewayWithConfiguration(
 
 export function createPaypalGateway(
   fetchImplementation: Fetch = fetch,
-): PaypalGateway {
+): PaypalGateway & PaypalRefundGateway {
   let configuration: EnabledPaypalConfiguration;
   try {
     configuration = assertPaypalServerEnvironment();

@@ -30,6 +30,9 @@ const definitions: Record<OrderNotificationKind, Readonly<{
   OWNER_RIGHTS_CLIENT_ACCEPTED: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-rights-client-accepted" },
   CUSTOMER_RIGHTS_REJECTED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-rights-rejected" },
   CUSTOMER_RIGHTS_READY_FOR_PAYMENT: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-rights-ready-for-payment" },
+  CUSTOMER_PARTIAL_REFUND: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-partial-refund" },
+  CUSTOMER_REFUND_COMPLETED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-refund-completed" },
+  OWNER_PAYMENT_INCIDENT: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-payment-incident" },
 };
 
 export function notificationDefinition(kind: OrderNotificationKind) {
@@ -74,6 +77,7 @@ export function notificationBackoffMs(attempts: number) {
 const payloadKeys = new Set([
   "orderNumber", "customerName", "customerEmail", "totalCents", "currency", "coverIncluded",
   "priorityProcessing", "createdAt", "workTitle", "rightsRequestNumber", "rightsRequestType", "requestedPriceCents",
+  "refundAmountCents",
 ]);
 
 export function parseNotificationPayload(value: unknown): NotificationPayload {
@@ -95,6 +99,7 @@ export function parseNotificationPayload(value: unknown): NotificationPayload {
   if (payload.rightsRequestNumber !== undefined && (typeof payload.rightsRequestNumber !== "string" || payload.rightsRequestNumber.length > 80)) throw new Error("Notification payload is invalid.");
   if (payload.rightsRequestType !== undefined && !["PUBLICATION_LICENSE", "EXPLOITATION_PARTNERSHIP"].includes(String(payload.rightsRequestType))) throw new Error("Notification payload is invalid.");
   if (payload.requestedPriceCents !== undefined && (!Number.isInteger(payload.requestedPriceCents) || Number(payload.requestedPriceCents) <= 0)) throw new Error("Notification payload is invalid.");
+  if (payload.refundAmountCents !== undefined && (!Number.isInteger(payload.refundAmountCents) || Number(payload.refundAmountCents) <= 0)) throw new Error("Notification payload is invalid.");
   return payload as NotificationPayload;
 }
 

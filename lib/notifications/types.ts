@@ -10,7 +10,10 @@ export type OrderNotificationKind =
   | "CUSTOMER_RIGHTS_CONTRACT_READY"
   | "OWNER_RIGHTS_CLIENT_ACCEPTED"
   | "CUSTOMER_RIGHTS_REJECTED"
-  | "CUSTOMER_RIGHTS_READY_FOR_PAYMENT";
+  | "CUSTOMER_RIGHTS_READY_FOR_PAYMENT"
+  | "CUSTOMER_PARTIAL_REFUND"
+  | "CUSTOMER_REFUND_COMPLETED"
+  | "OWNER_PAYMENT_INCIDENT";
 
 export type NotificationChannel = "EMAIL" | "SMS";
 export type NotificationPriority = "CRITICAL" | "INFORMATIONAL" | "INTERNAL";
@@ -29,6 +32,7 @@ export type NotificationPayload = Readonly<{
   rightsRequestNumber?: string;
   rightsRequestType?: "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP";
   requestedPriceCents?: number;
+  refundAmountCents?: number;
 }>;
 
 export type OrderNotificationMessage = Readonly<{

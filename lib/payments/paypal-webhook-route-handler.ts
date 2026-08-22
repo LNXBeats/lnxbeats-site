@@ -7,6 +7,7 @@ import {
 } from "@/lib/payments/paypal-webhook";
 import { logPaymentEvent } from "@/lib/payments/observability";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
+import { isPaypalFinancialEvent, processVerifiedPaypalFinancialEvent } from "@/lib/payments/provider-financial-events";
 
 export const PAYPAL_WEBHOOK_MAX_BYTES = 256 * 1024;
 
@@ -21,7 +22,9 @@ const dependencies: PaypalWebhookRouteDependencies = {
     await assertPaymentsRuntimeEnvironment();
   },
   gateway: createPaypalGateway,
-  processEvent: processVerifiedPaypalWebhookEvent,
+  processEvent: async (event) => isPaypalFinancialEvent(event.event_type)
+    ? { ...(await processVerifiedPaypalFinancialEvent(event)), orderConfirmed: false }
+    : processVerifiedPaypalWebhookEvent(event),
 };
 
 class PaypalWebhookRequestError extends Error {

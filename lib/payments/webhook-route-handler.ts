@@ -7,6 +7,7 @@ import { normalizePaymentMethod } from "@/lib/payments/domain";
 import type { PaymentConfiguration } from "@/lib/payments/types";
 import { logPaymentEvent } from "@/lib/payments/observability";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
+import { isStripeFinancialEvent, processVerifiedStripeFinancialEvent } from "@/lib/payments/provider-financial-events";
 import {
   findProcessedStripeWebhookEvent,
   processVerifiedStripeWebhookEvent,
@@ -199,7 +200,9 @@ const routeDependencies: StripeWebhookRouteDependencies = {
   constructEvent: constructStripeWebhookEvent,
   enrichEvent: enrichStripeWebhookEvent,
   findDuplicateEvent: findProcessedStripeWebhookEvent,
-  processEvent: processVerifiedStripeWebhookEvent,
+  processEvent: (event) => isStripeFinancialEvent(event.type)
+    ? processVerifiedStripeFinancialEvent(event)
+    : processVerifiedStripeWebhookEvent(event),
 };
 
 function webhookJson(body: object, status: number) {

@@ -8,6 +8,11 @@ import { addInternalOrderNote, deleteEligibleAdminOrder, transitionOrderStatus }
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { expireCheckoutAfterCancellation } from "@/lib/payments/service";
+import {
+  parseRefundAmountToCents,
+  reconcileRefundAttemptForAdmin,
+  requestRefundForOrder,
+} from "@/lib/payments/refund";
 
 function adminOrderPath(orderNumber: string, state: string) {
   return `/admin/commandes/${encodeURIComponent(orderNumber)}?etat=${encodeURIComponent(state)}`;
@@ -76,4 +81,62 @@ export async function deleteOrderAction(formData: FormData) {
   revalidatePath("/admin/commandes");
   revalidatePath("/compte");
   redirect("/admin/commandes?etat=commande-supprimee");
+}
+
+function adminActor(session: Awaited<ReturnType<typeof requireAdmin>>) {
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    role: "ADMIN" as const,
+    status: "ACTIVE" as const,
+    emailVerified: true as const,
+  };
+}
+
+export async function requestPaymentRefundAction(formData: FormData) {
+  const orderNumber = String(formData.get("orderNumber") ?? "");
+  const kind = String(formData.get("refundKind") ?? "");
+  const requestToken = String(formData.get("requestToken") ?? "");
+  const confirmation = String(formData.get("confirmation") ?? "");
+  if (
+    !/^LNX-\d{4}-\d{6}$/.test(orderNumber)
+    || (kind !== "FULL" && kind !== "PARTIAL")
+    || !/^[0-9a-f-]{36}$/i.test(requestToken)
+    || confirmation !== "CONFIRM_FINANCIAL_REFUND"
+  ) redirect(adminOrderPath(orderNumber, "remboursement-refuse"));
+  const session = await authorizeAdminAction();
+  let amountCents: number | undefined;
+  try {
+    amountCents = kind === "PARTIAL" ? parseRefundAmountToCents(formData.get("amount")) : undefined;
+    const result = await requestRefundForOrder(adminActor(session), {
+      orderNumber,
+      kind,
+      amountCents,
+      requestToken,
+    });
+    revalidatePath(`/admin/commandes/${orderNumber}`);
+    redirect(adminOrderPath(orderNumber, result.status === "SUCCEEDED" ? "remboursement-confirme" : "remboursement-en-cours"));
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    redirect(adminOrderPath(orderNumber, "remboursement-a-verifier"));
+  }
+}
+
+export async function reconcilePaymentRefundAction(formData: FormData) {
+  const orderNumber = String(formData.get("orderNumber") ?? "");
+  const attemptId = String(formData.get("attemptId") ?? "");
+  const confirmation = String(formData.get("confirmation") ?? "");
+  if (!/^LNX-\d{4}-\d{6}$/.test(orderNumber) || !/^[0-9a-f-]{36}$/i.test(attemptId) || confirmation !== "CONFIRM_REFUND_RECONCILIATION") {
+    redirect(adminOrderPath(orderNumber, "remboursement-refuse"));
+  }
+  const session = await authorizeAdminAction();
+  try {
+    const result = await reconcileRefundAttemptForAdmin(adminActor(session), attemptId);
+    revalidatePath(`/admin/commandes/${orderNumber}`);
+    redirect(adminOrderPath(orderNumber, result.status === "SUCCEEDED" ? "remboursement-confirme" : "remboursement-en-cours"));
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    redirect(adminOrderPath(orderNumber, "remboursement-a-verifier"));
+  }
 }

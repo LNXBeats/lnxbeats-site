@@ -39,6 +39,7 @@ type ResourceSnapshot = Readonly<{
   rightsRequestNumber?: string;
   rightsRequestType?: "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP";
   requestedPriceCents?: number;
+  refundAmountCents?: number;
 }>;
 
 export async function enqueueOrderNotification(
@@ -83,6 +84,7 @@ export async function enqueueOrderNotification(
       rightsRequestType: input.resource.rightsRequestType,
       requestedPriceCents: input.resource.requestedPriceCents,
     } : {}),
+    ...(input.resource?.refundAmountCents ? { refundAmountCents: input.resource.refundAmountCents } : {}),
   } satisfies Prisma.InputJsonObject;
   const recipient = input.recipient?.trim().toLowerCase() || null;
   const resourceType = input.resource?.type ?? "ORDER";

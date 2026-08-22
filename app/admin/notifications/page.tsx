@@ -26,6 +26,9 @@ const kindLabels = {
   OWNER_RIGHTS_CLIENT_ACCEPTED: "Acceptation · propriétaire",
   CUSTOMER_RIGHTS_REJECTED: "Demande rejetée · client",
   CUSTOMER_RIGHTS_READY_FOR_PAYMENT: "Étape future · client",
+  CUSTOMER_PARTIAL_REFUND: "Remboursement partiel · client",
+  CUSTOMER_REFUND_COMPLETED: "Remboursement total · client",
+  OWNER_PAYMENT_INCIDENT: "Incident paiement · propriétaire",
 } as const;
 
 type Props = { searchParams: Promise<{ filtre?: string; etat?: string }> };
