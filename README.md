@@ -2,7 +2,7 @@
 
 Site officiel de **LNX Beats**, le projet artistique de Ludovic Mathon. Le catalogue public et ses métadonnées vivent dans PostgreSQL ; les médias utilisent une abstraction locale/S3-compatible. Le Checkout Commander Stripe reste en mode Test, désactivé par défaut et fermé aux environnements publics.
 
-Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande, puis suivre son paiement et sa création dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement Live/public ni facture n’est actif. V0.7.2 ajoute localement les demandes de droits, modèles juridiques versionnés, PDF privés et preuves d’acceptation, sans paiement de droits ni activation contractuelle ; la production reste bloquée par la revue juridique et l’advisory Prisma/deepmerge-ts.
+Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergement Railway. Les membres vérifiés peuvent enregistrer, reprendre et finaliser une demande, puis suivre son paiement et sa création dans leur espace. Le cockpit ADMIN lit les commandes, membres et données catalogue réelles et n’autorise que les transitions prévues. Aucun paiement Live/public ni facture n’est actif. Les demandes de droits, modèles juridiques versionnés, PDF privés et preuves d’acceptation restent sans paiement de droits ni activation contractuelle. L’advisory Prisma/deepmerge-ts est corrigée dans V0.7.7 ; les gates juridiques et de production demeurent.
 
 ## Stack
 
@@ -61,6 +61,7 @@ npm run test:payment
 npm run test:checkout
 npm run test:notification
 npm run test:contracts
+npm run test:security
 ```
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :

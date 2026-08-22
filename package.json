@@ -51,6 +51,7 @@
     "test:payment": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/payments/*.test.ts",
     "test:checkout": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/checkout/*.test.ts",
     "test:notification": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/notifications/*.test.ts",
+    "test:security": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/security/*.test.ts",
     "notifications:dispatch": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-dispatch.ts",
     "notifications:check": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-check.ts",
     "test:notification:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-notifications-runtime.ts",
@@ -114,5 +115,8 @@
   "engines": {
     "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
   },
-  "packageManager": "npm@11.16.0"
+  "packageManager": "npm@11.16.0",
+  "overrides": {
+    "deepmerge-ts": "8.0.2"
+  }
 }

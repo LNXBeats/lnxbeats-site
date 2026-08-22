@@ -481,7 +481,7 @@ Le passage en production n’appartient pas à V0.7.4. Il nécessitera un sprint
 - monitoring, alertes, réconciliation et runbooks exercés ;
 - compte marchand PayPal production, application Live, credentials et webhook Live distincts, jamais réutilisés depuis Sandbox ;
 - stratégie explicite de remboursement/réconciliation d’un succès tardif entre providers ;
-- résolution ou décision formelle sur l’advisory `deepmerge-ts` transitif de Prisma ;
+- maintien vérifié de l’override `deepmerge-ts` corrigé tant que Prisma 7 ne l’intègre pas directement ;
 - maintien du Legal Review Gate pour les droits et contrats ;
 - modification volontaire du code qui refuse actuellement Stripe Live, PayPal Live et `PAYMENT_DEPLOYMENT_ENV=production`, suivie d’une nouvelle revue ;
 - bascule des flags provider seulement après ces preuves, puis de `PAYMENTS_ENABLED=true`, jamais l’inverse.

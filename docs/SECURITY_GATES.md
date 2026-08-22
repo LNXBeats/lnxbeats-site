@@ -1,19 +1,19 @@
-# Security gates — V0.7.2
+# Security gates
 
 ## Prisma / deepmerge-ts
 
-Versions relevées le 20 août 2026 :
+État revu le 22 août 2026 :
 
 - `prisma` 7.9.1 ;
 - `@prisma/client` 7.9.1 ;
 - `@prisma/config` 7.9.1 ;
-- `deepmerge-ts` 7.1.5, dépendance transitive unique de `@prisma/config`.
+- `deepmerge-ts` 8.0.2, dépendance transitive unique résolue par un override npm ciblé.
 
-`npm audit` rapporte [GHSA-ggr8-5vv4-36mx / CVE-2026-40345](https://github.com/advisories/GHSA-ggr8-5vv4-36mx) sur `deepmerge-ts < 8.0.0`. La correction existe en deepmerge-ts 8, mais la [dernière version Prisma stable installée, 7.9.1](https://github.com/prisma/prisma/releases/tag/7.9.1), fixe encore 7.1.5 et Prisma 8 n’est disponible qu’en release candidate. Aucun override incompatible et aucune RC ne sont introduits.
+La dernière version Prisma stable reste 7.9.1 et fixe encore `deepmerge-ts` 7.1.5. V0.7.7 conserve Prisma 7.9.1, refuse Prisma 8 RC et impose `deepmerge-ts` 8.0.2 après un probe complet de compatibilité. L’installation complète et l’installation `--omit=dev` retournent zéro vulnérabilité.
 
-Reachability : le bundle applicatif n’importe pas `deepmerge-ts`. La dépendance est atteinte par la CLI/config Prisma ; `prisma.config.ts` construit un objet statique à partir de chaînes d’environnement et ne transmet pas de graphe récursif contrôlé par un utilisateur. Cela réduit la surface observée sans supprimer l’avis.
+Reachability : le bundle applicatif n’importe pas `deepmerge-ts`. La dépendance est atteinte par la CLI/config Prisma ; `prisma.config.ts` construit un objet statique à partir de chaînes d’environnement et ne transmet pas de graphe récursif contrôlé par un utilisateur.
 
-Décision : **PRODUCTION BLOCKED — SECURITY ADVISORY OPEN**. Un sprint sécurité séparé doit mettre à niveau Prisma dès qu’une version stable officiellement compatible avec deepmerge-ts 8 existe.
+Décision : **SECURITY ADVISORY RESOLVED**. Les faits, probes, limites de l’override et conditions de retrait sont consignés dans [SECURITY_ADVISORIES.md](SECURITY_ADVISORIES.md).
 
 ## Contrats
 
