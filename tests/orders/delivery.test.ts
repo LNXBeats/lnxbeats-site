@@ -366,20 +366,24 @@ test("la migration multi-livrables ne supprime aucune donnée et protège les po
 });
 
 test("Compte et Admin exposent le workflow livraison sans réintroduire un upload audio client", async () => {
-  const [account, adminPage, adminPanel, adminActions, adminCss, commander] = await Promise.all([
+  const [account, adminPage, adminPanel, adminActions, adminCss, commander, deliveryRoute] = await Promise.all([
     readFile("app/compte/commandes/[orderNumber]/page.tsx", "utf8"),
     readFile("app/admin/commandes/[orderNumber]/page.tsx", "utf8"),
     readFile("components/admin-order-delivery-panel.tsx", "utf8"),
     readFile("components/admin-order-actions.tsx", "utf8"),
     readFile("app/admin/admin.css", "utf8"),
     readFile("components/music-order-form.tsx", "utf8"),
+    readFile("app/api/orders/[orderNumber]/delivery/[assetId]/route.ts", "utf8"),
   ]);
   assert.match(account, /Votre création est en cours/);
   assert.match(account, /Votre création est prête/);
   assert.match(account, /order\.deliveries\.map/);
   assert.match(adminPage, /AdminOrderDeliveryPanel/);
+  assert.match(account, /\?lecture=1/);
   assert.match(adminPanel, /MP3, WAV, FLAC, ZIP, PDF, JPEG ou PNG/);
   assert.match(adminPanel, /\?lecture=1/);
+  assert.match(deliveryRoute, /searchParams\.get\("lecture"\) !== "1"/);
+  assert.match(deliveryRoute, /head, download/);
   assert.match(adminPanel, /<label className="admin-delivery-picker" htmlFor=\{inputId\}/);
   assert.match(adminPanel, /className="admin-delivery-picker__input"[\s\S]*type="file"[\s\S]*aria-describedby=\{helpId\}/);
   assert.match(adminPanel, /disabled=\{!file \|\| selection\?\.ok !== true \|\| busy \|\| removingId !== null\}/);

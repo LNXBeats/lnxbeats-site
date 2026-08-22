@@ -33,6 +33,33 @@
 .rights-acceptance__check { align-items: flex-start; }
 .rights-response small { color: #918d85; }
 .rights-account { border-color: rgba(214,179,106,.28); }
+.rights-options__intro { max-width: 72ch; margin: -.75rem 0 2rem; line-height: 1.7; }
+.rights-options__grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: stretch; gap: clamp(1.25rem,3vw,2rem); }
+.rights-option-card { position: relative; display: flex; min-width: 0; min-height: 100%; flex-direction: column; padding: clamp(1.35rem,3vw,2rem); overflow: hidden; border: 1px solid rgba(214,179,106,.38); border-radius: 22px; background: linear-gradient(145deg,rgba(214,179,106,.09),rgba(16,15,14,.97) 42%); box-shadow: 0 24px 70px rgba(0,0,0,.24); }
+.rights-option-card::before { position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg,#d6b36a,rgba(214,179,106,.08)); content: ""; }
+.rights-option-card--partnership { border-color: rgba(143,168,201,.42); background: linear-gradient(145deg,rgba(90,119,158,.12),rgba(16,15,14,.97) 42%); }
+.rights-option-card--partnership::before { background: linear-gradient(90deg,#8fa8c9,rgba(143,168,201,.08)); }
+.rights-option-card__header { display: grid; gap: .75rem; }
+.rights-option-card__header .eyebrow { margin: 0; color: #e4c985; font-size: .65rem; }
+.rights-option-card--partnership .rights-option-card__header .eyebrow { color: #a9bfdb; }
+.rights-option-card__header h3 { max-width: 18ch; margin: 0; overflow-wrap: anywhere; font-size: clamp(1.35rem,2.7vw,2rem); font-weight: 600; letter-spacing: -.035em; line-height: 1.08; text-transform: uppercase; }
+.rights-option-card__price { color: #f4f0e8; font-size: clamp(2.4rem,5vw,4.2rem); font-weight: 500; letter-spacing: -.065em; line-height: 1; }
+.rights-option-card__description { margin: 1.5rem 0 0; color: #b5afa5; line-height: 1.7; }
+.rights-option-card__cta { margin-top: auto; padding-top: clamp(2rem,4vw,3rem); }
+.rights-option-card__action { display: inline-flex; width: 100%; min-height: 56px; align-items: center; justify-content: center; margin-inline: 0; padding: .9rem 1.1rem; overflow-wrap: anywhere; text-align: center; white-space: normal; }
+.rights-option-card--partnership .rights-option-card__action { border-color: rgba(143,168,201,.72); }
+.rights-option-card__action:focus-visible { outline: 2px solid #f4f0e8; outline-offset: 3px; }
+.rights-option-card__notice { display: grid; min-height: 88px; align-content: center; gap: .35rem; margin-top: 1rem; padding: 1rem 1.1rem; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; background: rgba(0,0,0,.2); }
+.rights-option-card__notice strong { color: #f4f0e8; font-size: .72rem; }
+.rights-option-card__notice small { color: #aaa59c; font-size: .71rem; line-height: 1.5; }
+.rights-options__legal { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: .9rem; margin-top: clamp(1.25rem,3vw,2rem); padding: 1rem 1.2rem; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; background: rgba(255,255,255,.025); color: #b5afa5; }
+.rights-options__legal > span { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border: 1px solid rgba(228,201,133,.55); border-radius: 50%; color: #e4c985; font-size: .75rem; font-weight: 800; }
+.rights-options__legal p { margin: 0; line-height: 1.6; }
+
+@media (max-width: 720px) {
+  .rights-options__grid { grid-template-columns: minmax(0,1fr); }
+  .rights-option-card__notice { min-height: 0; }
+}
 
 @media (max-width: 768px) {
   .rights-form__progress { grid-template-columns: repeat(2,minmax(0,1fr)); }

@@ -75,7 +75,11 @@ export async function orderDeliveryResponse(
       }
       return new Response(null, { status: 200, headers: { ...headers, "content-length": String(size) } });
     }
-    if (asset.storageBackend === "OBJECT" && "sign" in dependencies && dependencies.sign) {
+    // Downloads may leave the application through a short-lived signed URL.
+    // Playback must remain same-origin: the site CSP deliberately restricts
+    // media-src to self, and the proxy below provides Safari-compatible Range
+    // responses without buffering the complete private object in memory.
+    if (download && asset.storageBackend === "OBJECT" && "sign" in dependencies && dependencies.sign) {
       const signedUrl = await dependencies.sign(asset, {
         expiresInSeconds: ORDER_DELIVERY_SIGNED_URL_SECONDS,
         ...(download ? { downloadFilename: asset.filename } : {}),
