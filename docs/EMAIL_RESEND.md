@@ -45,7 +45,7 @@ La variable `NOTIFICATION_STAGING_RECIPIENT_ALLOWLIST` n'est pas utilisée par c
 
 Les commandes suivantes lisent le secret worker depuis l'environnement du conteneur sans l'afficher. Toujours vérifier qu'il n'existe aucune autre notification `PENDING` avant le dispatcher, car celui-ci traite un lot global borné.
 
-Création de la fixture, en remplaçant uniquement la constante locale `scenario` par l'un des quatre noms autorisés :
+Création d'une fixture fournisseur, en remplaçant uniquement la constante locale `scenario` par l'un des quatre noms du tableau ci-dessous. Le scénario `scheduler-delivered` suit exclusivement la procédure Cron de `NOTIFICATION_SCHEDULER.md` et ne doit pas utiliser le dispatch manuel :
 
 ```bash
 node -e 'const scenario="delivered";fetch("http://127.0.0.1:"+process.env.PORT+"/api/internal/notifications/qa/resend",{method:"POST",headers:{authorization:"Bearer "+process.env.NOTIFICATION_WORKER_SECRET,"content-type":"application/json"},body:JSON.stringify({scenario})}).then(async r=>console.log(JSON.stringify({http:r.status,...await r.json()})))'
@@ -85,7 +85,9 @@ Pour chacun des scénarios ci-dessous :
 | `complained` | `complained+lnx-v073-qa-01@resend.dev` | `COMPLAINED` | `COMPLAINT` active |
 | `suppressed` | `suppressed@resend.dev` | `SUPPRESSED` | `PROVIDER_SUPPRESSED` active |
 
-Après le dernier contrôle, remettre `OWNER_EMAIL_NOTIFICATIONS_ENABLED=false`, retirer `EMAIL_OWNER_RECIPIENT` et `NOTIFICATION_STAGING_QA_CONFIRM`, puis redéployer. Conserver les quatre fixtures pour l'audit jusqu'à une procédure de cleanup distincte : aucune route destructive n'est fournie par le harness.
+Le scénario additionnel `scheduler-delivered` est réservé à la preuve du Cron V0.7.9. Il cible `delivered+lnx-v079-scheduler-01@resend.dev`, utilise la clé one-shot `qa:scheduler:v079:delivered:01` et n'est jamais dispatché par le harness. Une fois la ligne créée, seul le scheduler global automatique doit la prendre en charge. Un rappel de création ne réarme jamais son statut ni ses tentatives.
+
+Après le dernier contrôle, remettre `OWNER_EMAIL_NOTIFICATIONS_ENABLED=false`, retirer `EMAIL_OWNER_RECIPIENT` et `NOTIFICATION_STAGING_QA_CONFIRM`, puis redéployer. Conserver les fixtures fournisseur et la fixture scheduler pour l'audit jusqu'à une procédure de cleanup distincte : aucune route destructive n'est fournie par le harness.
 
 ## STAGING OWNER EMAIL SMOKE TEST ONLY — V0.7.3.2
 

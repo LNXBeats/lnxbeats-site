@@ -101,12 +101,14 @@ Le secret worker reste exigé par le parseur partagé, même si le Cron direct n
 
 1. Garder le staging actuel désarmé pendant la création du service.
 2. Vérifier un tick `outcome=disabled`, `claimed=0` sans provider.
-3. Préparer une seule notification QA ciblée selon le harness déjà validé, en capture ou vers une destination Resend de test explicitement autorisée.
+3. Créer une seule fois le scénario `scheduler-delivered` du harness Resend. Il utilise exclusivement `delivered+lnx-v079-scheduler-01@resend.dev`, l'Order synthétique annulée `LNX-QA-SCHEDULER-DELIVERED-01` et la clé `qa:scheduler:v079:delivered:01`.
 4. Armer seulement l'audience concernée, l'e-mail, le worker et la confirmation staging.
 5. Exécuter `npm run notifications:scheduler:preflight` dans le conteneur et exiger tous les `PASS`, plus la vérification humaine du Cron.
 6. Attendre une occurrence, vérifier `notification.scheduler.started` puis `notification.scheduler.completed`, une tentative et aucun doublon.
 7. Attendre une seconde occurrence et confirmer l'absence de nouvel envoi de la même notification logique.
 8. Remettre les flags à `false`, le transport à `disabled`, puis désactiver la cadence du Scheduled Job.
+
+La création du scénario ne déclenche ni transport, ni dispatcher, ni fournisseur. Sa notification `OWNER_NEW_ORDER` est volontairement éligible au dispatcher global, contrairement au smoke historique `qa:owner-smoke:v0732:01`. Le premier appel crée une ligne `PENDING`; tout rappel retourne la même ligne sans modifier son statut, ses tentatives ou sa disponibilité. La preuve doit obligatoirement provenir d'un Cron Railway automatique, jamais de la route de dispatch manuel.
 
 Aucun e-mail réel n'est envoyé pendant l'implémentation V0.7.9.
 

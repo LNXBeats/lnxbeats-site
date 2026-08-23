@@ -12,7 +12,12 @@ import {
   type ResendQaScenario,
   type ResendQaStatusResult,
 } from "@/lib/notifications/resend-qa-harness";
-import { dispatchOrderNotification, type NotificationDispatchRepository } from "@/lib/notifications/service";
+import {
+  dispatchOrderNotification,
+  globalNotificationDispatchWhere,
+  type NotificationDispatchRepository,
+} from "@/lib/notifications/service";
+import { OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY, isOfficialResendTestRecipient } from "@/lib/notifications/domain";
 import type { OrderNotificationMessage } from "@/lib/notifications/types";
 
 const WORKER_SECRET = "w".repeat(40);
@@ -116,6 +121,24 @@ test("le harness refuse production et tout environnement non staging", async () 
   }
 });
 
+test("la fixture scheduler est disponible uniquement dans le staging Railway armé", async () => {
+  const scenario = "scheduler-delivered" as const;
+  const state = memoryRepository();
+  assert.equal((await handleResendQaHarnessPost(
+    request(scenario),
+    dependencies(state.repository, {}, scenario),
+  )).status, 200);
+  for (const override of [
+    { NOTIFICATION_DEPLOYMENT_ENV: "production", RAILWAY_ENVIRONMENT_NAME: "production" },
+    { NODE_ENV: "development", RAILWAY_ENVIRONMENT_NAME: undefined },
+  ]) {
+    assert.equal((await handleResendQaHarnessPost(
+      request(scenario),
+      dependencies(state.repository, override, scenario),
+    )).status, 404);
+  }
+});
+
 test("la confirmation staging dédiée est obligatoire et exacte", async () => {
   const { repository } = memoryRepository();
   assert.equal((await handleResendQaHarnessPost(request(), dependencies(repository, { NOTIFICATION_STAGING_QA_CONFIRM: undefined }))).status, 404);
@@ -162,15 +185,27 @@ test("le JSON strict refuse scénario inconnu et toute injection de destination"
   assert.equal(state.creates(), 0);
 });
 
+test("la fixture scheduler refuse tout destinataire fourni par la requête", async () => {
+  const scenario = "scheduler-delivered" as const;
+  const state = memoryRepository();
+  const response = await handleResendQaHarnessPost(
+    request(scenario, { body: { scenario, recipient: "attacker@example.com" } }),
+    dependencies(state.repository, {}, scenario),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(state.creates(), 0);
+});
+
 test("chaque scénario impose l'unique adresse officielle attendue", async () => {
   const expected = {
     delivered: "delivered+lnx-v073-qa-01@resend.dev",
     bounced: "bounced+lnx-v073-qa-01@resend.dev",
     complained: "complained+lnx-v073-qa-01@resend.dev",
     suppressed: "suppressed@resend.dev",
+    "scheduler-delivered": "delivered+lnx-v079-scheduler-01@resend.dev",
   } as const;
   assert.deepEqual(Object.fromEntries(Object.entries(RESEND_QA_SCENARIOS).map(([scenario, value]) => [scenario, value.recipient])), expected);
-  assert.ok(Object.values(RESEND_QA_SCENARIOS).every(({ recipient }) => recipient.endsWith("@resend.dev")));
+  assert.ok(Object.values(RESEND_QA_SCENARIOS).every(({ recipient }) => isOfficialResendTestRecipient(recipient)));
   for (const scenario of Object.keys(RESEND_QA_SCENARIOS) as ResendQaScenario[]) {
     const state = memoryRepository();
     const response = await handleResendQaHarnessPost(request(scenario), dependencies(state.repository, {}, scenario));
@@ -194,13 +229,51 @@ test("un second POST conserve une seule notification logique", async () => {
   assert.equal(resendQaIdempotencyKey("delivered"), "qa:resend:v073:delivered:01");
 });
 
+test("la fixture scheduler possède une identité fixe et reste claimable par le dispatcher global", () => {
+  const key = resendQaIdempotencyKey("scheduler-delivered");
+  assert.equal(key, "qa:scheduler:v079:delivered:01");
+  assert.notEqual(key, OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY);
+  assert.deepEqual(globalNotificationDispatchWhere(new Date(), "staging").idempotencyKey, {
+    not: OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+  });
+});
+
+test("un rappel de la fixture scheduler terminale ne la réarme jamais", async () => {
+  const scenario = "scheduler-delivered" as const;
+  const state = memoryRepository();
+  const injected = dependencies(state.repository, {}, scenario);
+  const first = await handleResendQaHarnessPost(request(scenario), injected);
+  const firstBody = await first.json() as ResendQaFixtureResult;
+  assert.equal(firstBody.created, true);
+  assert.equal(firstBody.status, "PENDING");
+  const current = state.fixtures.get(scenario);
+  assert.ok(current);
+  state.fixtures.set(scenario, {
+    ...current,
+    status: "DELIVERED",
+    attempts: 1,
+    provider: "RESEND",
+    providerMessageIdPresent: true,
+    sentAtPresent: true,
+    deliveredAtPresent: true,
+  });
+  const second = await handleResendQaHarnessPost(request(scenario), injected);
+  const secondBody = await second.json() as ResendQaFixtureResult;
+  assert.equal(secondBody.created, false);
+  assert.equal(secondBody.notificationId, firstBody.notificationId);
+  assert.equal(secondBody.status, "DELIVERED");
+  assert.equal(state.fixtures.get(scenario)?.attempts, 1);
+  assert.equal(state.creates(), 1);
+});
+
 test("la route ne fait qu'enfiler la fixture, sans transport ni Resend", async () => {
   const state = memoryRepository();
-  const response = await handleResendQaHarnessPost(request(), dependencies(state.repository));
+  const scenario = "scheduler-delivered" as const;
+  const response = await handleResendQaHarnessPost(request(scenario), dependencies(state.repository, {}, scenario));
   assert.equal(response.status, 200);
-  assert.equal(state.fixtures.get("delivered")?.status, "PENDING");
-  assert.equal(state.fixtures.get("delivered")?.provider, null);
-  assert.equal(state.fixtures.get("delivered")?.attempts, 0);
+  assert.equal(state.fixtures.get(scenario)?.status, "PENDING");
+  assert.equal(state.fixtures.get(scenario)?.provider, null);
+  assert.equal(state.fixtures.get(scenario)?.attempts, 0);
 });
 
 test("une fixture propriétaire est dispatchable par le worker existant", async () => {

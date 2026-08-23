@@ -25,6 +25,10 @@ export const RESEND_QA_SCENARIOS = {
     recipient: "suppressed@resend.dev",
     orderNumber: "LNX-QA-RS-SUPPRESSED-01",
   },
+  "scheduler-delivered": {
+    recipient: "delivered+lnx-v079-scheduler-01@resend.dev",
+    orderNumber: "LNX-QA-SCHEDULER-DELIVERED-01",
+  },
 } as const;
 
 export type ResendQaScenario = keyof typeof RESEND_QA_SCENARIOS;
@@ -58,6 +62,7 @@ export interface ResendQaHarnessRepository {
 }
 
 export function resendQaIdempotencyKey(scenario: ResendQaScenario) {
+  if (scenario === "scheduler-delivered") return "qa:scheduler:v079:delivered:01";
   return `qa:resend:v073:${scenario}:01`;
 }
 
@@ -123,7 +128,7 @@ export function resendQaOrderData(
     coverPriceCents: 0,
     priorityPriceCents: 0,
     totalCents: 0,
-    pricingVersion: "qa-resend-v073",
+    pricingVersion: scenario === "scheduler-delivered" ? "qa-scheduler-v079" : "qa-resend-v073",
     cancelledAt,
   };
 }

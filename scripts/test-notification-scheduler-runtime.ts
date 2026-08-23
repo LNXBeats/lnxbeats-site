@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 
 import { recipientHash } from "@/lib/notifications/domain";
 import { loadAndAssertNotificationQaEnvironment } from "@/lib/notifications/qa-guard";
+import {
+  databaseResendQaHarnessRepository,
+  RESEND_QA_SCENARIOS,
+  resendQaIdempotencyKey,
+} from "@/lib/notifications/resend-qa-harness";
 import { runNotificationSchedulerTick, type NotificationSchedulerDependencies } from "@/lib/notifications/scheduler";
 import {
   databaseNotificationDispatchRepository,
@@ -16,6 +21,9 @@ const SUPPRESSED_EMAIL = "lnx-v079-scheduler-suppressed@example.invalid";
 const ORDER_NUMBER = "LNX-2099-079001";
 const KEY_PREFIX = "scheduler:v079:";
 const WORKER_SECRET = "v079-local-scheduler-worker-secret-0001";
+const ONE_SHOT_SCENARIO = "scheduler-delivered" as const;
+const ONE_SHOT_KEY = resendQaIdempotencyKey(ONE_SHOT_SCENARIO);
+const ONE_SHOT_ORDER_NUMBER = RESEND_QA_SCENARIOS[ONE_SHOT_SCENARIO].orderNumber;
 
 const schedulerEnvironment = {
   NODE_ENV: "test",
@@ -37,7 +45,20 @@ async function scope() {
   return { userId: user?.id, orderId: order?.id };
 }
 
+async function cleanupOneShotFixture() {
+  const order = await prisma.order.findUnique({ where: { orderNumber: ONE_SHOT_ORDER_NUMBER }, select: { id: true } });
+  if (!order) return;
+  const notificationIds = (await prisma.orderNotification.findMany({ where: { orderId: order.id }, select: { id: true } })).map(({ id }) => id);
+  await prisma.$transaction(async (transaction) => {
+    if (notificationIds.length) await transaction.notificationEvent.deleteMany({ where: { notificationId: { in: notificationIds } } });
+    await transaction.orderNotification.deleteMany({ where: { orderId: order.id } });
+    await transaction.orderEvent.deleteMany({ where: { orderId: order.id } });
+    await transaction.order.delete({ where: { id: order.id } });
+  });
+}
+
 async function cleanup() {
+  await cleanupOneShotFixture();
   const current = await scope();
   if (current.orderId) {
     const notificationIds = (await prisma.orderNotification.findMany({
@@ -58,13 +79,19 @@ async function cleanup() {
 }
 
 async function assertClean(stage: string) {
-  const [users, orders, notifications, suppressions] = await Promise.all([
+  const [users, orders, oneShotOrders, notifications, oneShotNotifications, suppressions] = await Promise.all([
     prisma.user.count({ where: { email: EMAIL } }),
     prisma.order.count({ where: { orderNumber: ORDER_NUMBER } }),
+    prisma.order.count({ where: { orderNumber: ONE_SHOT_ORDER_NUMBER } }),
     prisma.orderNotification.count({ where: { idempotencyKey: { startsWith: KEY_PREFIX } } }),
+    prisma.orderNotification.count({ where: { idempotencyKey: ONE_SHOT_KEY } }),
     prisma.notificationSuppression.count({ where: { recipient: SUPPRESSED_EMAIL } }),
   ]);
-  assert.deepEqual({ users, orders, notifications, suppressions }, { users: 0, orders: 0, notifications: 0, suppressions: 0 }, `${stage}: scheduler fixtures remain.`);
+  assert.deepEqual(
+    { users, orders, oneShotOrders, notifications, oneShotNotifications, suppressions },
+    { users: 0, orders: 0, oneShotOrders: 0, notifications: 0, oneShotNotifications: 0, suppressions: 0 },
+    `${stage}: scheduler fixtures remain.`,
+  );
 }
 
 function notificationData(
@@ -106,11 +133,100 @@ function notificationData(
   };
 }
 
+async function assertOneShotFixtureLifecycle() {
+  const successCalls = new Map<string, number>();
+  const successDependencies: NotificationSchedulerDependencies = {
+    dispatch: (limit) => dispatchPendingOrderNotifications(limit, {
+      dispatch: (id) => dispatchOrderNotification(id, {
+        repository: databaseNotificationDispatchRepository,
+        sendEmail: async (message) => {
+          successCalls.set(message.id, (successCalls.get(message.id) ?? 0) + 1);
+          return { provider: "CAPTURE", providerMessageId: `capture_one_shot_${message.id}`, deliveredImmediately: true };
+        },
+      }),
+    }),
+    now: Date.now,
+    info: () => undefined,
+    error: () => undefined,
+  };
+
+  const created = await databaseResendQaHarnessRepository.create(ONE_SHOT_SCENARIO);
+  assert.equal(created.created, true);
+  assert.equal(created.status, "PENDING");
+  const initial = await prisma.orderNotification.findUniqueOrThrow({
+    where: { idempotencyKey: ONE_SHOT_KEY },
+    include: { order: { include: { _count: { select: { payments: true, notifications: true } } } } },
+  });
+  assert.equal(initial.attempts, 0);
+  assert.equal(initial.deploymentEnvironment, "staging");
+  assert.equal(initial.recipient, RESEND_QA_SCENARIOS[ONE_SHOT_SCENARIO].recipient);
+  assert.equal(initial.order.status, "CANCELLED");
+  assert.equal(initial.order.totalCents, 0);
+  assert.equal(initial.order.userId, null);
+  assert.equal(initial.order.customerId, null);
+  assert.deepEqual(initial.order._count, { payments: 0, notifications: 1 });
+  assert.equal(await prisma.providerEvent.count(), 0);
+  assert.equal(await prisma.orderNotification.count({ where: { deploymentEnvironment: "staging", status: "PENDING" } }), 1);
+
+  const duplicate = await databaseResendQaHarnessRepository.create(ONE_SHOT_SCENARIO);
+  assert.deepEqual(duplicate, { created: false, notificationId: created.notificationId, scenario: ONE_SHOT_SCENARIO, status: "PENDING" });
+  const afterDuplicate = await prisma.orderNotification.findUniqueOrThrow({ where: { id: created.notificationId } });
+  assert.equal(afterDuplicate.attempts, 0);
+  assert.equal(afterDuplicate.availableAt.getTime(), initial.availableAt.getTime());
+  assert.equal(await prisma.orderNotification.count({ where: { idempotencyKey: ONE_SHOT_KEY } }), 1);
+
+  const firstTick = await runNotificationSchedulerTick(process.env, successDependencies);
+  assert.deepEqual(
+    { claimed: firstTick.claimed, delivered: firstTick.delivered, failed: firstTick.failed, skipped: firstTick.skipped },
+    { claimed: 1, delivered: 1, failed: 0, skipped: 0 },
+  );
+  const delivered = await prisma.orderNotification.findUniqueOrThrow({ where: { id: created.notificationId } });
+  assert.equal(delivered.status, "DELIVERED");
+  assert.equal(delivered.attempts, 1);
+  assert.equal(successCalls.get(created.notificationId), 1);
+  assert.equal((await runNotificationSchedulerTick(process.env, successDependencies)).claimed, 0);
+  assert.equal(successCalls.get(created.notificationId), 1);
+
+  const afterSuccessRecall = await databaseResendQaHarnessRepository.create(ONE_SHOT_SCENARIO);
+  assert.equal(afterSuccessRecall.created, false);
+  assert.equal(afterSuccessRecall.status, "DELIVERED");
+  const stillDelivered = await prisma.orderNotification.findUniqueOrThrow({ where: { id: created.notificationId } });
+  assert.equal(stillDelivered.attempts, 1);
+  assert.equal(stillDelivered.availableAt.getTime(), delivered.availableAt.getTime());
+
+  await cleanupOneShotFixture();
+  const failedFixture = await databaseResendQaHarnessRepository.create(ONE_SHOT_SCENARIO);
+  const failedTick = await runNotificationSchedulerTick(process.env, {
+    ...successDependencies,
+    dispatch: (limit) => dispatchPendingOrderNotifications(limit, {
+      dispatch: (id) => dispatchOrderNotification(id, {
+        repository: databaseNotificationDispatchRepository,
+        sendEmail: async () => { throw Object.assign(new Error("provider fixture rejected"), { statusCode: 422 }); },
+      }),
+    }),
+  });
+  assert.deepEqual(
+    { claimed: failedTick.claimed, delivered: failedTick.delivered, failed: failedTick.failed, skipped: failedTick.skipped },
+    { claimed: 1, delivered: 0, failed: 1, skipped: 0 },
+  );
+  const failed = await prisma.orderNotification.findUniqueOrThrow({ where: { id: failedFixture.notificationId } });
+  assert.equal(failed.status, "FAILED_FINAL");
+  assert.equal(failed.attempts, 1);
+  assert.equal((await runNotificationSchedulerTick(process.env, successDependencies)).claimed, 0);
+  const afterFailureRecall = await databaseResendQaHarnessRepository.create(ONE_SHOT_SCENARIO);
+  assert.equal(afterFailureRecall.created, false);
+  assert.equal(afterFailureRecall.status, "FAILED_FINAL");
+  assert.equal((await prisma.orderNotification.findUniqueOrThrow({ where: { id: failedFixture.notificationId } })).attempts, 1);
+  await cleanupOneShotFixture();
+}
+
 async function main() {
   await loadAndAssertNotificationQaEnvironment();
   await cleanup();
   await assertClean("precondition");
   Object.assign(process.env, schedulerEnvironment);
+  await assertOneShotFixtureLifecycle();
+  await assertClean("one-shot postcondition");
   const providerCalls = new Map<string, number>();
   const sendEmail = async (message: { id: string }): Promise<NotificationTransportResult> => {
     providerCalls.set(message.id, (providerCalls.get(message.id) ?? 0) + 1);
@@ -151,9 +267,10 @@ async function main() {
       select: { id: true, orderNumber: true, createdAt: true },
     });
 
-    await prisma.orderNotification.createMany({
-      data: Array.from({ length: 55 }, (_, index) => notificationData(order, `backlog:${String(index).padStart(2, "0")}`)),
-    });
+    const backlog = Array.from({ length: 55 }, (_, index) => notificationData(order, `backlog:${String(index).padStart(2, "0")}`));
+    for (let offset = 0; offset < backlog.length; offset += 20) {
+      await prisma.orderNotification.createMany({ data: backlog.slice(offset, offset + 20) });
+    }
     await prisma.orderNotification.createMany({
       data: [
         notificationData(order, "foreign:production", "production"),
