@@ -9,6 +9,8 @@ import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { expireCheckoutAfterCancellation } from "@/lib/payments/service";
 import {
+  LIVE_REFUND_CONFIRMATION,
+  LIVE_REFUND_RECONCILIATION_CONFIRMATION,
   parseRefundAmountToCents,
   reconcileRefundAttemptForAdmin,
   requestRefundForOrder,
@@ -103,7 +105,7 @@ export async function requestPaymentRefundAction(formData: FormData) {
     !/^LNX-\d{4}-\d{6}$/.test(orderNumber)
     || (kind !== "FULL" && kind !== "PARTIAL")
     || !/^[0-9a-f-]{36}$/i.test(requestToken)
-    || confirmation !== "CONFIRM_FINANCIAL_REFUND"
+    || !["CONFIRM_FINANCIAL_REFUND", LIVE_REFUND_CONFIRMATION].includes(confirmation)
   ) redirect(adminOrderPath(orderNumber, "remboursement-refuse"));
   const session = await authorizeAdminAction();
   let amountCents: number | undefined;
@@ -114,6 +116,7 @@ export async function requestPaymentRefundAction(formData: FormData) {
       kind,
       amountCents,
       requestToken,
+      liveConfirmation: confirmation,
     });
     revalidatePath(`/admin/commandes/${orderNumber}`);
     redirect(adminOrderPath(orderNumber, result.status === "SUCCEEDED" ? "remboursement-confirme" : "remboursement-en-cours"));
@@ -127,12 +130,16 @@ export async function reconcilePaymentRefundAction(formData: FormData) {
   const orderNumber = String(formData.get("orderNumber") ?? "");
   const attemptId = String(formData.get("attemptId") ?? "");
   const confirmation = String(formData.get("confirmation") ?? "");
-  if (!/^LNX-\d{4}-\d{6}$/.test(orderNumber) || !/^[0-9a-f-]{36}$/i.test(attemptId) || confirmation !== "CONFIRM_REFUND_RECONCILIATION") {
+  if (
+    !/^LNX-\d{4}-\d{6}$/.test(orderNumber)
+    || !/^[0-9a-f-]{36}$/i.test(attemptId)
+    || !["CONFIRM_REFUND_RECONCILIATION", LIVE_REFUND_RECONCILIATION_CONFIRMATION].includes(confirmation)
+  ) {
     redirect(adminOrderPath(orderNumber, "remboursement-refuse"));
   }
   const session = await authorizeAdminAction();
   try {
-    const result = await reconcileRefundAttemptForAdmin(adminActor(session), attemptId);
+    const result = await reconcileRefundAttemptForAdmin(adminActor(session), attemptId, undefined, confirmation);
     revalidatePath(`/admin/commandes/${orderNumber}`);
     redirect(adminOrderPath(orderNumber, result.status === "SUCCEEDED" ? "remboursement-confirme" : "remboursement-en-cours"));
   } catch (error) {

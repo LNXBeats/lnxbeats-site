@@ -155,10 +155,11 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `RESEND_WEBHOOK_SECRET` / `NOTIFICATION_WORKER_SECRET` | Signature du webhook et protection du dispatcher interne ; aucun scheduler n’est créé par le dépôt | Oui |
 | `NOTIFICATION_CAPTURE_PATH` | Capture QA mode 0600, hors dépôt | Non |
 | `SMS_TRANSPORT` / `SMS_NOTIFICATIONS_ENABLED` | `disabled` ou capture seulement ; aucun SMS réel | Non |
-| `PAYMENTS_ENABLED` | Garde globale ; `false` dans la fondation et tant que la QA sandbox n’est pas validée | Non |
-| `STRIPE_MODE` | Mode Stripe attendu ; limité à `test` dans cette fondation | Non |
-| `STRIPE_SECRET_KEY` | Clé Stripe sandbox côté serveur, vide dans le dépôt et jamais journalisée | Oui |
-| `STRIPE_WEBHOOK_SECRET` | Secret de signature propre au webhook sandbox ou à Stripe CLI | Oui |
+| `PAYMENTS_ENABLED` | Kill switch global ; `false` lors du déploiement production initial | Non |
+| `PAYMENT_DEPLOYMENT_ENV` / `PAYMENT_PRODUCTION_CONFIRM` | Isolation development/staging/production et armement Live explicite | Non |
+| `STRIPE_MODE` / `PAYPAL_ENVIRONMENT` | `test`/`sandbox` hors production ; `live` uniquement en production | Non |
+| `STRIPE_SECRET_KEY` / `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | Credentials serveur propres à l’environnement, jamais journalisés | Oui |
+| `STRIPE_WEBHOOK_SECRET` / `PAYPAL_WEBHOOK_ID` | Vérification webhook propre à l’environnement | Oui |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Clé publiable facultative, inutile pour Checkout hébergé et réservée à une future UI Elements | Non |
 | `STRIPE_DIAGNOSTIC_CONFIRM` / `PAYMENT_QA_CONFIRM` | Confirmations non secrètes des QA Stripe Test opt-in | Non |
 | `ORDER_UPLOAD_MODE` | Adaptateur de fichiers ; `local-private` en développement et `local-qa` sur la cible jetable | Non |
@@ -183,7 +184,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `ALLOW_DATABASE_RESET` | Garde explicite requise pour la validation destructive locale | Non |
 | `PORT` | Port d’écoute ; fourni automatiquement par Railway | Non |
 
-Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés par Git ou dans un gestionnaire de secrets. Aucun secret SMTP, Stripe ou de production n’est commité. `PAYMENTS_ENABLED=false` et `STRIPE_MODE=test` restent les valeurs obligatoires avant une validation sandbox dédiée ; cette fondation ne prouve pas que Stripe, PayPal ou Wero sont activés sur un compte réel.
+Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés par Git ou dans un gestionnaire de secrets. Aucun secret SMTP ou de paiement n’est commité. La production démarre avec `PAYMENTS_ENABLED=false` et les deux flags provider désactivés, même si les secrets ont été préchargés dans le coffre. Voir [docs/PRODUCTION_PAYMENTS.md](docs/PRODUCTION_PAYMENTS.md) et [docs/PAYMENT_PRODUCTION_RUNBOOK.md](docs/PAYMENT_PRODUCTION_RUNBOOK.md).
 
 ## Paiements
 

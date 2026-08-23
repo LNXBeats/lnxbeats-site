@@ -14,6 +14,7 @@ type PaymentQaEnvironment = Record<string, string | undefined>;
 type PrismaRuntimeProof = {
   name?: string;
   pid?: number;
+  databasePort?: number;
   exports?: { database?: { connectionString?: string } };
 };
 
@@ -43,9 +44,10 @@ function assertPaymentQaBaseEnvironment(
 
   const rawDatabaseUrl = required(environment, "DATABASE_URL");
   const databaseUrl = assertSafeLocalPostgresUrl(rawDatabaseUrl);
+  assert.ok(databaseUrl.port !== "5432", "Payment sandbox QA refuses the default PostgreSQL port.");
   assert.ok(
-    databaseUrl.port === PAYMENT_QA_DATABASE_PORT,
-    "Payment sandbox QA requires its dedicated PostgreSQL port.",
+    Number(databaseUrl.port) === proof.databasePort,
+    "Payment sandbox QA requires the port recorded by its dedicated Prisma runtime proof.",
   );
   assert.ok(
     decodeURIComponent(databaseUrl.pathname) === "/template1",

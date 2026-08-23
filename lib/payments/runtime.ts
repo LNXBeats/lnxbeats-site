@@ -28,8 +28,8 @@ function canonicalHttpsOrigin(value: string | undefined) {
 
 /**
  * Shared runtime gate for every provider route. Development remains bound to
- * the disposable Prisma QA proof; staging requires Railway's named staging
- * environment plus a canonical HTTPS origin. Production is not supported.
+ * the disposable Prisma QA proof; deployed runtimes require Railway's exact
+ * named environment plus a canonical HTTPS origin.
  */
 export async function assertPaymentsRuntimeEnvironment(
   environment: PaymentEnvironment = process.env,
@@ -43,18 +43,25 @@ export async function assertPaymentsRuntimeEnvironment(
       return configuration;
     }
 
+    const expectedRailwayEnvironment = configuration.deploymentEnvironment;
     if (
       environment.NODE_ENV !== "production"
-      || environment.RAILWAY_ENVIRONMENT_NAME !== "staging"
-      || /production/i.test(environment.RAILWAY_ENVIRONMENT ?? "")
+      || environment.RAILWAY_ENVIRONMENT_NAME !== expectedRailwayEnvironment
+      || (expectedRailwayEnvironment === "staging" && /production/i.test(environment.RAILWAY_ENVIRONMENT ?? ""))
+      || (expectedRailwayEnvironment === "production" && /staging/i.test(environment.RAILWAY_ENVIRONMENT ?? ""))
     ) throw new PaymentRuntimeError();
 
     const canonicalOrigin = canonicalHttpsOrigin(
       environment.APP_CANONICAL_URL ?? environment.AUTH_URL ?? environment.SITE_URL,
     );
     if (
-      (environment.AUTH_URL && new URL(environment.AUTH_URL).origin !== canonicalOrigin)
-      || (environment.SITE_URL && new URL(environment.SITE_URL).origin !== canonicalOrigin)
+      (environment.AUTH_URL && canonicalHttpsOrigin(environment.AUTH_URL) !== canonicalOrigin)
+      || (environment.SITE_URL && canonicalHttpsOrigin(environment.SITE_URL) !== canonicalOrigin)
+    ) throw new PaymentRuntimeError();
+
+    if (
+      configuration.deploymentEnvironment === "production"
+      && !["lnxbeats.fr", "www.lnxbeats.fr"].includes(new URL(canonicalOrigin).hostname)
     ) throw new PaymentRuntimeError();
 
     return configuration;

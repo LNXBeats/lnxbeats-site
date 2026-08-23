@@ -32,6 +32,7 @@ function valid() {
     proof: {
       name: PAYMENT_QA_TARGET,
       pid: 123,
+      databasePort: Number(PAYMENT_QA_DATABASE_PORT),
       exports: { database: { connectionString: databaseUrl } },
     },
   };
@@ -80,6 +81,12 @@ test("refuse la preview personnelle, Railway, le port par défaut et les overrid
     mutate(fixture.environment);
     assert.throws(() => assertPaymentQaEnvironment(fixture.environment, fixture.proof));
   }
+
+  const defaultPort = valid();
+  defaultPort.environment.DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:5432/template1";
+  defaultPort.proof.databasePort = 5432;
+  defaultPort.proof.exports.database.connectionString = defaultPort.environment.DATABASE_URL;
+  assert.throws(() => assertPaymentQaEnvironment(defaultPort.environment, defaultPort.proof));
 });
 
 test("refuse le live, une origine personnelle et une preuve Prisma divergente", () => {

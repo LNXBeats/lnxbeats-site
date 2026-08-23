@@ -49,6 +49,7 @@ const reserved = {
   providerIdempotencyKey: "refund:paypal:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   providerRefundId: null,
   status: "PROCESSING",
+  mode: "TEST",
   reused: false,
 } as const satisfies ReservedRefund;
 
@@ -225,13 +226,13 @@ test("only documented PayPal and Stripe financial webhook names are routed", () 
   assert.equal(isStripeFinancialEvent("refund.succeeded"), false);
 });
 
-test("financial webhook normalizers reject wrong currency, amount and live Stripe evidence", () => {
+test("financial webhook normalizers reject wrong currency and amount while preserving signed live mode", () => {
   const stripe = {
     id: "evt_refund_01", type: "refund.updated", livemode: false, created: 1_787_398_400,
     data: { object: { id: "re_test_01", object: "refund", payment_intent: "pi_test_01", amount: 1_500, currency: "eur", status: "succeeded" } },
   } as const;
   assert.equal(normalizeStripeRefundEvent(stripe)?.status, "SUCCEEDED");
-  assert.equal(normalizeStripeRefundEvent({ ...stripe, livemode: true }), null);
+  assert.equal(normalizeStripeRefundEvent({ ...stripe, livemode: true })?.eventId, stripe.id);
   assert.equal(normalizeStripeRefundEvent({ ...stripe, data: { object: { ...stripe.data.object, currency: "usd" } } }), null);
   assert.equal(normalizeStripeRefundEvent({ ...stripe, data: { object: { ...stripe.data.object, amount: 1.5 } } }), null);
   const paypal = {
@@ -350,6 +351,6 @@ test("Admin refund mutations reuse origin, session and closed confirmation guard
     assert.doesNotMatch(body, /formData\.get\("provider"\)/);
     assert.doesNotMatch(body, /formData\.get\("currency"\)/);
   }
-  assert.match(actions, /confirmation !== "CONFIRM_FINANCIAL_REFUND"/);
-  assert.match(actions, /confirmation !== "CONFIRM_REFUND_RECONCILIATION"/);
+  assert.match(actions, /LIVE_REFUND_CONFIRMATION/);
+  assert.match(actions, /LIVE_REFUND_RECONCILIATION_CONFIRMATION/);
 });

@@ -30,7 +30,7 @@ export type StripePaymentIntentEvidence = Readonly<{
   id: string;
   amountCents: number;
   currency: string;
-  livemode: false;
+  livemode: boolean;
   status: "succeeded";
   paymentId: string;
   orderId: string;
@@ -63,7 +63,7 @@ export type NormalizedStripeCheckoutEvent = EventReceipt & Readonly<{
   currency: string;
   paymentStatus: string;
   checkoutStatus: string | null;
-  sessionLivemode: false;
+  sessionLivemode: boolean;
   paymentIntentId: string | null;
   paymentIntentEvidence: StripePaymentIntentEvidence | null;
   occurredAt: Date;
@@ -265,7 +265,7 @@ function normalizeCheckoutEvent(
     || session.object !== "checkout.session"
     || !receipt.objectId
     || session.mode !== "payment"
-    || session.livemode !== false
+    || session.livemode !== receipt.livemode
     || !paymentId
     || !uuid.test(paymentId)
     || !orderId
@@ -293,7 +293,7 @@ function normalizeCheckoutEvent(
       currency: currency.toUpperCase(),
       paymentStatus,
       checkoutStatus: typeof session.status === "string" ? session.status : null,
-      sessionLivemode: false,
+      sessionLivemode: receipt.livemode,
       paymentIntentId: paymentIntentId(session.payment_intent),
       paymentIntentEvidence: event.paymentIntentEvidence ?? null,
       occurredAt: new Date(event.created * 1_000),
@@ -316,7 +316,7 @@ function normalizePaymentIntentFailureEvent(
     !intent
     || intent.object !== "payment_intent"
     || !receipt.objectId
-    || intent.livemode !== false
+    || intent.livemode !== receipt.livemode
     || intent.status !== "requires_payment_method"
     || !paymentId
     || !uuid.test(paymentId)
@@ -369,9 +369,8 @@ function firstMismatch(
 ): PaymentWebhookMismatch | null {
   if (current.provider !== "STRIPE") return "WEBHOOK_PROVIDER_MISMATCH";
   if (
-    current.mode !== "TEST"
-    || event.livemode
-    || event.sessionLivemode
+    (current.mode === "LIVE") !== event.livemode
+    || event.sessionLivemode !== event.livemode
   ) return "WEBHOOK_MODE_MISMATCH";
   if (current.id !== event.paymentId) return "WEBHOOK_PAYMENT_ID_MISMATCH";
   if (
@@ -396,7 +395,7 @@ function firstMismatch(
       || evidence.id !== event.paymentIntentId
       || evidence.amountCents !== event.amountTotal
       || evidence.currency !== event.currency
-      || evidence.livemode
+      || evidence.livemode !== event.livemode
       || evidence.status !== "succeeded"
       || evidence.paymentId !== event.paymentId
       || evidence.orderId !== event.orderId
@@ -560,7 +559,7 @@ export function planStripePaymentIntentFailure(
 ): PaymentReconciliationPlan {
   let mismatch: PaymentWebhookMismatch | null = null;
   if (current.provider !== "STRIPE") mismatch = "WEBHOOK_PROVIDER_MISMATCH";
-  else if (current.mode !== "TEST" || event.livemode) mismatch = "WEBHOOK_MODE_MISMATCH";
+  else if ((current.mode === "LIVE") !== event.livemode) mismatch = "WEBHOOK_MODE_MISMATCH";
   else if (current.id !== event.paymentId) mismatch = "WEBHOOK_PAYMENT_ID_MISMATCH";
   else if (current.orderId !== event.orderId) mismatch = "WEBHOOK_ORDER_ID_MISMATCH";
   else if (!current.providerCheckoutId) mismatch = "WEBHOOK_CHECKOUT_ID_MISMATCH";
@@ -618,10 +617,6 @@ export async function processVerifiedStripeWebhookEvent(
   ) {
     return repository.record(receipt, "IGNORED");
   }
-  if (receipt.livemode) {
-    return repository.record(receipt, "REQUIRES_REVIEW");
-  }
-
   if (receipt.type === STRIPE_PAYMENT_INTENT_FAILURE_EVENT) {
     const failure = normalizePaymentIntentFailureEvent(event, receipt);
     return failure
@@ -738,7 +733,7 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
       // a late success and creation of a new active attempt for the same order.
       await lock(transaction, `payments:attempt:${event.paymentId}`);
       const paymentOwner = await transaction.payment.findUnique({
-        where: { id: event.paymentId },
+        where: { id: event.paymentId, mode: event.livemode ? "LIVE" : "TEST" },
         select: { order: { select: { orderNumber: true } } },
       });
       if (!paymentOwner) {
@@ -747,7 +742,7 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
       await lock(transaction, `payments:order:${paymentOwner.order.orderNumber}`);
 
       const payment = await transaction.payment.findUnique({
-        where: { id: event.paymentId },
+        where: { id: event.paymentId, mode: event.livemode ? "LIVE" : "TEST" },
         select: {
           id: true,
           orderId: true,
@@ -869,7 +864,7 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
 
       await lock(transaction, `payments:attempt:${event.paymentId}`);
       const paymentOwner = await transaction.payment.findUnique({
-        where: { id: event.paymentId },
+        where: { id: event.paymentId, mode: event.livemode ? "LIVE" : "TEST" },
         select: { order: { select: { orderNumber: true } } },
       });
       if (!paymentOwner) {
@@ -878,7 +873,7 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
       await lock(transaction, `payments:order:${paymentOwner.order.orderNumber}`);
 
       const payment = await transaction.payment.findUnique({
-        where: { id: event.paymentId },
+        where: { id: event.paymentId, mode: event.livemode ? "LIVE" : "TEST" },
         select: {
           id: true,
           orderId: true,

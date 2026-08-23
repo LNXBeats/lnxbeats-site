@@ -2,6 +2,8 @@
 
 > V0.7.6 ajoute un moteur commun de remboursements Stripe Test / PayPal Sandbox et un registre séparé des disputes, reversals et chargebacks. La règle approuvée est stricte : `Payment` porte l'état financier ; un remboursement ou incident ne modifie jamais automatiquement `Order.status`. Les procédures opérateur sont décrites dans [PAYMENT_REFUND_RUNBOOK.md](./PAYMENT_REFUND_RUNBOOK.md).
 
+> V0.8.0 ajoute les gardes techniques Stripe Live/PayPal Live sans les activer. Les règles production à jour et le runbook humain sont dans [PRODUCTION_PAYMENTS.md](PRODUCTION_PAYMENTS.md) et [PAYMENT_PRODUCTION_RUNBOOK.md](PAYMENT_PRODUCTION_RUNBOOK.md). Les paragraphes V0.7.4 ci-dessous restent l’historique de la fondation Sandbox.
+
 ## Statut de cette fondation
 
 La V0.7.4 conserve Stripe Hosted Checkout et ajoute une intégration PayPal Orders v2 **uniquement en Stripe Test / PayPal Sandbox**. Elle ne constitue ni une ouverture des paiements au public, ni une autorisation de passer en production.
@@ -73,17 +75,18 @@ Variables prévues :
 | Variable | Valeur de fondation | Exposition autorisée |
 | --- | --- | --- |
 | `PAYMENTS_ENABLED` | `false` | serveur uniquement ; garde fonctionnelle |
-| `PAYMENT_DEPLOYMENT_ENV` | `development` | `development` ou `staging`, jamais production en V0.7.4 |
+| `PAYMENT_DEPLOYMENT_ENV` | `development` | `development`, `staging` ou `production`, avec mode provider strictement lié |
 | `PAYMENT_STAGING_CONFIRM` | vide | confirmation non secrète exigée en staging |
 | `STRIPE_PAYMENTS_ENABLED` | `false` | activation explicite du seul adapter Stripe |
-| `STRIPE_MODE` | `test` | serveur uniquement ; `live` est refusé à ce stade |
+| `PAYMENT_PRODUCTION_CONFIRM` | vide | confirmation non secrète exigée avant activation Live |
+| `STRIPE_MODE` | `test` | `test` hors production ; `live` uniquement en production |
 | `STRIPE_SECRET_KEY` | vide dans le dépôt | secret serveur sandbox, jamais journalisé |
 | `STRIPE_WEBHOOK_SECRET` | vide dans le dépôt | secret `whsec_…` propre à l’endpoint sandbox/CLI |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | facultative et vide | uniquement si une future UI Elements l’exige |
 | `STRIPE_DIAGNOSTIC_CONFIRM` | vide par défaut | confirmation locale non secrète du diagnostic réseau Stripe Test |
 | `PAYMENT_QA_CONFIRM` | vide par défaut | confirmation locale non secrète de la QA paiement sur base jetable |
 | `PAYPAL_PAYMENTS_ENABLED` | `false` | activation explicite du seul adapter PayPal |
-| `PAYPAL_ENVIRONMENT` | `sandbox` | `live` et `production` sont refusés |
+| `PAYPAL_ENVIRONMENT` | `sandbox` | `sandbox` hors production ; `live` uniquement en production |
 | `PAYPAL_CLIENT_ID` | vide | secret/configuration serveur Sandbox |
 | `PAYPAL_CLIENT_SECRET` | vide | secret serveur Sandbox |
 | `PAYPAL_WEBHOOK_ID` | vide | identifiant serveur de l’endpoint webhook Sandbox |
@@ -354,7 +357,7 @@ obligatoire et doit correspondre exactement à `DATABASE_URL`. Elles exigent en 
 `PAYMENT_QA_CONFIRM=run-v074-sandbox-payment-qa`. La base
 `lnx-studio-local-preview` est explicitement refusée.
 
-Le parcours local doit être servi sur un port QA dédié avec la preuve de base jetable et `PAYMENTS_ENABLED=true`. Chaque provider exige aussi son flag explicite. En staging, le runtime accepte uniquement Railway `staging`, une origine HTTPS canonique, `PAYMENT_DEPLOYMENT_ENV=staging` et `PAYMENT_STAGING_CONFIRM=payments-staging-sandbox-approved`; Stripe reste Test et PayPal Sandbox. Tout environnement production ou toute configuration ambiguë est refusé.
+Le parcours local doit être servi sur un port QA dédié avec la preuve de base jetable et `PAYMENTS_ENABLED=true`. Chaque provider exige aussi son flag explicite. En staging, le runtime accepte uniquement Railway `staging`, une origine HTTPS canonique, `PAYMENT_DEPLOYMENT_ENV=staging` et `PAYMENT_STAGING_CONFIRM=payments-staging-sandbox-approved`; Stripe reste Test et PayPal Sandbox. En production, seul Railway `production`, l’origine canonique LNX, les modes Live et la confirmation production sont acceptés lorsque le global est armé. Toute combinaison croisée échoue fermée.
 
 Le diagnostic réseau est séparé des tests mocks et s'exécute uniquement après la
 confirmation non secrète prévue :
@@ -471,7 +474,7 @@ Stripe réessaie automatiquement les webhooks live jusqu’à trois jours avec b
 
 ## Gates de production
 
-Le passage en production n’appartient pas à V0.7.4. Il nécessitera un sprint et une validation séparés comprenant au minimum :
+V0.8.0 ferme le gate de compatibilité technique, mais le passage Live reste une validation humaine séparée comprenant au minimum :
 
 - activation du compte Stripe, informations légales et compte de règlement validés ;
 - clés live et webhook live dans le coffre Railway, jamais dans `.env.local` partagé ou Git ;
@@ -483,7 +486,7 @@ Le passage en production n’appartient pas à V0.7.4. Il nécessitera un sprint
 - stratégie explicite de remboursement/réconciliation d’un succès tardif entre providers ;
 - maintien vérifié de l’override `deepmerge-ts` corrigé tant que Prisma 7 ne l’intègre pas directement ;
 - maintien du Legal Review Gate pour les droits et contrats ;
-- modification volontaire du code qui refuse actuellement Stripe Live, PayPal Live et `PAYMENT_DEPLOYMENT_ENV=production`, suivie d’une nouvelle revue ;
+- preflight production read-only `PASS`, configuration Dashboard séparée et smoke Live humain autorisé ;
 - bascule des flags provider seulement après ces preuves, puis de `PAYMENTS_ENABLED=true`, jamais l’inverse.
 
 Le parcours client V0.7.1, ses règles de reprise, d’édition et de confirmation sont décrits dans [CHECKOUT.md](CHECKOUT.md). Toute activation publique ou Live demeure un sprint séparé.

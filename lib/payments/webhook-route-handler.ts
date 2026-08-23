@@ -107,6 +107,7 @@ function expandedPaymentMethod(
 export function paymentIntentEvidenceFromCheckoutSession(
   session: Stripe.Checkout.Session,
   expectedSessionId: string,
+  expectedLivemode = false,
 ): StripePaymentIntentEvidence {
   const intent = expandedPaymentIntent(session.payment_intent);
   const method = intent ? expandedPaymentMethod(intent.payment_method) : null;
@@ -118,9 +119,9 @@ export function paymentIntentEvidenceFromCheckoutSession(
     || session.object !== "checkout.session"
     || session.mode !== "payment"
     || session.payment_status !== "paid"
-    || session.livemode
+    || session.livemode !== expectedLivemode
     || !intent
-    || intent.livemode
+    || intent.livemode !== expectedLivemode
     || intent.status !== "succeeded"
     || !Number.isSafeInteger(intent.amount)
     || intent.amount <= 0
@@ -136,7 +137,7 @@ export function paymentIntentEvidenceFromCheckoutSession(
     id: intent.id,
     amountCents: intent.amount,
     currency: intent.currency.toUpperCase(),
-    livemode: false,
+    livemode: expectedLivemode,
     status: "succeeded",
     paymentId,
     orderId,
@@ -145,8 +146,8 @@ export function paymentIntentEvidenceFromCheckoutSession(
   };
 }
 
-function successfulCheckoutSessionId(event: VerifiedStripeWebhookEvent) {
-  if (event.livemode) return null;
+function successfulCheckoutSessionId(event: VerifiedStripeWebhookEvent, expectedLivemode: boolean) {
+  if (event.livemode !== expectedLivemode) return null;
   const session = objectRecord(event.data.object);
   const metadata = objectRecord(session?.metadata);
   const paymentId = typeof metadata?.paymentId === "string" ? metadata.paymentId : "";
@@ -159,7 +160,7 @@ function successfulCheckoutSessionId(event: VerifiedStripeWebhookEvent) {
     || typeof session.id !== "string"
     || session.id.length === 0
     || session.id.length > 255
-    || session.livemode !== false
+    || session.livemode !== expectedLivemode
     || !internalId.test(paymentId)
     || !internalId.test(orderId)
     || session.client_reference_id !== orderId
@@ -175,7 +176,8 @@ export async function enrichStripeWebhookEvent(
   event: VerifiedStripeWebhookEvent,
   configuration: EnabledPaymentConfiguration,
 ) {
-  const checkoutId = successfulCheckoutSessionId(event);
+  const expectedLivemode = configuration.mode === "live";
+  const checkoutId = successfulCheckoutSessionId(event, expectedLivemode);
   if (!checkoutId) return event;
   const stripe = new Stripe(configuration.secretKey, {
     apiVersion: STRIPE_API_VERSION,
@@ -188,7 +190,7 @@ export async function enrichStripeWebhookEvent(
   });
   return {
     ...event,
-    paymentIntentEvidence: paymentIntentEvidenceFromCheckoutSession(session, checkoutId),
+    paymentIntentEvidence: paymentIntentEvidenceFromCheckoutSession(session, checkoutId, expectedLivemode),
   };
 }
 
@@ -242,6 +244,9 @@ export async function handleStripeWebhookPost(
   try {
     event = dependencies.constructEvent(rawBody, signature, configuration);
   } catch {
+    return webhookJson({ received: false }, 400);
+  }
+  if (event.livemode !== (configuration.mode === "live")) {
     return webhookJson({ received: false }, 400);
   }
 

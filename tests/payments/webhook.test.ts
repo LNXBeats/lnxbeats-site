@@ -462,6 +462,66 @@ test("fails closed for disabled configuration, missing signature and invalid sig
   assert.equal(constructed, 1);
 });
 
+test("rejects a signed Stripe event whose livemode differs from the configured endpoint", async () => {
+  let processed = 0;
+  const configuration = {
+    provider: "stripe",
+    enabled: true,
+    configured: true,
+    mode: "live",
+    apiVersion: "2026-07-29.dahlia",
+    secretKey: ["sk", "live", "route-fixture"].join("_"),
+    webhookSecret: stripeRouteWebhookSecret,
+  } as const;
+  const response = await handleStripeWebhookPost(new Request(
+    "https://www.lnxbeats.fr/api/payments/stripe/webhook",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "stripe-signature": "fixture" },
+      body: "{}",
+    },
+  ), {
+    assertQaRuntime: async () => {},
+    configuration: () => configuration,
+    constructEvent: () => stripeEvent(),
+    enrichEvent: async (event) => event,
+    processEvent: async () => {
+      processed += 1;
+      return { outcome: "PROCESSED", duplicate: false };
+    },
+  });
+  assert.equal(response.status, 400);
+  assert.equal(processed, 0);
+});
+
+test("reconciles valid live Stripe evidence only with a LIVE Payment snapshot", () => {
+  const event = normalized({
+    livemode: true,
+    sessionLivemode: true,
+    objectId: "cs_live_checkout",
+    paymentIntentId: "pi_live_payment",
+    paymentIntentEvidence: {
+      id: "pi_live_payment",
+      amountCents: 5_000,
+      currency: "EUR",
+      livemode: true,
+      status: "succeeded",
+      paymentId,
+      orderId,
+      pricingVersion: "2026-08-v1",
+      paymentMethod: "CARD",
+    },
+  });
+  const plan = planStripeCheckoutReconciliation(payment({
+    mode: "LIVE",
+    providerCheckoutId: "cs_live_checkout",
+    providerPaymentId: "pi_live_payment",
+  }), event);
+  assert.equal(plan.outcome, "PROCESSED");
+  assert.equal(plan.confirmOrder, true);
+  assert.equal(plan.paymentUpdate.status, "SUCCEEDED");
+});
+
 test("rejects oversized declared and streamed webhook bodies before verification", async () => {
   let constructed = 0;
   const dependencies: StripeWebhookRouteDependencies = {

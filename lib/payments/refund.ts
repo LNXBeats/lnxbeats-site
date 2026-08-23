@@ -18,12 +18,16 @@ import {
   type StripeRefundGateway,
 } from "@/lib/payments/stripe-client";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
+import { parsePaymentsConfiguration } from "@/lib/payments/config";
+import type { PersistedPaymentMode } from "@/lib/payments/types";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 const internalId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const orderNumberPattern = /^LNX-[0-9]{4}-[0-9]{6}$/;
 const activeRefundStatuses = ["PROCESSING", "PENDING", "REQUIRES_REVIEW"] as const;
 const winningPaymentStatuses = ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] as const;
+export const LIVE_REFUND_CONFIRMATION = "CONFIRM_LIVE_FINANCIAL_REFUND" as const;
+export const LIVE_REFUND_RECONCILIATION_CONFIRMATION = "CONFIRM_LIVE_REFUND_RECONCILIATION" as const;
 type Transaction = Prisma.TransactionClient;
 
 export type RefundProviderEvidence = Readonly<{
@@ -148,6 +152,7 @@ export type ReservedRefund = Readonly<{
   providerIdempotencyKey: string;
   providerRefundId: string | null;
   status: "PROCESSING" | "PENDING" | "SUCCEEDED" | "FAILED" | "REQUIRES_REVIEW";
+  mode: PersistedPaymentMode;
   reused: boolean;
 }>;
 
@@ -160,7 +165,7 @@ function reservedRefund(attempt: {
   providerIdempotencyKey: string;
   providerRefundId: string | null;
   status: "PROCESSING" | "PENDING" | "SUCCEEDED" | "FAILED" | "REQUIRES_REVIEW";
-  payment: { providerPaymentId: string | null };
+  payment: { providerPaymentId: string | null; mode: PersistedPaymentMode };
 }, reused: boolean): ReservedRefund {
   if (attempt.currency !== "EUR" || !attempt.payment.providerPaymentId) {
     throw new RefundServiceError(409, "REFUND_REQUIRES_REVIEW");
@@ -175,11 +180,15 @@ function reservedRefund(attempt: {
     providerIdempotencyKey: attempt.providerIdempotencyKey,
     providerRefundId: attempt.providerRefundId,
     status: attempt.status,
+    mode: attempt.payment.mode,
     reused,
   };
 }
 
-export function createRefundDatabaseRepository(client: PrismaClient) {
+export function createRefundDatabaseRepository(
+  client: PrismaClient,
+  expectedMode: PersistedPaymentMode = "TEST",
+) {
   return {
     async reserve(input: Readonly<{
       actor: OrderActor;
@@ -187,6 +196,7 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
       kind: "FULL" | "PARTIAL";
       amountCents?: number;
       localIdempotencyKey: string;
+      liveConfirmation?: string;
     }>): Promise<ReservedRefund> {
       assertAdmin(input.actor);
       if (
@@ -198,11 +208,18 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
         await lock(transaction, `payments:order:${input.orderNumber}`);
         const existing = await transaction.refundAttempt.findUnique({
           where: { localIdempotencyKey: input.localIdempotencyKey },
-          include: { payment: { select: { providerPaymentId: true, order: { select: { orderNumber: true } } } } },
+          include: { payment: { select: { providerPaymentId: true, mode: true, order: { select: { orderNumber: true } } } } },
         });
         if (existing) {
-          if (existing.requestedByUserId !== input.actor.id || existing.payment.order.orderNumber !== input.orderNumber) {
+          if (
+            existing.requestedByUserId !== input.actor.id
+            || existing.payment.order.orderNumber !== input.orderNumber
+            || existing.payment.mode !== expectedMode
+          ) {
             throw new RefundServiceError(409, "REFUND_REQUIRES_REVIEW");
+          }
+          if (existing.payment.mode === "LIVE" && input.liveConfirmation !== LIVE_REFUND_CONFIRMATION) {
+            throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");
           }
           return reservedRefund(existing, true);
         }
@@ -212,10 +229,10 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
             id: true,
             status: true,
             payments: {
-              where: { status: { in: [...winningPaymentStatuses] } },
+              where: { status: { in: [...winningPaymentStatuses] }, mode: expectedMode },
               select: {
                 id: true, provider: true, status: true, amountCents: true, currency: true,
-                refundedAmountCents: true, providerPaymentId: true,
+                refundedAmountCents: true, providerPaymentId: true, mode: true,
               },
             },
           },
@@ -226,6 +243,9 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
         const payment = order.payments[0]!;
         if (payment.currency !== "EUR" || !payment.providerPaymentId || payment.status === "REFUNDED") {
           throw new RefundServiceError(409, "PAYMENT_NOT_REFUNDABLE");
+        }
+        if (payment.mode === "LIVE" && input.liveConfirmation !== LIVE_REFUND_CONFIRMATION) {
+          throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");
         }
         await lock(transaction, `payments:attempt:${payment.id}`);
         const reserved = await transaction.refundAttempt.aggregate({
@@ -254,7 +274,7 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
             providerIdempotencyKey: `refund:${payment.provider.toLowerCase()}:${attemptId}`,
             status: "PROCESSING",
           },
-          include: { payment: { select: { providerPaymentId: true } } },
+          include: { payment: { select: { providerPaymentId: true, mode: true } } },
         });
         await transaction.payment.update({
           where: { id: payment.id },
@@ -293,8 +313,16 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
       if (!internalId.test(attemptId)) throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");
       return inPaymentTransaction(client, async (transaction) => {
         await lock(transaction, `payments:refund:${attemptId}`);
-        const attempt = await transaction.refundAttempt.findUnique({ where: { id: attemptId } });
-        if (!attempt || !["PROCESSING", "REQUIRES_REVIEW"].includes(attempt.status) || attempt.providerRefundId) return false;
+        const attempt = await transaction.refundAttempt.findUnique({
+          where: { id: attemptId },
+          include: { payment: { select: { mode: true } } },
+        });
+        if (
+          !attempt
+          || attempt.payment.mode !== expectedMode
+          || !["PROCESSING", "REQUIRES_REVIEW"].includes(attempt.status)
+          || attempt.providerRefundId
+        ) return false;
         const leaseBoundary = new Date(Date.now() - 60_000);
         if (attempt.lastAttemptAt && attempt.lastAttemptAt > leaseBoundary) return false;
         const updated = await transaction.refundAttempt.updateMany({
@@ -319,6 +347,7 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
           include: { payment: { include: { order: true } } },
         });
         if (!attempt) throw new RefundServiceError(404, "PAYMENT_NOT_REFUNDABLE");
+        if (attempt.payment.mode !== expectedMode) throw new RefundServiceError(409, "REFUND_REQUIRES_REVIEW");
         await lock(transaction, `payments:order:${attempt.payment.order.orderNumber}`);
         const mismatch = evidence.provider !== attempt.provider
           || evidence.providerPaymentId !== attempt.payment.providerPaymentId
@@ -424,6 +453,7 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
           include: { payment: true },
         });
         if (!attempt || attempt.status === "SUCCEEDED") return;
+        if (attempt.payment.mode !== expectedMode) throw new RefundServiceError(409, "REFUND_REQUIRES_REVIEW");
         const status = failure.review ? "REQUIRES_REVIEW" : "FAILED";
         await transaction.refundAttempt.update({
           where: { id: attempt.id },
@@ -453,9 +483,9 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
     async get(attemptId: string): Promise<ReservedRefund> {
       const attempt = await client.refundAttempt.findUnique({
         where: { id: attemptId },
-        include: { payment: { select: { providerPaymentId: true } } },
+        include: { payment: { select: { providerPaymentId: true, mode: true } } },
       });
-      if (!attempt) throw new RefundServiceError(404, "PAYMENT_NOT_REFUNDABLE");
+      if (!attempt || attempt.payment.mode !== expectedMode) throw new RefundServiceError(404, "PAYMENT_NOT_REFUNDABLE");
       return reservedRefund(attempt, true);
     },
 
@@ -467,9 +497,9 @@ export function createRefundDatabaseRepository(client: PrismaClient) {
       assertAdmin(actor);
       const attempt = await client.refundAttempt.findUnique({
         where: { id: attemptId },
-        select: { id: true, paymentId: true, provider: true, amountCents: true },
+        select: { id: true, paymentId: true, provider: true, amountCents: true, payment: { select: { mode: true } } },
       });
-      if (!attempt) throw new RefundServiceError(404, "PAYMENT_NOT_REFUNDABLE");
+      if (!attempt || attempt.payment.mode !== expectedMode) throw new RefundServiceError(404, "PAYMENT_NOT_REFUNDABLE");
       await client.paymentAuditEvent.create({
         data: {
           paymentId: attempt.paymentId,
@@ -555,8 +585,10 @@ export type RefundDependencies = Readonly<{
 
 function defaultDependencies(): RefundDependencies {
   assertDatabaseConfigured();
+  const configuration = parsePaymentsConfiguration();
+  const expectedMode = configuration.deploymentEnvironment === "production" ? "LIVE" : "TEST";
   return {
-    repository: createRefundDatabaseRepository(prisma),
+    repository: createRefundDatabaseRepository(prisma, expectedMode),
     gateway: (provider) => createRefundProviderGateway(provider),
     assertRuntime: async () => { await assertPaymentsRuntimeEnvironment(); },
   };
@@ -569,6 +601,7 @@ export async function requestRefundForOrder(
     kind: "FULL" | "PARTIAL";
     amountCents?: number;
     requestToken: string;
+    liveConfirmation?: string;
   }>,
   dependencies: RefundDependencies = defaultDependencies(),
 ) {
@@ -581,6 +614,7 @@ export async function requestRefundForOrder(
     kind: input.kind,
     amountCents: input.amountCents,
     localIdempotencyKey,
+    ...(input.liveConfirmation ? { liveConfirmation: input.liveConfirmation } : {}),
   });
   if (attempt.status === "SUCCEEDED") return { attemptId: attempt.id, status: attempt.status } as const;
   const gateway = dependencies.gateway(attempt.provider);
@@ -615,10 +649,14 @@ export async function reconcileRefundAttemptForAdmin(
   actor: OrderActor,
   attemptId: string,
   dependencies: RefundDependencies = defaultDependencies(),
+  liveConfirmation?: string,
 ) {
   assertAdmin(actor);
   await dependencies.assertRuntime();
   const attempt = await dependencies.repository.get(attemptId);
+  if (attempt.mode === "LIVE" && liveConfirmation !== LIVE_REFUND_RECONCILIATION_CONFIRMATION) {
+    throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");
+  }
   if (attempt.status === "SUCCEEDED" || attempt.status === "FAILED") {
     await dependencies.repository.recordReconciliation(attempt.id, actor, attempt.status);
     return { status: attempt.status } as const;

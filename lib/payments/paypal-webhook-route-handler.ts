@@ -5,26 +5,34 @@ import {
   processVerifiedPaypalWebhookEvent,
   type VerifiedPaypalWebhookEvent,
 } from "@/lib/payments/paypal-webhook";
+import { createPaymentDatabasePaypalCaptureRepository } from "@/lib/payments/paypal-service";
 import { logPaymentEvent } from "@/lib/payments/observability";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import { isPaypalFinancialEvent, processVerifiedPaypalFinancialEvent } from "@/lib/payments/provider-financial-events";
+import type { PaymentsConfiguration } from "@/lib/payments/types";
+import { prisma } from "@/lib/prisma";
 
 export const PAYPAL_WEBHOOK_MAX_BYTES = 256 * 1024;
 
 export type PaypalWebhookRouteDependencies = Readonly<{
-  assertRuntime(): Promise<void>;
+  assertRuntime(): Promise<PaymentsConfiguration | void>;
   gateway(): PaypalGateway;
   processEvent(event: VerifiedPaypalWebhookEvent): ReturnType<typeof processVerifiedPaypalWebhookEvent>;
 }>;
 
 const dependencies: PaypalWebhookRouteDependencies = {
-  assertRuntime: async () => {
-    await assertPaymentsRuntimeEnvironment();
-  },
+  assertRuntime: assertPaymentsRuntimeEnvironment,
   gateway: createPaypalGateway,
-  processEvent: async (event) => isPaypalFinancialEvent(event.event_type)
-    ? { ...(await processVerifiedPaypalFinancialEvent(event)), orderConfirmed: false }
-    : processVerifiedPaypalWebhookEvent(event),
+  processEvent: async (event) => {
+    const configuration = await assertPaymentsRuntimeEnvironment();
+    const environment = configuration.paypal.enabled ? configuration.paypal.environment : "sandbox";
+    return isPaypalFinancialEvent(event.event_type)
+      ? { ...(await processVerifiedPaypalFinancialEvent(event, environment)), orderConfirmed: false }
+      : processVerifiedPaypalWebhookEvent(
+          event,
+          createPaymentDatabasePaypalCaptureRepository(prisma, environment === "live" ? "LIVE" : "TEST"),
+        );
+  },
 };
 
 class PaypalWebhookRequestError extends Error {
@@ -70,7 +78,10 @@ function requiredHeader(headers: Headers, name: string, max: number) {
   return value;
 }
 
-export function paypalWebhookHeaders(headers: Headers): PaypalWebhookHeaders {
+export function paypalWebhookHeaders(
+  headers: Headers,
+  environment: "sandbox" | "live" = "sandbox",
+): PaypalWebhookHeaders {
   const transmissionId = requiredHeader(headers, "paypal-transmission-id", 255);
   const transmissionTime = requiredHeader(headers, "paypal-transmission-time", 80);
   const certUrl = requiredHeader(headers, "paypal-cert-url", 2_048);
@@ -84,7 +95,9 @@ export function paypalWebhookHeaders(headers: Headers): PaypalWebhookHeaders {
   }
   if (
     certificate.protocol !== "https:"
-    || !["api-m.sandbox.paypal.com", "api.sandbox.paypal.com"].includes(certificate.hostname)
+    || !(environment === "live"
+      ? ["api-m.paypal.com", "api.paypal.com"]
+      : ["api-m.sandbox.paypal.com", "api.sandbox.paypal.com"]).includes(certificate.hostname)
     || !certificate.pathname.startsWith("/v1/notifications/certs/")
     || certificate.username
     || certificate.password
@@ -131,8 +144,9 @@ export async function handlePaypalWebhookPost(
   request: Request,
   routeDependencies: PaypalWebhookRouteDependencies = dependencies,
 ) {
+  let runtimeConfiguration: PaymentsConfiguration | void;
   try {
-    await routeDependencies.assertRuntime();
+    runtimeConfiguration = await routeDependencies.assertRuntime();
   } catch {
     return json({ received: false }, 503);
   }
@@ -140,7 +154,10 @@ export async function handlePaypalWebhookPost(
   let body: Buffer;
   let event: VerifiedPaypalWebhookEvent;
   try {
-    headers = paypalWebhookHeaders(request.headers);
+    const environment = runtimeConfiguration?.paypal.enabled
+      ? runtimeConfiguration.paypal.environment
+      : "sandbox";
+    headers = paypalWebhookHeaders(request.headers, environment);
     body = await rawBody(request);
     event = parsedEvent(body);
   } catch (error) {

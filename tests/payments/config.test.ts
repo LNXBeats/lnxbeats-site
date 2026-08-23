@@ -56,7 +56,7 @@ test("enabled payments require a complete explicit test configuration", () => {
   }
 });
 
-test("PayPal is explicit, complete, sandbox-only and secret-free in health data", () => {
+test("PayPal is explicit, complete, environment-bound and secret-free in health data", () => {
   const paypalEnvironment = {
     PAYMENTS_ENABLED: "true",
     PAYPAL_PAYMENTS_ENABLED: "true",
@@ -90,8 +90,13 @@ test("PayPal is explicit, complete, sandbox-only and secret-free in health data"
     );
   }
   assert.throws(
-    () => parsePaymentsConfiguration({ ...paypalEnvironment, PAYPAL_ENVIRONMENT: "live" }),
-    (error) => error instanceof PaymentConfigurationError && error.code === "LIVE_MODE_FORBIDDEN",
+    () => parsePaymentsConfiguration({
+      ...paypalEnvironment,
+      PAYMENT_DEPLOYMENT_ENV: "staging",
+      PAYMENT_STAGING_CONFIRM: "payments-staging-sandbox-approved",
+      PAYPAL_ENVIRONMENT: "live",
+    }),
+    (error) => error instanceof PaymentConfigurationError && error.code === "MODE_ENVIRONMENT_MISMATCH",
   );
 });
 
@@ -118,13 +123,13 @@ test("live, malformed and ambiguous configurations fail closed", () => {
   const rejected = [
     [{ PAYMENTS_ENABLED: "yes" }, "INVALID_PAYMENTS_ENABLED"],
     [{ PAYMENTS_ENABLED: "true", STRIPE_PAYMENTS_ENABLED: "sometimes" }, "INVALID_PROVIDER_FLAG"],
-    [{ PAYMENTS_ENABLED: "false", STRIPE_MODE: "live" }, "LIVE_MODE_FORBIDDEN"],
+    [{ PAYMENTS_ENABLED: "false", STRIPE_MODE: "live" }, "MODE_ENVIRONMENT_MISMATCH"],
     [{ PAYMENTS_ENABLED: "false", STRIPE_MODE: "sandbox" }, "INVALID_STRIPE_MODE"],
-    [{ PAYMENTS_ENABLED: "false", STRIPE_SECRET_KEY: ["sk", "live", "forbidden"].join("_") }, "LIVE_SECRET_KEY_FORBIDDEN"],
-    [{ PAYMENTS_ENABLED: "false", STRIPE_SECRET_KEY: ["rk", "live", "forbidden"].join("_") }, "LIVE_SECRET_KEY_FORBIDDEN"],
+    [{ PAYMENTS_ENABLED: "false", STRIPE_SECRET_KEY: ["sk", "live", "forbidden"].join("_") }, "INCOMPLETE_CONFIGURATION"],
+    [{ PAYMENTS_ENABLED: "false", STRIPE_SECRET_KEY: ["rk", "live", "forbidden"].join("_") }, "INCOMPLETE_CONFIGURATION"],
     [{ PAYMENTS_ENABLED: "false", STRIPE_SECRET_KEY: "secret" }, "INVALID_SECRET_KEY"],
     [{ PAYMENTS_ENABLED: "false", STRIPE_WEBHOOK_SECRET: "webhook" }, "INVALID_WEBHOOK_SECRET"],
-    [{ PAYMENTS_ENABLED: "false", NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ["pk", "live", "forbidden"].join("_") }, "LIVE_PUBLISHABLE_KEY_FORBIDDEN"],
+    [{ PAYMENTS_ENABLED: "false", NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ["pk", "live", "forbidden"].join("_") }, "INCOMPLETE_CONFIGURATION"],
     [{ PAYMENTS_ENABLED: "false", NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "publishable" }, "INVALID_PUBLISHABLE_KEY"],
   ] as const;
 
@@ -162,7 +167,7 @@ test("the health summary cannot expose payment credentials", () => {
   assert.doesNotMatch(serialized, /sk_test_|rk_test_|whsec_|pk_test_/);
 });
 
-test("provider configuration remains sandbox-only and staging requires explicit confirmation", () => {
+test("provider configuration remains environment-bound and staging requires explicit confirmation", () => {
   assert.throws(() => assertPaymentServerEnvironment({
     ...completeTestEnvironment,
     PAYMENT_DEPLOYMENT_ENV: "staging",

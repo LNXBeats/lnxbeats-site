@@ -161,12 +161,16 @@ function paymentIntentId(
   return paymentIntent?.id;
 }
 
-function hostedCheckoutSession(session: Stripe.Checkout.Session): HostedCheckoutSession {
+function hostedCheckoutSession(
+  session: Stripe.Checkout.Session,
+  expectedLivemode: boolean,
+): HostedCheckoutSession {
   if (
     !session.id
     || !session.url
     || session.status !== "open"
     || !Number.isSafeInteger(session.expires_at)
+    || session.livemode !== expectedLivemode
     || session.expires_at <= 0
     || session.expires_at * 1_000 <= Date.now()
   ) {
@@ -202,6 +206,7 @@ export function createStripeCheckoutGateway(): StripeCheckoutGateway {
     timeout: 20_000,
     telemetry: false,
   });
+  const expectedLivemode = configuration.mode === "live";
 
   return {
     async createHostedCheckout(request, idempotencyKey) {
@@ -215,11 +220,11 @@ export function createStripeCheckoutGateway(): StripeCheckoutGateway {
         throw new StripeCheckoutClientError("UNAVAILABLE");
       }
 
-      return hostedCheckoutSession(session);
+      return hostedCheckoutSession(session, expectedLivemode);
     },
     async retrieveHostedCheckout(checkoutId) {
       try {
-        return hostedCheckoutSession(await stripe.checkout.sessions.retrieve(checkoutId));
+        return hostedCheckoutSession(await stripe.checkout.sessions.retrieve(checkoutId), expectedLivemode);
       } catch (error) {
         if (error instanceof StripeCheckoutClientError) throw error;
         throw new StripeCheckoutClientError("UNAVAILABLE");
@@ -241,11 +246,12 @@ export function createStripeCheckoutLifecycleGateway(): StripeCheckoutLifecycleG
     timeout: 20_000,
     telemetry: false,
   });
+  const expectedLivemode = configuration.mode === "live";
   return {
     async expireHostedCheckout(checkoutId, idempotencyKey) {
       try {
         const session = await stripe.checkout.sessions.expire(checkoutId, {}, { idempotencyKey });
-        if (session.id !== checkoutId || session.livemode || session.status !== "expired") {
+        if (session.id !== checkoutId || session.livemode !== expectedLivemode || session.status !== "expired") {
           throw new StripeCheckoutClientError("INVALID_RESPONSE");
         }
         return { id: session.id, status: "expired" };

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PAYMENT_STAGING_CONFIRMATION } from "@/lib/payments/config";
+import {
+  PAYMENT_PRODUCTION_CONFIRMATION,
+  PAYMENT_STAGING_CONFIRMATION,
+} from "@/lib/payments/config";
 import { assertPaymentsRuntimeEnvironment, PaymentRuntimeError } from "@/lib/payments/runtime";
 
 const staging = {
@@ -33,6 +36,7 @@ test("accepts only an explicitly confirmed HTTPS Railway staging sandbox", async
     { ...staging, RAILWAY_ENVIRONMENT: "production" },
     { ...staging, APP_CANONICAL_URL: "http://staging.example.test" },
     { ...staging, AUTH_URL: "https://other.example.test" },
+    { ...staging, AUTH_URL: "https://staging.example.test/unexpected" },
   ]) {
     await assert.rejects(
       assertPaymentsRuntimeEnvironment(environment),
@@ -46,6 +50,41 @@ test("keeps the global and provider flags fail-closed", async () => {
     { ...staging, PAYMENTS_ENABLED: "false" },
     { ...staging, PAYPAL_PAYMENTS_ENABLED: "false" },
     { ...staging, PAYPAL_ENVIRONMENT: "live" },
+  ]) {
+    await assert.rejects(
+      assertPaymentsRuntimeEnvironment(environment),
+      (error) => error instanceof PaymentRuntimeError,
+    );
+  }
+});
+
+test("accepts only explicitly armed live providers in the exact Railway production environment", async () => {
+  const production = {
+    PAYMENTS_ENABLED: "true",
+    PAYMENT_DEPLOYMENT_ENV: "production",
+    PAYMENT_PRODUCTION_CONFIRM: PAYMENT_PRODUCTION_CONFIRMATION,
+    STRIPE_PAYMENTS_ENABLED: "true",
+    STRIPE_MODE: "live",
+    STRIPE_SECRET_KEY: ["sk", "live", "runtime-fixture"].join("_"),
+    STRIPE_WEBHOOK_SECRET: ["whsec", "runtime-fixture"].join("_"),
+    NODE_ENV: "production",
+    RAILWAY_ENVIRONMENT: "production-identifier",
+    RAILWAY_ENVIRONMENT_NAME: "production",
+    APP_CANONICAL_URL: "https://www.lnxbeats.fr",
+    AUTH_URL: "https://www.lnxbeats.fr",
+    SITE_URL: "https://www.lnxbeats.fr",
+  } as const;
+  const configuration = await assertPaymentsRuntimeEnvironment(production);
+  assert.equal(configuration.deploymentEnvironment, "production");
+  assert.equal(configuration.stripe.enabled && configuration.stripe.mode, "live");
+
+  for (const environment of [
+    { ...production, PAYMENT_PRODUCTION_CONFIRM: undefined },
+    { ...production, RAILWAY_ENVIRONMENT_NAME: "staging" },
+    { ...production, RAILWAY_ENVIRONMENT: "staging-identifier" },
+    { ...production, APP_CANONICAL_URL: "https://staging.example.test", AUTH_URL: "https://staging.example.test", SITE_URL: "https://staging.example.test" },
+    { ...production, SITE_URL: "https://www.lnxbeats.fr/unexpected" },
+    { ...production, STRIPE_MODE: "test", STRIPE_SECRET_KEY: ["sk", "test", "runtime-fixture"].join("_") },
   ]) {
     await assert.rejects(
       assertPaymentsRuntimeEnvironment(environment),

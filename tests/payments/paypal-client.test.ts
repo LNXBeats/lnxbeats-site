@@ -143,3 +143,28 @@ test("posts the exact raw event inside PayPal's official signature envelope", as
   assert.equal(calls[1]?.url, "https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature");
   assert.ok(String(calls[1]?.init.body).endsWith(`\"webhook_event\":${rawEvent}}`));
 });
+
+test("derives the immutable PayPal Live API and approval hosts only from server configuration", async () => {
+  const liveConfiguration = { ...configuration, environment: "live" as const };
+  const calls: string[] = [];
+  const gateway = createTestPaypalGateway(liveConfiguration, async (input) => {
+    calls.push(String(input));
+    if (String(input).endsWith("/v1/oauth2/token")) {
+      return new Response(JSON.stringify({ access_token: "access-token-fixture", token_type: "Bearer" }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      id: "PAYPAL-LIVE-ORDER-01",
+      status: "CREATED",
+      links: [{ rel: "approve", href: "https://www.paypal.com/checkoutnow?token=PAYPAL-LIVE-ORDER-01" }],
+    }), { status: 201 });
+  });
+  const result = await gateway.createOrder(request, "paypal-live-order:fixture");
+  assert.equal(result.approvalUrl, "https://www.paypal.com/checkoutnow?token=PAYPAL-LIVE-ORDER-01");
+  assert.equal(calls[0], "https://api-m.paypal.com/v1/oauth2/token");
+  assert.equal(calls[1], "https://api-m.paypal.com/v2/checkout/orders");
+  assert.throws(() => paypalOrderSession({
+    id: "PAYPAL-LIVE-ORDER-01",
+    status: "CREATED",
+    links: [{ rel: "approve", href: "https://www.sandbox.paypal.com/checkoutnow" }],
+  }, "live"));
+});

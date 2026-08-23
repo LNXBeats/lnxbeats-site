@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 import type { OrderActor } from "@/lib/orders/domain";
+import type { PersistedPaymentMode } from "@/lib/payments/types";
 import { validateOrderPaymentSnapshot } from "@/lib/payments/domain";
 import {
   createPaypalGateway,
@@ -140,10 +141,14 @@ function createOrderRequest(
 }
 
 async function defaultCheckoutDependencies(orderNumber: string): Promise<PaypalCheckoutDependencies> {
-  await assertPaymentsRuntimeEnvironment();
+  const configuration = await assertPaymentsRuntimeEnvironment();
   const urls = paymentReturnUrls(orderNumber);
   return {
-    repository: createPaymentDatabaseCheckoutRepository(prisma, "PAYPAL"),
+    repository: createPaymentDatabaseCheckoutRepository(
+      prisma,
+      "PAYPAL",
+      configuration.paypal.enabled && configuration.paypal.environment === "live" ? "LIVE" : "TEST",
+    ),
     gateway: createPaypalGateway(),
     baseUrl: new URL(urls.successUrl).origin,
   };
@@ -204,6 +209,7 @@ async function createReceipt(
     outcome: "PROCESSED" | "IGNORED" | "REQUIRES_REVIEW";
     paymentId?: string;
     occurredAt?: Date;
+    livemode: boolean;
   }>,
 ): Promise<PaypalReconciliationResult> {
   await transaction.providerEvent.create({
@@ -211,7 +217,7 @@ async function createReceipt(
       provider: "PAYPAL",
       providerEventId: input.eventId,
       type: input.type.slice(0, 160),
-      livemode: false,
+      livemode: input.livemode,
       objectId: input.objectId?.slice(0, 255),
       outcome: input.outcome,
       processedAt: input.occurredAt ?? new Date(),
@@ -224,7 +230,12 @@ async function createReceipt(
 
 export function createPaymentDatabasePaypalCaptureRepository(
   client: PrismaClient,
+  mode: PersistedPaymentMode = "TEST",
 ): PaypalCaptureRepository {
+  const receipt = (
+    transaction: Transaction,
+    input: Omit<Parameters<typeof createReceipt>[1], "livemode">,
+  ) => createReceipt(transaction, { ...input, livemode: mode === "LIVE" });
   return {
     async reserveCapture(actorId, orderNumber, providerOrderId) {
       assertDatabaseConfigured();
@@ -250,6 +261,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
           where: {
             orderId: order.id,
             provider: "PAYPAL",
+            mode,
             providerCheckoutId: providerOrderId,
             status: { in: ["CREATED", "PENDING"] },
           },
@@ -299,7 +311,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
         }
         const owner = event.paymentId
           ? await transaction.payment.findUnique({
-              where: { id: event.paymentId },
+              where: { id: event.paymentId, mode },
               select: { id: true, order: { select: { orderNumber: true } } },
             })
           : await transaction.payment.findUnique({
@@ -308,11 +320,12 @@ export function createPaymentDatabasePaypalCaptureRepository(
                   provider: "PAYPAL",
                   providerCheckoutId: event.providerOrderId,
                 },
+                mode,
               },
               select: { id: true, order: { select: { orderNumber: true } } },
             });
         if (!owner) {
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -357,7 +370,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
           : null;
         const mismatch = !payment
           || payment.provider !== "PAYPAL"
-          || payment.mode !== "TEST"
+          || payment.mode !== mode
           || (event.paymentId !== undefined && payment.id !== event.paymentId)
           || payment.providerCheckoutId !== event.providerOrderId
           || (event.captureId && payment.providerPaymentId && payment.providerPaymentId !== event.captureId)
@@ -380,7 +393,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
               select: { id: true },
             });
           }
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -401,7 +414,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
               select: { id: true },
             });
           }
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -424,7 +437,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
               select: { id: true },
             });
           }
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -452,7 +465,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
             },
             select: { id: true },
           });
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -463,7 +476,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
         }
 
         if (payment.status === "SUCCEEDED") {
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -478,7 +491,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
             data: { failureCode: "WEBHOOK_PAYPAL_TERMINAL_CAPTURE" },
             select: { id: true },
           });
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -493,7 +506,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
             data: { status: "REQUIRES_REVIEW", failureCode: "PAYPAL_ORDER_STATUS_MISMATCH" },
             select: { id: true },
           });
-          return createReceipt(transaction, {
+          return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
@@ -545,7 +558,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
           select: { id: true },
         });
         await enqueuePaymentConfirmedNotifications(transaction, payment.orderId);
-        const receipt = await createReceipt(transaction, {
+        const eventReceipt = await receipt(transaction, {
           eventId: event.eventId,
           type: event.type,
           objectId: event.captureId,
@@ -553,7 +566,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
           paymentId: payment.id,
           occurredAt: event.occurredAt,
         });
-        return { ...receipt, orderConfirmed: true };
+        return { ...eventReceipt, orderConfirmed: true };
       });
     },
 
@@ -566,7 +579,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
         await lockPaymentTransaction(transaction, `payments:webhook:event:${eventId}`);
         const duplicate = await duplicateReceipt(transaction, eventId);
         if (duplicate) return { outcome: duplicate.outcome, duplicate: true, orderConfirmed: false };
-        return createReceipt(transaction, {
+        return receipt(transaction, {
           eventId,
           type,
           objectId,
@@ -593,9 +606,12 @@ export async function capturePaypalOrderForOrder(
   }
   try {
     const resolved = dependencies ?? await (async () => {
-      await assertPaymentsRuntimeEnvironment();
+      const configuration = await assertPaymentsRuntimeEnvironment();
       return {
-        repository: paymentDatabasePaypalCaptureRepository,
+        repository: createPaymentDatabasePaypalCaptureRepository(
+          prisma,
+          configuration.paypal.enabled && configuration.paypal.environment === "live" ? "LIVE" : "TEST",
+        ),
         gateway: createPaypalGateway(),
       };
     })();

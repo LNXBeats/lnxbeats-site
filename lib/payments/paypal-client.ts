@@ -3,7 +3,10 @@ import "server-only";
 import { assertPaypalServerEnvironment } from "@/lib/payments/config";
 import type { PaypalPaymentConfiguration } from "@/lib/payments/types";
 
-const PAYPAL_SANDBOX_API_ORIGIN = "https://api-m.sandbox.paypal.com";
+const PAYPAL_API_ORIGINS = {
+  sandbox: "https://api-m.sandbox.paypal.com",
+  live: "https://api-m.paypal.com",
+} as const;
 const PAYPAL_RESPONSE_MAX_BYTES = 1024 * 1024;
 
 type EnabledPaypalConfiguration = Extract<PaypalPaymentConfiguration, { enabled: true }>;
@@ -67,7 +70,7 @@ export interface PaypalRefundGateway {
 
 export class PaypalClientError extends Error {
   constructor(readonly code: "UNAVAILABLE" | "INVALID_RESPONSE" | "NOT_APPROVED" | "INVALID_REQUEST" | "AUTHENTICATION" | "CONFLICT" | "RATE_LIMITED") {
-    super("PayPal Sandbox is unavailable.");
+    super("PayPal is unavailable.");
     this.name = "PaypalClientError";
   }
 }
@@ -137,14 +140,14 @@ export function paypalCreateOrderBody(request: PaypalCreateOrderRequest) {
   } as const;
 }
 
-function sandboxApprovalUrl(value: unknown) {
+function paypalApprovalUrl(value: unknown, environment: "sandbox" | "live") {
   const raw = nonEmptyString(value, 2_048);
   if (!raw) return null;
   try {
     const url = new URL(raw);
     if (
       url.protocol !== "https:"
-      || url.hostname !== "www.sandbox.paypal.com"
+      || url.hostname !== (environment === "live" ? "www.paypal.com" : "www.sandbox.paypal.com")
       || url.username
       || url.password
     ) return null;
@@ -154,7 +157,10 @@ function sandboxApprovalUrl(value: unknown) {
   }
 }
 
-export function paypalOrderSession(value: unknown): PaypalOrderSession {
+export function paypalOrderSession(
+  value: unknown,
+  environment: "sandbox" | "live" = "sandbox",
+): PaypalOrderSession {
   const body = record(value);
   const id = nonEmptyString(body?.id);
   const status = body?.status;
@@ -165,7 +171,7 @@ export function paypalOrderSession(value: unknown): PaypalOrderSession {
   const approval = array(body?.links)
     .map(record)
     .find((link) => link?.rel === "payer-action" || link?.rel === "approve");
-  const approvalUrl = sandboxApprovalUrl(approval?.href);
+  const approvalUrl = paypalApprovalUrl(approval?.href, environment);
   if (status !== "APPROVED" && !approvalUrl) {
     throw new PaypalClientError("INVALID_RESPONSE");
   }
@@ -207,7 +213,7 @@ export function paypalCaptureEvidence(value: unknown): PaypalCaptureEvidence {
   };
 }
 
-function paypalCaptureIdFromLinks(value: unknown) {
+function paypalCaptureIdFromLinks(value: unknown, environment: "sandbox" | "live") {
   const link = array(value)
     .map(record)
     .find((candidate) => candidate?.rel === "up" && candidate?.method === "GET");
@@ -217,7 +223,9 @@ function paypalCaptureIdFromLinks(value: unknown) {
     const url = new URL(href);
     if (
       url.protocol !== "https:"
-      || !["api-m.sandbox.paypal.com", "api.sandbox.paypal.com"].includes(url.hostname)
+      || !(environment === "live"
+        ? ["api-m.paypal.com", "api.paypal.com"]
+        : ["api-m.sandbox.paypal.com", "api.sandbox.paypal.com"]).includes(url.hostname)
       || url.username
       || url.password
     ) return null;
@@ -228,12 +236,15 @@ function paypalCaptureIdFromLinks(value: unknown) {
   }
 }
 
-export function paypalRefundEvidence(value: unknown): PaypalRefundEvidence {
+export function paypalRefundEvidence(
+  value: unknown,
+  environment: "sandbox" | "live" = "sandbox",
+): PaypalRefundEvidence {
   const body = record(value);
   const providerRefundId = nonEmptyString(body?.id);
   const amount = record(body?.amount);
   const status = body?.status;
-  const captureId = paypalCaptureIdFromLinks(body?.links);
+  const captureId = paypalCaptureIdFromLinks(body?.links, environment);
   const updateTime = nonEmptyString(body?.update_time, 80) ?? nonEmptyString(body?.create_time, 80);
   if (
     !providerRefundId
@@ -274,10 +285,11 @@ function createPaypalGatewayWithConfiguration(
   configuration: EnabledPaypalConfiguration,
   fetchImplementation: Fetch,
 ): PaypalGateway & PaypalRefundGateway {
+  const apiOrigin = PAYPAL_API_ORIGINS[configuration.environment];
   async function accessToken() {
     let response: Response;
     try {
-      response = await fetchImplementation(`${PAYPAL_SANDBOX_API_ORIGIN}/v1/oauth2/token`, {
+      response = await fetchImplementation(`${apiOrigin}/v1/oauth2/token`, {
         method: "POST",
         headers: {
           accept: "application/json",
@@ -301,7 +313,7 @@ function createPaypalGatewayWithConfiguration(
     const token = await accessToken();
     let response: Response;
     try {
-      response = await fetchImplementation(`${PAYPAL_SANDBOX_API_ORIGIN}${path}`, {
+      response = await fetchImplementation(`${apiOrigin}${path}`, {
         ...init,
         headers: {
           accept: "application/json",
@@ -337,13 +349,13 @@ function createPaypalGatewayWithConfiguration(
       return paypalOrderSession(await api("/v2/checkout/orders", {
         method: "POST",
         body: JSON.stringify(paypalCreateOrderBody(request)),
-      }, idempotencyKey));
+      }, idempotencyKey), configuration.environment);
     },
     async retrieveOrder(providerOrderId) {
       return paypalOrderSession(await api(
         `/v2/checkout/orders/${encodeURIComponent(providerOrderId)}`,
         { method: "GET" },
-      ));
+      ), configuration.environment);
     },
     async captureOrder(providerOrderId, idempotencyKey) {
       return paypalCaptureEvidence(await api(
@@ -363,13 +375,13 @@ function createPaypalGatewayWithConfiguration(
           }),
         },
         idempotencyKey,
-      ));
+      ), configuration.environment);
     },
     async retrieveRefund(providerRefundId) {
       return paypalRefundEvidence(await api(
         `/v2/payments/refunds/${encodeURIComponent(providerRefundId)}`,
         { method: "GET" },
-      ));
+      ), configuration.environment);
     },
     async verifyWebhook(headers, webhookEventBody) {
       const result = record(await api("/v1/notifications/verify-webhook-signature", {

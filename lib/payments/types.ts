@@ -1,6 +1,7 @@
-export type StripePaymentMode = "test";
-export type PaypalPaymentEnvironment = "sandbox";
-export type PaymentDeploymentEnvironment = "development" | "staging";
+export type StripePaymentMode = "test" | "live";
+export type PaypalPaymentEnvironment = "sandbox" | "live";
+export type PaymentDeploymentEnvironment = "development" | "staging" | "production";
+export type PersistedPaymentMode = "TEST" | "LIVE";
 
 export type PaymentProvider = "STRIPE" | "PAYPAL";
 

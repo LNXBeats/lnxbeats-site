@@ -12,6 +12,7 @@ import type {
 
 export const STRIPE_API_VERSION = "2026-07-29.dahlia" as const;
 export const PAYMENT_STAGING_CONFIRMATION = "payments-staging-sandbox-approved" as const;
+export const PAYMENT_PRODUCTION_CONFIRMATION = "payments-production-live-approved" as const;
 
 type PaymentEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -20,13 +21,12 @@ export type PaymentConfigurationErrorCode =
   | "INVALID_PROVIDER_FLAG"
   | "INVALID_DEPLOYMENT_ENVIRONMENT"
   | "STAGING_CONFIRMATION_REQUIRED"
+  | "PRODUCTION_CONFIRMATION_REQUIRED"
   | "NO_PROVIDER_ENABLED"
-  | "LIVE_MODE_FORBIDDEN"
+  | "MODE_ENVIRONMENT_MISMATCH"
   | "INVALID_STRIPE_MODE"
-  | "LIVE_SECRET_KEY_FORBIDDEN"
   | "INVALID_SECRET_KEY"
   | "INVALID_WEBHOOK_SECRET"
-  | "LIVE_PUBLISHABLE_KEY_FORBIDDEN"
   | "INVALID_PUBLISHABLE_KEY"
   | "INVALID_PAYPAL_ENVIRONMENT"
   | "INVALID_PAYPAL_CLIENT_ID"
@@ -60,41 +60,29 @@ function configuredDeploymentEnvironment(
   environment: PaymentEnvironment,
 ): PaymentDeploymentEnvironment {
   const value = optional(environment, "PAYMENT_DEPLOYMENT_ENV") ?? "development";
-  if (value === "development" || value === "staging") return value;
+  if (value === "development" || value === "staging" || value === "production") return value;
   throw new PaymentConfigurationError(
-    value === "production" ? "LIVE_MODE_FORBIDDEN" : "INVALID_DEPLOYMENT_ENVIRONMENT",
-    "Payments are restricted to development or staging sandbox runtimes.",
+    "INVALID_DEPLOYMENT_ENVIRONMENT",
+    "PAYMENT_DEPLOYMENT_ENV must be development, staging, or production.",
   );
 }
 
 function configuredStripeMode(environment: PaymentEnvironment) {
   const value = optional(environment, "STRIPE_MODE");
-  if (value === undefined || value === "test") return value;
-  if (value === "live") {
-    throw new PaymentConfigurationError(
-      "LIVE_MODE_FORBIDDEN",
-      "Live Stripe mode is forbidden in V0.7.4.",
-    );
-  }
+  if (value === undefined || value === "test" || value === "live") return value;
   throw new PaymentConfigurationError(
     "INVALID_STRIPE_MODE",
-    "STRIPE_MODE must be test in V0.7.4.",
+    "STRIPE_MODE must be test or live.",
   );
 }
 
 function configuredStripeSecretKey(environment: PaymentEnvironment) {
   const value = optional(environment, "STRIPE_SECRET_KEY");
   if (value === undefined) return undefined;
-  if (/^(?:sk|rk)_live_/.test(value)) {
-    throw new PaymentConfigurationError(
-      "LIVE_SECRET_KEY_FORBIDDEN",
-      "A live Stripe credential is forbidden in V0.7.4.",
-    );
-  }
-  if (!/^(?:sk|rk)_test_[A-Za-z0-9_-]{8,}$/.test(value)) {
+  if (!/^(?:sk|rk)_(?:test|live)_[A-Za-z0-9_-]{8,}$/.test(value)) {
     throw new PaymentConfigurationError(
       "INVALID_SECRET_KEY",
-      "STRIPE_SECRET_KEY must be a Stripe test or restricted test credential.",
+      "STRIPE_SECRET_KEY must be a Stripe secret or restricted credential.",
     );
   }
   return value;
@@ -115,16 +103,10 @@ function configuredStripeWebhookSecret(environment: PaymentEnvironment) {
 function configuredStripePublishableKey(environment: PaymentEnvironment) {
   const value = optional(environment, "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY");
   if (value === undefined) return undefined;
-  if (/^pk_live_/.test(value)) {
-    throw new PaymentConfigurationError(
-      "LIVE_PUBLISHABLE_KEY_FORBIDDEN",
-      "A live Stripe publishable key is forbidden in V0.7.4.",
-    );
-  }
-  if (!/^pk_test_[A-Za-z0-9_-]{8,}$/.test(value)) {
+  if (!/^pk_(?:test|live)_[A-Za-z0-9_-]{8,}$/.test(value)) {
     throw new PaymentConfigurationError(
       "INVALID_PUBLISHABLE_KEY",
-      "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY must be a Stripe test publishable key.",
+      "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY must be a Stripe publishable key.",
     );
   }
   return value;
@@ -133,26 +115,38 @@ function configuredStripePublishableKey(environment: PaymentEnvironment) {
 function parseStripeConfiguration(
   environment: PaymentEnvironment,
   enabled: boolean,
+  deploymentEnvironment: PaymentDeploymentEnvironment,
 ): StripePaymentConfiguration {
   const mode = configuredStripeMode(environment);
   const secretKey = configuredStripeSecretKey(environment);
   const webhookSecret = configuredStripeWebhookSecret(environment);
   const publishableKey = configuredStripePublishableKey(environment);
-  const configured = mode === "test" && secretKey !== undefined && webhookSecret !== undefined;
+  const secretMode = secretKey?.includes("_live_") ? "live" : secretKey?.includes("_test_") ? "test" : undefined;
+  const publishableMode = publishableKey?.startsWith("pk_live_") ? "live" : publishableKey?.startsWith("pk_test_") ? "test" : undefined;
+  if (!mode && (secretKey || webhookSecret || publishableKey)) {
+    throw new PaymentConfigurationError("INCOMPLETE_CONFIGURATION", "STRIPE_MODE is required when Stripe credentials are present.");
+  }
+  if ((mode && secretMode && mode !== secretMode) || (mode && publishableMode && mode !== publishableMode)) {
+    throw new PaymentConfigurationError("MODE_ENVIRONMENT_MISMATCH", "Stripe credentials do not match STRIPE_MODE.");
+  }
+  if (mode && ((deploymentEnvironment === "production") !== (mode === "live"))) {
+    throw new PaymentConfigurationError("MODE_ENVIRONMENT_MISMATCH", "Stripe mode does not match the payment deployment environment.");
+  }
+  const configured = mode !== undefined && secretMode === mode && webhookSecret !== undefined;
 
   if (!enabled) {
     return {
       provider: "stripe",
       enabled: false,
       configured,
-      mode: configured ? "test" : "disabled",
+      mode: configured ? mode : "disabled",
       apiVersion: STRIPE_API_VERSION,
     };
   }
-  if (!configured || mode !== "test") {
+  if (!configured || !mode || !secretKey || !webhookSecret) {
     throw new PaymentConfigurationError(
       "INCOMPLETE_CONFIGURATION",
-      "Stripe payments are enabled but their test configuration is incomplete.",
+      "Stripe payments are enabled but their configuration is incomplete.",
     );
   }
   return {
@@ -169,16 +163,10 @@ function parseStripeConfiguration(
 
 function configuredPaypalEnvironment(environment: PaymentEnvironment) {
   const value = optional(environment, "PAYPAL_ENVIRONMENT");
-  if (value === undefined || value === "sandbox") return value;
-  if (value === "live" || value === "production") {
-    throw new PaymentConfigurationError(
-      "LIVE_MODE_FORBIDDEN",
-      "PayPal production mode is forbidden in V0.7.4.",
-    );
-  }
+  if (value === undefined || value === "sandbox" || value === "live") return value;
   throw new PaymentConfigurationError(
     "INVALID_PAYPAL_ENVIRONMENT",
-    "PAYPAL_ENVIRONMENT must be sandbox in V0.7.4.",
+    "PAYPAL_ENVIRONMENT must be sandbox or live.",
   );
 }
 
@@ -205,12 +193,22 @@ function configuredPaypalCredential(
 function parsePaypalConfiguration(
   environment: PaymentEnvironment,
   enabled: boolean,
+  deploymentEnvironment: PaymentDeploymentEnvironment,
 ): PaypalPaymentConfiguration {
   const paypalEnvironment = configuredPaypalEnvironment(environment);
   const clientId = configuredPaypalCredential(environment, "PAYPAL_CLIENT_ID");
   const clientSecret = configuredPaypalCredential(environment, "PAYPAL_CLIENT_SECRET");
   const webhookId = configuredPaypalCredential(environment, "PAYPAL_WEBHOOK_ID");
-  const configured = paypalEnvironment === "sandbox"
+  if (!paypalEnvironment && (clientId || clientSecret || webhookId)) {
+    throw new PaymentConfigurationError("INCOMPLETE_CONFIGURATION", "PAYPAL_ENVIRONMENT is required when PayPal credentials are present.");
+  }
+  if (
+    paypalEnvironment
+    && ((deploymentEnvironment === "production") !== (paypalEnvironment === "live"))
+  ) {
+    throw new PaymentConfigurationError("MODE_ENVIRONMENT_MISMATCH", "PayPal environment does not match the payment deployment environment.");
+  }
+  const configured = paypalEnvironment !== undefined
     && clientId !== undefined
     && clientSecret !== undefined
     && webhookId !== undefined;
@@ -220,13 +218,13 @@ function parsePaypalConfiguration(
       provider: "paypal",
       enabled: false,
       configured,
-      environment: configured ? "sandbox" : "disabled",
+      environment: configured ? paypalEnvironment : "disabled",
     };
   }
-  if (!configured || paypalEnvironment !== "sandbox") {
+  if (!configured || !paypalEnvironment) {
     throw new PaymentConfigurationError(
       "INCOMPLETE_CONFIGURATION",
-      "PayPal payments are enabled but their sandbox configuration is incomplete.",
+      "PayPal payments are enabled but their configuration is incomplete.",
     );
   }
   return {
@@ -258,6 +256,16 @@ export function parsePaymentsConfiguration(
       "Staging sandbox payments require their explicit confirmation.",
     );
   }
+  if (
+    enabled
+    && deploymentEnvironment === "production"
+    && optional(environment, "PAYMENT_PRODUCTION_CONFIRM") !== PAYMENT_PRODUCTION_CONFIRMATION
+  ) {
+    throw new PaymentConfigurationError(
+      "PRODUCTION_CONFIRMATION_REQUIRED",
+      "Production live payments require their explicit confirmation.",
+    );
+  }
   if (enabled && !stripeRequested && !paypalRequested) {
     throw new PaymentConfigurationError(
       "NO_PROVIDER_ENABLED",
@@ -268,8 +276,8 @@ export function parsePaymentsConfiguration(
   return {
     enabled,
     deploymentEnvironment,
-    stripe: parseStripeConfiguration(environment, enabled && stripeRequested),
-    paypal: parsePaypalConfiguration(environment, enabled && paypalRequested),
+    stripe: parseStripeConfiguration(environment, enabled && stripeRequested, deploymentEnvironment),
+    paypal: parsePaypalConfiguration(environment, enabled && paypalRequested, deploymentEnvironment),
   };
 }
 

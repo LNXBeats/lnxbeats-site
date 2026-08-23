@@ -19,7 +19,7 @@ import {
   type StripeCheckoutGateway,
   type StripeCheckoutLifecycleGateway,
 } from "@/lib/payments/stripe-client";
-import type { OrderPaymentSnapshot, PaymentProvider } from "@/lib/payments/types";
+import type { OrderPaymentSnapshot, PaymentProvider, PersistedPaymentMode } from "@/lib/payments/types";
 import { logPaymentEvent } from "@/lib/payments/observability";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -201,6 +201,7 @@ export async function reserveProviderPaymentAttempt(
   actorId: string,
   orderNumber: string,
   provider: PaymentProvider,
+  mode: PersistedPaymentMode = "TEST",
 ) {
   assertDatabaseConfigured();
   return inLockedPaymentTransaction(client, async (transaction) => {
@@ -282,7 +283,7 @@ export async function reserveProviderPaymentAttempt(
         throw new PaymentServiceError(409, "PAYMENT_SNAPSHOT_CONFLICT");
       }
       if (
-        active.mode !== "TEST"
+        active.mode !== mode
         || active.amountCents !== pricing.amountCents
         || active.currency !== pricing.currency
         || active.pricingVersion !== pricing.pricingVersion
@@ -308,7 +309,7 @@ export async function reserveProviderPaymentAttempt(
         id: paymentId,
         orderId: order.id,
         provider,
-        mode: "TEST",
+        mode,
         status: "CREATED",
         amountCents: pricing.amountCents,
         currency: pricing.currency,
@@ -381,10 +382,11 @@ export async function recordProviderCheckoutSession(
 export function createPaymentDatabaseCheckoutRepository(
   client: PrismaClient,
   provider: PaymentProvider = "STRIPE",
+  mode: PersistedPaymentMode = "TEST",
 ): PaymentCheckoutRepository {
   return {
     enforceRateLimit: (actorId) => enforcePaymentRateLimit(client, actorId),
-    reserveAttempt: (actorId, orderNumber) => reserveProviderPaymentAttempt(client, actorId, orderNumber, provider),
+    reserveAttempt: (actorId, orderNumber) => reserveProviderPaymentAttempt(client, actorId, orderNumber, provider, mode),
     recordSession: (paymentId, session) => recordProviderCheckoutSession(client, paymentId, session, provider),
   };
 }
@@ -581,10 +583,14 @@ export function paymentReturnUrls(
 }
 
 async function defaultDependencies(orderNumber: string): Promise<CheckoutServiceDependencies> {
-  await assertPaymentsRuntimeEnvironment();
+  const configuration = await assertPaymentsRuntimeEnvironment();
   const urls = paymentReturnUrls(orderNumber);
   return {
-    repository: paymentDatabaseCheckoutRepository,
+    repository: createPaymentDatabaseCheckoutRepository(
+      prisma,
+      "STRIPE",
+      configuration.stripe.enabled && configuration.stripe.mode === "live" ? "LIVE" : "TEST",
+    ),
     gateway: createStripeCheckoutGateway(),
     baseUrl: new URL(urls.successUrl).origin,
   };

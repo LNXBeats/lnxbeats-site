@@ -23,6 +23,7 @@ type IncidentInput = Readonly<{
   currency?: "EUR";
   outcome?: "BUYER_FAVOUR" | "SELLER_FAVOUR" | "REVERSED" | "RESTORED" | "ACCEPTED" | "DENIED" | "OTHER";
   occurredAt: Date;
+  livemode: boolean;
 }>;
 
 const activeRefundStatuses = ["PROCESSING", "PENDING", "REQUIRES_REVIEW"] as const;
@@ -104,13 +105,14 @@ async function createReceipt(transaction: Transaction, input: Readonly<{
   refundAttemptId?: string;
   incidentId?: string;
   occurredAt: Date;
+  livemode: boolean;
 }>) {
   await transaction.providerEvent.create({
     data: {
       provider: input.provider,
       providerEventId: input.eventId,
       type: input.type.slice(0, 160),
-      livemode: false,
+      livemode: input.livemode,
       objectId: input.objectId?.slice(0, 255),
       outcome: input.outcome,
       processedAt: input.occurredAt,
@@ -129,6 +131,7 @@ async function recordReview(input: Readonly<{
   providerPaymentId?: string;
   objectId?: string;
   occurredAt: Date;
+  livemode: boolean;
 }>) {
   assertDatabaseConfigured();
   return withEventTransaction(async (transaction) => {
@@ -137,7 +140,10 @@ async function recordReview(input: Readonly<{
     if (seen) return result(seen.outcome, true);
     const payment = input.providerPaymentId
       ? await transaction.payment.findUnique({
-          where: { provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId } },
+          where: {
+            provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId },
+            mode: input.livemode ? "LIVE" : "TEST",
+          },
           select: { id: true },
         })
       : null;
@@ -149,25 +155,29 @@ async function recordReview(input: Readonly<{
       outcome: "REQUIRES_REVIEW",
       paymentId: payment?.id,
       occurredAt: input.occurredAt,
+      livemode: input.livemode,
     });
   });
 }
 
-async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eventId: string; eventType: string }>) {
+async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eventId: string; eventType: string; livemode: boolean }>) {
   assertDatabaseConfigured();
   return withEventTransaction(async (transaction) => {
     await lock(transaction, `payments:webhook:event:${input.provider}:${input.eventId}`);
     const seen = await duplicate(transaction, input.provider, input.eventId);
     if (seen) return result(seen.outcome, true);
     const payment = await transaction.payment.findUnique({
-      where: { provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId } },
+      where: {
+        provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId },
+        mode: input.livemode ? "LIVE" : "TEST",
+      },
       include: { order: true },
     });
     if (!payment || !winningPaymentStatuses.includes(payment.status as typeof winningPaymentStatuses[number])) {
       return createReceipt(transaction, {
         provider: input.provider, eventId: input.eventId, type: input.eventType,
         objectId: input.providerRefundId, outcome: "REQUIRES_REVIEW",
-        paymentId: payment?.id, occurredAt: input.occurredAt,
+        paymentId: payment?.id, occurredAt: input.occurredAt, livemode: input.livemode,
       });
     }
     await lock(transaction, `payments:order:${payment.order.orderNumber}`);
@@ -201,7 +211,7 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
         return createReceipt(transaction, {
           provider: input.provider, eventId: input.eventId, type: input.eventType,
           objectId: input.providerRefundId, outcome: "REQUIRES_REVIEW",
-          paymentId: payment.id, occurredAt: input.occurredAt,
+          paymentId: payment.id, occurredAt: input.occurredAt, livemode: input.livemode,
         });
       }
       attempt = await transaction.refundAttempt.create({
@@ -232,7 +242,7 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
       return createReceipt(transaction, {
         provider: input.provider, eventId: input.eventId, type: input.eventType,
         objectId: input.providerRefundId, outcome: "REQUIRES_REVIEW",
-        paymentId: payment.id, refundAttemptId: attempt.id, occurredAt: input.occurredAt,
+        paymentId: payment.id, refundAttemptId: attempt.id, occurredAt: input.occurredAt, livemode: input.livemode,
       });
     }
     const wasSucceeded = attempt.status === "SUCCEEDED";
@@ -301,7 +311,7 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
     return createReceipt(transaction, {
       provider: input.provider, eventId: input.eventId, type: input.eventType,
       objectId: input.providerRefundId, outcome: "PROCESSED",
-      paymentId: payment.id, refundAttemptId: attempt.id, occurredAt: input.occurredAt,
+      paymentId: payment.id, refundAttemptId: attempt.id, occurredAt: input.occurredAt, livemode: input.livemode,
     });
   });
 }
@@ -313,14 +323,17 @@ async function processIncident(input: IncidentInput) {
     const seen = await duplicate(transaction, input.provider, input.eventId);
     if (seen) return result(seen.outcome, true);
     const payment = await transaction.payment.findUnique({
-      where: { provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId } },
+      where: {
+        provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId },
+        mode: input.livemode ? "LIVE" : "TEST",
+      },
       include: { order: true },
     });
     if (!payment || !winningPaymentStatuses.includes(payment.status as typeof winningPaymentStatuses[number])) {
       return createReceipt(transaction, {
         provider: input.provider, eventId: input.eventId, type: input.eventType,
         objectId: input.providerIncidentId, outcome: "REQUIRES_REVIEW",
-        paymentId: payment?.id, occurredAt: input.occurredAt,
+        paymentId: payment?.id, occurredAt: input.occurredAt, livemode: input.livemode,
       });
     }
     await lock(transaction, `payments:order:${payment.order.orderNumber}`);
@@ -342,6 +355,7 @@ async function processIncident(input: IncidentInput) {
         outcome: "REQUIRES_REVIEW",
         paymentId: payment.id,
         occurredAt: input.occurredAt,
+        livemode: input.livemode,
       });
     }
     const status = existing?.status === "RESOLVED" ? "RESOLVED" : input.status;
@@ -395,13 +409,13 @@ async function processIncident(input: IncidentInput) {
     return createReceipt(transaction, {
       provider: input.provider, eventId: input.eventId, type: input.eventType,
       objectId: input.providerIncidentId, outcome: "PROCESSED",
-      paymentId: payment.id, incidentId: incident.id, occurredAt: input.occurredAt,
+      paymentId: payment.id, incidentId: incident.id, occurredAt: input.occurredAt, livemode: input.livemode,
     });
   });
 }
 
 export function normalizeStripeRefundEvent(event: VerifiedStripeWebhookEvent): (RefundProviderEvidence & { eventId: string; eventType: string }) | null {
-  if (!stripeRefundEvents.has(event.type) || event.livemode) return null;
+  if (!stripeRefundEvents.has(event.type)) return null;
   const refund = record(event.data.object);
   const paymentIntent = bounded(record(refund?.payment_intent)?.id) ?? bounded(refund?.payment_intent);
   const status = event.type === "refund.failed" || refund?.status === "failed" || refund?.status === "canceled"
@@ -436,10 +450,13 @@ function captureIdFromRefundResource(resource: Record<string, unknown>) {
   }
 }
 
-export function normalizePaypalRefundEvent(event: VerifiedPaypalWebhookEvent): (RefundProviderEvidence & { eventId: string; eventType: string }) | null {
+export function normalizePaypalRefundEvent(
+  event: VerifiedPaypalWebhookEvent,
+  environment: "sandbox" | "live" = "sandbox",
+): (RefundProviderEvidence & { eventId: string; eventType: string }) | null {
   if (event.event_type !== "PAYMENT.REFUND.PENDING" && event.event_type !== "PAYMENT.REFUND.FAILED") return null;
   try {
-    const evidence = paypalRefundEvidence(event.resource);
+    const evidence = paypalRefundEvidence(event.resource, environment);
     return {
       provider: "PAYPAL", providerRefundId: evidence.providerRefundId,
       providerPaymentId: evidence.captureId,
@@ -452,7 +469,10 @@ export function normalizePaypalRefundEvent(event: VerifiedPaypalWebhookEvent): (
   }
 }
 
-export function normalizePaypalIncidentEvent(event: VerifiedPaypalWebhookEvent): IncidentInput | null {
+export function normalizePaypalIncidentEvent(
+  event: VerifiedPaypalWebhookEvent,
+  livemode = false,
+): IncidentInput | null {
   const resource = record(event.resource);
   const occurredAt = eventDate(event.create_time);
   if (!resource || !occurredAt) return null;
@@ -466,7 +486,7 @@ export function normalizePaypalIncidentEvent(event: VerifiedPaypalWebhookEvent):
       provider: "PAYPAL", eventId: event.id, eventType: event.event_type,
       providerPaymentId: captureId, providerIncidentId: `reversal:${captureId}`,
       incidentType: "REVERSAL", status: "RESOLVED", outcome: "REVERSED",
-      ...(amountCents ? { amountCents, currency: "EUR" } : {}), occurredAt,
+      ...(amountCents ? { amountCents, currency: "EUR" } : {}), occurredAt, livemode,
     };
   }
   if (!event.event_type.startsWith("CUSTOMER.DISPUTE.")) return null;
@@ -498,12 +518,12 @@ export function normalizePaypalIncidentEvent(event: VerifiedPaypalWebhookEvent):
     provider: "PAYPAL", eventId: event.id, eventType: event.event_type,
     providerPaymentId, providerIncidentId,
     incidentType: resource.dispute_life_cycle_stage === "CHARGEBACK" ? "CHARGEBACK" : "DISPUTE",
-    status, ...(amountCents ? { amountCents, currency: "EUR" } : {}), ...(outcome ? { outcome } : {}), occurredAt,
+    status, ...(amountCents ? { amountCents, currency: "EUR" } : {}), ...(outcome ? { outcome } : {}), occurredAt, livemode,
   };
 }
 
 export function normalizeStripeIncidentEvent(event: VerifiedStripeWebhookEvent): IncidentInput | null {
-  if (!stripeIncidentEvents.has(event.type) || event.livemode) return null;
+  if (!stripeIncidentEvents.has(event.type)) return null;
   const dispute = record(event.data.object);
   const providerIncidentId = bounded(dispute?.id);
   const paymentIntent = bounded(record(dispute?.payment_intent)?.id) ?? bounded(dispute?.payment_intent);
@@ -519,6 +539,7 @@ export function normalizeStripeIncidentEvent(event: VerifiedStripeWebhookEvent):
     provider: "STRIPE", eventId: event.id, eventType: event.type,
     providerPaymentId: paymentIntent, providerIncidentId, incidentType: "DISPUTE",
     status, ...(amountCents ? { amountCents, currency: "EUR" } : {}), ...(outcome ? { outcome } : {}), occurredAt,
+    livemode: event.livemode,
   };
 }
 
@@ -527,17 +548,15 @@ export function isStripeFinancialEvent(type: string) {
 }
 
 export async function processVerifiedStripeFinancialEvent(event: VerifiedStripeWebhookEvent) {
-  if (event.livemode) {
-    return recordReview({ provider: "STRIPE", eventId: event.id, type: event.type, occurredAt: eventDate(event.created) ?? new Date() });
-  }
   const refund = normalizeStripeRefundEvent(event);
-  if (refund) return processRefundEvent(refund);
+  if (refund) return processRefundEvent({ ...refund, livemode: event.livemode });
   const incident = normalizeStripeIncidentEvent(event);
   if (incident) return processIncident(incident);
   return recordReview({
     provider: "STRIPE", eventId: event.id, type: event.type,
     objectId: bounded(record(event.data.object)?.id) ?? undefined,
     occurredAt: eventDate(event.created) ?? new Date(),
+    livemode: event.livemode,
   });
 }
 
@@ -545,10 +564,14 @@ export function isPaypalFinancialEvent(type: string) {
   return paypalFinancialEvents.has(type);
 }
 
-export async function processVerifiedPaypalFinancialEvent(event: VerifiedPaypalWebhookEvent) {
-  const refund = normalizePaypalRefundEvent(event);
-  if (refund) return processRefundEvent(refund);
-  const incident = normalizePaypalIncidentEvent(event);
+export async function processVerifiedPaypalFinancialEvent(
+  event: VerifiedPaypalWebhookEvent,
+  environment: "sandbox" | "live" = "sandbox",
+) {
+  const livemode = environment === "live";
+  const refund = normalizePaypalRefundEvent(event, environment);
+  if (refund) return processRefundEvent({ ...refund, livemode });
+  const incident = normalizePaypalIncidentEvent(event, livemode);
   if (incident) return processIncident(incident);
   const resource = record(event.resource);
   const captureId = event.event_type === "PAYMENT.CAPTURE.REFUNDED"
@@ -559,5 +582,6 @@ export async function processVerifiedPaypalFinancialEvent(event: VerifiedPaypalW
     providerPaymentId: captureId ?? undefined,
     objectId: bounded(resource?.id) ?? undefined,
     occurredAt: eventDate(event.create_time) ?? new Date(),
+    livemode,
   });
 }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import type { PaypalGateway } from "@/lib/payments/paypal-client";
@@ -143,6 +144,33 @@ test("fails closed for invalid signatures, production certificate hosts and over
       "content-length": String(PAYPAL_WEBHOOK_MAX_BYTES + 1),
     }), dependencies,
   )).status, 413);
+});
+
+test("accepts only the PayPal certificate host for the configured provider environment", async () => {
+  const dependencies: PaypalWebhookRouteDependencies = {
+    assertRuntime: async () => ({
+      enabled: true,
+      deploymentEnvironment: "production",
+      stripe: { provider: "stripe", enabled: false, configured: false, mode: "disabled", apiVersion: "2026-07-29.dahlia" },
+      paypal: {
+        provider: "paypal", enabled: true, configured: true, environment: "live",
+        clientId: "paypal-client-fixture", clientSecret: "paypal-secret-fixture", webhookId: "paypal-webhook-fixture",
+      },
+    }),
+    gateway: () => gateway(true),
+    async processEvent() { return { outcome: "PROCESSED", duplicate: false, orderConfirmed: false }; },
+  };
+  const response = await handlePaypalWebhookPost(routeRequest(
+    JSON.stringify(completedEvent()),
+    { "paypal-cert-url": "https://api-m.paypal.com/v1/notifications/certs/CERT-01" },
+  ), dependencies);
+  assert.equal(response.status, 200);
+});
+
+test("the default route returns the runtime configuration used to bind the certificate host", async () => {
+  const source = await readFile(new URL("../../lib/payments/paypal-webhook-route-handler.ts", import.meta.url), "utf8");
+  assert.match(source, /assertRuntime:\s*assertPaymentsRuntimeEnvironment/);
+  assert.match(source, /runtimeConfiguration\?\.paypal\.enabled/);
 });
 
 test("delegates replay idempotence and quarantines malformed supported events", async () => {
