@@ -1,5 +1,9 @@
 # Gates de production
 
+V0.8.0.4 ajoute les outils CLI dry-run/apply pour le premier ADMIN, les 25 projets canoniques et les 14 médias manifestés. **Le code est prêt, mais aucune de ces opérations n'a été exécutée en Production.** Restent ouverts : consolidation dans `develop`, reconstruction de la branche de promotion, déploiement Railway contrôlé, migrations Production, bootstrap ADMIN réel, imports catalogue/média, QA Auth/R2, backups et diagnostics safe-disabled. Voir [PRODUCTION_BOOTSTRAP.md](PRODUCTION_BOOTSTRAP.md) et [MAIN_PROMOTION_RUNBOOK.md](MAIN_PROMOTION_RUNBOOK.md).
+
+La preuve humaine `RAILWAY_VOLUME_NAME=ABSENT`, `RAILWAY_VOLUME_MOUNT_PATH=ABSENT` et `/data=ABSENT` retire l'hypothèse d'un volume historique Railway. L'ancien site écrivait néanmoins orders, contacts et uploads sur son filesystem runtime éphémère lorsque `PERSISTENT_ROOT` était absent ; aucune existence historique externe ne doit être inventée.
+
 V0.7.8 prépare les notifications de production sur une branche feature, sans déploiement ni activation. Les gates suivants restent obligatoires :
 
 - `SECURITY ADVISORY RESOLVED` : V0.7.7 conserve Prisma 7.9.1 et force sa dépendance transitive vers `deepmerge-ts` 8.0.2. Le PoC local, les installations complète/production, Prisma, les migrations et les runtimes sont validés. Voir [SECURITY_ADVISORIES.md](SECURITY_ADVISORIES.md). Ce point ne lève aucun autre gate production.

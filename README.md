@@ -63,8 +63,13 @@ npm run test:checkout
 npm run test:notification
 npm run test:contracts
 npm run test:security
+npm run test:admin:production-bootstrap
+npm run test:catalog:production-import
+npm run test:media:production-import
 npm run notifications:scheduler:preflight
 ```
+
+Les outils one-shot `admin:bootstrap:production`, `catalog:import:production` et `media:import:production` sont dry-run par défaut, CLI uniquement et strictement fail-closed. Ils ne sont jamais exécutés par le build, le démarrage ou les migrations. Leur procédure se trouve dans [docs/PRODUCTION_BOOTSTRAP.md](docs/PRODUCTION_BOOTSTRAP.md).
 
 Le scheduler de notifications V0.7.9 est documenté dans [docs/NOTIFICATION_SCHEDULER.md](docs/NOTIFICATION_SCHEDULER.md). Il n'est jamais lancé dans le process Next.js. Son Scheduled Job staging a été validé humainement puis remis à l'état désactivé ; le service et l'activation production restent à créer et valider humainement.
 
@@ -179,6 +184,9 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `FFMPEG_PATH` | Chemin absolu optionnel du FFmpeg système ; sinon le binaire reproductible du package est utilisé | Non |
 | `SHADOW_DATABASE_URL` | Base shadow jetable pour les contrôles Prisma Migrate | Oui |
 | `LNX_DATABASE_TARGET` | Identifiant explicite de la cible QA autorisée par le script de validation | Non |
+| `ADMIN_BOOTSTRAP_CONFIRM` / `ADMIN_BOOTSTRAP_PASSWORD` | Armement one-shot et credential temporaire du premier ADMIN Production ; à supprimer immédiatement après | Non / Oui |
+| `CATALOG_PRODUCTION_CONFIRM` | Confirmation one-shot de l'import du catalogue Git canonique | Non |
+| `MEDIA_PRODUCTION_CONFIRM` / `MEDIA_PRODUCTION_SOURCE_ROOT` | Confirmation one-shot et racine locale contrôlée des médias canoniques | Non |
 | `LNX_PRISMA_DEV_SERVER_FILE` | Preuve explicite du runtime Prisma Dev ; obligatoire pour toute QA paiement et les opérations média sensibles | Non |
 | `LNX_EXPECTED_DATABASE` | Nom exact de la base locale contenu dans `DATABASE_URL` | Non |
 | `ALLOW_DATABASE_RESET` | Garde explicite requise pour la validation destructive locale | Non |
@@ -258,4 +266,6 @@ Le merge, le push et le déploiement de production restent des actions explicite
 - [Previews audio](docs/AUDIO_PREVIEWS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Déploiement](docs/DEPLOYMENT.md)
+- [Bootstrap Production](docs/PRODUCTION_BOOTSTRAP.md)
+- [Runbook promotion main](docs/MAIN_PROMOTION_RUNBOOK.md)
 - [Changelog](CHANGELOG.md)
