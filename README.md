@@ -192,6 +192,8 @@ La V0.7.1 relie Commander à Stripe Checkout hébergé dans la seule QA locale T
 
 PayPal est compatible avec un compte Stripe français, mais son activation dans le Dashboard et la connexion d’un compte PayPal restent des actions humaines séparées. Wero reste un accès contrôlé/preview et n’est ni promis ni hardcodé. Aucun IBAN ou établissement bancaire n’est couplé au code.
 
+Deux commandes serveur sans appel provider complètent les contrôles production : `npm run payments:diagnostic` inspecte en lecture seule l’état courant désactivé, les origines, la présence des credentials et les invariants PostgreSQL sans afficher de secret ; `npm run payments:preflight` constitue ensuite le gate de readiness avant une activation humaine. Le diagnostic retourne uniquement `SAFE_DISABLED`, `CONFIGURED_DISABLED` ou `INVALID` et n’autorise jamais un paiement.
+
 Voir [docs/PAYMENTS.md](docs/PAYMENTS.md) pour l’architecture Stripe et [docs/CHECKOUT.md](docs/CHECKOUT.md) pour le parcours Commander, la reprise et les états client.
 
 ## Architecture

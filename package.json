@@ -62,6 +62,7 @@
     "test:payment:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-payment-runtime.ts",
     "test:payment:production-runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-payment-production-runtime.ts",
     "payments:preflight": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/payments-preflight.ts",
+    "payments:diagnostic": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/payments-diagnostic.ts",
     "test:refund:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-refund-runtime.ts",
     "stripe:browser-fixtures:setup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/stripe-browser-fixtures.ts setup",
     "stripe:browser-fixtures:cleanup": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/stripe-browser-fixtures.ts cleanup",

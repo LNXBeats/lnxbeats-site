@@ -117,9 +117,21 @@ Les disputes, chargebacks et reversals créent ou mettent à jour un `PaymentInc
 
 L’Admin peut afficher provider, mode, montant, remboursé, solde, état, références externes nécessaires, tentatives, incidents et audit. Aucun credential, signature, Authorization header, payload provider complet ou donnée carte ne doit apparaître dans les logs ou l’interface.
 
-## Preflight read-only
+## Diagnostic et preflight read-only
+
+`npm run payments:diagnostic` inspecte l’état courant sans contacter Stripe ou PayPal et sans écrire dans PostgreSQL. Il vérifie l’environnement explicite, les flags, les modes, la présence booléenne des credentials et secrets webhook, les trois origines HTTPS, l’accès PostgreSQL, les migrations, l’isolation Test/Live, EUR, les relations `Order`/`Payment`/`ProviderEvent` et les éléments `REQUIRES_REVIEW`. Sa sortie est allowlistée : aucune valeur de credential, URL de base, adresse ou confirmation n’est imprimée.
+
+Résultats possibles :
+
+- `SAFE_DISABLED` : le kill switch global et les flags providers sont inertes, même si des credentials Live complets ont été préchargés ;
+- `CONFIGURED_DISABLED` : le global reste désactivé, mais un flag provider ou la confirmation production est déjà présent et doit être revu avant la suite ;
+- `INVALID` : incohérence de configuration, runtime/origine, migration ou donnée nécessitant correction/revue.
+
+Un provider désactivé peut être totalement absent. Le diagnostic exige `PAYMENTS_ENABLED=false`; il inspecte la préparation, il ne constitue pas une autorisation d’ouverture.
 
 `npm run payments:preflight` ne contacte aucun provider et ne modifie aucune donnée. Il contrôle la configuration, l’environnement Railway, l’origine HTTPS, les flags, modes, présences de credentials, migrations, colonnes d’isolation, invariant gagnant et devise. Résultats possibles : `SAFE_DISABLED`, `READY_FOR_STRIPE_LIVE_QA`, `READY_FOR_PAYPAL_LIVE_QA`, `READY_FOR_DUAL_LIVE_QA`, `BLOCKED`.
+
+La différence est intentionnelle : `payments:diagnostic` photographie l’état désactivé et ses anomalies ; `payments:preflight` est le gate de readiness après préparation explicite de l’activation.
 
 ## Limites et gates
 

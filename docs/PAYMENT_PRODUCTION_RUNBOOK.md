@@ -6,12 +6,15 @@ Ce runbook prépare les actions humaines futures. Il n’autorise pas leur exéc
 
 1. backup PostgreSQL vérifié et migrations `prisma migrate deploy` à jour ;
 2. `/api/health` 200 avec paiements désactivés ;
-3. `npm run payments:preflight` = `SAFE_DISABLED` ;
-4. origine canonique HTTPS et variables Auth/Site cohérentes ;
-5. endpoints Live distincts créés dans chaque dashboard avec les allowlists de [PRODUCTION_PAYMENTS.md](PRODUCTION_PAYMENTS.md) ;
-6. secrets placés uniquement dans le coffre Railway, jamais dans un ticket, terminal partagé ou chat ;
-7. notifications et monitoring opérateur validés indépendamment ;
-8. personne responsable, fenêtre, critères d’arrêt et retour arrière nommés.
+3. `npm run payments:diagnostic` = `SAFE_DISABLED` avant armement ;
+4. `npm run payments:preflight` = `SAFE_DISABLED` ;
+5. origine canonique HTTPS et variables Auth/Site cohérentes ;
+6. endpoints Live distincts créés dans chaque dashboard avec les allowlists de [PRODUCTION_PAYMENTS.md](PRODUCTION_PAYMENTS.md) ;
+7. secrets placés uniquement dans le coffre Railway, jamais dans un ticket, terminal partagé ou chat ;
+8. notifications et monitoring opérateur validés indépendamment ;
+9. personne responsable, fenêtre, critères d’arrêt et retour arrière nommés.
+
+Le diagnostic est une inspection read-only de l’état courant désactivé. Le preflight est le gate de readiness utilisé après chaque modification contrôlée des flags. Aucun des deux ne contacte un provider ni ne déclenche une opération financière.
 
 ## Activation progressive
 
@@ -61,4 +64,4 @@ Surveiller les statuts `REQUIRES_REVIEW`, ProviderEvents non traités/revus, rem
 
 ## Arrêt et retour fail-closed
 
-L’action immédiate et réversible est `PAYMENTS_ENABLED=false`. Ensuite seulement diagnostiquer. Ne jamais supprimer un Payment, ProviderEvent, RefundAttempt, PaymentIncident ou audit pour « nettoyer » un incident financier.
+L’action immédiate et réversible est `PAYMENTS_ENABLED=false`. Ensuite seulement lancer `npm run payments:diagnostic`, puis le preflight lorsque la configuration est corrigée. Ne jamais supprimer un Payment, ProviderEvent, RefundAttempt, PaymentIncident ou audit pour « nettoyer » un incident financier.
