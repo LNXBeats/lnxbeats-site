@@ -144,12 +144,19 @@ test("les templates ont HTML, texte, deep link et garde DRAFT", () => {
   const owner = orderNotificationTemplate(message, captureConfiguration);
   assert.match(owner.subject, /^\[TEST\]/);
   assert.match(owner.text, /\/admin\/commandes\/LNX-2026-000002/);
+  assert.match(owner.text, /Commande : LNX-2026-000002/);
+  assert.match(owner.text, /Montant : 90,00\s?€/u);
   assert.match(owner.html, /Client &lt;QA&gt;/);
   assert.doesNotMatch(owner.text, /<[^>]+>/);
+  assert.doesNotMatch(`${owner.text}\n${owner.html}`, /providerMessageId|whsec_|sk_live_|utm_(source|medium|campaign)|tracking pixel/i);
+  const ownerLink = owner.html.match(/href="([^"]+)"/)?.[1];
+  assert.equal(ownerLink, "http://localhost:31730/admin/commandes/LNX-2026-000002");
+  assert.equal(new URL(ownerLink!).search, "");
   const rights = orderNotificationTemplate({
     ...message,
     kind: "CUSTOMER_RIGHTS_CONTRACT_READY",
     recipient: "client@example.invalid",
+    templateKey: "customer-rights-contract-ready",
     payload: { ...message.payload, rightsRequestNumber: "LNX-LIC-2026-000001", rightsRequestType: "PUBLICATION_LICENSE", requestedPriceCents: 15_000 },
   }, captureConfiguration);
   assert.match(rights.text, /DRAFT|Aucun droit/i);
@@ -182,7 +189,8 @@ test("Resend refuse les fixtures locales avant tout appel réseau", async () => 
     EMAIL_FROM: "LNX Beats <notifications@mail.example.com>", EMAIL_REPLY_TO: "reply@example.com",
     EMAIL_OWNER_RECIPIENT: "owner@example.com", APP_CANONICAL_URL: "https://staging.example.com",
   });
-  await assert.rejects(() => createNotificationTransport(resend).send(message, orderNotificationTemplate(message, resend)), /test locale/i);
+  const stagingMessage = { ...message, deploymentEnvironment: "staging" as const };
+  await assert.rejects(() => createNotificationTransport(resend).send(stagingMessage, orderNotificationTemplate(stagingMessage, resend)), /test locale/i);
   assert.equal(isFictitiousRecipient("member@example.invalid"), true);
 });
 
@@ -196,8 +204,9 @@ test("configuration et contrôles du worker échouent fermés", () => {
 
 test("backoff et retry Admin restent bornés", () => {
   assert.equal(notificationBackoffMs(1), 5 * 60_000);
-  assert.equal(notificationBackoffMs(99), 24 * 60 * 60_000);
-  assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: false }), true);
+  assert.equal(notificationBackoffMs(99), 6 * 60 * 60_000);
+  assert.equal(manualRetryAllowed({ status: "FAILED_RETRYABLE", suppressionActive: false }), true);
+  assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: false }), false);
   assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: false, attempts: 5 }), false);
   assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: true }), false);
   assert.equal(manualRetryAllowed({ status: "DELIVERED", suppressionActive: false }), false);

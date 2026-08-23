@@ -4,9 +4,8 @@ import { createHash } from "node:crypto";
 import { appendFile, chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { Resend } from "resend";
-
 import type { NotificationConfiguration } from "@/lib/notifications/config";
+import { sendResendEmail, type ResendEmailSender } from "@/lib/email/resend-adapter";
 import {
   isFictitiousRecipient,
   isOfficialResendTestRecipient,
@@ -34,9 +33,20 @@ function deterministicCaptureId(message: OrderNotificationMessage) {
   return `capture_${createHash("sha256").update(`${message.id}:${message.idempotencyKey}`).digest("hex").slice(0, 32)}`;
 }
 
+function assertMessageEnvironment(message: OrderNotificationMessage, configuration: NotificationConfiguration) {
+  if (message.deploymentEnvironment !== configuration.deploymentEnvironment) {
+    throw new NotificationTransportError({
+      code: "DEPLOYMENT_ENVIRONMENT_MISMATCH",
+      message: "La notification appartient à un autre environnement.",
+      retryable: false,
+    });
+  }
+}
+
 function captureTransport(configuration: NotificationConfiguration): NotificationTransport {
   return {
     async send(message, template) {
+      assertMessageEnvironment(message, configuration);
       if (!configuration.emailEnabled) {
         throw new NotificationTransportError({ code: "EMAIL_DISABLED", message: "Le transport e-mail est désactivé.", retryable: false });
       }
@@ -75,8 +85,8 @@ function assertResendRecipient(message: OrderNotificationMessage, configuration:
   if (isFictitiousRecipient(recipient)) {
     throw new NotificationTransportError({ code: "FICTITIOUS_RECIPIENT", message: "Une adresse de test locale ne peut pas être envoyée au fournisseur.", retryable: false });
   }
-  const owner = message.kind === "OWNER_NEW_ORDER" || message.kind === "OWNER_RIGHTS_REQUESTED" || message.kind === "OWNER_RIGHTS_CLIENT_ACCEPTED" || message.kind === "OWNER_PAYMENT_INCIDENT";
-  if (owner) {
+  const audience = notificationDefinition(message.kind).audience;
+  if (audience === "OWNER") {
     if (!configuration.ownerEmailEnabled || recipient !== configuration.ownerRecipient) {
       throw new NotificationTransportError({ code: "OWNER_DESTINATION_NOT_APPROVED", message: "La destination propriétaire n’est pas approuvée.", retryable: false });
     }
@@ -84,46 +94,57 @@ function assertResendRecipient(message: OrderNotificationMessage, configuration:
     if (!configuration.clientEmailEnabled) {
       throw new NotificationTransportError({ code: "CLIENT_EMAIL_DISABLED", message: "Les notifications client sont désactivées.", retryable: false });
     }
-    const allowed = isOfficialResendTestRecipient(recipient) || configuration.stagingRecipientAllowlist.includes(recipient);
-    if (!allowed) {
+    if (recipient !== normalizeNotificationRecipient(message.order.customerEmail)) {
+      throw new NotificationTransportError({ code: "CLIENT_DESTINATION_MISMATCH", message: "La destination client ne correspond pas au compte de la commande.", retryable: false });
+    }
+    const stagingAllowed = isOfficialResendTestRecipient(recipient) || configuration.stagingRecipientAllowlist.includes(recipient);
+    if (configuration.deploymentEnvironment === "staging" && !stagingAllowed) {
       throw new NotificationTransportError({ code: "STAGING_DESTINATION_NOT_APPROVED", message: "La destination staging n’est pas approuvée.", retryable: false });
+    }
+    if (configuration.deploymentEnvironment === "production" && (isOfficialResendTestRecipient(recipient) || recipient.endsWith("@resend.dev"))) {
+      throw new NotificationTransportError({ code: "PRODUCTION_DESTINATION_NOT_APPROVED", message: "La destination production n’est pas approuvée.", retryable: false });
     }
   }
   return recipient;
 }
 
-function resendTransport(configuration: NotificationConfiguration): NotificationTransport {
-  const client = new Resend(configuration.resendApiKey!);
+function resendTransport(configuration: NotificationConfiguration, injectedSender?: ResendEmailSender): NotificationTransport {
   return {
     async send(message, template) {
+      assertMessageEnvironment(message, configuration);
       assertIdempotencyKey(message.idempotencyKey);
       const recipient = assertResendRecipient(message, configuration);
-      const response = await client.emails.send({
-        from: configuration.emailFrom!,
-        to: recipient,
-        replyTo: configuration.emailReplyTo!,
-        subject: template.subject,
-        text: template.text,
-        html: template.html,
-        headers: {
-          "X-Entity-Ref-ID": message.id,
-          "X-LNX-Environment": configuration.deploymentEnvironment,
+      const providerMessageId = await sendResendEmail({
+        apiKey: configuration.resendApiKey!,
+        idempotencyKey: message.idempotencyKey,
+        message: {
+          from: configuration.emailFrom!,
+          to: recipient,
+          replyTo: configuration.emailReplyTo!,
+          subject: template.subject,
+          text: template.text,
+          html: template.html,
+          headers: {
+            "X-Entity-Ref-ID": message.id,
+            "X-LNX-Environment": configuration.deploymentEnvironment,
+          },
+          tags: [
+            { name: "lnx_source", value: "order_outbox" },
+            { name: "lnx_environment", value: configuration.deploymentEnvironment },
+          ],
         },
-      }, { idempotencyKey: message.idempotencyKey });
-      if (response.error || !response.data?.id) {
-        const error = response.error as unknown as Record<string, unknown> | null;
-        const statusCode = typeof error?.statusCode === "number" ? error.statusCode : null;
-        const name = typeof error?.name === "string" ? error.name : "provider_error";
-        throw Object.assign(new Error("Resend did not accept the notification."), { statusCode, name });
-      }
-      return { provider: "RESEND", providerMessageId: response.data.id, deliveredImmediately: false };
+      }, injectedSender);
+      return { provider: "RESEND", providerMessageId, deliveredImmediately: false };
     },
   };
 }
 
-export function createNotificationTransport(configuration: NotificationConfiguration): NotificationTransport {
+export function createNotificationTransport(
+  configuration: NotificationConfiguration,
+  dependencies: { resendSender?: ResendEmailSender } = {},
+): NotificationTransport {
   if (configuration.emailTransport === "capture") return captureTransport(configuration);
-  if (configuration.emailTransport === "resend") return resendTransport(configuration);
+  if (configuration.emailTransport === "resend") return resendTransport(configuration, dependencies.resendSender);
   return {
     async send() {
       throw new NotificationTransportError({ code: "EMAIL_DISABLED", message: "Le transport e-mail est désactivé.", retryable: false });

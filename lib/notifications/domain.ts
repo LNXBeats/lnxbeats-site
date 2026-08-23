@@ -70,7 +70,7 @@ export function isOfficialResendTestRecipient(value: string) {
 }
 
 export function notificationBackoffMs(attempts: number) {
-  const delays = [5 * 60_000, 30 * 60_000, 2 * 60 * 60_000, 6 * 60 * 60_000, 24 * 60 * 60_000] as const;
+  const delays = [5 * 60_000, 30 * 60_000, 2 * 60 * 60_000, 6 * 60 * 60_000] as const;
   return delays[Math.min(Math.max(attempts - 1, 0), delays.length - 1)]!;
 }
 
@@ -120,7 +120,15 @@ export function classifyNotificationFailure(error: unknown): NotificationFailure
   const candidate = error && typeof error === "object" ? error as Record<string, unknown> : {};
   const name = typeof candidate.name === "string" ? candidate.name : "unknown";
   const status = typeof candidate.statusCode === "number" ? candidate.statusCode : null;
-  const retryable = status === null || status === 408 || status === 409 || status === 429 || status >= 500;
+  if (name === "invalid_idempotent_request") {
+    return { code: "IDEMPOTENCY_CONFLICT", message: "La requête fournisseur ne correspond plus à son empreinte initiale.", retryable: false };
+  }
+  const retryable = name === "concurrent_idempotent_requests"
+    || name === "request_timeout"
+    || status === null
+    || status === 408
+    || status === 429
+    || status !== null && status >= 500;
   const code = retryable ? "PROVIDER_TEMPORARY" : ["invalid_api_key", "missing_api_key", "restricted_api_key"].includes(name)
     ? "PROVIDER_CONFIGURATION"
     : name === "validation_error" || status === 400 || status === 422
@@ -154,5 +162,5 @@ export function manualRetryAllowed(input: {
 }) {
   return !input.suppressionActive
     && (input.attempts ?? 0) < MAXIMUM_NOTIFICATION_ATTEMPTS
-    && ["FAILED_RETRYABLE", "FAILED_FINAL"].includes(input.status);
+    && input.status === "FAILED_RETRYABLE";
 }

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 try {
   const configuration = parseNotificationConfiguration();
-  if (!configuration.emailEnabled) throw new Error("Notifications are disabled.");
+  if (!configuration.emailEnabled || !configuration.workerEnabled) throw new Error("Notification worker is disabled.");
   const result = await dispatchPendingOrderNotifications(25);
   console.info(`Notification dispatcher completed: claimed=${result.claimed}, delivered=${result.delivered}, failed=${result.failed}, skipped=${result.skipped}.`);
 } catch {

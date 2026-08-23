@@ -29,4 +29,13 @@ test("la garde accepte uniquement la cible notification jetable exacte", () => {
   assert.throws(() => assertNotificationQaEnvironment({ ...environment, CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false" }, proof));
   assert.throws(() => assertNotificationQaEnvironment({ ...environment, EMAIL_OWNER_RECIPIENT: "owner@example.invalid" }, proof));
   assert.throws(() => assertNotificationQaEnvironment({ ...environment, SMS_NOTIFICATIONS_ENABLED: "true" }, proof));
+  const dynamicConnection = connection.replace("51254", "51226");
+  assert.equal(assertNotificationQaEnvironment(
+    { ...environment, DATABASE_URL: dynamicConnection, NOTIFICATION_QA_DATABASE_PORT: "51226" },
+    { ...proof, exports: { database: { connectionString: dynamicConnection } } },
+  ).databaseUrl.includes(":51226/"), true);
+  assert.throws(() => assertNotificationQaEnvironment(
+    { ...environment, DATABASE_URL: dynamicConnection, NOTIFICATION_QA_DATABASE_PORT: "5432" },
+    { ...proof, exports: { database: { connectionString: dynamicConnection } } },
+  ));
 });

@@ -43,7 +43,9 @@ export function assertNotificationQaEnvironment(environment: Environment, proof:
 
   const rawDatabaseUrl = required(environment, "DATABASE_URL");
   const databaseUrl = assertSafeLocalPostgresUrl(rawDatabaseUrl);
-  assert.ok(databaseUrl.port === NOTIFICATION_QA_DATABASE_PORT, "Notification QA requires its dedicated PostgreSQL port.");
+  const expectedDatabasePort = environment.NOTIFICATION_QA_DATABASE_PORT?.trim() || NOTIFICATION_QA_DATABASE_PORT;
+  assert.ok(/^\d{5}$/.test(expectedDatabasePort) && Number(expectedDatabasePort) >= 49_152 && Number(expectedDatabasePort) <= 65_535, "Notification QA requires a bounded ephemeral PostgreSQL port.");
+  assert.ok(databaseUrl.port === expectedDatabasePort, "Notification QA requires its dedicated PostgreSQL port.");
   assert.ok(decodeURIComponent(databaseUrl.pathname) === "/template1", "Notification QA requires the Prisma Dev database path.");
   assert.ok(proof.name === NOTIFICATION_QA_TARGET, "Notification QA proof name mismatch.");
   assert.ok(proof.exports?.database?.connectionString === rawDatabaseUrl, "Notification QA proof connection mismatch.");

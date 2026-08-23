@@ -17,6 +17,7 @@ function emailLayout(title: string, message: string, action: string, url: string
   const safeUrl = escapeHtml(url);
   return `<!doctype html>
 <html lang="fr">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
   <body style="margin:0;background:#080808;color:#f5f1e8;font-family:Arial,sans-serif">
     <main style="max-width:620px;margin:0 auto;padding:48px 24px">
       <p style="color:#c6a15b;font-size:12px;letter-spacing:2px;text-transform:uppercase">LNX Beats</p>
@@ -37,6 +38,7 @@ function codeEmailLayout(code: string) {
   const ignore = "Si vous n’êtes pas à l’origine de cette demande, ignorez ce message.";
   return `<!doctype html>
 <html lang="fr">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
   <body style="margin:0;background:#080808;color:#f5f1e8;font-family:Arial,sans-serif">
     <main style="max-width:620px;margin:0 auto;padding:48px 24px">
       <p style="color:#c6a15b;font-size:12px;letter-spacing:2px;text-transform:uppercase">LNX Beats</p>

@@ -1,14 +1,21 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { appendFile, chmod, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { Resend } from "resend";
-
 import type { AuthEmailTemplate } from "@/lib/email/templates";
 import { configuredAdminEmail, isLoopbackUrl, isPersistentLocalPreview } from "@/lib/auth/environment";
-import { assertResendPreviewDelivery, configuredEmailProvider } from "@/lib/email/provider-policy";
+import { assertResendAuthDelivery, configuredEmailProvider } from "@/lib/email/provider-policy";
+import { sendResendEmail } from "@/lib/email/resend-adapter";
+import { normalizeNotificationRecipient } from "@/lib/notifications/domain";
+import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 export type AuthEmailKind = "registration-code" | "verification" | "password-reset";
+type AuthEmailDatabase = Pick<typeof prisma, "notificationSuppression" | "notificationEvent">;
+type AuthEmailDependencies = Readonly<{
+  database: AuthEmailDatabase;
+  sendResend: typeof sendResendEmail;
+}>;
 
 const DEFAULT_CAPTURE_PATH = "/private/tmp/lnx-studio-v052-mailbox.jsonl";
 
@@ -33,17 +40,26 @@ function assertLocalSiteUrl(link: string) {
   if (destination.origin !== expected.origin) throw new Error("Authentication email links must remain same-origin.");
 }
 
+function authAuditEventId(idempotencyKey: string) {
+  return `auth-request:${createHash("sha256").update(idempotencyKey).digest("hex")}`;
+}
+
+function authAuditCode(kind: AuthEmailKind, state: "REQUESTED" | "SENDING" | "ACCEPTED" | "FAILED") {
+  return `AUTH_${kind.replaceAll("-", "_").toUpperCase()}_${state}`.slice(0, 80);
+}
+
 export async function sendAuthEmail(input: {
   idempotencyKey?: string;
   kind: AuthEmailKind;
   to: string;
   link?: string;
   template: AuthEmailTemplate;
-}) {
+}, dependencies: AuthEmailDependencies = { database: prisma, sendResend: sendResendEmail }) {
   const provider = configuredEmailProvider(process.env);
 
+  if (provider === "disabled") throw new Error("Transactional email delivery is disabled.");
   if (provider === "resend") {
-    assertResendPreviewDelivery({
+    assertResendAuthDelivery({
       apiKey: process.env.RESEND_API_KEY,
       environment: process.env,
       from: process.env.EMAIL_FROM,
@@ -54,18 +70,82 @@ export async function sendAuthEmail(input: {
       to: input.to,
     });
     if (input.link) assertLocalSiteUrl(input.link);
+    const idempotencyKey = input.idempotencyKey!;
+    const recipient = normalizeNotificationRecipient(input.to);
+    assertDatabaseConfigured();
+    const suppression = await dependencies.database.notificationSuppression.findUnique({
+      where: { channel_recipient: { channel: "EMAIL", recipient } },
+      select: { active: true },
+    });
+    if (suppression?.active) throw new Error("Transactional email recipient is suppressed.");
 
-    const client = new Resend(process.env.RESEND_API_KEY);
-    const result = await client.emails.send({
-      from: process.env.EMAIL_FROM!,
-      to: input.to,
-      replyTo: process.env.EMAIL_REPLY_TO!,
-      subject: input.template.subject,
-      text: input.template.text,
-      html: input.template.html,
-    }, input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined);
-    if (result.error || !result.data?.id) {
-      throw new Error("Transactional email delivery was not accepted.");
+    const providerEventId = authAuditEventId(idempotencyKey);
+    const audit = await dependencies.database.notificationEvent.upsert({
+      where: { providerEventId },
+      update: {},
+      create: {
+        providerEventId,
+        providerEventType: "auth.email.requested",
+        outcome: "PROCESSED",
+        code: authAuditCode(input.kind, "REQUESTED"),
+        occurredAt: new Date(),
+      },
+      select: { providerMessageId: true, code: true },
+    });
+    if (audit.providerMessageId && audit.code === authAuditCode(input.kind, "ACCEPTED")) return;
+    const now = new Date();
+    const staleSendingBefore = new Date(now.getTime() - 30_000);
+    const claimed = await dependencies.database.notificationEvent.updateMany({
+      where: {
+        providerEventId,
+        providerMessageId: null,
+        OR: [
+          { code: { in: [authAuditCode(input.kind, "REQUESTED"), authAuditCode(input.kind, "FAILED")] } },
+          { code: authAuditCode(input.kind, "SENDING"), occurredAt: { lte: staleSendingBefore } },
+        ],
+      },
+      data: {
+        providerEventType: "auth.email.sending",
+        outcome: "PROCESSED",
+        code: authAuditCode(input.kind, "SENDING"),
+        occurredAt: now,
+      },
+    });
+    if (claimed.count !== 1) return;
+
+    try {
+      const providerMessageId = await dependencies.sendResend({
+        apiKey: process.env.RESEND_API_KEY!,
+        idempotencyKey,
+        message: {
+          from: process.env.EMAIL_FROM!,
+          to: recipient,
+          replyTo: process.env.EMAIL_REPLY_TO!,
+          subject: input.template.subject,
+          text: input.template.text,
+          html: input.template.html,
+          tags: [
+            { name: "lnx_source", value: "auth" },
+            { name: "lnx_kind", value: input.kind.replaceAll("-", "_") },
+          ],
+        },
+      });
+      await dependencies.database.notificationEvent.update({
+        where: { providerEventId },
+        data: {
+          providerMessageId,
+          providerEventType: "auth.email.accepted",
+          outcome: "PROCESSED",
+          code: authAuditCode(input.kind, "ACCEPTED"),
+          occurredAt: new Date(),
+        },
+      });
+    } catch (error) {
+      await dependencies.database.notificationEvent.updateMany({
+        where: { providerEventId, providerMessageId: null },
+        data: { outcome: "REQUIRES_REVIEW", code: authAuditCode(input.kind, "FAILED"), occurredAt: new Date() },
+      });
+      throw error;
     }
     return;
   }

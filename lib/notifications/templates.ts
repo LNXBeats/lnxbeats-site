@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { NotificationConfiguration } from "@/lib/notifications/config";
+import { notificationDefinition, NOTIFICATION_PAYLOAD_VERSION, NOTIFICATION_TEMPLATE_VERSION } from "@/lib/notifications/domain";
 import type { NotificationTemplate, OrderNotificationMessage } from "@/lib/notifications/types";
 
 function escapeHtml(value: string) {
@@ -29,7 +30,7 @@ function canonicalOrigin(configuration: NotificationConfiguration) {
 }
 
 function resourceUrl(message: OrderNotificationMessage, configuration: NotificationConfiguration) {
-  const owner = message.kind === "OWNER_NEW_ORDER" || message.kind === "OWNER_RIGHTS_REQUESTED" || message.kind === "OWNER_RIGHTS_CLIENT_ACCEPTED" || message.kind === "OWNER_PAYMENT_INCIDENT";
+  const owner = notificationDefinition(message.kind).audience === "OWNER";
   const rightsReference = message.kind.includes("RIGHTS") ? message.payload.rightsRequestNumber : undefined;
   const pathname = rightsReference
     ? `${owner ? "/admin/droits/" : "/compte/droits/"}${encodeURIComponent(rightsReference)}`
@@ -118,6 +119,17 @@ function layout(input: {
 }
 
 export function orderNotificationTemplate(message: OrderNotificationMessage, configuration: NotificationConfiguration): NotificationTemplate {
+  const definition = notificationDefinition(message.kind);
+  if (
+    message.templateKey !== definition.templateKey
+    || message.templateVersion !== NOTIFICATION_TEMPLATE_VERSION
+    || message.payloadVersion !== NOTIFICATION_PAYLOAD_VERSION
+  ) {
+    throw new Error("Notification template version is not supported.");
+  }
+  if (message.deploymentEnvironment !== configuration.deploymentEnvironment) {
+    throw new Error("Notification template environment does not match the runtime.");
+  }
   const content = copy(message);
   const options = [message.payload.coverIncluded ? "Cover" : "", message.payload.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(", ") || "Aucune";
   const details = [

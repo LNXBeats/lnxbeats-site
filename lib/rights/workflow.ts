@@ -231,7 +231,7 @@ export async function requestRightsInformation(actor: OrderActor, requestNumber:
     });
     await transaction.rightsRequest.update({ where: { id: request.id }, data: { status: "INFORMATION_REQUIRED", needsInformationMessage: message } });
     await event(transaction, { requestId: request.id, type: "INFORMATION_REQUESTED", key: `rights:${request.id}:information:${created.id}`, actorId: actor.id, note: "Informations complémentaires demandées au client." });
-    await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_INFORMATION_REQUIRED", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:information:${created.id}:email` });
+    await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_INFORMATION_REQUIRED", recipient: request.owner.email, key: `rights:${request.id}:information:${created.id}:email` });
     return request.requestNumber;
   });
 }
@@ -263,7 +263,7 @@ export async function rejectRightsRequest(actor: OrderActor, requestNumber: stri
     }
     await transaction.rightsRequest.update({ where: { id: request.id }, data: { status: "REJECTED", rejectedAt: new Date(), rejectionReason: reason } });
     await event(transaction, { requestId: request.id, type: "REQUEST_REJECTED", key: `rights:${request.id}:rejected`, actorId: actor.id, note: "Demande non retenue. Le motif est communiqué au client." });
-    await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_REJECTED", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:rejected:email` });
+    await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_REJECTED", recipient: request.owner.email, key: `rights:${request.id}:rejected:email` });
     return request.requestNumber;
   });
 }
@@ -532,7 +532,7 @@ export async function generateRightsDocument(
       // rewriting the earlier row.
       if (kind === "CONTRACT" && legalTemplateApproved) {
         await transaction.rightsRequest.update({ where: { id: current.id }, data: { status: "CONTRACT_READY" } });
-        await notification(transaction, { request: current, kind: "CUSTOMER_RIGHTS_CONTRACT_READY", recipient: current.partySnapshots[0]?.contractEmail ?? current.owner.email, key: `rights:${current.id}:contract:${documentVersion}:email` });
+        await notification(transaction, { request: current, kind: "CUSTOMER_RIGHTS_CONTRACT_READY", recipient: current.owner.email, key: `rights:${current.id}:contract:${documentVersion}:email` });
       }
       await event(transaction, { requestId: current.id, type: currentPrevious ? "DOCUMENT_SUPERSEDED" : "DOCUMENT_GENERATED", key: `rights:${current.id}:${kind}:${documentVersion}`, actorId: actor.id, note: `${kind === "CONTRACT" ? "Projet de contrat" : "Fiche de préparation SACEM"} version ${documentVersion} généré ${legalTemplateApproved ? "pour revue client" : "en DRAFT filigrané"}, sans activation.` });
       return { duplicate: false as const, documentStatus };
@@ -695,7 +695,7 @@ export async function adminValidateRightsContract(actor: OrderActor, requestNumb
       await transaction.rightsRequest.update({ where: { id: request.id }, data: { status: "READY_FOR_PAYMENT", approvedAt: now } });
       await event(transaction, { requestId: request.id, type: "ADMIN_VALIDATED", key: `rights:${request.id}:document:${document.id}:admin-validated`, actorId: actor.id, note: "Double validation enregistrée. Aucun paiement ni droit actif n’est créé." });
       await event(transaction, { requestId: request.id, type: "READY_FOR_PAYMENT", key: `rights:${request.id}:ready-for-future-payment`, actorId: actor.id, note: "Dossier prêt pour une future étape de paiement, actuellement désactivée." });
-      await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_READY_FOR_PAYMENT", recipient: request.partySnapshots[0]?.contractEmail ?? request.owner.email, key: `rights:${request.id}:ready-for-payment:email` });
+      await notification(transaction, { request, kind: "CUSTOMER_RIGHTS_READY_FOR_PAYMENT", recipient: request.owner.email, key: `rights:${request.id}:ready-for-payment:email` });
     }
     return request.requestNumber;
   });

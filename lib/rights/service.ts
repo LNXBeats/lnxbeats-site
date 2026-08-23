@@ -44,7 +44,7 @@ export class RightsServiceError extends Error {
 }
 
 const requestInclude = {
-  order: { select: { id: true, orderNumber: true, userId: true, status: true } },
+  order: { select: { id: true, orderNumber: true, userId: true, status: true, customerEmail: true } },
   partySnapshots: { orderBy: { version: "desc" as const } },
   contributions: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
   grants: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
@@ -93,7 +93,7 @@ async function findRequestWithRelations(database: RightsReader, where: Prisma.Ri
   // sequence. Production keeps the same deterministic behavior.
   const order = await database.order.findUniqueOrThrow({
     where: { id: request.orderId },
-    select: { id: true, orderNumber: true, userId: true, status: true },
+    select: { id: true, orderNumber: true, userId: true, status: true, customerEmail: true },
   });
   const partySnapshots = await database.contractPartySnapshot.findMany({ where: { rightsRequestId: request.id }, orderBy: { version: "desc" } });
   const contributions = await database.rightsContribution.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ position: "asc" }, { id: "asc" }] });
@@ -579,7 +579,7 @@ export async function generatePreauthorization(
       await enqueueOrderNotification(transaction, {
         orderId: request.orderId,
         kind: "CUSTOMER_RIGHTS_PREAUTHORIZATION_READY",
-        recipient: request.partySnapshots[0]?.contractEmail ?? null,
+        recipient: request.order.customerEmail,
         idempotencyKey,
         resource: {
           type: "RIGHTS_REQUEST", id: request.id, reference: request.requestNumber,

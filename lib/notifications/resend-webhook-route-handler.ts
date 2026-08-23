@@ -2,10 +2,18 @@ import "server-only";
 
 import { Resend } from "resend";
 
-import { parseNotificationConfiguration } from "@/lib/notifications/config";
+import {
+  parseNotificationConfiguration,
+  type NotificationDeploymentEnvironment,
+} from "@/lib/notifications/config";
+import { normalizeNotificationRecipient } from "@/lib/notifications/domain";
 import { processVerifiedResendWebhookEvent, type VerifiedResendWebhookEvent } from "@/lib/notifications/resend-webhook";
 
 const MAXIMUM_BODY_BYTES = 256 * 1024;
+const MAXIMUM_EVENT_ID_LENGTH = 255;
+const MAXIMUM_PROVIDER_MESSAGE_ID_LENGTH = 255;
+const MAXIMUM_EVENT_TYPE_LENGTH = 80;
+const MAXIMUM_BOUNCE_SUBTYPE_LENGTH = 80;
 
 async function readBoundedBody(request: Request) {
   if (!request.body) return "";
@@ -25,26 +33,65 @@ async function readBoundedBody(request: Request) {
   return new TextDecoder("utf-8", { fatal: true }).decode(body);
 }
 
-function boundedHeader(request: Request, name: string) {
+function boundedHeader(request: Request, name: string, maximumLength: number) {
   const value = request.headers.get(name)?.trim() ?? "";
-  if (!value || value.length > 512 || /[\r\n]/.test(value)) throw new Error("Webhook signature is invalid.");
+  if (!value || value.length > maximumLength || /[\r\n]/.test(value)) throw new Error("Webhook signature is invalid.");
   return value;
 }
 
-function normalizeVerifiedPayload(providerEventId: string, value: unknown): VerifiedResendWebhookEvent {
+function boundedPayloadString(value: unknown, maximumLength: number) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw new Error("Webhook payload is invalid.");
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maximumLength || /[\r\n]/.test(normalized)) {
+    throw new Error("Webhook payload is invalid.");
+  }
+  return normalized;
+}
+
+function normalizeBounceType(value: unknown) {
+  return value === "Permanent" || value === "Transient" || value === "Undetermined" ? value : null;
+}
+
+function normalizeVerifiedPayload(
+  providerEventId: string,
+  value: unknown,
+  deploymentEnvironment: NotificationDeploymentEnvironment,
+): VerifiedResendWebhookEvent {
   if (!value || typeof value !== "object") throw new Error("Webhook payload is invalid.");
   const payload = value as Record<string, unknown>;
   const data = payload.data as Record<string, unknown> | undefined;
-  const type = typeof payload.type === "string" ? payload.type : "";
+  const bounce = data?.bounce && typeof data.bounce === "object" && !Array.isArray(data.bounce)
+    ? data.bounce as Record<string, unknown>
+    : null;
+  const type = boundedPayloadString(payload.type, MAXIMUM_EVENT_TYPE_LENGTH);
   const occurredAt = new Date(String(payload.created_at ?? ""));
   if (!type || Number.isNaN(occurredAt.getTime())) throw new Error("Webhook payload is invalid.");
-  const providerMessageId = typeof data?.email_id === "string"
-    ? data.email_id
-    : typeof data?.source_id === "string" ? data.source_id : null;
+  const providerMessageId = boundedPayloadString(
+    data?.email_id ?? data?.source_id,
+    MAXIMUM_PROVIDER_MESSAGE_ID_LENGTH,
+  );
   const recipients = Array.isArray(data?.to) ? data.to : [];
-  const recipient = typeof data?.email === "string" ? data.email : typeof recipients[0] === "string" ? recipients[0] : null;
+  const rawRecipient = data?.email ?? recipients[0] ?? null;
+  const recipient = rawRecipient === null ? null : normalizeNotificationRecipient(
+    boundedPayloadString(rawRecipient, 320),
+  );
   const suppressionOrigin = data?.origin === "bounce" || data?.origin === "complaint" || data?.origin === "manual" ? data.origin : null;
-  return { providerEventId, type, occurredAt, providerMessageId, recipient, suppressionOrigin };
+  const bounceSubType = boundedPayloadString(
+    bounce?.subType ?? bounce?.subtype,
+    MAXIMUM_BOUNCE_SUBTYPE_LENGTH,
+  );
+  return {
+    providerEventId,
+    type,
+    occurredAt,
+    providerMessageId,
+    recipient,
+    suppressionOrigin,
+    bounceType: normalizeBounceType(bounce?.type),
+    bounceSubType,
+    deploymentEnvironment,
+  };
 }
 
 export type ResendWebhookRouteDependencies = Readonly<{
@@ -52,30 +99,50 @@ export type ResendWebhookRouteDependencies = Readonly<{
   process(event: VerifiedResendWebhookEvent): Promise<{ outcome: string; duplicate: boolean }>;
 }>;
 
+export function verifyResendWebhookSignature(input: {
+  payload: string;
+  id: string;
+  timestamp: string;
+  signature: string;
+  secret: string;
+}) {
+  return new Resend().webhooks.verify({
+    payload: input.payload,
+    headers: { id: input.id, timestamp: input.timestamp, signature: input.signature },
+    webhookSecret: input.secret,
+  });
+}
+
 const dependencies: ResendWebhookRouteDependencies = {
-  verify(input) {
-    return new Resend().webhooks.verify({
-      payload: input.payload,
-      headers: { id: input.id, timestamp: input.timestamp, signature: input.signature },
-      webhookSecret: input.secret,
-    });
-  },
+  verify: verifyResendWebhookSignature,
   process: processVerifiedResendWebhookEvent,
 };
 
 export async function handleResendWebhookPost(request: Request, injected: ResendWebhookRouteDependencies = dependencies) {
+  let configuration;
+  try {
+    configuration = parseNotificationConfiguration();
+  } catch {
+    return Response.json({ ok: false }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+  if (!configuration.resendWebhookSecret) {
+    return Response.json({ ok: false }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+
   let event: VerifiedResendWebhookEvent;
   try {
-    const configuration = parseNotificationConfiguration();
-    if (configuration.emailTransport !== "resend" || !configuration.resendWebhookSecret) {
-      return Response.json({ ok: false }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    if (contentType !== "application/json") throw new Error("Webhook content type is invalid.");
+    const declaredLength = Number(request.headers.get("content-length") ?? "0");
+    if (Number.isFinite(declaredLength) && declaredLength > MAXIMUM_BODY_BYTES) {
+      throw Object.assign(new Error("Body too large."), { status: 413 });
     }
     const rawBody = await readBoundedBody(request);
-    const id = boundedHeader(request, "svix-id");
-    const timestamp = boundedHeader(request, "svix-timestamp");
-    const signature = boundedHeader(request, "svix-signature");
+    const id = boundedHeader(request, "svix-id", MAXIMUM_EVENT_ID_LENGTH);
+    const timestamp = boundedHeader(request, "svix-timestamp", 64);
+    const signature = boundedHeader(request, "svix-signature", 512);
     const verified = injected.verify({ payload: rawBody, id, timestamp, signature, secret: configuration.resendWebhookSecret });
-    event = normalizeVerifiedPayload(id, verified);
+    event = normalizeVerifiedPayload(id, verified, configuration.deploymentEnvironment);
   } catch (error) {
     const status = error && typeof error === "object" && "status" in error && error.status === 413 ? 413 : 400;
     return Response.json({ ok: false }, { status, headers: { "Cache-Control": "no-store" } });

@@ -85,7 +85,11 @@ L’Auth appelle une abstraction unique. Le transport `capture` écrit un fichie
 - l’identité exacte configurée par `ADMIN_EMAIL` dans la seule preview locale persistante explicitement gardée ;
 - cette même identité dans la base QA auth dédiée, pour tester le bootstrap.
 
-Le transport `resend` est limité à la preview personnelle persistante explicitement reconnue. Il exige la clé locale, l’expéditeur exact `LNX Beats <no-reply@email.lnxbeats.fr>`, l’adresse de réponse administrative et le destinataire propriétaire approuvé. Il refuse avant tout appel réseau :
+Le transport `resend` conserve les gardes strictes de la preview personnelle et peut être ouvert en production uniquement par le contrat V0.7.8. En production, `EMAIL_PROVIDER=resend` est obligatoire pour l'inscription, la vérification legacy et la récupération. Il partage les credentials et l'identité d'expéditeur Resend du système transactionnel, tout en restant un chemin direct afin qu'aucun OTP ou token ne soit persisté dans l'outbox métier.
+
+La production exige une origine `AUTH_URL` HTTPS, la confirmation notification exacte, les flags généraux cohérents, un domaine From et Reply-To contrôlé sous `lnxbeats.fr`, ainsi que des secrets présents dans le coffre. Elle refuse toute adresse `.invalid`, `.test`, `resend.dev`, tout expéditeur QA et toute combinaison incomplète. `NOTIFICATION_WORKER_ENABLED` ne pilote pas l'envoi Auth immédiat, mais le rollback doit désactiver explicitement les deux transports.
+
+La preview locale continue d'exiger la clé locale, l'expéditeur approuvé, l'adresse de réponse administrative et le destinataire propriétaire approuvé. Elle refuse avant tout appel réseau :
 
 - `NODE_ENV=test` ;
 - toute base dont la cible se termine par `-test` ;
@@ -94,6 +98,8 @@ Le transport `resend` est limité à la preview personnelle persistante explicit
 - une origine, une base, un expéditeur ou une adresse de réponse inattendus.
 
 Le domaine `email.lnxbeats.fr` doit rester vérifié côté Resend. L’envoi OTP fournit une clé d’idempotence liée à l’identifiant de tentative ; le rate limiting PostgreSQL et le verrouillage existants restent actifs. Une erreur ou une réponse sans identifiant d’acceptation invalide la tentative et produit uniquement une erreur publique générique. Aucun code, clé, cookie, preuve ou mot de passe n’est journalisé.
+
+Les liens de vérification legacy et de reset utilisent eux aussi une clé d'idempotence dérivée d'une empreinte non réversible du token. Le token brut n'entre jamais dans cette clé, un log, l'outbox ou un événement de diagnostic.
 
 Le sujet OTP est `Votre code LNX Beats`. Les versions HTML et texte contiennent seulement le code, son expiration de dix minutes et la consigne d’ignorer une demande non initiée, sans tracking, publicité, image distante ni lien externe.
 
@@ -158,7 +164,7 @@ La preview `lnx-studio-local-preview` est personnelle et persistante. Aucun scri
 
 `AUTH_SECRET`, `DATABASE_URL`, mots de passe, codes, preuves, cookies et URLs d’action complètes ne doivent jamais être committés ou journalisés. Le build sans base utilise uniquement le secret transitoire existant pendant `phase-production-build` ; tout runtime réel sans secret échoue fermé.
 
-Railway et sa base de production restent hors périmètre de cette validation locale. Aucun reset, bootstrap ou transport capture ne doit être exécuté sur ces services. L’activation future de Resend sur Railway exigera une validation dédiée de ses secrets et garde-fous ; elle n’est pas implicite dans la configuration de preview.
+Railway et sa base de production restent hors périmètre de cette validation locale. Aucun reset, bootstrap ou transport capture ne doit être exécuté sur ces services. L’activation de Resend sur Railway exige le preflight et la procédure humaine décrits dans [PRODUCTION_NOTIFICATIONS.md](PRODUCTION_NOTIFICATIONS.md) ; elle n’est jamais implicite dans la configuration de preview.
 
 ## SEO et accessibilité
 

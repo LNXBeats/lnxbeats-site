@@ -2,6 +2,7 @@ import "server-only";
 
 import { sendAuthEmail } from "@/lib/email/auth-email";
 import { registrationCodeEmailTemplate, resetPasswordEmailTemplate } from "@/lib/email/templates";
+import { authEmailIdempotencyKey } from "@/lib/email/provider-policy";
 
 export async function sendRegistrationCodeEmail(input: { email: string; code: string; idempotencyKey: string }) {
   await sendAuthEmail({
@@ -23,6 +24,7 @@ export async function sendPasswordResetEmail(input: { email: string; url: string
   link.hash = `token=${encodeURIComponent(token)}`;
 
   await sendAuthEmail({
+    idempotencyKey: authEmailIdempotencyKey("password-reset", token),
     kind: "password-reset",
     to: input.email,
     link: link.toString(),

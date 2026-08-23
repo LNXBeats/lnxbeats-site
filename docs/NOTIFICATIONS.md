@@ -6,9 +6,9 @@ V0.7.3 étend l’outbox PostgreSQL existante. Elle ne crée pas de seconde sour
 
 - `EMAIL` : `disabled`, `capture` ou `resend`.
 - `SMS` : `disabled` ou `capture`. Aucun SDK, crédit ou envoi SMS réel n’est activé.
-- Development utilise `capture` par défaut. Staging Resend exige une confirmation serveur explicite. Production reste refusée par le parseur V0.7.3.
+- Development utilise `capture` par défaut. Staging Resend exige une confirmation serveur explicite et conserve son allowlist. Production reste fermée par défaut et exige la confirmation V0.7.8, le worker explicitement activé et l'ensemble du contrat de configuration décrit dans [PRODUCTION_NOTIFICATIONS.md](PRODUCTION_NOTIFICATIONS.md).
 
-Les services métier créent uniquement une ligne d’outbox versionnée. Le worker `npm run notifications:dispatch` réclame au plus 25 lignes, construit le rendu déterministe et appelle l’unique abstraction de transport. La route interne `POST /api/internal/notifications/dispatch` exige un bearer secret d’au moins 32 caractères ; aucun cron Railway n’est configuré.
+Les services métier créent uniquement une ligne d’outbox versionnée. Le worker `npm run notifications:dispatch` réclame au plus 25 lignes, construit le rendu déterministe et appelle l’unique abstraction de transport. La route interne `POST /api/internal/notifications/dispatch` exige un bearer secret d’au moins 32 caractères et `NOTIFICATION_WORKER_ENABLED=true` ; la présence de la route ou du secret ne suffit pas à activer le worker. Aucun cron Railway n’est configuré par le code.
 
 ## Événements utiles
 
@@ -23,10 +23,14 @@ Les e-mails droits ne disent jamais qu’un contrat DRAFT ou qu’un droit est a
 - HTML sans JavaScript ni ressource distante obligatoire, avec équivalent texte ;
 - destinataires masqués dans l’Admin ;
 - une adresse `.invalid`/`.test` est refusée par Resend ;
-- `EMAIL_OWNER_RECIPIENT` est serveur uniquement ;
+- `EMAIL_OWNER_RECIPIENT` est serveur uniquement et aucun fallback personnel n'est hardcodé ;
+- les notifications client utilisent l'adresse vérifiée du compte ou de l'Order, pas une adresse contractuelle non vérifiée ;
+- une ligne d'outbox d'un autre environnement n'est pas dispatchée ;
 - aucun e-mail n’est une preuve métier.
 
 La vue `/admin/notifications` affiche les statuts humains, tentatives, erreurs assainies et ressources. Un retry manuel réutilise la même notification logique et reste interdit après livraison ou suppression du destinataire.
+
+Les codes et tokens Auth ne sont jamais ajoutés à cette outbox. Leur adaptateur dédié doit néanmoins utiliser Resend et les gardes de production communes lorsqu'il est activé. Le rollback, les incidents et l'ordre d'activation sont documentés dans [NOTIFICATION_RUNBOOK.md](NOTIFICATION_RUNBOOK.md).
 
 ## Harness Resend staging
 

@@ -12,6 +12,7 @@ export type NotificationConfiguration = Readonly<{
   ownerEmailEnabled: boolean;
   clientEmailEnabled: boolean;
   smsEnabled: boolean;
+  workerEnabled: boolean;
   emailConfigured: boolean;
   workerConfigured: boolean;
   webhookConfigured: boolean;
@@ -28,6 +29,8 @@ export type NotificationConfiguration = Readonly<{
 
 const DEFAULT_CAPTURE_PATH = "/private/tmp/lnx-studio-v073-notifications.jsonl";
 const STAGING_CONFIRMATION = "resend-staging-approved";
+export const NOTIFICATION_PRODUCTION_CONFIRMATION = "I_UNDERSTAND_THIS_ENABLES_PRODUCTION_EMAILS";
+export const RESEND_API_BASE_URL = "https://api.resend.com";
 
 function optional(environment: Record<string, string | undefined>, name: string) {
   return environment[name]?.trim() || null;
@@ -61,6 +64,26 @@ function sender(value: string | null) {
     throw new Error("EMAIL_FROM is invalid.");
   }
   return value;
+}
+
+function senderAddress(value: string) {
+  const match = value.match(/^[^<>\r\n]+ <([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)>$/);
+  if (!match?.[1]) throw new Error("EMAIL_FROM is invalid.");
+  return match[1].toLowerCase();
+}
+
+function senderDisplayName(value: string) {
+  return value.slice(0, value.indexOf("<")).trim();
+}
+
+export function isLnxProductionEmailAddress(value: string) {
+  const domain = value.toLowerCase().split("@").at(-1) ?? "";
+  return domain === "lnxbeats.fr" || domain.endsWith(".lnxbeats.fr");
+}
+
+function isProductionHostname(value: string) {
+  const hostname = new URL(value).hostname.toLowerCase();
+  return hostname === "lnxbeats.fr" || hostname.endsWith(".lnxbeats.fr");
 }
 
 function canonicalUrl(value: string | null) {
@@ -99,6 +122,7 @@ export function parseNotificationConfiguration(
   const ownerEmailEnabled = flag(optional(environment, "OWNER_EMAIL_NOTIFICATIONS_ENABLED"), emailTransport === "capture", "OWNER_EMAIL_NOTIFICATIONS_ENABLED");
   const clientEmailEnabled = flag(optional(environment, "CLIENT_EMAIL_NOTIFICATIONS_ENABLED"), emailTransport === "capture", "CLIENT_EMAIL_NOTIFICATIONS_ENABLED");
   const smsEnabled = flag(optional(environment, "SMS_NOTIFICATIONS_ENABLED"), false, "SMS_NOTIFICATIONS_ENABLED");
+  const workerEnabled = flag(optional(environment, "NOTIFICATION_WORKER_ENABLED"), false, "NOTIFICATION_WORKER_ENABLED");
   const emailFrom = sender(optional(environment, "EMAIL_FROM"));
   const emailReplyTo = email(optional(environment, "EMAIL_REPLY_TO"), "EMAIL_REPLY_TO");
   const ownerRecipient = email(optional(environment, "EMAIL_OWNER_RECIPIENT"), "EMAIL_OWNER_RECIPIENT");
@@ -111,10 +135,14 @@ export function parseNotificationConfiguration(
   const resendApiKey = optional(environment, "RESEND_API_KEY");
   const resendWebhookSecret = optional(environment, "RESEND_WEBHOOK_SECRET");
   const workerSecret = optional(environment, "NOTIFICATION_WORKER_SECRET");
+  const railwayEnvironment = (optional(environment, "RAILWAY_ENVIRONMENT_NAME") ?? optional(environment, "RAILWAY_ENVIRONMENT"))?.toLowerCase() ?? null;
+  const configuredResendBaseUrl = optional(environment, "RESEND_BASE_URL");
 
-  if (deploymentEnvironment === "production" && (emailTransport !== "disabled" || emailEnabled || ownerEmailEnabled || clientEmailEnabled || smsEnabled)) {
-    throw new Error("Production notifications remain disabled in V0.7.3.");
+  if (railwayEnvironment && ["staging", "production"].includes(deploymentEnvironment) && railwayEnvironment !== deploymentEnvironment) {
+    throw new Error("Notification and Railway deployment environments do not match.");
   }
+  if (deploymentEnvironment === "production" && emailTransport === "capture") throw new Error("Capture email is forbidden in production.");
+  if (deploymentEnvironment === "production" && smsTransport !== "disabled") throw new Error("SMS transport is disabled in production.");
   if (smsEnabled && smsTransport === "disabled") throw new Error("SMS notifications require a configured transport.");
   if (emailTransport === "disabled" && (emailEnabled || ownerEmailEnabled || clientEmailEnabled)) {
     throw new Error("Email flags cannot enable a disabled transport.");
@@ -122,15 +150,36 @@ export function parseNotificationConfiguration(
   if ((ownerEmailEnabled || clientEmailEnabled) && !emailEnabled) {
     throw new Error("Recipient email flags require email notifications to be enabled.");
   }
+  if (workerEnabled && !emailEnabled) throw new Error("The notification worker requires email notifications to be enabled.");
+  if (workerEnabled && (!workerSecret || workerSecret.length < 32)) throw new Error("Notification worker configuration is incomplete.");
   if (emailTransport === "resend") {
-    if (deploymentEnvironment !== "staging" || environment.NOTIFICATION_STAGING_CONFIRM !== STAGING_CONFIRMATION) {
-      throw new Error("Resend requires an explicitly confirmed staging environment.");
+    const stagingConfirmed = deploymentEnvironment === "staging" && environment.NOTIFICATION_STAGING_CONFIRM === STAGING_CONFIRMATION;
+    const productionConfirmed = deploymentEnvironment === "production"
+      && environment.NOTIFICATION_PRODUCTION_CONFIRM === NOTIFICATION_PRODUCTION_CONFIRMATION;
+    if (!stagingConfirmed && !productionConfirmed) {
+      throw new Error("Resend requires an explicitly confirmed deployment environment.");
     }
     if (!resendApiKey?.startsWith("re_") || !resendWebhookSecret?.startsWith("whsec_") || !emailFrom || !emailReplyTo || !appCanonicalUrl) {
-      throw new Error("Resend staging configuration is incomplete.");
+      throw new Error("Resend configuration is incomplete.");
     }
     if (ownerEmailEnabled && !ownerRecipient) throw new Error("Owner email notifications require a recipient.");
     if (workerSecret !== null && workerSecret.length < 32) throw new Error("Notification worker secret is too short.");
+    if (configuredResendBaseUrl && configuredResendBaseUrl !== RESEND_API_BASE_URL) throw new Error("RESEND_BASE_URL is not approved.");
+    if (deploymentEnvironment === "production") {
+      if (!isProductionHostname(appCanonicalUrl)) throw new Error("Production notification links require the LNX Beats canonical domain.");
+      if (!["LNX Beats", "LNX Studio"].includes(senderDisplayName(emailFrom))) {
+        throw new Error("Production email display name is not approved.");
+      }
+      if (!isLnxProductionEmailAddress(senderAddress(emailFrom)) || !isLnxProductionEmailAddress(emailReplyTo)) {
+        throw new Error("Production From and Reply-To addresses require the LNX Beats domain.");
+      }
+      if (ownerRecipient && (ownerRecipient.endsWith(".invalid") || ownerRecipient.endsWith(".test") || ownerRecipient.endsWith("@resend.dev"))) {
+        throw new Error("Production owner recipient is not valid.");
+      }
+      if (stagingRecipientAllowlist.length > 0 || environment.NOTIFICATION_STAGING_CONFIRM || environment.NOTIFICATION_STAGING_QA_CONFIRM || environment.NOTIFICATION_OWNER_SMOKE_TEST_CONFIRM) {
+        throw new Error("Staging notification controls are forbidden in production.");
+      }
+    }
   }
 
   const emailConfigured = emailTransport === "capture"
@@ -143,6 +192,7 @@ export function parseNotificationConfiguration(
     ownerEmailEnabled,
     clientEmailEnabled,
     smsEnabled,
+    workerEnabled,
     emailConfigured,
     workerConfigured: Boolean(workerSecret && workerSecret.length >= 32),
     webhookConfigured: Boolean(resendWebhookSecret?.startsWith("whsec_")),
@@ -161,9 +211,14 @@ export function parseNotificationConfiguration(
 export function notificationHealthSummary(configuration: NotificationConfiguration) {
   return {
     emailTransport: configuration.emailTransport,
+    emailEnabled: configuration.emailEnabled,
+    ownerEmailEnabled: configuration.ownerEmailEnabled,
+    clientEmailEnabled: configuration.clientEmailEnabled,
     emailConfigured: configuration.emailConfigured,
     smsTransport: configuration.smsTransport,
+    workerEnabled: configuration.workerEnabled,
     workerConfigured: configuration.workerConfigured,
+    webhookConfigured: configuration.webhookConfigured,
   } as const;
 }
 

@@ -54,6 +54,7 @@
     "test:security": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/security/*.test.ts",
     "notifications:dispatch": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-dispatch.ts",
     "notifications:check": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-check.ts",
+    "notifications:preflight": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-preflight.ts",
     "test:notification:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-notifications-runtime.ts",
     "test:payment:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-payment-runtime.ts",
     "test:refund:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-refund-runtime.ts",
