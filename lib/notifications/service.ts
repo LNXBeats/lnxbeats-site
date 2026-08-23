@@ -503,7 +503,12 @@ export function globalNotificationDispatchWhere(now: Date, deploymentEnvironment
   };
 }
 
-export async function dispatchPendingOrderNotifications(limit = 10) {
+export async function dispatchPendingOrderNotifications(
+  limit = 10,
+  dependencies: Readonly<{
+    dispatch(id: string): Promise<{ delivered: boolean; skipped: boolean }>;
+  }> = { dispatch: dispatchOrderNotification },
+) {
   assertDatabaseConfigured();
   const configuration = parseNotificationConfiguration();
   if (!configuration.emailEnabled || !configuration.workerEnabled) throw new Error("Notification worker is disabled.");
@@ -518,7 +523,7 @@ export async function dispatchPendingOrderNotifications(limit = 10) {
   let failed = 0;
   let skipped = 0;
   for (const notification of pending) {
-    const result = await dispatchOrderNotification(notification.id);
+    const result = await dependencies.dispatch(notification.id);
     if (result.skipped) skipped += 1;
     else if (result.delivered) delivered += 1;
     else failed += 1;

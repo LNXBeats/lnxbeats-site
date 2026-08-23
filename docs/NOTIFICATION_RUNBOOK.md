@@ -21,6 +21,14 @@ Le diagnostic courant, également read-only, reste :
 npm run notifications:check
 ```
 
+Le scheduler automatique possède un preflight séparé :
+
+```text
+npm run notifications:scheduler:preflight
+```
+
+Le runbook complet — absence de tick, overlap, backlog, leases, mauvaise configuration et rollback — est dans [NOTIFICATION_SCHEDULER.md](NOTIFICATION_SCHEDULER.md). Un tick sain toutes les cinq minutes doit produire un événement `notification.scheduler.completed`; l'absence de succès pendant 15 minutes exige une intervention.
+
 ## 1. Provider indisponible
 
 **Signaux** : timeouts, 429/5xx, notifications `FAILED_RETRYABLE`, augmentation du backlog.

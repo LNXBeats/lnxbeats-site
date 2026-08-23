@@ -30,6 +30,7 @@ export type NotificationConfiguration = Readonly<{
 const DEFAULT_CAPTURE_PATH = "/private/tmp/lnx-studio-v073-notifications.jsonl";
 const STAGING_CONFIRMATION = "resend-staging-approved";
 export const NOTIFICATION_PRODUCTION_CONFIRMATION = "I_UNDERSTAND_THIS_ENABLES_PRODUCTION_EMAILS";
+export const NOTIFICATION_SCHEDULER_MODE = "railway-cron";
 export const RESEND_API_BASE_URL = "https://api.resend.com";
 
 function optional(environment: Record<string, string | undefined>, name: string) {

@@ -27,6 +27,7 @@ const productionEnvironment = {
   OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true",
   CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "true",
   NOTIFICATION_WORKER_ENABLED: "true",
+  NOTIFICATION_SCHEDULER_MODE: "railway-cron",
   SMS_TRANSPORT: "disabled",
   SMS_NOTIFICATIONS_ENABLED: "false",
   NOTIFICATION_PRODUCTION_CONFIRM: NOTIFICATION_PRODUCTION_CONFIRMATION,
@@ -89,6 +90,7 @@ test("la configuration production exige un armement complet et cohérent", () =>
   assert.equal(configuration.webhookConfigured, true);
 
   const requiredMutations: Array<[string, string | undefined]> = [
+    ["NOTIFICATION_SCHEDULER_MODE", undefined],
     ["NOTIFICATION_PRODUCTION_CONFIRM", undefined],
     ["EMAIL_NOTIFICATIONS_ENABLED", "false"],
     ["NOTIFICATION_WORKER_SECRET", "short"],
@@ -99,7 +101,12 @@ test("la configuration production exige un armement complet et cohérent", () =>
     ["RAILWAY_ENVIRONMENT_NAME", "staging"],
   ];
   for (const [name, value] of requiredMutations) {
-    assert.throws(() => parseNotificationConfiguration({ ...productionEnvironment, [name]: value }), name);
+    if (name === "NOTIFICATION_SCHEDULER_MODE") {
+      const rules = evaluateProductionNotificationEnvironment({ ...productionEnvironment, [name]: value });
+      assert.equal(rules.find((rule) => rule.name === "scheduler.mode.railwayCron")?.passed, false, name);
+    } else {
+      assert.throws(() => parseNotificationConfiguration({ ...productionEnvironment, [name]: value }), name);
+    }
   }
   assert.throws(() => parseNotificationConfiguration({
     ...productionEnvironment,

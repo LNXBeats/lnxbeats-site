@@ -15,6 +15,7 @@ Le site public cible `https://lnxbeats.fr` et reste préparé pour un hébergeme
 - Stripe Checkout Sessions via `stripe` 22.5.0, API `2026-07-29.dahlia`, désactivé par défaut
 - stockage média local en développement et objet S3-compatible en production
 - Better Auth avec sessions en base et mots de passe Argon2id
+- outbox transactionnelle avec scheduler Railway Cron borné et désactivé par défaut
 - Node.js 20.19, 22.12 ou 24+
 
 ## Prérequis
@@ -62,7 +63,10 @@ npm run test:checkout
 npm run test:notification
 npm run test:contracts
 npm run test:security
+npm run notifications:scheduler:preflight
 ```
+
+Le scheduler de notifications V0.7.9 est documenté dans [docs/NOTIFICATION_SCHEDULER.md](docs/NOTIFICATION_SCHEDULER.md). Il n'est jamais lancé dans le process Next.js et son service Railway reste à créer/activer humainement.
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
 

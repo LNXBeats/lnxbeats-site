@@ -1,6 +1,6 @@
 import "server-only";
 
-import { NOTIFICATION_PRODUCTION_CONFIRMATION, parseNotificationConfiguration, RESEND_API_BASE_URL } from "@/lib/notifications/config";
+import { NOTIFICATION_PRODUCTION_CONFIRMATION, NOTIFICATION_SCHEDULER_MODE, parseNotificationConfiguration, RESEND_API_BASE_URL } from "@/lib/notifications/config";
 import { isFictitiousRecipient } from "@/lib/notifications/domain";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
@@ -33,6 +33,7 @@ export function evaluateProductionNotificationEnvironment(
     { name: "email.owner.enabled", passed: flag(environment.OWNER_EMAIL_NOTIFICATIONS_ENABLED) },
     { name: "email.client.enabled", passed: flag(environment.CLIENT_EMAIL_NOTIFICATIONS_ENABLED) },
     { name: "worker.enabled", passed: flag(environment.NOTIFICATION_WORKER_ENABLED) },
+    { name: "scheduler.mode.railwayCron", passed: environment.NOTIFICATION_SCHEDULER_MODE?.trim().toLowerCase() === NOTIFICATION_SCHEDULER_MODE },
     { name: "sms.disabled", passed: environment.SMS_TRANSPORT?.trim().toLowerCase() === "disabled" && !flag(environment.SMS_NOTIFICATIONS_ENABLED) },
     { name: "production.confirmed", passed: environment.NOTIFICATION_PRODUCTION_CONFIRM === NOTIFICATION_PRODUCTION_CONFIRMATION },
     { name: "resend.apiKey.present", passed: present(environment.RESEND_API_KEY, "re_") },
