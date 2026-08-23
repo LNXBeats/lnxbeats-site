@@ -120,6 +120,12 @@ Les e-mails ne contiennent aucun pixel, paramètre UTM ni ressource distante obl
 
 Le worker traite un lot borné et ne s'exécute que si `NOTIFICATION_WORKER_ENABLED=true`, après authentification par `NOTIFICATION_WORKER_SECRET`. Un verrou PostgreSQL et une lease empêchent deux workers de réclamer simultanément la même ligne. Une lease expirée est récupérable après crash.
 
+### Déclenchement automatique
+
+Le dépôt fournit la commande `npm run notifications:dispatch` et la route interne protégée `POST /api/internal/notifications/dispatch`, mais ne configure aucun cron, scheduler Railway ni service worker permanent. `NOTIFICATION_WORKER_ENABLED=true` autorise un déclenchement ; il ne le planifie pas.
+
+Le gate opérationnel reste donc : `PRODUCTION GATE — WORKER SCHEDULER REQUIRED`. Avant toute activation production, un humain doit choisir et documenter un déclenchement borné de la route interne ou de la commande CLI, protéger le secret, éviter les cadences concurrentes et valider le monitoring ainsi que le rollback. Aucun scheduler n'est créé par V0.7.8.
+
 La stratégie bornée est : 5 minutes, 30 minutes, 2 heures puis 6 heures, avec cinq claims maximum. Le cinquième échec devient final et ne planifie pas un délai supplémentaire. Sont retryables : timeout, erreur réseau, 429 et 5xx. Sont finaux : adresse invalide, configuration invalide, destinataire absent, suppression active, complaint et requête fournisseur invalide.
 
 Un retry technique conserve la même notification logique et la même clé d'idempotence. Le retry Admin est limité aux statuts `FAILED_RETRYABLE`, exige une confirmation explicite et reste interdit après livraison, complaint ou suppression, ainsi qu'après épuisement du maximum.
@@ -131,6 +137,19 @@ L'endpoint Resend lit un corps brut borné, exige les en-têtes Svix, vérifie l
 Un hard bounce active une suppression locale. Une complaint est un signal fort et active également une suppression. Les prochaines notifications vers cette adresse sont bloquées; le compte utilisateur n'est pas désactivé automatiquement. Un événement inconnu, une destination incohérente ou un `providerMessageId` non corrélé exige une revue sans envoyer de nouveau message.
 
 Les soft bounces ne doivent pas être inventés lorsque le payload Resend ne fournit pas une distinction fiable. Une panne de webhook répond en erreur après authentification afin que le fournisseur puisse retenter.
+
+## Preuves QA staging du 23 août 2026
+
+La QA humaine staging V0.7.8 a validé le transport propriétaire et le webhook réels avec les destinations officielles Resend :
+
+- `delivered` : une notification `OWNER_NEW_ORDER`, une tentative, statut final livré après webhook et aucun doublon ;
+- `bounced` : statut adresse rejetée et suppression locale activée ;
+- `complained` : complaint reçue et suppression locale activée ;
+- destination déjà supprimée : claim refusé avant transport et aucun nouvel appel Resend ;
+- client QA `.invalid` avec audience client désactivée : échec local final, aucun appel Resend ;
+- isolation : staging ne réclame que staging, production ne réclame que production et les lignes legacy `development` restent ignorées.
+
+Le diagnostic staging final a indiqué `pending=0`, `retryable=0` et `foreignEnvironment=0`. Ces preuves ne valident ni un domaine, ni un expéditeur, ni un webhook, ni un scheduler de production.
 
 ## Observabilité Admin
 

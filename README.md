@@ -144,10 +144,11 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 | `EMAIL_FROM` | Expéditeur appartenant au domaine transactionnel vérifié | Non |
 | `EMAIL_REPLY_TO` | Adresse de réponse humaine des messages transactionnels | Non |
 | `AUTH_EMAIL_CAPTURE_PATH` | Fichier local de capture QA, hors dépôt | Non |
-| `NOTIFICATION_EMAIL_TRANSPORT` / `NOTIFICATION_DEPLOYMENT_ENV` | `capture`, `resend` staging confirmé ou `disabled` ; production fermée en V0.7.3 | Non |
+| `NOTIFICATION_EMAIL_TRANSPORT` / `NOTIFICATION_DEPLOYMENT_ENV` | `capture`, `resend` explicitement confirmé ou `disabled` ; production V0.7.8 fail-closed | Non |
 | `EMAIL_NOTIFICATIONS_ENABLED` / `OWNER_EMAIL_NOTIFICATIONS_ENABLED` / `CLIENT_EMAIL_NOTIFICATIONS_ENABLED` | Flags serveur de l’outbox transactionnelle | Non |
 | `EMAIL_OWNER_RECIPIENT` / `APP_CANONICAL_URL` | Destination propriétaire et origine des liens, serveur uniquement | Oui / Non |
-| `RESEND_WEBHOOK_SECRET` / `NOTIFICATION_WORKER_SECRET` | Signature du webhook et protection du dispatcher interne | Oui |
+| `NOTIFICATION_WORKER_ENABLED` / `NOTIFICATION_PRODUCTION_CONFIRM` | Armement explicite du worker et confirmation non secrète de l’environnement production | Non |
+| `RESEND_WEBHOOK_SECRET` / `NOTIFICATION_WORKER_SECRET` | Signature du webhook et protection du dispatcher interne ; aucun scheduler n’est créé par le dépôt | Oui |
 | `NOTIFICATION_CAPTURE_PATH` | Capture QA mode 0600, hors dépôt | Non |
 | `SMS_TRANSPORT` / `SMS_NOTIFICATIONS_ENABLED` | `disabled` ou capture seulement ; aucun SMS réel | Non |
 | `PAYMENTS_ENABLED` | Garde globale ; `false` dans la fondation et tant que la QA sandbox n’est pas validée | Non |
