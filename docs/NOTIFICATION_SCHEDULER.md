@@ -110,7 +110,15 @@ Le secret worker reste exigé par le parseur partagé, même si le Cron direct n
 
 La création du scénario ne déclenche ni transport, ni dispatcher, ni fournisseur. Sa notification `OWNER_NEW_ORDER` est volontairement éligible au dispatcher global, contrairement au smoke historique `qa:owner-smoke:v0732:01`. Le premier appel crée une ligne `PENDING`; tout rappel retourne la même ligne sans modifier son statut, ses tentatives ou sa disponibilité. La preuve doit obligatoirement provenir d'un Cron Railway automatique, jamais de la route de dispatch manuel.
 
-Aucun e-mail réel n'est envoyé pendant l'implémentation V0.7.9.
+### Preuve humaine staging du 23 août 2026
+
+Le Scheduled Job staging séparé a été validé humainement avec `/railway.scheduler.toml`, la commande `npm run notifications:scheduler:run` et le Cron UTC `*/5 * * * *`. Avant armement, plusieurs ticks automatiques ont terminé `outcome=disabled`, `claimed=0` et sans appel fournisseur.
+
+Le preflight armé uniquement pour son processus a validé le mode, l'environnement, le worker, le transport, le secret, le SMS désactivé, la configuration, les tables et les indexes. L'inventaire avant création indiquait `pending=0`, `retryable=0`, `expiredLeases=0` et `foreignEnvironment=0`; les 24 événements `requiresReview` provenaient des QA historiques et ne constituaient pas un backlog claimable.
+
+La fixture one-shot `qa:scheduler:v079:delivered:01` a ensuite été créée une fois avec le statut `PENDING`. Le premier Cron armé a traité exactement une ligne (`claimed=1`, `delivered=1`, `failed=0`, `skipped=0`, `durationMs=404`). Le Cron suivant a confirmé l'idempotence avec `claimed=0`. Le webhook Resend a finalement porté la notification à `DELIVERED`, avec `attempts=1`, un identifiant fournisseur présent et les événements `email.sent` puis `email.delivered`. Aucune suppression, aucun échec et aucun doublon n'ont été observés.
+
+Le Safe Reset humain final a remis le worker, le transport et toutes les audiences à l'état désactivé : `NOTIFICATION_EMAIL_TRANSPORT=disabled`, `NOTIFICATION_WORKER_ENABLED=false`, les trois flags e-mail à `false`, `EMAIL_PROVIDER=capture`, ainsi que le transport et le flag SMS désactivés. Les confirmations staging temporaires et `EMAIL_OWNER_RECIPIENT` ont été retirées du service web ; `PAYMENTS_ENABLED` a été restauré à `true`. Plusieurs ticks postérieurs ont de nouveau terminé `outcome=disabled` et `claimed=0`. L'état final observé contenait `pending=0`, `retryable=0`, `expiredLeases=0`, `foreignEnvironment=0`, aucune destination propriétaire configurée et aucune suppression issue de cette fixture. Cette preuve ferme le gate technique staging du scheduler, pas les gates de production.
 
 ## Observabilité et détection d'un worker stale
 

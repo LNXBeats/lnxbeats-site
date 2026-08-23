@@ -29,6 +29,8 @@ npm run notifications:scheduler:preflight
 
 Le runbook complet — absence de tick, overlap, backlog, leases, mauvaise configuration et rollback — est dans [NOTIFICATION_SCHEDULER.md](NOTIFICATION_SCHEDULER.md). Un tick sain toutes les cinq minutes doit produire un événement `notification.scheduler.completed`; l'absence de succès pendant 15 minutes exige une intervention.
 
+La QA staging humaine du 23 août 2026 a validé un seul traitement de la fixture scheduler (`claimed=1`, `attempts=1`, webhook `DELIVERED`), puis un Cron anti-doublon à `claimed=0`. Le Safe Reset a été vérifié sur plusieurs ticks `disabled`, avec `pending=0`, `retryable=0`, aucune lease expirée et aucun environnement étranger. Cette preuve ne remplace pas le preflight ni le smoke test explicitement autorisé d'un futur environnement production.
+
 ## 1. Provider indisponible
 
 **Signaux** : timeouts, 429/5xx, notifications `FAILED_RETRYABLE`, augmentation du backlog.

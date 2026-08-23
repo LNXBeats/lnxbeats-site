@@ -6,7 +6,7 @@ V0.7.8 prépare techniquement les notifications transactionnelles de production 
 
 La mise en production reste une décision humaine distincte. Elle exige le preflight, la validation staging, la configuration du worker et du webhook dans l'environnement d'exécution, puis une validation opérateur. V0.7.8 ne modifie ni Railway, ni Resend, ni DNS et n'envoie aucun e-mail réel pendant l'implémentation automatisée.
 
-V0.7.9 prépare le déclenchement automatique sous forme d'un Scheduled Job Railway séparé, toutes les cinq minutes, avec un seul lot de 25 par tick. La commande, les gardes et le preflight sont prêts ; la création du service Railway reste une action humaine non réalisée. Le détail est dans [NOTIFICATION_SCHEDULER.md](NOTIFICATION_SCHEDULER.md).
+V0.7.9 prépare le déclenchement automatique sous forme d'un Scheduled Job Railway séparé, toutes les cinq minutes, avec un seul lot de 25 par tick. Le staging a été validé humainement le 23 août 2026 : un premier Cron armé a réclamé la fixture one-shot, le suivant n'a rien réclamé, le webhook l'a confirmée `DELIVERED`, puis le scheduler a été remis à l'état désactivé. La création et la validation du service Railway **production** restent des actions humaines non réalisées. Le détail est dans [NOTIFICATION_SCHEDULER.md](NOTIFICATION_SCHEDULER.md).
 
 Les messages couverts sont strictement transactionnels. Newsletter, prospection, promotion, SMS réel et préférences marketing sont hors périmètre.
 

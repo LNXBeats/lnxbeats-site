@@ -66,7 +66,7 @@ npm run test:security
 npm run notifications:scheduler:preflight
 ```
 
-Le scheduler de notifications V0.7.9 est documenté dans [docs/NOTIFICATION_SCHEDULER.md](docs/NOTIFICATION_SCHEDULER.md). Il n'est jamais lancé dans le process Next.js et son service Railway reste à créer/activer humainement.
+Le scheduler de notifications V0.7.9 est documenté dans [docs/NOTIFICATION_SCHEDULER.md](docs/NOTIFICATION_SCHEDULER.md). Il n'est jamais lancé dans le process Next.js. Son Scheduled Job staging a été validé humainement puis remis à l'état désactivé ; le service et l'activation production restent à créer et valider humainement.
 
 La validation d’intégration PostgreSQL s’exécute uniquement contre une base locale jetable, vide et déjà migrée. Elle refuse toute URL qui ne cible pas explicitement une adresse de boucle locale, un port non standard et le nom de base attendu :
 
