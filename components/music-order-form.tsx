@@ -552,7 +552,7 @@ export function MusicOrderForm({
               </>
             ) : paymentProviders.stripe || paymentProviders.paypal ? (
               <div className="order-checkout-panel">
-                <p>Vous allez quitter temporairement LNX Studio pour le provider sandbox choisi. Le retour navigateur ne confirme jamais seul le paiement.</p>
+                <p>Vous allez quitter temporairement LNX Studio pour le prestataire de paiement choisi. Le retour navigateur ne confirme jamais seul le paiement.</p>
                 <PaymentCheckoutActions orderNumber={finalizedOrder.orderNumber} amountCents={finalizedOrder.totalCents} providers={paymentProviders} />
               </div>
             ) : (

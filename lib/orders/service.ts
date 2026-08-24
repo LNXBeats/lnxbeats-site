@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import type { Prisma } from "@/generated/prisma/client";
+import type { Order, Prisma } from "@/generated/prisma/client";
 
 import { orderOffer } from "@/data/order-offer";
 import {
@@ -25,6 +25,7 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { canReadOrderMedia } from "@/lib/media/authorization";
 import { personalUseTermsSnapshot } from "@/lib/rights/domain";
 import { ORDER_DELIVERY_MIME_TYPES } from "@/lib/orders/audio-request";
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 
 export class OrderServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -64,6 +65,26 @@ const orderInclude = {
 
 type OrderWithRelations = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 type Transaction = Prisma.TransactionClient;
+
+async function loadTransactionalOrderRelations(transaction: Transaction, order: Order): Promise<OrderWithRelations> {
+  const [events, assets, payments] = await runSequentialDatabaseQueries(
+    () => transaction.orderEvent.findMany({
+      where: { orderId: order.id, visibility: "CLIENT" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    }),
+    () => transaction.orderAsset.findMany({
+      where: { orderId: order.id, role: { in: ["REFERENCE", "DELIVERY"] } },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      include: { asset: true },
+    }),
+    () => transaction.payment.findMany({
+      where: { orderId: order.id },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: orderInclude.payments.select,
+    }),
+  );
+  return { ...order, events, assets, payments } as OrderWithRelations;
+}
 
 function optional(value: string) {
   return value || null;
@@ -308,9 +329,8 @@ export async function createDraftOrder(actor: OrderActor, input: OrderDraftInput
           },
         },
       },
-      include: orderInclude,
     });
-    return serializeOrder(order);
+    return serializeOrder(await loadTransactionalOrderRelations(transaction, order));
   });
 }
 
@@ -323,9 +343,8 @@ export async function saveDraftOrder(actor: OrderActor, orderNumber: string, inp
     });
     if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     await assertOrderEditableForPayment(transaction, current);
-    await transaction.order.update({ where: { id: current.id }, data: dataFromInput(input) });
-    const order = await transaction.order.findUniqueOrThrow({ where: { id: current.id }, include: orderInclude });
-    return serializeOrder(order);
+    const order = await transaction.order.update({ where: { id: current.id }, data: dataFromInput(input) });
+    return serializeOrder(await loadTransactionalOrderRelations(transaction, order));
   });
 }
 
@@ -343,7 +362,7 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
     }
     const submittedAt = new Date();
     const terms = personalUseTermsSnapshot();
-    await transaction.order.update({
+    const order = await transaction.order.update({
       where: { id: draft.id },
       data: {
         ...dataFromInput(input),
@@ -368,8 +387,7 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
         },
       });
     }
-    const order = await transaction.order.findUniqueOrThrow({ where: { id: draft.id }, include: orderInclude });
-    return serializeOrder(order);
+    return serializeOrder(await loadTransactionalOrderRelations(transaction, order));
   });
 }
 

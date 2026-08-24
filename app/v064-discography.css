@@ -5,11 +5,15 @@
   isolation: isolate;
   overflow: clip;
   min-height: min(900px, calc(100svh - 1rem));
-  padding-block: clamp(1.75rem, 3.4vw, 3.5rem) clamp(4rem, 7vw, 7rem);
+  padding-block: clamp(1.75rem, 3.4vw, 3.5rem) clamp(1.75rem, 3vw, 3rem);
   background:
     radial-gradient(circle at 50% 35%, rgba(198, 161, 91, .11), transparent 34rem),
     radial-gradient(circle at 7% 52%, rgba(111, 75, 38, .08), transparent 26rem),
     #080808;
+}
+
+main:has(> .v064-discography-stage) + .site-footer {
+  padding-top: clamp(3rem, 5vw, 5rem);
 }
 
 .v064-discography-stage::before {
@@ -421,7 +425,7 @@
 }
 
 @media (max-width: 700px) {
-  .v064-discography-stage { min-height: 0; padding-block: 1.5rem 4rem; }
+  .v064-discography-stage { min-height: 0; padding-block: 1.5rem 2.5rem; }
   .v064-discography-container { max-width: 100%; padding-inline: 0; }
 
   .discography-jukebox.home-jukebox {

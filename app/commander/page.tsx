@@ -61,7 +61,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             <p>Vous n’avez pas besoin d’apporter des paroles finales. Racontez les personnes, la scène et ce que la musique devra préserver.</p>
             <p>Préparez le brief librement, puis connectez-vous pour l’enregistrer. Le parcours reprend après l’authentification sans placer votre histoire dans l’URL.</p>
             <p>La demande initiale reste personnelle et son total ne dépasse pas 90 €. Une extension d’exploitation séparée ne peut être envisagée qu’après livraison.</p>
-            <p>Le paiement sandbox s’ouvre uniquement après le récapitulatif, chez le provider activé. Le serveur reste la seule source du montant et de la confirmation.</p>
+            <p>Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible. Le serveur reste la seule source du montant et de la confirmation.</p>
           </div>
         </Container>
       </section>
@@ -83,7 +83,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
               <li>Traitement prioritaire : +30 €</li>
               <li>Total maximum de la création : 90 €</li>
               <li>Droits d’exploitation exclus de cette première commande</li>
-              <li>{paymentProviders.stripe || paymentProviders.paypal ? "Paiement sandbox sécurisé selon les moyens activés" : "Paiement fermé dans cet environnement"}</li>
+              <li>{paymentProviders.stripe || paymentProviders.paypal ? "Paiement sécurisé selon les moyens disponibles" : "Paiement fermé dans cet environnement"}</li>
             </ul>
             <p className="order-aside__note">Après livraison, une demande distincte pourra ouvrir un échange sur les droits d’exploitation, selon contrat spécifique.</p>
           </aside>

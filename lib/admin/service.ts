@@ -14,6 +14,7 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deletePrivateOrderFile } from "@/lib/orders/storage";
 import { ORDER_DELIVERY_MIME_TYPES } from "@/lib/orders/audio-request";
 import { MAXIMUM_ORDER_DELIVERIES } from "@/lib/orders/delivery";
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -320,11 +321,11 @@ export async function transitionOrderStatus(orderNumber: string, requestedStatus
       }
     }
     if (transition.to === "DELIVERED") {
-      const [deliveries, validDeliveries] = await Promise.all([
-        transaction.orderAsset.count({
+      const [deliveries, validDeliveries] = await runSequentialDatabaseQueries(
+        () => transaction.orderAsset.count({
           where: { orderId: order.id, role: "DELIVERY" },
         }),
-        transaction.orderAsset.count({
+        () => transaction.orderAsset.count({
           where: {
             orderId: order.id,
             role: "DELIVERY",
@@ -335,7 +336,7 @@ export async function transitionOrderStatus(orderNumber: string, requestedStatus
             },
           },
         }),
-      ]);
+      );
       if (deliveries < 1 || deliveries > MAXIMUM_ORDER_DELIVERIES || validDeliveries !== deliveries) {
         throw new AdminServiceError("Au moins un livrable privé valide est requis avant la publication.", "DELIVERY_REQUIRED");
       }
@@ -398,19 +399,19 @@ export async function deleteEligibleAdminOrder(orderNumber: string) {
   const storageKeys = await withOrderLock(orderNumber, async (transaction) => {
     const order = await transaction.order.findUnique({
       where: { orderNumber },
-      include: {
-        events: { select: { toStatus: true } },
-        assets: { include: { asset: true } },
-        commercialLicenses: { select: { id: true } },
-        rightsRequests: { select: { id: true } },
-        payments: { select: { id: true } },
-      },
     });
     if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");
-    const eligibility = getOrderDeletionEligibility(order);
+    const [events, assets, commercialLicenses, rightsRequests, payments] = await runSequentialDatabaseQueries(
+      () => transaction.orderEvent.findMany({ where: { orderId: order.id }, select: { toStatus: true } }),
+      () => transaction.orderAsset.findMany({ where: { orderId: order.id }, include: { asset: true } }),
+      () => transaction.commercialLicense.findMany({ where: { orderId: order.id }, select: { id: true } }),
+      () => transaction.rightsRequest.findMany({ where: { orderId: order.id }, select: { id: true } }),
+      () => transaction.payment.findMany({ where: { orderId: order.id }, select: { id: true } }),
+    );
+    const eligibility = getOrderDeletionEligibility({ ...order, events, assets, commercialLicenses, rightsRequests, payments });
     if (!eligibility.eligible) throw new AdminServiceError(eligibility.reason, "ORDER_DELETE_FORBIDDEN");
 
-    const assetIds = order.assets.map(({ assetId }) => assetId);
+    const assetIds = assets.map(({ assetId }) => assetId);
     await transaction.orderAsset.deleteMany({ where: { orderId: order.id } });
     await transaction.orderEvent.deleteMany({ where: { orderId: order.id } });
     await transaction.order.delete({ where: { id: order.id } });

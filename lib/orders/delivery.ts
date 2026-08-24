@@ -11,6 +11,7 @@ import { canReadOrderMedia } from "@/lib/media/authorization";
 import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
 import { MediaStorageError } from "@/lib/media/storage/types";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/storage";
 import { orderOffer } from "@/data/order-offer";
 
@@ -143,25 +144,25 @@ async function withDeliveryOrderLock<T>(
 async function paidOrderForDelivery(transaction: Transaction, orderNumber: string, requireCapacity = true) {
   const order = await transaction.order.findUnique({
     where: { orderNumber },
-    include: {
-      payments: {
-        where: { status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] } },
-        select: { id: true },
-      },
-      assets: {
-        where: { role: "DELIVERY" },
-        include: { asset: true },
-      },
-    },
   });
   if (!order) throw new OrderDeliveryError("Commande introuvable.", 404, "ORDER_NOT_FOUND");
-  if (!orderAcceptsDeliveryUpload(order.status, order.payments.length > 0)) {
+  const [successfulPayments, assets] = await runSequentialDatabaseQueries(
+    () => transaction.payment.count({
+      where: { orderId: order.id, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] } },
+    }),
+    () => transaction.orderAsset.findMany({
+      where: { orderId: order.id, role: "DELIVERY" },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      include: { asset: true },
+    }),
+  );
+  if (!orderAcceptsDeliveryUpload(order.status, successfulPayments > 0)) {
     throw new OrderDeliveryError("Une livraison exige une commande payée encore en cours.", 409, "ORDER_NOT_DELIVERABLE");
   }
-  if (requireCapacity && order.assets.length >= MAXIMUM_ORDER_DELIVERIES) {
+  if (requireCapacity && assets.length >= MAXIMUM_ORDER_DELIVERIES) {
     throw new OrderDeliveryError("Cette commande contient déjà le maximum de huit livrables.", 409, "DELIVERY_LIMIT_REACHED");
   }
-  return order;
+  return { ...order, assets };
 }
 
 async function prepareOrderDelivery(orderNumber: string) {

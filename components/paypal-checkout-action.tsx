@@ -39,7 +39,7 @@ export function PaypalCheckoutAction({
       }
       if (!response.ok || typeof body?.approvalUrl !== "string") {
         const code = typeof body?.code === "string" ? body.code : "";
-        throw new Error(messages[code] ?? "PayPal Sandbox est momentanément indisponible. Votre commande reste enregistrée.");
+        throw new Error(messages[code] ?? "PayPal est momentanément indisponible. Votre commande reste enregistrée.");
       }
       const approvalUrl = new URL(body.approvalUrl);
       const allowed = approvalUrl.protocol === "https:"
@@ -47,7 +47,7 @@ export function PaypalCheckoutAction({
       if (!allowed) throw new Error("La redirection PayPal est invalide.");
       window.location.assign(approvalUrl.toString());
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "PayPal Sandbox est momentanément indisponible.");
+      setMessage(error instanceof Error ? error.message : "PayPal est momentanément indisponible.");
       setPending(false);
     }
   }
@@ -57,7 +57,7 @@ export function PaypalCheckoutAction({
       <button className="form-button" type="button" onClick={startCheckout} disabled={pending}>
         {pending ? "Préparation PayPal…" : `Payer ${formatEuro(amountCents)} avec PayPal`}
       </button>
-      <small>PayPal Sandbox · le montant reste calculé par LNX Studio.</small>
+      <small>Paiement sécurisé hébergé par PayPal · le montant reste calculé par LNX Studio.</small>
       {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}
     </div>
   );

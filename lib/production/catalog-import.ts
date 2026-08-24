@@ -1,7 +1,17 @@
 import "server-only";
 
-import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import type {
+  Asset,
+  ConfidenceAnnotation,
+  Credit,
+  PlatformLink,
+  PrismaClient,
+  Project,
+  ProjectAsset,
+  Track,
+} from "@/generated/prisma/client";
 import * as legacy from "@/lib/catalog/legacy";
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import {
   CATALOG_PRODUCTION_CONFIRMATION,
   ProductionBootstrapError,
@@ -11,16 +21,14 @@ import {
 
 type Environment = Record<string, string | undefined>;
 
-const include = {
-  tracks: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
-  platformLinks: { where: { scope: { in: ["RELEASE" as const, "STORE" as const] } }, orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
-  credits: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
-  confidenceAnnotations: true,
-  assets: { where: { role: "COVER" as const }, take: 1, include: { asset: true } },
-} satisfies Prisma.ProjectInclude;
-
-type CatalogDatabase = Pick<PrismaClient, "project">;
-type IncludedProject = Prisma.ProjectGetPayload<{ include: typeof include }>;
+type CatalogDatabase = Pick<PrismaClient, "project" | "track" | "platformLink" | "credit" | "confidenceAnnotation" | "projectAsset">;
+type IncludedProject = Project & {
+  tracks: Track[];
+  platformLinks: PlatformLink[];
+  credits: Credit[];
+  confidenceAnnotations: ConfidenceAnnotation[];
+  assets: Array<ProjectAsset & { asset: Asset }>;
+};
 
 export type CatalogImportPlan = {
   sourceVersion: string;
@@ -79,6 +87,26 @@ export function canonicalCatalogRecords() {
   return projects.map((project, index) => ({ project, record: legacy.legacyProjectRecord(project, index) }));
 }
 
+async function findCatalogProject(database: CatalogDatabase, slug: string): Promise<IncludedProject | null> {
+  const project = await database.project.findUnique({ where: { slug } });
+  if (!project) return null;
+  const [tracks, platformLinks, credits, confidenceAnnotations, assets] = await runSequentialDatabaseQueries(
+    () => database.track.findMany({ where: { projectId: project.id }, orderBy: [{ position: "asc" }, { id: "asc" }] }),
+    () => database.platformLink.findMany({
+      where: { projectId: project.id, scope: { in: ["RELEASE", "STORE"] } },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+    }),
+    () => database.credit.findMany({ where: { projectId: project.id }, orderBy: [{ position: "asc" }, { id: "asc" }] }),
+    () => database.confidenceAnnotation.findMany({ where: { projectId: project.id } }),
+    () => database.projectAsset.findMany({
+      where: { projectId: project.id, role: "COVER" },
+      take: 1,
+      include: { asset: true },
+    }),
+  );
+  return { ...project, tracks, platformLinks, credits, confidenceAnnotations, assets } as IncludedProject;
+}
+
 async function inspectCatalog(database: CatalogDatabase): Promise<CatalogImportPlan> {
   const source = canonicalCatalogRecords();
   const sourceSlugs = new Set(source.map(({ project }) => project.slug));
@@ -88,7 +116,7 @@ async function inspectCatalog(database: CatalogDatabase): Promise<CatalogImportP
   const conflicts: string[] = [];
 
   for (const { project, record } of source) {
-    const existing = await database.project.findUnique({ where: { slug: project.slug }, include });
+    const existing = await findCatalogProject(database, project.slug);
     if (!existing) {
       creates.push(project.slug);
       continue;

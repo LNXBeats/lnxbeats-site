@@ -2930,7 +2930,10 @@ main { position: relative; isolation: isolate; }
 .about-teaser__image { min-height: 720px; border-radius: var(--radius-md); }
 .about-teaser__image img { object-position: 48% center; }
 
-.editorial-break { background: var(--paper); color: #171512; }
+.editorial-break {
+  background: linear-gradient(180deg, #ddd2c0 0, var(--paper) 12%, var(--paper) 88%, #ddd2c0 100%);
+  color: #171512;
+}
 .editorial-break .content-columns__label { color: #72552e; }
 .editorial-break .editorial-copy p { color: #575147; }
 .editorial-break .editorial-copy > p:first-child { color: #171512; }
@@ -2967,7 +2970,7 @@ main { position: relative; isolation: isolate; }
 .contact-panel { overflow: hidden; border-radius: var(--radius-md); background: linear-gradient(145deg, #191612, #0f0e0d); }
 
 .shop-grid { gap: 1rem; }
-.shop-card { min-height: 560px; overflow: hidden; border-radius: var(--radius-md); }
+.shop-card { overflow: hidden; border-radius: var(--radius-md); }
 .shop-card:first-child { background: linear-gradient(145deg, #1a1712, #0d0c0b); }
 .shop-card:last-child { background: linear-gradient(145deg, #2a1718, #0d0c0b 68%); }
 

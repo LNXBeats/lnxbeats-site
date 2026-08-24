@@ -181,6 +181,14 @@ test("the desktop CSS uses 3D transforms while reduced motion keeps the catalogu
   assert.match(css, /\.discography-jukebox \.home-jukebox__item \{ transform: none !important; \}/);
 });
 
+test("discography keeps premium breathing room without the former double footer gap", async () => {
+  const css = await readFile(new URL("../../app/v064-discography.css", import.meta.url), "utf8");
+  assert.match(css, /padding-block: clamp\(1\.75rem, 3\.4vw, 3\.5rem\) clamp\(1\.75rem, 3vw, 3rem\);/);
+  assert.match(css, /main:has\(> \.v064-discography-stage\) \+ \.site-footer \{[\s\S]*?padding-top: clamp\(3rem, 5vw, 5rem\);/);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?padding-block: 1\.5rem 2\.5rem;/);
+  assert.doesNotMatch(css, /clamp\(4rem, 7vw, 7rem\)/);
+});
+
 test("the publication migration is additive and preserves the existing public catalogue", async () => {
   const sql = await readFile(new URL("../../prisma/migrations/20260812143000_project_publication_controls/migration.sql", import.meta.url), "utf8");
   assert.match(sql, /ADD COLUMN "publicVisible" BOOLEAN NOT NULL DEFAULT true/);

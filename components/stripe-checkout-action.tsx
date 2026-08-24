@@ -42,13 +42,13 @@ export function StripeCheckoutAction({
       }
       if (!response.ok || typeof body?.checkoutUrl !== "string") {
         const code = typeof body?.code === "string" ? body.code : "";
-        throw new Error(checkoutMessages[code] ?? "Stripe Test est momentanément indisponible. Votre commande reste enregistrée.");
+        throw new Error(checkoutMessages[code] ?? "Stripe est momentanément indisponible. Votre commande reste enregistrée.");
       }
       const checkoutUrl = new URL(body.checkoutUrl);
       if (checkoutUrl.protocol !== "https:") throw new Error("La redirection de paiement est invalide.");
       window.location.assign(checkoutUrl.toString());
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Stripe Test est momentanément indisponible. Votre commande reste enregistrée.");
+      setMessage(error instanceof Error ? error.message : "Stripe est momentanément indisponible. Votre commande reste enregistrée.");
       setPending(false);
     }
   }
@@ -58,7 +58,7 @@ export function StripeCheckoutAction({
       <button className="form-button form-button--primary" type="button" onClick={startCheckout} disabled={pending}>
         {pending ? "Préparation sécurisée…" : `Payer ${formatEuro(amountCents)}`}
       </button>
-      <small>Paiement hébergé par Stripe · environnement Test · aucune donnée carte saisie sur LNX.</small>
+      <small>Paiement sécurisé hébergé par Stripe · aucune donnée de carte saisie sur LNX Studio.</small>
       {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}
     </div>
   );

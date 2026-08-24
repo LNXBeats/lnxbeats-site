@@ -213,14 +213,15 @@ async function run() {
     await assert.rejects(prisma.order.update({ where: { id: stored.id }, data: { totalCents: 1 } }));
     passed.push("internal notes hidden and SQL checks enforced");
 
-    const concurrentUsers = await prisma.$transaction(async (transaction) => Promise.all(
-      Array.from({ length: 6 }, (_, index) => transaction.user.create({
+    const concurrentUsers = [];
+    for (let index = 0; index < 6; index += 1) {
+      concurrentUsers.push(await prisma.user.create({
         data: {
           email: `lnx-v060-concurrent-${index}@example.invalid`, displayName: `Concurrent ${index}`,
           emailVerified: true, emailVerifiedAt: new Date(), status: "ACTIVE", role: "MEMBER",
         },
-      })),
-    ));
+      }));
+    }
     const concurrentOrders = await Promise.all(concurrentUsers.map((user) => createDraftOrder(actor(user), baseInput)));
     assert.equal(new Set(concurrentOrders.map((order) => order.orderNumber)).size, concurrentOrders.length);
     passed.push("concurrent order numbers unique");

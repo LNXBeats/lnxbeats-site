@@ -107,10 +107,8 @@ async function run() {
   assert.equal(await prisma.project.count(), 0);
   const catalogApply = await applyProductionCatalogImport(prisma, productionEnvironment);
   assert.deepEqual(catalogApply, { created: 25, skipped: 0, sourceProjects: 25 });
-  const catalogSecond = await planProductionCatalogImport(prisma, productionEnvironment);
-  assert.equal(catalogSecond.creates.length, 0);
-  assert.equal(catalogSecond.skips.length, 25);
-  assert.equal(catalogSecond.conflicts.length, 0);
+  const catalogSecond = await applyProductionCatalogImport(prisma, productionEnvironment);
+  assert.deepEqual(catalogSecond, { created: 0, skipped: 25, sourceProjects: 25 });
 
   const objects = new Map<string, string>();
   let puts = 0;

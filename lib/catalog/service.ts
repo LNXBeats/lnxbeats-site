@@ -5,6 +5,7 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deleteMediaObject } from "@/lib/media/storage";
 import { getCatalogDeletionEligibility, parseCatalogSlug } from "@/lib/catalog/lifecycle";
 import { platformLabelOverride } from "@/lib/catalog/platform-label";
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import {
   boundedInteger, optionalText, parseConfidence, parseDate, parseHttpsUrl, parsePlatform,
   parseCreditRole, parseJukeboxPlacement, parseProjectStatus, parseProjectType, parseTrackStatus, requiredText,
@@ -162,17 +163,19 @@ export async function deleteCatalogProject(projectId: string, rawConfirmation: u
       where: { id: projectId },
       select: {
         id: true, slug: true, featured: true, publicVisible: true, status: true,
-        tracks: { select: { id: true } },
-        assets: { select: { assetId: true } },
       },
     });
     if (!project) throw new CatalogLifecycleError("Projet introuvable.", "PROJECT_NOT_FOUND");
+    const [tracks, assets] = await runSequentialDatabaseQueries(
+      () => transaction.track.findMany({ where: { projectId }, select: { id: true } }),
+      () => transaction.projectAsset.findMany({ where: { projectId }, select: { assetId: true } }),
+    );
     if (confirmation !== project.slug) throw new CatalogLifecycleError("La confirmation ne correspond pas au slug.", "CONFIRMATION_INVALID");
     const eligibility = getCatalogDeletionEligibility(project);
     if (!eligibility.eligible) throw new CatalogLifecycleError(eligibility.reason, "DELETE_FORBIDDEN");
 
-    const trackIds = project.tracks.map(({ id }) => id);
-    const assetIds = [...new Set(project.assets.map(({ assetId }) => assetId))];
+    const trackIds = tracks.map(({ id }) => id);
+    const assetIds = [...new Set(assets.map(({ assetId }) => assetId))];
     await transaction.credit.deleteMany({ where: { OR: [{ projectId }, ...(trackIds.length ? [{ trackId: { in: trackIds } }] : [])] } });
     await transaction.platformLink.deleteMany({ where: { projectId } });
     await transaction.confidenceAnnotation.deleteMany({ where: { projectId } });

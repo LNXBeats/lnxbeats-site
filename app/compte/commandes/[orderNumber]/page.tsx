@@ -128,7 +128,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           <aside className="order-detail__price" aria-label="Prix de la demande">
             <span>Total de la création</span><strong>{formatEuro(order.totalCents)}</strong>
             <p>{order.usage === "PERSONAL" ? "Usage personnel" : "Ancien snapshot commercial V0.6 — à régulariser"}</p>
-            <small>Version tarifaire {order.pricingVersion} · les providers restent limités aux environnements sandbox contrôlés.</small>
+            <small>Version tarifaire {order.pricingVersion} · le montant et son statut sont contrôlés par LNX Studio.</small>
           </aside>
         </div>
 
