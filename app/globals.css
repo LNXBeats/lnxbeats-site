@@ -265,8 +265,10 @@ a {
 
 .menu-button {
   display: none;
-  width: 48px;
+  width: auto;
+  min-width: 76px;
   min-height: 48px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
   gap: 0.7rem;
@@ -288,6 +290,7 @@ a {
   display: block;
   width: 22px;
   height: 14px;
+  flex: 0 0 22px;
 }
 
 .menu-button__icon span {
@@ -341,13 +344,6 @@ a {
   font-size: clamp(1.25rem, 6vw, 2rem);
   font-weight: 500;
   letter-spacing: -0.035em;
-}
-
-.mobile-navigation nav a span {
-  color: var(--gold);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
 }
 
 .mobile-navigation__inner > p {
@@ -2761,7 +2757,12 @@ main { position: relative; isolation: isolate; }
 @media (max-width: 700px) {
   .home-hero, .home-hero__inner { min-height: min(700px, 78svh); }
   .home-featured__heading { align-items: start; flex-direction: column; }
-  .home-perspectives__grid { grid-template-columns: 1fr; }.home-perspective { min-height: 0; }.home-perspective h3 { margin-top: 1.8rem; }
+  .home-perspectives__grid { grid-template-columns: 1fr; }
+  .home-perspective { min-height: 0; }
+  .home-perspective > span { display: none; }
+  .home-perspective h3 { margin-top: 0; }
+  .shop-card { justify-content: flex-end; }
+  .shop-card__index { display: none; }
   .home-jukebox { margin-top: 1.5rem; }.home-jukebox__scene { min-height: 0; padding-bottom: 3.35rem; }.home-jukebox__rail { display: flex; height: auto; padding-inline: 12vw; overflow-x: auto; }.home-jukebox__item { position: relative; top: auto; left: auto; width: auto; height: auto; flex: 0 0 76vw; visibility: visible !important; pointer-events: auto; transform: none !important; opacity: .58; will-change: auto !important; }.home-jukebox__item.is-active { opacity: 1; }.home-jukebox__item.is-previous, .home-jukebox__item.is-next { opacity: .72; }.home-jukebox__item.is-far-previous, .home-jukebox__item.is-far-next { opacity: .48; }
   .home-jukebox__arrow { --jukebox-arrow-line-width: 24px; --jukebox-arrow-vertical: 0%; top: auto; bottom: 0; width: calc(72px + .55rem); transform: translateY(var(--jukebox-arrow-vertical)); }.home-jukebox__arrow--previous { right: auto; left: 1.25rem; }.home-jukebox__arrow--next { right: 1.25rem; left: auto; }
   .home-jukebox__navigation-hint { margin-top: .65rem; }.home-jukebox__navigation-hint span:first-child { display: none; }.home-jukebox__navigation-hint span:last-child { display: inline; }

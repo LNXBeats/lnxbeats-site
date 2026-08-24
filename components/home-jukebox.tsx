@@ -49,11 +49,11 @@ type ProjectJukeboxProps = {
   eager?: boolean;
 };
 
-const filterOptions: ReadonlyArray<{ value: DiscographyFilter; label: string }> = [
+const filterOptions: ReadonlyArray<{ value: DiscographyFilter; label: string; mobileLabel?: string }> = [
   { value: "all", label: "Tous" },
   { value: "albums", label: "Albums" },
   { value: "singles", label: "Singles" },
-  { value: "development", label: "Projets en développement" },
+  { value: "development", label: "Projets en développement", mobileLabel: "En développement" },
 ];
 
 const sortOptions: ReadonlyArray<{ value: DiscographySort; label: string }> = [
@@ -334,7 +334,10 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     <div className="home-jukebox__background" aria-hidden="true" />
     <div className="home-jukebox__heading">
       <div><p className="section-index">{eyebrow}</p><h1 id={regionId}>{heading}</h1></div>
-      <output aria-live="polite" aria-atomic="true"><span className="visually-hidden">Projet actif : {active.title}. </span>{currentVisibleIndex + 1} / {visibleProjects.length}</output>
+      <output aria-live="polite" aria-atomic="true">
+        <span className="visually-hidden">Projet actif : {active.title}. </span>
+        <span className="home-jukebox__counter">{currentVisibleIndex + 1} / {visibleProjects.length}</span>
+      </output>
     </div>
 
     <div className="discography-jukebox__toolbar">
@@ -342,11 +345,14 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
         {filterOptions.map((option) => <button
           type="button"
           key={option.value}
+          aria-label={`${option.label} · ${counts[option.value]} projet${counts[option.value] > 1 ? "s" : ""}`}
           aria-pressed={filter === option.value}
           disabled={counts[option.value] === 0}
           onClick={() => applyFilter(option.value)}
         >
-          <span>{option.label}</span><strong>{counts[option.value]}</strong>
+          <span className="discography-jukebox__filter-label discography-jukebox__filter-label--desktop">{option.label}</span>
+          <span className="discography-jukebox__filter-label discography-jukebox__filter-label--mobile" aria-hidden="true">{option.mobileLabel ?? option.label}</span>
+          <strong aria-hidden="true">{counts[option.value]}</strong>
         </button>)}
       </div>
       <label className="discography-jukebox__sort">
@@ -366,7 +372,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
           const preloadCover = Math.abs(distance) <= 1;
           const outsideScene = Math.abs(distance) > 2;
           const globalIndex = globalIndexBySlug.get(project.slug) ?? 0;
-          const artwork = <ProjectArtwork project={project} priority={eager && preloadCover} sizes="(max-width: 700px) 78vw, (max-width: 1000px) 42vw, 430px" className="discography-card__artwork" />;
+          const artwork = <ProjectArtwork project={project} priority={eager && preloadCover} sizes="(max-width: 700px) 86vw, (max-width: 1000px) 42vw, 430px" className="discography-card__artwork" />;
 
           return <li className={`home-jukebox__item ${position}`} data-project-index={globalIndex} aria-hidden={outsideScene || undefined} tabIndex={distance === 0 ? -1 : undefined} key={project.slug}>
             <article className="discography-card" data-active={distance === 0 || undefined} aria-current={distance === 0 ? "true" : undefined}>

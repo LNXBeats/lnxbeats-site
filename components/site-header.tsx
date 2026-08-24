@@ -121,7 +121,6 @@ export function SiteHeader() {
                   menuButtonRef.current?.focus();
                 }}
               >
-                <span>{String(index + 1).padStart(2, "0")}</span>
                 {item.label}
               </Link>
             ))}
@@ -135,7 +134,6 @@ export function SiteHeader() {
                 menuButtonRef.current?.focus();
               }}
             >
-              <span>{String(navigation.length + 1).padStart(2, "0")}</span>
               Compte
             </Link>
           </nav>
