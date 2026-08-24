@@ -13,7 +13,7 @@ Ce document prépare le déploiement sans l’exécuter. Aucun domaine, DNS ou e
 - stockage média objet obligatoire (`MEDIA_STORAGE_DRIVER=s3`) avec deux buckets distincts ;
 - `PORT` fourni automatiquement par Railway.
 
-Le fichier `railway.toml` sélectionne Railpack, le start command et le healthcheck.
+Le fichier racine `railway.toml` sélectionne uniquement Railpack. Il ne définit aucun bloc `[deploy]` : le dépôt alimente à la fois le service web et le Cron notifications, dont les commandes et healthchecks doivent rester indépendants. Dans Railway, configurer explicitement le service web avec `npm start`, le pre-deploy `npx prisma migrate deploy`, le healthcheck `/api/health` (timeout 300 secondes) et la politique `ON_FAILURE` avec 10 retries. Le Cron ne doit hériter d'aucun healthcheck ou pre-deploy.
 
 ## Vérification avant déploiement
 

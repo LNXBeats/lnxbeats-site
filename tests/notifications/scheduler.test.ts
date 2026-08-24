@@ -79,9 +79,47 @@ test("worker désactivé termine en no-op sans réclamer ni contacter un provide
     CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
     NOTIFICATION_EMAIL_TRANSPORT: "disabled",
   }, current.dependencies);
-  assert.equal(result.exitCode, 0);
-  assert.equal(result.outcome, "disabled");
-  assert.equal(result.claimed, 0);
+  assert.deepEqual(result, {
+    exitCode: 0,
+    outcome: "disabled",
+    environment: "staging",
+    claimed: 0,
+    delivered: 0,
+    failed: 0,
+    skipped: 0,
+    durationMs: 5,
+  });
+  assert.equal(calls, 0);
+});
+
+test("le premier tick Production désarmé quitte à zéro sans dispatch ni provider", async () => {
+  let calls = 0;
+  const current = harness(async () => {
+    calls += 1;
+    return { claimed: 1, delivered: 1, failed: 0, skipped: 0 };
+  });
+  const result = await runNotificationSchedulerTick({
+    NODE_ENV: "production",
+    NOTIFICATION_DEPLOYMENT_ENV: "production",
+    NOTIFICATION_EMAIL_TRANSPORT: "disabled",
+    EMAIL_NOTIFICATIONS_ENABLED: "false",
+    OWNER_EMAIL_NOTIFICATIONS_ENABLED: "false",
+    CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
+    NOTIFICATION_WORKER_ENABLED: "false",
+    NOTIFICATION_SCHEDULER_MODE: "disabled",
+    SMS_TRANSPORT: "disabled",
+    SMS_NOTIFICATIONS_ENABLED: "false",
+  }, current.dependencies);
+  assert.deepEqual(result, {
+    exitCode: 0,
+    outcome: "disabled",
+    environment: "production",
+    claimed: 0,
+    delivered: 0,
+    failed: 0,
+    skipped: 0,
+    durationMs: 5,
+  });
   assert.equal(calls, 0);
 });
 
@@ -186,10 +224,32 @@ test("le preflight PostgreSQL est read-only et rapporte l'outbox sans réclamer"
   assert.equal("update" in (database.orderNotification as object), false);
 });
 
-test("la configuration Railway dédiée lance seulement le tick Cron borné", async () => {
-  const configuration = await readFile("railway.scheduler.toml", "utf8");
-  assert.match(configuration, /startCommand = "npm run notifications:scheduler:run"/);
-  assert.match(configuration, /cronSchedule = "\*\/5 \* \* \* \*"/);
-  assert.match(configuration, /restartPolicyType = "NEVER"/);
-  assert.doesNotMatch(configuration, /healthcheck|npm start|notifications:dispatch|curl|Authorization/i);
+test("la configuration Railway racine ne force aucun déploiement sur les services partagés", async () => {
+  const [rootConfiguration, schedulerConfiguration, packageSource, schedulerSource, healthRoute] = await Promise.all([
+    readFile("railway.toml", "utf8"),
+    readFile("railway.scheduler.toml", "utf8"),
+    readFile("package.json", "utf8"),
+    readFile("scripts/notifications-scheduler.ts", "utf8"),
+    readFile("app/api/health/route.ts", "utf8"),
+  ]);
+
+  assert.match(rootConfiguration, /\[build\]\s+builder = "RAILPACK"/);
+  assert.doesNotMatch(rootConfiguration, /\[deploy\]|startCommand|healthcheck|cronSchedule|preDeployCommand|restartPolicy/i);
+
+  const packageConfiguration = JSON.parse(packageSource) as { scripts: Record<string, string> };
+  assert.equal(packageConfiguration.scripts.start, "next start");
+  assert.equal(
+    packageConfiguration.scripts["notifications:scheduler:run"],
+    "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-scheduler.ts",
+  );
+  assert.match(healthRoute, /export async function GET\(\)/);
+
+  assert.match(schedulerConfiguration, /startCommand = "npm run notifications:scheduler:run"/);
+  assert.match(schedulerConfiguration, /cronSchedule = "\*\/15 \* \* \* \*"/);
+  assert.match(schedulerConfiguration, /restartPolicyType = "NEVER"/);
+  assert.doesNotMatch(schedulerConfiguration, /healthcheck|npm start|notifications:dispatch|curl|Authorization/i);
+
+  assert.equal(schedulerSource.match(/runNotificationSchedulerTick\(\)/g)?.length, 1);
+  assert.match(schedulerSource, /try\s*\{[\s\S]*runNotificationSchedulerTick\(\)[\s\S]*\}\s*finally\s*\{\s*await prisma\.\$disconnect\(\);\s*\}/);
+  assert.doesNotMatch(schedulerSource, /setInterval|setTimeout|while\s*\(|for\s*\(\s*;;/);
 });

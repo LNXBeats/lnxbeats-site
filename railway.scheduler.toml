@@ -3,5 +3,5 @@ builder = "RAILPACK"
 
 [deploy]
 startCommand = "npm run notifications:scheduler:run"
-cronSchedule = "*/5 * * * *"
+cronSchedule = "*/15 * * * *"
 restartPolicyType = "NEVER"

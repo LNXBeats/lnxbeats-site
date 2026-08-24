@@ -8,7 +8,7 @@ Le scheduler retenu est un **Railway Cron Job séparé** qui exécute directemen
 npm run notifications:scheduler:run
 ```
 
-La commande effectue un tick, réclame au maximum 25 notifications de l'environnement exact, puis ferme la connexion PostgreSQL et quitte. Elle ne lance ni serveur HTTP ni boucle permanente. Railway exécute ce service selon `*/5 * * * *` en UTC.
+La commande effectue un tick, réclame au maximum 25 notifications de l'environnement exact, puis ferme la connexion PostgreSQL et quitte. Elle ne lance ni serveur HTTP ni boucle permanente. La cadence Production envisagée est `*/15 * * * *` en UTC, mais elle reste absente tant que le service n'a pas passé son premier tick désarmé.
 
 Cette architecture garde PostgreSQL comme source de vérité, consomme des ressources uniquement pendant le tick et réutilise sans duplication le dispatcher V0.7.8. La documentation Railway précise qu'un Cron démarre la commande du service, doit terminer sans ressource ouverte et saute une occurrence si l'exécution précédente est toujours active :
 
@@ -64,17 +64,15 @@ La sortie `MANUAL scheduler.external.configured verification-required` est inten
 
 Ne jamais configurer cette section par script ou API sans une autorisation humaine distincte.
 
-1. Créer un service Railway de type **Scheduled Job**, nommé par exemple `lnxbeats-notification-scheduler`.
-2. Utiliser le même dépôt GitHub. En staging, sélectionner la branche de QA validée ; en production future, sélectionner uniquement la branche de release validée par l'opérateur.
-3. Si le service permet encore la configuration-as-code déjà utilisée par ce projet, sélectionner le chemin absolu `/railway.scheduler.toml`. Sinon, définir dans le dashboard la commande `npm run notifications:scheduler:run`, la cadence UTC `*/5 * * * *` et la restart policy `NEVER`.
-4. Vérifier dans le détail de déploiement que la commande et la cadence effectives correspondent exactement à ces valeurs.
-5. Ne créer ni domaine public, ni healthcheck HTTP, ni pre-deploy de migration sur ce service.
-6. Référencer le `DATABASE_URL` PostgreSQL du même environnement.
-7. Ajouter uniquement les variables notification requises pour cet environnement, avec `NOTIFICATION_SCHEDULER_MODE=railway-cron`.
-8. Conserver au premier démarrage `NOTIFICATION_WORKER_ENABLED=false` et les audiences désactivées.
-9. Vérifier dans le détail du déploiement que la commande effective est bien celle du scheduler.
+1. Avant tout nouveau déploiement, configurer explicitement `lnxbeats-site` dans le dashboard : Start Command `npm start`, Pre-deploy Command `npx prisma migrate deploy`, Healthcheck Path `/api/health`, Healthcheck Timeout `300`, restart policy `ON_FAILURE` et maximum `10`. Laisser son auto-deploy désactivé.
+2. Créer ou reprendre le service Railway `lnxbeats-notifications` avec le même dépôt GitHub et la branche Production approuvée.
+3. Définir explicitement dans ses réglages : Start Command `npm run notifications:scheduler:run`, aucun Pre-deploy Command, aucun Healthcheck Path, aucun domaine public et restart policy `NEVER`.
+4. Ne définir initialement aucun Cron Schedule. Référencer `DATABASE_URL` vers PostgreSQL du même environnement et conserver tous les transports, audiences, worker et scheduler en mode désactivé.
+5. Déployer une seule fois ce processus désarmé et exiger `outcome=disabled`, `claimed=0`, `delivered=0`, `failed=0`, `skipped=0`, puis une terminaison avec code `0`.
+6. Vérifier dans le détail du déploiement que la commande provient bien des réglages du service et qu'aucun `npm start`, healthcheck ou pre-deploy n'est effectif.
+7. Après une autorisation humaine distincte seulement, définir la cadence UTC `*/15 * * * *`, puis armer le scheduler et les notifications selon le preflight Production complet.
 
-Le dépôt contient déjà `railway.toml` pour le service web avec `npm start` et `/api/health`. La configuration-as-code du dépôt prévaut sur le dashboard lorsqu'elle est associée à un service. Le service Cron ne doit donc jamais appliquer ce fichier web. Le fichier dédié [railway.scheduler.toml](../railway.scheduler.toml) ne contient ni serveur web ni healthcheck. Railway déprécie actuellement la configuration-as-code pour les nouveaux services ; si le sélecteur de fichier n'est pas disponible, utiliser les réglages dashboard du Scheduled Job et vérifier leur source/effectivité dans le détail du déploiement. Si `/railway.toml` apparaît, arrêter la configuration et ne pas armer le worker. Références :
+Le fichier racine [railway.toml](../railway.toml) ne contient plus que le builder commun. Aucun `startCommand`, healthcheck, pre-deploy ou restart policy global ne peut donc imposer le profil web au Cron. Le fichier [railway.scheduler.toml](../railway.scheduler.toml) reste une référence legacy vérifiable pour les services qui l'utilisaient déjà ; il n'est pas la procédure retenue pour le nouveau service. Railway déprécie la configuration-as-code et interdit aux nouveaux services de l'adopter ; la migration vers `.railway/railway.ts` est volontairement reportée à un sprint d'infrastructure séparé. Pour cette correction ciblée, les réglages par service du dashboard sont l'option officiellement documentée et la moins risquée. Références :
 
 - <https://docs.railway.com/config-as-code>
 - <https://docs.railway.com/deployments/monorepo>

@@ -222,7 +222,7 @@ Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) pour le détail.
 
 ## Railway
 
-`railway.toml` lance `npm start` et utilise `/api/health`. Next.js lit automatiquement la variable `PORT` fournie par Railway.
+`railway.toml` fixe uniquement le builder Railpack commun. Les réglages de déploiement sont propres à chaque service Railway : le web utilise explicitement `npm start` et `/api/health`, tandis que le Cron exécute `npm run notifications:scheduler:run` sans healthcheck HTTP. Next.js lit automatiquement la variable `PORT` fournie par Railway.
 
 La procédure complète, sans modification DNS, est décrite dans [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
