@@ -44,15 +44,15 @@ export function PaymentReturnNotice({
 
   return (
     <section className="order-detail__section" aria-live="polite">
-      <p className="auth-panel__label">Confirmation serveur</p>
+      <p className="auth-panel__label">Confirmation du paiement</p>
       <h2>{paymentState === "confirmed" ? "Paiement confirmé. Commande reçue." : paymentState === "failed" ? "Paiement refusé." : paymentState === "review" ? "Paiement en cours de vérification." : "Paiement en cours de confirmation."}</h2>
       <p>{paymentState === "confirmed"
-        ? "La confirmation sécurisée du paiement a été enregistrée côté serveur."
+        ? "La confirmation sécurisée du paiement a bien été enregistrée."
         : paymentState === "failed"
           ? "Aucun débit n’a été confirmé. Réessayez ou utilisez un autre moyen proposé par Stripe."
           : paymentState === "review"
             ? "LNX Beats vérifie automatiquement la concordance du paiement avant de traiter la commande."
-            : "Cette page actualise temporairement l’état serveur. Le retour navigateur ne constitue jamais une preuve de paiement."}</p>
+            : "Cette page actualise temporairement le statut de la commande. Le retour sur le site ne suffit pas à confirmer le paiement."}</p>
       {paymentState === "confirming" || paymentState === "ready" ? <small>Après quelques instants, retrouvez toujours l’état dans votre espace Compte.</small> : null}
     </section>
   );

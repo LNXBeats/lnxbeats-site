@@ -16,6 +16,6 @@ test("success and cancellation query parameters never become payment evidence", 
   assert.match(confirmationPageSource, /paiement.*annule/);
   assert.match(confirmationPageSource, /PaymentReturnNotice/);
   assert.doesNotMatch(confirmationPageSource, /session_id.*(?:find|update|create)/s);
-  assert.match(componentSource, /ne constitue jamais une preuve de paiement/);
+  assert.match(componentSource, /Le retour sur le site ne suffit pas à confirmer le paiement/);
   assert.match(componentSource, /commande reste impayée/);
 });

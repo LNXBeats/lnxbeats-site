@@ -86,33 +86,39 @@ export function MusicOrderForm({
   initialDraft,
   initialStep = 0,
   paymentProviders,
+  resumeJourney = false,
 }: {
   account: AccountState;
   initialDraft: SerializedOrder | null;
   initialStep?: number;
   paymentProviders: PaymentProviderAvailability;
+  resumeJourney?: boolean;
 }) {
   const router = useRouter();
   const journey = useOrderJourneyMemory();
   const remembered = journey.memory;
-  const [step, setStep] = useState(() => Math.min(Math.max(remembered?.step ?? initialStep, 0), steps.length - 1));
-  const [form, setForm] = useState<OrderDraftInput>(() => remembered?.form ?? draftFromOrder(initialDraft));
-  const [orderNumber, setOrderNumber] = useState(initialDraft?.orderNumber ?? "");
-  const [orderStatus, setOrderStatus] = useState<SerializedOrder["status"] | null>(initialDraft?.status ?? null);
-  const [photos, setPhotos] = useState<SerializedOrderPhoto[]>(initialDraft?.photos ?? []);
-  const [pendingFiles, setPendingFiles] = useState<File[]>(() => remembered?.pendingFiles ?? []);
-  const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(remembered?.photoRightsConfirmed ?? false);
+  const restoringJourney = resumeJourney && remembered !== null;
+  const persistedDraft = restoringJourney ? null : initialDraft;
+  const [step, setStep] = useState(() => Math.min(Math.max(restoringJourney ? remembered.step : initialStep, 0), steps.length - 1));
+  const [form, setForm] = useState<OrderDraftInput>(() => restoringJourney ? remembered.form : draftFromOrder(persistedDraft));
+  const [orderNumber, setOrderNumber] = useState(persistedDraft?.orderNumber ?? "");
+  const [orderStatus, setOrderStatus] = useState<SerializedOrder["status"] | null>(persistedDraft?.status ?? null);
+  const [photos, setPhotos] = useState<SerializedOrderPhoto[]>(persistedDraft?.photos ?? []);
+  const [pendingFiles, setPendingFiles] = useState<File[]>(() => restoringJourney ? remembered.pendingFiles : []);
+  const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(restoringJourney ? remembered.photoRightsConfirmed : false);
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
   const [contentConfirmed, setContentConfirmed] = useState(false);
   const [personalUseTermsConfirmed, setPersonalUseTermsConfirmed] = useState(false);
   const [finalizedOrder, setFinalizedOrder] = useState<SerializedOrder | null>(null);
-  const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">(initialDraft ? "saved" : "dirty");
-  const [message, setMessage] = useState(remembered ? "Votre brief et vos références ont été restaurés après la connexion." : initialDraft ? `Commande ${initialDraft.orderNumber} reprise.` : "");
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "dirty" | "saving" | "error">(restoringJourney ? "dirty" : "idle");
+  const [message, setMessage] = useState(restoringJourney ? "Votre brief et vos références ont été restaurés après la connexion." : persistedDraft ? `Commande ${persistedDraft.orderNumber} reprise.` : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const photoRightsRef = useRef<HTMLInputElement>(null);
   const previousStep = useRef(step);
   const pricing = calculateOrderPrice(form);
+  const hasPaymentProvider = paymentProviders.stripe || paymentProviders.paypal;
 
   useEffect(() => {
     if (previousStep.current === step) return;
@@ -168,6 +174,7 @@ export function MusicOrderForm({
     }
     if (step === 3 && pendingFiles.length && !photoRightsConfirmed) {
       setError("Confirmez que vous avez le droit de communiquer les photos sélectionnées.");
+      photoRightsRef.current?.focus();
       return false;
     }
     if (step === 4 && !account.authenticated) {
@@ -213,7 +220,7 @@ export function MusicOrderForm({
       setOrderStatus(payload.order.status);
       setPhotos(payload.order.photos);
       setSaveState("saved");
-      setMessage(`Enregistré — ${payload.order.orderNumber}`);
+      setMessage("");
       journey.clear();
       router.refresh();
       return payload.order;
@@ -317,7 +324,9 @@ export function MusicOrderForm({
       setOrderStatus(payload.order.status);
       setFinalizedOrder(payload.order);
       setSaveState("saved");
-      setMessage("Commande enregistrée. Le paiement sécurisé peut maintenant être ouvert.");
+      setMessage(hasPaymentProvider
+        ? "Commande enregistrée. Vous pouvez maintenant choisir votre moyen de paiement."
+        : "Commande enregistrée. Elle reste disponible dans votre espace.");
       journey.clear();
       router.refresh();
     } catch (caught) {
@@ -342,7 +351,7 @@ export function MusicOrderForm({
       setPhotos([]);
       setPendingFiles([]);
       setStep(0);
-      setSaveState("dirty");
+      setSaveState("idle");
       setMessage("Brouillon supprimé.");
       journey.clear();
       router.replace("/commander");
@@ -356,28 +365,46 @@ export function MusicOrderForm({
 
   return (
     <form className="order-form order-form--connected" onSubmit={(event) => event.preventDefault()}>
-      <div className="order-progress" aria-label="Progression de la commande">
+      <nav className="order-progress-shell" aria-label="Étapes de la commande">
+        <p className="order-progress__summary" aria-live="polite">
+          <span>Étape {step + 1} sur {steps.length}</span>
+          <strong>{steps[step]}</strong>
+        </p>
+        <div className="order-progress">
         {steps.map((label, index) => (
           <button
             key={label}
             type="button"
-            className={`order-progress__item ${index <= step ? "is-active" : ""}`}
+            className="order-progress__item"
+            data-state={index < step ? "complete" : index === step ? "current" : "future"}
             aria-current={index === step ? "step" : undefined}
+            aria-label={index < step ? `Revenir à l’étape ${index + 1} : ${label}` : `Étape ${index + 1} : ${label}`}
             onClick={() => { if (index < step) moveToStep(index); }}
-            disabled={busy || index > step}
+            disabled={busy || index >= step}
           >
-            {String(index + 1).padStart(2, "0")} <span>· {label}</span>
+            <span className="order-progress__number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+            <span className="order-progress__label">{label}</span>
           </button>
         ))}
-      </div>
-
-      <div className="order-savebar" aria-live="polite">
-        <div>
-          <strong>{orderNumber || "Nouvelle commande"}</strong>
-          <span>{saveState === "saving" ? "Enregistrement…" : saveState === "saved" ? "Enregistrée" : saveState === "error" ? "Échec de l’enregistrement" : "Modifications en mémoire"}</span>
         </div>
-        {account.authenticated && !finalizedOrder ? <button type="button" className="form-button" onClick={() => void saveDraft()} disabled={busy}>Enregistrer</button> : null}
-      </div>
+      </nav>
+
+      {account.authenticated && !finalizedOrder && saveState !== "idle" ? (
+        <div className="order-save-status" aria-live="polite">
+          <span>{saveState === "saving"
+            ? "Enregistrement du brouillon…"
+            : saveState === "saved"
+              ? orderStatus === "AWAITING_PAYMENT" ? "Commande enregistrée" : "Brouillon enregistré"
+              : saveState === "error"
+                ? "Enregistrement interrompu"
+                : "Modifications non enregistrées"}</span>
+          {saveState === "dirty" || saveState === "error" ? (
+            <button type="button" className="order-save-status__action" onClick={() => void saveDraft()} disabled={busy}>
+              {orderStatus === "AWAITING_PAYMENT" ? "Enregistrer les modifications" : "Enregistrer le brouillon"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="form-step" key={step}>
         {step === 0 ? (
@@ -451,7 +478,7 @@ export function MusicOrderForm({
                 </label>
               </div>
             </fieldset>
-            <div className="order-total order-total--compact"><span>Total actualisé</span><strong>{formatEuro(pricing.totalCents)}</strong><small>Calculé côté serveur au moment de l’enregistrement.</small></div>
+            <div className="order-total order-total--compact"><span>Total actualisé</span><strong>{formatEuro(pricing.totalCents)}</strong><small>Calculé et vérifié par LNX Studio lors de l’enregistrement.</small></div>
           </>
         ) : null}
 
@@ -470,7 +497,7 @@ export function MusicOrderForm({
                 <input id="order-photos" type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => setPendingFiles(Array.from(event.target.files ?? []))} />
               </div>
               <label className="choice choice--full">
-                <input type="checkbox" checked={photoRightsConfirmed} onChange={(event) => setPhotoRightsConfirmed(event.target.checked)} />
+                <input ref={photoRightsRef} id="order-photo-rights" type="checkbox" checked={photoRightsConfirmed} onChange={(event) => setPhotoRightsConfirmed(event.target.checked)} />
                 <span>Je dispose du droit de communiquer ces photos à LNX Beats pour cette commande.</span>
               </label>
               {account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>Enregistrer les photos</button> : <p className="field__hint">Les photos sélectionnées restent uniquement en mémoire jusqu’à votre connexion.</p>}
@@ -494,7 +521,7 @@ export function MusicOrderForm({
         {step === 4 ? (
           <>
             <p className="eyebrow">Étape 5 sur 6</p>
-            <h2 ref={headingRef} tabIndex={-1}>{account.authenticated ? "Votre compte vérifié est prêt." : "Protégez votre brief avant le paiement."}</h2>
+            <h2 ref={headingRef} tabIndex={-1}>{account.authenticated ? "Votre compte vérifié est prêt." : "Connectez-vous pour protéger et conserver votre brief."}</h2>
             {account.authenticated ? (
               <div className="order-auth-note order-auth-note--verified">
                 <p><strong>{account.name}</strong></p><p>{account.email}</p>
@@ -503,7 +530,7 @@ export function MusicOrderForm({
             ) : (
               <div className="order-auth-note">
                 <p><strong>Votre brief et vos photos sélectionnées restent en mémoire pendant ce parcours de connexion.</strong></p>
-                <p>Aucune histoire, référence privée ou donnée sensible n’est placée dans l’URL, le localStorage ou le sessionStorage.</p>
+                <p>Aucune histoire ni référence privée n’est placée dans l’adresse de la page ou conservée durablement dans le navigateur.</p>
                 <div className="order-auth-actions">
                   <button className="form-button form-button--primary" type="button" onClick={() => preserveAndNavigate("/connexion")}>Me connecter</button>
                   <button className="form-button" type="button" onClick={() => preserveAndNavigate("/inscription")}>Créer mon compte</button>
@@ -516,7 +543,9 @@ export function MusicOrderForm({
         {step === 5 ? (
           <>
             <p className="eyebrow">Étape 6 sur 6</p>
-            <h2 ref={headingRef} tabIndex={-1}>{finalizedOrder ? "Votre commande est prête à être payée." : "Relisez avant le paiement."}</h2>
+            <h2 ref={headingRef} tabIndex={-1}>{finalizedOrder
+              ? hasPaymentProvider ? "Votre commande est prête à être payée." : "Votre commande est enregistrée."
+              : hasPaymentProvider ? "Relisez avant le paiement." : "Relisez avant d’enregistrer la commande."}</h2>
             <dl className="summary order-summary">
               <div><dt>Projet</dt><dd>{form.title || "Sans titre de repère"}</dd></div>
               <div><dt>Histoire pour</dt><dd>{form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
@@ -531,7 +560,7 @@ export function MusicOrderForm({
             </dl>
             <div className="order-total" aria-live="polite">
               <span>Total de la création</span><strong>{formatEuro(pricing.totalCents)}</strong>
-              <small>Base 50 €{form.coverIncluded ? " + cover 10 €" : ""}{form.priorityProcessing ? " + priorité 30 €" : ""} · aucun montant n’est accepté depuis le navigateur.</small>
+              <small>Base 50 €{form.coverIncluded ? " + cover 10 €" : ""}{form.priorityProcessing ? " + priorité 30 €" : ""} · total calculé et vérifié par LNX Studio.</small>
             </div>
 
             {!finalizedOrder ? (
@@ -548,15 +577,15 @@ export function MusicOrderForm({
                   <input type="checkbox" checked={personalUseTermsConfirmed} onChange={(event) => setPersonalUseTermsConfirmed(event.target.checked)} />
                   <span><strong>Usage personnel.</strong> {personalUseTerms.text}</span>
                 </label>
-                <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed}>Enregistrer et passer au paiement</button>
+                <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy || !summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed}>{hasPaymentProvider ? "Enregistrer et passer au paiement" : "Enregistrer la commande"}</button>
               </>
-            ) : paymentProviders.stripe || paymentProviders.paypal ? (
+            ) : hasPaymentProvider ? (
               <div className="order-checkout-panel">
-                <p>Vous allez quitter temporairement LNX Studio pour le prestataire de paiement choisi. Le retour navigateur ne confirme jamais seul le paiement.</p>
+                <p>Vous allez quitter temporairement LNX Studio pour le moyen de paiement choisi. Le retour sur le site ne suffit pas à confirmer le paiement.</p>
                 <PaymentCheckoutActions orderNumber={finalizedOrder.orderNumber} amountCents={finalizedOrder.totalCents} providers={paymentProviders} />
               </div>
             ) : (
-              <div className="order-checkout-panel"><p><strong>Commande enregistrée.</strong> Les paiements sont fermés dans cet environnement. Retrouvez la commande dans votre espace sans perdre le brief.</p><Link className="form-button" href={`/compte/commandes/${encodeURIComponent(finalizedOrder.orderNumber)}`}>Voir ma commande</Link></div>
+              <div className="order-checkout-panel"><p><strong>Paiement temporairement indisponible.</strong> Votre commande reste enregistrée dans votre espace.</p><Link className="form-button" href={`/compte/commandes/${encodeURIComponent(finalizedOrder.orderNumber)}`}>Voir ma commande</Link></div>
             )}
           </>
         ) : null}

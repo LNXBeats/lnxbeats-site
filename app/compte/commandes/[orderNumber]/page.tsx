@@ -104,7 +104,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           <section className="order-detail__section order-payment-panel" aria-labelledby="order-payment-title">
             <p className="auth-panel__label">Paiement</p>
             <h2 id="order-payment-title">{paymentState === "confirmed" ? "Paiement confirmé" : paymentState === "confirming" ? "Confirmation en cours" : paymentState === "review" ? "Vérification en cours" : "Commande prête à payer"}</h2>
-            <p>Le montant vient du snapshot PostgreSQL. Le navigateur ne peut ni le modifier ni confirmer un paiement.</p>
+            <p>Le montant enregistré pour cette commande est vérifié par LNX Studio. Il ne peut pas être modifié depuis cette page.</p>
             {(paymentProviders.stripe || paymentProviders.paypal) && canStartPayment ? <PaymentCheckoutActions orderNumber={order.orderNumber} amountCents={order.totalCents} providers={paymentProviders} /> : null}
             {orderCanStillBeEdited(order) ? <Link className="form-button" href={`/commander?brouillon=${encodeURIComponent(order.orderNumber)}&etape=recap`}>Modifier avant paiement</Link> : null}
             {paymentProviders.stripe && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
@@ -137,7 +137,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           {order.deliveries.length ? (
             <>
               <h2 id="order-delivery-title">Votre création est prête.</h2>
-              <p>Vos livrables restent privés. Chaque téléchargement passe par votre session LNX Studio et utilise un accès R2 court, jamais une URL publique permanente.</p>
+              <p>Vos livrables restent privés. Chaque lecture ou téléchargement nécessite votre session LNX Studio ; aucun lien public permanent n’est créé.</p>
               <ul className="order-delivery-list">
                 {order.deliveries.map((delivery, index) => <li key={delivery.id}>
                   <div><span>Livrable {index + 1}</span><strong>{delivery.filename}</strong><small>{deliveryFormat(delivery.mimeType)} · {(delivery.sizeBytes / (1024 * 1024)).toFixed(1)} Mo</small></div>

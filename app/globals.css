@@ -42,6 +42,7 @@
 }
 
 html {
+  overflow-x: clip;
   background: var(--background);
   scroll-behavior: smooth;
 }
@@ -1390,20 +1391,6 @@ a {
 .order-aside li::before { color: var(--gold); content: "—"; }
 .order-aside__note { margin: 1.5rem 0 0; color: #918c84; font-size: 0.72rem; line-height: 1.55; }
 
-.order-savebar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.018);
-}
-
-.order-savebar > div { display: grid; gap: 0.2rem; }
-.order-savebar strong { font-size: 0.8rem; letter-spacing: 0.04em; }
-.order-savebar span { color: var(--text-soft); font-size: 0.7rem; }
 .order-auth-note { margin: 0 0 2.25rem; padding: 1rem; border-left: 2px solid var(--gold); background: rgba(198, 161, 91, 0.055); color: var(--text-soft); font-size: 0.78rem; }
 .order-auth-note p { margin: 0; }
 .order-auth-note p + p { margin-top: 0.5rem; }
@@ -1928,8 +1915,6 @@ a {
   .album-platforms a { justify-content: space-between; }
   .legal-shell h1 { font-size: clamp(2rem, 12vw, 3rem); }
   .shop-card { min-height: 360px; padding: 1.5rem; }
-  .order-progress__item span { display: none; }
-  .order-progress__item { min-height: 16px; }
   .summary div { grid-template-columns: 1fr; gap: 0.2rem; }
   .form-navigation { flex-wrap: wrap; }
   .form-button { flex: 1; }
@@ -2369,8 +2354,7 @@ a {
   .auth-panel, .auth-profile { padding: 1.25rem; }
   .auth-profile > div { grid-template-columns: 1fr; gap: 0.4rem; }
   .legal-checklist li { grid-template-columns: 1fr; gap: 0.4rem; }
-  .order-savebar, .member-orders__heading { align-items: stretch; flex-direction: column; }
-  .order-savebar .form-button { width: 100%; }
+  .member-orders__heading { align-items: stretch; flex-direction: column; }
   .member-order-list li > a { grid-template-columns: minmax(0, 1fr); }
   .member-order-list li > a > span:last-child { grid-template-columns: 1fr auto; justify-items: start; }
   .order-detail__facts { grid-template-columns: minmax(0, 1fr); }
@@ -3184,8 +3168,7 @@ main { position: relative; isolation: isolate; }
   .order-form { padding: 1.25rem; }
   .order-progress { gap: 0.3rem; margin-bottom: 1.5rem; }
   .order-progress__item { min-height: 44px; padding: 0.55rem 0.2rem; text-align: center; }
-  .order-savebar { align-items: stretch; flex-direction: column; }
-  .order-savebar .form-button, .order-auth-actions .form-button, .checkout-action .form-button, .modify-unpaid-order .form-button { width: 100%; }
+  .order-auth-actions .form-button, .checkout-action .form-button, .modify-unpaid-order .form-button { width: 100%; }
   .order-total { display: grid; align-items: start; }
   .order-total small { grid-column: 1 / -1; }
   .order-photo-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }

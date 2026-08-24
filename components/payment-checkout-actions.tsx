@@ -17,7 +17,7 @@ export function PaymentCheckoutActions({
       <div>
         <p className="auth-panel__label">Moyen de paiement</p>
         <h3 id={`payment-methods-${orderNumber}`}>Choisissez un parcours sécurisé.</h3>
-        <p>Une seule confirmation fournisseur peut valider cette commande. Le retour navigateur ne suffit jamais.</p>
+        <p>Une seule confirmation de paiement peut valider cette commande. Le retour sur le site ne suffit pas.</p>
       </div>
       <div className="payment-methods__actions">
         {providers.stripe ? (

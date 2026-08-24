@@ -221,6 +221,11 @@
 
 /* Responsive ------------------------------------------------------------ */
 
+@media (max-width: 1280px) {
+  .site-header__inner { padding-inline: clamp(1rem, 1.6vw, 1.35rem); }
+  .desktop-navigation { gap: clamp(0.75rem, 1.25vw, 1.15rem); }
+}
+
 @media (max-width: 900px) {
   .story-window--scene,
   .story-window--scene-compact { min-height: auto; }

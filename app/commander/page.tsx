@@ -33,8 +33,9 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
   const actor = await orderActorFromHeaders(await headers());
   const query = await searchParams;
   const requestedDraft = query.brouillon;
-  const draft = actor ? await getCommanderOrderForActor(actor, requestedDraft) : null;
-  const initialStep = query.etape && query.etape in stepFromQuery ? stepFromQuery[query.etape] : 0;
+  const resumeJourney = query.reprendre === "1" && !requestedDraft;
+  const draft = actor && !resumeJourney ? await getCommanderOrderForActor(actor, requestedDraft) : null;
+  const initialStep = resumeJourney ? 0 : query.etape && query.etape in stepFromQuery ? stepFromQuery[query.etape] : 0;
   const paymentProviders = await paymentProvidersAvailable();
 
   return (
@@ -60,8 +61,8 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
           <div className="editorial-copy">
             <p>Vous n’avez pas besoin d’apporter des paroles finales. Racontez les personnes, la scène et ce que la musique devra préserver.</p>
             <p>Préparez le brief librement, puis connectez-vous pour l’enregistrer. Le parcours reprend après l’authentification sans placer votre histoire dans l’URL.</p>
-            <p>La demande initiale reste personnelle et son total ne dépasse pas 90 €. Une extension d’exploitation séparée ne peut être envisagée qu’après livraison.</p>
-            <p>Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible. Le serveur reste la seule source du montant et de la confirmation.</p>
+            <p>La création personnelle est plafonnée à 90 €. Les droits d’exploitation pourront faire l’objet d’une demande distincte après livraison.</p>
+            <p>Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible. Le total est calculé par LNX Studio et le paiement n’est confirmé qu’après validation sécurisée.</p>
           </div>
         </Container>
       </section>
@@ -72,20 +73,21 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             initialDraft={draft}
             initialStep={initialStep}
             paymentProviders={paymentProviders}
+            resumeJourney={resumeJourney}
           />
           <aside className="order-aside" aria-label="Règles de la création">
             <p className="eyebrow">Repères du projet</p>
             <p className="order-aside__price">Dès 50 €</p>
             <ul>
-              <li>Création musicale et livraison WAV future</li>
-              <li>Un retour conforme au brief initial inclus</li>
+              <li>Création musicale avec livraison ultérieure du fichier WAV</li>
+              <li>Une demande d’ajustement conforme au brief initial incluse</li>
               <li>Cover personnalisée : +10 €</li>
               <li>Traitement prioritaire : +30 €</li>
               <li>Total maximum de la création : 90 €</li>
-              <li>Droits d’exploitation exclus de cette première commande</li>
-              <li>{paymentProviders.stripe || paymentProviders.paypal ? "Paiement sécurisé selon les moyens disponibles" : "Paiement fermé dans cet environnement"}</li>
+              <li>Les droits d’exploitation font l’objet d’une demande distincte après livraison</li>
+              <li>{paymentProviders.stripe || paymentProviders.paypal ? "Paiement sécurisé selon les moyens disponibles" : "Paiement temporairement indisponible"}</li>
             </ul>
-            <p className="order-aside__note">Après livraison, une demande distincte pourra ouvrir un échange sur les droits d’exploitation, selon contrat spécifique.</p>
+            <p className="order-aside__note">Chaque demande de droits reste soumise à une étude et à un contrat spécifique.</p>
           </aside>
         </Container>
       </section>

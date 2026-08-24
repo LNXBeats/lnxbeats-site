@@ -54,9 +54,16 @@ test("permits editing only before a payment or after every attempt is terminal",
 test("Commander keeps a six-step brief in memory across authentication without sensitive browser storage", () => {
   const form = readFileSync("components/music-order-form.tsx", "utf8");
   const provider = readFileSync("components/order-journey-provider.tsx", "utf8");
+  const page = readFileSync("app/commander/page.tsx", "utf8");
   assert.match(form, /Projet.*Histoire.*Options.*Références.*Compte.*Récapitulatif & paiement/s);
   assert.match(form, /useOrderJourneyMemory/);
   assert.match(form, /journey\.preserve\(\{[\s\S]*form,[\s\S]*step: 4,[\s\S]*pendingFiles,[\s\S]*photoRightsConfirmed,[\s\S]*\}\)/);
+  assert.match(page, /const resumeJourney = query\.reprendre === "1" && !requestedDraft/);
+  assert.match(page, /actor && !resumeJourney \? await getCommanderOrderForActor\(actor, requestedDraft\) : null/);
+  assert.match(form, /const restoringJourney = resumeJourney && remembered !== null/);
+  assert.match(form, /const persistedDraft = restoringJourney \? null : initialDraft/);
+  assert.match(form, /useState\(persistedDraft\?\.orderNumber \?\? ""\)/);
+  assert.doesNotMatch(form, /useState\(initialDraft\?\.orderNumber \?\? ""\)/);
   assert.doesNotMatch(provider, /pendingAudioFiles|audioRightsConfirmed/);
   assert.doesNotMatch(form, /100 Mo maximum par fichier|references\/audio|fichier audio client/i);
   assert.match(form, /brouillon=\$\{encodeURIComponent\(persistedOrderNumber\)\}&etape=\$\{stepQueryValues\[bounded\]\}/);
@@ -72,6 +79,8 @@ test("recap and confirmation use server Orders while the client sends no amount"
   const paypalAction = readFileSync("components/paypal-checkout-action.tsx", "utf8");
   const confirmation = readFileSync("app/commande/[orderNumber]/confirmation/page.tsx", "utf8");
   assert.match(form, /Enregistrer et passer au paiement/);
+  assert.match(form, /hasPaymentProvider \? "Enregistrer et passer au paiement" : "Enregistrer la commande"/);
+  assert.match(form, /Paiement temporairement indisponible/);
   assert.match(form, /PaymentCheckoutActions/);
   assert.match(providerActions, /Carte bancaire — Stripe/);
   assert.match(providerActions, /PayPal/);
@@ -86,26 +95,63 @@ test("recap and confirmation use server Orders while the client sends no amount"
 test("public checkout wording stays provider-neutral and never exposes QA environments", () => {
   const commander = readFileSync("app/commander/page.tsx", "utf8");
   const form = readFileSync("components/music-order-form.tsx", "utf8");
+  const paymentActions = readFileSync("components/payment-checkout-actions.tsx", "utf8");
+  const paymentReturn = readFileSync("components/payment-return-notice.tsx", "utf8");
   const stripe = readFileSync("components/stripe-checkout-action.tsx", "utf8");
   const paypal = readFileSync("components/paypal-checkout-action.tsx", "utf8");
   const account = readFileSync("app/compte/commandes/[orderNumber]/page.tsx", "utf8");
+  const publicOrderCopy = [commander, form, paymentActions, paymentReturn, account].join("\n");
   assert.match(commander, /Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible/);
-  assert.match(commander, /Paiement fermé dans cet environnement/);
+  assert.match(commander, /Paiement temporairement indisponible/);
+  assert.match(commander, /Création musicale avec livraison ultérieure du fichier WAV/);
+  assert.match(commander, /La création personnelle est plafonnée à 90 €/);
+  assert.match(form, /Le retour sur le site ne suffit pas à confirmer le paiement/);
   assert.doesNotMatch(commander, /paiement sandbox/i);
   assert.doesNotMatch(form, /provider sandbox/i);
   assert.doesNotMatch(stripe, /Stripe Test|environnement Test/i);
   assert.doesNotMatch(paypal, /PayPal Sandbox/i);
   assert.doesNotMatch(account, /environnements sandbox/i);
+  assert.doesNotMatch(publicOrderCopy, /snapshot PostgreSQL|accès R2|confirmation fournisseur|retour navigateur|côté serveur|dans cet environnement|localStorage|sessionStorage/i);
+});
+
+test("Commander exposes a discreet truthful save state only after authenticated changes", () => {
+  const form = readFileSync("components/music-order-form.tsx", "utf8");
+  const css = readFileSync("app/visual-phase2.css", "utf8");
+  assert.doesNotMatch(form, /order-savebar|Nouvelle commande|Modifications en mémoire/);
+  assert.match(form, /account\.authenticated && !finalizedOrder && saveState !== "idle"/);
+  assert.match(form, /Enregistrer le brouillon/);
+  assert.match(form, /Enregistrement du brouillon…/);
+  assert.match(form, /Brouillon enregistré/);
+  assert.match(css, /\.order-save-status \{/);
+  assert.match(css, /\.order-save-status__action \{/);
+});
+
+test("Commander stepper remains distinct across desktop, intermediate and mobile widths", () => {
+  const form = readFileSync("components/music-order-form.tsx", "utf8");
+  const css = readFileSync("app/visual-phase2.css", "utf8");
+  assert.match(form, /<nav className="order-progress-shell" aria-label="Étapes de la commande">/);
+  assert.match(form, /data-state=\{index < step \? "complete" : index === step \? "current" : "future"\}/);
+  assert.match(form, /Étape \{step \+ 1\} sur \{steps\.length\}/);
+  assert.match(css, /\.order-layout \{ width: var\(--window-width\); \}/);
+  assert.match(css, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\) minmax\(9\.5rem, 1\.28fr\)/);
+  assert.match(css, /@media \(max-width: 1100px\)[\s\S]*?\.order-layout \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?grid-auto-flow: column[\s\S]*?overflow-x: auto[\s\S]*?scroll-snap-type: x proximity/);
+  assert.doesNotMatch(readFileSync("app/globals.css", "utf8"), /\.order-progress__item span\s*\{\s*display:\s*none/);
+  assert.match(css, /\.form-step \{ animation: none !important; \}/);
 });
 
 test("Commander and Boutique retain their editorial identity with denser responsive spacing", () => {
   const css = readFileSync("app/globals.css", "utf8");
+  const shop = readFileSync("app/boutique/page.tsx", "utf8");
   assert.match(css, /\.editorial-break \{[\s\S]*?linear-gradient\(180deg, #ddd2c0 0, var\(--paper\) 12%, var\(--paper\) 88%, #ddd2c0 100%\)/);
   assert.match(css, /\.editorial-break \.editorial-copy p \{ color: #575147; \}/);
   assert.match(css, /\.shop-card \{[\s\S]*?min-height: 480px;/);
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*?\.shop-card \{ min-height: 400px; \}/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.shop-card \{ min-height: 360px; padding: 1\.5rem; \}/);
   assert.doesNotMatch(css, /\.shop-card \{ min-height: 560px; overflow: hidden;/);
+  assert.match(shop, /Le lien mène vers l’espace musical officiel\. Les disponibilités et les éventuels achats y sont gérés hors de ce site\./);
+  assert.match(shop, /Le lien mène vers la page Etsy officielle de LNX Beats\. Son contenu et ses disponibilités peuvent évoluer indépendamment de ce site\./);
 });
 
 test("Compte and Admin separate unpaid checkout from paid work", () => {
