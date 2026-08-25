@@ -10,7 +10,7 @@ Le montant est reconstruit depuis le snapshot serveur de l’Order, en centimes 
 
 ## Isolation et armement
 
-L’ordre des gardes est : `PAYMENTS_ENABLED` → flag provider → configuration complète → environnement de déploiement → mode provider → runtime Railway/origine canonique.
+L’ordre des gardes Checkout est : `PAYMENTS_ENABLED` → flag provider → configuration complète → environnement de déploiement → mode provider → runtime Railway/origine canonique. Le domaine Refund Live possède en plus son propre gate serveur `LIVE_REFUNDS_ENABLED`, indépendant du Checkout.
 
 - `development` et `staging` acceptent uniquement Stripe `test` et PayPal `sandbox` ;
 - `production` accepte uniquement Stripe `live` et PayPal `live` ;
@@ -25,6 +25,7 @@ L’ordre des gardes est : `PAYMENTS_ENABLED` → flag provider → configuratio
 ```text
 PAYMENT_DEPLOYMENT_ENV=production
 PAYMENTS_ENABLED=false
+LIVE_REFUNDS_ENABLED=false
 STRIPE_PAYMENTS_ENABLED=false
 PAYPAL_PAYMENTS_ENABLED=false
 STRIPE_MODE=live
@@ -41,6 +42,7 @@ Callbacks dérivés uniquement de l’origine canonique : Stripe réussit vers `
 | --- | --- | --- | --- | --- | --- |
 | `PAYMENT_DEPLOYMENT_ENV` | configuration serveur | environnement attendu | `staging` | `production` | `production` |
 | `PAYMENTS_ENABLED` | configuration serveur | kill switch global | booléen | booléen | `false` |
+| `LIVE_REFUNDS_ENABLED` | configuration serveur | initiation et réconciliation des remboursements Live | `false` recommandé | opt-in exact `true`, toute autre valeur désactive | `false` |
 | `PAYMENT_STAGING_CONFIRM` | configuration serveur | armement sandbox | phrase suivie | absent | absent |
 | `PAYMENT_PRODUCTION_CONFIRM` | configuration serveur | armement Live explicite | absent | phrase suivie | absent |
 | `STRIPE_PAYMENTS_ENABLED` | configuration serveur | provider Stripe | booléen | booléen | `false` |
@@ -111,7 +113,9 @@ Plan Dashboard humain futur : créer/sélectionner l’application PayPal Live, 
 
 ## Remboursements, incidents et Admin
 
-Un remboursement Live est une vraie opération financière. L’Admin affiche `MODE LIVE — OPÉRATION FINANCIÈRE RÉELLE`, le montant serveur et une confirmation dédiée. Le repository refuse toute tentative dont `Payment.mode` diffère du runtime. Les remboursements restent idempotents, bornés au solde disponible et n’altèrent pas le statut métier de l’Order.
+La première phase Stripe Live active le Checkout tout en conservant `LIVE_REFUNDS_ENABLED=false` (ou la variable absente). L’Admin peut lire le paiement, les tentatives, les incidents et l’audit, mais ne peut ni demander ni réconcilier un remboursement Live depuis LNX Studio. Cette désactivation n’empêche pas la réception et le rapprochement des webhooks signés décrivant un remboursement ou un litige créé chez le prestataire.
+
+Seule la valeur exacte `LIVE_REFUNDS_ENABLED=true` ouvre le chemin Refund Live ; absence, chaîne vide, `false` ou valeur invalide restent fail-closed. Les paiements TEST/Sandbox conservent leur parcours actuel. Une activation future des remboursements Live exige un sprint distinct corrigeant le retry ambigu sans `providerRefundId`, ajoutant un plafond d’essais et un cutoff temporel, puis démontrant une réconciliation provider sûre avant tout nouvel ordre financier.
 
 Les disputes, chargebacks et reversals créent ou mettent à jour un `PaymentIncident`, une piste `PaymentAuditEvent` et une alerte opérateur. Ils ne créent ni nouveau paiement, ni remboursement automatique, ni transition de l’Order. Ne jamais provoquer un litige bancaire réel pour la QA.
 
@@ -131,12 +135,27 @@ Un provider désactivé peut être totalement absent. Le diagnostic exige `PAYME
 
 `npm run payments:preflight` ne contacte aucun provider et ne modifie aucune donnée. Il contrôle la configuration, l’environnement Railway, l’origine HTTPS, les flags, modes, présences de credentials, migrations, colonnes d’isolation, invariant gagnant et devise. Résultats possibles : `SAFE_DISABLED`, `READY_FOR_STRIPE_LIVE_QA`, `READY_FOR_PAYPAL_LIVE_QA`, `READY_FOR_DUAL_LIVE_QA`, `BLOCKED`.
 
+Pour le premier QA Stripe Live, `READY_FOR_STRIPE_LIVE_QA` est attendu avec `liveRefundsEnabled=false` : le Checkout peut être prêt alors que les remboursements Live demeurent volontairement fermés.
+
+Configuration non secrète recommandée pour cette première phase :
+
+```text
+PAYMENTS_ENABLED=true
+STRIPE_PAYMENTS_ENABLED=true
+STRIPE_MODE=live
+PAYMENT_DEPLOYMENT_ENV=production
+PAYMENT_PRODUCTION_CONFIRM=payments-production-live-approved
+LIVE_REFUNDS_ENABLED=false
+PAYPAL_PAYMENTS_ENABLED=false
+```
+
 La différence est intentionnelle : `payments:diagnostic` photographie l’état désactivé et ses anomalies ; `payments:preflight` est le gate de readiness après préparation explicite de l’activation.
 
 ## Limites et gates
 
 - aucun compte Live, webhook Dashboard ou variable Railway n’est configuré par V0.8.0 ;
 - aucun paiement ou remboursement Live n’est exécuté ;
+- l’activation des remboursements Live reste un sprint séparé tant que retry ambigu, plafond, cutoff et réconciliation sûre ne sont pas corrigés et validés ;
 - facturation/comptabilité et traitement fiscal restent un chantier séparé ;
 - les modèles droits/contrats restent bloqués par la revue juridique ;
 - les notifications production, le scheduler, les domaines et la QA production gardent leurs gates humains ;

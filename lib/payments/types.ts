@@ -98,6 +98,7 @@ export type PaypalPaymentConfiguration =
 export type PaymentsConfiguration = Readonly<{
   enabled: boolean;
   deploymentEnvironment: PaymentDeploymentEnvironment;
+  liveRefundsEnabled: boolean;
   stripe: StripePaymentConfiguration;
   paypal: PaypalPaymentConfiguration;
 }>;
@@ -123,6 +124,7 @@ export type PaypalPaymentHealthSummary = Readonly<{
 export type PaymentsHealthSummary = Readonly<{
   enabled: boolean;
   deploymentEnvironment: PaymentDeploymentEnvironment;
+  liveRefundsEnabled: boolean;
   providers: Readonly<{
     stripe: StripePaymentHealthSummary;
     paypal: PaypalPaymentHealthSummary;

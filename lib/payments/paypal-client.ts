@@ -1,6 +1,6 @@
 import "server-only";
 
-import { assertPaypalServerEnvironment } from "@/lib/payments/config";
+import { assertPaypalServerEnvironment, parsePaymentsConfiguration } from "@/lib/payments/config";
 import type { PaypalPaymentConfiguration } from "@/lib/payments/types";
 
 const PAYPAL_API_ORIGINS = {
@@ -284,6 +284,7 @@ async function boundedJson(response: Response) {
 function createPaypalGatewayWithConfiguration(
   configuration: EnabledPaypalConfiguration,
   fetchImplementation: Fetch,
+  liveRefundsEnabled = false,
 ): PaypalGateway & PaypalRefundGateway {
   const apiOrigin = PAYPAL_API_ORIGINS[configuration.environment];
   async function accessToken() {
@@ -365,6 +366,9 @@ function createPaypalGatewayWithConfiguration(
       ));
     },
     async refundCapture(captureId, amountCents, idempotencyKey) {
+      if (configuration.environment === "live" && !liveRefundsEnabled) {
+        throw new PaypalClientError("UNAVAILABLE");
+      }
       return paypalRefundEvidence(await api(
         `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`,
         {
@@ -408,12 +412,14 @@ export function createPaypalGateway(
   fetchImplementation: Fetch = fetch,
 ): PaypalGateway & PaypalRefundGateway {
   let configuration: EnabledPaypalConfiguration;
+  let liveRefundsEnabled = false;
   try {
     configuration = assertPaypalServerEnvironment();
+    liveRefundsEnabled = parsePaymentsConfiguration().liveRefundsEnabled;
   } catch {
     throw new PaypalClientError("UNAVAILABLE");
   }
-  return createPaypalGatewayWithConfiguration(configuration, fetchImplementation);
+  return createPaypalGatewayWithConfiguration(configuration, fetchImplementation, liveRefundsEnabled);
 }
 
 export function createTestPaypalGateway(

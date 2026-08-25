@@ -56,6 +56,15 @@ function booleanFlag(
   throw new PaymentConfigurationError(errorCode, `${name} must be true or false.`);
 }
 
+/**
+ * A financial mutation kill switch must fail closed for every value other than
+ * the single documented opt-in. In particular, an invalid value must not make
+ * Checkout unavailable: it simply keeps Live refunds disabled.
+ */
+function explicitOptInFlag(environment: PaymentEnvironment, name: string) {
+  return environment[name] === "true";
+}
+
 function configuredDeploymentEnvironment(
   environment: PaymentEnvironment,
 ): PaymentDeploymentEnvironment {
@@ -245,6 +254,7 @@ export function parsePaymentsConfiguration(
   const deploymentEnvironment = configuredDeploymentEnvironment(environment);
   const stripeRequested = booleanFlag(environment, "STRIPE_PAYMENTS_ENABLED", "INVALID_PROVIDER_FLAG");
   const paypalRequested = booleanFlag(environment, "PAYPAL_PAYMENTS_ENABLED", "INVALID_PROVIDER_FLAG");
+  const liveRefundsEnabled = explicitOptInFlag(environment, "LIVE_REFUNDS_ENABLED");
 
   if (
     enabled
@@ -276,6 +286,7 @@ export function parsePaymentsConfiguration(
   return {
     enabled,
     deploymentEnvironment,
+    liveRefundsEnabled,
     stripe: parseStripeConfiguration(environment, enabled && stripeRequested, deploymentEnvironment),
     paypal: parsePaypalConfiguration(environment, enabled && paypalRequested, deploymentEnvironment),
   };
@@ -332,6 +343,7 @@ export function paymentsHealthSummary(
   return {
     enabled: configuration.enabled,
     deploymentEnvironment: configuration.deploymentEnvironment,
+    liveRefundsEnabled: configuration.liveRefundsEnabled,
     providers: {
       stripe: paymentHealthSummary(configuration.stripe),
       paypal: {
