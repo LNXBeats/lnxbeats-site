@@ -12,6 +12,11 @@ export const NOTIFICATION_LEASE_MS = 5 * 60_000;
 export const NOTIFICATION_TEMPLATE_VERSION = 1;
 export const NOTIFICATION_PAYLOAD_VERSION = 1;
 export const OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY = "qa:owner-smoke:v0732:01";
+export const PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY = "production:owner-smoke:v0812:01";
+export const ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS = [
+  OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+  PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+] as const;
 
 const definitions: Record<OrderNotificationKind, Readonly<{
   audience: "OWNER" | "CLIENT";

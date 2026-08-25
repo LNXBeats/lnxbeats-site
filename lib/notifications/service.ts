@@ -12,7 +12,7 @@ import {
   NOTIFICATION_TEMPLATE_VERSION,
   notificationBackoffMs,
   notificationDefinition,
-  OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+  ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS,
   normalizeNotificationRecipient,
   parseNotificationPayload,
   recipientHash,
@@ -491,7 +491,7 @@ export async function dispatchOrderNotification(
 
 export function globalNotificationDispatchWhere(now: Date, deploymentEnvironment = notificationEnvironmentSnapshot()): Prisma.OrderNotificationWhereInput {
   return {
-    idempotencyKey: { not: OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY },
+    idempotencyKey: { notIn: [...ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS] },
     deploymentEnvironment,
     attempts: { lt: MAXIMUM_NOTIFICATION_ATTEMPTS },
     availableAt: { lte: now },
@@ -537,6 +537,9 @@ export async function retryNotificationManually(id: string, actorUserId: string)
     await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`notifications:${id}`})) IS NULL AS locked`;
     const notification = await transaction.orderNotification.findUnique({ where: { id } });
     if (!notification) throw new Error("Notification introuvable.");
+    if ((ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS as readonly string[]).includes(notification.idempotencyKey)) {
+      throw new Error("Cette notification one-shot ne peut pas être rejouée.");
+    }
     let recipient = notification.recipient;
     if (!recipient && notificationDefinition(notification.kind).audience === "OWNER") {
       const configuredRecipient = parseNotificationConfiguration().ownerRecipient;

@@ -4,12 +4,20 @@ import { readFile, rm } from "node:fs/promises";
 import { sendAuthEmail } from "@/lib/email/auth-email";
 import { registrationCodeEmailTemplate } from "@/lib/email/templates";
 import { NOTIFICATION_PRODUCTION_CONFIRMATION } from "@/lib/notifications/config";
+import { PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY } from "@/lib/notifications/domain";
+import {
+  assertProductionOwnerEmailSmokeEnvironment,
+  databaseProductionOwnerEmailSmokeRepository,
+  PRODUCTION_OWNER_EMAIL_SMOKE_CONFIRMATION,
+  PRODUCTION_OWNER_EMAIL_SMOKE_ORDER_NUMBER,
+} from "@/lib/notifications/production-owner-email-smoke";
 import {
   databaseNotificationDispatchRepository,
   dispatchOrderNotification,
   enqueuePaymentConfirmedNotifications,
   enqueueCustomerDeliveryNotification,
   enqueueOrderNotification,
+  globalNotificationDispatchWhere,
   retryNotificationManually,
   suppressNotificationRecipientManually,
 } from "@/lib/notifications/service";
@@ -24,12 +32,27 @@ const EMAIL = "lnx-v073-notifications-member@example.invalid";
 const ORDER_NUMBER = "LNX-2099-073001";
 const PROVIDER_EVENT_PREFIX = "svix_v073_runtime_";
 const CAPTURE_PATH = "/private/tmp/lnx-studio-v073-notifications-runtime.jsonl";
+const PRODUCTION_SMOKE_RECIPIENT = "owner-smoke-runtime@lnxbeats.fr";
+const PRODUCTION_SMOKE_PROVIDER_MESSAGE_ID = "email_v0812_production_owner_smoke";
 
 async function scope() {
   const user = await prisma.user.findUnique({ where: { email: EMAIL }, select: { id: true } });
   const order = await prisma.order.findUnique({ where: { orderNumber: ORDER_NUMBER }, select: { id: true } });
+  const productionSmokeOrder = await prisma.order.findUnique({
+    where: { orderNumber: PRODUCTION_OWNER_EMAIL_SMOKE_ORDER_NUMBER },
+    select: { id: true },
+  });
   const notificationIds = order ? (await prisma.orderNotification.findMany({ where: { orderId: order.id }, select: { id: true } })).map(({ id }) => id) : [];
-  return { userId: user?.id, orderId: order?.id, notificationIds };
+  const productionSmokeNotificationIds = productionSmokeOrder
+    ? (await prisma.orderNotification.findMany({ where: { orderId: productionSmokeOrder.id }, select: { id: true } })).map(({ id }) => id)
+    : [];
+  return {
+    userId: user?.id,
+    orderId: order?.id,
+    notificationIds,
+    productionSmokeOrderId: productionSmokeOrder?.id,
+    productionSmokeNotificationIds,
+  };
 }
 
 async function cleanup() {
@@ -39,12 +62,20 @@ async function cleanup() {
       where: {
         OR: [
           { providerEventId: { startsWith: PROVIDER_EVENT_PREFIX } },
+          { providerEventId: { startsWith: "svix_v0812_production_owner_smoke_" } },
           { providerMessageId: { startsWith: "email_v078_auth_" } },
-          ...(current.notificationIds.length ? [{ notificationId: { in: current.notificationIds } }] : []),
+          ...([...current.notificationIds, ...current.productionSmokeNotificationIds].length
+            ? [{ notificationId: { in: [...current.notificationIds, ...current.productionSmokeNotificationIds] } }]
+            : []),
         ],
       },
     });
-    await transaction.notificationSuppression.deleteMany({ where: { recipient: EMAIL } });
+    await transaction.notificationSuppression.deleteMany({ where: { recipient: { in: [EMAIL, PRODUCTION_SMOKE_RECIPIENT] } } });
+    if (current.productionSmokeOrderId) {
+      await transaction.orderNotification.deleteMany({ where: { orderId: current.productionSmokeOrderId } });
+      await transaction.orderEvent.deleteMany({ where: { orderId: current.productionSmokeOrderId } });
+      await transaction.order.delete({ where: { id: current.productionSmokeOrderId } });
+    }
     if (current.orderId) {
       await transaction.orderNotification.deleteMany({ where: { orderId: current.orderId } });
       await transaction.orderEvent.deleteMany({ where: { orderId: current.orderId } });
@@ -55,14 +86,204 @@ async function cleanup() {
 }
 
 async function assertClean(stage: string) {
-  const [users, orders, notifications, events, suppressions] = await Promise.all([
+  const [users, orders, notifications, events, suppressions, productionSmokeOrders, productionSmokeNotifications] = await Promise.all([
     prisma.user.count({ where: { email: EMAIL } }),
     prisma.order.count({ where: { orderNumber: ORDER_NUMBER } }),
     prisma.orderNotification.count({ where: { order: { orderNumber: ORDER_NUMBER } } }),
     prisma.notificationEvent.count({ where: { providerEventId: { startsWith: PROVIDER_EVENT_PREFIX } } }),
     prisma.notificationSuppression.count({ where: { recipient: EMAIL } }),
+    prisma.order.count({ where: { orderNumber: PRODUCTION_OWNER_EMAIL_SMOKE_ORDER_NUMBER } }),
+    prisma.orderNotification.count({ where: { idempotencyKey: PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY } }),
   ]);
-  assert.deepEqual({ users, orders, notifications, events, suppressions }, { users: 0, orders: 0, notifications: 0, events: 0, suppressions: 0 }, `${stage}: fixtures remain.`);
+  assert.deepEqual(
+    { users, orders, notifications, events, suppressions, productionSmokeOrders, productionSmokeNotifications },
+    { users: 0, orders: 0, notifications: 0, events: 0, suppressions: 0, productionSmokeOrders: 0, productionSmokeNotifications: 0 },
+    `${stage}: fixtures remain.`,
+  );
+}
+
+async function cleanupProductionOwnerSmokeFixture() {
+  const order = await prisma.order.findUnique({
+    where: { orderNumber: PRODUCTION_OWNER_EMAIL_SMOKE_ORDER_NUMBER },
+    select: { id: true },
+  });
+  if (!order) return;
+  const notificationIds = (await prisma.orderNotification.findMany({
+    where: { orderId: order.id },
+    select: { id: true },
+  })).map(({ id }) => id);
+  await prisma.$transaction(async (transaction) => {
+    if (notificationIds.length) {
+      await transaction.notificationEvent.deleteMany({ where: { notificationId: { in: notificationIds } } });
+    }
+    await transaction.orderNotification.deleteMany({ where: { orderId: order.id } });
+    await transaction.orderEvent.deleteMany({ where: { orderId: order.id } });
+    await transaction.order.delete({ where: { id: order.id } });
+  });
+}
+
+async function withProductionOwnerSmokeEnvironment<T>(callback: () => Promise<T>) {
+  const names = [
+    "NODE_ENV", "RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "NOTIFICATION_DEPLOYMENT_ENV",
+    "NOTIFICATION_EMAIL_TRANSPORT", "NOTIFICATION_PRODUCTION_CONFIRM", "NOTIFICATION_PRODUCTION_OWNER_SMOKE_CONFIRM",
+    "EMAIL_NOTIFICATIONS_ENABLED", "OWNER_EMAIL_NOTIFICATIONS_ENABLED", "CLIENT_EMAIL_NOTIFICATIONS_ENABLED",
+    "NOTIFICATION_WORKER_ENABLED", "NOTIFICATION_WORKER_SECRET", "NOTIFICATION_SCHEDULER_MODE", "PAYMENTS_ENABLED",
+    "SMS_TRANSPORT", "SMS_NOTIFICATIONS_ENABLED", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "EMAIL_FROM",
+    "EMAIL_REPLY_TO", "EMAIL_OWNER_RECIPIENT", "APP_CANONICAL_URL", "NOTIFICATION_STAGING_CONFIRM",
+    "NOTIFICATION_STAGING_QA_CONFIRM", "NOTIFICATION_STAGING_RECIPIENT_ALLOWLIST", "NOTIFICATION_OWNER_SMOKE_TEST_CONFIRM",
+    "RESEND_BASE_URL",
+  ] as const;
+  const saved = new Map(names.map((name) => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, {
+      NODE_ENV: "production",
+      RAILWAY_ENVIRONMENT_NAME: "production",
+      NOTIFICATION_DEPLOYMENT_ENV: "production",
+      NOTIFICATION_EMAIL_TRANSPORT: "resend",
+      NOTIFICATION_PRODUCTION_CONFIRM: NOTIFICATION_PRODUCTION_CONFIRMATION,
+      NOTIFICATION_PRODUCTION_OWNER_SMOKE_CONFIRM: PRODUCTION_OWNER_EMAIL_SMOKE_CONFIRMATION,
+      EMAIL_NOTIFICATIONS_ENABLED: "true",
+      OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true",
+      CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
+      NOTIFICATION_WORKER_ENABLED: "false",
+      NOTIFICATION_WORKER_SECRET: "w".repeat(40),
+      NOTIFICATION_SCHEDULER_MODE: "disabled",
+      PAYMENTS_ENABLED: "false",
+      SMS_TRANSPORT: "disabled",
+      SMS_NOTIFICATIONS_ENABLED: "false",
+      RESEND_API_KEY: `re_${"runtime".repeat(6)}`,
+      RESEND_WEBHOOK_SECRET: `whsec_${"runtime".repeat(6)}`,
+      EMAIL_FROM: "LNX Beats <notifications@mail.lnxbeats.fr>",
+      EMAIL_REPLY_TO: "reply@lnxbeats.fr",
+      EMAIL_OWNER_RECIPIENT: PRODUCTION_SMOKE_RECIPIENT,
+      APP_CANONICAL_URL: "https://www.lnxbeats.fr",
+    });
+    for (const name of [
+      "RAILWAY_ENVIRONMENT", "NOTIFICATION_STAGING_CONFIRM", "NOTIFICATION_STAGING_QA_CONFIRM",
+      "NOTIFICATION_STAGING_RECIPIENT_ALLOWLIST", "NOTIFICATION_OWNER_SMOKE_TEST_CONFIRM", "RESEND_BASE_URL",
+    ]) delete process.env[name];
+    return await callback();
+  } finally {
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name];
+      else (process.env as Record<string, string | undefined>)[name] = value;
+    }
+  }
+}
+
+async function assertProductionOwnerSmokeRuntime() {
+  await cleanupProductionOwnerSmokeFixture();
+  await withProductionOwnerSmokeEnvironment(async () => {
+    const configuration = assertProductionOwnerEmailSmokeEnvironment();
+    assert.equal(configuration.ownerRecipient, PRODUCTION_SMOKE_RECIPIENT);
+    assert.equal(configuration.workerEnabled, false);
+    assert.equal(configuration.clientEmailEnabled, false);
+
+    const first = await databaseProductionOwnerEmailSmokeRepository.create(PRODUCTION_SMOKE_RECIPIENT);
+    const second = await databaseProductionOwnerEmailSmokeRepository.create(PRODUCTION_SMOKE_RECIPIENT);
+    assert.equal(first.created, true);
+    assert.equal(second.created, false);
+    assert.equal(second.notificationId, first.notificationId);
+    const fixture = await prisma.orderNotification.findUniqueOrThrow({
+      where: { id: first.notificationId },
+      include: { order: { include: { _count: { select: { payments: true, notifications: true } } } } },
+    });
+    assert.equal(fixture.idempotencyKey, PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY);
+    assert.equal(fixture.deploymentEnvironment, "production");
+    assert.equal(fixture.order.status, "CANCELLED");
+    assert.equal(fixture.order.totalCents, 0);
+    assert.equal(fixture.order.userId, null);
+    assert.equal(fixture.order.customerId, null);
+    assert.deepEqual(fixture.order._count, { payments: 0, notifications: 1 });
+    assert.equal(await prisma.notificationEvent.count({
+      where: { notificationId: first.notificationId, code: "PRODUCTION_OWNER_SMOKE_CREATED" },
+    }), 1);
+
+    let successProviderCalls = 0;
+    const successDispatch = (id: string) => dispatchOrderNotification(id, {
+      repository: databaseNotificationDispatchRepository,
+      sendEmail: async () => {
+        successProviderCalls += 1;
+        return { provider: "RESEND", providerMessageId: PRODUCTION_SMOKE_PROVIDER_MESSAGE_ID, deliveredImmediately: false };
+      },
+    });
+    assert.deepEqual(await successDispatch(first.notificationId), { delivered: true, skipped: false });
+    assert.deepEqual(await successDispatch(first.notificationId), { delivered: false, skipped: true });
+    assert.equal(successProviderCalls, 1);
+    const sent = await databaseProductionOwnerEmailSmokeRepository.read(PRODUCTION_SMOKE_RECIPIENT);
+    assert.equal(sent?.status, "SENT");
+    assert.equal(sent?.attempts, 1);
+    assert.equal(sent?.providerMessageIdPresent, true);
+
+    assert.deepEqual(await processVerifiedResendWebhookEvent({
+      providerEventId: "svix_v0812_production_owner_smoke_delivered",
+      type: "email.delivered",
+      occurredAt: new Date(),
+      providerMessageId: PRODUCTION_SMOKE_PROVIDER_MESSAGE_ID,
+      recipient: PRODUCTION_SMOKE_RECIPIENT,
+      suppressionOrigin: null,
+      bounceType: null,
+      bounceSubType: null,
+      deploymentEnvironment: "production",
+    }), { outcome: "PROCESSED", duplicate: false });
+    const delivered = await databaseProductionOwnerEmailSmokeRepository.read(PRODUCTION_SMOKE_RECIPIENT);
+    assert.equal(delivered?.status, "DELIVERED");
+    assert.ok(delivered?.eventTypes.includes("email.delivered"));
+
+    await cleanupProductionOwnerSmokeFixture();
+    const failureFixture = await databaseProductionOwnerEmailSmokeRepository.create(PRODUCTION_SMOKE_RECIPIENT);
+    let failureProviderCalls = 0;
+    const failureDispatch = (id: string) => dispatchOrderNotification(id, {
+      repository: databaseNotificationDispatchRepository,
+      sendEmail: async () => {
+        failureProviderCalls += 1;
+        throw Object.assign(new Error("simulated provider timeout"), { statusCode: 503 });
+      },
+    });
+    assert.deepEqual(await failureDispatch(failureFixture.notificationId), { delivered: false, skipped: false });
+    await databaseProductionOwnerEmailSmokeRepository.finalizeFailedAttempt(
+      failureFixture.notificationId,
+      PRODUCTION_SMOKE_RECIPIENT,
+    );
+    const failed = await databaseProductionOwnerEmailSmokeRepository.read(PRODUCTION_SMOKE_RECIPIENT);
+    assert.equal(failed?.status, "FAILED_FINAL");
+    assert.equal(failed?.attempts, 1);
+    assert.equal(failed?.lastErrorCode, "PRODUCTION_OWNER_SMOKE_ONE_SHOT_FAILED");
+    assert.deepEqual(await failureDispatch(failureFixture.notificationId), { delivered: false, skipped: true });
+    assert.equal(failureProviderCalls, 1);
+    assert.equal(await prisma.orderNotification.count({
+      where: {
+        AND: [
+          { id: failureFixture.notificationId },
+          globalNotificationDispatchWhere(new Date(Date.now() + 60_000), "production"),
+        ],
+      },
+    }), 0);
+
+    await prisma.orderNotification.update({
+      where: { id: failureFixture.notificationId },
+      data: { status: "FAILED_RETRYABLE", failedAt: new Date(), availableAt: new Date() },
+    });
+    assert.equal(await prisma.orderNotification.count({
+      where: {
+        AND: [
+          { id: failureFixture.notificationId },
+          globalNotificationDispatchWhere(new Date(Date.now() + 60_000), "production"),
+        ],
+      },
+    }), 0, "The global dispatcher must exclude the retryable Production smoke fixture.");
+    await assert.rejects(
+      retryNotificationManually(failureFixture.notificationId, "00000000-0000-4000-8000-000000000812"),
+      /one-shot/,
+    );
+    await databaseProductionOwnerEmailSmokeRepository.finalizeFailedAttempt(
+      failureFixture.notificationId,
+      PRODUCTION_SMOKE_RECIPIENT,
+    );
+  });
+  await cleanupProductionOwnerSmokeFixture();
+  assert.equal(await prisma.orderNotification.count({ where: { idempotencyKey: PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY } }), 0);
+  console.info("Production owner email smoke PostgreSQL QA passed: fixture, idempotence, targeted dispatch, webhook, final failure and no retry.");
 }
 
 async function main() {
@@ -79,6 +300,8 @@ async function main() {
   try {
     const user = await prisma.user.create({ data: { email: EMAIL, emailVerified: true, emailVerifiedAt: new Date(), displayName: "Member Notifications QA", status: "ACTIVE", role: "MEMBER" } });
     const order = await prisma.order.create({ data: { orderNumber: ORDER_NUMBER, userId: user.id, customerEmail: EMAIL, customerName: "Member Notifications QA", status: "PAYMENT_CONFIRMED", title: "Notification QA", brief: "Fixture locale et jetable.", coverIncluded: true, priorityProcessing: true, coverPriceCents: 1_000, priorityPriceCents: 3_000, totalCents: 9_000 } });
+
+    await assertProductionOwnerSmokeRuntime();
 
     const unknownProviderEventId = `${PROVIDER_EVENT_PREFIX}unknown-event`;
     assert.deepEqual(await processVerifiedResendWebhookEvent({

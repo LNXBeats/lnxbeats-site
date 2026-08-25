@@ -16,7 +16,10 @@ import {
   type OwnerEmailSmokeRepository,
   type OwnerEmailSmokeStatus,
 } from "@/lib/notifications/owner-email-smoke";
-import { OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY } from "@/lib/notifications/domain";
+import {
+  ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS,
+  OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+} from "@/lib/notifications/domain";
 import { globalNotificationDispatchWhere } from "@/lib/notifications/service";
 import { orderNotificationTemplate } from "@/lib/notifications/templates";
 import type { OrderNotificationMessage } from "@/lib/notifications/types";
@@ -290,7 +293,7 @@ test("un échec provider devient final et ne déclenche aucune boucle", async ()
 
 test("le dispatcher global exclut la clé réservée au dispatch ciblé", () => {
   const where = globalNotificationDispatchWhere(new Date("2026-08-21T12:00:00.000Z"));
-  assert.deepEqual(where.idempotencyKey, { not: OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY });
+  assert.deepEqual(where.idempotencyKey, { notIn: [...ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS] });
 });
 
 test("le rendu staging porte [TEST] dans le sujet et le corps", () => {

@@ -17,7 +17,11 @@ import {
   globalNotificationDispatchWhere,
   type NotificationDispatchRepository,
 } from "@/lib/notifications/service";
-import { OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY, isOfficialResendTestRecipient } from "@/lib/notifications/domain";
+import {
+  isOfficialResendTestRecipient,
+  ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS,
+  OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+} from "@/lib/notifications/domain";
 import type { OrderNotificationMessage } from "@/lib/notifications/types";
 
 const WORKER_SECRET = "w".repeat(40);
@@ -234,7 +238,7 @@ test("la fixture scheduler possède une identité fixe et reste claimable par le
   assert.equal(key, "qa:scheduler:v079:delivered:01");
   assert.notEqual(key, OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY);
   assert.deepEqual(globalNotificationDispatchWhere(new Date(), "staging").idempotencyKey, {
-    not: OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+    notIn: [...ONE_SHOT_NOTIFICATION_IDEMPOTENCY_KEYS],
   });
 });
 

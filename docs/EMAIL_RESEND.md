@@ -156,3 +156,7 @@ Références officielles :
 - envoi et idempotence : https://resend.com/docs/api-reference/emails/send-email et https://resend.com/docs/dashboard/emails/idempotency-keys
 - adresses de test : https://resend.com/docs/dashboard/emails/send-test-emails
 - erreurs : https://www.resend.com/docs/api-reference/errors
+
+Le smoke propriétaire Production, distinct et strictement one-shot, est documenté dans
+[PRODUCTION_OWNER_EMAIL_SMOKE.md](PRODUCTION_OWNER_EMAIL_SMOKE.md). Le garde staging ci-dessus
+reste inchangé et ne doit jamais être utilisé en Production.

@@ -1,7 +1,12 @@
 import "server-only";
 
 import type { NotificationConfiguration } from "@/lib/notifications/config";
-import { notificationDefinition, NOTIFICATION_PAYLOAD_VERSION, NOTIFICATION_TEMPLATE_VERSION } from "@/lib/notifications/domain";
+import {
+  notificationDefinition,
+  NOTIFICATION_PAYLOAD_VERSION,
+  NOTIFICATION_TEMPLATE_VERSION,
+  PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
+} from "@/lib/notifications/domain";
 import type { NotificationTemplate, OrderNotificationMessage } from "@/lib/notifications/types";
 
 function escapeHtml(value: string) {
@@ -39,6 +44,15 @@ function resourceUrl(message: OrderNotificationMessage, configuration: Notificat
 }
 
 function copy(message: OrderNotificationMessage) {
+  if (message.idempotencyKey === PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY) {
+    return {
+      subject: "[TEST PRODUCTION] Vérification e-mail propriétaire LNX Studio",
+      eyebrow: "Test Production",
+      title: "Vérification e-mail propriétaire",
+      body: "Ce message est un test one-shot autorisé. Il ne correspond à aucune commande, aucun client et aucun paiement réel.",
+      cta: "Ouvrir l’Admin",
+    } as const;
+  }
   const values = {
     OWNER_NEW_ORDER: [
       `Nouvelle commande LNX Beats — ${message.payload.orderNumber}`,
