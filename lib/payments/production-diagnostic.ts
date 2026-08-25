@@ -40,6 +40,7 @@ export type PaymentDiagnosticResult = Readonly<{
   environment: PaymentDeploymentEnvironment | "invalid";
   production: boolean;
   paymentsEnabled: boolean | "invalid";
+  liveRefundsEnabled: boolean;
   stripe: Readonly<{
     flag: boolean | "invalid";
     enabled: boolean | "invalid";
@@ -294,6 +295,12 @@ export async function runPaymentDiagnostic(
     { name: "origins.https.consistent", passed: origins.consistent },
     { name: "payments.disabled", passed: configuration?.enabled === false },
     {
+      name: configuration?.liveRefundsEnabled === true
+        ? "refunds.live.explicitly-enabled"
+        : "refunds.live.disabled",
+      passed: true,
+    },
+    {
       name: "stripe.mode.matchesDeployment",
       passed: stripeMode === "disabled"
         || (deploymentEnvironment === "production" ? stripeMode === "live" : stripeMode === "test"),
@@ -330,7 +337,10 @@ export async function runPaymentDiagnostic(
   ] as const;
 
   const valid = checks.every((check) => check.passed);
-  const configuredButDisabled = confirmationPresent || stripeRequested === true || paypalRequested === true;
+  const configuredButDisabled = confirmationPresent
+    || stripeRequested === true
+    || paypalRequested === true
+    || configuration?.liveRefundsEnabled === true;
   const status: PaymentDiagnosticStatus = !valid
     ? "INVALID"
     : configuredButDisabled
@@ -342,6 +352,7 @@ export async function runPaymentDiagnostic(
     environment: deploymentEnvironment,
     production: deploymentEnvironment === "production",
     paymentsEnabled,
+    liveRefundsEnabled: configuration?.liveRefundsEnabled ?? false,
     stripe: {
       flag: stripeRequested,
       enabled: configuration?.stripe.enabled ?? "invalid",
@@ -374,6 +385,7 @@ export function formatPaymentDiagnostic(result: PaymentDiagnosticResult) {
     `environment=${result.environment}`,
     `production=${result.production}`,
     `paymentsEnabled=${result.paymentsEnabled}`,
+    `liveRefundsEnabled=${result.liveRefundsEnabled}`,
     `stripeFlag=${result.stripe.flag}`,
     `stripe.enabled=${result.stripe.enabled}`,
     `stripe.mode=${result.stripe.mode}`,

@@ -78,6 +78,7 @@ test("production remains safely disabled even when live credentials are preloade
   const result = await runProductionPaymentPreflight(environment, databaseFixture());
   assert.equal(result.passed, true);
   assert.equal(result.status, "SAFE_DISABLED");
+  assert.equal(result.rules.find(({ name }) => name === "refunds.live.disabled")?.passed, true);
   assert.doesNotMatch(JSON.stringify(result), /production-readiness-fixture|paypal-live-/);
 });
 
@@ -95,6 +96,20 @@ test("production arming is explicit and supports one provider at a time", async 
     PAYPAL_PAYMENTS_ENABLED: "false",
   }, databaseFixture());
   assert.equal(stripe.status, "READY_FOR_STRIPE_LIVE_QA");
+  assert.equal(stripe.rules.find(({ name }) => name === "refunds.live.disabled")?.passed, true);
+
+  const stripeWithLiveRefunds = await runProductionPaymentPreflight({
+    ...common,
+    STRIPE_PAYMENTS_ENABLED: "true",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    LIVE_REFUNDS_ENABLED: "true",
+  }, databaseFixture());
+  assert.equal(stripeWithLiveRefunds.status, "BLOCKED");
+  assert.equal(stripeWithLiveRefunds.passed, false);
+  assert.equal(
+    stripeWithLiveRefunds.rules.find(({ name }) => name === "refunds.live.disabled")?.passed,
+    false,
+  );
 
   const paypal = await runProductionPaymentPreflight({
     ...common,

@@ -77,6 +77,7 @@ Variables prévues :
 | `PAYMENTS_ENABLED` | `false` | serveur uniquement ; garde fonctionnelle |
 | `PAYMENT_DEPLOYMENT_ENV` | `development` | `development`, `staging` ou `production`, avec mode provider strictement lié |
 | `PAYMENT_STAGING_CONFIRM` | vide | confirmation non secrète exigée en staging |
+| `LIVE_REFUNDS_ENABLED` | `false` | serveur uniquement ; seul `true` autorise les remboursements Live, sans effet sur Checkout |
 | `STRIPE_PAYMENTS_ENABLED` | `false` | activation explicite du seul adapter Stripe |
 | `PAYMENT_PRODUCTION_CONFIRM` | vide | confirmation non secrète exigée avant activation Live |
 | `STRIPE_MODE` | `test` | `test` hors production ; `live` uniquement en production |
@@ -213,7 +214,7 @@ checkout-session:<payment-id-interne>
 
 La clé est persistée avant l’appel. Un retry réseau de la même opération réutilise exactement la même clé et les mêmes paramètres. Une tentative volontairement nouvelle ou une requête corrigée utilise une nouvelle clé.
 
-Stripe conserve le premier résultat associé à une clé, y compris certains échecs, puis peut supprimer la clé après au moins 24 heures. Réutiliser une clé avec d’autres paramètres est une erreur. La base locale reste donc également responsable des contraintes uniques et d’une transition transactionnelle concurrent-safe.
+Stripe conserve le premier résultat associé à une clé, y compris certains échecs, puis peut supprimer la clé après au moins 24 heures. Réutiliser une clé avec d’autres paramètres est une erreur. La base locale reste donc également responsable des contraintes uniques et d’une transition transactionnelle concurrent-safe. Cette limite justifie de maintenir `LIVE_REFUNDS_ENABLED=false` lors de la première phase Checkout Live : un sprint séparé doit borner le retry ambigu, son cutoff et sa réconciliation avant activation des remboursements Live.
 
 Pour les webhooks :
 
@@ -357,7 +358,7 @@ obligatoire et doit correspondre exactement à `DATABASE_URL`. Elles exigent en 
 `PAYMENT_QA_CONFIRM=run-v074-sandbox-payment-qa`. La base
 `lnx-studio-local-preview` est explicitement refusée.
 
-Le parcours local doit être servi sur un port QA dédié avec la preuve de base jetable et `PAYMENTS_ENABLED=true`. Chaque provider exige aussi son flag explicite. En staging, le runtime accepte uniquement Railway `staging`, une origine HTTPS canonique, `PAYMENT_DEPLOYMENT_ENV=staging` et `PAYMENT_STAGING_CONFIRM=payments-staging-sandbox-approved`; Stripe reste Test et PayPal Sandbox. En production, seul Railway `production`, l’origine canonique LNX, les modes Live et la confirmation production sont acceptés lorsque le global est armé. Toute combinaison croisée échoue fermée.
+Le parcours local doit être servi sur un port QA dédié avec la preuve de base jetable et `PAYMENTS_ENABLED=true`. Chaque provider exige aussi son flag explicite. En staging, le runtime accepte uniquement Railway `staging`, une origine HTTPS canonique, `PAYMENT_DEPLOYMENT_ENV=staging` et `PAYMENT_STAGING_CONFIRM=payments-staging-sandbox-approved`; Stripe reste Test et PayPal Sandbox. En production, seul Railway `production`, l’origine canonique LNX, les modes Live et la confirmation production sont acceptés lorsque le global est armé. Toute combinaison croisée échoue fermée. Le premier QA Stripe Live conserve `LIVE_REFUNDS_ENABLED=false` : Checkout et webhooks paiement restent actifs, mais aucune demande ou réconciliation Refund Live ne peut partir de LNX Studio.
 
 Le diagnostic réseau est séparé des tests mocks et s'exécute uniquement après la
 confirmation non secrète prévue :

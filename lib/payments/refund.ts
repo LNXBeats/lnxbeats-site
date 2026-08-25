@@ -61,10 +61,22 @@ export class RefundServiceError extends Error {
       | "REFUND_AMOUNT_EXCEEDS_AVAILABLE"
       | "REFUND_ALREADY_PROCESSING"
       | "REFUND_REQUIRES_REVIEW"
+      | "LIVE_REFUNDS_DISABLED"
       | "REFUND_PROVIDER_UNAVAILABLE",
   ) {
     super("Le remboursement ne peut pas être traité.");
     this.name = "RefundServiceError";
+  }
+}
+
+export type RefundRuntimePolicy = Readonly<{
+  mode: PersistedPaymentMode;
+  liveRefundsEnabled: boolean;
+}>;
+
+function assertLiveRefundMutationAllowed(policy: RefundRuntimePolicy) {
+  if (policy.mode === "LIVE" && !policy.liveRefundsEnabled) {
+    throw new RefundServiceError(403, "LIVE_REFUNDS_DISABLED");
   }
 }
 
@@ -188,6 +200,7 @@ function reservedRefund(attempt: {
 export function createRefundDatabaseRepository(
   client: PrismaClient,
   expectedMode: PersistedPaymentMode = "TEST",
+  liveRefundsEnabled = false,
 ) {
   return {
     async reserve(input: Readonly<{
@@ -199,6 +212,7 @@ export function createRefundDatabaseRepository(
       liveConfirmation?: string;
     }>): Promise<ReservedRefund> {
       assertAdmin(input.actor);
+      assertLiveRefundMutationAllowed({ mode: expectedMode, liveRefundsEnabled });
       if (
         !orderNumberPattern.test(input.orderNumber)
         || !/^refund-request:[0-9a-f-]{36}$/i.test(input.localIdempotencyKey)
@@ -311,6 +325,7 @@ export function createRefundDatabaseRepository(
 
     async claim(attemptId: string) {
       if (!internalId.test(attemptId)) throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");
+      assertLiveRefundMutationAllowed({ mode: expectedMode, liveRefundsEnabled });
       return inPaymentTransaction(client, async (transaction) => {
         await lock(transaction, `payments:refund:${attemptId}`);
         const attempt = await transaction.refundAttempt.findUnique({
@@ -580,7 +595,7 @@ function providerFailure(error: unknown) {
 export type RefundDependencies = Readonly<{
   repository: ReturnType<typeof createRefundDatabaseRepository>;
   gateway(provider: "STRIPE" | "PAYPAL"): RefundProviderGateway;
-  assertRuntime(): Promise<void>;
+  assertRuntime(): Promise<RefundRuntimePolicy>;
 }>;
 
 function defaultDependencies(): RefundDependencies {
@@ -588,9 +603,15 @@ function defaultDependencies(): RefundDependencies {
   const configuration = parsePaymentsConfiguration();
   const expectedMode = configuration.deploymentEnvironment === "production" ? "LIVE" : "TEST";
   return {
-    repository: createRefundDatabaseRepository(prisma, expectedMode),
+    repository: createRefundDatabaseRepository(prisma, expectedMode, configuration.liveRefundsEnabled),
     gateway: (provider) => createRefundProviderGateway(provider),
-    assertRuntime: async () => { await assertPaymentsRuntimeEnvironment(); },
+    assertRuntime: async () => {
+      const runtime = await assertPaymentsRuntimeEnvironment();
+      return {
+        mode: runtime.deploymentEnvironment === "production" ? "LIVE" : "TEST",
+        liveRefundsEnabled: runtime.liveRefundsEnabled,
+      };
+    },
   };
 }
 
@@ -606,7 +627,8 @@ export async function requestRefundForOrder(
   dependencies: RefundDependencies = defaultDependencies(),
 ) {
   assertAdmin(actor);
-  await dependencies.assertRuntime();
+  const runtime = await dependencies.assertRuntime();
+  assertLiveRefundMutationAllowed(runtime);
   const localIdempotencyKey = `refund-request:${input.requestToken}`;
   const attempt = await dependencies.repository.reserve({
     actor,
@@ -652,7 +674,8 @@ export async function reconcileRefundAttemptForAdmin(
   liveConfirmation?: string,
 ) {
   assertAdmin(actor);
-  await dependencies.assertRuntime();
+  const runtime = await dependencies.assertRuntime();
+  assertLiveRefundMutationAllowed(runtime);
   const attempt = await dependencies.repository.get(attemptId);
   if (attempt.mode === "LIVE" && liveConfirmation !== LIVE_REFUND_RECONCILIATION_CONFIRMATION) {
     throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");

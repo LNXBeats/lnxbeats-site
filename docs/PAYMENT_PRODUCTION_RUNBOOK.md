@@ -20,7 +20,7 @@ Le diagnostic est une inspection read-only de l’état courant désactivé. Le 
 
 ### Stripe seul
 
-Laisser PayPal désactivé. Valider les credentials et le secret du webhook Live, puis définir le mode Live et l’environnement production. Ajouter la confirmation production seulement dans la fenêtre d’activation, activer le flag Stripe, puis le global. Exécuter le preflight : seul `READY_FOR_STRIPE_LIVE_QA` est acceptable. Vérifier le healthcheck avant d’autoriser le smoke propriétaire/internal approuvé.
+Laisser PayPal désactivé et imposer `LIVE_REFUNDS_ENABLED=false`. Valider les credentials et le secret du webhook Live, puis définir le mode Live et l’environnement production. Ajouter la confirmation production seulement dans la fenêtre d’activation, activer le flag Stripe, puis le global. Exécuter le preflight : seul `READY_FOR_STRIPE_LIVE_QA` avec `liveRefundsEnabled=false` est acceptable. Vérifier le healthcheck avant d’autoriser le smoke propriétaire/internal approuvé.
 
 ### PayPal seul
 
@@ -32,7 +32,7 @@ N’activer les deux qu’après les deux preuves isolées. Le preflight attendu
 
 ## Smoke Live futur
 
-Le smoke n’est pas automatisé. Utiliser un compte propriétaire/internal explicitement autorisé, une Order dédiée et le montant métier minimal valide. Stripe Checkout doit rester hébergé. PayPal exige un acheteur réel distinct du marchand. Ne jamais créer un litige réel. Ne rembourser que si la décision comptable/juridique l’autorise, avec la confirmation Admin Live.
+Le smoke n’est pas automatisé. Utiliser un compte propriétaire/internal explicitement autorisé, une Order dédiée et le montant métier minimal valide. Stripe Checkout doit rester hébergé. PayPal exige un acheteur réel distinct du marchand. Ne jamais créer un litige réel. Tant que `LIVE_REFUNDS_ENABLED=false`, ne lancer aucun remboursement ni aucune réconciliation Live depuis LNX Studio ; toute procédure financière séparée doit être préalablement validée par l’opérateur, la comptabilité et le runbook applicable.
 
 Vérifier après le retour navigateur : `Payment.mode=LIVE`, provider correct, montant EUR exact, `ProviderEvent.livemode=true`, `Payment=SUCCEEDED`, `Order=PAYMENT_CONFIRMED`, un seul événement de confirmation et aucune seconde réussite. Le retour navigateur seul n’est jamais une preuve.
 
@@ -45,7 +45,7 @@ Vérifier après le retour navigateur : `Payment.mode=LIVE`, provider correct, m
 5. **Webhook PayPal en panne** : ne pas recapturer. Vérifier postback, certificat, webhook ID et mode ; rejouer l’événement existant si le provider le permet.
 6. **Provider payé, LNX non confirmé** : couper les nouveaux Checkout si nécessaire, rapprocher IDs/montant/devise/mode, corriger la cause puis rejouer le webhook. Ne pas demander un second paiement.
 7. **`Payment=REQUIRES_REVIEW`** : geler toute action financière supplémentaire et examiner le mismatch allowlisté ; ne jamais forcer `SUCCEEDED`.
-8. **Remboursement bloqué** : ne pas créer une seconde tentative. Réconcilier la tentative idempotente existante et son identifiant provider.
+8. **Remboursement bloqué** : ne pas créer une seconde tentative. En TEST/Sandbox, réconcilier uniquement la tentative idempotente existante et son identifiant provider. En Live avec le gate désactivé, conserver la revue et contrôler le prestataire sans déclencher de nouvelle mutation depuis LNX Studio.
 9. **Provider remboursé, DB incertaine** : conserver l’Order, marquer la revue via le flux existant et rapprocher le webhook/refund exact ; aucune compensation automatique supplémentaire.
 10. **Dispute** : laisser l’Order inchangée, ouvrir la revue opérateur et traiter dans le dashboard/provider selon la procédure juridique.
 11. **Reversal** : conserver l’invariant gagnant ; aucun nouveau Checkout sur l’Order.
@@ -64,4 +64,4 @@ Surveiller les statuts `REQUIRES_REVIEW`, ProviderEvents non traités/revus, rem
 
 ## Arrêt et retour fail-closed
 
-L’action immédiate et réversible est `PAYMENTS_ENABLED=false`. Ensuite seulement lancer `npm run payments:diagnostic`, puis le preflight lorsque la configuration est corrigée. Ne jamais supprimer un Payment, ProviderEvent, RefundAttempt, PaymentIncident ou audit pour « nettoyer » un incident financier.
+L’action immédiate et réversible est `PAYMENTS_ENABLED=false`. Le gate indépendant `LIVE_REFUNDS_ENABLED` reste `false` avant, pendant et après cette fermeture. Ensuite seulement lancer `npm run payments:diagnostic`, puis le preflight lorsque la configuration est corrigée. Ne jamais supprimer un Payment, ProviderEvent, RefundAttempt, PaymentIncident ou audit pour « nettoyer » un incident financier.

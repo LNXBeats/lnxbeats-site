@@ -136,6 +136,7 @@ export async function runProductionPaymentPreflight(
     rule("runtime.railway.production", environment.RAILWAY_ENVIRONMENT_NAME === "production"),
     rule("canonical.production.https", canonicalProductionOrigin(environment)),
     rule("currency.policy.eur", true),
+    rule("refunds.live.disabled", !configuration.liveRefundsEnabled),
   );
 
   if (configuration.enabled) {

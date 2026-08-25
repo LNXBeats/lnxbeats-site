@@ -141,7 +141,7 @@ function fakeDependencies() {
   let failNext = false;
   const dependencies: RefundDependencies = {
     repository,
-    assertRuntime: async () => {},
+    assertRuntime: async () => ({ mode: "TEST", liveRefundsEnabled: false }),
     gateway(provider) {
       return {
         async request(input) {

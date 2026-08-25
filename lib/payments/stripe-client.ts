@@ -4,6 +4,7 @@ import Stripe from "stripe";
 
 import {
   assertPaymentServerEnvironment,
+  parsePaymentsConfiguration,
   STRIPE_API_VERSION,
 } from "@/lib/payments/config";
 import type { ServerCheckoutLineItem } from "@/lib/payments/types";
@@ -265,8 +266,10 @@ export function createStripeCheckoutLifecycleGateway(): StripeCheckoutLifecycleG
 
 export function createStripeRefundGateway(): StripeRefundGateway {
   let configuration;
+  let liveRefundsEnabled = false;
   try {
     configuration = assertPaymentServerEnvironment();
+    liveRefundsEnabled = parsePaymentsConfiguration().liveRefundsEnabled;
   } catch {
     throw new StripeRefundClientError("UNAVAILABLE");
   }
@@ -278,6 +281,9 @@ export function createStripeRefundGateway(): StripeRefundGateway {
   });
   return {
     async refundPaymentIntent(paymentIntentId, amountCents, idempotencyKey, metadata) {
+      if (configuration.mode === "live" && !liveRefundsEnabled) {
+        throw new StripeRefundClientError("UNAVAILABLE");
+      }
       try {
         return stripeRefundEvidence(await stripe.refunds.create({
           payment_intent: paymentIntentId,
