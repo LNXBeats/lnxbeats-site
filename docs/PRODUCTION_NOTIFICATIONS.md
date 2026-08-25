@@ -189,7 +189,28 @@ npm run notifications:scheduler:preflight
 
 Il reste read-only et affiche volontairement `MANUAL scheduler.external.configured verification-required`, car aucun code local ne peut attester l'existence du Scheduled Job Railway.
 
+La première ouverture strictement propriétaire utilise un gate séparé :
+
+```text
+OWNER_EMAIL_NOTIFICATIONS_ENABLED=true CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false npm run notifications:owner:preflight
+```
+
+L'override ci-dessus ne vaut que pour le processus read-only lancé dans la Console du service Cron; il doit être exécuté avant toute modification persistante du flag Railway. Ce profil exige `OWNER_EMAIL_NOTIFICATIONS_ENABLED=true`, impose simultanément `CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false`, vérifie le Reply-To exact `contact@lnxbeats.fr`, contrôle en lecture seule qu'aucune notification d'audience propriétaire n'est `PENDING`, `FAILED_RETRYABLE`, `PROCESSING` ou `FAILED_FINAL` en Production et qu'aucun événement `REQUIRES_REVIEW` ne reste ouvert avant l'armement. Le preflight général continue d'exiger les deux audiences et n'est pas affaibli.
+
+Le service web garde son flag propriétaire à `false`, mais doit déjà posséder la même valeur serveur `EMAIL_OWNER_RECIPIENT` que le Cron : c'est lui qui snapshotte la destination dans la transaction de confirmation du paiement. L'absence ou la divergence de cette variable sur l'un des deux services est un STOP humain avant toute activation.
+
 Un preflight réussi ne prouve ni la validité réseau de la clé, ni la configuration du Dashboard, ni la réception dans un client e-mail. Ces points restent des validations humaines staging puis production contrôlée.
+
+Les flags d'audience sont évalués au claim, avant tout appel provider et avant l'incrément de `attempts`. Les anciennes lignes déjà persistées pour une audience fermée sont placées en échec final local, sans appel provider et sans devenir un backlog réarmable. Pour une confirmation de paiement nouvelle, `CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false` empêche aussi la création de `CUSTOMER_PAYMENT_CONFIRMED` côté web ; ce contrôle est fail-closed et ne peut pas faire échouer la transaction de paiement. L'alerte `OWNER_NEW_ORDER` reste, elle, toujours créée atomiquement avec le paiement puis n'est envoyée que par le Cron armé. Le futur sprint client devra donc activer explicitement le flag client à la fois sur le producteur web et sur le worker après un inventaire dédié.
+
+Pour une activation propriétaire seule, seul le service Cron a besoin du flag propriétaire à `true`; le service web le conserve à `false`, garde le flag client à `false` et crée l'outbox propriétaire transactionnelle sans évaluer le flag owner.
+
+Avant cette ouverture owner-only :
+
+1. exécuter `npm run notifications:check` sur le service web et exiger notamment `Owner destination configured: true` sans changer ses flags ;
+2. confirmer humainement dans Railway que `EMAIL_OWNER_RECIPIENT` est strictement identique sur le web et le Cron, sans copier sa valeur dans un rapport ou un log ;
+3. exécuter l'override read-only `OWNER_EMAIL_NOTIFICATIONS_ENABLED=true CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false npm run notifications:owner:preflight` sur le Cron encore persisté avec owner `false` ;
+4. ne pas utiliser le preflight général, réservé à l'ouverture future de toutes les audiences, comme preuve d'une activation owner-only.
 
 ## Activation humaine
 
@@ -201,7 +222,7 @@ Un preflight réussi ne prouve ni la validité réseau de la clé, ni la configu
 6. Laisser `NOTIFICATION_WORKER_ENABLED=false` pendant le premier boot de configuration, sans cron actif.
 7. Lorsque la configuration candidate est prête, armer explicitement le worker tout en laissant le cron absent, puis exécuter `npm run notifications:preflight` dans le conteneur candidat.
 8. Après validation opérateur du preflight, configurer ou activer le déclenchement du worker selon la procédure d'exploitation.
-9. Effectuer un unique smoke test propriétaire explicitement autorisé avant toute ouverture client.
+9. Ne pas rejouer le one-shot V0.8.1.2 déjà livré. Après ouverture explicite des paiements dans un sprint distinct, effectuer une unique commande métier contrôlée et vérifier son unique `OWNER_NEW_ORDER`.
 10. Surveiller l'outbox, les webhooks et les suppressions.
 
 ## Rollback

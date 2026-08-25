@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 
 import { parseNotificationConfiguration } from "@/lib/notifications/config";
 import {
+  automaticNotificationRetryIsSafe,
   classifyNotificationFailure,
   manualRetryAllowed,
   MAXIMUM_NOTIFICATION_ATTEMPTS,
@@ -40,6 +41,16 @@ type Transaction = Prisma.TransactionClient;
 export const ownerNewOrderNotificationKey = (orderId: string) => `order:${orderId}:owner-new:email`;
 export const customerPaymentNotificationKey = (orderId: string) => `order:${orderId}:payment-confirmed:email`;
 export const customerDeliveryNotificationKey = (orderId: string) => `order:${orderId}:delivery-ready:email`;
+
+export function clientNotificationEnqueueEnabled(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const explicit = environment.CLIENT_EMAIL_NOTIFICATIONS_ENABLED?.trim().toLowerCase();
+  if (explicit === "true") return true;
+  if (explicit === "false") return false;
+  const deployment = environment.NOTIFICATION_DEPLOYMENT_ENV?.trim().toLowerCase();
+  return deployment ? deployment === "development" : environment.NODE_ENV !== "production";
+}
 
 function notificationEnvironmentSnapshot() {
   const value = process.env.NOTIFICATION_DEPLOYMENT_ENV?.trim().toLowerCase();
@@ -159,12 +170,14 @@ export function enqueueOwnerNewOrderNotification(transaction: Transaction, order
 export async function enqueuePaymentConfirmedNotifications(transaction: Transaction, orderId: string) {
   const order = await transaction.order.findUniqueOrThrow({ where: { id: orderId }, select: { customerEmail: true } });
   await enqueueOwnerNewOrderNotification(transaction, orderId);
-  await enqueueOrderNotification(transaction, {
-    orderId,
-    kind: "CUSTOMER_PAYMENT_CONFIRMED",
-    recipient: order.customerEmail,
-    idempotencyKey: customerPaymentNotificationKey(orderId),
-  });
+  if (clientNotificationEnqueueEnabled()) {
+    await enqueueOrderNotification(transaction, {
+      orderId,
+      kind: "CUSTOMER_PAYMENT_CONFIRMED",
+      recipient: order.customerEmail,
+      idempotencyKey: customerPaymentNotificationKey(orderId),
+    });
+  }
 }
 
 export function enqueueCustomerDeliveryNotification(transaction: Transaction, order: { id: string; customerEmail: string }) {
@@ -207,7 +220,8 @@ function logNotification(event: string, fields: Record<string, string | number |
 export const databaseNotificationDispatchRepository: NotificationDispatchRepository = {
   async claim(id) {
     assertDatabaseConfigured();
-    const runtimeEnvironment = parseNotificationConfiguration().deploymentEnvironment;
+    const configuration = parseNotificationConfiguration();
+    const runtimeEnvironment = configuration.deploymentEnvironment;
     return prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`notifications:${id}`})) IS NULL AS locked`;
       const now = new Date();
@@ -228,6 +242,40 @@ export const databaseNotificationDispatchRepository: NotificationDispatchReposit
         || notification.status === "FAILED_RETRYABLE"
         || (notification.status === "PROCESSING" && notification.leaseExpiresAt !== null && notification.leaseExpiresAt <= now);
       if (!claimable || notification.availableAt > now) return null;
+      if (notification.attempts > 0) {
+        const firstProviderRisk = await transaction.notificationEvent.findFirst({
+          where: {
+            notificationId: id,
+            code: { in: ["DISPATCH_CLAIMED", "EXPIRED_LEASE_RECLAIMED"] },
+          },
+          orderBy: [{ occurredAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+          select: { occurredAt: true },
+        });
+        if (!automaticNotificationRetryIsSafe(firstProviderRisk?.occurredAt ?? null, now)) {
+          const blocked = await transaction.orderNotification.updateMany({
+            where: { id, status: notification.status, updatedAt: notification.updatedAt },
+            data: {
+              status: "FAILED_FINAL",
+              failedAt: now,
+              processingStartedAt: null,
+              leaseExpiresAt: null,
+              lastErrorCode: "AMBIGUOUS_PROVIDER_ACCEPTANCE",
+              lastErrorMessage: "L’état fournisseur doit être réconcilié avant tout renvoi.",
+            },
+          });
+          if (blocked.count === 1) {
+            await transaction.notificationEvent.create({
+              data: {
+                notificationId: id,
+                outcome: "REQUIRES_REVIEW",
+                code: "AMBIGUOUS_PROVIDER_ACCEPTANCE",
+                occurredAt: now,
+              },
+            });
+          }
+          return null;
+        }
+      }
       if (notification.attempts >= MAXIMUM_NOTIFICATION_ATTEMPTS) {
         await transaction.orderNotification.update({
           where: { id },
@@ -261,6 +309,38 @@ export const databaseNotificationDispatchRepository: NotificationDispatchReposit
           });
           return null;
         }
+      }
+      const audience = notificationDefinition(notification.kind).audience;
+      const disabledAudienceCode = audience === "OWNER" && !configuration.ownerEmailEnabled
+        ? "OWNER_EMAIL_DISABLED"
+        : audience === "CLIENT" && !configuration.clientEmailEnabled
+          ? "CLIENT_EMAIL_DISABLED"
+          : null;
+      if (disabledAudienceCode) {
+        const disabled = await transaction.orderNotification.updateMany({
+          where: { id, status: notification.status, updatedAt: notification.updatedAt },
+          data: {
+            status: "FAILED_FINAL",
+            failedAt: now,
+            processingStartedAt: null,
+            leaseExpiresAt: null,
+            lastErrorCode: disabledAudienceCode,
+            lastErrorMessage: audience === "OWNER"
+              ? "Les notifications propriétaire sont désactivées."
+              : "Les notifications client sont désactivées.",
+          },
+        });
+        if (disabled.count === 1) {
+          await transaction.notificationEvent.create({
+            data: {
+              notificationId: id,
+              outcome: "IGNORED",
+              code: disabledAudienceCode,
+              occurredAt: now,
+            },
+          });
+        }
+        return null;
       }
       let payload;
       try {
@@ -470,6 +550,7 @@ export async function dispatchOrderNotification(
 ) {
   const message = await dependencies.repository.claim(id);
   if (!message) return { delivered: false, skipped: true } as const;
+  let result: NotificationTransportResult;
   try {
     if (message.channel !== "EMAIL") throw new Error("No real SMS provider is configured.");
     if (!message.recipient) {
@@ -477,16 +558,24 @@ export async function dispatchOrderNotification(
       return { delivered: false, skipped: false } as const;
     }
     normalizeNotificationRecipient(message.recipient);
-    const result = await dependencies.sendEmail(message);
-    await dependencies.repository.markSent(id, result);
-    logNotification("notification.dispatch.accepted", { notificationId: id, provider: result.provider, delivered: result.deliveredImmediately });
-    return { delivered: true, skipped: false } as const;
+    result = await dependencies.sendEmail(message);
   } catch (error) {
     const failure = classifyNotificationFailure(error);
     await dependencies.repository.markFailed(id, failure);
     logNotification("notification.dispatch.failed", { notificationId: id, code: failure.code, retryable: failure.retryable });
     return { delivered: false, skipped: false } as const;
   }
+  try {
+    await dependencies.repository.markSent(id, result);
+  } catch (error) {
+    logNotification("notification.dispatch.persistence_failed", {
+      notificationId: id,
+      code: "PROVIDER_ACCEPTED_PERSISTENCE_FAILED",
+    });
+    throw error;
+  }
+  logNotification("notification.dispatch.accepted", { notificationId: id, provider: result.provider, delivered: result.deliveredImmediately });
+  return { delivered: true, skipped: false } as const;
 }
 
 export function globalNotificationDispatchWhere(now: Date, deploymentEnvironment = notificationEnvironmentSnapshot()): Prisma.OrderNotificationWhereInput {
@@ -555,6 +644,17 @@ export async function retryNotificationManually(id: string, actorUserId: string)
       attempts: notification.attempts,
     })) {
       throw new Error("Cette notification ne peut pas être rejouée.");
+    }
+    const firstProviderRisk = await transaction.notificationEvent.findFirst({
+      where: {
+        notificationId: id,
+        code: { in: ["DISPATCH_CLAIMED", "EXPIRED_LEASE_RECLAIMED"] },
+      },
+      orderBy: [{ occurredAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      select: { occurredAt: true },
+    });
+    if (!automaticNotificationRetryIsSafe(firstProviderRisk?.occurredAt ?? null, new Date())) {
+      throw new Error("Cette notification exige une réconciliation fournisseur avant tout renvoi.");
     }
     if (!recipient) throw new Error("La destination de cette notification reste indisponible.");
     if (notification.providerMessageId) {

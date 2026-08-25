@@ -151,6 +151,7 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
     ...(message.payload.rightsRequestNumber ? [`Demande : ${message.payload.rightsRequestNumber}`] : []),
     ...(message.kind === "OWNER_NEW_ORDER" ? [
       `Client : ${message.payload.customerName || "Non renseigné"} — ${message.payload.customerEmail}`,
+      ...(message.payload.workTitle ? [`Projet : ${message.payload.workTitle}`] : []),
       `Montant : ${formatEuro(message.payload.totalCents, message.payload.currency)}`,
       `Options : ${options}`,
       `Date : ${formatDate(message.payload.createdAt)}`,

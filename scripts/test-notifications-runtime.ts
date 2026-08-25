@@ -320,11 +320,20 @@ async function main() {
       "EVENT_NOT_ALLOWLISTED",
     );
 
+    const initialClientFlag = process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED;
+    process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = "false";
     await Promise.all([
       prisma.$transaction(async (transaction) => { await enqueuePaymentConfirmedNotifications(transaction, order.id); }),
       prisma.$transaction(async (transaction) => { await enqueuePaymentConfirmedNotifications(transaction, order.id); }),
     ]);
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: order.id } }), 2, "The same payment event must create exactly two logical notifications.");
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: order.id } }), 1, "Owner-only payment confirmation must create one logical notification.");
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: order.id, kind: "OWNER_NEW_ORDER" } }), 1);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: order.id, kind: "CUSTOMER_PAYMENT_CONFIRMED" } }), 0);
+    process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = "true";
+    await prisma.$transaction(async (transaction) => { await enqueuePaymentConfirmedNotifications(transaction, order.id); });
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: order.id } }), 2, "Explicit client enablement must add only the customer notification.");
+    if (initialClientFlag === undefined) delete process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED;
+    else process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = initialClientFlag;
 
     const ownerNotification = await prisma.orderNotification.findUniqueOrThrow({ where: { idempotencyKey: `order:${order.id}:owner-new:email` } });
     assert.equal(ownerNotification.recipient, null, "The runtime must not inject a real owner destination.");
@@ -391,6 +400,71 @@ async function main() {
     assert.equal(capturedLines.length, 1, "Concurrent workers wrote more than one capture envelope.");
     assert.equal(capturedLines[0]?.recipient, EMAIL);
     assert.equal(capturedLines[0]?.idempotencyKey, clientPayment.idempotencyKey);
+
+    await prisma.$transaction(async (transaction) => {
+      await enqueueOrderNotification(transaction, {
+        orderId: order.id,
+        kind: "CUSTOMER_ORDER_ACCEPTED",
+        recipient: EMAIL,
+        idempotencyKey: `order:${order.id}:client-disabled:email`,
+      });
+    });
+    const disabledClient = await prisma.orderNotification.findUniqueOrThrow({
+      where: { idempotencyKey: `order:${order.id}:client-disabled:email` },
+    });
+    const savedClientFlag = process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED;
+    process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = "false";
+    try {
+      let disabledClientProviderCalls = 0;
+      assert.deepEqual(await dispatchOrderNotification(disabledClient.id, {
+        repository: databaseNotificationDispatchRepository,
+        sendEmail: async () => {
+          disabledClientProviderCalls += 1;
+          throw new Error("A disabled client audience must not reach the provider.");
+        },
+      }), { delivered: false, skipped: true });
+      assert.equal(disabledClientProviderCalls, 0);
+      const disabledClientAfter = await prisma.orderNotification.findUniqueOrThrow({ where: { id: disabledClient.id } });
+      assert.equal(disabledClientAfter.status, "FAILED_FINAL");
+      assert.equal(disabledClientAfter.attempts, 0);
+      assert.equal(disabledClientAfter.lastErrorCode, "CLIENT_EMAIL_DISABLED");
+      assert.equal(await prisma.notificationEvent.count({
+        where: { notificationId: disabledClient.id, code: "CLIENT_EMAIL_DISABLED", outcome: "IGNORED" },
+      }), 1);
+    } finally {
+      if (savedClientFlag === undefined) delete process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED;
+      else process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = savedClientFlag;
+    }
+
+    await prisma.$transaction(async (transaction) => {
+      await enqueueOrderNotification(transaction, {
+        orderId: order.id,
+        kind: "OWNER_PAYMENT_INCIDENT",
+        recipient: null,
+        idempotencyKey: `order:${order.id}:owner-disabled:email`,
+      });
+    });
+    const disabledOwner = await prisma.orderNotification.findUniqueOrThrow({
+      where: { idempotencyKey: `order:${order.id}:owner-disabled:email` },
+    });
+    const savedOwnerFlag = process.env.OWNER_EMAIL_NOTIFICATIONS_ENABLED;
+    process.env.OWNER_EMAIL_NOTIFICATIONS_ENABLED = "false";
+    try {
+      assert.deepEqual(await dispatchOrderNotification(disabledOwner.id, {
+        repository: databaseNotificationDispatchRepository,
+        sendEmail: async () => { throw new Error("A disabled owner audience must not reach the provider."); },
+      }), { delivered: false, skipped: true });
+      const disabledOwnerAfter = await prisma.orderNotification.findUniqueOrThrow({ where: { id: disabledOwner.id } });
+      assert.equal(disabledOwnerAfter.status, "FAILED_FINAL");
+      assert.equal(disabledOwnerAfter.attempts, 0);
+      assert.equal(disabledOwnerAfter.lastErrorCode, "OWNER_EMAIL_DISABLED");
+      assert.equal(await prisma.notificationEvent.count({
+        where: { notificationId: disabledOwner.id, code: "OWNER_EMAIL_DISABLED", outcome: "IGNORED" },
+      }), 1);
+    } finally {
+      if (savedOwnerFlag === undefined) delete process.env.OWNER_EMAIL_NOTIFICATIONS_ENABLED;
+      else process.env.OWNER_EMAIL_NOTIFICATIONS_ENABLED = savedOwnerFlag;
+    }
 
     await prisma.$transaction(async (transaction) => { await enqueueCustomerDeliveryNotification(transaction, { id: order.id, customerEmail: EMAIL }); });
     const delivery = await prisma.orderNotification.findUniqueOrThrow({ where: { idempotencyKey: `order:${order.id}:delivery-ready:email` } });
@@ -525,22 +599,151 @@ async function main() {
     const expiredLease = await prisma.orderNotification.findUniqueOrThrow({
       where: { idempotencyKey: `order:${order.id}:expired-lease:email` },
     });
-    const expiredAt = new Date(Date.now() - 60_000);
+    const providerRequests: string[] = [];
+    const providerAcceptances = new Map<string, string>();
+    const idempotentProvider = async (message: Parameters<typeof sendOrderNotificationEmail>[0]) => {
+      providerRequests.push(message.idempotencyKey);
+      let providerMessageId = providerAcceptances.get(message.idempotencyKey);
+      if (!providerMessageId) {
+        providerMessageId = "email_v0814_recovered_after_crash";
+        providerAcceptances.set(message.idempotencyKey, providerMessageId);
+      }
+      return { provider: "RESEND" as const, providerMessageId, deliveredImmediately: false };
+    };
+    const simulatedPersistenceCrash = new Error("simulated post-provider database crash");
+    await assert.rejects(dispatchOrderNotification(expiredLease.id, {
+      repository: {
+        claim: databaseNotificationDispatchRepository.claim,
+        markSent: async () => { throw simulatedPersistenceCrash; },
+        markFailed: databaseNotificationDispatchRepository.markFailed,
+      },
+      sendEmail: idempotentProvider,
+    }), simulatedPersistenceCrash);
+    const afterCrash = await prisma.orderNotification.findUniqueOrThrow({ where: { id: expiredLease.id } });
+    assert.equal(afterCrash.status, "PROCESSING");
+    assert.equal(afterCrash.attempts, 1);
+    assert.equal(afterCrash.providerMessageId, null);
     await prisma.orderNotification.update({
       where: { id: expiredLease.id },
-      data: { status: "PROCESSING", attempts: 1, processingStartedAt: expiredAt, leaseExpiresAt: expiredAt },
+      data: { leaseExpiresAt: new Date(Date.now() - 60_000) },
     });
-    let recoveredLeaseCalls = 0;
     await dispatchOrderNotification(expiredLease.id, {
       repository: databaseNotificationDispatchRepository,
-      sendEmail: async () => {
-        recoveredLeaseCalls += 1;
-        return { provider: "CAPTURE", providerMessageId: "capture_v078_recovered", deliveredImmediately: true };
-      },
+      sendEmail: idempotentProvider,
     });
-    assert.equal(recoveredLeaseCalls, 1);
-    assert.equal((await prisma.orderNotification.findUniqueOrThrow({ where: { id: expiredLease.id } })).attempts, 2);
+    assert.deepEqual(providerRequests, [expiredLease.idempotencyKey, expiredLease.idempotencyKey]);
+    assert.equal(providerAcceptances.size, 1, "The idempotent provider accepted the logical message more than once.");
+    const recovered = await prisma.orderNotification.findUniqueOrThrow({ where: { id: expiredLease.id } });
+    assert.equal(recovered.attempts, 2);
+    assert.equal(recovered.status, "SENT");
+    assert.equal(recovered.providerMessageId, "email_v0814_recovered_after_crash");
     assert.equal(await prisma.notificationEvent.count({ where: { notificationId: expiredLease.id, code: "EXPIRED_LEASE_RECLAIMED" } }), 1);
+    assert.deepEqual(await processVerifiedResendWebhookEvent({
+      providerEventId: `${PROVIDER_EVENT_PREFIX}recovered-after-crash`,
+      type: "email.delivered",
+      occurredAt: new Date(),
+      providerMessageId: "email_v0814_recovered_after_crash",
+      recipient: EMAIL,
+      suppressionOrigin: null,
+      bounceType: null,
+      bounceSubType: null,
+      deploymentEnvironment: "development",
+    }), { outcome: "PROCESSED", duplicate: false });
+    assert.equal((await prisma.orderNotification.findUniqueOrThrow({ where: { id: expiredLease.id } })).status, "DELIVERED");
+
+    await prisma.$transaction(async (transaction) => {
+      await enqueueOrderNotification(transaction, {
+        orderId: order.id,
+        kind: "CUSTOMER_ORDER_ACCEPTED",
+        recipient: EMAIL,
+        idempotencyKey: `order:${order.id}:ambiguous-old-processing:email`,
+      });
+    });
+    const ambiguousProcessing = await prisma.orderNotification.findUniqueOrThrow({
+      where: { idempotencyKey: `order:${order.id}:ambiguous-old-processing:email` },
+    });
+    const oldProviderRiskAt = new Date(Date.now() - 13 * 60 * 60_000);
+    await prisma.$transaction([
+      prisma.orderNotification.update({
+        where: { id: ambiguousProcessing.id },
+        data: {
+          status: "PROCESSING",
+          attempts: 1,
+          processingStartedAt: oldProviderRiskAt,
+          leaseExpiresAt: oldProviderRiskAt,
+        },
+      }),
+      prisma.notificationEvent.create({
+        data: {
+          notificationId: ambiguousProcessing.id,
+          outcome: "PROCESSED",
+          code: "DISPATCH_CLAIMED",
+          occurredAt: oldProviderRiskAt,
+        },
+      }),
+    ]);
+    let ambiguousProviderCalls = 0;
+    assert.deepEqual(await dispatchOrderNotification(ambiguousProcessing.id, {
+      repository: databaseNotificationDispatchRepository,
+      sendEmail: async () => {
+        ambiguousProviderCalls += 1;
+        throw new Error("An ambiguous notification must not reach the provider.");
+      },
+    }), { delivered: false, skipped: true });
+    assert.equal(ambiguousProviderCalls, 0);
+    const blockedAmbiguous = await prisma.orderNotification.findUniqueOrThrow({ where: { id: ambiguousProcessing.id } });
+    assert.equal(blockedAmbiguous.status, "FAILED_FINAL");
+    assert.equal(blockedAmbiguous.lastErrorCode, "AMBIGUOUS_PROVIDER_ACCEPTANCE");
+    assert.equal(await prisma.notificationEvent.count({
+      where: { notificationId: ambiguousProcessing.id, code: "AMBIGUOUS_PROVIDER_ACCEPTANCE", outcome: "REQUIRES_REVIEW" },
+    }), 1);
+
+    await prisma.$transaction(async (transaction) => {
+      await enqueueOrderNotification(transaction, {
+        orderId: order.id,
+        kind: "CUSTOMER_ORDER_ACCEPTED",
+        recipient: EMAIL,
+        idempotencyKey: `order:${order.id}:ambiguous-old-retryable:email`,
+      });
+    });
+    const ambiguousRetryable = await prisma.orderNotification.findUniqueOrThrow({
+      where: { idempotencyKey: `order:${order.id}:ambiguous-old-retryable:email` },
+    });
+    await prisma.$transaction([
+      prisma.orderNotification.update({
+        where: { id: ambiguousRetryable.id },
+        data: {
+          status: "FAILED_RETRYABLE",
+          attempts: 1,
+          availableAt: new Date(Date.now() - 60_000),
+          failedAt: oldProviderRiskAt,
+          lastErrorCode: "PROVIDER_TEMPORARY",
+          lastErrorMessage: "Le fournisseur est temporairement indisponible.",
+        },
+      }),
+      prisma.notificationEvent.create({
+        data: {
+          notificationId: ambiguousRetryable.id,
+          outcome: "PROCESSED",
+          code: "DISPATCH_CLAIMED",
+          occurredAt: oldProviderRiskAt,
+        },
+      }),
+    ]);
+    await assert.rejects(
+      retryNotificationManually(ambiguousRetryable.id, user.id),
+      /réconciliation fournisseur/i,
+    );
+    assert.equal((await prisma.orderNotification.findUniqueOrThrow({ where: { id: ambiguousRetryable.id } })).status, "FAILED_RETRYABLE");
+    assert.deepEqual(await dispatchOrderNotification(ambiguousRetryable.id, {
+      repository: databaseNotificationDispatchRepository,
+      sendEmail: async () => {
+        ambiguousProviderCalls += 1;
+        throw new Error("An expired retry window must not reach the provider.");
+      },
+    }), { delivered: false, skipped: true });
+    assert.equal(ambiguousProviderCalls, 0);
+    assert.equal((await prisma.orderNotification.findUniqueOrThrow({ where: { id: ambiguousRetryable.id } })).lastErrorCode, "AMBIGUOUS_PROVIDER_ACCEPTANCE");
 
     await prisma.$transaction(async (transaction) => {
       await enqueueOrderNotification(transaction, {

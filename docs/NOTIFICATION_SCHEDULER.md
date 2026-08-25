@@ -30,7 +30,7 @@ Un tick traite exactement un lot borné à 25. Il n'existe aucune boucle de drai
 
 `NOTIFICATION_SCHEDULER_MODE` est `disabled` par défaut. Le mode automatique exige exactement `railway-cron`. Si `NOTIFICATION_WORKER_ENABLED=false`, aucun claim ni appel fournisseur n'est effectué et le tick quitte avec succès. Si le worker est armé alors que le scheduler, l'e-mail ou sa configuration sont invalides, la commande échoue avant tout claim.
 
-Le process n'intercepte pas `SIGTERM`. Une interruption Railway termine donc le process ; toute ligne déjà `PROCESSING` conserve sa lease PostgreSQL et devient récupérable après son expiration. Chaque appel Resend reste borné par le timeout existant.
+Le process n'intercepte pas `SIGTERM`. Une interruption Railway termine donc le process ; toute ligne déjà `PROCESSING` conserve sa lease PostgreSQL. Après expiration, elle n'est récupérable que si le premier claim fournisseur date de moins de 12 heures ; au-delà, elle devient `FAILED_FINAL / AMBIGUOUS_PROVIDER_ACCEPTANCE` et exige une réconciliation humaine. Chaque appel Resend reste borné par le timeout existant.
 
 ## Concurrence, retries et crash
 
@@ -41,7 +41,7 @@ La sélection respecte l'environnement, `availableAt`, le statut retryable, cinq
 - le second contrôle de `deploymentEnvironment` dans la transaction ;
 - la même `idempotencyKey` persistante côté Resend.
 
-Deux ticks ou plusieurs replicas peuvent donc sélectionner la même ligne sans l'envoyer deux fois. Un crash après claim laisse la lease expirer. Un crash après acceptation fournisseur reprend avec la même clé provider ; le webhook précoce et la réconciliation V0.7.8 restent inchangés. Le scheduler ne modifie jamais `availableAt` et n'accélère aucun backoff.
+Deux ticks ou plusieurs replicas peuvent donc sélectionner la même ligne sans l'envoyer deux fois. Un crash après claim laisse la lease expirer. Pendant les 12 heures suivant le premier claim, un crash après acceptation fournisseur reprend avec la même clé provider, encore couverte par la fenêtre d'idempotence Resend de 24 heures. Ensuite, aucun retry automatique ou manuel n'est permis : la ligne passe en revue humaine. Le webhook précoce et la réconciliation V0.7.8 restent inchangés. Le scheduler ne modifie jamais `availableAt` et n'accélère aucun backoff.
 
 ## Preflight read-only
 

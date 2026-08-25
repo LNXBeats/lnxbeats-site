@@ -61,6 +61,7 @@
     "notifications:dispatch": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-dispatch.ts",
     "notifications:check": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-check.ts",
     "notifications:preflight": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-preflight.ts",
+    "notifications:owner:preflight": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-owner-preflight.ts",
     "notifications:scheduler:run": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-scheduler.ts",
     "notifications:scheduler:preflight": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-scheduler-preflight.ts",
     "test:notification:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-notifications-runtime.ts",

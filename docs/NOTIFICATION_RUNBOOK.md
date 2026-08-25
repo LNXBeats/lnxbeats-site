@@ -111,23 +111,23 @@ Une décision opérateur de blocage utilise l'action Admin sur une notification 
 
 **Diagnostiquer** : inspecter la lease, le dernier event `DISPATCH_CLAIMED`, les logs structurés et l'état du provider. Un crash après acceptation provider doit être traité avec prudence à cause de la fenêtre d'idempotence fournisseur.
 
-**Reprendre** : laisser le claim normal récupérer la lease expirée avec la même clé d'idempotence. Si l'état provider est ambigu, exiger une réconciliation opérateur avant retry manuel.
+**Reprendre** : laisser le claim normal récupérer une lease récente avec la même clé d'idempotence. Le premier claim fixe une fenêtre automatique maximale de 12 heures, volontairement inférieure aux 24 heures de conservation des clés Resend. Au-delà, ou si la preuve du premier claim manque, la ligne passe en `FAILED_FINAL` avec `AMBIGUOUS_PROVIDER_ACCEPTANCE`; exiger alors une réconciliation opérateur et ne jamais réarmer automatiquement.
 
 ## 9. E-mails client désactivés
 
 **Signaux** : `CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false` ou échec final `CLIENT_EMAIL_DISABLED`.
 
-**Effet attendu** : Payment, Order, Delivery, Refund et Rights continuent normalement. Aucun appel provider client.
+**Effet attendu** : Payment, Order, Delivery, Refund et Rights continuent normalement. Le claim ferme la ligne en échec final avant d'incrémenter les tentatives; aucun appel provider client.
 
-**Reprendre** : seulement après validation humaine, remettre le flag client, exécuter le preflight et rejouer individuellement les notifications toujours pertinentes et éligibles. Ne pas recréer les événements métier.
+**Reprendre** : seulement après validation humaine, remettre le flag client et exécuter le preflight. Une ligne fermée par `CLIENT_EMAIL_DISABLED` est finale et non rejouable ; seuls de nouveaux événements métier créés après l'activation peuvent être envoyés.
 
 ## 10. E-mails propriétaire désactivés
 
 **Signaux** : `OWNER_EMAIL_NOTIFICATIONS_ENABLED=false` ou échec final `OWNER_EMAIL_DISABLED`.
 
-**Effet attendu** : commandes, paiements, remboursements, incidents et droits restent enregistrés. Aucun fallback d'adresse.
+**Effet attendu** : commandes, paiements, remboursements, incidents et droits restent enregistrés. Le claim ferme la ligne en échec final avant d'incrémenter les tentatives; aucun fallback d'adresse et aucun appel provider.
 
-**Reprendre** : vérifier la destination serveur, activer le flag après preflight, puis utiliser le retry Admin sur chaque ligne pertinente. Ne jamais envoyer en masse sans inventaire.
+**Reprendre** : vérifier la destination serveur puis activer le flag après preflight. Une ligne fermée par `OWNER_EMAIL_DISABLED` est finale et non rejouable ; seuls de nouveaux événements métier créés après l'activation peuvent être envoyés. Ne jamais réarmer un historique en masse.
 
 ## 11. Rollback production
 

@@ -9,6 +9,10 @@ import type {
 
 export const MAXIMUM_NOTIFICATION_ATTEMPTS = 5;
 export const NOTIFICATION_LEASE_MS = 5 * 60_000;
+// Resend retains idempotency keys for 24 hours. Automatic retries stop at
+// half that window so an interrupted worker cannot silently resend after the
+// provider's deduplication guarantee has expired.
+export const NOTIFICATION_PROVIDER_IDEMPOTENCY_SAFE_AGE_MS = 12 * 60 * 60_000;
 export const NOTIFICATION_TEMPLATE_VERSION = 1;
 export const NOTIFICATION_PAYLOAD_VERSION = 1;
 export const OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY = "qa:owner-smoke:v0732:01";
@@ -44,6 +48,11 @@ export function notificationDefinition(kind: OrderNotificationKind) {
   return definitions[kind];
 }
 
+export function notificationKindsForAudience(audience: "OWNER" | "CLIENT") {
+  return (Object.keys(definitions) as OrderNotificationKind[])
+    .filter((kind) => definitions[kind].audience === audience);
+}
+
 export function normalizeNotificationRecipient(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase() ?? "";
   if (!normalized || normalized.length > 320 || /[\r\n]/.test(normalized) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
@@ -77,6 +86,15 @@ export function isOfficialResendTestRecipient(value: string) {
 export function notificationBackoffMs(attempts: number) {
   const delays = [5 * 60_000, 30 * 60_000, 2 * 60 * 60_000, 6 * 60 * 60_000] as const;
   return delays[Math.min(Math.max(attempts - 1, 0), delays.length - 1)]!;
+}
+
+export function automaticNotificationRetryIsSafe(
+  firstProviderRiskAt: Date | null,
+  now: Date,
+) {
+  if (!firstProviderRiskAt) return false;
+  const ageMs = now.getTime() - firstProviderRiskAt.getTime();
+  return ageMs >= 0 && ageMs < NOTIFICATION_PROVIDER_IDEMPOTENCY_SAFE_AGE_MS;
 }
 
 const payloadKeys = new Set([

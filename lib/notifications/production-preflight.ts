@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NOTIFICATION_PRODUCTION_CONFIRMATION, NOTIFICATION_SCHEDULER_MODE, parseNotificationConfiguration, RESEND_API_BASE_URL } from "@/lib/notifications/config";
-import { isFictitiousRecipient } from "@/lib/notifications/domain";
+import { isFictitiousRecipient, notificationKindsForAudience } from "@/lib/notifications/domain";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 export type NotificationPreflightRule = Readonly<{
@@ -9,6 +9,8 @@ export type NotificationPreflightRule = Readonly<{
   passed: boolean;
   detail?: string;
 }>;
+
+export type ProductionNotificationPreflightProfile = "all-audiences" | "owner-only";
 
 function present(value: string | undefined, prefix?: string) {
   const normalized = value?.trim() ?? "";
@@ -25,13 +27,20 @@ function absent(environment: Record<string, string | undefined>, names: readonly
 
 export function evaluateProductionNotificationEnvironment(
   environment: Record<string, string | undefined>,
+  profile: ProductionNotificationPreflightProfile = "all-audiences",
 ): NotificationPreflightRule[] {
+  const ownerOnly = profile === "owner-only";
   const rules: NotificationPreflightRule[] = [
     { name: "deployment.production", passed: environment.NOTIFICATION_DEPLOYMENT_ENV?.trim().toLowerCase() === "production" },
     { name: "transport.resend", passed: environment.NOTIFICATION_EMAIL_TRANSPORT?.trim().toLowerCase() === "resend" },
     { name: "email.global.enabled", passed: flag(environment.EMAIL_NOTIFICATIONS_ENABLED) },
     { name: "email.owner.enabled", passed: flag(environment.OWNER_EMAIL_NOTIFICATIONS_ENABLED) },
-    { name: "email.client.enabled", passed: flag(environment.CLIENT_EMAIL_NOTIFICATIONS_ENABLED) },
+    {
+      name: ownerOnly ? "email.client.disabled" : "email.client.enabled",
+      passed: ownerOnly
+        ? environment.CLIENT_EMAIL_NOTIFICATIONS_ENABLED?.trim().toLowerCase() === "false"
+        : flag(environment.CLIENT_EMAIL_NOTIFICATIONS_ENABLED),
+    },
     { name: "worker.enabled", passed: flag(environment.NOTIFICATION_WORKER_ENABLED) },
     { name: "scheduler.mode.railwayCron", passed: environment.NOTIFICATION_SCHEDULER_MODE?.trim().toLowerCase() === NOTIFICATION_SCHEDULER_MODE },
     { name: "sms.disabled", passed: environment.SMS_TRANSPORT?.trim().toLowerCase() === "disabled" && !flag(environment.SMS_NOTIFICATIONS_ENABLED) },
@@ -58,6 +67,7 @@ export function evaluateProductionNotificationEnvironment(
       { name: "configuration.valid", passed: true },
       { name: "sender.configured", passed: Boolean(configuration.emailFrom) },
       { name: "replyTo.configured", passed: Boolean(configuration.emailReplyTo) },
+      ...(ownerOnly ? [{ name: "replyTo.owner.expected", passed: configuration.emailReplyTo === "contact@lnxbeats.fr" }] : []),
       { name: "owner.recipient.configured", passed: Boolean(configuration.ownerRecipient) },
       { name: "canonical.https", passed: Boolean(configuration.canonicalUrl?.startsWith("https://")) },
       { name: "auth.canonical.match", passed: Boolean(configuration.canonicalUrl && authUrl === configuration.canonicalUrl) },
@@ -138,6 +148,45 @@ export async function evaluateProductionNotificationDatabase(
   ];
 }
 
+export async function evaluateProductionOwnerNotificationDatabase(
+  database: DatabaseClient = prisma,
+  ownerRecipient = process.env.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null,
+): Promise<NotificationPreflightRule[]> {
+  const baseRules = await evaluateProductionNotificationDatabase(database, ownerRecipient);
+  const ownerKinds = notificationKindsForAudience("OWNER");
+  const [pending, retryable, processing, finalFailures, nonOwnerClaimable, requiresReview] = await Promise.all([
+    database.orderNotification.count({
+      where: { deploymentEnvironment: "production", kind: { in: ownerKinds }, status: "PENDING" },
+    }),
+    database.orderNotification.count({
+      where: { deploymentEnvironment: "production", kind: { in: ownerKinds }, status: "FAILED_RETRYABLE" },
+    }),
+    database.orderNotification.count({
+      where: { deploymentEnvironment: "production", kind: { in: ownerKinds }, status: "PROCESSING" },
+    }),
+    database.orderNotification.count({
+      where: { deploymentEnvironment: "production", kind: { in: ownerKinds }, status: "FAILED_FINAL" },
+    }),
+    database.orderNotification.count({
+      where: {
+        deploymentEnvironment: "production",
+        kind: { notIn: ownerKinds },
+        status: { in: ["PENDING", "FAILED_RETRYABLE", "PROCESSING"] },
+      },
+    }),
+    database.notificationEvent.count({ where: { outcome: "REQUIRES_REVIEW" } }),
+  ]);
+  return [
+    ...baseRules,
+    { name: "outbox.owner.pending", passed: pending === 0, detail: `count=${pending}` },
+    { name: "outbox.owner.retryable", passed: retryable === 0, detail: `count=${retryable}` },
+    { name: "outbox.owner.processing", passed: processing === 0, detail: `count=${processing}` },
+    { name: "outbox.owner.final.none", passed: finalFailures === 0, detail: `count=${finalFailures}` },
+    { name: "outbox.nonOwner.claimable.none", passed: nonOwnerClaimable === 0, detail: `count=${nonOwnerClaimable}` },
+    { name: "events.requiresReview.none", passed: requiresReview === 0, detail: `count=${requiresReview}` },
+  ];
+}
+
 export async function runProductionNotificationPreflight(
   environment: Record<string, string | undefined> = process.env,
 ) {
@@ -145,6 +194,23 @@ export async function runProductionNotificationPreflight(
   let databaseRules: NotificationPreflightRule[];
   try {
     databaseRules = await evaluateProductionNotificationDatabase(prisma, environment.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null);
+  } catch {
+    databaseRules = [{ name: "database.readOnlyCheck", passed: false }];
+  }
+  const rules = [...configurationRules, ...databaseRules];
+  return { passed: rules.every((rule) => rule.passed), rules } as const;
+}
+
+export async function runProductionOwnerNotificationPreflight(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const configurationRules = evaluateProductionNotificationEnvironment(environment, "owner-only");
+  let databaseRules: NotificationPreflightRule[];
+  try {
+    databaseRules = await evaluateProductionOwnerNotificationDatabase(
+      prisma,
+      environment.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null,
+    );
   } catch {
     databaseRules = [{ name: "database.readOnlyCheck", passed: false }];
   }

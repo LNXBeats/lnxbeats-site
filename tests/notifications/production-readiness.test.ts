@@ -12,7 +12,11 @@ import {
   manualRetryAllowed,
   notificationDefinition,
 } from "@/lib/notifications/domain";
-import { evaluateProductionNotificationDatabase, evaluateProductionNotificationEnvironment } from "@/lib/notifications/production-preflight";
+import {
+  evaluateProductionNotificationDatabase,
+  evaluateProductionNotificationEnvironment,
+  evaluateProductionOwnerNotificationDatabase,
+} from "@/lib/notifications/production-preflight";
 import { globalNotificationDispatchWhere } from "@/lib/notifications/service";
 import { orderNotificationTemplate } from "@/lib/notifications/templates";
 import { createNotificationTransport } from "@/lib/notifications/transport";
@@ -35,7 +39,7 @@ const productionEnvironment = {
   RESEND_WEBHOOK_SECRET: `whsec_${"b".repeat(32)}`,
   NOTIFICATION_WORKER_SECRET: "c".repeat(32),
   EMAIL_FROM: "LNX Beats <notifications@mail.lnxbeats.fr>",
-  EMAIL_REPLY_TO: "support@lnxbeats.fr",
+  EMAIL_REPLY_TO: "contact@lnxbeats.fr",
   EMAIL_OWNER_RECIPIENT: "owner@lnxbeats.fr",
   APP_CANONICAL_URL: "https://lnxbeats.fr",
   AUTH_URL: "https://lnxbeats.fr",
@@ -173,6 +177,34 @@ test("le préflight production rend toutes les règles d'environnement explicite
   assert.equal(blocked.find((rule) => rule.name === "configuration.valid")?.passed, false);
 });
 
+test("le préflight owner-only exige owner actif et client explicitement fermé", () => {
+  const ownerOnlyEnvironment = {
+    ...productionEnvironment,
+    CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
+  };
+  const passing = evaluateProductionNotificationEnvironment(ownerOnlyEnvironment, "owner-only");
+  assert.deepEqual(passing.filter((rule) => !rule.passed), []);
+  assert.equal(passing.find((rule) => rule.name === "email.owner.enabled")?.passed, true);
+  assert.equal(passing.find((rule) => rule.name === "email.client.disabled")?.passed, true);
+
+  const clientOpened = evaluateProductionNotificationEnvironment(productionEnvironment, "owner-only");
+  assert.equal(clientOpened.find((rule) => rule.name === "email.client.disabled")?.passed, false);
+  const clientAbsent = evaluateProductionNotificationEnvironment(Object.fromEntries(
+    Object.entries(ownerOnlyEnvironment).filter(([name]) => name !== "CLIENT_EMAIL_NOTIFICATIONS_ENABLED"),
+  ), "owner-only");
+  assert.equal(clientAbsent.find((rule) => rule.name === "email.client.disabled")?.passed, false);
+  const ownerClosed = evaluateProductionNotificationEnvironment({
+    ...ownerOnlyEnvironment,
+    OWNER_EMAIL_NOTIFICATIONS_ENABLED: "false",
+  }, "owner-only");
+  assert.equal(ownerClosed.find((rule) => rule.name === "email.owner.enabled")?.passed, false);
+  const wrongReplyTo = evaluateProductionNotificationEnvironment({
+    ...ownerOnlyEnvironment,
+    EMAIL_REPLY_TO: "support@lnxbeats.fr",
+  }, "owner-only");
+  assert.equal(wrongReplyTo.find((rule) => rule.name === "replyTo.owner.expected")?.passed, false);
+});
+
 test("le préflight base reste strictement en lecture et valide le schéma courant", async () => {
   const database = {
     $queryRaw: async () => [{ tables_ready: true, indexes_ready: true, migrations: 17n, latest_ready: true }],
@@ -189,6 +221,40 @@ test("le préflight base reste strictement en lecture et valide le schéma coura
   } as unknown as Parameters<typeof evaluateProductionNotificationDatabase>[0];
   const blocked = await evaluateProductionNotificationDatabase(outdatedDatabase, "owner@lnxbeats.fr");
   assert.equal(blocked.find((rule) => rule.name === "database.migrations")?.passed, false);
+
+  const ownerPassing = await evaluateProductionOwnerNotificationDatabase(database, "owner@lnxbeats.fr");
+  assert.deepEqual(ownerPassing.filter((rule) => !rule.passed), []);
+  const ownerBacklogDatabase = {
+    ...database,
+    orderNotification: {
+      count: async (input: { where?: { status?: string; kind?: unknown } }) => (
+        input.where?.status === "PENDING" && input.where.kind ? 1 : 0
+      ),
+    },
+  } as unknown as Parameters<typeof evaluateProductionOwnerNotificationDatabase>[0];
+  const ownerBlocked = await evaluateProductionOwnerNotificationDatabase(ownerBacklogDatabase, "owner@lnxbeats.fr");
+  assert.equal(ownerBlocked.find((rule) => rule.name === "outbox.owner.pending")?.passed, false);
+  assert.equal(ownerBlocked.find((rule) => rule.name === "outbox.owner.pending")?.detail, "count=1");
+
+  const reviewBacklogDatabase = {
+    ...database,
+    notificationEvent: { count: async () => 1 },
+  } as unknown as Parameters<typeof evaluateProductionOwnerNotificationDatabase>[0];
+  const reviewBlocked = await evaluateProductionOwnerNotificationDatabase(reviewBacklogDatabase, "owner@lnxbeats.fr");
+  assert.equal(reviewBlocked.find((rule) => rule.name === "events.requiresReview.none")?.passed, false);
+  assert.equal(reviewBlocked.find((rule) => rule.name === "events.requiresReview.none")?.detail, "count=1");
+
+  const clientBacklogDatabase = {
+    ...database,
+    orderNotification: {
+      count: async (input: { where?: { kind?: { notIn?: unknown }; status?: unknown } }) => (
+        input.where?.kind?.notIn && typeof input.where.status === "object" ? 1 : 0
+      ),
+    },
+  } as unknown as Parameters<typeof evaluateProductionOwnerNotificationDatabase>[0];
+  const clientBacklogBlocked = await evaluateProductionOwnerNotificationDatabase(clientBacklogDatabase, "owner@lnxbeats.fr");
+  assert.equal(clientBacklogBlocked.find((rule) => rule.name === "outbox.nonOwner.claimable.none")?.passed, false);
+  assert.equal(clientBacklogBlocked.find((rule) => rule.name === "outbox.nonOwner.claimable.none")?.detail, "count=1");
 });
 
 test("le worker isole l'environnement courant et le retry manuel reste strict", () => {
@@ -289,12 +355,19 @@ test("le transport Resend conserve les métadonnées sûres et refuse une destin
   let observedKey = "";
   let observedEnvironment = "";
   let observedTags = "";
+  let observedEnvelope: Record<string, unknown> = {};
   const transport = createNotificationTransport(configuration, {
     resendSender: async (providerMessage, options) => {
       calls += 1;
       observedKey = options.idempotencyKey;
       observedEnvironment = providerMessage.headers?.["X-LNX-Environment"] ?? "";
       observedTags = JSON.stringify(providerMessage.tags ?? []);
+      observedEnvelope = {
+        from: providerMessage.from,
+        to: providerMessage.to,
+        replyTo: providerMessage.replyTo,
+        subject: providerMessage.subject,
+      };
       return { data: { id: "email_transport_001" }, error: null, headers: null };
     },
   });
@@ -302,6 +375,12 @@ test("le transport Resend conserve les métadonnées sûres et refuse une destin
   assert.equal(calls, 1);
   assert.equal(observedKey, baseMessage.idempotencyKey);
   assert.equal(observedEnvironment, "production");
+  assert.deepEqual(observedEnvelope, {
+    from: productionEnvironment.EMAIL_FROM,
+    to: baseMessage.recipient,
+    replyTo: "contact@lnxbeats.fr",
+    subject: "Nouvelle commande LNX Beats — LNX-2026-000002",
+  });
   assert.deepEqual(JSON.parse(observedTags), [
     { name: "lnx_source", value: "order_outbox" },
     { name: "lnx_environment", value: "production" },

@@ -278,6 +278,15 @@ async function run() {
     assert.equal(receipts.filter(({ outcome }) => outcome === "PROCESSED").length, 4);
     assert.equal(await prisma.payment.count({ where: { status: "SUCCEEDED" } }), 4);
     assert.equal(await prisma.order.count({ where: { status: "PAYMENT_CONFIRMED" } }), 4);
+    const paymentNotifications = await prisma.orderNotification.groupBy({
+      by: ["kind"],
+      where: { orderId: { in: fixtures.map(({ id }) => id) } },
+      _count: { _all: true },
+    });
+    assert.deepEqual(
+      Object.fromEntries(paymentNotifications.map(({ kind, _count }) => [kind, _count._all])),
+      { CUSTOMER_PAYMENT_CONFIRMED: 4, OWNER_NEW_ORDER: 4 },
+    );
     passed.push("wrong-environment receipts are unlinked and cannot mutate Payment or Order");
 
     const adminUserId = stripeTest.order.userId;

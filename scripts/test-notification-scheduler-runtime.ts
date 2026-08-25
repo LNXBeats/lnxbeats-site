@@ -302,6 +302,9 @@ async function main() {
 
     const future = await prisma.orderNotification.create({ data: notificationData(order, "future", "staging", { availableAt: new Date(Date.now() + 60 * 60_000) }) });
     const retry = await prisma.orderNotification.create({ data: notificationData(order, "retry", "staging", { status: "FAILED_RETRYABLE", availableAt: new Date(Date.now() + 60 * 60_000), attempts: 1 }) });
+    await prisma.notificationEvent.create({
+      data: { notificationId: retry.id, outcome: "PROCESSED", code: "DISPATCH_CLAIMED", occurredAt: new Date() },
+    });
     assert.equal((await runNotificationSchedulerTick(process.env, silentDependencies)).claimed, 0, "The scheduler bypassed availableAt.");
     await prisma.orderNotification.update({ where: { id: retry.id }, data: { availableAt: new Date(Date.now() - 1_000) } });
     assert.equal((await runNotificationSchedulerTick(process.env, silentDependencies)).claimed, 1);
@@ -310,6 +313,9 @@ async function main() {
 
     const leased = await prisma.orderNotification.create({
       data: notificationData(order, "lease", "staging", { status: "PROCESSING", leaseExpiresAt: new Date(Date.now() + 60 * 60_000), attempts: 1 }),
+    });
+    await prisma.notificationEvent.create({
+      data: { notificationId: leased.id, outcome: "PROCESSED", code: "DISPATCH_CLAIMED", occurredAt: new Date() },
     });
     assert.equal((await runNotificationSchedulerTick(process.env, silentDependencies)).claimed, 0, "An active lease was reclaimed.");
     await prisma.orderNotification.update({ where: { id: leased.id }, data: { leaseExpiresAt: new Date(Date.now() - 1_000) } });

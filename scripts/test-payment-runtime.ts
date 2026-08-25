@@ -159,6 +159,23 @@ async function assertFixturesClean(stage: string) {
   assert.equal(notifications, 0, `${stage}: disposable Order notifications remain.`);
 }
 
+async function assertPaymentNotificationPair(orderId: string) {
+  const notifications = await prisma.orderNotification.findMany({
+    where: { orderId },
+    orderBy: { kind: "asc" },
+    select: { kind: true, idempotencyKey: true, deploymentEnvironment: true },
+  });
+  assert.deepEqual(notifications.map(({ kind }) => kind).sort(), [
+    "CUSTOMER_PAYMENT_CONFIRMED",
+    "OWNER_NEW_ORDER",
+  ]);
+  assert.deepEqual(notifications.map(({ idempotencyKey }) => idempotencyKey).sort(), [
+    `order:${orderId}:owner-new:email`,
+    `order:${orderId}:payment-confirmed:email`,
+  ]);
+  assert.equal(new Set(notifications.map(({ deploymentEnvironment }) => deploymentEnvironment)).size, 1);
+}
+
 function createMockGateway() {
   const requests: Array<{
     request: HostedCheckoutRequest;
@@ -693,7 +710,7 @@ async function run() {
     assert.equal(await prisma.payment.count({
       where: { orderId: pendingNinety.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
     }), 1);
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: pendingNinety.orderId } }), 2);
+    await assertPaymentNotificationPair(pendingNinety.orderId);
     const latePaypalCapture = await processVerifiedPaypalWebhookEvent({
       id: `${QA_EVENT_PREFIX}paypal_after_stripe`,
       event_type: "PAYMENT.CAPTURE.COMPLETED",
@@ -712,7 +729,7 @@ async function run() {
     assert.equal(await prisma.payment.count({
       where: { orderId: pendingNinety.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
     }), 1);
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: pendingNinety.orderId } }), 2);
+    await assertPaymentNotificationPair(pendingNinety.orderId);
     await assert.rejects(
       capturePaypalOrderForOrder(actor, QA_ORDER_NUMBERS[3], paypalAttempt.providerCheckoutId, {
         repository: createPaymentDatabasePaypalCaptureRepository(prisma),
@@ -722,7 +739,7 @@ async function run() {
         && error.code === "PAYMENT_ALREADY_COMPLETED",
     );
     assert.equal(paypal.counts().captureCalls, 0);
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: pendingNinety.orderId } }), 2);
+    await assertPaymentNotificationPair(pendingNinety.orderId);
     passed.push("Stripe and PayPal may be prepared concurrently; Stripe wins once and late PayPal capture is quarantined without duplicate notifications");
 
     const fifty = attempts.find(({ amountCents }) => amountCents === 5_000);
@@ -760,6 +777,7 @@ async function run() {
         toStatus: "PAYMENT_CONFIRMED",
       },
     }), 1);
+    await assertPaymentNotificationPair(fifty.orderId);
 
     const gatewayCallsAfterSuccess = mock.requests.length + mock.retrieved.length;
     await assert.rejects(
@@ -816,6 +834,7 @@ async function run() {
     assert.equal(reviewed.status, "REQUIRES_REVIEW");
     assert.equal(reviewed.failureCode, "WEBHOOK_AMOUNT_MISMATCH");
     assert.equal(reviewed.order.status, "AWAITING_PAYMENT");
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: sixty.orderId } }), 0);
     passed.push("amount mismatch quarantined transactionally without confirming the order");
 
     const eighty = attempts.find(({ amountCents }) => amountCents === 8_000);
@@ -832,6 +851,7 @@ async function run() {
     assert.equal(declined.status, "FAILED");
     assert.equal(declined.failureCode, "STRIPE_PAYMENT_ATTEMPT_FAILED");
     assert.equal(declined.paymentMethod, null);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: eighty.orderId } }), 0);
 
     const requestsBeforeRetry = mock.requests.length;
     const retrievalsBeforeRetry = mock.retrieved.length;
@@ -1005,7 +1025,7 @@ async function run() {
     assert.equal(await prisma.providerEvent.count({
       where: { provider: "PAYPAL", providerEventId: paypalWebhookEvent.id },
     }), 1);
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: paypalOrder.id } }), 2);
+    await assertPaymentNotificationPair(paypalOrder.id);
     passed.push("PayPal webhook success and replay produce one Payment, one receipt, one Order transition and one notification pair");
 
     console.info(`V0.7 payment runtime passed (${passed.length} groups):`);

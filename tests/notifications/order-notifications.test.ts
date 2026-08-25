@@ -6,14 +6,17 @@ import test from "node:test";
 
 import { parseNotificationConfiguration } from "@/lib/notifications/config";
 import {
+  automaticNotificationRetryIsSafe,
   classifyNotificationFailure,
   isFictitiousRecipient,
   manualRetryAllowed,
   notificationBackoffMs,
   notificationDefinition,
+  NOTIFICATION_PROVIDER_IDEMPOTENCY_SAFE_AGE_MS,
   NotificationTransportError,
 } from "@/lib/notifications/domain";
 import {
+  clientNotificationEnqueueEnabled,
   customerDeliveryNotificationKey,
   customerPaymentNotificationKey,
   dispatchOrderNotification,
@@ -44,6 +47,7 @@ const message: OrderNotificationMessage = {
     coverIncluded: true,
     priorityProcessing: true,
     createdAt: "2026-08-14T10:00:00.000Z",
+    workTitle: "Élégie <d’été>",
   },
   resourceType: "ORDER",
   resourceId: "00000000-0000-4000-8000-000000000010",
@@ -89,6 +93,15 @@ test("les clés persistantes séparent paiement, propriétaire et livraison", ()
   assert.notEqual(customerPaymentNotificationKey(id), customerDeliveryNotificationKey(id));
 });
 
+test("la création de l’outbox client échoue fermée hors développement", () => {
+  assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "production", NOTIFICATION_DEPLOYMENT_ENV: "production" }), false);
+  assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "production", NOTIFICATION_DEPLOYMENT_ENV: "staging" }), false);
+  assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "test", NOTIFICATION_DEPLOYMENT_ENV: "development" }), true);
+  assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "production", CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "true" }), true);
+  assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "test", CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false" }), false);
+  assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "production", CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "invalid" }), false);
+});
+
 test("le mapping métier définit audience, priorité et template", () => {
   assert.deepEqual(notificationDefinition("OWNER_NEW_ORDER"), { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-new-order" });
   assert.equal(notificationDefinition("CUSTOMER_DELIVERY_READY").priority, "CRITICAL");
@@ -115,6 +128,34 @@ test("une panne fournisseur reste isolée de la commande", async () => {
   assert.deepEqual(repo.counts(), { sent: 0, failed: 1 });
   assert.equal(classifyNotificationFailure(Object.assign(new Error(), { statusCode: 429 })).retryable, true);
   assert.equal(classifyNotificationFailure(Object.assign(new Error(), { statusCode: 422, name: "validation_error" })).retryable, false);
+});
+
+test("une acceptation fournisseur suivie d’un échec DB reste ambiguë sans retry technique immédiat", async () => {
+  let claimable: OrderNotificationMessage | null = message;
+  let sends = 0;
+  let failed = 0;
+  const persistenceError = new Error("simulated database persistence failure");
+  const repository: NotificationDispatchRepository = {
+    claim: async () => {
+      const claimed = claimable;
+      claimable = null;
+      return claimed;
+    },
+    markSent: async () => { throw persistenceError; },
+    markFailed: async () => { failed += 1; },
+  };
+  await assert.rejects(
+    dispatchOrderNotification(message.id, {
+      repository,
+      sendEmail: async () => {
+        sends += 1;
+        return { provider: "RESEND", providerMessageId: "email_accepted_before_db_failure", deliveredImmediately: false };
+      },
+    }),
+    persistenceError,
+  );
+  assert.equal(sends, 1);
+  assert.equal(failed, 0, "A post-acceptance DB failure must not be reclassified as a provider retry.");
 });
 
 test("la livraison reste en outbox sans appel provider lorsque les e-mails client sont désactivés", async () => {
@@ -146,6 +187,8 @@ test("les templates ont HTML, texte, deep link et garde DRAFT", () => {
   assert.match(owner.text, /\/admin\/commandes\/LNX-2026-000002/);
   assert.match(owner.text, /Commande : LNX-2026-000002/);
   assert.match(owner.text, /Montant : 90,00\s?€/u);
+  assert.match(owner.text, /Projet : Élégie ‹d’été›/u);
+  assert.match(owner.html, /Projet : Élégie &lt;d’été&gt;/u);
   assert.match(owner.html, /Client &lt;QA&gt;/);
   assert.doesNotMatch(owner.text, /<[^>]+>/);
   assert.doesNotMatch(`${owner.text}\n${owner.html}`, /providerMessageId|whsec_|sk_live_|utm_(source|medium|campaign)|tracking pixel/i);
@@ -210,4 +253,14 @@ test("backoff et retry Admin restent bornés", () => {
   assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: false, attempts: 5 }), false);
   assert.equal(manualRetryAllowed({ status: "FAILED_FINAL", suppressionActive: true }), false);
   assert.equal(manualRetryAllowed({ status: "DELIVERED", suppressionActive: false }), false);
+  const now = new Date("2026-08-25T12:00:00.000Z");
+  assert.equal(automaticNotificationRetryIsSafe(
+    new Date(now.getTime() - NOTIFICATION_PROVIDER_IDEMPOTENCY_SAFE_AGE_MS + 1),
+    now,
+  ), true);
+  assert.equal(automaticNotificationRetryIsSafe(
+    new Date(now.getTime() - NOTIFICATION_PROVIDER_IDEMPOTENCY_SAFE_AGE_MS),
+    now,
+  ), false);
+  assert.equal(automaticNotificationRetryIsSafe(null, now), false);
 });
