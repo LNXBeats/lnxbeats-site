@@ -111,7 +111,7 @@ Chaque changement important doit produire un événement horodaté et compréhen
 
 ## Droits d’exploitation après livraison
 
-Commander porte uniquement la création personnelle, de 50 à 90 € selon les options. Aucun choix commercial ni tarif à 1 500 € ne doit détourner la rencontre artistique initiale.
+Commander porte uniquement la création personnelle, de 20 à 60 € selon les options pour la grille courante `2026-08-v2`. Les Orders historiques `2026-08-v1` conservent leurs montants de 50 à 90 €. Aucun choix commercial ni tarif à 1 500 € ne doit détourner la rencontre artistique initiale.
 
 Une fois l’`Order` livrée, le propriétaire peut ouvrir soit une demande de licence de publication à 150 €, soit une étude de partenariat d’exploitation à 1 500 €. Le détail privé sépare le paiement initial, le dossier de droits et ses documents. Ces montants restent des cibles futures : aucun paiement de droits, droit actif ou déclaration SACEM n’est ouvert dans V0.7.2.
 
@@ -235,7 +235,7 @@ Cette version :
 - valide les briefs et calcule les prix côté serveur ;
 - finalise une demande en attente de paiement et expose sa timeline privée ;
 - protège et normalise les photos de référence ;
-- force la commande initiale à l’usage personnel et à 90 € maximum ;
+- force toute nouvelle commande initiale à l’usage personnel et à 60 € maximum sous v2, sans réécrire les commandes historiques v1 plafonnées à 90 € ;
 - enregistre, après livraison seulement, une demande autonome de droits à prix serveur ;
 - publie les seules informations professionnelles confirmées tout en signalant les validations restantes.
 

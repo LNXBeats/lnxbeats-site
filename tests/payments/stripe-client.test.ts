@@ -7,12 +7,12 @@ test("builds a hosted Checkout request with only the canonical internal metadata
   const parameters = hostedCheckoutParameters({
     orderId: "11111111-1111-4111-8111-111111111111",
     paymentId: "22222222-2222-4222-8222-222222222222",
-    pricingVersion: "2026-08-v1",
+    pricingVersion: "2026-08-v2",
     lineItems: [{
       quantity: 1,
       price_data: {
         currency: "eur",
-        unit_amount: 5_000,
+        unit_amount: 2_000,
         product_data: { name: "Création musicale personnalisée LNX Beats" },
       },
     }],
@@ -34,7 +34,7 @@ test("builds a hosted Checkout request with only the canonical internal metadata
   assert.deepEqual(parameters.metadata, {
     paymentId: "22222222-2222-4222-8222-222222222222",
     orderId: "11111111-1111-4111-8111-111111111111",
-    pricingVersion: "2026-08-v1",
+    pricingVersion: "2026-08-v2",
   });
   assert.deepEqual(parameters.payment_intent_data?.metadata, parameters.metadata);
   assert.equal(parameters.customer_email, "verified-owner@example.test");
@@ -42,7 +42,7 @@ test("builds a hosted Checkout request with only the canonical internal metadata
     quantity: 1,
     price_data: {
       currency: "eur",
-      unit_amount: 5_000,
+      unit_amount: 2_000,
       product_data: { name: "Création musicale personnalisée LNX Beats" },
     },
   }]);

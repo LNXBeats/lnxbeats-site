@@ -1,6 +1,6 @@
 # Évaluation SMS — futur sprint V0.7.3.1
 
-V0.7.3 ne choisit aucun fournisseur. `SMS_TRANSPORT` reste `disabled` ou `capture`, sans SDK ni numéro réel. Le message propriétaire cible resterait minimal : « Nouvelle commande LNX Beats — 90 € — Prioritaire — LNX-2026-000123 ».
+V0.7.3 ne choisit aucun fournisseur. `SMS_TRANSPORT` reste `disabled` ou `capture`, sans SDK ni numéro réel. Pour une commande courante v2 avec cover et priorité, le message propriétaire cible resterait minimal : « Nouvelle commande LNX Beats — 60 € — Prioritaire — LNX-2026-000123 ». Une éventuelle notification d’Order historique v1 doit toujours reprendre son montant persisté, y compris 90 €, et non le tarif courant.
 
 | Critère | Brevo | OVHcloud SMS | Twilio |
 | --- | --- | --- | --- |

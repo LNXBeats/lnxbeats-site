@@ -65,7 +65,7 @@ const pricingFixtures: readonly PricingFixture[] = [
     priorityProcessing: false,
     coverPriceCents: 0,
     priorityPriceCents: 0,
-    totalCents: 5_000,
+    totalCents: 2_000,
   },
   {
     orderNumber: QA_ORDER_NUMBERS[1],
@@ -73,7 +73,7 @@ const pricingFixtures: readonly PricingFixture[] = [
     priorityProcessing: false,
     coverPriceCents: 1_000,
     priorityPriceCents: 0,
-    totalCents: 6_000,
+    totalCents: 3_000,
   },
   {
     orderNumber: QA_ORDER_NUMBERS[2],
@@ -81,7 +81,7 @@ const pricingFixtures: readonly PricingFixture[] = [
     priorityProcessing: true,
     coverPriceCents: 0,
     priorityPriceCents: 3_000,
-    totalCents: 8_000,
+    totalCents: 5_000,
   },
   {
     orderNumber: QA_ORDER_NUMBERS[3],
@@ -89,7 +89,7 @@ const pricingFixtures: readonly PricingFixture[] = [
     priorityProcessing: true,
     coverPriceCents: 1_000,
     priorityPriceCents: 3_000,
-    totalCents: 9_000,
+    totalCents: 6_000,
   },
 ] as const;
 
@@ -320,7 +320,7 @@ function checkoutEvent(input: {
         metadata: {
           paymentId: input.paymentId,
           orderId: input.orderId,
-          pricingVersion: input.pricingVersion ?? "2026-08-v1",
+          pricingVersion: input.pricingVersion ?? "2026-08-v2",
         },
         amount_total: input.amountCents,
         currency: "eur",
@@ -338,7 +338,7 @@ function checkoutEvent(input: {
       status: "succeeded",
       paymentId: input.paymentId,
       orderId: input.orderId,
-      pricingVersion: input.pricingVersion ?? "2026-08-v1",
+      pricingVersion: input.pricingVersion ?? "2026-08-v2",
       paymentMethod: "CARD",
     },
   };
@@ -368,7 +368,7 @@ function paymentIntentFailureEvent(input: {
         metadata: {
           paymentId: input.paymentId,
           orderId: input.orderId,
-          pricingVersion: input.pricingVersion ?? "2026-08-v1",
+          pricingVersion: input.pricingVersion ?? "2026-08-v2",
         },
         last_payment_error: {
           payment_method: {
@@ -396,12 +396,12 @@ async function createOrders(userId: string) {
         usage: "PERSONAL" as const,
         coverIncluded: fixture.coverIncluded,
         priorityProcessing: fixture.priorityProcessing,
-        basePriceCents: 5_000,
+        basePriceCents: 2_000,
         coverPriceCents: fixture.coverPriceCents,
         priorityPriceCents: fixture.priorityPriceCents,
         totalCents: fixture.totalCents,
         currency: "EUR",
-        pricingVersion: "2026-08-v1",
+        pricingVersion: "2026-08-v2",
         contractRequired: false,
         submittedAt: new Date(),
       })),
@@ -548,12 +548,13 @@ async function run() {
       where: { order: { orderNumber: { in: pricingFixtures.map(({ orderNumber }) => orderNumber) } } },
       orderBy: { amountCents: "asc" },
     });
-    assert.deepEqual(attempts.map(({ amountCents }) => amountCents), [5_000, 6_000, 8_000, 9_000]);
+    assert.deepEqual(attempts.map(({ amountCents }) => amountCents), [2_000, 3_000, 5_000, 6_000]);
     assert.ok(attempts.every((attempt) => (
       attempt.provider === "STRIPE"
       && attempt.mode === "TEST"
       && attempt.status === "PENDING"
       && attempt.currency === "EUR"
+      && attempt.pricingVersion === "2026-08-v2"
       && attempt.providerCheckoutId?.startsWith("cs_test_v074_")
       && attempt.providerPaymentId?.startsWith("pi_test_v074_")
     )));
@@ -573,7 +574,7 @@ async function run() {
     for (const attempt of attempts) {
       assert.equal(requestTotals.get(attempt.orderId), attempt.amountCents);
     }
-    passed.push("server pricing 50/60/80/90 EUR and concurrent Checkout idempotency across independent DB clients");
+    passed.push("server pricing 20/30/50/60 EUR and concurrent Checkout idempotency across independent DB clients");
 
     const constraintOrder = await prisma.order.findUniqueOrThrow({
       where: { orderNumber: QA_ORDER_NUMBERS[4] },
@@ -608,15 +609,15 @@ async function run() {
         idempotencyKey: " ",
       },
     }));
-    const pendingNinety = attempts.find(({ amountCents }) => amountCents === 9_000);
-    assert.ok(pendingNinety);
+    const pendingMaximum = attempts.find(({ amountCents }) => amountCents === 6_000);
+    assert.ok(pendingMaximum);
     await assert.rejects(prisma.payment.create({
       data: {
-        orderId: pendingNinety.orderId,
+        orderId: pendingMaximum.orderId,
         mode: "TEST",
-        amountCents: 9_000,
+        amountCents: 6_000,
         currency: "EUR",
-        pricingVersion: "2026-08-v1",
+        pricingVersion: "2026-08-v2",
         idempotencyKey: "v074-runtime:second-active",
       },
     }));
@@ -643,12 +644,12 @@ async function run() {
       },
       assertQaRuntime: async () => {},
     });
-    assert.equal(expiredCheckoutId, pendingNinety.providerCheckoutId);
+    assert.equal(expiredCheckoutId, pendingMaximum.providerCheckoutId);
     const changedInput = {
       title: "Payment runtime repriced",
       recipient: "Personne fictive QA",
       occasion: "Modification avant paiement",
-      brief: "Cette commande fictive vérifie que la session à 90 euros est expirée avant le nouveau snapshot.",
+      brief: "Cette commande fictive vérifie que la session à 60 euros est expirée avant le nouveau snapshot.",
       musicalDirection: "Pop",
       emotion: "Lumineuse",
       importantDetails: "Aucune donnée personnelle réelle.",
@@ -662,19 +663,19 @@ async function run() {
     await finalizeOrder(actor, QA_ORDER_NUMBERS[3], changedInput, true);
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[3], dependencies);
     const repricedAttempts = await prisma.payment.findMany({
-      where: { orderId: pendingNinety.orderId },
+      where: { orderId: pendingMaximum.orderId },
       orderBy: { createdAt: "asc" },
       select: { id: true, status: true, amountCents: true, providerCheckoutId: true },
     });
     assert.deepEqual(repricedAttempts.map(({ status, amountCents }) => ({ status, amountCents })), [
-      { status: "EXPIRED", amountCents: 9_000 },
-      { status: "PENDING", amountCents: 6_000 },
+      { status: "EXPIRED", amountCents: 6_000 },
+      { status: "PENDING", amountCents: 3_000 },
     ]);
     assert.notEqual(repricedAttempts[0]?.providerCheckoutId, repricedAttempts[1]?.providerCheckoutId);
     passed.push("editing expires the old Checkout before a new server-priced snapshot and Session");
 
     const repricedStripe = await prisma.payment.findFirstOrThrow({
-      where: { orderId: pendingNinety.orderId, provider: "STRIPE", status: "PENDING" },
+      where: { orderId: pendingMaximum.orderId, provider: "STRIPE", status: "PENDING" },
     });
     assert.ok(repricedStripe.providerCheckoutId && repricedStripe.providerPaymentId);
     const paypal = createMockPaypalGateway();
@@ -684,7 +685,7 @@ async function run() {
       baseUrl: runtime.baseUrl,
     });
     const paypalAttempt = await prisma.payment.findFirstOrThrow({
-      where: { orderId: pendingNinety.orderId, provider: "PAYPAL", status: "PENDING" },
+      where: { orderId: pendingMaximum.orderId, provider: "PAYPAL", status: "PENDING" },
     });
     assert.ok(paypalAttempt.providerCheckoutId);
     assert.deepEqual(paypal.counts(), { createCalls: 1, retrieveCalls: 0, captureCalls: 0 });
@@ -699,7 +700,7 @@ async function run() {
     }));
     assert.equal(stripeWins.outcome, "PROCESSED");
     const [doubleProviderOrder, doubleProviderStripe, doubleProviderPaypal] = await Promise.all([
-      prisma.order.findUniqueOrThrow({ where: { id: pendingNinety.orderId } }),
+      prisma.order.findUniqueOrThrow({ where: { id: pendingMaximum.orderId } }),
       prisma.payment.findUniqueOrThrow({ where: { id: repricedStripe.id } }),
       prisma.payment.findUniqueOrThrow({ where: { id: paypalAttempt.id } }),
     ]);
@@ -708,9 +709,9 @@ async function run() {
     assert.equal(doubleProviderPaypal.status, "CANCELED");
     assert.equal(doubleProviderPaypal.failureCode, "ORDER_PAID_BY_OTHER_PROVIDER");
     assert.equal(await prisma.payment.count({
-      where: { orderId: pendingNinety.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+      where: { orderId: pendingMaximum.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
     }), 1);
-    await assertPaymentNotificationPair(pendingNinety.orderId);
+    await assertPaymentNotificationPair(pendingMaximum.orderId);
     const latePaypalCapture = await processVerifiedPaypalWebhookEvent({
       id: `${QA_EVENT_PREFIX}paypal_after_stripe`,
       event_type: "PAYMENT.CAPTURE.COMPLETED",
@@ -718,7 +719,7 @@ async function run() {
       resource: {
         id: "PAYPAL-CAPTURE-AFTER-STRIPE",
         status: "COMPLETED",
-        amount: { currency_code: "EUR", value: "60.00" },
+        amount: { currency_code: "EUR", value: "30.00" },
         supplementary_data: {
           related_ids: { order_id: paypalAttempt.providerCheckoutId },
         },
@@ -727,9 +728,9 @@ async function run() {
     assert.equal(latePaypalCapture.outcome, "REQUIRES_REVIEW");
     assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: paypalAttempt.id } })).status, "REQUIRES_REVIEW");
     assert.equal(await prisma.payment.count({
-      where: { orderId: pendingNinety.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+      where: { orderId: pendingMaximum.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
     }), 1);
-    await assertPaymentNotificationPair(pendingNinety.orderId);
+    await assertPaymentNotificationPair(pendingMaximum.orderId);
     await assert.rejects(
       capturePaypalOrderForOrder(actor, QA_ORDER_NUMBERS[3], paypalAttempt.providerCheckoutId, {
         repository: createPaymentDatabasePaypalCaptureRepository(prisma),
@@ -739,28 +740,28 @@ async function run() {
         && error.code === "PAYMENT_ALREADY_COMPLETED",
     );
     assert.equal(paypal.counts().captureCalls, 0);
-    await assertPaymentNotificationPair(pendingNinety.orderId);
+    await assertPaymentNotificationPair(pendingMaximum.orderId);
     passed.push("Stripe and PayPal may be prepared concurrently; Stripe wins once and late PayPal capture is quarantined without duplicate notifications");
 
-    const fifty = attempts.find(({ amountCents }) => amountCents === 5_000);
-    assert.ok(fifty?.providerCheckoutId && fifty.providerPaymentId);
-    const fiftyEvent = checkoutEvent({
-      eventId: `${QA_EVENT_PREFIX}success_50`,
-      paymentId: fifty.id,
-      orderId: fifty.orderId,
-      checkoutId: fifty.providerCheckoutId,
-      paymentIntentId: fifty.providerPaymentId,
-      amountCents: fifty.amountCents,
+    const baseOnly = attempts.find(({ amountCents }) => amountCents === 2_000);
+    assert.ok(baseOnly?.providerCheckoutId && baseOnly.providerPaymentId);
+    const baseOnlyEvent = checkoutEvent({
+      eventId: `${QA_EVENT_PREFIX}success_20`,
+      paymentId: baseOnly.id,
+      orderId: baseOnly.orderId,
+      checkoutId: baseOnly.providerCheckoutId,
+      paymentIntentId: baseOnly.providerPaymentId,
+      amountCents: baseOnly.amountCents,
     });
     const duplicateResults = [
-      await processVerifiedStripeWebhookEvent(fiftyEvent),
-      await processVerifiedStripeWebhookEvent(fiftyEvent),
+      await processVerifiedStripeWebhookEvent(baseOnlyEvent),
+      await processVerifiedStripeWebhookEvent(baseOnlyEvent),
     ];
     assert.deepEqual(duplicateResults.map(({ duplicate }) => duplicate).sort(), [false, true]);
     assert.ok(duplicateResults.every(({ outcome }) => outcome === "PROCESSED"));
 
     const paid = await prisma.payment.findUniqueOrThrow({
-      where: { id: fifty.id },
+      where: { id: baseOnly.id },
       include: { order: true },
     });
     assert.equal(paid.status, "SUCCEEDED");
@@ -768,16 +769,16 @@ async function run() {
     assert.ok(paid.paidAt);
     assert.equal(paid.order.status, "PAYMENT_CONFIRMED");
     assert.equal(await prisma.providerEvent.count({
-      where: { providerEventId: fiftyEvent.id },
+      where: { providerEventId: baseOnlyEvent.id },
     }), 1);
     assert.equal(await prisma.orderEvent.count({
       where: {
-        orderId: fifty.orderId,
+        orderId: baseOnly.orderId,
         fromStatus: "AWAITING_PAYMENT",
         toStatus: "PAYMENT_CONFIRMED",
       },
     }), 1);
-    await assertPaymentNotificationPair(fifty.orderId);
+    await assertPaymentNotificationPair(baseOnly.orderId);
 
     const gatewayCallsAfterSuccess = mock.requests.length + mock.retrieved.length;
     await assert.rejects(
@@ -786,113 +787,113 @@ async function run() {
         && error.code === "PAYMENT_ALREADY_COMPLETED",
     );
     assert.equal(mock.requests.length + mock.retrieved.length, gatewayCallsAfterSuccess);
-    assert.equal(await prisma.payment.count({ where: { orderId: fifty.orderId } }), 1);
+    assert.equal(await prisma.payment.count({ where: { orderId: baseOnly.orderId } }), 1);
     passed.push("a successful order rejects a new Checkout before any gateway call");
 
     const lateExpired = checkoutEvent({
-      eventId: `${QA_EVENT_PREFIX}late_expired_50`,
+      eventId: `${QA_EVENT_PREFIX}late_expired_20`,
       type: "checkout.session.expired",
-      paymentId: fifty.id,
-      orderId: fifty.orderId,
-      checkoutId: fifty.providerCheckoutId,
-      paymentIntentId: fifty.providerPaymentId,
-      amountCents: fifty.amountCents,
+      paymentId: baseOnly.id,
+      orderId: baseOnly.orderId,
+      checkoutId: baseOnly.providerCheckoutId,
+      paymentIntentId: baseOnly.providerPaymentId,
+      amountCents: baseOnly.amountCents,
       paymentStatus: "unpaid",
       checkoutStatus: "expired",
     });
     assert.equal((await processVerifiedStripeWebhookEvent(lateExpired)).outcome, "PROCESSED");
-    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: fifty.id } })).status, "SUCCEEDED");
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: baseOnly.id } })).status, "SUCCEEDED");
     await assert.rejects(prisma.payment.create({
       data: {
-        orderId: fifty.orderId,
+        orderId: baseOnly.orderId,
         mode: "TEST",
         status: "SUCCEEDED",
-        amountCents: 5_000,
+        amountCents: 2_000,
         currency: "EUR",
-        pricingVersion: "2026-08-v1",
+        pricingVersion: "2026-08-v2",
         idempotencyKey: "v074-runtime:second-success",
         paidAt: new Date(),
       },
     }));
     passed.push("atomic success, duplicate event receipt, one order event and monotonic late-event handling");
 
-    const sixty = attempts.find(({ amountCents }) => amountCents === 6_000);
-    assert.ok(sixty?.providerCheckoutId && sixty.providerPaymentId);
+    const coverOnly = attempts.find(({ amountCents }) => amountCents === 3_000);
+    assert.ok(coverOnly?.providerCheckoutId && coverOnly.providerPaymentId);
     const mismatch = await processVerifiedStripeWebhookEvent(checkoutEvent({
-      eventId: `${QA_EVENT_PREFIX}mismatch_60`,
-      paymentId: sixty.id,
-      orderId: sixty.orderId,
-      checkoutId: sixty.providerCheckoutId,
-      paymentIntentId: sixty.providerPaymentId,
-      amountCents: sixty.amountCents + 1,
+      eventId: `${QA_EVENT_PREFIX}mismatch_30`,
+      paymentId: coverOnly.id,
+      orderId: coverOnly.orderId,
+      checkoutId: coverOnly.providerCheckoutId,
+      paymentIntentId: coverOnly.providerPaymentId,
+      amountCents: coverOnly.amountCents + 1,
     }));
     assert.equal(mismatch.outcome, "REQUIRES_REVIEW");
     const reviewed = await prisma.payment.findUniqueOrThrow({
-      where: { id: sixty.id },
+      where: { id: coverOnly.id },
       include: { order: true },
     });
     assert.equal(reviewed.status, "REQUIRES_REVIEW");
     assert.equal(reviewed.failureCode, "WEBHOOK_AMOUNT_MISMATCH");
     assert.equal(reviewed.order.status, "AWAITING_PAYMENT");
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: sixty.orderId } }), 0);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: coverOnly.orderId } }), 0);
     passed.push("amount mismatch quarantined transactionally without confirming the order");
 
-    const eighty = attempts.find(({ amountCents }) => amountCents === 8_000);
-    assert.ok(eighty?.providerCheckoutId && eighty.providerPaymentId);
+    const priorityOnly = attempts.find(({ amountCents }) => amountCents === 5_000);
+    assert.ok(priorityOnly?.providerCheckoutId && priorityOnly.providerPaymentId);
     const failed = await processVerifiedStripeWebhookEvent(paymentIntentFailureEvent({
-      eventId: `${QA_EVENT_PREFIX}card_declined_80`,
-      paymentId: eighty.id,
-      orderId: eighty.orderId,
-      paymentIntentId: eighty.providerPaymentId,
-      amountCents: eighty.amountCents,
+      eventId: `${QA_EVENT_PREFIX}card_declined_50`,
+      paymentId: priorityOnly.id,
+      orderId: priorityOnly.orderId,
+      paymentIntentId: priorityOnly.providerPaymentId,
+      amountCents: priorityOnly.amountCents,
     }));
     assert.equal(failed.outcome, "PROCESSED");
-    const declined = await prisma.payment.findUniqueOrThrow({ where: { id: eighty.id } });
+    const declined = await prisma.payment.findUniqueOrThrow({ where: { id: priorityOnly.id } });
     assert.equal(declined.status, "FAILED");
     assert.equal(declined.failureCode, "STRIPE_PAYMENT_ATTEMPT_FAILED");
     assert.equal(declined.paymentMethod, null);
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: eighty.orderId } }), 0);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: priorityOnly.orderId } }), 0);
 
     const requestsBeforeRetry = mock.requests.length;
     const retrievalsBeforeRetry = mock.retrieved.length;
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[2], dependencies);
     assert.equal(mock.requests.length, requestsBeforeRetry);
     assert.equal(mock.retrieved.length, retrievalsBeforeRetry + 1);
-    assert.equal(mock.retrieved.at(-1), eighty.providerCheckoutId);
-    assert.equal(await prisma.payment.count({ where: { orderId: eighty.orderId } }), 1);
+    assert.equal(mock.retrieved.at(-1), priorityOnly.providerCheckoutId);
+    assert.equal(await prisma.payment.count({ where: { orderId: priorityOnly.orderId } }), 1);
 
     await processVerifiedStripeWebhookEvent(checkoutEvent({
-      eventId: `${QA_EVENT_PREFIX}expired_80`,
+      eventId: `${QA_EVENT_PREFIX}expired_50`,
       type: "checkout.session.expired",
-      paymentId: eighty.id,
-      orderId: eighty.orderId,
-      checkoutId: eighty.providerCheckoutId,
-      paymentIntentId: eighty.providerPaymentId,
-      amountCents: eighty.amountCents,
+      paymentId: priorityOnly.id,
+      orderId: priorityOnly.orderId,
+      checkoutId: priorityOnly.providerCheckoutId,
+      paymentIntentId: priorityOnly.providerPaymentId,
+      amountCents: priorityOnly.amountCents,
       paymentStatus: "unpaid",
       checkoutStatus: "expired",
     }));
-    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: eighty.id } })).status, "EXPIRED");
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: priorityOnly.id } })).status, "EXPIRED");
 
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[2], dependencies);
-    const secondEighty = await prisma.payment.findFirstOrThrow({
-      where: { orderId: eighty.orderId, status: "PENDING" },
+    const secondPriority = await prisma.payment.findFirstOrThrow({
+      where: { orderId: priorityOnly.orderId, status: "PENDING" },
       orderBy: { createdAt: "desc" },
     });
-    assert.notEqual(secondEighty.id, eighty.id);
-    assert.ok(secondEighty.providerCheckoutId && secondEighty.providerPaymentId);
+    assert.notEqual(secondPriority.id, priorityOnly.id);
+    assert.ok(secondPriority.providerCheckoutId && secondPriority.providerPaymentId);
     await processVerifiedStripeWebhookEvent(checkoutEvent({
-      eventId: `${QA_EVENT_PREFIX}terminal_failed_80`,
+      eventId: `${QA_EVENT_PREFIX}terminal_failed_50`,
       type: "checkout.session.async_payment_failed",
-      paymentId: secondEighty.id,
-      orderId: secondEighty.orderId,
-      checkoutId: secondEighty.providerCheckoutId,
-      paymentIntentId: secondEighty.providerPaymentId,
-      amountCents: secondEighty.amountCents,
+      paymentId: secondPriority.id,
+      orderId: secondPriority.orderId,
+      checkoutId: secondPriority.providerCheckoutId,
+      paymentIntentId: secondPriority.providerPaymentId,
+      amountCents: secondPriority.amountCents,
       paymentStatus: "unpaid",
       checkoutStatus: "complete",
     }));
-    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: secondEighty.id } })).status, "FAILED");
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: secondPriority.id } })).status, "FAILED");
 
     // The new PayPal preparation adds one request to this intentionally broad
     // runtime scenario. Reset only the disposable actor before the independent
@@ -903,7 +904,7 @@ async function run() {
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[2], dependencies);
     assert.deepEqual(
       (await prisma.payment.findMany({
-        where: { orderId: eighty.orderId },
+        where: { orderId: priorityOnly.orderId },
         select: { status: true },
         orderBy: { createdAt: "asc" },
       })).map(({ status }) => status),
@@ -923,6 +924,17 @@ async function run() {
       where: { order: { orderNumber: QA_ORDER_NUMBERS[4] } },
     });
     assert.ok(racedPayment.providerCheckoutId && racedPayment.providerPaymentId);
+    assert.equal(racedPayment.amountCents, 5_000);
+    assert.equal(racedPayment.pricingVersion, "2026-08-v1");
+    const historicalCheckoutRequest = mock.requests.find(({ request }) => (
+      request.paymentId === racedPayment.id
+    ));
+    assert.ok(historicalCheckoutRequest);
+    assert.equal(historicalCheckoutRequest.request.pricingVersion, "2026-08-v1");
+    assert.equal(historicalCheckoutRequest.request.lineItems.reduce(
+      (total, item) => total + item.price_data.unit_amount,
+      0,
+    ), 5_000);
     const raceResults = await Promise.allSettled([
       processVerifiedStripeWebhookEvent(checkoutEvent({
         eventId: `${QA_EVENT_PREFIX}success_cancel_race`,
@@ -931,6 +943,7 @@ async function run() {
         checkoutId: racedPayment.providerCheckoutId,
         paymentIntentId: racedPayment.providerPaymentId,
         amountCents: racedPayment.amountCents,
+        pricingVersion: racedPayment.pricingVersion,
       })),
       transitionOrderStatus(QA_ORDER_NUMBERS[4], "CANCELLED", actor.id),
     ]);
@@ -957,7 +970,7 @@ async function run() {
         toStatus: { in: ["PAYMENT_CONFIRMED", "CANCELLED"] },
       },
     }), 1);
-    passed.push("Admin cancellation and webhook success serialize to one coherent Order/Payment outcome");
+    passed.push("historical v1 Checkout stays at 5000 cents while Admin cancellation and webhook success serialize coherently");
 
     const unknownPayment = "99999999-9999-4999-8999-999999999999";
     const unknownOrder = "88888888-8888-4888-8888-888888888888";
@@ -979,8 +992,8 @@ async function run() {
       },
     });
     assert.equal(missingReceipt.paymentId, null);
-    await assert.rejects(prisma.order.delete({ where: { id: pendingNinety.orderId } }));
-    await assert.rejects(prisma.payment.delete({ where: { id: fifty.id } }));
+    await assert.rejects(prisma.order.delete({ where: { id: pendingMaximum.orderId } }));
+    await assert.rejects(prisma.payment.delete({ where: { id: baseOnly.id } }));
     passed.push("unknown payment review receipt and restrictive payment foreign keys");
 
     await prisma.rateLimit.deleteMany({

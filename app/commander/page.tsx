@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { Container } from "@/components/container";
 import { MusicOrderForm } from "@/components/music-order-form";
 import { orderOffer } from "@/data/order-offer";
+import { formatEuro } from "@/lib/orders/domain";
 import { orderActorFromHeaders } from "@/lib/orders/request";
 import { getCommanderOrderForActor } from "@/lib/orders/service";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
@@ -29,6 +30,10 @@ const stepFromQuery: Record<string, number> = {
   recap: 5,
 };
 
+const maximumOrderPriceCents = orderOffer.personalBaseCents
+  + orderOffer.coverCents
+  + orderOffer.priorityCents;
+
 export default async function OrderPage({ searchParams }: OrderPageProps) {
   const actor = await orderActorFromHeaders(await headers());
   const query = await searchParams;
@@ -48,7 +53,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
           </div>
           <div>
             <p className="page-hero__intro">Vous apportez l’histoire, les intentions et les repères. LNX Beats l’interprète, écrit et construit la création musicale.</p>
-            <div className="page-hero__meta"><span>Création personnelle : 50 €</span><span>Délai indicatif : {orderOffer.indicativeDelay}</span></div>
+            <div className="page-hero__meta"><span>Création personnelle : {formatEuro(orderOffer.personalBaseCents)}</span><span>Délai indicatif : {orderOffer.indicativeDelay}</span></div>
           </div>
           <div className="page-hero__visual page-hero__visual--story" aria-hidden="true">
             <span>Votre récit</span>
@@ -61,7 +66,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
           <div className="editorial-copy">
             <p>Vous n’avez pas besoin d’apporter des paroles finales. Racontez les personnes, la scène et ce que la musique devra préserver.</p>
             <p>Préparez le brief librement, puis connectez-vous pour l’enregistrer. Le parcours reprend après l’authentification sans placer votre histoire dans l’URL.</p>
-            <p>La création personnelle est plafonnée à 90 €. Les droits d’exploitation pourront faire l’objet d’une demande distincte après livraison.</p>
+            <p>La création personnelle est plafonnée à {formatEuro(maximumOrderPriceCents)}. Les droits d’exploitation pourront faire l’objet d’une demande distincte après livraison.</p>
             <p>Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible. Le total est calculé par LNX Studio et le paiement n’est confirmé qu’après validation sécurisée.</p>
           </div>
         </Container>
@@ -77,13 +82,13 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
           />
           <aside className="order-aside" aria-label="Règles de la création">
             <p className="eyebrow">Repères du projet</p>
-            <p className="order-aside__price">Dès 50 €</p>
+            <p className="order-aside__price">Dès {formatEuro(orderOffer.personalBaseCents)}</p>
             <ul>
               <li>Création musicale avec livraison ultérieure du fichier WAV</li>
               <li>Une demande d’ajustement conforme au brief initial incluse</li>
               <li>Cover personnalisée : +10 €</li>
               <li>Traitement prioritaire : +30 €</li>
-              <li>Total maximum de la création : 90 €</li>
+              <li>Total maximum de la création : {formatEuro(maximumOrderPriceCents)}</li>
               <li>Les droits d’exploitation font l’objet d’une demande distincte après livraison</li>
               <li>{paymentProviders.stripe || paymentProviders.paypal ? "Paiement sécurisé selon les moyens disponibles" : "Paiement temporairement indisponible"}</li>
             </ul>

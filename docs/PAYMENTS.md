@@ -130,6 +130,13 @@ Le prix payable provient exclusivement du snapshot serveur enregistré sur cette
 - `currency` ;
 - `pricingVersion`.
 
+Le registre conserve simultanément deux grilles :
+
+| Version | Usage | Base | Cover | Priorité | Totaux autorisés |
+| --- | --- | ---: | ---: | ---: | --- |
+| `2026-08-v2` | nouvelles Orders | 20 € | +10 € | +30 € | 20/30/50/60 € |
+| `2026-08-v1` | Orders historiques | 50 € | +10 € | +30 € | 50/60/80/90 € |
+
 Le serveur valide la cohérence arithmétique de ce snapshot et sa conformité au registre tarifaire versionné. Chaque version publiée doit rester dans ce registre aussi longtemps qu’une commande correspondante peut être payable : changer l’offre courante ne réécrit donc pas une ancienne commande. Il réserve ensuite un `Payment` local avec `amountCents`, `currency` et `pricingVersion` **avant** l’appel Stripe. Cette copie devient le contrat de la tentative en cours : une modification ultérieure de la commande ne doit ni modifier silencieusement son montant, ni réutiliser cette tentative avec d’autres paramètres. Une version inconnue ou un conflit de snapshot échoue fermé et exige une décision métier explicite.
 
 Le service est ouvert au **propriétaire authentifié, actif et vérifié** de l’Order, quel que soit son rôle applicatif. La QA locale V0.7.4 reste strictement confinée au runtime `lnx-studio-v074-test`, aux confirmations explicites et aux modes Stripe Test/PayPal Sandbox. Elle ne rend ni `lnxbeats.fr`, ni un environnement Live payables.
@@ -147,7 +154,7 @@ Le serveur doit, au moment de créer une session :
 9. enregistrer l’identifiant et l’expiration de la Checkout Session renvoyée par Stripe ;
 10. rediriger vers l’URL Stripe sans exposer la clé serveur.
 
-Pour une commande de création, le tarif reste plafonné par les règles métier existantes. Une extension de droits commerciaux constitue un objet et un paiement distincts ; son montant ne doit jamais être fusionné implicitement avec celui de la création.
+Pour une nouvelle commande de création, la grille courante v2 reste plafonnée à 60 €. Une extension de droits commerciaux constitue un objet et un paiement distincts ; son montant ne doit jamais être fusionné implicitement avec celui de la création. Les snapshots historiques v1 restent payables à leur montant d’origine, jusqu’à 90 €.
 
 La création de session doit être protégée contre les doubles clics et les requêtes concurrentes. Une tentative déjà payée n’est jamais repassée à un état antérieur.
 

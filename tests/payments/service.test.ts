@@ -40,6 +40,22 @@ const attempt = {
   },
 } as const satisfies ReservedCheckoutAttempt;
 
+const currentBaseAttempt = {
+  ...attempt,
+  paymentId: "33333333-3333-4333-8333-333333333333",
+  idempotencyKey: "checkout-session:33333333-3333-4333-8333-333333333333",
+  snapshot: {
+    coverIncluded: false,
+    priorityProcessing: false,
+    basePriceCents: 2_000,
+    coverPriceCents: 0,
+    priorityPriceCents: 0,
+    totalCents: 2_000,
+    currency: "EUR",
+    pricingVersion: "2026-08-v2",
+  },
+} as const satisfies ReservedCheckoutAttempt;
+
 function dependencies(events: string[]) {
   const requests: HostedCheckoutRequest[] = [];
   const idempotencyKeys: string[] = [];
@@ -126,6 +142,19 @@ test("creates Checkout only after reserving a local server-priced attempt", asyn
   });
   assert.equal(fake.recorded[0]?.paymentId, attempt.paymentId);
   assert.equal(fake.recorded[0]?.session.paymentIntentId, "pi_test_payment");
+});
+
+test("creates a 2000-cent Checkout for the current base-only server snapshot", async () => {
+  const events: string[] = [];
+  const fake = dependencies(events);
+  fake.value.repository.reserveAttempt = async () => currentBaseAttempt;
+
+  await createStripeCheckoutForOrder(admin, attempt.orderNumber, fake.value);
+
+  assert.equal(fake.requests[0]?.pricingVersion, "2026-08-v2");
+  assert.equal(fake.requests[0]?.lineItems.length, 1);
+  assert.equal(fake.requests[0]?.lineItems[0]?.price_data.unit_amount, 2_000);
+  assert.equal(fake.requests[0]?.lineItems[0]?.price_data.currency, "eur");
 });
 
 test("retrieves a persisted Checkout Session instead of relying on a remote idempotency window", async () => {
