@@ -5,6 +5,12 @@ export const orderPricingVersions = {
     coverCents: 1_000,
     priorityCents: 3_000,
   },
+  "2026-08-v2": {
+    currency: "EUR",
+    personalBaseCents: 2_000,
+    coverCents: 1_000,
+    priorityCents: 3_000,
+  },
 } as const;
 
 export type OrderPricingVersion = keyof typeof orderPricingVersions;
@@ -13,7 +19,7 @@ export function orderPricingForVersion(version: string) {
   return orderPricingVersions[version as OrderPricingVersion];
 }
 
-const currentOrderPricingVersion = "2026-08-v1" as const;
+const currentOrderPricingVersion = "2026-08-v2" as const;
 
 export const orderOffer = {
   pricingVersion: currentOrderPricingVersion,

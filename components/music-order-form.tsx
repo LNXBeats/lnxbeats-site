@@ -110,6 +110,9 @@ export function MusicOrderForm({
   const [contentConfirmed, setContentConfirmed] = useState(false);
   const [personalUseTermsConfirmed, setPersonalUseTermsConfirmed] = useState(false);
   const [finalizedOrder, setFinalizedOrder] = useState<SerializedOrder | null>(null);
+  const [activePricingVersion, setActivePricingVersion] = useState(
+    persistedDraft?.pricingVersion ?? orderOffer.pricingVersion,
+  );
   const [saveState, setSaveState] = useState<"idle" | "saved" | "dirty" | "saving" | "error">(restoringJourney ? "dirty" : "idle");
   const [message, setMessage] = useState(restoringJourney ? "Votre brief et vos références ont été restaurés après la connexion." : persistedDraft ? `Commande ${persistedDraft.orderNumber} reprise.` : "");
   const [error, setError] = useState("");
@@ -117,7 +120,7 @@ export function MusicOrderForm({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const photoRightsRef = useRef<HTMLInputElement>(null);
   const previousStep = useRef(step);
-  const pricing = calculateOrderPrice(form);
+  const pricing = calculateOrderPrice(form, activePricingVersion);
   const hasPaymentProvider = paymentProviders.stripe || paymentProviders.paypal;
 
   useEffect(() => {
@@ -218,6 +221,7 @@ export function MusicOrderForm({
       if (!response.ok || !payload.order) throw new Error(payload.error ?? "Le brouillon n’a pas pu être enregistré.");
       setOrderNumber(payload.order.orderNumber);
       setOrderStatus(payload.order.status);
+      setActivePricingVersion(payload.order.pricingVersion);
       setPhotos(payload.order.photos);
       setSaveState("saved");
       setMessage("");
@@ -322,6 +326,7 @@ export function MusicOrderForm({
       if (!response.ok || !payload.order) throw new Error(payload.error ?? "La commande n’a pas pu être préparée.");
       setOrderNumber(payload.order.orderNumber);
       setOrderStatus(payload.order.status);
+      setActivePricingVersion(payload.order.pricingVersion);
       setFinalizedOrder(payload.order);
       setSaveState("saved");
       setMessage(hasPaymentProvider
@@ -348,6 +353,7 @@ export function MusicOrderForm({
       setForm(emptyDraft);
       setOrderNumber("");
       setOrderStatus(null);
+      setActivePricingVersion(orderOffer.pricingVersion);
       setPhotos([]);
       setPendingFiles([]);
       setStep(0);
@@ -560,7 +566,7 @@ export function MusicOrderForm({
             </dl>
             <div className="order-total" aria-live="polite">
               <span>Total de la création</span><strong>{formatEuro(pricing.totalCents)}</strong>
-              <small>Base 50 €{form.coverIncluded ? " + cover 10 €" : ""}{form.priorityProcessing ? " + priorité 30 €" : ""} · total calculé et vérifié par LNX Studio.</small>
+              <small>Base {formatEuro(pricing.basePriceCents)}{form.coverIncluded ? ` + cover ${formatEuro(pricing.coverPriceCents)}` : ""}{form.priorityProcessing ? ` + priorité ${formatEuro(pricing.priorityPriceCents)}` : ""} · total calculé et vérifié par LNX Studio.</small>
             </div>
 
             {!finalizedOrder ? (

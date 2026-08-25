@@ -88,7 +88,7 @@ Le script contrôle le schéma physique, les opérations Prisma, les contraintes
 
 La validation runtime de l’inscription possède des gardes supplémentaires liées à l’instance Prisma Dev locale jetable `lnx-studio-v062-auth-test`. Elle utilise un transport email capturé sans réseau et couvre code OTP, expiration, tentatives, anti-énumération, concurrence, compte membre, bootstrap admin et invalidation de session, puis nettoie exclusivement cette base et sa boîte QA. La preview personnelle `lnx-studio-local-preview` reste persistante et ne doit jamais être ciblée par ce nettoyage. La procédure et les variables sont décrites dans [docs/AUTH.md](docs/AUTH.md).
 
-La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, prix serveur plafonné à 90 €, finalisation atomique, propriété, références concurrentes, événements, IDOR, photos normalisées et nettoyage. Les droits post-livraison possèdent leur propre suite gardée `test:contracts:runtime` sur `lnx-studio-v072-test`, avec PDF et R2 simulés, transport email capturé, Stripe neutralisé et postcondition vide. Les procédures sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md) et [docs/RIGHTS.md](docs/RIGHTS.md).
+La validation runtime des commandes cible exclusivement l’instance Prisma Dev locale jetable `lnx-studio-v060-test` et un stockage privé sous `/private/tmp`. Elle couvre création, sauvegarde, grille serveur courante `2026-08-v2` plafonnée à 60 €, compatibilité historique `2026-08-v1` jusqu’à 90 €, finalisation atomique, propriété, références concurrentes, événements, IDOR, photos normalisées et nettoyage. Les droits post-livraison possèdent leur propre suite gardée `test:contracts:runtime` sur `lnx-studio-v072-test`, avec PDF et R2 simulés, transport email capturé, Stripe neutralisé et postcondition vide. Les procédures sont décrites dans [docs/ORDER_MODEL.md](docs/ORDER_MODEL.md) et [docs/RIGHTS.md](docs/RIGHTS.md).
 
 Pour les smoke tests, lancer d’abord le build et le serveur de production :
 
@@ -110,7 +110,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/` — accueil
 - `/discographie` — catalogue PostgreSQL et sélection éditoriale
 - `/album/[slug]` — fiche dynamique d’un projet, avec metadata issues du catalogue
-- `/commander` — parcours complet du brief au récapitulatif, photos privées, prix serveur de 50 à 90 € et Checkout Stripe Test sous garde QA
+- `/commander` — parcours complet du brief au récapitulatif, photos privées, grille serveur courante de 20 à 60 € et Checkout hébergé selon les providers activés
 - `/boutique` — liens DistroKid Direct et Etsy
 - `/a-propos` — biographie officielle et démarche artistique
 - `/contact` — contact professionnel
@@ -196,7 +196,7 @@ Les URL PostgreSQL et secrets réels restent dans les fichiers `.env*` ignorés 
 
 ## Paiements
 
-La V0.7.1 relie Commander à Stripe Checkout hébergé dans la seule QA locale Test gardée. Les prix sont relus et calculés côté serveur depuis PostgreSQL ; le navigateur ne fournit jamais le montant faisant foi. Le paiement ne peut être confirmé que par un webhook Stripe signé et traité de façon idempotente. La page de retour Checkout n’est pas une preuve de paiement.
+La V0.7.1 relie Commander à Stripe Checkout hébergé dans la seule QA locale Test gardée. Les prix sont relus et calculés côté serveur depuis PostgreSQL ; le navigateur ne fournit jamais le montant faisant foi. La grille courante `2026-08-v2` produit les totaux 20/30/50/60 €, tandis que les commandes historiques `2026-08-v1` conservent leurs totaux 50/60/80/90 €. Le paiement ne peut être confirmé que par un webhook Stripe signé et traité de façon idempotente. La page de retour Checkout n’est pas une preuve de paiement.
 
 PayPal est compatible avec un compte Stripe français, mais son activation dans le Dashboard et la connexion d’un compte PayPal restent des actions humaines séparées. Wero reste un accès contrôlé/preview et n’est ni promis ni hardcodé. Aucun IBAN ou établissement bancaire n’est couplé au code.
 

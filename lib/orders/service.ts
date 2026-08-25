@@ -90,8 +90,8 @@ function optional(value: string) {
   return value || null;
 }
 
-function dataFromInput(input: OrderDraftInput) {
-  const pricing = calculateOrderPrice(input);
+function dataFromInput(input: OrderDraftInput, pricingVersion: string = orderOffer.pricingVersion) {
+  const pricing = calculateOrderPrice(input, pricingVersion);
   return {
     title: optional(input.title),
     recipient: optional(input.recipient),
@@ -339,11 +339,14 @@ export async function saveDraftOrder(actor: OrderActor, orderNumber: string, inp
   return withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
     const current = await transaction.order.findFirst({
       where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
-      select: { id: true, status: true },
+      select: { id: true, status: true, pricingVersion: true },
     });
     if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     await assertOrderEditableForPayment(transaction, current);
-    const order = await transaction.order.update({ where: { id: current.id }, data: dataFromInput(input) });
+    const order = await transaction.order.update({
+      where: { id: current.id },
+      data: dataFromInput(input, current.pricingVersion),
+    });
     return serializeOrder(await loadTransactionalOrderRelations(transaction, order));
   });
 }
@@ -365,7 +368,7 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
     const order = await transaction.order.update({
       where: { id: draft.id },
       data: {
-        ...dataFromInput(input),
+        ...dataFromInput(input, draft.pricingVersion),
         ...(draft.status === "DRAFT" ? {
           status: "AWAITING_PAYMENT" as const,
           submittedAt,

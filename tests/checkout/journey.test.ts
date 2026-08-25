@@ -63,6 +63,8 @@ test("Commander keeps a six-step brief in memory across authentication without s
   assert.match(form, /const restoringJourney = resumeJourney && remembered !== null/);
   assert.match(form, /const persistedDraft = restoringJourney \? null : initialDraft/);
   assert.match(form, /useState\(persistedDraft\?\.orderNumber \?\? ""\)/);
+  assert.match(form, /persistedDraft\?\.pricingVersion \?\? orderOffer\.pricingVersion/);
+  assert.match(form, /calculateOrderPrice\(form, activePricingVersion\)/);
   assert.doesNotMatch(form, /useState\(initialDraft\?\.orderNumber \?\? ""\)/);
   assert.doesNotMatch(provider, /pendingAudioFiles|audioRightsConfirmed/);
   assert.doesNotMatch(form, /100 Mo maximum par fichier|references\/audio|fichier audio client/i);
@@ -104,7 +106,7 @@ test("public checkout wording stays provider-neutral and never exposes QA enviro
   assert.match(commander, /Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible/);
   assert.match(commander, /Paiement temporairement indisponible/);
   assert.match(commander, /Création musicale avec livraison ultérieure du fichier WAV/);
-  assert.match(commander, /La création personnelle est plafonnée à 90 €/);
+  assert.match(commander, /La création personnelle est plafonnée à \{formatEuro\(maximumOrderPriceCents\)\}/);
   assert.match(form, /Le retour sur le site ne suffit pas à confirmer le paiement/);
   assert.doesNotMatch(commander, /paiement sandbox/i);
   assert.doesNotMatch(form, /provider sandbox/i);
