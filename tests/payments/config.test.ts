@@ -30,6 +30,25 @@ test("payments are disabled safely when no Stripe configuration exists", () => {
   assert.equal(STRIPE_API_VERSION, "2026-07-29.dahlia");
 });
 
+test("Live refunds use an exact default-off opt-in without affecting Checkout configuration", () => {
+  for (const value of [undefined, "", "false", "TRUE", "yes", "1", "invalid", " true ", "true "]) {
+    const configuration = parsePaymentsConfiguration({
+      ...completeTestEnvironment,
+      LIVE_REFUNDS_ENABLED: value,
+    });
+    assert.equal(configuration.liveRefundsEnabled, false);
+    assert.equal(configuration.stripe.enabled, true);
+    assert.equal(configuration.stripe.mode, "test");
+  }
+
+  const enabled = parsePaymentsConfiguration({
+    ...completeTestEnvironment,
+    LIVE_REFUNDS_ENABLED: "true",
+  });
+  assert.equal(enabled.liveRefundsEnabled, true);
+  assert.equal(enabled.stripe.enabled, true);
+});
+
 test("enabled payments require a complete explicit test configuration", () => {
   const configuration = parsePaymentConfiguration(completeTestEnvironment);
   assert.deepEqual(configuration, {

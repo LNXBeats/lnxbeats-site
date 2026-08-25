@@ -324,7 +324,7 @@ async function run() {
         },
       },
     });
-    const liveRepository = createRefundDatabaseRepository(prisma, "LIVE");
+    const disabledLiveRepository = createRefundDatabaseRepository(prisma, "LIVE");
     const actor = {
       id: adminUserId,
       email: QA_EMAIL,
@@ -339,6 +339,20 @@ async function run() {
       kind: "FULL" as const,
       localIdempotencyKey: "refund-request:80000000-0000-4000-8000-000000000001",
     };
+    await assert.rejects(
+      disabledLiveRepository.reserve({
+        ...refundInput,
+        liveConfirmation: LIVE_REFUND_CONFIRMATION,
+      }),
+      (error) => error instanceof RefundServiceError && error.code === "LIVE_REFUNDS_DISABLED",
+    );
+    const blockedPayment = await prisma.payment.findFirstOrThrow({ where: { orderId: liveRefundOrder.id } });
+    assert.equal(await prisma.refundAttempt.count({ where: { payment: { orderId: liveRefundOrder.id } } }), 0);
+    assert.equal(await prisma.paymentAuditEvent.count({ where: { paymentId: blockedPayment.id } }), 0);
+    assert.equal(await prisma.orderEvent.count({ where: { orderId: liveRefundOrder.id } }), 0);
+    assert.equal(blockedPayment.status, "SUCCEEDED");
+
+    const liveRepository = createRefundDatabaseRepository(prisma, "LIVE", true);
     await assert.rejects(
       liveRepository.reserve(refundInput),
       (error) => error instanceof RefundServiceError && error.code === "INVALID_REFUND_REQUEST",
@@ -358,7 +372,7 @@ async function run() {
     assert.equal(replay.id, reserved.id);
     assert.equal(replay.reused, true);
     assert.equal((await prisma.order.findUniqueOrThrow({ where: { id: liveRefundOrder.id } })).status, "IN_PROGRESS");
-    passed.push("LIVE refund creation and idempotent replay both require explicit confirmation without changing Order");
+    passed.push("LIVE refund gate blocks all persistence by default; explicit opt-in and confirmation preserve idempotent creation without changing Order");
 
     console.info(`V0.8 payment production runtime passed (${passed.length} groups):`);
     for (const label of passed) console.info(`- ${label}`);

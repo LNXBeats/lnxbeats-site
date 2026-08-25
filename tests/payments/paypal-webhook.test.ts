@@ -151,6 +151,7 @@ test("accepts only the PayPal certificate host for the configured provider envir
     assertRuntime: async () => ({
       enabled: true,
       deploymentEnvironment: "production",
+      liveRefundsEnabled: false,
       stripe: { provider: "stripe", enabled: false, configured: false, mode: "disabled", apiVersion: "2026-07-29.dahlia" },
       paypal: {
         provider: "paypal", enabled: true, configured: true, environment: "live",

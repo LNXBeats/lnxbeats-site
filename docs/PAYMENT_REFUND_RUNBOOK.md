@@ -4,6 +4,12 @@
 
 Ce runbook couvre uniquement Stripe Test et PayPal Sandbox. Il ne constitue pas une autorisation d'activer Stripe Live, PayPal Live ou un environnement de production.
 
+## Production Live — fermée par défaut
+
+Le Checkout Stripe Live peut être activé séparément, mais les remboursements Live restent désactivés lorsque `LIVE_REFUNDS_ENABLED` est absente, vide, invalide ou égale à `false`. Seule la valeur exacte `true` ouvre le chemin serveur. Lorsque le gate est fermé, l’Admin conserve la lecture des paiements, tentatives, incidents et audits, tandis que les demandes et réconciliations Live sont indisponibles. Les webhooks signés décrivant un remboursement ou un litige externe continuent d’être reçus et rapprochés ; ils ne constituent pas une autorisation d’émettre une nouvelle mutation financière.
+
+Le parcours TEST/Sandbox décrit ci-dessous reste disponible. L’activation future du Refund Live nécessite un sprint distinct : corriger le retry ambigu sans `providerRefundId`, ajouter un plafond d’essais et un cutoff temporel, puis valider une réconciliation provider qui ne peut pas réémettre indéfiniment une demande.
+
 `Payment` décrit l'état financier. `Order` décrit la prestation, la création et la livraison. Un remboursement, un litige, un chargeback ou un reversal ne modifie donc jamais automatiquement `Order.status`. Toute trace liée à ces opérations est une annotation `OrderEvent` avec `fromStatus = null` et `toStatus = statut courant réel`.
 
 Exemples valides :
@@ -82,12 +88,12 @@ L'ordre d'exécution est volontairement séparé :
 2. appel provider hors transaction ;
 3. transaction PostgreSQL de rapprochement avec la preuve provider.
 
-Après timeout ou réponse ambiguë :
+Après timeout ou réponse ambiguë en TEST/Sandbox :
 
 - la tentative devient `REQUIRES_REVIEW` ;
 - le paiement reste dans l'historique gagnant et généralement `REFUND_PENDING` ;
 - aucune nouvelle tentative logique ne doit être créée ;
-- l'Admin utilise **Réconcilier cette tentative** ;
+- l'Admin utilise **Réconcilier cette tentative** ; cette action reste indisponible en Live tant que le gate Refund Live est fermé ;
 - si aucun `providerRefundId` n'existe, le retry réutilise la même clé provider ;
 - si l'identifiant existe, le provider est relu avant mutation locale.
 

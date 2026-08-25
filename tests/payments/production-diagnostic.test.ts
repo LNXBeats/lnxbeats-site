@@ -63,6 +63,7 @@ test("production is SAFE_DISABLED with configured Stripe Live and no enabled pro
   assert.equal(result.status, "SAFE_DISABLED");
   assert.equal(result.production, true);
   assert.equal(result.paymentsEnabled, false);
+  assert.equal(result.liveRefundsEnabled, false);
   assert.deepEqual(
     [result.stripe.flag, result.stripe.enabled, result.stripe.mode, result.stripe.configured],
     [false, false, "live", true],
@@ -206,6 +207,22 @@ test("diagnostic output contains no credentials or confirmation value", async ()
   }
   assert.match(output, /stripe\.secretConfigured=true/);
   assert.match(output, /paypal\.webhookConfigured=true/);
+  assert.match(output, /liveRefundsEnabled=false/);
+  assert.match(output, /PASS refunds\.live\.disabled/);
+});
+
+test("diagnostic reports the explicit Live refund opt-in without exposing its variable name", async () => {
+  const result = await runPaymentDiagnostic({
+    ...productionBase,
+    ...stripeLive,
+    LIVE_REFUNDS_ENABLED: "true",
+  }, repository());
+  const output = formatPaymentDiagnostic(result);
+  assert.equal(result.status, "CONFIGURED_DISABLED");
+  assert.equal(result.liveRefundsEnabled, true);
+  assert.match(output, /liveRefundsEnabled=true/);
+  assert.match(output, /PASS refunds\.live\.explicitly-enabled/);
+  assert.doesNotMatch(output, /LIVE_REFUNDS_ENABLED/);
 });
 
 test("diagnostic repository is read exactly once and implementation has no mutation/provider call", async () => {

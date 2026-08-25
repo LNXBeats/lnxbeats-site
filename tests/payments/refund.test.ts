@@ -7,6 +7,7 @@ import {
   createRefundProviderGateway,
   parseRefundAmountToCents,
   paymentStatusAfterRefund,
+  reconcileRefundAttemptForAdmin,
   refundableAmount,
   RefundServiceError,
   requestRefundForOrder,
@@ -78,7 +79,7 @@ function dependencies(overrides: Partial<RefundDependencies> = {}) {
       },
       async retrieve() { throw new Error("not expected"); },
     }),
-    assertRuntime: async () => {},
+    assertRuntime: async () => ({ mode: "TEST", liveRefundsEnabled: false }),
     ...overrides,
   };
   return { value, evidence: () => evidenceSeen, failure: () => failureSeen };
@@ -168,6 +169,28 @@ test("PayPal Sandbox refund API uses exact EUR and the persistent Request ID", a
   assert.equal(calls[1]?.url, "https://api-m.sandbox.paypal.com/v2/payments/captures/PAYPAL-CAPTURE-01/refund");
   assert.equal(new Headers(calls[1]?.init.headers).get("PayPal-Request-Id"), "refund:paypal:persistent-01");
   assert.deepEqual(JSON.parse(String(calls[1]?.init.body)), { amount: { currency_code: "EUR", value: "15.00" } });
+});
+
+test("the PayPal Live adapter refuses a refund before OAuth when the Live gate is closed", async () => {
+  let fetchCalls = 0;
+  const gateway = createTestPaypalGateway({
+    provider: "paypal",
+    enabled: true,
+    configured: true,
+    environment: "live",
+    clientId: "paypal-live-client-fixture",
+    clientSecret: "paypal-live-secret-fixture",
+    webhookId: "paypal-live-webhook-fixture",
+  }, async () => {
+    fetchCalls += 1;
+    throw new Error("network must remain unreachable");
+  });
+
+  await assert.rejects(
+    gateway.refundCapture("PAYPAL-LIVE-CAPTURE-01", 1_500, "refund:paypal:live-gated"),
+    (error: unknown) => error instanceof PaypalClientError && error.code === "UNAVAILABLE",
+  );
+  assert.equal(fetchCalls, 0);
 });
 
 test("PayPal refund HTTP failures are classified without provider payload leakage", async () => {
@@ -290,6 +313,117 @@ test("an Admin refund uses the reserved attempt once and reconciles provider evi
   });
 });
 
+test("the Live gate refuses a new refund before repository or provider activity", async () => {
+  const base = dependencies();
+  let repositoryCalls = 0;
+  let gatewayCalls = 0;
+  const fixture = dependencies({
+    repository: {
+      ...base.value.repository,
+      async reserve() {
+        repositoryCalls += 1;
+        return { ...reserved, mode: "LIVE" as const };
+      },
+    },
+    gateway: (provider) => {
+      gatewayCalls += 1;
+      return base.value.gateway(provider);
+    },
+    assertRuntime: async () => ({ mode: "LIVE", liveRefundsEnabled: false }),
+  });
+
+  await assert.rejects(
+    requestRefundForOrder(admin, {
+      orderNumber: "LNX-2026-000001",
+      kind: "FULL",
+      requestToken: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    }, fixture.value),
+    (error: unknown) => error instanceof RefundServiceError
+      && error.code === "LIVE_REFUNDS_DISABLED"
+      && error.status === 403,
+  );
+  assert.equal(repositoryCalls, 0);
+  assert.equal(gatewayCalls, 0);
+});
+
+test("an explicit Live opt-in preserves the existing refund path", async () => {
+  const base = dependencies();
+  let repositoryCalls = 0;
+  let providerCalls = 0;
+  const fixture = dependencies({
+    repository: {
+      ...base.value.repository,
+      async reserve() {
+        repositoryCalls += 1;
+        return { ...reserved, mode: "LIVE" as const };
+      },
+    },
+    gateway: () => ({
+      async request(input) {
+        providerCalls += 1;
+        return {
+          provider: "PAYPAL",
+          providerRefundId: "REFUND-LIVE-01",
+          providerPaymentId: input.providerPaymentId,
+          status: "SUCCEEDED",
+          amountCents: input.amountCents,
+          currency: "EUR",
+          occurredAt: new Date("2026-08-22T12:00:00Z"),
+        };
+      },
+      async retrieve() { throw new Error("not expected"); },
+    }),
+    assertRuntime: async () => ({ mode: "LIVE", liveRefundsEnabled: true }),
+  });
+
+  const result = await requestRefundForOrder(admin, {
+    orderNumber: "LNX-2026-000001",
+    kind: "FULL",
+    requestToken: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    liveConfirmation: "CONFIRM_LIVE_FINANCIAL_REFUND",
+  }, fixture.value);
+  assert.equal(result.status, "SUCCEEDED");
+  assert.equal(repositoryCalls, 1);
+  assert.equal(providerCalls, 1);
+});
+
+test("the Live gate refuses Admin reconciliation before lookup, claim or provider activity", async () => {
+  const base = dependencies();
+  let repositoryCalls = 0;
+  let gatewayCalls = 0;
+  const fixture = dependencies({
+    repository: {
+      ...base.value.repository,
+      async get() {
+        repositoryCalls += 1;
+        return { ...reserved, mode: "LIVE" as const };
+      },
+      async claim() {
+        repositoryCalls += 1;
+        return true;
+      },
+    },
+    gateway: (provider) => {
+      gatewayCalls += 1;
+      return base.value.gateway(provider);
+    },
+    assertRuntime: async () => ({ mode: "LIVE", liveRefundsEnabled: false }),
+  });
+
+  await assert.rejects(
+    reconcileRefundAttemptForAdmin(
+      admin,
+      reserved.id,
+      fixture.value,
+      "CONFIRM_LIVE_REFUND_RECONCILIATION",
+    ),
+    (error: unknown) => error instanceof RefundServiceError
+      && error.code === "LIVE_REFUNDS_DISABLED",
+  );
+  assert.equal(repositoryCalls, 0);
+  assert.equal(gatewayCalls, 0);
+});
+
 test("MEMBER and malformed requests are refused before any provider call", async () => {
   const fixture = dependencies();
   const member = { ...admin, role: "MEMBER" as const };
@@ -351,6 +485,36 @@ test("Admin refund mutations reuse origin, session and closed confirmation guard
     assert.doesNotMatch(body, /formData\.get\("provider"\)/);
     assert.doesNotMatch(body, /formData\.get\("currency"\)/);
   }
+  assert.match(actions, /await requestRefundForOrder\(/);
+  assert.match(actions, /await reconcileRefundAttemptForAdmin\(/);
   assert.match(actions, /LIVE_REFUND_CONFIRMATION/);
   assert.match(actions, /LIVE_REFUND_RECONCILIATION_CONFIRMATION/);
+});
+
+test("the Admin UI hides Live refund mutations behind the server configuration while preserving TEST", async () => {
+  const page = await readFile(
+    new URL("../../app/admin/commandes/[orderNumber]/page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(page, /const paymentsConfiguration = parsePaymentsConfiguration\(\)/);
+  assert.match(page, /paymentsConfiguration\.enabled/);
+  assert.match(page, /paymentsConfiguration\.deploymentEnvironment === "production"/);
+  assert.match(page, /paymentsConfiguration\.liveRefundsEnabled === true/);
+  assert.match(page, /payment\.mode === "LIVE" && !liveRefundsEnabled/);
+  assert.match(page, /Remboursements Live désactivés/);
+  assert.match(page, /payment\.mode === "TEST" && \["SUCCEEDED", "PARTIALLY_REFUNDED"\]/);
+  assert.match(page, /payment\.mode === "LIVE" && \["SUCCEEDED", "PARTIALLY_REFUNDED"\][^\n]+\? liveRefundsEnabled \?/);
+});
+
+test("provider adapters enforce the Live mutation gate while inbound financial webhooks stay open", async () => {
+  const [stripe, paypal, inbound] = await Promise.all([
+    readFile(new URL("../../lib/payments/stripe-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/payments/paypal-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/payments/provider-financial-events.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(stripe, /configuration\.mode === "live" && !liveRefundsEnabled/);
+  assert.match(stripe, /stripe\.refunds\.create/);
+  assert.match(paypal, /configuration\.environment === "live" && !liveRefundsEnabled/);
+  assert.match(paypal, /\/v2\/payments\/captures\/\$\{encodeURIComponent\(captureId\)\}\/refund/);
+  assert.doesNotMatch(inbound, /LIVE_REFUNDS_ENABLED|liveRefundsEnabled/);
 });

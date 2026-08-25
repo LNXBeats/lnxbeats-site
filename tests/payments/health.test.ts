@@ -18,6 +18,7 @@ const names: readonly string[] = [
   "PAYPAL_CLIENT_ID",
   "PAYPAL_CLIENT_SECRET",
   "PAYPAL_WEBHOOK_ID",
+  "LIVE_REFUNDS_ENABLED",
   "MEDIA_STORAGE_DRIVER",
   "MEDIA_DEPLOYMENT_ENV",
   "RAILWAY_ENVIRONMENT",
@@ -62,6 +63,7 @@ test("health reports disabled payments without exposing configuration values", a
     assert.deepEqual(payload.payments, {
       enabled: false,
       deploymentEnvironment: "development",
+      liveRefundsEnabled: false,
       providers: {
         stripe: {
           provider: "stripe",
@@ -96,6 +98,7 @@ test("health reports only an aggregate for a complete Stripe test configuration"
     assert.deepEqual(payload.payments, {
       enabled: true,
       deploymentEnvironment: "development",
+      liveRefundsEnabled: false,
       providers: {
         stripe: {
           provider: "stripe",
@@ -113,6 +116,16 @@ test("health reports only an aggregate for a complete Stripe test configuration"
       },
     });
     assert.doesNotMatch(JSON.stringify(payload), /sk_test_|whsec_/);
+  });
+});
+
+test("health exposes only the Live refund gate boolean", async () => {
+  await withEnvironment({ LIVE_REFUNDS_ENABLED: "true" }, async () => {
+    const response = await healthResponse(healthyRuntime);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.payments.liveRefundsEnabled, true);
+    assert.doesNotMatch(JSON.stringify(payload), /LIVE_REFUNDS_ENABLED/);
   });
 });
 
