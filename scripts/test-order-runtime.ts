@@ -120,10 +120,64 @@ async function run() {
     assert.equal(await prisma.order.count(), 0);
     passed.push("unknown owner rejected without partial order");
 
+    const historicalOrderNumber = "LNX-2099-083001";
+    await prisma.order.create({
+      data: {
+        orderNumber: historicalOrderNumber,
+        userId: member.id,
+        customerEmail: member.email,
+        customerName: member.name,
+        status: "DRAFT",
+        title: "Runtime historique V0.8.3",
+        brief: "Cette commande historique fictive prouve que le snapshot tarifaire V1 reste immuable après le passage à V2.",
+        usage: "PERSONAL",
+        coverIncluded: false,
+        priorityProcessing: false,
+        basePriceCents: 5_000,
+        coverPriceCents: 0,
+        priorityPriceCents: 0,
+        totalCents: 5_000,
+        currency: "EUR",
+        pricingVersion: "2026-08-v1",
+        contractRequired: false,
+      },
+    });
+    const savedHistorical = await saveDraftOrder(member, historicalOrderNumber, {
+      ...baseInput,
+      coverIncluded: true,
+      priorityProcessing: true,
+    });
+    assert.equal(savedHistorical.status, "DRAFT");
+    assert.equal(savedHistorical.pricingVersion, "2026-08-v1");
+    assert.equal(savedHistorical.basePriceCents, 5_000);
+    assert.equal(savedHistorical.coverPriceCents, 1_000);
+    assert.equal(savedHistorical.priorityPriceCents, 3_000);
+    assert.equal(savedHistorical.totalCents, 9_000);
+    const finalizedHistorical = await finalizeOrder(member, historicalOrderNumber, {
+      ...baseInput,
+      coverIncluded: true,
+      priorityProcessing: false,
+    }, true);
+    assert.equal(finalizedHistorical.status, "AWAITING_PAYMENT");
+    assert.equal(finalizedHistorical.pricingVersion, "2026-08-v1");
+    assert.equal(finalizedHistorical.basePriceCents, 5_000);
+    assert.equal(finalizedHistorical.coverPriceCents, 1_000);
+    assert.equal(finalizedHistorical.priorityPriceCents, 0);
+    assert.equal(finalizedHistorical.totalCents, 6_000);
+    const persistedHistorical = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: historicalOrderNumber },
+    });
+    assert.equal(persistedHistorical.pricingVersion, "2026-08-v1");
+    assert.equal(persistedHistorical.basePriceCents, 5_000);
+    assert.equal(persistedHistorical.totalCents, 6_000);
+    passed.push("historical V1 draft keeps its 50/60/90 EUR grid through save and finalization");
+
     const draft = await createDraftOrder(member, { ...baseInput, brief: "" });
     assert.match(draft.orderNumber, /^LNX-\d{4}-\d{6}$/);
     assert.equal(draft.status, "DRAFT");
-    assert.equal(draft.totalCents, 5_000);
+    assert.equal(draft.pricingVersion, "2026-08-v2");
+    assert.equal(draft.basePriceCents, 2_000);
+    assert.equal(draft.totalCents, 2_000);
     assert.equal(draft.events.length, 1);
     passed.push("private draft and client event created");
 
@@ -133,8 +187,9 @@ async function run() {
       priorityProcessing: true,
     });
     assert.equal(priced.usage, "PERSONAL");
-    assert.equal(priced.basePriceCents, 5_000);
-    assert.equal(priced.totalCents, 9_000);
+    assert.equal(priced.pricingVersion, "2026-08-v2");
+    assert.equal(priced.basePriceCents, 2_000);
+    assert.equal(priced.totalCents, 6_000);
     assert.equal(priced.contractRequired, false);
     assert.equal((await getDraftForActor(member, draft.orderNumber))?.orderNumber, draft.orderNumber);
     await assert.rejects(saveDraftOrder(other, draft.orderNumber, baseInput));
@@ -169,16 +224,20 @@ async function run() {
     assert.equal(finalized.events.length, 2);
     assert.ok(finalized.submittedAt);
     assert.equal(finalized.usage, "PERSONAL");
-    assert.equal(finalized.totalCents, 9_000);
+    assert.equal(finalized.pricingVersion, "2026-08-v2");
+    assert.equal(finalized.basePriceCents, 2_000);
+    assert.equal(finalized.totalCents, 6_000);
     const editableBeforeCheckout = await saveDraftOrder(member, draft.orderNumber, baseInput);
     assert.equal(editableBeforeCheckout.status, "AWAITING_PAYMENT");
-    assert.equal(editableBeforeCheckout.totalCents, 5_000);
+    assert.equal(editableBeforeCheckout.pricingVersion, "2026-08-v2");
+    assert.equal(editableBeforeCheckout.totalCents, 2_000);
     const restoredBeforeCheckout = await saveDraftOrder(member, draft.orderNumber, {
       ...baseInput,
       coverIncluded: true,
       priorityProcessing: true,
     });
-    assert.equal(restoredBeforeCheckout.totalCents, 9_000);
+    assert.equal(restoredBeforeCheckout.pricingVersion, "2026-08-v2");
+    assert.equal(restoredBeforeCheckout.totalCents, 6_000);
     assert.equal(await getOrderForActor(other, draft.orderNumber), null);
     assert.ok(await getOrderForActor(admin, draft.orderNumber));
     assert.deepEqual((await listMemberOrders(other)).map((order) => order.orderNumber), [invalid.orderNumber]);
@@ -201,7 +260,8 @@ async function run() {
     });
     const delivered = await getOrderForActor(member, draft.orderNumber);
     assert.equal(delivered?.status, "DELIVERED");
-    assert.equal(delivered?.totalCents, 9_000);
+    assert.equal(delivered?.pricingVersion, "2026-08-v2");
+    assert.equal(delivered?.totalCents, 6_000);
     assert.equal(delivered?.usage, "PERSONAL");
     passed.push("delivered order remains personal and eligible for the separate V0.7.2 rights workflow");
 

@@ -4,7 +4,7 @@
 
 La V0.6 transforme Commander en un parcours membre réel : brouillon privé, sauvegarde, reprise, suppression, photos de référence, calcul serveur, finalisation et suivi. Une finalisation produit une `Order` au statut `AWAITING_PAYMENT` et un événement client horodaté. Elle ne prouve ni paiement, ni acceptation artistique, ni démarrage de la prestation.
 
-La V0.6.0.1 sépare définitivement deux objets métier : la création personnelle commandée entre 50 et 90 €, puis l’éventuelle extension de droits demandée après livraison. Le second objet ne modifie jamais le prix, le statut ou le snapshot de la création d’origine.
+La V0.6.0.1 sépare définitivement deux objets métier : la création personnelle, puis l’éventuelle extension de droits demandée après livraison. La grille initiale `2026-08-v1` allait de 50 à 90 €. Depuis V0.8.3, les nouvelles commandes utilisent `2026-08-v2`, de 20 à 60 €. Le second objet ne modifie jamais le prix, le statut ou le snapshot de la création d’origine.
 
 Aucun paiement, secret marchand, SDK PSP, webhook, facture ou email transactionnel n’est actif.
 
@@ -12,16 +12,18 @@ Aucun paiement, secret marchand, SDK PSP, webhook, facture ou email transactionn
 
 ## Offre et prix
 
-Tous les montants sont calculés côté serveur en centimes entiers, en EUR, puis figés dans la commande avec `pricingVersion = 2026-08-v1` :
+Tous les montants sont calculés côté serveur en centimes entiers, en EUR, puis figés dans la commande avec leur `pricingVersion`. La grille courante `2026-08-v2` est :
 
 | Élément | Montant |
 | --- | ---: |
-| Création personnelle | 50 € |
+| Création personnelle | 20 € |
 | Cover | +10 € |
 | Traitement prioritaire | +30 € |
-| Total maximal de la commande initiale | 90 € |
+| Total maximal de la commande initiale | 60 € |
 
-Le serveur ignore tout prix et tout `usage` envoyés par le client. Il persiste séparément base, cover, priorité et total, puis force `usage = PERSONAL` et `contractRequired = false` pour chaque brouillon et chaque finalisation. Le choix `COMMERCIAL_EXTENDED` reste dans l’ancien enum uniquement pour compatibilité de schéma ; aucune route de commande initiale ne peut le produire. Un éventuel snapshot soumis sous V0.6 est conservé et explicitement signalé comme historique, jamais réécrit silencieusement.
+La grille historique `2026-08-v1` reste enregistrée dans le registre avec une base à 50 €, une cover à +10 €, une priorité à +30 € et les totaux 50/60/80/90 €. Toute `Order` existante conserve cette version ; lorsqu’elle est payable, Checkout utilise son snapshot d’origine. Elle n’est jamais migrée vers v2.
+
+Le serveur ignore tout prix, toute version tarifaire et tout `usage` envoyés par le client. Il persiste séparément base, cover, priorité et total, puis force `usage = PERSONAL` et `contractRequired = false` pour chaque brouillon et chaque finalisation. Le choix `COMMERCIAL_EXTENDED` reste dans l’ancien enum uniquement pour compatibilité de schéma ; aucune route de commande initiale ne peut le produire. Un snapshot historique est conservé et explicitement signalé comme tel, jamais réécrit silencieusement.
 
 Le modèle prévoit un retour inclus (`revisionAllowance = 1`). Le délai public reste indicatif ; la priorité n’est pas une promesse automatique de date.
 
@@ -30,7 +32,7 @@ Le modèle prévoit un retour inclus (`revisionAllowance = 1`). Le délai public
 1. Un compte actif et vérifié ouvre ou crée un brouillon.
 2. Le brief est sauvegardé explicitement en PostgreSQL ; aucune histoire sensible n’est déposée dans `localStorage`.
 3. Les photos sont contrôlées puis ajoutées au brouillon privé. Une sélection encore en attente est automatiquement envoyée avant la finalisation afin qu’un changement de page ne l’oublie pas.
-4. Le serveur valide de nouveau le brief, recalcule le prix et finalise atomiquement la commande.
+4. Le serveur valide de nouveau le brief, recalcule le prix avec la version déjà figée sur l’Order et finalise atomiquement la commande. Seule la création initiale d’une nouvelle Order choisit la grille courante.
 5. Le statut devient `AWAITING_PAYMENT`. La page privée présente le prix comme calculé mais rappelle que le paiement n’est pas disponible.
 6. Tant que la commande n’est pas `DELIVERED`, aucun bouton de droits n’est proposé et le service refuse toute demande.
 7. Après livraison, le propriétaire peut demander une extension distincte depuis le détail privé.
@@ -123,7 +125,7 @@ Avant toute activation commerciale, il faut confirmer le régime de TVA associé
 
 ## Tests et environnement jetable
 
-Les tests de commande couvrent le plafond initial de 90 €, l’usage personnel versionné et le workflow de livraison. Les tests de contrats couvrent les tarifs serveur 150/1 500 €, l’éligibilité post-livraison, l’ownership, la concurrence, les snapshots, l’idempotence, le PDF privé, le hash, la réauthentification, la double validation, l’interdiction d’activation et l’absence de paiement. La suite runtime exige l’instance jetable exacte `lnx-studio-v072-test`, des identités `@example.invalid`, un stockage R2 simulé et Stripe absent ; elle nettoie cette base dans un `finally` et vérifie une postcondition vide.
+Les tests de commande couvrent la grille courante v2 plafonnée à 60 €, la grille historique v1 plafonnée à 90 €, l’usage personnel versionné et le workflow de livraison. Les tests de contrats couvrent les tarifs serveur 150/1 500 €, l’éligibilité post-livraison, l’ownership, la concurrence, les snapshots, l’idempotence, le PDF privé, le hash, la réauthentification, la double validation, l’interdiction d’activation et l’absence de paiement. La suite runtime exige l’instance jetable exacte `lnx-studio-v072-test`, des identités `@example.invalid`, un stockage R2 simulé et Stripe absent ; elle nettoie cette base dans un `finally` et vérifie une postcondition vide.
 
 ## Données professionnelles confirmées
 

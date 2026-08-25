@@ -14,27 +14,29 @@ import type { OrderPaymentSnapshot } from "@/lib/payments/types";
 function snapshot(
   coverIncluded: boolean,
   priorityProcessing: boolean,
+  pricingVersion: "2026-08-v1" | "2026-08-v2" = "2026-08-v2",
 ): OrderPaymentSnapshot {
+  const basePriceCents = pricingVersion === "2026-08-v1" ? 5_000 : 2_000;
   const coverPriceCents = coverIncluded ? 1_000 : 0;
   const priorityPriceCents = priorityProcessing ? 3_000 : 0;
   return {
     coverIncluded,
     priorityProcessing,
-    basePriceCents: 5_000,
+    basePriceCents,
     coverPriceCents,
     priorityPriceCents,
-    totalCents: 5_000 + coverPriceCents + priorityPriceCents,
+    totalCents: basePriceCents + coverPriceCents + priorityPriceCents,
     currency: "EUR",
-    pricingVersion: "2026-08-v1",
+    pricingVersion,
   };
 }
 
 test("validates the four current server pricing snapshots", () => {
   const scenarios = [
-    [false, false, 5_000],
-    [true, false, 6_000],
-    [false, true, 8_000],
-    [true, true, 9_000],
+    [false, false, 2_000],
+    [true, false, 3_000],
+    [false, true, 5_000],
+    [true, true, 6_000],
   ] as const;
 
   for (const [coverIncluded, priorityProcessing, amountCents] of scenarios) {
@@ -42,9 +44,28 @@ test("validates the four current server pricing snapshots", () => {
       ok: true,
       amountCents,
       currency: "EUR",
-      pricingVersion: "2026-08-v1",
+      pricingVersion: "2026-08-v2",
     });
   }
+});
+
+test("accepts historical v1 snapshots without recalculating them", () => {
+  const legacy = snapshot(false, false, "2026-08-v1");
+  assert.deepEqual(validateOrderPaymentSnapshot(legacy), {
+    ok: true,
+    amountCents: 5_000,
+    currency: "EUR",
+    pricingVersion: "2026-08-v1",
+  });
+  assert.deepEqual(
+    validateOrderPaymentSnapshot({ ...legacy, basePriceCents: 2_000, totalCents: 2_000 }),
+    { ok: false, code: "INVALID_BASE_PRICE" },
+  );
+  const current = snapshot(false, false);
+  assert.deepEqual(
+    validateOrderPaymentSnapshot({ ...current, basePriceCents: 5_000, totalCents: 5_000 }),
+    { ok: false, code: "INVALID_BASE_PRICE" },
+  );
 });
 
 test("rejects altered currency, version, components and totals", () => {
@@ -56,7 +77,7 @@ test("rejects altered currency, version, components and totals", () => {
     [{ ...valid, basePriceCents: 1 }, "INVALID_BASE_PRICE"],
     [{ ...valid, coverPriceCents: 0 }, "INVALID_COVER_PRICE"],
     [{ ...valid, priorityPriceCents: 0 }, "INVALID_PRIORITY_PRICE"],
-    [{ ...valid, totalCents: 8_999 }, "INVALID_TOTAL"],
+    [{ ...valid, totalCents: 5_999 }, "INVALID_TOTAL"],
   ] as const;
 
   for (const [altered, code] of invalid) {
@@ -86,13 +107,19 @@ test("builds fixed-quantity Checkout lines exclusively from the stored snapshot"
     quantity: item.quantity,
     currency: item.price_data.currency,
   })), [
-    { name: "Création musicale personnalisée LNX Beats", amount: 5_000, quantity: 1, currency: "eur" },
+    { name: "Création musicale personnalisée LNX Beats", amount: 2_000, quantity: 1, currency: "eur" },
     { name: "Cover personnalisée", amount: 1_000, quantity: 1, currency: "eur" },
     { name: "Traitement prioritaire", amount: 3_000, quantity: 1, currency: "eur" },
   ]);
-  assert.equal(lineItems.reduce((sum, item) => sum + item.price_data.unit_amount, 0), 9_000);
+  assert.equal(lineItems.reduce((sum, item) => sum + item.price_data.unit_amount, 0), 6_000);
   assert.equal(JSON.stringify(lineItems).includes("attacker"), false);
   assert.equal(JSON.stringify(lineItems).includes("example.invalid"), false);
+});
+
+test("builds a historical v1 Checkout line from the persisted snapshot", () => {
+  const lineItems = checkoutLineItemsFromOrderSnapshot(snapshot(false, false, "2026-08-v1"));
+  assert.equal(lineItems.length, 1);
+  assert.equal(lineItems[0]?.price_data.unit_amount, 5_000);
 });
 
 test("normalizes only known payment methods", () => {

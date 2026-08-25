@@ -18,40 +18,52 @@ const scenarios = [
     orderId: "70000000-0000-4700-8700-000000000050",
     initialEventId: "71000000-0000-4700-8700-000000000050",
     orderNumber: "LNX-2070-000050",
-    title: "Stripe Test — succès 50 EUR",
+    title: "Stripe Test — succès 20 EUR",
     coverIncluded: false,
     priorityProcessing: false,
-    totalCents: 5_000,
+    basePriceCents: 2_000,
+    coverPriceCents: 0,
+    priorityPriceCents: 0,
+    totalCents: 2_000,
   },
   {
     name: "decline",
     orderId: "70000000-0000-4700-8700-000000000060",
     initialEventId: "71000000-0000-4700-8700-000000000060",
     orderNumber: "LNX-2070-000060",
-    title: "Stripe Test — refus 60 EUR",
+    title: "Stripe Test — refus 30 EUR",
     coverIncluded: true,
     priorityProcessing: false,
-    totalCents: 6_000,
+    basePriceCents: 2_000,
+    coverPriceCents: 1_000,
+    priorityPriceCents: 0,
+    totalCents: 3_000,
   },
   {
     name: "three-d-secure",
     orderId: "70000000-0000-4700-8700-000000000080",
     initialEventId: "71000000-0000-4700-8700-000000000080",
     orderNumber: "LNX-2070-000080",
-    title: "Stripe Test — 3DS 80 EUR",
+    title: "Stripe Test — 3DS 50 EUR",
     coverIncluded: false,
     priorityProcessing: true,
-    totalCents: 8_000,
+    basePriceCents: 2_000,
+    coverPriceCents: 0,
+    priorityPriceCents: 3_000,
+    totalCents: 5_000,
   },
   {
     name: "cancel",
     orderId: "70000000-0000-4700-8700-000000000090",
     initialEventId: "71000000-0000-4700-8700-000000000090",
     orderNumber: "LNX-2070-000090",
-    title: "Stripe Test — annulation 90 EUR",
+    title: "Stripe Test — annulation 60 EUR",
     coverIncluded: true,
     priorityProcessing: true,
-    totalCents: 9_000,
+    basePriceCents: 2_000,
+    coverPriceCents: 1_000,
+    priorityPriceCents: 3_000,
+    totalCents: 6_000,
   },
 ] as const;
 
@@ -260,6 +272,16 @@ async function createFixtures(password: string) {
           wordsToInclude: input.wordsToInclude,
           avoid: input.avoid,
           pronunciationNotes: input.pronunciationNotes,
+          usage: "PERSONAL",
+          coverIncluded: scenario.coverIncluded,
+          priorityProcessing: scenario.priorityProcessing,
+          basePriceCents: scenario.basePriceCents,
+          coverPriceCents: scenario.coverPriceCents,
+          priorityPriceCents: scenario.priorityPriceCents,
+          totalCents: scenario.totalCents,
+          currency: "EUR",
+          pricingVersion: "2026-08-v2",
+          contractRequired: false,
           events: {
             create: {
               id: scenario.initialEventId,
@@ -294,6 +316,9 @@ async function createFixtures(password: string) {
       userId: true,
       coverIncluded: true,
       priorityProcessing: true,
+      basePriceCents: true,
+      coverPriceCents: true,
+      priorityPriceCents: true,
       totalCents: true,
       currency: true,
       pricingVersion: true,
@@ -310,9 +335,12 @@ async function createFixtures(password: string) {
     assert.equal(order.userId, QA_USER_ID);
     assert.equal(order.coverIncluded, expected.coverIncluded);
     assert.equal(order.priorityProcessing, expected.priorityProcessing);
+    assert.equal(order.basePriceCents, expected.basePriceCents);
+    assert.equal(order.coverPriceCents, expected.coverPriceCents);
+    assert.equal(order.priorityPriceCents, expected.priorityPriceCents);
     assert.equal(order.totalCents, expected.totalCents);
     assert.equal(order.currency, "EUR");
-    assert.equal(order.pricingVersion, "2026-08-v1");
+    assert.equal(order.pricingVersion, "2026-08-v2");
     assert.ok(order.submittedAt);
   }
 }

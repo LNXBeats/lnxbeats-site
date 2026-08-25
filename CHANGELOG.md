@@ -1,5 +1,11 @@
 # Changelog
 
+## V0.8.3 — Tarif de création versionné
+
+- fixe la grille courante `2026-08-v2` à 20 €, avec cover +10 € et priorité +30 €, soit 20/30/50/60 € selon les options ;
+- conserve intégralement la grille historique `2026-08-v1` à 50/60/80/90 € pour les commandes qui la référencent déjà ;
+- maintient le montant, la devise et la version tarifaire comme snapshots serveur, sans rétroactivité ni prix fourni par le navigateur.
+
 ## V0.7.3 — Notifications transactionnelles
 
 - consolide l’outbox PostgreSQL existante avec leases, retries bornés, statuts fournisseur, événements et suppressions persistantes ;

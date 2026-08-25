@@ -1,4 +1,4 @@
-import { orderOffer } from "@/data/order-offer";
+import { orderOffer, orderPricingForVersion } from "@/data/order-offer";
 
 export const orderTextLimits = {
   title: 120,
@@ -126,10 +126,12 @@ export function validateOrderForSubmission(input: OrderDraftInput) {
 export function calculateOrderPrice(selection: {
   coverIncluded: boolean;
   priorityProcessing: boolean;
-}): PricingSnapshot {
-  const basePriceCents = orderOffer.personalBaseCents;
-  const coverPriceCents = selection.coverIncluded ? orderOffer.coverCents : 0;
-  const priorityPriceCents = selection.priorityProcessing ? orderOffer.priorityCents : 0;
+}, pricingVersion: string = orderOffer.pricingVersion): PricingSnapshot {
+  const pricing = orderPricingForVersion(pricingVersion);
+  if (!pricing) throw new RangeError("Unsupported order pricing version.");
+  const basePriceCents = pricing.personalBaseCents;
+  const coverPriceCents = selection.coverIncluded ? pricing.coverCents : 0;
+  const priorityPriceCents = selection.priorityProcessing ? pricing.priorityCents : 0;
 
   return {
     usage: "PERSONAL",
@@ -137,8 +139,8 @@ export function calculateOrderPrice(selection: {
     coverPriceCents,
     priorityPriceCents,
     totalCents: basePriceCents + coverPriceCents + priorityPriceCents,
-    currency: orderOffer.currency,
-    pricingVersion: orderOffer.pricingVersion,
+    currency: pricing.currency,
+    pricingVersion,
     contractRequired: false,
   };
 }

@@ -27,31 +27,41 @@ const validBrief = {
   priorityProcessing: false,
 } as const;
 
-test("calcule exclusivement la création personnelle entre 50 et 90 euros", () => {
+test("calcule exclusivement la grille courante entre 20 et 60 euros", () => {
   assert.deepEqual(calculateOrderPrice(validBrief), {
     usage: "PERSONAL",
-    basePriceCents: 5_000,
+    basePriceCents: 2_000,
     coverPriceCents: 0,
     priorityPriceCents: 0,
-    totalCents: 5_000,
+    totalCents: 2_000,
     currency: "EUR",
-    pricingVersion: "2026-08-v1",
+    pricingVersion: "2026-08-v2",
     contractRequired: false,
   });
-  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: false }).totalCents, 6_000);
-  assert.equal(calculateOrderPrice({ coverIncluded: false, priorityProcessing: true }).totalCents, 8_000);
-  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: true }).totalCents, 9_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: false }).totalCents, 3_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: false, priorityProcessing: true }).totalCents, 5_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: true }).totalCents, 6_000);
 });
 
-test("ignore tout usage, montant, propriétaire ou rôle forgé par le client", () => {
-  const parsed = parseOrderDraftInput({ ...validBrief, usage: "COMMERCIAL_EXTENDED", totalCents: 1, basePriceCents: -1, contractRequired: true, userId: "attacker", role: "ADMIN", status: "PAID" });
+test("conserve intégralement la grille historique v1", () => {
+  assert.equal(calculateOrderPrice(validBrief, "2026-08-v1").totalCents, 5_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: false }, "2026-08-v1").totalCents, 6_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: false, priorityProcessing: true }, "2026-08-v1").totalCents, 8_000);
+  assert.equal(calculateOrderPrice({ coverIncluded: true, priorityProcessing: true }, "2026-08-v1").totalCents, 9_000);
+  assert.throws(() => calculateOrderPrice(validBrief, "unknown-pricing-version"), RangeError);
+});
+
+test("ignore tout usage, montant, version tarifaire, propriétaire ou rôle forgé par le client", () => {
+  const parsed = parseOrderDraftInput({ ...validBrief, usage: "COMMERCIAL_EXTENDED", totalCents: 1, basePriceCents: -1, currency: "USD", pricingVersion: "2026-08-v1", contractRequired: true, userId: "attacker", role: "ADMIN", status: "PAID" });
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   assert.equal("usage" in parsed.value, false);
   assert.equal("totalCents" in parsed.value, false);
+  assert.equal("currency" in parsed.value, false);
+  assert.equal("pricingVersion" in parsed.value, false);
   assert.equal("userId" in parsed.value, false);
   assert.equal("role" in parsed.value, false);
-  assert.equal(calculateOrderPrice(parsed.value).totalCents, 5_000);
+  assert.equal(calculateOrderPrice(parsed.value).totalCents, 2_000);
 });
 
 test("refuse les payloads ambigus et les briefs incomplets", () => {

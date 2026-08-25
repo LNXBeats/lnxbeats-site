@@ -15,7 +15,7 @@ Commander présente six étapes compactes :
 3. **Options** — direction, émotion, cover +10 € et priorité +30 € ;
 4. **Références** — jusqu’à dix photos privées normalisées ;
 5. **Compte** — connexion ou inscription avec email vérifié ;
-6. **Récapitulatif & paiement** — données relues, ventilation 50/10/30 €, compte propriétaire et ouverture Checkout.
+6. **Récapitulatif & paiement** — données relues, ventilation du snapshot tarifaire versionné, compte propriétaire et ouverture Checkout.
 
 Les anciens champs « mots à préserver », « éléments à éviter » et « prononciation » ne sont jamais rendus. Leurs colonnes historiques restent intactes afin de ne détruire aucune ancienne donnée.
 
@@ -37,12 +37,14 @@ Le téléchargement passe exclusivement par une route applicative authentifiée.
 
 ## Order, prix et Checkout
 
-Une Order appartenant au compte existe avant le paiement. Le passage au paiement la place dans `AWAITING_PAYMENT`. Le serveur calcule le snapshot avec l’unique fonction de domaine existante :
+Une Order appartenant au compte existe avant le paiement. Le passage au paiement la place dans `AWAITING_PAYMENT`. Le serveur calcule le snapshot avec l’unique fonction de domaine existante. La grille courante `2026-08-v2`, appliquée uniquement aux nouvelles Orders, contient :
 
-- création : 5 000 centimes ;
+- création : 2 000 centimes ;
 - cover : 1 000 centimes ;
 - priorité : 3 000 centimes ;
-- totaux autorisés : 5 000, 6 000, 8 000 ou 9 000 centimes EUR.
+- totaux autorisés : 2 000, 3 000, 5 000 ou 6 000 centimes EUR.
+
+La grille historique `2026-08-v1` reste valide avec une création à 5 000 centimes et les totaux 5 000, 6 000, 8 000 ou 9 000 centimes EUR. Une Order conserve sa `pricingVersion` lors de la sauvegarde, de la finalisation, du retry et de la génération Checkout ; aucune ancienne commande n’est repricée.
 
 Le POST Checkout ne reçoit aucun montant ni devise. Il relit propriétaire, statut, usage et snapshot dans PostgreSQL, réserve une tentative idempotente, puis crée ou retrouve la Session hébergée. Le bouton se verrouille pendant la requête ; deux onglets restent sérialisés par les verrous et contraintes V0.7.0.
 
@@ -58,7 +60,7 @@ Une Order reste modifiable tant qu’aucun paiement n’a réussi. Sans Session 
 4. marque la tentative `EXPIRED` ;
 5. autorise seulement ensuite la modification du brief, des photos et des options.
 
-Le nouvel enregistrement recalcule le snapshot serveur. Une Session à 60 € ne peut donc jamais rester payable après un passage à 90 €. Après `SUCCEEDED`, l’Order et ses options tarifaires ne sont plus éditables.
+Le nouvel enregistrement recalcule le snapshot serveur dans la version déjà attachée à l’Order. Sous v2, une Session à 30 € ne peut donc jamais rester payable après l’ajout de la priorité portant le total à 60 €. Le même invariant demeure pour la grille historique v1, notamment lors d’un passage de 60 € à 90 €. Après `SUCCEEDED`, l’Order et ses options tarifaires ne sont plus éditables.
 
 ## Retour, confirmation et retry
 

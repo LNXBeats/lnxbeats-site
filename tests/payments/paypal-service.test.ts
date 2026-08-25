@@ -32,14 +32,14 @@ function checkoutRepository(): PaymentCheckoutRepository {
         orderNumber,
         customerEmail: actor.email,
         snapshot: {
-          basePriceCents: 5_000,
-          coverIncluded: true,
-          coverPriceCents: 1_000,
-          priorityProcessing: true,
-          priorityPriceCents: 3_000,
-          totalCents: 9_000,
+          basePriceCents: 2_000,
+          coverIncluded: false,
+          coverPriceCents: 0,
+          priorityProcessing: false,
+          priorityPriceCents: 0,
+          totalCents: 2_000,
           currency: "EUR",
-          pricingVersion: "2026-08-v1",
+          pricingVersion: "2026-08-v2",
         },
         idempotencyKey: `paypal-order:${paymentId}`,
       };
@@ -93,7 +93,7 @@ test("creates a PayPal order after the server-priced reservation and reuses its 
     baseUrl: "https://staging.example.test",
   });
   assert.equal(result.approvalUrl, "https://www.sandbox.paypal.com/checkoutnow?token=PAYPAL-ORDER-01");
-  assert.equal(createInput?.[0].amountCents, 9_000);
+  assert.equal(createInput?.[0].amountCents, 2_000);
   assert.equal(createInput?.[0].currency, "EUR");
   assert.equal(createInput?.[1], `paypal-order:${paymentId}`);
 });
