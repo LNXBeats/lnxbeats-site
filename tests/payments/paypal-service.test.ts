@@ -22,7 +22,7 @@ const paymentId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const orderId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const orderNumber = "LNX-2026-000001";
 
-function checkoutRepository(): PaymentCheckoutRepository {
+function checkoutRepository(providerCheckoutId?: string): PaymentCheckoutRepository {
   return {
     async enforceRateLimit() {},
     async reserveAttempt() {
@@ -42,6 +42,7 @@ function checkoutRepository(): PaymentCheckoutRepository {
           pricingVersion: "2026-08-v2",
         },
         idempotencyKey: `paypal-order:${paymentId}`,
+        ...(providerCheckoutId ? { providerCheckoutId } : {}),
       };
     },
     async recordSession() {},
@@ -96,6 +97,44 @@ test("creates a PayPal order after the server-priced reservation and reuses its 
   assert.equal(createInput?.[0].amountCents, 2_000);
   assert.equal(createInput?.[0].currency, "EUR");
   assert.equal(createInput?.[1], `paypal-order:${paymentId}`);
+});
+
+test("reuses the persisted PayPal order instead of creating a second logical transaction", async () => {
+  let createCalls = 0;
+  let retrieveCalls = 0;
+  let recordedSession: { id: string; url: string } | undefined;
+  const repository = checkoutRepository("PAYPAL-LIVE-ORDER-01");
+  repository.recordSession = async (_paymentId, session) => {
+    recordedSession = session;
+  };
+
+  const result = await createPaypalOrderForOrder(actor, orderNumber, {
+    repository,
+    gateway: gateway({
+      async createOrder() {
+        createCalls += 1;
+        throw new Error("must not create a second PayPal order");
+      },
+      async retrieveOrder(providerOrderId) {
+        retrieveCalls += 1;
+        assert.equal(providerOrderId, "PAYPAL-LIVE-ORDER-01");
+        return {
+          id: providerOrderId,
+          status: "PAYER_ACTION_REQUIRED",
+          approvalUrl: "https://www.paypal.com/checkoutnow?token=PAYPAL-LIVE-ORDER-01",
+        };
+      },
+    }),
+    baseUrl: "https://www.lnxbeats.fr",
+  });
+
+  assert.equal(createCalls, 0);
+  assert.equal(retrieveCalls, 1);
+  assert.equal(result.approvalUrl, "https://www.paypal.com/checkoutnow?token=PAYPAL-LIVE-ORDER-01");
+  assert.deepEqual(recordedSession, {
+    id: "PAYPAL-LIVE-ORDER-01",
+    url: "https://www.paypal.com/checkoutnow?token=PAYPAL-LIVE-ORDER-01",
+  });
 });
 
 test("rejects a capture whose amount, currency or Payment identity differs from the DB snapshot", async () => {
