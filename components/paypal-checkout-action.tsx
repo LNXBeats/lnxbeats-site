@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { formatEuro } from "@/lib/orders/domain";
+import { isAllowedPaypalApprovalRedirect } from "@/lib/payments/paypal-redirect";
 
 const messages: Record<string, string> = {
   PAYMENT_ALREADY_COMPLETED: "Ce paiement est déjà confirmé. Actualisez la page pour voir la commande.",
@@ -42,9 +43,9 @@ export function PaypalCheckoutAction({
         throw new Error(messages[code] ?? "PayPal est momentanément indisponible. Votre commande reste enregistrée.");
       }
       const approvalUrl = new URL(body.approvalUrl);
-      const allowed = approvalUrl.protocol === "https:"
-        && (approvalUrl.hostname === "www.sandbox.paypal.com" || approvalUrl.origin === window.location.origin);
-      if (!allowed) throw new Error("La redirection PayPal est invalide.");
+      if (!isAllowedPaypalApprovalRedirect(approvalUrl.toString(), window.location.origin)) {
+        throw new Error("La redirection PayPal est invalide.");
+      }
       window.location.assign(approvalUrl.toString());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "PayPal est momentanément indisponible.");
