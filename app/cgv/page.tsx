@@ -21,7 +21,7 @@ export default function TermsPage() {
           items: [
             { status: "DÉJÀ IDENTIFIÉ", text: "Vendeur annoncé : Ludovic Mathon, entrepreneur individuel, sous le nom artistique LNX Beats." },
             { status: "À FOURNIR", text: "Description exacte de la prestation et du livrable musical." },
-            { status: "DÉJÀ IDENTIFIÉ", text: `Commande initiale personnelle : ${formatEuro(orderOffer.personalBaseCents)}, cover +${formatEuro(orderOffer.coverCents)}, priorité +${formatEuro(orderOffer.priorityCents)}, soit ${formatEuro(maximumOrderPriceCents)} maximum.` },
+            { status: "DÉJÀ IDENTIFIÉ", text: `Commande initiale personnelle : ${formatEuro(orderOffer.personalBaseCents)}, illustration personnalisée +${formatEuro(orderOffer.coverCents)}, priorité +${formatEuro(orderOffer.priorityCents)}, soit ${formatEuro(maximumOrderPriceCents)} maximum.` },
             { status: "DÉJÀ IDENTIFIÉ", text: `Après livraison uniquement, une licence de publication peut être demandée au tarif cible de ${(rightsOffers.PUBLICATION_LICENSE.priceCents / 100).toLocaleString("fr-FR")} € ou un partenariat d’exploitation au tarif cible de ${(rightsOffers.EXPLOITATION_PARTNERSHIP.priceCents / 100).toLocaleString("fr-FR")} €. Aucun paiement de droits n’est ouvert avant revue juridique.` },
             { status: "À VALIDER", text: "Taxes, devis, durée de validité, conditions de révision tarifaire et régime de TVA applicable." },
             { status: "À VALIDER", text: "Calendrier, étapes de validation et livraison. Une demande de retour est prévue dans le modèle, sans délai contractuel annoncé." },

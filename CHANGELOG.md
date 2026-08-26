@@ -1,5 +1,14 @@
 # Changelog
 
+## V0.8.4 — Parcours Commander premium et formats d’illustration
+
+- refond les six étapes de `/commander` avec une hiérarchie éditoriale plus claire, des erreurs reliées aux champs, une navigation mobile recentrée et des contrôles adaptés à Safari ;
+- remplace la terminologie publique « Cover personnalisée » par « Illustration personnalisée », sans renommer les snapshots financiers techniques ni modifier les montants ;
+- ajoute cinq formats non tarifaires : carré 1:1, vertical 9:16, paysage 16:9, portrait 4:5 et format personnalisé ;
+- conserve le choix dans les brouillons, la reprise après authentification, le récapitulatif, le Compte et l’Admin ;
+- maintient les anciennes commandes avec illustration et format non renseigné, sans réécriture rétroactive ;
+- conserve les grilles `2026-08-v1` et `2026-08-v2`, ainsi que les flux Checkout, Payment et notifications existants.
+
 ## V0.8.3 — Tarif de création versionné
 
 - fixe la grille courante `2026-08-v2` à 20 €, avec cover +10 € et priorité +30 €, soit 20/30/50/60 € selon les options ;

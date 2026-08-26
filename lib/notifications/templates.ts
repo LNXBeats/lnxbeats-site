@@ -145,7 +145,7 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
     throw new Error("Notification template environment does not match the runtime.");
   }
   const content = copy(message);
-  const options = [message.payload.coverIncluded ? "Cover" : "", message.payload.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(", ") || "Aucune";
+  const options = [message.payload.coverIncluded ? "Illustration personnalisée" : "", message.payload.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(", ") || "Aucune";
   const details = [
     `Commande : ${message.payload.orderNumber}`,
     ...(message.payload.rightsRequestNumber ? [`Demande : ${message.payload.rightsRequestNumber}`] : []),

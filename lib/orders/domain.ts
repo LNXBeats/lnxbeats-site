@@ -12,7 +12,18 @@ export const orderTextLimits = {
   wordsToInclude: 2_000,
   avoid: 2_000,
   pronunciationNotes: 1_000,
+  illustrationFormatCustom: 240,
 } as const;
+
+export const orderIllustrationFormats = [
+  "SQUARE",
+  "VERTICAL",
+  "LANDSCAPE",
+  "PORTRAIT",
+  "CUSTOM",
+] as const;
+
+export type OrderIllustrationFormat = (typeof orderIllustrationFormats)[number];
 
 export type OrderDraftInput = {
   title: string;
@@ -25,6 +36,8 @@ export type OrderDraftInput = {
   wordsToInclude: string;
   avoid: string;
   pronunciationNotes: string;
+  illustrationFormat: OrderIllustrationFormat | null;
+  illustrationFormatCustom: string;
   coverIncluded: boolean;
   priorityProcessing: boolean;
 };
@@ -102,23 +115,79 @@ export function parseOrderDraftInput(value: unknown): ParseResult {
     return { ok: false, message: "L’option prioritaire est invalide.", field: "priorityProcessing" };
   }
 
+  const coverIncluded = payload.coverIncluded === true;
+  const rawIllustrationFormat = payload.illustrationFormat;
+  let illustrationFormat: OrderIllustrationFormat | null = null;
+  let illustrationFormatCustom = "";
+  if (coverIncluded) {
+    if (rawIllustrationFormat === undefined || rawIllustrationFormat === null) {
+      illustrationFormat = null;
+    } else if (
+      typeof rawIllustrationFormat !== "string"
+      || !orderIllustrationFormats.includes(rawIllustrationFormat as OrderIllustrationFormat)
+    ) {
+      return { ok: false, message: "Choisissez un format d’illustration.", field: "illustrationFormat" };
+    } else {
+      illustrationFormat = rawIllustrationFormat as OrderIllustrationFormat;
+    }
+    if (illustrationFormat === "CUSTOM") {
+      const parsedCustom = stringField(
+        payload,
+        "illustrationFormatCustom",
+        orderTextLimits.illustrationFormatCustom,
+      );
+      if (!parsedCustom.ok) return parsedCustom;
+      if (!parsedCustom.value) {
+        return {
+          ok: false,
+          message: "Précisez le format d’illustration personnalisé.",
+          field: "illustrationFormatCustom",
+        };
+      }
+      illustrationFormatCustom = parsedCustom.value;
+    }
+  }
+
   return {
     ok: true,
     value: {
       ...strings,
-      coverIncluded: payload.coverIncluded === true,
+      illustrationFormat,
+      illustrationFormatCustom,
+      coverIncluded,
       priorityProcessing: payload.priorityProcessing === true,
     },
   };
 }
 
-export function validateOrderForSubmission(input: OrderDraftInput) {
+export function validateOrderForSubmission(
+  input: OrderDraftInput,
+  options: { allowLegacyMissingIllustrationFormat?: boolean } = {},
+) {
   if (!input.recipient) return { ok: false as const, message: "Indiquez à qui ou à quoi cette histoire est destinée.", field: "recipient" as const };
   if (input.brief.length < orderTextLimits.briefMin) {
     return { ok: false as const, message: `L’histoire doit contenir au moins ${orderTextLimits.briefMin} caractères.`, field: "brief" as const };
   }
   if (!input.musicalDirection) {
     return { ok: false as const, message: "Choisissez une direction musicale ou confiez ce choix à LNX Beats.", field: "musicalDirection" as const };
+  }
+  if (input.coverIncluded) {
+    if (!input.illustrationFormat && !options.allowLegacyMissingIllustrationFormat) {
+      return { ok: false as const, message: "Choisissez un format d’illustration.", field: "illustrationFormat" as const };
+    }
+    if (input.illustrationFormat && !orderIllustrationFormats.includes(input.illustrationFormat)) {
+      return { ok: false as const, message: "Choisissez un format d’illustration.", field: "illustrationFormat" as const };
+    }
+    if (
+      input.illustrationFormat === "CUSTOM"
+      && (
+        typeof input.illustrationFormatCustom !== "string"
+        || !input.illustrationFormatCustom.trim()
+        || input.illustrationFormatCustom.trim().length > orderTextLimits.illustrationFormatCustom
+      )
+    ) {
+      return { ok: false as const, message: "Précisez le format d’illustration personnalisé.", field: "illustrationFormatCustom" as const };
+    }
   }
   return { ok: true as const };
 }

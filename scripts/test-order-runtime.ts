@@ -40,6 +40,8 @@ const baseInput: OrderDraftInput = {
   wordsToInclude: "",
   avoid: "",
   pronunciationNotes: "",
+  illustrationFormat: null,
+  illustrationFormatCustom: "",
   coverIncluded: false,
   priorityProcessing: false,
 };
@@ -117,8 +119,51 @@ async function run() {
     const admin = actor(adminUser);
 
     await assert.rejects(createDraftOrder({ ...member, id: "00000000-0000-4000-8000-000000000001" }, baseInput));
+    await assert.rejects(
+      createDraftOrder(member, { ...baseInput, coverIncluded: true }),
+      (error: unknown) => error instanceof Error
+        && "code" in error
+        && error.code === "INVALID_ILLUSTRATION_FORMAT",
+    );
     assert.equal(await prisma.order.count(), 0);
-    passed.push("unknown owner rejected without partial order");
+    passed.push("unknown owner and new cover without illustration format rejected without partial order");
+
+    const legacyIllustrationOrderNumber = "LNX-2099-084001";
+    await prisma.order.create({
+      data: {
+        orderNumber: legacyIllustrationOrderNumber,
+        userId: member.id,
+        customerEmail: member.email,
+        customerName: member.name,
+        status: "DRAFT",
+        title: "Runtime illustration antérieure V0.8.4",
+        brief: "Cette commande fictive avec cover préexistante prouve que la migration nullable reste non rétroactive.",
+        usage: "PERSONAL",
+        coverIncluded: true,
+        priorityProcessing: false,
+        basePriceCents: 2_000,
+        coverPriceCents: 1_000,
+        priorityPriceCents: 0,
+        totalCents: 3_000,
+        currency: "EUR",
+        pricingVersion: "2026-08-v2",
+        contractRequired: false,
+      },
+    });
+    const legacyIllustrationInput = { ...baseInput, coverIncluded: true };
+    const savedLegacyIllustration = await saveDraftOrder(member, legacyIllustrationOrderNumber, legacyIllustrationInput);
+    assert.equal(savedLegacyIllustration.illustrationFormat, null);
+    assert.equal(savedLegacyIllustration.coverIncluded, true);
+    const finalizedLegacyIllustration = await finalizeOrder(
+      member,
+      legacyIllustrationOrderNumber,
+      legacyIllustrationInput,
+      true,
+    );
+    assert.equal(finalizedLegacyIllustration.status, "AWAITING_PAYMENT");
+    assert.equal(finalizedLegacyIllustration.illustrationFormat, null);
+    assert.equal(finalizedLegacyIllustration.totalCents, 3_000);
+    passed.push("pre-V0.8.4 cover remains editable without inferring compatibility from pricing version");
 
     const historicalOrderNumber = "LNX-2099-083001";
     await prisma.order.create({
@@ -144,6 +189,7 @@ async function run() {
     });
     const savedHistorical = await saveDraftOrder(member, historicalOrderNumber, {
       ...baseInput,
+      illustrationFormat: "SQUARE",
       coverIncluded: true,
       priorityProcessing: true,
     });
@@ -153,8 +199,10 @@ async function run() {
     assert.equal(savedHistorical.coverPriceCents, 1_000);
     assert.equal(savedHistorical.priorityPriceCents, 3_000);
     assert.equal(savedHistorical.totalCents, 9_000);
+    assert.equal(savedHistorical.illustrationFormat, "SQUARE");
     const finalizedHistorical = await finalizeOrder(member, historicalOrderNumber, {
       ...baseInput,
+      illustrationFormat: "SQUARE",
       coverIncluded: true,
       priorityProcessing: false,
     }, true);
@@ -164,6 +212,7 @@ async function run() {
     assert.equal(finalizedHistorical.coverPriceCents, 1_000);
     assert.equal(finalizedHistorical.priorityPriceCents, 0);
     assert.equal(finalizedHistorical.totalCents, 6_000);
+    assert.equal(finalizedHistorical.illustrationFormat, "SQUARE");
     const persistedHistorical = await prisma.order.findUniqueOrThrow({
       where: { orderNumber: historicalOrderNumber },
     });
@@ -181,8 +230,44 @@ async function run() {
     assert.equal(draft.events.length, 1);
     passed.push("private draft and client event created");
 
+    await assert.rejects(
+      saveDraftOrder(member, draft.orderNumber, {
+        ...baseInput,
+        coverIncluded: true,
+        illustrationFormat: null,
+      }),
+      (error: unknown) => error instanceof Error
+        && "code" in error
+        && error.code === "INVALID_ILLUSTRATION_FORMAT",
+    );
+    await assert.rejects(
+      finalizeOrder(member, draft.orderNumber, {
+        ...baseInput,
+        coverIncluded: true,
+        illustrationFormat: null,
+      }, true),
+      (error: unknown) => error instanceof Error
+        && "code" in error
+        && error.code === "INVALID_BRIEF",
+    );
+    await assert.rejects(prisma.order.update({
+      where: { orderNumber: draft.orderNumber },
+      data: { coverIncluded: false, illustrationFormat: "SQUARE" },
+    }));
+    await assert.rejects(prisma.order.update({
+      where: { orderNumber: draft.orderNumber },
+      data: { illustrationFormat: null, illustrationFormatCustom: "format orphelin" },
+    }));
+    await assert.rejects(prisma.order.update({
+      where: { orderNumber: draft.orderNumber },
+      data: { coverIncluded: true, illustrationFormat: "CUSTOM", illustrationFormatCustom: null },
+    }));
+    passed.push("illustration format is required for a cover and the SQL invariant rejects a format without one");
+
     const priced = await saveDraftOrder(member, draft.orderNumber, {
       ...baseInput,
+      illustrationFormat: "CUSTOM",
+      illustrationFormatCustom: "  Pochette panoramique 21:9  ",
       coverIncluded: true,
       priorityProcessing: true,
     });
@@ -190,6 +275,8 @@ async function run() {
     assert.equal(priced.pricingVersion, "2026-08-v2");
     assert.equal(priced.basePriceCents, 2_000);
     assert.equal(priced.totalCents, 6_000);
+    assert.equal(priced.illustrationFormat, "CUSTOM");
+    assert.equal(priced.illustrationFormatCustom, "Pochette panoramique 21:9");
     assert.equal(priced.contractRequired, false);
     assert.equal((await getDraftForActor(member, draft.orderNumber))?.orderNumber, draft.orderNumber);
     await assert.rejects(saveDraftOrder(other, draft.orderNumber, baseInput));
@@ -217,6 +304,8 @@ async function run() {
 
     const finalized = await finalizeOrder(member, draft.orderNumber, {
       ...baseInput,
+      illustrationFormat: "LANDSCAPE",
+      illustrationFormatCustom: "valeur personnalisée obsolète",
       coverIncluded: true,
       priorityProcessing: true,
     }, true);
@@ -227,17 +316,23 @@ async function run() {
     assert.equal(finalized.pricingVersion, "2026-08-v2");
     assert.equal(finalized.basePriceCents, 2_000);
     assert.equal(finalized.totalCents, 6_000);
+    assert.equal(finalized.illustrationFormat, "LANDSCAPE");
+    assert.equal(finalized.illustrationFormatCustom, "");
     const editableBeforeCheckout = await saveDraftOrder(member, draft.orderNumber, baseInput);
     assert.equal(editableBeforeCheckout.status, "AWAITING_PAYMENT");
     assert.equal(editableBeforeCheckout.pricingVersion, "2026-08-v2");
     assert.equal(editableBeforeCheckout.totalCents, 2_000);
+    assert.equal(editableBeforeCheckout.illustrationFormat, null);
+    assert.equal(editableBeforeCheckout.illustrationFormatCustom, "");
     const restoredBeforeCheckout = await saveDraftOrder(member, draft.orderNumber, {
       ...baseInput,
+      illustrationFormat: "PORTRAIT",
       coverIncluded: true,
       priorityProcessing: true,
     });
     assert.equal(restoredBeforeCheckout.pricingVersion, "2026-08-v2");
     assert.equal(restoredBeforeCheckout.totalCents, 6_000);
+    assert.equal(restoredBeforeCheckout.illustrationFormat, "PORTRAIT");
     assert.equal(await getOrderForActor(other, draft.orderNumber), null);
     assert.ok(await getOrderForActor(admin, draft.orderNumber));
     assert.deepEqual((await listMemberOrders(other)).map((order) => order.orderNumber), [invalid.orderNumber]);

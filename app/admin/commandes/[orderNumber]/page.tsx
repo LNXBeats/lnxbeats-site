@@ -6,6 +6,7 @@ import { addInternalNoteAction, reconcilePaymentRefundAction, requestPaymentRefu
 import { AdminOrderActions } from "@/components/admin-order-actions";
 import { AdminOrderDeliveryPanel } from "@/components/admin-order-delivery-panel";
 import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
+import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { getAllowedOrderTransitions, getOrderDeletionEligibility } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
@@ -163,6 +164,9 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               <div><dt>Contexte</dt><dd>{order.occasion || "Non renseigné"}</dd></div>
               <div><dt>Direction musicale</dt><dd>{order.musicalDirection || "Non renseignée"}</dd></div>
               <div><dt>Émotion</dt><dd>{order.emotion || "Non renseignée"}</dd></div>
+              {order.coverIncluded ? <div><dt>Illustration</dt><dd>Demandée</dd></div> : null}
+              {order.coverIncluded ? <div><dt>Format demandé</dt><dd>{orderIllustrationFormatLabel(order.illustrationFormat)}</dd></div> : null}
+              {order.coverIncluded && order.illustrationFormat === "CUSTOM" ? <div><dt>Précision</dt><dd>{order.illustrationFormatCustom}</dd></div> : null}
               <div className="admin-detail-facts__wide"><dt>Histoire</dt><dd>{order.brief || "Non renseignée"}</dd></div>
               {order.importantDetails ? <div className="admin-detail-facts__wide"><dt>Détails importants</dt><dd>{order.importantDetails}</dd></div> : null}
             </dl>
@@ -195,7 +199,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
         <aside className="admin-order-detail__aside">
           <section className="admin-side-window">
             <p className="admin-section-label">Prix snapshot</p><strong className="admin-price">{formatEuro(order.totalCents)}</strong>
-            <dl><div><dt>Création</dt><dd>{formatEuro(order.basePriceCents)}</dd></div><div><dt>Cover</dt><dd>{order.coverIncluded ? formatEuro(order.coverPriceCents) : "Non"}</dd></div><div><dt>Priorité</dt><dd>{order.priorityProcessing ? formatEuro(order.priorityPriceCents) : "Non"}</dd></div><div><dt>Révisions</dt><dd>{order.revisionUsed} / {order.revisionAllowance}</dd></div></dl>
+            <dl><div><dt>Création</dt><dd>{formatEuro(order.basePriceCents)}</dd></div>{order.coverIncluded ? <div><dt>Illustration</dt><dd>{formatEuro(order.coverPriceCents)}</dd></div> : null}<div><dt>Priorité</dt><dd>{order.priorityProcessing ? formatEuro(order.priorityPriceCents) : "Non"}</dd></div><div><dt>Révisions</dt><dd>{order.revisionUsed} / {order.revisionAllowance}</dd></div></dl>
             <small>Tarif {order.pricingVersion}. Le montant du navigateur n’est jamais utilisé comme source de vérité.</small>
           </section>
 

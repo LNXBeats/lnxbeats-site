@@ -34,6 +34,8 @@ const input: OrderDraftInput = {
   wordsToInclude: "",
   avoid: "",
   pronunciationNotes: "",
+  illustrationFormat: "SQUARE",
+  illustrationFormatCustom: "",
   coverIncluded: true,
   priorityProcessing: false,
 };

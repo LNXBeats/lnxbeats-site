@@ -125,6 +125,8 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
       recipient: true,
       status: true,
       coverIncluded: true,
+      illustrationFormat: true,
+      illustrationFormatCustom: true,
       priorityProcessing: true,
       totalCents: true,
       createdAt: true,

@@ -72,7 +72,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
         </Container>
       </section>
       <section className="section">
-        <Container className="order-layout motion-reveal motion-reveal--soft">
+        <Container className="order-layout commander-v084 motion-reveal motion-reveal--soft">
           <MusicOrderForm
             account={actor ? { authenticated: true, name: actor.name, email: actor.email } : { authenticated: false }}
             initialDraft={draft}
@@ -86,7 +86,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             <ul>
               <li>Création musicale avec livraison ultérieure du fichier WAV</li>
               <li>Une demande d’ajustement conforme au brief initial incluse</li>
-              <li>Cover personnalisée : +10 €</li>
+              <li>Illustration personnalisée : +10 €</li>
               <li>Traitement prioritaire : +30 €</li>
               <li>Total maximum de la création : {formatEuro(maximumOrderPriceCents)}</li>
               <li>Les droits d’exploitation font l’objet d’une demande distincte après livraison</li>

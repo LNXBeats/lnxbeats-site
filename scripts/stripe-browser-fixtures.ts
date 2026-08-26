@@ -95,6 +95,8 @@ function inputForScenario(
     wordsToInclude: "",
     avoid: "",
     pronunciationNotes: "",
+    illustrationFormat: scenario.coverIncluded ? "SQUARE" : null,
+    illustrationFormatCustom: "",
     coverIncluded: scenario.coverIncluded,
     priorityProcessing: scenario.priorityProcessing,
   };
@@ -275,6 +277,8 @@ async function createFixtures(password: string) {
           usage: "PERSONAL",
           coverIncluded: scenario.coverIncluded,
           priorityProcessing: scenario.priorityProcessing,
+          illustrationFormat: scenario.coverIncluded ? "SQUARE" : null,
+          illustrationFormatCustom: null,
           basePriceCents: scenario.basePriceCents,
           coverPriceCents: scenario.coverPriceCents,
           priorityPriceCents: scenario.priorityPriceCents,

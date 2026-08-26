@@ -52,6 +52,7 @@ const input: OrderDraftInput = {
   brief: "Une histoire fictive suffisamment détaillée pour le contrôle navigateur de la commande.",
   musicalDirection: "Cinématographique", emotion: "Lumineuse", importantDetails: "",
   wordsToInclude: "", avoid: "", pronunciationNotes: "",
+  illustrationFormat: "SQUARE", illustrationFormatCustom: "",
   coverIncluded: true, priorityProcessing: false,
 };
 
