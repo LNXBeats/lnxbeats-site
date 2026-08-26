@@ -22,6 +22,9 @@ test("V0.8.5 Commander owns its scoped stylesheet and collapses secondary mobile
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.commander-meeting-v084__desktop \{ display: none; \}[\s\S]*?\.commander-meeting-v084__mobile \{ display: block; \}/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.commander-hero-v084 \{[\s\S]*?min-height: 0;/);
   assert.match(css, /\.commander-v084 \.order-aside::after \{ pointer-events: none; \}/);
+  assert.match(css, /@media \(max-width: 1100px\) \{[\s\S]*?\.commander-v084 \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.match(css, /@media \(max-width: 1100px\) and \(min-width: 601px\)[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(css, /scroll-margin-top: calc\(var\(--header-height\) \+ max\(6px, env\(safe-area-inset-top\)\) \+ 1\.25rem\);/);
   assert.doesNotMatch(css, /\.illustration-format-choice small \{ display: none; \}/);
 });
 

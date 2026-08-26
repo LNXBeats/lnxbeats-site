@@ -26,18 +26,25 @@
 }
 
 .home-hero__eyebrow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.65rem;
+  display: block;
+  max-width: 46rem;
+  margin: clamp(0.85rem, 1.7vw, 1.35rem) 0 0;
+  color: var(--gold-light);
 }
 
-.home-hero__eyebrow-brand,
-.home-hero__eyebrow-separator,
 .home-hero__eyebrow-story { display: inline-block; }
 
-.home-hero__eyebrow-separator { color: rgba(244, 240, 232, 0.42); }
 .home-hero__eyebrow-story-key { white-space: nowrap; }
+
+.project-artwork[data-artwork-state="unavailable"] {
+  background:
+    radial-gradient(circle at 76% 26%, rgba(202, 168, 97, 0.16), transparent 28%),
+    linear-gradient(145deg, #1b1813, #090909 68%);
+}
+
+.project-artwork[data-artwork-state="unavailable"] .project-artwork__status {
+  color: #b9b3a8;
+}
 
 .about-teaser--copy-only { grid-template-columns: minmax(0, 1fr); }
 .about-teaser--copy-only .about-teaser__copy { max-width: 760px; margin-inline: auto; }
@@ -154,6 +161,67 @@
   .album-hero__content { width: 100%; }
 }
 
+/* Bridge the former 600/820px jump without changing the desktop composition. */
+@media (min-width: 601px) and (max-width: 820px) {
+  .home-hero,
+  .home-hero__inner { min-height: max(680px, 100svh); }
+
+  .home-hero__inner {
+    padding-top: calc(var(--header-height) + clamp(3.75rem, 8vw, 5rem));
+    padding-bottom: 1.75rem;
+  }
+
+  .home-hero__copy {
+    max-width: min(84vw, 720px);
+    padding-bottom: clamp(1.75rem, 5vh, 3rem);
+  }
+
+  .home-hero h1 {
+    font-size: clamp(4.65rem, 12.8vw, 6.6rem);
+    line-height: 0.76;
+  }
+
+  .home-hero__slogan { margin-top: 1.5rem; font-size: clamp(1.45rem, 4vw, 2rem); }
+  .home-hero__lead { margin-top: 1rem; font-size: 1rem; }
+
+  .page-hero {
+    min-height: 0;
+    padding-block: calc(var(--header-height) + clamp(3rem, 7vw, 4.25rem)) clamp(3rem, 7vw, 4.5rem);
+  }
+
+  .page-hero__grid { gap: 1.75rem; }
+  .page-hero h1 { max-width: 11ch; font-size: clamp(4rem, 9vw, 4.8rem); line-height: 0.86; }
+  .page-hero__intro { max-width: 40rem; padding-top: 1rem; }
+
+  .contact-hero { min-height: 0; padding-top: calc(var(--header-height) + clamp(3rem, 7vw, 4.25rem)); }
+  .contact-hero__inner { padding-bottom: clamp(3rem, 7vw, 4.5rem); }
+  .contact-hero h1 { max-width: 13ch; font-size: clamp(3.8rem, 9vw, 4.5rem); line-height: 0.9; }
+
+  .about-hero__copy { min-height: 0; padding-block: clamp(3rem, 7vw, 4.5rem); }
+  .about-hero h1 { max-width: 10ch; font-size: clamp(4rem, 9vw, 5rem); line-height: 0.84; }
+  .about-hero__portrait { min-height: clamp(420px, 72vw, 560px); margin-inline: 0; }
+}
+
+@media (min-width: 821px) and (max-width: 1100px) {
+  .page-hero {
+    min-height: 0;
+    padding-block: calc(var(--header-height) + clamp(3.5rem, 6vw, 4.5rem)) clamp(3.5rem, 6vw, 5rem);
+  }
+
+  .page-hero__grid { grid-template-columns: 1fr; gap: 1.75rem; }
+  .page-hero__grid > div:first-child,
+  .page-hero__grid > div:nth-child(2),
+  .page-hero__grid > .page-hero__intro { grid-column: auto; }
+  .page-hero h1 { max-width: 11ch; font-size: clamp(4.8rem, 9vw, 6.2rem); line-height: 0.86; }
+  .page-hero__intro { max-width: 42rem; padding-top: 1rem; }
+  .page-hero__visual { right: -6%; bottom: -12%; width: min(44vw, 420px); opacity: 0.32; }
+
+  .contact-hero { min-height: 0; padding-top: calc(var(--header-height) + clamp(3.5rem, 6vw, 4.5rem)); }
+  .contact-hero__inner { padding-bottom: clamp(3.5rem, 6vw, 5rem); }
+  .contact-hero__inner > div { max-width: min(100%, 760px); }
+  .contact-hero h1 { max-width: 13ch; font-size: clamp(4.5rem, 9vw, 6.2rem); line-height: 0.88; }
+}
+
 @media (max-width: 600px) {
   .quick-access-slot + main .contact-hero { --header-height: 0px; }
 
@@ -168,10 +236,9 @@
   }
 
   .home-hero__copy { padding-bottom: 1rem; }
-  .home-hero__eyebrow { display: grid; max-width: none !important; gap: 0.22rem; }
-  .home-hero__eyebrow-separator { display: none; }
+  .home-hero__eyebrow { max-width: none; margin-top: 0.95rem; }
   .home-hero__eyebrow-story { color: var(--gold-light); }
-  .home-hero h1 { font-size: clamp(3.1rem, 14vw, 3.45rem); line-height: 0.82; }
+  .home-hero h1 { font-size: clamp(3.1rem, 14vw, 4.65rem); line-height: 0.82; }
   .home-hero__slogan { margin-top: 1.15rem; font-size: clamp(1.25rem, 6.5vw, 1.55rem); }
   .home-hero__lead { margin-top: 1rem; font-size: 0.92rem; line-height: 1.58; }
   .home-hero__actions { gap: 0.65rem; margin-top: 1.35rem; }

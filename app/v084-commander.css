@@ -92,7 +92,13 @@ main:has(.commander-v084) .commander-meeting-v084 { padding-block: clamp(2.5rem,
 }
 
 .order-form--premium .order-step-heading .eyebrow { margin: 0 0 0.5rem; }
-.order-form--premium .order-step-heading h2 { max-width: 25ch; margin-bottom: 0.5rem; font-size: clamp(1.65rem, 2.1vw, 2.25rem); line-height: 1; }
+.order-form--premium .order-step-heading h2 {
+  max-width: 25ch;
+  margin-bottom: 0.5rem;
+  scroll-margin-top: calc(var(--header-height) + max(6px, env(safe-area-inset-top)) + 1.25rem);
+  font-size: clamp(1.65rem, 2.1vw, 2.25rem);
+  line-height: 1;
+}
 .order-form--premium .order-step-heading h2:focus { outline: 0; }
 .order-form--premium .order-step-heading h2:focus-visible {
   outline: 2px solid rgba(226, 196, 126, 0.78);
@@ -469,7 +475,7 @@ main:has(.commander-v084) .commander-meeting-v084 { padding-block: clamp(2.5rem,
 .order-aside__assurance strong { color: var(--commander-ivory); font-size: 0.76rem; }
 .order-aside__assurance span { color: var(--commander-muted); font-size: 0.68rem; line-height: 1.45; }
 
-@media (max-width: 980px) {
+@media (max-width: 1100px) {
   .commander-v084 { grid-template-columns: minmax(0, 1fr); }
   .commander-v084 .order-form--premium { grid-column: 1; grid-row: 2; }
   .commander-v084 .order-aside { position: static; grid-column: 1; grid-row: 1; margin: 0 0 0.75rem; }
@@ -495,7 +501,7 @@ main:has(.commander-v084) .commander-meeting-v084 { padding-block: clamp(2.5rem,
   .commander-v084 .order-aside__content { padding: 0 0.9rem 0.9rem; }
 }
 
-@media (max-width: 980px) and (min-width: 601px) {
+@media (max-width: 1100px) and (min-width: 601px) {
   .order-form--premium .order-progress { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 

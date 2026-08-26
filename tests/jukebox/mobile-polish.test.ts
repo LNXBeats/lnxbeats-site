@@ -50,7 +50,17 @@ test("shared mobile polish groups the Home promise and keeps the global rails co
   ]);
 
   assert.match(homepage, /home-hero__eyebrow-story-key">Les histoires<\/span> deviennent musique/);
+  assert.doesNotMatch(homepage, /home-hero__eyebrow-brand|home-hero__eyebrow-separator/);
+  assert.ok(
+    homepage.indexOf('id="home-hero-title"') < homepage.indexOf("home-hero__eyebrow-story"),
+    "la promesse éditoriale doit suivre la marque principale dans l’ordre DOM",
+  );
   assert.match(css, /\.home-hero__eyebrow-story-key \{ white-space: nowrap; \}/);
+  assert.match(css, /@media \(min-width: 601px\) and \(max-width: 820px\)[\s\S]*?\.home-hero h1 \{[\s\S]*?font-size: clamp\(4\.65rem, 12\.8vw, 6\.6rem\);/);
+  assert.match(css, /@media \(min-width: 601px\) and \(max-width: 820px\)[\s\S]*?\.page-hero \{[\s\S]*?min-height: 0;/);
+  assert.match(css, /@media \(min-width: 601px\) and \(max-width: 820px\)[\s\S]*?\.page-hero h1 \{[\s\S]*?font-size: clamp\(4rem, 9vw, 4\.8rem\);/);
+  assert.match(css, /@media \(min-width: 821px\) and \(max-width: 1100px\)[\s\S]*?\.page-hero__grid \{ grid-template-columns: 1fr;/);
+  assert.match(css, /@media \(min-width: 821px\) and \(max-width: 1100px\)[\s\S]*?\.contact-hero__inner > div \{ max-width: min\(100%, 760px\); \}/);
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*?\.quick-access__rail \{[\s\S]*?overflow-x: auto;/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.site-footer__group-links \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
   assert.match(layout, /import "\.\/v085-mobile-polish\.css"/);

@@ -86,11 +86,24 @@ test("discography renders one exhaustive scene without the former duplicate grid
   assert.match(discography, /const sceneProjects = discographyView\(projects\)/);
   assert.doesNotMatch(discography, /eligibleSlugs|publishedJukeboxProjects|developmentJukeboxProjects/);
   assert.match(discography, /projects=\{sceneProjects\}/);
-  assert.match(discography, /jukeboxInitialIndex\(sceneProjects, 2\)/);
+  assert.match(discography, /initialIndex=\{0\}/);
+  assert.doesNotMatch(discography, /jukeboxInitialIndex\(sceneProjects/);
   assert.match(discography, /audioPreview: project\.audioPreview/);
   assert.doesNotMatch(discography, /project\.status === "published" && project\.audioPreview/);
   assert.doesNotMatch(discography, /page-hero|v064-discography-hero/);
   assert.match(component, /<h1 id=\{regionId\}>\{heading\}<\/h1>/);
+});
+
+test("changing the sort resets the scene to the first project in the selected order", async () => {
+  const component = await readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8");
+
+  assert.match(component, /const applySort = \(nextSort: DiscographySort\) => \{/);
+  assert.match(component, /const nextProjects = visibleDiscographyProjects\(projects, nextFilter, sort\);/);
+  assert.match(component, /const nextProjects = visibleDiscographyProjects\(projects, filter, nextSort\);/);
+  assert.match(component, /setSort\(nextSort\);[\s\S]*?select\(nextIndex, false\);/);
+  assert.match(component, /onChange=\{\(event\) => applySort\(event\.target\.value as DiscographySort\)\}/);
+  assert.match(component, /data-active-index=\{currentVisibleIndex\}/);
+  assert.match(component, /data-active-project-index=\{activeIndex\}/);
 });
 
 test("the desktop scene keeps five relative cover positions", async () => {
