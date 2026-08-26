@@ -61,8 +61,8 @@ export function PaymentCheckoutActions({
                   />
                 )}
                 <span className="payment-methods__choice-title">
-                  <strong id={headingId}>{presentation.title}</strong>
-                  <span>{presentation.providerLabel}</span>
+                  {provider === "stripe" ? <strong id={headingId}>{presentation.title}</strong> : null}
+                  <span id={provider === "paypal" ? headingId : undefined}>{presentation.providerLabel}</span>
                 </span>
               </header>
               <p className="payment-methods__choice-details">{presentation.details}</p>

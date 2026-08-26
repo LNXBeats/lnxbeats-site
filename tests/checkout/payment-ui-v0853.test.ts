@@ -55,6 +55,9 @@ test("premium payment presentation uses a pinned official PayPal asset without c
 
   assert.match(choices, /src="\/brands\/paypal-white\.svg"/);
   assert.match(choices, /provider === "stripe"[\s\S]*?<CardPaymentIcon \/>[\s\S]*?: \([\s\S]*?paypal-white\.svg/);
+  assert.match(choices, /provider === "stripe" \? <strong id=\{headingId\}>\{presentation\.title\}<\/strong> : null/);
+  assert.match(choices, /<span id=\{provider === "paypal" \? headingId : undefined\}>\{presentation\.providerLabel\}<\/span>/);
+  assert.doesNotMatch(choices, /<strong id=\{headingId\}>\{presentation\.title\}<\/strong>\s*<span>/);
   assert.doesNotMatch(choices, /paypalobjects\.com|paypal\.com\/.*\.svg|<script/);
   assert.equal(digest, "c2654a3c25ef2a429934e80d8b66ecf5c9dfe998250d9f046ecfe8e11f7fb4f5");
   assert.match(asset, /^<svg\b/);
