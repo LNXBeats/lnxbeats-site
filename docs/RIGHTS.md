@@ -4,7 +4,7 @@
 
 ## Trois niveaux séparés
 
-1. **Création personnelle** — grille courante `2026-08-v2` : 20 €, 30 €, 50 € ou 60 € selon Cover/Priorité. Les Orders historiques `2026-08-v1` conservent leurs montants de 50 €, 60 €, 80 € ou 90 €. La version tarifaire et la version acceptée des conditions d’usage personnel sont figées sur chaque `Order`. Elles ne valent pas autorisation de publier, distribuer, monétiser, revendiquer la qualité d’auteur/compositeur ou obtenir une quote-part SACEM.
+1. **Création personnelle** — grille courante `2026-08-v2` : 20 €, 30 €, 50 € ou 60 € selon Illustration/Priorité. Les Orders historiques `2026-08-v1` conservent leurs montants de 50 €, 60 €, 80 € ou 90 €. La version tarifaire et la version acceptée des conditions d’usage personnel sont figées sur chaque `Order`. Elles ne valent pas autorisation de publier, distribuer, monétiser, revendiquer la qualité d’auteur/compositeur ou obtenir une quote-part SACEM.
 2. **Licence de publication** — tarif cible serveur 150 € (`15_000` centimes). Elle prépare une autorisation délimitée par droits, destination, supports, territoire et durée. V0.7.2 n’encaisse rien.
 3. **Partenariat d’exploitation** — tarif cible serveur 1 500 € (`150_000` centimes). Il ouvre une étude manuelle des contributions, rôles, IA et paramètres contractuels. Une proposition 70/30 est facultative, volontairement créée par l’Admin et non automatique.
 

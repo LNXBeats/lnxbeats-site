@@ -23,6 +23,8 @@ const validBrief = {
   wordsToInclude: "",
   avoid: "",
   pronunciationNotes: "",
+  illustrationFormat: null,
+  illustrationFormatCustom: "",
   coverIncluded: false,
   priorityProcessing: false,
 } as const;
@@ -52,7 +54,7 @@ test("conserve intégralement la grille historique v1", () => {
 });
 
 test("ignore tout usage, montant, version tarifaire, propriétaire ou rôle forgé par le client", () => {
-  const parsed = parseOrderDraftInput({ ...validBrief, usage: "COMMERCIAL_EXTENDED", totalCents: 1, basePriceCents: -1, currency: "USD", pricingVersion: "2026-08-v1", contractRequired: true, userId: "attacker", role: "ADMIN", status: "PAID" });
+  const parsed = parseOrderDraftInput({ ...validBrief, coverIncluded: true, illustrationFormat: "SQUARE", usage: "COMMERCIAL_EXTENDED", totalCents: 1, basePriceCents: -1, currency: "USD", pricingVersion: "2026-08-v1", contractRequired: true, userId: "attacker", role: "ADMIN", status: "PAID" });
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   assert.equal("usage" in parsed.value, false);
@@ -61,7 +63,85 @@ test("ignore tout usage, montant, version tarifaire, propriétaire ou rôle forg
   assert.equal("pricingVersion" in parsed.value, false);
   assert.equal("userId" in parsed.value, false);
   assert.equal("role" in parsed.value, false);
-  assert.equal(calculateOrderPrice(parsed.value).totalCents, 2_000);
+  assert.equal(calculateOrderPrice(parsed.value).totalCents, 3_000);
+});
+
+test("normalise et valide le format d’illustration sans accepter de valeur libre", () => {
+  const custom = parseOrderDraftInput({
+    ...validBrief,
+    coverIncluded: true,
+    illustrationFormat: "CUSTOM",
+    illustrationFormatCustom: "  Pochette panoramique 21:9  ",
+  });
+  assert.equal(custom.ok, true);
+  if (custom.ok) {
+    assert.equal(custom.value.illustrationFormat, "CUSTOM");
+    assert.equal(custom.value.illustrationFormatCustom, "Pochette panoramique 21:9");
+  }
+
+  const square = parseOrderDraftInput({
+    ...validBrief,
+    coverIncluded: true,
+    illustrationFormat: "SQUARE",
+    illustrationFormatCustom: "valeur obsolète du navigateur",
+  });
+  assert.equal(square.ok, true);
+  if (square.ok) assert.equal(square.value.illustrationFormatCustom, "");
+
+  const legacyTransport = parseOrderDraftInput({ ...validBrief, coverIncluded: true });
+  assert.equal(legacyTransport.ok, true);
+  if (legacyTransport.ok) {
+    assert.equal(legacyTransport.value.illustrationFormat, null);
+    assert.equal(validateOrderForSubmission(legacyTransport.value).ok, false);
+    assert.equal(validateOrderForSubmission(
+      legacyTransport.value,
+      { allowLegacyMissingIllustrationFormat: true },
+    ).ok, true);
+  }
+  assert.equal(parseOrderDraftInput({ ...validBrief, coverIncluded: true, illustrationFormat: "FREEFORM" }).ok, false);
+  assert.equal(parseOrderDraftInput({ ...validBrief, coverIncluded: true, illustrationFormat: "CUSTOM", illustrationFormatCustom: "   " }).ok, false);
+  assert.equal(parseOrderDraftInput({
+    ...validBrief,
+    coverIncluded: true,
+    illustrationFormat: "CUSTOM",
+    illustrationFormatCustom: "x".repeat(241),
+  }).ok, false);
+
+  const withoutCover = parseOrderDraftInput({
+    ...validBrief,
+    coverIncluded: false,
+    illustrationFormat: "FREEFORM",
+    illustrationFormatCustom: { forged: true },
+  });
+  assert.equal(withoutCover.ok, true);
+  if (withoutCover.ok) {
+    assert.equal(withoutCover.value.illustrationFormat, null);
+    assert.equal(withoutCover.value.illustrationFormatCustom, "");
+  }
+
+  const missingFormat = validateOrderForSubmission({
+    ...validBrief,
+    coverIncluded: true,
+    illustrationFormat: null,
+  });
+  assert.equal(missingFormat.ok, false);
+  if (!missingFormat.ok) assert.equal(missingFormat.field, "illustrationFormat");
+
+  const missingCustom = validateOrderForSubmission({
+    ...validBrief,
+    coverIncluded: true,
+    illustrationFormat: "CUSTOM",
+    illustrationFormatCustom: "   ",
+  });
+  assert.equal(missingCustom.ok, false);
+  if (!missingCustom.ok) assert.equal(missingCustom.field, "illustrationFormatCustom");
+
+  const forgedWithoutCover = validateOrderForSubmission({
+    ...validBrief,
+    illustrationFormat: "CUSTOM",
+    illustrationFormatCustom: "",
+  });
+  assert.equal(forgedWithoutCover.ok, true);
 });
 
 test("refuse les payloads ambigus et les briefs incomplets", () => {

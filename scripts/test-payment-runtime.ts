@@ -396,6 +396,8 @@ async function createOrders(userId: string) {
         usage: "PERSONAL" as const,
         coverIncluded: fixture.coverIncluded,
         priorityProcessing: fixture.priorityProcessing,
+        illustrationFormat: fixture.coverIncluded ? "SQUARE" as const : null,
+        illustrationFormatCustom: null,
         basePriceCents: 2_000,
         coverPriceCents: fixture.coverPriceCents,
         priorityPriceCents: fixture.priorityPriceCents,
@@ -656,6 +658,8 @@ async function run() {
       wordsToInclude: "",
       avoid: "",
       pronunciationNotes: "",
+      illustrationFormat: "SQUARE",
+      illustrationFormatCustom: "",
       coverIncluded: true,
       priorityProcessing: false,
     } satisfies OrderDraftInput;

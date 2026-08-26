@@ -71,7 +71,7 @@ test("Commander keeps a six-step brief in memory across authentication without s
   assert.match(form, /brouillon=\$\{encodeURIComponent\(persistedOrderNumber\)\}&etape=\$\{stepQueryValues\[bounded\]\}/);
   assert.doesNotMatch(`${form}\n${provider}`, /(?:localStorage|sessionStorage)\s*(?:\[|\.)\s*(?:getItem|setItem|removeItem)|indexedDB\s*\.\s*open/i);
   assert.doesNotMatch(form, /label[^>]*>[^<]*(mots ou expressions|éléments à éviter|prononciation)/i);
-  assert.match(form, /Détails importants/);
+  assert.match(form, /Détails à préserver/);
 });
 
 test("recap and confirmation use server Orders while the client sends no amount", () => {

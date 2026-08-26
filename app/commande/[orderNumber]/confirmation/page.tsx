@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Container } from "@/components/container";
+import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { ModifyUnpaidOrderAction } from "@/components/modify-unpaid-order-action";
 import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
@@ -33,6 +34,9 @@ export default async function OrderConfirmationPage({ params, searchParams }: Co
   const paymentProviders = await paymentProvidersAvailable();
   const canRetry = ["ready", "failed", "expired"].includes(paymentState)
     || (returnState === "cancel" && paymentState === "confirming");
+  const illustrationOption = order.coverIncluded
+    ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)}${order.illustrationFormat === "CUSTOM" && order.illustrationFormatCustom ? ` · ${order.illustrationFormatCustom}` : ""})`
+    : null;
 
   return (
     <section className="auth-shell order-confirmation-shell">
@@ -46,7 +50,7 @@ export default async function OrderConfirmationPage({ params, searchParams }: Co
         <dl className="order-confirmation__summary">
           <div><dt>Projet</dt><dd>{order.title || order.recipient || "Votre création"}</dd></div>
           <div><dt>Total</dt><dd>{formatEuro(order.totalCents)}</dd></div>
-          <div><dt>Options</dt><dd>{[order.coverIncluded ? "Cover" : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
+          <div><dt>Options</dt><dd>{[illustrationOption, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
         </dl>
         {(paymentProviders.stripe || paymentProviders.paypal) && canRetry ? <PaymentCheckoutActions orderNumber={order.orderNumber} amountCents={order.totalCents} providers={paymentProviders} /> : null}
         {paymentProviders.stripe && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}

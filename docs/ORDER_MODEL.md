@@ -17,13 +17,15 @@ Tous les montants sont calculés côté serveur en centimes entiers, en EUR, pui
 | Élément | Montant |
 | --- | ---: |
 | Création personnelle | 20 € |
-| Cover | +10 € |
+| Illustration personnalisée | +10 € |
 | Traitement prioritaire | +30 € |
 | Total maximal de la commande initiale | 60 € |
 
-La grille historique `2026-08-v1` reste enregistrée dans le registre avec une base à 50 €, une cover à +10 €, une priorité à +30 € et les totaux 50/60/80/90 €. Toute `Order` existante conserve cette version ; lorsqu’elle est payable, Checkout utilise son snapshot d’origine. Elle n’est jamais migrée vers v2.
+La grille historique `2026-08-v1` reste enregistrée dans le registre avec une base à 50 €, une illustration à +10 €, une priorité à +30 € et les totaux 50/60/80/90 €. Toute `Order` existante conserve cette version ; lorsqu’elle est payable, Checkout utilise son snapshot d’origine. Elle n’est jamais migrée vers v2.
 
-Le serveur ignore tout prix, toute version tarifaire et tout `usage` envoyés par le client. Il persiste séparément base, cover, priorité et total, puis force `usage = PERSONAL` et `contractRequired = false` pour chaque brouillon et chaque finalisation. Le choix `COMMERCIAL_EXTENDED` reste dans l’ancien enum uniquement pour compatibilité de schéma ; aucune route de commande initiale ne peut le produire. Un snapshot historique est conservé et explicitement signalé comme tel, jamais réécrit silencieusement.
+Le serveur ignore tout prix, toute version tarifaire et tout `usage` envoyés par le client. Il persiste séparément base, illustration (`coverIncluded` et `coverPriceCents` restent les noms techniques historiques), priorité et total, puis force `usage = PERSONAL` et `contractRequired = false` pour chaque brouillon et chaque finalisation. Le choix `COMMERCIAL_EXTENDED` reste dans l’ancien enum uniquement pour compatibilité de schéma ; aucune route de commande initiale ne peut le produire. Un snapshot historique est conservé et explicitement signalé comme tel, jamais réécrit silencieusement.
+
+Depuis V0.8.4, une nouvelle illustration exige un format parmi `SQUARE`, `VERTICAL`, `LANDSCAPE`, `PORTRAIT` et `CUSTOM`. `CUSTOM` exige une précision nettoyée de 240 caractères maximum. Le format ne modifie jamais le prix. Lorsque l’option est absente, les deux champs de format sont normalisés à `NULL`. Les Orders antérieures avec `coverIncluded=true` et format nul restent lisibles comme « Non renseigné » ; aucune migration ne leur invente une acceptation.
 
 Le modèle prévoit un retour inclus (`revisionAllowance = 1`). Le délai public reste indicatif ; la priorité n’est pas une promesse automatique de date.
 

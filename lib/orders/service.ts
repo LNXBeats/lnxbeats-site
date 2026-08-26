@@ -10,6 +10,8 @@ import {
   calculateOrderPrice,
   canAccessOrder,
   formatOrderNumber,
+  orderIllustrationFormats,
+  orderTextLimits,
   type OrderActor,
   type OrderDraftInput,
   validateOrderForSubmission,
@@ -90,8 +92,36 @@ function optional(value: string) {
   return value || null;
 }
 
-function dataFromInput(input: OrderDraftInput, pricingVersion: string = orderOffer.pricingVersion) {
+function dataFromInput(
+  input: OrderDraftInput,
+  pricingVersion: string = orderOffer.pricingVersion,
+  options: { allowLegacyMissingIllustrationFormat?: boolean } = {},
+) {
   const pricing = calculateOrderPrice(input, pricingVersion);
+  const illustrationFormat = input.coverIncluded ? input.illustrationFormat : null;
+  if (input.coverIncluded && !illustrationFormat && !options.allowLegacyMissingIllustrationFormat) {
+    throw new OrderServiceError("Choisissez un format d’illustration.", 400, "INVALID_ILLUSTRATION_FORMAT");
+  }
+  if (illustrationFormat && !orderIllustrationFormats.includes(illustrationFormat)) {
+    throw new OrderServiceError("Choisissez un format d’illustration.", 400, "INVALID_ILLUSTRATION_FORMAT");
+  }
+  const illustrationFormatCustom = illustrationFormat === "CUSTOM"
+    && typeof input.illustrationFormatCustom === "string"
+    ? input.illustrationFormatCustom.trim()
+    : "";
+  if (
+    illustrationFormat === "CUSTOM"
+    && (
+      !illustrationFormatCustom
+      || illustrationFormatCustom.length > orderTextLimits.illustrationFormatCustom
+    )
+  ) {
+    throw new OrderServiceError(
+      "Précisez le format d’illustration personnalisé.",
+      400,
+      "INVALID_ILLUSTRATION_FORMAT_CUSTOM",
+    );
+  }
   return {
     title: optional(input.title),
     recipient: optional(input.recipient),
@@ -103,6 +133,8 @@ function dataFromInput(input: OrderDraftInput, pricingVersion: string = orderOff
     wordsToInclude: optional(input.wordsToInclude),
     avoid: optional(input.avoid),
     pronunciationNotes: optional(input.pronunciationNotes),
+    illustrationFormat,
+    illustrationFormatCustom: optional(illustrationFormatCustom),
     usage: pricing.usage,
     coverIncluded: input.coverIncluded,
     priorityProcessing: input.priorityProcessing,
@@ -172,6 +204,8 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
     wordsToInclude: order.wordsToInclude ?? "",
     avoid: order.avoid ?? "",
     pronunciationNotes: order.pronunciationNotes ?? "",
+    illustrationFormat: order.illustrationFormat,
+    illustrationFormatCustom: order.illustrationFormatCustom ?? "",
     usage: order.usage,
     coverIncluded: order.coverIncluded,
     priorityProcessing: order.priorityProcessing,
@@ -339,13 +373,17 @@ export async function saveDraftOrder(actor: OrderActor, orderNumber: string, inp
   return withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
     const current = await transaction.order.findFirst({
       where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
-      select: { id: true, status: true, pricingVersion: true },
+      select: { id: true, status: true, pricingVersion: true, coverIncluded: true, illustrationFormat: true },
     });
     if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     await assertOrderEditableForPayment(transaction, current);
+    const allowLegacyMissingIllustrationFormat = current.coverIncluded
+      && current.illustrationFormat === null
+      && input.coverIncluded
+      && input.illustrationFormat === null;
     const order = await transaction.order.update({
       where: { id: current.id },
-      data: dataFromInput(input, current.pricingVersion),
+      data: dataFromInput(input, current.pricingVersion, { allowLegacyMissingIllustrationFormat }),
     });
     return serializeOrder(await loadTransactionalOrderRelations(transaction, order));
   });
@@ -353,13 +391,16 @@ export async function saveDraftOrder(actor: OrderActor, orderNumber: string, inp
 
 export async function finalizeOrder(actor: OrderActor, orderNumber: string, input: OrderDraftInput, personalUseTermsAccepted: boolean) {
   assertDatabaseConfigured();
-  const validation = validateOrderForSubmission(input);
-  if (!validation.ok) throw new OrderServiceError(validation.message, 400, "INVALID_BRIEF");
-
   return withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
     const draft = await transaction.order.findFirst({ where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } } });
     if (!draft) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     await assertOrderEditableForPayment(transaction, draft);
+    const allowLegacyMissingIllustrationFormat = draft.coverIncluded
+      && draft.illustrationFormat === null
+      && input.coverIncluded
+      && input.illustrationFormat === null;
+    const validation = validateOrderForSubmission(input, { allowLegacyMissingIllustrationFormat });
+    if (!validation.ok) throw new OrderServiceError(validation.message, 400, "INVALID_BRIEF");
     if (draft.status === "DRAFT" && !personalUseTermsAccepted) {
       throw new OrderServiceError("Confirmez les conditions d’usage personnel avant le paiement.", 400, "PERSONAL_USE_TERMS_REQUIRED");
     }
@@ -368,7 +409,7 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
     const order = await transaction.order.update({
       where: { id: draft.id },
       data: {
-        ...dataFromInput(input, draft.pricingVersion),
+        ...dataFromInput(input, draft.pricingVersion, { allowLegacyMissingIllustrationFormat }),
         ...(draft.status === "DRAFT" ? {
           status: "AWAITING_PAYMENT" as const,
           submittedAt,

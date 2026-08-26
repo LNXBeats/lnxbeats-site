@@ -132,7 +132,7 @@ Le prix payable provient exclusivement du snapshot serveur enregistré sur cette
 
 Le registre conserve simultanément deux grilles :
 
-| Version | Usage | Base | Cover | Priorité | Totaux autorisés |
+| Version | Usage | Base | Illustration | Priorité | Totaux autorisés |
 | --- | --- | ---: | ---: | ---: | --- |
 | `2026-08-v2` | nouvelles Orders | 20 € | +10 € | +30 € | 20/30/50/60 € |
 | `2026-08-v1` | Orders historiques | 50 € | +10 € | +30 € | 50/60/80/90 € |
@@ -160,7 +160,7 @@ La création de session doit être protégée contre les doubles clics et les re
 
 ### Périmètre commercial volontairement fermé
 
-La Session contient uniquement les lignes déterministes produites par le snapshot serveur : création musicale, cover si elle a été commandée, et priorité si elle a été commandée. La V0.7.0 n’active ni codes promotionnels, ni remises libres, ni pourboires/dons, ni frais ou adresse de livraison, ni quantités modifiables, ni ajout d’option depuis Checkout, ni tarification adaptative. Chacun de ces sujets exigera une règle métier, des tests et une validation dédiés avant activation.
+La Session contient uniquement les lignes déterministes produites par le snapshot serveur : création musicale, illustration personnalisée si elle a été commandée, et priorité si elle a été commandée. Le format de l’illustration n’est ni envoyé comme prix ni facturé séparément. La V0.7.0 n’active ni codes promotionnels, ni remises libres, ni pourboires/dons, ni frais ou adresse de livraison, ni quantités modifiables, ni ajout d’option depuis Checkout, ni tarification adaptative. Chacun de ces sujets exigera une règle métier, des tests et une validation dédiés avant activation.
 
 ### PCI, CSP, CSRF et limitation de débit
 

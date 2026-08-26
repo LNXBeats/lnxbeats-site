@@ -108,7 +108,7 @@ test("builds fixed-quantity Checkout lines exclusively from the stored snapshot"
     currency: item.price_data.currency,
   })), [
     { name: "Création musicale personnalisée LNX Beats", amount: 2_000, quantity: 1, currency: "eur" },
-    { name: "Cover personnalisée", amount: 1_000, quantity: 1, currency: "eur" },
+    { name: "Illustration personnalisée", amount: 1_000, quantity: 1, currency: "eur" },
     { name: "Traitement prioritaire", amount: 3_000, quantity: 1, currency: "eur" },
   ]);
   assert.equal(lineItems.reduce((sum, item) => sum + item.price_data.unit_amount, 0), 6_000);
