@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { automaticCatalogCoverAlt, catalogCoverAltOverride, resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
@@ -21,4 +22,20 @@ test("effective SEO fallbacks do not create artificial missing-data warnings", (
   assert.equal(catalogSeoMode(automatic), "automatic");
   assert.equal(catalogSeoMode({ ...automatic, seoTitle: "Titre sur mesure" }), "mixed");
   assert.equal(catalogSeoMode({ ...automatic, seoTitle: "Titre sur mesure", seoDescription: "Description sur mesure" }), "custom");
+});
+
+test("catalog artwork keeps the real media URL and replaces only failed images with an honest fallback", async () => {
+  const [artwork, mapper] = await Promise.all([
+    readFile(new URL("../../components/project-artwork.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/catalog/mapper.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(mapper, /cover: coverAsset \? `\/media\/catalog\/\$\{coverAsset\.id\}` : null/);
+  assert.match(artwork, /src=\{cover\}/);
+  assert.match(artwork, /onError=\{\(\) => setFailedCover\(cover\)\}/);
+  assert.match(artwork, /data-artwork-state="available"/);
+  assert.match(artwork, /data-artwork-state=\{coverUnavailable \? "unavailable" : "missing"\}/);
+  assert.match(artwork, /Visuel temporairement indisponible/);
+  assert.match(artwork, /Aucune pochette officielle/);
+  assert.doesNotMatch(artwork, /unoptimized/);
 });

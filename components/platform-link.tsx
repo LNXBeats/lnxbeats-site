@@ -1,3 +1,5 @@
+import { ExternalLinkIcon } from "@/components/link-icons";
+
 type PlatformLinkProps = {
   name: string;
   url: string;
@@ -19,7 +21,7 @@ export function PlatformLink({ name, url, compact = false }: PlatformLinkProps) 
     >
       <span className="platform-link__mark" aria-hidden="true"><i /><i /><i /></span>
       <span><strong>{name}</strong>{compact ? null : <small>{action}</small>}</span>
-      <span className="platform-link__arrow" aria-hidden="true">↗</span>
+      <ExternalLinkIcon className="platform-link__arrow link-icon" />
     </a>
   );
 }

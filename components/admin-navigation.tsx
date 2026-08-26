@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import { ExternalLinkIcon } from "@/components/link-icons";
 
 const adminNavigation = [
   { href: "/admin", label: "Vue d’ensemble" },
@@ -16,6 +21,7 @@ export function AdminNavigation({
   displayName?: string | null;
   qaProfileSwitchAvailable?: boolean;
 }) {
+  const pathname = usePathname();
   const identity = displayName?.trim();
 
   return (
@@ -24,10 +30,15 @@ export function AdminNavigation({
         <Link href="/admin" aria-label="LNX Admin — vue d’ensemble"><span>LNX</span> Admin</Link>
         <p>{identity ? `${identity} · Administrateur` : "Administrateur"}</p>
       </div>
-      <nav aria-label="Navigation de l’administration">
-        {adminNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+      <nav className="admin-header__nav" aria-label="Navigation de l’administration">
+        {adminNavigation.map((item) => {
+          const active = item.href === "/admin"
+            ? pathname === item.href
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return <Link aria-current={active ? "page" : undefined} key={item.href} href={item.href}>{item.label}</Link>;
+        })}
         {qaProfileSwitchAvailable ? <Link href="/qa/access">Changer de profil QA</Link> : null}
-        <Link className="admin-header__site-link" href="/">Retour au site <span aria-hidden="true">↗</span></Link>
+        <Link className="admin-header__site-link" href="/">Retour au site <ExternalLinkIcon /></Link>
       </nav>
     </header>
   );

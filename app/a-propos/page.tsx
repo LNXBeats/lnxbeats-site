@@ -27,10 +27,7 @@ export default function AboutPage() {
         </Container>
       </header>
       <section className="section about-story-scene">
-        <Container className="about-teaser motion-reveal motion-reveal--soft">
-          <div className="about-teaser__image">
-            <Image src="/assets/hero-desktop.jpg" alt="Détail de l’univers visuel de LNX Beats" fill sizes="(max-width: 820px) 100vw, 45vw" />
-          </div>
+        <Container className="about-teaser about-teaser--copy-only motion-reveal motion-reveal--soft">
           <div className="about-teaser__copy">
             <p className="eyebrow">La démarche artistique</p>
             <h2>Faire du quotidien une œuvre musicale.</h2>

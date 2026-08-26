@@ -54,6 +54,14 @@ export function sortDiscographyProjects<ProjectRecord extends DiscographyProject
   });
 }
 
+export function visibleDiscographyProjects<ProjectRecord extends DiscographyProjectRecord>(
+  projects: readonly ProjectRecord[],
+  filter: DiscographyFilter,
+  sort: DiscographySort,
+) {
+  return sortDiscographyProjects(filterDiscographyProjects(projects, filter), sort);
+}
+
 export function discographyFilterCounts(projects: readonly DiscographyProjectRecord[]) {
   return {
     all: projects.length,

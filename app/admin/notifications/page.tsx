@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { retryNotificationAction, suppressNotificationRecipientAction } from "@/app/admin/notifications/actions";
+import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { adminNotificationFilters, listAdminNotificationReviewEvents, listAdminNotifications, listAdminNotificationSuppressions, parseAdminNotificationFilter, type AdminNotificationFilter } from "@/lib/notifications/admin";
 import { ADMIN_NOTIFICATION_RETRY_CONFIRMATION, ADMIN_NOTIFICATION_SUPPRESSION_CONFIRMATION, notificationEventOutcomePresentation, notificationSuppressionReasonPresentation } from "@/lib/notifications/admin-presentation";
@@ -48,6 +49,7 @@ export default async function AdminNotificationsPage({ searchParams }: Props) {
     listAdminNotificationSuppressions(),
   ]);
   return <main className="admin-main">
+    <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
     <header className="admin-page-heading"><div><p className="admin-section-label">Notifications</p><h1>Suivi transactionnel.</h1></div><p>Outbox PostgreSQL, retries bornés et statuts fournisseur. Les commandes et livraisons restent indépendantes des e-mails.</p></header>
     {params.etat === "retry-planifie" ? <p className="admin-feedback" role="status">La notification existante a été replacée dans la file.</p> : params.etat === "suppression-ajoutee" ? <p className="admin-feedback" role="status">La destination a été supprimée des prochains envois.</p> : params.etat === "confirmation-requise" ? <p className="admin-feedback" role="alert">Confirmez explicitement l’action avant de continuer.</p> : params.etat ? <p className="admin-feedback" role="alert">L’action n’a pas été appliquée.</p> : null}
     <nav className="admin-filters" aria-label="Filtrer les notifications">{adminNotificationFilters.map((value) => <Link key={value} href={value === "attention" ? "/admin/notifications" : `/admin/notifications?filtre=${value}`} aria-current={filter === value ? "page" : undefined}>{filterLabels[value]}</Link>)}</nav>

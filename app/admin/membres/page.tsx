@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AdminBackLink } from "@/components/admin-back-link";
 import { listAdminMembers } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 
@@ -14,6 +15,7 @@ export default async function AdminMembersPage() {
   const members = await listAdminMembers();
   return (
     <div className="admin-main">
+      <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
       <header className="admin-page-heading"><div><p className="admin-kicker">Membres</p><h1>Les accès LNX Beats.</h1></div><p>Cette vue permet uniquement de consulter les comptes. Les rôles et les accès sensibles ne sont pas modifiables ici.</p></header>
       <section className="admin-list-window" aria-labelledby="admin-members-title">
         <div className="admin-list-window__heading"><h2 id="admin-members-title">Comptes réels</h2><span>{members.length} membre{members.length === 1 ? "" : "s"}</span></div>

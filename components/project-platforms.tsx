@@ -1,4 +1,5 @@
 import type { ProjectPlatform } from "@/lib/catalog/types";
+import { ExternalLinkIcon } from "@/components/link-icons";
 
 const platformGroups = [
   { scope: "release", label: "Liens directs de la sortie" },
@@ -26,7 +27,7 @@ export function ProjectPlatforms({ platforms }: { platforms: readonly ProjectPla
                 <li key={`${item.platform}-${item.scope}`}>
                   <a href={item.url} target="_blank" rel="noopener noreferrer">
                     <span>{item.label}</span>
-                    <span aria-hidden="true">↗</span>
+                    <ExternalLinkIcon />
                     <span className="visually-hidden"> — nouvel onglet</span>
                   </a>
                 </li>

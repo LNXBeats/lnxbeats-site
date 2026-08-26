@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminBackLink } from "@/components/admin-back-link";
 import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { adminOrderFilters, listAdminOrders, listAdminPaymentReviewEvents, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
@@ -33,6 +34,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
 
   return (
     <div className="admin-main">
+      <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
       <header className="admin-page-heading">
         <div><p className="admin-kicker">Commandes</p><h1>Les histoires confiées.</h1></div>
         <p>Les commandes apparaîtront ici selon leur état d’avancement.</p>

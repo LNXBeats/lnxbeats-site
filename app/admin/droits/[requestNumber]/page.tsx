@@ -10,6 +10,7 @@ import {
   updateAiAssessmentAction,
 } from "@/app/admin/droits/actions";
 import { AdminRightsGrantForm } from "@/components/admin-rights-grant-form";
+import { AdminBackLink } from "@/components/admin-back-link";
 import { AdminPrivateDocumentHeading } from "@/components/admin-private-document-heading";
 import { AdminRightsSplitForm } from "@/components/admin-rights-split-form";
 import {
@@ -139,7 +140,7 @@ export default async function AdminRightsDetailPage({ params, searchParams }: {
   const expectedSacemDocumentVersion = Math.max(0, ...sacemDocuments.map((document) => document.documentVersion)) + 1;
 
   return <main className="admin-main admin-rights-detail">
-    <Link className="admin-back-link" href="/admin/droits">← Toutes les demandes</Link>
+    <AdminBackLink href="/admin/droits">Retour aux droits</AdminBackLink>
     {etat ? <p className="admin-notice" role="status">{adminRightsNotice(etat)}</p> : null}
     <header className="admin-page-heading">
       <div>

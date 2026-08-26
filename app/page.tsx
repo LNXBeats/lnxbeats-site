@@ -33,8 +33,10 @@ export default async function HomePage() {
       <div className="home-hero__media" aria-hidden="true"><Image src="/assets/hero-desktop.jpg" alt="" fill priority sizes="100vw" /></div>
       <Container className="home-hero__inner">
         <div className="home-hero__copy">
-          <p className="eyebrow">LNX Beats · Les histoires deviennent musique</p>
           <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
+          <p className="eyebrow home-hero__eyebrow">
+            <span className="home-hero__eyebrow-story"><span className="home-hero__eyebrow-story-key">Les histoires</span> deviennent musique</span>
+          </p>
           <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
           <p className="home-hero__lead">Un prénom, un souvenir ou une scène banale : LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
           <div className="home-hero__actions"><ButtonLink href="/discographie">Découvrir la musique</ButtonLink><ButtonLink href="/commander" variant="secondary">Commander une création</ButtonLink></div>

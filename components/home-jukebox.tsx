@@ -13,8 +13,7 @@ import {
 import { ProjectArtwork } from "@/components/project-artwork";
 import {
   discographyFilterCounts,
-  filterDiscographyProjects,
-  sortDiscographyProjects,
+  visibleDiscographyProjects,
   type DiscographyFilter,
   type DiscographySort,
 } from "@/lib/catalog/jukebox";
@@ -91,7 +90,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const active = projects[activeIndex];
   const counts = useMemo(() => discographyFilterCounts(projects), [projects]);
   const visibleProjects = useMemo(
-    () => sortDiscographyProjects(filterDiscographyProjects(projects, filter), sort),
+    () => visibleDiscographyProjects(projects, filter, sort),
     [filter, projects, sort],
   );
   const visibleActiveIndex = visibleProjects.findIndex(({ slug }) => slug === activeSlug);
@@ -201,11 +200,19 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
 
   const applyFilter = (nextFilter: DiscographyFilter) => {
     if (nextFilter === filter) return;
-    const nextProjects = sortDiscographyProjects(filterDiscographyProjects(projects, nextFilter), sort);
+    const nextProjects = visibleDiscographyProjects(projects, nextFilter, sort);
     setFilter(nextFilter);
     if (nextProjects.some(({ slug }) => slug === activeSlug)) return;
     const nextIndex = nextProjects[0] ? globalIndexBySlug.get(nextProjects[0].slug) : undefined;
     if (nextIndex !== undefined) select(nextIndex);
+  };
+
+  const applySort = (nextSort: DiscographySort) => {
+    if (nextSort === sort) return;
+    const nextProjects = visibleDiscographyProjects(projects, filter, nextSort);
+    const nextIndex = nextProjects[0] ? globalIndexBySlug.get(nextProjects[0].slug) : undefined;
+    setSort(nextSort);
+    if (nextIndex !== undefined) select(nextIndex, false);
   };
 
   const togglePlay = async () => {
@@ -313,7 +320,8 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     className="home-jukebox discography-jukebox motion-reveal"
     aria-labelledby={regionId}
     aria-roledescription="carrousel"
-    data-active-index={activeIndex}
+    data-active-index={currentVisibleIndex}
+    data-active-project-index={activeIndex}
     data-audio-unlocked={audioUnlocked}
     data-continuous-playback={continuousPlayback}
     data-filter={filter}
@@ -357,7 +365,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </div>
       <label className="discography-jukebox__sort">
         <span className="visually-hidden">Trier la discographie</span>
-        <select value={sort} onChange={(event) => setSort(event.target.value as DiscographySort)}>
+        <select value={sort} onChange={(event) => applySort(event.target.value as DiscographySort)}>
           {sortOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
         </select>
       </label>

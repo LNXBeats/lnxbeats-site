@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { listAdminCatalogProjects } from "@/lib/catalog/service";
 
@@ -19,6 +20,7 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
 
   return (
     <div className="admin-main">
+      <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
       <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue PostgreSQL</p><h1>La discographie, éditable.</h1></div><div className="admin-page-heading__actions"><p>Les pages publiques et cette administration lisent désormais la même source. Chaque enregistrement reste explicite et contrôlé.</p><Link className="admin-primary-action" href="/admin/catalogue/nouveau"><span aria-hidden="true">+</span> Nouveau projet</Link></div></header>
 
       {params.etat === "projet-supprime" ? <p className="admin-feedback" role="status">Projet supprimé définitivement.</p> : null}

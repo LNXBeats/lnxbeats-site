@@ -8,6 +8,7 @@ import { formatEuro } from "@/lib/orders/domain";
 import { orderActorFromHeaders } from "@/lib/orders/request";
 import { getCommanderOrderForActor } from "@/lib/orders/service";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
+import "../v084-commander.css";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,21 @@ const maximumOrderPriceCents = orderOffer.personalBaseCents
   + orderOffer.coverCents
   + orderOffer.priorityCents;
 
+function CommanderMeetingCopy({ paymentAvailable }: { paymentAvailable: boolean }) {
+  return (
+    <div className="editorial-copy">
+      <p>Vous n’avez pas besoin d’apporter des paroles finales. Racontez les personnes, la scène et ce que la musique devra préserver.</p>
+      <p>Préparez le brief librement, puis connectez-vous pour l’enregistrer. Le parcours reprend après l’authentification sans placer votre histoire dans l’URL.</p>
+      <p className="commander-meeting-v084__facts">
+        <span>Création musicale avec livraison ultérieure du fichier WAV.</span>
+        <span>{paymentAvailable ? "Paiement sécurisé selon les moyens disponibles." : "Paiement temporairement indisponible."}</span>
+      </p>
+      <p>La création personnelle est plafonnée à {formatEuro(maximumOrderPriceCents)}. Les droits d’exploitation pourront faire l’objet d’une demande distincte après livraison.</p>
+      <p>Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible. Le total est calculé par LNX Studio et le paiement n’est confirmé qu’après validation sécurisée.</p>
+    </div>
+  );
+}
+
 export default async function OrderPage({ searchParams }: OrderPageProps) {
   const actor = await orderActorFromHeaders(await headers());
   const query = await searchParams;
@@ -42,10 +58,11 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
   const draft = actor && !resumeJourney ? await getCommanderOrderForActor(actor, requestedDraft) : null;
   const initialStep = resumeJourney ? 0 : query.etape && query.etape in stepFromQuery ? stepFromQuery[query.etape] : 0;
   const paymentProviders = await paymentProvidersAvailable();
+  const paymentAvailable = paymentProviders.stripe || paymentProviders.paypal;
 
   return (
     <>
-      <header className="page-hero page-hero--story">
+      <header className="page-hero page-hero--story commander-hero-v084">
         <Container className="page-hero__grid">
           <div>
             <p className="eyebrow">Une histoire à confier</p>
@@ -60,18 +77,19 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
           </div>
         </Container>
       </header>
-      <section className="section editorial-break">
+      <section className="section editorial-break commander-meeting-v084">
         <Container className="content-columns motion-reveal">
           <p className="content-columns__label">La rencontre</p>
-          <div className="editorial-copy">
-            <p>Vous n’avez pas besoin d’apporter des paroles finales. Racontez les personnes, la scène et ce que la musique devra préserver.</p>
-            <p>Préparez le brief librement, puis connectez-vous pour l’enregistrer. Le parcours reprend après l’authentification sans placer votre histoire dans l’URL.</p>
-            <p>La création personnelle est plafonnée à {formatEuro(maximumOrderPriceCents)}. Les droits d’exploitation pourront faire l’objet d’une demande distincte après livraison.</p>
-            <p>Le paiement sera proposé après validation du récapitulatif lorsqu’un moyen de paiement est disponible. Le total est calculé par LNX Studio et le paiement n’est confirmé qu’après validation sécurisée.</p>
+          <div className="commander-meeting-v084__desktop">
+            <CommanderMeetingCopy paymentAvailable={paymentAvailable} />
           </div>
+          <details className="commander-meeting-v084__details commander-meeting-v084__mobile">
+            <summary>Comment ça marche</summary>
+            <CommanderMeetingCopy paymentAvailable={paymentAvailable} />
+          </details>
         </Container>
       </section>
-      <section className="section">
+      <section className="section commander-order-section-v084">
         <Container className="order-layout commander-v084 motion-reveal motion-reveal--soft">
           <MusicOrderForm
             account={actor ? { authenticated: true, name: actor.name, email: actor.email } : { authenticated: false }}
@@ -80,20 +98,6 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             paymentProviders={paymentProviders}
             resumeJourney={resumeJourney}
           />
-          <aside className="order-aside" aria-label="Règles de la création">
-            <p className="eyebrow">Repères du projet</p>
-            <p className="order-aside__price">Dès {formatEuro(orderOffer.personalBaseCents)}</p>
-            <ul>
-              <li>Création musicale avec livraison ultérieure du fichier WAV</li>
-              <li>Une demande d’ajustement conforme au brief initial incluse</li>
-              <li>Illustration personnalisée : +10 €</li>
-              <li>Traitement prioritaire : +30 €</li>
-              <li>Total maximum de la création : {formatEuro(maximumOrderPriceCents)}</li>
-              <li>Les droits d’exploitation font l’objet d’une demande distincte après livraison</li>
-              <li>{paymentProviders.stripe || paymentProviders.paypal ? "Paiement sécurisé selon les moyens disponibles" : "Paiement temporairement indisponible"}</li>
-            </ul>
-            <p className="order-aside__note">Chaque demande de droits reste soumise à une étude et à un contrat spécifique.</p>
-          </aside>
         </Container>
       </section>
     </>

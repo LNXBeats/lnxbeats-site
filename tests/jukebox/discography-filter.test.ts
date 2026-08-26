@@ -5,6 +5,7 @@ import {
   discographyFilterCounts,
   filterDiscographyProjects,
   sortDiscographyProjects,
+  visibleDiscographyProjects,
 } from "@/lib/catalog/jukebox";
 
 type FixtureProject = {
@@ -61,4 +62,22 @@ test("filtering and sorting never mutate the PostgreSQL-derived input order", ()
   const before = projects.map(({ slug }) => slug);
   sortDiscographyProjects(filterDiscographyProjects(projects, "all"), "newest");
   assert.deepEqual(projects.map(({ slug }) => slug), before);
+});
+
+test("the visible discography collection applies one shared filter and sort policy", () => {
+  assert.deepEqual(visibleDiscographyProjects(projects, "all", "editorial").map(({ slug }) => slug), [
+    "single-recent",
+    "album-old",
+    "album-undated",
+    "project-development",
+    "single-development",
+  ]);
+  assert.deepEqual(visibleDiscographyProjects(projects, "albums", "newest").map(({ slug }) => slug), [
+    "album-old",
+    "album-undated",
+  ]);
+  assert.deepEqual(visibleDiscographyProjects(projects, "development", "oldest").map(({ slug }) => slug), [
+    "project-development",
+    "single-development",
+  ]);
 });
