@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { ProjectArtwork } from "@/components/project-artwork";
+import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
 import {
   discographyFilterCounts,
   visibleDiscographyProjects,
@@ -67,12 +68,21 @@ function projectMeta(project: JukeboxProject) {
   return project.year ? `${kind} · ${project.year}` : kind;
 }
 
+function centerRailItem(rail: HTMLElement, item: HTMLElement, behavior: ScrollBehavior) {
+  const railRect = rail.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  const targetLeft = rail.scrollLeft + itemRect.left - railRect.left - ((rail.clientWidth - itemRect.width) / 2);
+  const maxLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
+  rail.scrollTo({ left: Math.min(maxLeft, Math.max(0, targetLeft)), behavior });
+}
+
 export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager = false }: ProjectJukeboxProps) {
   const safeInitialIndex = Math.min(Math.max(initialIndex, 0), Math.max(projects.length - 1, 0));
   const [activeSlug, setActiveSlug] = useState(projects[safeInitialIndex]?.slug ?? "");
   const [filter, setFilter] = useState<DiscographyFilter>("all");
   const [sort, setSort] = useState<DiscographySort>("editorial");
   const [playing, setPlaying] = useState(false);
+  const [ended, setEnded] = useState(false);
   const [progress, setProgress] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [continuousPlayback, setContinuousPlayback] = useState(false);
@@ -164,6 +174,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
 
     pauseCurrent();
     syncTrackMedia(next);
+    setEnded(false);
     setActiveSlug(nextProject.slug);
 
     const playbackAllowed = continuousPlayback;
@@ -175,11 +186,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       programmaticRef.current = true;
       const focusWasInsideScene = railRef.current?.contains(document.activeElement) ?? false;
       if (window.matchMedia("(max-width: 700px)").matches) {
-        railRef.current?.querySelector<HTMLElement>(`[data-project-index="${next}"]`)?.scrollIntoView({
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-          block: "nearest",
-          inline: "center",
-        });
+        const rail = railRef.current;
+        const item = rail?.querySelector<HTMLElement>(`[data-project-index="${next}"]`);
+        if (rail && item) {
+          centerRailItem(rail, item, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
+        }
       }
       window.setTimeout(() => {
         programmaticRef.current = false;
@@ -286,11 +297,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     const frame = window.requestAnimationFrame(() => {
       const index = globalIndexBySlug.get(activeSlug);
       if (index === undefined) return;
-      railRef.current?.querySelector<HTMLElement>(`[data-project-index="${index}"]`)?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        block: "nearest",
-        inline: "center",
-      });
+      const rail = railRef.current;
+      const item = rail?.querySelector<HTMLElement>(`[data-project-index="${index}"]`);
+      if (rail && item) {
+        centerRailItem(rail, item, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
+      }
     });
     const timer = window.setTimeout(() => {
       programmaticRef.current = false;
@@ -311,7 +322,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
 
   if (!active) return null;
 
-  const playBadge = active.audioPreview ? (playing ? "Ⅱ" : (audioUnlocked ? "▸" : "▶ Écouter")) : null;
+  const playbackState = (playing ? "pause" : ended ? "replay" : "play") satisfies StudioVinylControlState;
+  const playBadge = active.audioPreview ? <>
+    <StudioVinylControl state={playbackState} />
+    {!playing && !ended && !audioUnlocked ? <span className="home-jukebox__play-label">Écouter</span> : null}
+  </> : null;
   const leftArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-line" /><span className="home-jukebox__arrow-symbol" /></span>;
   const rightArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-symbol" /><span className="home-jukebox__arrow-line" /></span>;
   const currentVisibleIndex = visibleActiveIndex >= 0 ? visibleActiveIndex : 0;
@@ -392,7 +407,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onClick={() => handleCoverClick(globalIndex)}
-                  aria-label={playing ? `Mettre en pause l’extrait de ${project.title}` : `Lire l’extrait de ${project.title}`}
+                  aria-label={playing
+                    ? `Mettre en pause l’extrait de ${project.title}`
+                    : ended
+                      ? `Relire l’extrait de ${project.title}`
+                      : `Lire l’extrait de ${project.title}`}
                   data-active-control="true"
                 ><span className="home-jukebox__play" aria-hidden="true">{playBadge}</span></button> : null}
                 {distance === 0 && project.audioPreview ? <span className="home-jukebox__progress" style={{ transform: `scaleX(${progress})` }} aria-hidden="true" /> : null}
@@ -421,9 +440,9 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     <audio
       ref={audioRef}
       preload="metadata"
-      onPlay={() => setPlaying(true)}
+      onPlay={() => { setPlaying(true); setEnded(false); }}
       onPause={() => setPlaying(false)}
-      onEnded={() => { setPlaying(false); setProgress(0); }}
+      onEnded={() => { setPlaying(false); setProgress(0); setEnded(true); }}
       onTimeUpdate={(event) => setProgress(event.currentTarget.duration ? event.currentTarget.currentTime / event.currentTarget.duration : 0)}
     />
   </section>;

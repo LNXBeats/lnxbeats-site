@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
 
 const playbackEvent = "lnx-audio-preview-play";
 
@@ -30,6 +31,7 @@ export function AudioPreviewPlayer({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [ended, setEnded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState((durationMs ?? 0) / 1_000);
@@ -66,6 +68,7 @@ export function AudioPreviewPlayer({
         controlsList="nodownload noplaybackrate"
         onPlay={() => {
           setPlaying(true);
+          setEnded(false);
           window.dispatchEvent(new CustomEvent(playbackEvent, { detail: playerId }));
         }}
         onPause={() => setPlaying(false)}
@@ -84,17 +87,22 @@ export function AudioPreviewPlayer({
           event.currentTarget.currentTime = 0;
           setCurrentTime(0);
           setPlaying(false);
+          setEnded(true);
         }}
         onError={() => { setFailed(true); setLoading(false); setPlaying(false); }}
       />
       <button
         className="audio-preview-player__toggle"
         type="button"
-        aria-label={playing ? `Mettre en pause l’extrait de ${title}` : `Lire l’extrait de ${title}`}
+        aria-label={playing
+          ? `Mettre en pause l’extrait de ${title}`
+          : ended
+            ? `Relire l’extrait de ${title}`
+            : `Lire l’extrait de ${title}`}
         onClick={() => void toggle()}
         disabled={loading}
       >
-        <span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span>
+        <StudioVinylControl state={(loading ? "loading" : playing ? "pause" : ended ? "replay" : "play") satisfies StudioVinylControlState} />
       </button>
       <div className="audio-preview-player__body">
         <strong>{title}</strong>
@@ -113,6 +121,7 @@ export function AudioPreviewPlayer({
               if (audioRef.current && Number.isFinite(next)) {
                 audioRef.current.currentTime = next;
                 setCurrentTime(next);
+                setEnded(false);
               }
             }}
           />
