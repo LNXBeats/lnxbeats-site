@@ -8,6 +8,7 @@ import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
 import { PaypalReturnCapture } from "@/components/paypal-return-capture";
 import { RightsOptionsSection } from "@/components/rights-options-section";
+import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { clientOrderAction, clientPaymentState, orderCanStillBeEdited } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
@@ -171,7 +172,9 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             {order.emotion ? <div><dt>Émotion</dt><dd>{order.emotion}</dd></div> : null}
             <div className="order-detail__fact--wide"><dt>Histoire</dt><dd>{order.brief}</dd></div>
             {order.importantDetails ? <div className="order-detail__fact--wide"><dt>Détails</dt><dd>{order.importantDetails}</dd></div> : null}
-            <div><dt>Cover</dt><dd>{order.coverIncluded ? "Incluse (+10 €)" : "Non"}</dd></div>
+            {order.coverIncluded ? <div><dt>Illustration personnalisée</dt><dd>Incluse (+10 €)</dd></div> : null}
+            {order.coverIncluded ? <div><dt>Format demandé</dt><dd>{orderIllustrationFormatLabel(order.illustrationFormat)}</dd></div> : null}
+            {order.coverIncluded && order.illustrationFormat === "CUSTOM" ? <div><dt>Précision</dt><dd>{order.illustrationFormatCustom}</dd></div> : null}
             <div><dt>Priorité</dt><dd>{order.priorityProcessing ? "Demandée (+30 €), délai à confirmer" : "Non"}</dd></div>
             <div><dt>Retour inclus</dt><dd>{order.revisionAllowance - order.revisionUsed} sur {order.revisionAllowance} restant</dd></div>
           </dl>

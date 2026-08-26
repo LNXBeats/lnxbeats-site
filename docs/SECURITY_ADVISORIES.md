@@ -83,7 +83,7 @@ Le lockfile contient une seule instance `8.0.2`. Prisma reste en `7.9.1` : aucun
 - PoC locale avant correction : `deepmerge` et `deepmergeInto` produisaient `RangeError: Maximum call stack size exceeded` ;
 - même graphe avec 8.0.2 : cycles traités sans épuisement de pile ;
 - `npm install`, `npm ci`, `npm ls --all`, Prisma generate/validate, typecheck et build : réussis ;
-- PostgreSQL vierge : 17 migrations appliquées, `migrate status` à jour ;
+- PostgreSQL vierge : 18 migrations appliquées, `migrate status` à jour ;
 - runtime remboursements : 14 groupes réussis, incluant transactions, contraintes, verrous advisory et rollback ;
 - `npm audit` installation complète : zéro vulnérabilité ;
 - `npm ci --omit=dev` : `deepmerge-ts@8.0.2` présent et zéro vulnérabilité.
@@ -99,6 +99,6 @@ L’override est une substitution majeure transitive que Prisma 7.9.1 ne déclar
 1. contrôler la dépendance publiée de `@prisma/config` ;
 2. conserver `test:security` et l’audit production ;
 3. retirer l’override uniquement lorsqu’une version stable Prisma dépend elle-même d’une version corrigée ;
-4. réexécuter les 17 migrations sur PostgreSQL jetable et les runtimes.
+4. réexécuter les 18 migrations sur PostgreSQL jetable et les runtimes.
 
 Décision V0.7.7 : **SECURITY ADVISORY RESOLVED** pour le code et les installations reproductibles issues de ce lockfile. Les autres gates juridiques, e-mail, paiements Live et QA production restent indépendants.

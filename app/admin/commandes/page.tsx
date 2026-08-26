@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { adminOrderFilters, listAdminOrders, listAdminPaymentReviewEvents, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
@@ -70,7 +71,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
           <ul className="admin-order-list">
             {orders.map((order) => {
               const presentation = orderStatusPresentation[order.status];
-              const options = [order.coverIncluded ? "Cover" : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Sans option";
+              const options = [order.coverIncluded ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)})` : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Sans option";
               return (
                 <li key={order.orderNumber}>
                   <Link href={`/admin/commandes/${encodeURIComponent(order.orderNumber)}`}>

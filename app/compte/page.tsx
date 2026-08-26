@@ -5,6 +5,7 @@ import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { ProfileForm } from "@/components/auth/profile-form";
 import { Container } from "@/components/container";
+import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { qaAccessAvailable } from "@/lib/auth/qa-access";
 import { clientOrderAction, clientPaymentPresentation } from "@/lib/orders/checkout";
@@ -130,7 +131,7 @@ function OrderGroup({ title, orders, draft = false }: { title: string; orders: A
                 <span><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small></span>
                 <span><em>{presentation.label}</em><small>{clientPaymentPresentation(order)}</small><strong>{formatEuro(order.totalCents)}</strong></span>
               </Link>
-              <p><strong>Options :</strong> {[order.coverIncluded ? "Cover" : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}. <strong>Action attendue :</strong> {clientOrderAction(order)}. {presentation.next}</p>
+              <p><strong>Options :</strong> {[order.coverIncluded ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)})` : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}. <strong>Action attendue :</strong> {clientOrderAction(order)}. {presentation.next}</p>
             </li>
           );
         })}

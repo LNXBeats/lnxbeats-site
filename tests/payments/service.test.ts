@@ -132,7 +132,7 @@ test("creates Checkout only after reserving a local server-priced attempt", asyn
         price_data: {
           currency: "eur",
           unit_amount: 1_000,
-          product_data: { name: "Cover personnalisée" },
+          product_data: { name: "Illustration personnalisée" },
         },
       },
     ],

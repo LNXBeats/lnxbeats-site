@@ -223,6 +223,14 @@ enum OrderUsage {
   COMMERCIAL_EXTENDED
 }
 
+enum OrderIllustrationFormat {
+  SQUARE
+  VERTICAL
+  LANDSCAPE
+  PORTRAIT
+  CUSTOM
+}
+
 enum OrderEventVisibility {
   CLIENT
   INTERNAL
@@ -751,48 +759,50 @@ model ProjectAsset {
 }
 
 model Order {
-  id                         String              @id @default(uuid()) @db.Uuid
-  orderNumber                String              @unique @db.VarChar(32)
-  userId                     String?             @db.Uuid
-  customerId                 String?             @db.Uuid
-  customerEmail              String              @db.VarChar(320)
-  customerName               String?             @db.VarChar(200)
-  status                     OrderStatus         @default(DRAFT)
-  title                      String?             @db.VarChar(240)
-  recipient                  String?             @db.VarChar(200)
-  occasion                   String?             @db.VarChar(200)
-  brief                      String              @db.Text
-  musicalDirection           String?             @db.Text
-  emotion                    String?             @db.Text
-  importantDetails           String?             @db.Text
-  wordsToInclude             String?             @db.Text
-  avoid                      String?             @db.Text
-  pronunciationNotes         String?             @db.Text
-  notes                      String?             @db.Text
-  usage                      OrderUsage          @default(PERSONAL)
-  coverIncluded              Boolean             @default(false)
-  priorityProcessing         Boolean             @default(false)
-  basePriceCents             Int                 @default(5000)
-  coverPriceCents            Int                 @default(0)
-  priorityPriceCents         Int                 @default(0)
-  totalCents                 Int                 @default(5000)
-  currency                   String              @default("EUR") @db.VarChar(3)
-  pricingVersion             String              @default("2026-08-v1") @db.VarChar(32)
-  personalUseTermsVersion    String?             @db.VarChar(48)
-  personalUseTermsHashSha256 String?             @db.VarChar(64)
-  personalUseTermsAcceptedAt DateTime?           @db.Timestamptz(3)
-  contractRequired           Boolean             @default(false)
-  revisionAllowance          Int                 @default(1)
-  revisionUsed               Int                 @default(0)
-  submittedAt                DateTime?           @db.Timestamptz(3)
-  serviceStartedAt           DateTime?           @db.Timestamptz(3)
-  deliveredAt                DateTime?           @db.Timestamptz(3)
-  downloadExpiresAt          DateTime?           @db.Timestamptz(3)
-  cancelledAt                DateTime?           @db.Timestamptz(3)
-  createdAt                  DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime            @updatedAt @db.Timestamptz(3)
-  account                    User?               @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
-  customer                   Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  id                         String                   @id @default(uuid()) @db.Uuid
+  orderNumber                String                   @unique @db.VarChar(32)
+  userId                     String?                  @db.Uuid
+  customerId                 String?                  @db.Uuid
+  customerEmail              String                   @db.VarChar(320)
+  customerName               String?                  @db.VarChar(200)
+  status                     OrderStatus              @default(DRAFT)
+  title                      String?                  @db.VarChar(240)
+  recipient                  String?                  @db.VarChar(200)
+  occasion                   String?                  @db.VarChar(200)
+  brief                      String                   @db.Text
+  musicalDirection           String?                  @db.Text
+  emotion                    String?                  @db.Text
+  importantDetails           String?                  @db.Text
+  wordsToInclude             String?                  @db.Text
+  avoid                      String?                  @db.Text
+  pronunciationNotes         String?                  @db.Text
+  illustrationFormat         OrderIllustrationFormat?
+  illustrationFormatCustom   String?                  @db.VarChar(240)
+  notes                      String?                  @db.Text
+  usage                      OrderUsage               @default(PERSONAL)
+  coverIncluded              Boolean                  @default(false)
+  priorityProcessing         Boolean                  @default(false)
+  basePriceCents             Int                      @default(5000)
+  coverPriceCents            Int                      @default(0)
+  priorityPriceCents         Int                      @default(0)
+  totalCents                 Int                      @default(5000)
+  currency                   String                   @default("EUR") @db.VarChar(3)
+  pricingVersion             String                   @default("2026-08-v1") @db.VarChar(32)
+  personalUseTermsVersion    String?                  @db.VarChar(48)
+  personalUseTermsHashSha256 String?                  @db.VarChar(64)
+  personalUseTermsAcceptedAt DateTime?                @db.Timestamptz(3)
+  contractRequired           Boolean                  @default(false)
+  revisionAllowance          Int                      @default(1)
+  revisionUsed               Int                      @default(0)
+  submittedAt                DateTime?                @db.Timestamptz(3)
+  serviceStartedAt           DateTime?                @db.Timestamptz(3)
+  deliveredAt                DateTime?                @db.Timestamptz(3)
+  downloadExpiresAt          DateTime?                @db.Timestamptz(3)
+  cancelledAt                DateTime?                @db.Timestamptz(3)
+  createdAt                  DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                 @updatedAt @db.Timestamptz(3)
+  account                    User?                    @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
+  customer                   Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
   events                     OrderEvent[]
   assets                     OrderAsset[]
   rightsRequests             RightsRequest[]

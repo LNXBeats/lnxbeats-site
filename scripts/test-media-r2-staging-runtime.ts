@@ -54,6 +54,8 @@ const orderInput: OrderDraftInput = {
   wordsToInclude: "",
   avoid: "",
   pronunciationNotes: "",
+  illustrationFormat: null,
+  illustrationFormatCustom: "",
   coverIncluded: false,
   priorityProcessing: false,
 };

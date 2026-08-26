@@ -12,7 +12,7 @@ Commander présente six étapes compactes :
 
 1. **Projet** — repère, destinataire et contexte ;
 2. **Histoire** — brief et champ libre « Détails importants » ;
-3. **Options** — direction, émotion, cover +10 € et priorité +30 € ;
+3. **Options** — direction, émotion, illustration personnalisée +10 €, format sans incidence tarifaire et priorité +30 € ;
 4. **Références** — jusqu’à dix photos privées normalisées ;
 5. **Compte** — connexion ou inscription avec email vérifié ;
 6. **Récapitulatif & paiement** — données relues, ventilation du snapshot tarifaire versionné, compte propriétaire et ouverture Checkout.
@@ -40,7 +40,7 @@ Le téléchargement passe exclusivement par une route applicative authentifiée.
 Une Order appartenant au compte existe avant le paiement. Le passage au paiement la place dans `AWAITING_PAYMENT`. Le serveur calcule le snapshot avec l’unique fonction de domaine existante. La grille courante `2026-08-v2`, appliquée uniquement aux nouvelles Orders, contient :
 
 - création : 2 000 centimes ;
-- cover : 1 000 centimes ;
+- illustration personnalisée : 1 000 centimes (`coverPriceCents` reste le nom de snapshot historique) ;
 - priorité : 3 000 centimes ;
 - totaux autorisés : 2 000, 3 000, 5 000 ou 6 000 centimes EUR.
 

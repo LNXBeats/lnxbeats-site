@@ -113,7 +113,7 @@ export function checkoutLineItemsFromOrderSnapshot(
     checkoutLineItem("Création musicale personnalisée LNX Beats", snapshot.basePriceCents),
   ];
   if (snapshot.coverIncluded) {
-    lineItems.push(checkoutLineItem("Cover personnalisée", snapshot.coverPriceCents));
+    lineItems.push(checkoutLineItem("Illustration personnalisée", snapshot.coverPriceCents));
   }
   if (snapshot.priorityProcessing) {
     lineItems.push(checkoutLineItem("Traitement prioritaire", snapshot.priorityPriceCents));
