@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { formatEuro } from "@/lib/orders/domain";
 import { isAllowedPaypalApprovalRedirect } from "@/lib/payments/paypal-redirect";
+import { checkoutPaymentChoicePresentation, checkoutPaymentCtaLabel } from "@/lib/payments/presentation";
 
 const messages: Record<string, string> = {
   PAYMENT_ALREADY_COMPLETED: "Ce paiement est déjà confirmé. Actualisez la page pour voir la commande.",
@@ -56,9 +56,9 @@ export function PaypalCheckoutAction({
   return (
     <div className="checkout-action">
       <button className="form-button" type="button" onClick={startCheckout} disabled={pending}>
-        {pending ? "Préparation PayPal…" : `Payer ${formatEuro(amountCents)} avec PayPal`}
+        {pending ? "Préparation PayPal…" : checkoutPaymentCtaLabel("paypal", amountCents)}
       </button>
-      <small>Paiement sécurisé hébergé par PayPal · le montant reste calculé par LNX Studio.</small>
+      <small>{checkoutPaymentChoicePresentation.paypal.assurance}</small>
       {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}
     </div>
   );
