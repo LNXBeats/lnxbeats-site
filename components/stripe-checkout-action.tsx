@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { formatEuro } from "@/lib/orders/domain";
+import { checkoutPaymentChoicePresentation, checkoutPaymentCtaLabel } from "@/lib/payments/presentation";
 
 const checkoutMessages: Record<string, string> = {
   PAYMENT_ALREADY_COMPLETED: "Ce paiement est déjà confirmé. Actualisez la page pour voir la commande.",
@@ -56,9 +56,9 @@ export function StripeCheckoutAction({
   return (
     <div className={compact ? "checkout-action checkout-action--compact" : "checkout-action"}>
       <button className="form-button form-button--primary" type="button" onClick={startCheckout} disabled={pending}>
-        {pending ? "Préparation sécurisée…" : `Payer ${formatEuro(amountCents)}`}
+        {pending ? "Préparation sécurisée…" : checkoutPaymentCtaLabel("stripe", amountCents)}
       </button>
-      <small>Paiement sécurisé hébergé par Stripe · aucune donnée de carte saisie sur LNX Studio.</small>
+      <small>{checkoutPaymentChoicePresentation.stripe.assurance}</small>
       {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}
     </div>
   );

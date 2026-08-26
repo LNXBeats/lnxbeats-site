@@ -84,8 +84,9 @@ test("recap and confirmation use server Orders while the client sends no amount"
   assert.match(form, /hasPaymentProvider \? "Enregistrer et passer au paiement" : "Enregistrer la commande"/);
   assert.match(form, /Paiement temporairement indisponible/);
   assert.match(form, /PaymentCheckoutActions/);
-  assert.match(providerActions, /Carte bancaire — Stripe/);
-  assert.match(providerActions, /PayPal/);
+  assert.match(providerActions, /enabledCheckoutPaymentProviders\(providers\)/);
+  assert.match(providerActions, /checkoutPaymentChoicePresentation\[provider\]/);
+  assert.match(providerActions, /PaypalCheckoutAction/);
   assert.doesNotMatch(checkoutAction, /body:\s*JSON\.stringify\([^)]*(?:amount|currency)/s);
   assert.doesNotMatch(paypalAction, /body:\s*JSON\.stringify\([^)]*(?:amount|currency)/s);
   assert.match(confirmation, /getOrderForActor\(actor, orderNumber\)/);
