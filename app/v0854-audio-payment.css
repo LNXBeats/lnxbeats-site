@@ -1,0 +1,323 @@
+/* V0.8.5.4 — scoped premium audio and payment presentation. */
+
+@keyframes studio-vinyl-spin {
+  to { transform: rotate(1turn); }
+}
+
+@keyframes studio-vinyl-loading {
+  to { transform: rotate(1turn); }
+}
+
+.studio-vinyl-control {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--gold-light);
+}
+
+.studio-vinyl-control__label {
+  fill: #0a0a09;
+  stroke: rgba(226, 196, 126, 0.82);
+  stroke-width: 0.8;
+}
+
+.studio-vinyl-control__spindle { fill: var(--gold-light); }
+.studio-vinyl-control--pause .studio-vinyl-control__disc {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: studio-vinyl-spin 9s linear infinite;
+}
+.studio-vinyl-control--loading .studio-vinyl-control__loading-track {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: studio-vinyl-loading 1s linear infinite;
+}
+
+.audio-preview-player {
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  gap: 0.7rem 1rem;
+  width: min(100%, 640px);
+  padding: 0.9rem 1rem;
+  border-color: rgba(226, 196, 126, 0.3);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(198, 161, 91, 0.1), transparent 42%),
+    linear-gradient(145deg, rgba(18, 17, 15, 0.98), rgba(7, 7, 7, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 18px 46px rgba(0, 0, 0, 0.18);
+}
+
+.audio-preview-player__toggle {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(226, 196, 126, 0.72);
+  background:
+    radial-gradient(circle at center, #0a0908 0 13%, transparent 13.5%),
+    repeating-radial-gradient(circle at center, #11110f 0 3px, #080808 3.5px 5px);
+  color: var(--gold-light);
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.38), 0 0 22px rgba(198, 161, 91, 0.08);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.audio-preview-player__toggle:is(:hover, :focus-visible) {
+  border-color: var(--gold-light);
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.42), 0 0 26px rgba(198, 161, 91, 0.16);
+  transform: translateY(-1px);
+}
+.audio-preview-player__toggle:disabled { transform: none; }
+.audio-preview-player__toggle .studio-vinyl-control { width: 100%; height: 100%; }
+.audio-preview-player__body { gap: 0.15rem; }
+.audio-preview-player__body strong { color: var(--text); font-size: 0.84rem; font-weight: 650; }
+.audio-preview-player__body > span { color: var(--gold-light); font-size: 0.61rem; letter-spacing: 0.025em; }
+.audio-preview-player__body label { margin-top: 0.35rem; }
+.audio-preview-player__body input[type="range"] {
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  background: transparent;
+  accent-color: var(--gold-light);
+}
+.audio-preview-player__body input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(226, 196, 126, 0.72), rgba(244, 240, 232, 0.2));
+}
+.audio-preview-player__body input[type="range"]::-webkit-slider-thumb {
+  width: 13px;
+  height: 13px;
+  margin-top: -5px;
+  appearance: none;
+  border: 2px solid #17130d;
+  border-radius: 50%;
+  background: var(--gold-light);
+  box-shadow: 0 0 0 1px rgba(226, 196, 126, 0.32);
+}
+.audio-preview-player__body input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(244, 240, 232, 0.2);
+}
+.audio-preview-player__body input[type="range"]::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--gold-light);
+}
+.audio-preview-player__body input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #17130d;
+  border-radius: 50%;
+  background: var(--gold-light);
+}
+.audio-preview-player__time { color: rgba(244, 240, 232, 0.68); font-size: 0.64rem; }
+.audio-preview-player--compact { padding: 0.8rem; }
+
+.home-jukebox__play,
+.discography-jukebox .home-jukebox__play {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.5rem 0.22rem 0.22rem;
+  border: 1px solid rgba(226, 196, 126, 0.62);
+  border-radius: 999px;
+  background: rgba(7, 7, 7, 0.72);
+  color: var(--gold-light);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  opacity: 0.94;
+  backdrop-filter: blur(8px);
+}
+.home-jukebox__play .studio-vinyl-control {
+  width: 40px;
+  height: 40px;
+  padding: 1px;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle at center, #11110f 0 3px, #080808 3.5px 5px);
+}
+.home-jukebox__play-label {
+  padding-right: 0.18rem;
+  color: var(--text);
+  font-size: 0.58rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.home-jukebox__progress,
+.discography-jukebox .home-jukebox__progress {
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  box-shadow: 0 0 10px rgba(198, 161, 91, 0.3);
+}
+
+.payment-methods {
+  gap: clamp(1rem, 2vw, 1.4rem);
+  margin-top: 1.2rem;
+}
+.payment-methods > :first-child { display: grid; gap: 0.38rem; max-width: 52rem; }
+.payment-methods h3 { color: var(--text); font-size: clamp(1.2rem, 2vw, 1.55rem); font-weight: 590; letter-spacing: -0.025em; }
+.payment-methods > :first-child > p:last-child { max-width: 44rem; color: var(--text-soft); font-size: 0.78rem; line-height: 1.6; }
+.payment-methods__actions { grid-template-columns: minmax(0, 1fr); gap: clamp(0.85rem, 2vw, 1.2rem); }
+.payment-methods__choice {
+  position: relative;
+  isolation: isolate;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  justify-items: stretch;
+  gap: clamp(0.85rem, 1.8vw, 1.15rem);
+  min-height: 0;
+  padding: clamp(1.1rem, 2.5vw, 1.6rem);
+  overflow: hidden;
+  border-color: rgba(198, 161, 91, 0.42);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 0, var(--payment-accent-muted), transparent 48%),
+    linear-gradient(155deg, rgba(18, 17, 15, 0.98), rgba(7, 7, 7, 0.99));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 48px rgba(0, 0, 0, 0.18);
+  text-align: center;
+}
+.payment-methods__choice::before {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 14%;
+  left: 14%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--payment-accent), transparent);
+  content: "";
+  opacity: 0.72;
+}
+.payment-methods__choice--paypal {
+  --payment-accent: #5f92ff;
+  --payment-accent-muted: rgba(32, 91, 185, 0.18);
+}
+.payment-methods__choice-heading {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 0.65rem;
+}
+.payment-methods__choice-icon {
+  width: 4rem;
+  height: 3.35rem;
+  border-color: rgba(226, 196, 126, 0.34);
+  border-radius: 12px;
+  background: rgba(198, 161, 91, 0.075);
+}
+.payment-methods__choice-icon svg { width: 2rem; height: 2rem; }
+.payment-methods__paypal-logo {
+  width: auto;
+  height: clamp(1.75rem, 3vw, 2.15rem);
+  object-fit: contain;
+}
+.payment-methods__choice-title { justify-items: center; gap: 0.3rem; }
+.payment-methods__choice-title > strong { font-size: clamp(1rem, 1.6vw, 1.18rem); text-transform: uppercase; }
+.payment-methods__choice-title > span { font-size: 0.64rem; }
+.payment-methods .payment-methods__choice-details {
+  min-height: 0;
+  max-width: 31rem;
+  justify-self: center;
+  color: rgba(244, 240, 232, 0.7);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+.payment-methods__choice .checkout-action { width: 100%; gap: 0.8rem; align-content: end; }
+.payment-methods__choice .checkout-action .form-button {
+  min-height: 56px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+.payment-methods__choice--stripe .checkout-action .form-button {
+  border-color: rgba(226, 196, 126, 0.86);
+  background: linear-gradient(135deg, #c69f53, #efd98d);
+  color: #080807;
+}
+.payment-methods__choice--stripe .checkout-action .form-button:is(:hover, :focus-visible) {
+  border-color: #fff2c5;
+  background: linear-gradient(135deg, #d4ae62, #f6e3a1);
+  color: #080807;
+}
+.payment-methods__choice--paypal .checkout-action .form-button {
+  border-color: #4e8cff;
+  background: linear-gradient(135deg, #0f4aa8, #1c3f91);
+  color: #fff;
+}
+.payment-methods__choice--paypal .checkout-action .form-button:is(:hover, :focus-visible) {
+  border-color: #8cb7ff;
+  background: linear-gradient(135deg, #1759bd, #244ca2);
+  color: #fff;
+}
+.payment-methods__choice .checkout-action small {
+  min-height: 0;
+  max-width: 28rem;
+  justify-self: center;
+  color: rgba(244, 240, 232, 0.62);
+  font-size: 0.68rem;
+}
+
+@media (min-width: 760px) {
+  .payment-methods__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .payment-methods__choice:only-child {
+    grid-column: 1 / -1;
+    width: min(100%, 36rem);
+    justify-self: center;
+  }
+}
+
+@media (max-width: 900px) {
+  .audio-preview-player { grid-template-columns: 54px minmax(0, 1fr) auto; }
+  .audio-preview-player__toggle { width: 54px; height: 54px; }
+  .home-jukebox__play .studio-vinyl-control { width: 40px; height: 40px; }
+}
+
+@media (max-width: 700px) {
+  .home-jukebox__play .studio-vinyl-control { width: 46px; height: 46px; }
+}
+
+@media (max-width: 600px) {
+  .audio-preview-player {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 0.35rem 0.75rem;
+    padding: 0.72rem 0.75rem;
+    border-radius: 14px;
+  }
+  .audio-preview-player__toggle { width: 46px; height: 46px; }
+  .audio-preview-player__body strong { font-size: 0.78rem; }
+  .audio-preview-player__body > span { font-size: 0.57rem; }
+  .audio-preview-player__body label { margin-top: 0.18rem; }
+  .audio-preview-player__time { grid-column: 2; font-size: 0.59rem; }
+  .audio-preview-player__status,
+  .audio-preview-player__error { grid-column: 1 / -1; }
+  .home-jukebox__play,
+  .discography-jukebox .home-jukebox__play { gap: 0.28rem; padding: 0.18rem 0.4rem 0.18rem 0.18rem; }
+  .home-jukebox__play .studio-vinyl-control { width: 46px; height: 46px; }
+  .home-jukebox__play-label { font-size: 0.54rem; }
+  .payment-methods { gap: 0.9rem; }
+  .payment-methods h3 { font-size: 1.15rem; }
+  .payment-methods > :first-child > p:last-child { font-size: 0.74rem; }
+  .payment-methods__choice { padding: 1rem; border-radius: 14px; }
+  .payment-methods__choice-icon { width: 3.5rem; height: 3rem; }
+  .payment-methods__paypal-logo { height: 1.8rem; }
+  .payment-methods__choice .checkout-action .form-button { min-height: 52px; font-size: 0.66rem; }
+}
+
+@media (max-width: 340px) {
+  .audio-preview-player { grid-template-columns: 44px minmax(0, 1fr); padding-inline: 0.62rem; }
+  .audio-preview-player__toggle { width: 44px; height: 44px; }
+  .audio-preview-player__body strong { font-size: 0.74rem; }
+  .audio-preview-player__body input[type="range"] { min-height: 28px; }
+  .home-jukebox__play .studio-vinyl-control { width: 44px; height: 44px; }
+  .home-jukebox__play-label { display: none; }
+  .payment-methods__choice { padding-inline: 0.85rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-vinyl-control__disc,
+  .studio-vinyl-control__loading-track { animation: none !important; }
+  .audio-preview-player__toggle { transition: none; }
+}

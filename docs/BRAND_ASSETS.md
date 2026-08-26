@@ -31,6 +31,14 @@ La barre compacte utilise des glyphes SVG locaux afin de ne charger ni script ni
 
 Les marques restent la propriété de leurs titulaires. Les glyphes servent uniquement à identifier des liens vers les profils officiels LNX Beats et ne suggèrent aucun partenariat.
 
+## Paiement V0.8.5.4
+
+| Plateforme | Source officielle contrôlée | Asset local | Date de récupération | Licence / usage |
+| --- | --- | --- | --- | --- |
+| PayPal | Dépôt officiel PayPal `paypal/paypal-sdk-logos`, version CDN `2.3.7`, fichier `paypal-white.svg` (`https://github.com/paypal/paypal-sdk-logos/blob/main/cdn/2.3.7/paypal-white.svg`) | `public/brands/paypal-white.svg` | 26 août 2026 | Asset PayPal officiel distribué par le dépôt sous Apache-2.0 ; affichage local du wordmark blanc pour identifier le parcours PayPal, sans hotlink ni SDK supplémentaire. Empreinte SHA-256 locale : `c2654a3c25ef2a429934e80d8b66ecf5c9dfe998250d9f046ecfe8e11f7fb4f5`. |
+
+Les logos de réseaux de cartes et Apple Pay ne sont pas ajoutés : le code ne prouve pas une disponibilité exhaustive de chaque réseau dans tous les contextes Production. La carte Stripe conserve donc une iconographie générique et le texte conditionnel déjà validé pour Apple Pay.
+
 ## Règle de maintenance
 
 Tout futur ajout doit indiquer la plateforme, la source fiable, le fichier local exact, la date de récupération et les contraintes d'usage. Les captures d'écran, recréations et logos stylisés à la main ne sont pas acceptés.
