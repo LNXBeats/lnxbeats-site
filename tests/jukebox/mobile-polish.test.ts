@@ -21,19 +21,62 @@ test("the mobile menu keeps its accessible navigation without decorative numberi
   assert.doesNotMatch(css, /\.mobile-navigation nav a span\s*\{/);
 });
 
-test("mobile-only editorial cleanup preserves functional Commander progress", async () => {
-  const [homepage, shop, orderForm, css] = await Promise.all([
+test("mobile editorial cleanup uses one compact Commander progress indicator", async () => {
+  const [homepage, shop, orderForm, globalCss, commanderCss] = await Promise.all([
     source("app/page.tsx"),
     source("app/boutique/page.tsx"),
     source("components/music-order-form.tsx"),
     source("app/globals.css"),
+    source("app/v084-commander.css"),
   ]);
 
   assert.match(homepage, /number: "01"/);
   assert.match(shop, /shop-card__index">01 · MUSIQUE/);
   assert.match(orderForm, /order-progress__number/);
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.home-perspective > span \{ display: none; \}[\s\S]*?\.home-perspective h3 \{ margin-top: 0; \}[\s\S]*?\.shop-card \{ justify-content: flex-end; \}[\s\S]*?\.shop-card__index \{ display: none; \}/);
-  assert.doesNotMatch(css, /\.order-progress__number\s*\{[^}]*display:\s*none/);
+  assert.match(orderForm, /<progress max=\{steps\.length\} value=\{step \+ 1\}/);
+  assert.match(globalCss, /@media \(max-width: 700px\)[\s\S]*?\.home-perspective > span \{ display: none; \}[\s\S]*?\.home-perspective h3 \{ margin-top: 0; \}[\s\S]*?\.shop-card \{ justify-content: flex-end; \}[\s\S]*?\.shop-card__index \{ display: none; \}/);
+  assert.match(commanderCss, /@media \(max-width: 600px\)[\s\S]*?\.commander-v084 \.order-progress \{ display: none; \}/);
+  assert.match(commanderCss, /\.commander-v084 \.order-progress__summary \{[\s\S]*?display: grid;/);
+  assert.match(commanderCss, /\.order-step-heading__index \{ display: none; \}/);
+});
+
+test("shared mobile polish groups the Home promise and keeps the global rails compact", async () => {
+  const [homepage, layout, css, footer, quickAccess] = await Promise.all([
+    source("app/page.tsx"),
+    source("app/layout.tsx"),
+    source("app/v085-mobile-polish.css"),
+    source("components/site-footer.tsx"),
+    source("components/quick-access-bar.tsx"),
+  ]);
+
+  assert.match(homepage, /home-hero__eyebrow-story-key">Les histoires<\/span> deviennent musique/);
+  assert.match(css, /\.home-hero__eyebrow-story-key \{ white-space: nowrap; \}/);
+  assert.match(css, /@media \(max-width: 820px\)[\s\S]*?\.quick-access__rail \{[\s\S]*?overflow-x: auto;/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.site-footer__group-links \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(layout, /import "\.\/v085-mobile-polish\.css"/);
+  assert.doesNotMatch(layout, /import "\.\/v084-commander\.css"/);
+  assert.match(footer, /<details className="site-footer__group">/);
+  assert.match(footer, /<summary>Les portes<\/summary>/);
+  assert.match(quickAccess, /quick-access__rail/);
+});
+
+test("external links share an accessible SVG icon instead of a Unicode glyph", async () => {
+  const paths = [
+    "components/button.tsx",
+    "components/platform-link.tsx",
+    "components/project-platforms.tsx",
+    "components/admin-navigation.tsx",
+    "app/admin/catalogue/[slug]/page.tsx",
+  ];
+  const sources = await Promise.all(paths.map(source));
+  const icon = await source("components/link-icons.tsx");
+
+  assert.match(icon, /export function ExternalLinkIcon/);
+  assert.match(icon, /aria-hidden="true"/);
+  for (const [index, fileSource] of sources.entries()) {
+    assert.match(fileSource, /ExternalLinkIcon/, paths[index]);
+    assert.doesNotMatch(fileSource, /↗/, paths[index]);
+  }
 });
 
 test("the discography mobile heading hides only the visual counter", async () => {

@@ -10,7 +10,7 @@ import {
   orderIllustrationFormatLabel,
   orderIllustrationFormatOptions,
 } from "@/data/order-illustration";
-import { orderOffer } from "@/data/order-offer";
+import { orderOffer, orderPricingForVersion } from "@/data/order-offer";
 import { personalUseTerms } from "@/data/rights-offer";
 import {
   calculateOrderPrice,
@@ -157,8 +157,29 @@ export function MusicOrderForm({
   const progressRef = useRef<HTMLDivElement>(null);
   const previousStep = useRef(step);
   const pricing = calculateOrderPrice(form, activePricingVersion);
+  const pricingConfiguration = orderPricingForVersion(activePricingVersion) ?? orderOffer;
+  const maximumPriceCents = pricingConfiguration.personalBaseCents
+    + pricingConfiguration.coverCents
+    + pricingConfiguration.priorityCents;
   const hasPaymentProvider = paymentProviders.stripe || paymentProviders.paypal;
   const errorBelongsToCurrentStep = errorField !== null && errorFieldSteps[errorField] === step;
+  const liveSummaryContent = (
+    <div className="order-aside__content">
+      <p className="eyebrow">Récapitulatif en temps réel</p>
+      <dl className="order-aside__summary">
+        <div><dt>Création personnelle</dt><dd>{formatEuro(pricing.basePriceCents)}</dd></div>
+        <div><dt>Illustration personnalisée</dt><dd>{form.coverIncluded ? `+ ${formatEuro(pricing.coverPriceCents)}` : "Non sélectionnée"}</dd></div>
+        {form.coverIncluded && form.illustrationFormat ? <div><dt>Format</dt><dd>{orderIllustrationFormatLabel(form.illustrationFormat)}</dd></div> : null}
+        <div><dt>Traitement prioritaire</dt><dd>{form.priorityProcessing ? `+ ${formatEuro(pricing.priorityPriceCents)}` : "Non sélectionné"}</dd></div>
+      </dl>
+      <div className="order-aside__total"><span>Total actualisé</span><strong>{formatEuro(pricing.totalCents)}</strong></div>
+      <p className="order-aside__maximum">Total maximum : {formatEuro(maximumPriceCents)}</p>
+      <div className="order-aside__assurance">
+        <strong>{hasPaymentProvider ? "Paiement sécurisé" : "Données protégées"}</strong>
+        <span>{hasPaymentProvider ? "Votre brief et vos références restent protégés." : "Aucun paiement n’est proposé tant qu’aucun moyen sécurisé n’est disponible."}</span>
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     if (previousStep.current === step) return;
@@ -489,11 +510,20 @@ export function MusicOrderForm({
   }
 
   return (
+    <>
+    <aside className="order-aside order-aside--live" aria-label="Récapitulatif de la création">
+      <div className="order-aside__desktop">{liveSummaryContent}</div>
+      <details className="order-aside__disclosure order-aside__mobile">
+        <summary><span>Repères du projet</span><strong>{formatEuro(pricing.totalCents)}</strong></summary>
+        {liveSummaryContent}
+      </details>
+    </aside>
     <form className="order-form order-form--connected order-form--premium" aria-busy={busy} onSubmit={(event) => event.preventDefault()}>
       <nav className="order-progress-shell" aria-label="Étapes de la commande">
         <p className="order-progress__summary" aria-live="polite">
           <span>Étape {step + 1} sur {steps.length}</span>
           <strong>{steps[step]}</strong>
+          <progress max={steps.length} value={step + 1} aria-label={`Progression : étape ${step + 1} sur ${steps.length}`} />
         </p>
         <div className="order-progress" ref={progressRef}>
         {steps.map((label, index) => (
@@ -599,7 +629,7 @@ export function MusicOrderForm({
               <span className="order-step-heading__index" aria-hidden="true">03</span>
               <div>
                 <p className="eyebrow">Direction & options</p>
-                <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur de votre création.</h2>
+                <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur et les options.</h2>
                 <p className="form-step__intro">Indiquez une direction, une émotion et les options utiles. Le total reste lisible à chaque décision.</p>
               </div>
             </header>
@@ -624,64 +654,67 @@ export function MusicOrderForm({
             <fieldset className="fieldset order-options-fieldset">
               <legend>Options de création</legend>
               <div className="order-option-grid">
-                <label className="order-option-card" data-selected={form.coverIncluded}>
-                  <input type="checkbox" checked={form.coverIncluded} onChange={(event) => setIllustrationEnabled(event.target.checked)} />
-                  <span className="order-option-card__copy">
-                    <strong>Illustration personnalisée</strong>
-                    <small>Un visuel original préparé dans le format de votre choix.</small>
-                  </span>
-                  <span className="order-option-card__price">+ {formatEuro(orderOffer.coverCents)}</span>
-                </label>
-                <label className="order-option-card" data-selected={form.priorityProcessing}>
-                  <input type="checkbox" checked={form.priorityProcessing} onChange={(event) => setField("priorityProcessing", event.target.checked)} />
-                  <span className="order-option-card__copy">
-                    <strong>Traitement prioritaire</strong>
-                    <small>{orderOffer.priorityDelay}</small>
-                  </span>
-                  <span className="order-option-card__price">+ {formatEuro(orderOffer.priorityCents)}</span>
-                </label>
+                <div className="order-option-stack order-option-stack--illustration" data-selected={form.coverIncluded}>
+                  <label className="order-option-card" data-selected={form.coverIncluded}>
+                    <input type="checkbox" checked={form.coverIncluded} onChange={(event) => setIllustrationEnabled(event.target.checked)} />
+                    <span className="order-option-card__copy">
+                      <strong>Illustration personnalisée</strong>
+                      <small>Un visuel original préparé dans le format de votre choix.</small>
+                    </span>
+                    <span className="order-option-card__price">+ {formatEuro(orderOffer.coverCents)}</span>
+                  </label>
+                  {form.coverIncluded ? (
+                    <fieldset className="illustration-format-panel" id="order-illustration-format" tabIndex={-1} aria-invalid={errorField === "illustrationFormat"} aria-describedby={errorField === "illustrationFormat" ? "order-illustration-format-error" : "order-illustration-format-hint"}>
+                      <legend>Format de l’illustration *</legend>
+                      <p id="order-illustration-format-hint">Le format ne change pas le prix.</p>
+                      <div className="illustration-format-grid">
+                        {orderIllustrationFormatOptions.map((option) => (
+                          <label className="illustration-format-choice" data-selected={form.illustrationFormat === option.value} key={option.value}>
+                            <input
+                              required
+                              type="radio"
+                              name="illustrationFormat"
+                              value={option.value}
+                              checked={form.illustrationFormat === option.value}
+                              onChange={() => setIllustrationFormat(option.value)}
+                            />
+                            <span><strong>{option.label}</strong><b>{option.ratio}</b><small>{option.description}</small></span>
+                          </label>
+                        ))}
+                      </div>
+                      {errorField === "illustrationFormat" ? <span className="field__error" id="order-illustration-format-error" role="alert">{error}</span> : null}
+                      {form.illustrationFormat === "CUSTOM" ? (
+                        <div className="field illustration-format-custom">
+                          <label htmlFor="order-illustration-format-custom">Dimensions ou usage attendu *</label>
+                          <input
+                            id="order-illustration-format-custom"
+                            required
+                            maxLength={orderTextLimits.illustrationFormatCustom}
+                            value={form.illustrationFormatCustom}
+                            aria-invalid={errorField === "illustrationFormatCustom"}
+                            aria-describedby={errorField === "illustrationFormatCustom" ? "order-illustration-format-custom-error" : "order-illustration-format-custom-hint"}
+                            placeholder="Ex. Bannière 2560 × 1440 px"
+                            onChange={(event) => setField("illustrationFormatCustom", event.target.value)}
+                          />
+                          <span className="field__hint" id="order-illustration-format-custom-hint">{form.illustrationFormatCustom.length} / {orderTextLimits.illustrationFormatCustom} caractères</span>
+                          {errorField === "illustrationFormatCustom" ? <span className="field__error" id="order-illustration-format-custom-error" role="alert">{error}</span> : null}
+                        </div>
+                      ) : null}
+                    </fieldset>
+                  ) : null}
+                </div>
+                <div className="order-option-stack" data-selected={form.priorityProcessing}>
+                  <label className="order-option-card" data-selected={form.priorityProcessing}>
+                    <input type="checkbox" checked={form.priorityProcessing} onChange={(event) => setField("priorityProcessing", event.target.checked)} />
+                    <span className="order-option-card__copy">
+                      <strong>Traitement prioritaire</strong>
+                      <small>{orderOffer.priorityDelay}</small>
+                    </span>
+                    <span className="order-option-card__price">+ {formatEuro(orderOffer.priorityCents)}</span>
+                  </label>
+                </div>
               </div>
             </fieldset>
-
-            {form.coverIncluded ? (
-              <fieldset className="illustration-format-panel" id="order-illustration-format" tabIndex={-1} aria-invalid={errorField === "illustrationFormat"} aria-describedby={errorField === "illustrationFormat" ? "order-illustration-format-error" : "order-illustration-format-hint"}>
-                <legend>Format de l’illustration *</legend>
-                <p id="order-illustration-format-hint">Le format n’a aucun effet sur le prix. Choisissez celui qui correspond à votre usage principal.</p>
-                <div className="illustration-format-grid">
-                  {orderIllustrationFormatOptions.map((option) => (
-                    <label className="illustration-format-choice" data-selected={form.illustrationFormat === option.value} key={option.value}>
-                      <input
-                        required
-                        type="radio"
-                        name="illustrationFormat"
-                        value={option.value}
-                        checked={form.illustrationFormat === option.value}
-                        onChange={() => setIllustrationFormat(option.value)}
-                      />
-                      <span><strong>{option.label}</strong><b>{option.ratio}</b><small>{option.description}</small></span>
-                    </label>
-                  ))}
-                </div>
-                {errorField === "illustrationFormat" ? <span className="field__error" id="order-illustration-format-error" role="alert">{error}</span> : null}
-                {form.illustrationFormat === "CUSTOM" ? (
-                  <div className="field illustration-format-custom">
-                    <label htmlFor="order-illustration-format-custom">Dimensions ou usage attendu *</label>
-                    <input
-                      id="order-illustration-format-custom"
-                      required
-                      maxLength={orderTextLimits.illustrationFormatCustom}
-                      value={form.illustrationFormatCustom}
-                      aria-invalid={errorField === "illustrationFormatCustom"}
-                      aria-describedby={errorField === "illustrationFormatCustom" ? "order-illustration-format-custom-error" : "order-illustration-format-custom-hint"}
-                      placeholder="Ex. Bannière 2560 × 1440 px"
-                      onChange={(event) => setField("illustrationFormatCustom", event.target.value)}
-                    />
-                    <span className="field__hint" id="order-illustration-format-custom-hint">{form.illustrationFormatCustom.length} / {orderTextLimits.illustrationFormatCustom} caractères</span>
-                    {errorField === "illustrationFormatCustom" ? <span className="field__error" id="order-illustration-format-custom-error" role="alert">{error}</span> : null}
-                  </div>
-                ) : null}
-              </fieldset>
-            ) : null}
 
             <div className="order-total order-total--compact order-total--breakdown" aria-live="polite">
               <div className="order-total__heading"><span>Total de votre création</span><strong>{formatEuro(pricing.totalCents)}</strong></div>
@@ -690,7 +723,7 @@ export function MusicOrderForm({
                 {form.coverIncluded ? <div><dt>Illustration personnalisée</dt><dd>+ {formatEuro(pricing.coverPriceCents)}</dd></div> : null}
                 {form.priorityProcessing ? <div><dt>Traitement prioritaire</dt><dd>+ {formatEuro(pricing.priorityPriceCents)}</dd></div> : null}
               </dl>
-              <small>Le total est recalculé et vérifié par LNX Studio lors de l’enregistrement.</small>
+              <small><strong>Total maximum : {formatEuro(maximumPriceCents)}</strong> · Le total est recalculé et vérifié par LNX Studio lors de l’enregistrement.</small>
             </div>
           </>
         ) : null}
@@ -831,7 +864,7 @@ export function MusicOrderForm({
                 {form.coverIncluded ? <div><dt>Illustration personnalisée</dt><dd>+ {formatEuro(pricing.coverPriceCents)}</dd></div> : null}
                 {form.priorityProcessing ? <div><dt>Traitement prioritaire</dt><dd>+ {formatEuro(pricing.priorityPriceCents)}</dd></div> : null}
               </dl>
-              <small>{finalizedOrder ? "Total vérifié lors de l’enregistrement de la commande." : "Le total sera recalculé et vérifié lors de l’enregistrement."}</small>
+              <small><strong>Total maximum : {formatEuro(maximumPriceCents)}</strong> · {finalizedOrder ? "Total vérifié lors de l’enregistrement de la commande." : "Le total sera recalculé et vérifié lors de l’enregistrement."}</small>
             </div>
 
             {!finalizedOrder ? (
@@ -875,5 +908,6 @@ export function MusicOrderForm({
         {orderNumber && orderStatus === "DRAFT" ? <button className="order-delete-draft" type="button" onClick={() => void deleteDraft()} disabled={busy}>Supprimer ce brouillon</button> : null}
       </fieldset>
     </form>
+    </>
   );
 }
