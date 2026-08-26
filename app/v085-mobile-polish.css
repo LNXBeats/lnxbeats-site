@@ -247,10 +247,15 @@
   .home-featured__heading h2,
   .home-perspectives__heading h2 { font-size: clamp(2.25rem, 11vw, 3.2rem); line-height: 0.98; }
 
+  .home-project-lead { grid-template-columns: minmax(0, 1fr); }
+  .home-project-lead__art { width: 100%; }
   .home-project-lead__art .project-artwork {
+    width: 100%;
+    height: auto;
     min-height: 0;
-    aspect-ratio: 1;
+    aspect-ratio: 1 / 1;
   }
+  .home-project-lead__art .project-artwork--image img { object-fit: contain; object-position: center; }
 
   .home-project-lead__copy { padding: 1.35rem; }
   .home-project-lead__copy h3 { font-size: clamp(2.35rem, 12vw, 3.4rem); }
