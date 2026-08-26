@@ -4,11 +4,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CatalogEditGuard, CatalogSubmitButton } from "@/components/catalog-edit-guard";
+import { AdminBackLink } from "@/components/admin-back-link";
 import { CatalogAudioForm } from "@/components/catalog-audio-form";
 import { CatalogCoverForm } from "@/components/catalog-cover-form";
 import { CatalogPlatformLinkFields } from "@/components/catalog-platform-link-fields";
 import { CatalogProjectDangerZone } from "@/components/catalog-project-danger-zone";
 import { CatalogProjectFields } from "@/components/catalog-project-fields";
+import { ExternalLinkIcon } from "@/components/link-icons";
 import { requireAdmin } from "@/lib/auth/session";
 import { catalogCoverAltOverride, resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import { deriveCatalogConfidence, projectCompletenessLabel } from "@/lib/catalog/confidence";
@@ -83,9 +85,9 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
   const deletion = getCatalogDeletionEligibility(project);
 
   return <div className="admin-main admin-catalogue-editor">
-    <Link className="admin-back-link" href="/admin/catalogue"><span aria-hidden="true">←</span> Retour au catalogue</Link>
+    <AdminBackLink href="/admin/catalogue">Retour au catalogue</AdminBackLink>
     <header className="admin-page-heading"><div><p className="admin-kicker">Fiche catalogue</p><h1>{project.title}</h1></div><p>Le slug reste immuable. Enregistrer, rendre visible et placer dans un jukebox sont trois décisions distinctes.</p></header>
-    <div className="admin-editor-actions">{project.publicVisible && (project.status === "PUBLISHED" || project.status === "IN_DEVELOPMENT") ? <Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir la fiche publique <span aria-hidden="true">↗</span></Link> : <span className="admin-muted">Fiche publique masquée</span>}</div>
+    <div className="admin-editor-actions">{project.publicVisible && (project.status === "PUBLISHED" || project.status === "IN_DEVELOPMENT") ? <Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir la fiche publique <ExternalLinkIcon /></Link> : <span className="admin-muted">Fiche publique masquée</span>}</div>
     <section className="admin-catalogue-summary" aria-label="État actuel des données">
       <div><span>Publication</span><strong>{project.status === "PUBLISHED" ? "Publié" : project.status === "IN_DEVELOPMENT" ? "En développement" : project.status === "DRAFT" ? "Brouillon" : "Archivé"}</strong></div>
       <div><span>Cover</span><strong>{cover ? "Renseignée" : "Manquante"}</strong></div>
@@ -134,7 +136,7 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
 
     <section className="admin-detail-window">
       <p className="admin-section-label">Cover officielle</p>
-      {cover ? <div className="admin-cover-preview"><Image src={`/media/catalog/${cover.id}`} alt={coverAlt} width={320} height={320} /><div><p>Cover officielle actuelle</p><Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir sur le site <span aria-hidden="true">↗</span></Link></div></div> : <p className="admin-muted">Aucune cover officielle. L’espace graphique de repli reste visible publiquement.</p>}
+      {cover ? <div className="admin-cover-preview"><Image src={`/media/catalog/${cover.id}`} alt={coverAlt} width={320} height={320} /><div><p>Cover officielle actuelle</p><Link className="admin-row-action" href={`/album/${project.slug}`} target="_blank" rel="noreferrer">Voir sur le site <ExternalLinkIcon /></Link></div></div> : <p className="admin-muted">Aucune cover officielle. L’espace graphique de repli reste visible publiquement.</p>}
       <CatalogCoverForm projectId={project.id} slug={project.slug} currentCoverAssetId={cover?.id ?? null} alt={coverAltOverride ?? ""} altPlaceholder={coverAlt} hasCover={Boolean(cover)} initialState={etat?.startsWith("cover-") ? etat : undefined} />
       {cover ? <details className="admin-add-panel"><summary>Supprimer la cover actuelle</summary><p>La fiche publique utilisera son visuel de repli. Cette action ne concerne aucun fichier client privé.</p><form action={deleteCatalogCoverAction}><Identity project={project} /><input type="hidden" name="expectedCoverAssetId" value={cover.id} /><button className="admin-danger-action">Confirmer la suppression de la cover</button></form></details> : null}
     </section>

@@ -16,23 +16,50 @@ export function SiteFooter() {
             <p>Chaque histoire<br />mérite sa musique.</p>
           </div>
 
-          <div className="site-footer__columns">
-            <div>
-              <h2>Les portes</h2>
-              {navigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+          <div className="site-footer__navigation">
+            <div className="site-footer__columns site-footer__columns--desktop">
+              <div>
+                <h2>Les portes</h2>
+                {navigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+              </div>
+              <div>
+                <h2>Les voix</h2>
+                {siteConfig.platforms.map((platform) => (
+                  <a key={platform.name} href={platform.url} target="_blank" rel="noopener noreferrer" aria-label={`${platform.name} — nouvel onglet`}>{platform.name}</a>
+                ))}
+              </div>
+              <div>
+                <h2>Prolonger l’histoire</h2>
+                {[...siteConfig.social, ...siteConfig.shops].map((item) => (
+                  <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} — nouvel onglet`}>{item.name}</a>
+                ))}
+                <a href={`mailto:${siteConfig.email}`}>E-mail</a>
+              </div>
             </div>
-            <div>
-              <h2>Les voix</h2>
-              {siteConfig.platforms.map((platform) => (
-                <a key={platform.name} href={platform.url} target="_blank" rel="noopener noreferrer" aria-label={`${platform.name} — nouvel onglet`}>{platform.name}</a>
-              ))}
-            </div>
-            <div>
-              <h2>Prolonger l’histoire</h2>
-              {[...siteConfig.social, ...siteConfig.shops].map((item) => (
-                <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} — nouvel onglet`}>{item.name}</a>
-              ))}
-              <a href={`mailto:${siteConfig.email}`}>E-mail</a>
+            <div className="site-footer__columns site-footer__columns--mobile">
+              <details className="site-footer__group">
+                <summary>Les portes</summary>
+                <div className="site-footer__group-links">
+                  {navigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+                </div>
+              </details>
+              <details className="site-footer__group">
+                <summary>Les voix</summary>
+                <div className="site-footer__group-links">
+                  {siteConfig.platforms.map((platform) => (
+                    <a key={platform.name} href={platform.url} target="_blank" rel="noopener noreferrer" aria-label={`${platform.name} — nouvel onglet`}>{platform.name}</a>
+                  ))}
+                </div>
+              </details>
+              <details className="site-footer__group">
+                <summary>Prolonger l’histoire</summary>
+                <div className="site-footer__group-links">
+                  {[...siteConfig.social, ...siteConfig.shops].map((item) => (
+                    <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} — nouvel onglet`}>{item.name}</a>
+                  ))}
+                  <a href={`mailto:${siteConfig.email}`}>E-mail</a>
+                </div>
+              </details>
             </div>
           </div>
         </div>

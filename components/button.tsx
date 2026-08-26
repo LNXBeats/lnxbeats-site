@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ExternalLinkIcon } from "@/components/link-icons";
+
 type ButtonLinkProps = {
   href: string;
   children: ReactNode;
@@ -32,7 +34,7 @@ export function ButtonLink({
           {children}
           {opensNewTab ? <span className="visually-hidden"> — nouvel onglet</span> : null}
         </span>
-        <span aria-hidden="true">{opensNewTab ? "↗" : "→"}</span>
+        {opensNewTab ? <ExternalLinkIcon /> : <span aria-hidden="true">→</span>}
       </a>
     );
   }

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Container } from "@/components/container";
 import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
-import { jukeboxInitialIndex } from "@/lib/catalog/jukebox";
 import "../v064-discography.css";
 
 export const metadata: Metadata = {
@@ -41,7 +40,7 @@ export default async function DiscographyPage() {
       <Container className="v064-discography-container">
         <ProjectJukebox
           projects={sceneProjects}
-          initialIndex={jukeboxInitialIndex(sceneProjects, 2)}
+          initialIndex={0}
           eyebrow="Catalogue"
           heading="Tous les projets."
           eager

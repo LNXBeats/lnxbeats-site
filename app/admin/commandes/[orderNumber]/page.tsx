@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { addInternalNoteAction, reconcilePaymentRefundAction, requestPaymentRefundAction } from "@/app/admin/actions";
+import { AdminBackLink } from "@/components/admin-back-link";
 import { AdminOrderActions } from "@/components/admin-order-actions";
 import { AdminOrderDeliveryPanel } from "@/components/admin-order-delivery-panel";
 import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
@@ -148,7 +149,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
 
   return (
     <div className="admin-main admin-order-detail">
-      <Link className="admin-back-link" href="/admin/commandes"><span aria-hidden="true">←</span> Toutes les commandes</Link>
+      <AdminBackLink href="/admin/commandes">Retour aux commandes</AdminBackLink>
       {message ? <p className="admin-feedback" role="status">{message}</p> : null}
       <header className="admin-order-hero">
         <div><p className="admin-kicker">{order.orderNumber}</p><h1>{order.title || order.recipient || "Histoire sans titre"}</h1><p>{order.customerName || "Client"} · {order.customerEmail}</p></div>
