@@ -54,6 +54,9 @@
     "test:checkout": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/checkout/*.test.ts",
     "test:notification": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/notifications/*.test.ts",
     "test:security": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/security/*.test.ts",
+    "test:pricing": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/pricing/*.test.ts",
+    "test:shop": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/shop/*.test.ts",
+    "test:shop-pricing:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-shop-pricing-runtime.ts",
     "test:admin:production-bootstrap": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/production/admin-bootstrap.test.ts",
     "test:catalog:production-import": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/production/catalog-import.test.ts",
     "test:media:production-import": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/production/media-import.test.ts",
@@ -113,6 +116,7 @@
     "stripe": "22.5.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.4.3",
     "@tailwindcss/postcss": "4.3.3",
     "@types/busboy": "^1.5.4",
     "@types/node": "26.2.0",

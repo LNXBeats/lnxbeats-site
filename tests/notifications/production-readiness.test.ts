@@ -207,7 +207,7 @@ test("le préflight owner-only exige owner actif et client explicitement fermé"
 
 test("le préflight base reste strictement en lecture et valide le schéma courant", async () => {
   const database = {
-    $queryRaw: async () => [{ tables_ready: true, indexes_ready: true, migrations: 18n, latest_ready: true }],
+    $queryRaw: async () => [{ tables_ready: true, indexes_ready: true, migrations: 19n, latest_ready: true }],
     orderNotification: { count: async () => 0 },
     notificationEvent: { count: async () => 0 },
     notificationSuppression: { count: async () => 0 },

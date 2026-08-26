@@ -20,3 +20,20 @@ V0.7.8 prépare les notifications de production sur une branche feature, sans d�
 - `PRODUCTION BLOCKED — ACCOUNTING / INVOICING DECISION REQUIRED` : l’encaissement Live doit être aligné avec facturation, TVA/comptabilité, politique de remboursement et conservation des preuves avant ouverture publique.
 
 Avant une future ouverture : maintenir le contrôle de l’override Prisma ; revue juridique ; domaine Resend vérifié ; test delivered/bounce/complaint/suppressed ; retry concurrent ; monitoring des `REQUIRES_REVIEW` ; validation propriétaire mobile ; rotation/procédure secrets ; backup ; rollback vers `disabled` documenté ; configuration et smoke Live humains séparés. Voir [PRODUCTION_NOTIFICATIONS.md](PRODUCTION_NOTIFICATIONS.md), [NOTIFICATION_RUNBOOK.md](NOTIFICATION_RUNBOOK.md), [PRODUCTION_PAYMENTS.md](PRODUCTION_PAYMENTS.md) et [PAYMENT_PRODUCTION_RUNBOOK.md](PAYMENT_PRODUCTION_RUNBOOK.md).
+
+## V1.1.0 — gates Boutique et tarifs
+
+- `SHOP_ENABLED=false` reste obligatoire pendant la phase 1 ; aucun panier,
+  Checkout produit ou `ShopOrder` n'est présent.
+- `MUSIC_PRICING_SOURCE=legacy` maintient la grille V1 validée pendant la revue
+  de l'Admin Tarifs. Le cutover vers PostgreSQL exige un sprint financier dédié
+  prouvant la compatibilité Stripe et PayPal avec toute nouvelle version.
+- Aucun produit n'est créé ou publié automatiquement par la migration.
+- Avant la 19e migration : backup PostgreSQL/PITR vérifié, inventaire des
+  compteurs V1 et procédure de restauration humaine obligatoires. Le rollback
+  applicatif conserve les tables additives ; aucune down migration destructive.
+- L'upload R2 produit, les pays de livraison, frais, rétractation, TVA,
+  facturation, réservations et remboursements Boutique restent des gates
+  distincts avant toute ouverture publique.
+- Le rollback est applicatif : flags fermés et tables additives conservées ;
+  aucune down migration destructive.

@@ -236,6 +236,31 @@ enum OrderEventVisibility {
   INTERNAL
 }
 
+enum MusicPricingStatus {
+  ACTIVE
+  RETIRED
+}
+
+enum MusicPricingSource {
+  IMPORTED
+  ADMIN
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProductAuditAction {
+  CREATED
+  UPDATED
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+  STOCK_ADJUSTED
+}
+
 enum RightsRequestType {
   PUBLICATION_LICENSE
   EXPLOITATION_PARTNERSHIP
@@ -473,35 +498,42 @@ enum ProviderEventOutcome {
 }
 
 model User {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  email               String                  @unique @db.VarChar(320)
-  emailVerified       Boolean                 @default(false)
-  emailVerifiedAt     DateTime?               @db.Timestamptz(3)
-  displayName         String                  @default("") @db.VarChar(120)
-  firstName           String?                 @db.VarChar(100)
-  lastName            String?                 @db.VarChar(100)
-  image               String?                 @db.VarChar(500)
-  role                UserRole                @default(MEMBER)
-  status              UserStatus              @default(PENDING)
-  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime                @updatedAt @db.Timestamptz(3)
-  customerProfile     Customer?
-  orders              Order[]                 @relation("OrderAccount")
-  orderEvents         OrderEvent[]            @relation("OrderEventActor")
-  confidenceReviews   ConfidenceAnnotation[]  @relation("ConfidenceReviewer")
-  favorites           Favorite[]
-  sessions            Session[]
-  accounts            Account[]
-  rightsRequests      RightsRequest[]         @relation("RightsRequestOwner")
-  partyConfirmations  ContractPartySnapshot[] @relation("ContractPartyConfirmedBy")
-  rightsEvents        RightsRequestEvent[]    @relation("RightsEventActor")
-  rightsMessages      RightsMessage[]         @relation("RightsMessageAuthor")
-  templateApprovals   ContractTemplate[]      @relation("ContractTemplateApprover")
-  contractAcceptances ContractAcceptance[]    @relation("ContractAcceptanceActor")
-  splitProposals      RightsSplitProposal[]   @relation("RightsSplitProposer")
-  notificationEvents  NotificationEvent[]     @relation("NotificationEventActor")
-  refundRequests      RefundAttempt[]         @relation("RefundRequestedBy")
-  paymentAuditEvents  PaymentAuditEvent[]     @relation("PaymentAuditActor")
+  id                           String                      @id @default(uuid()) @db.Uuid
+  email                        String                      @unique @db.VarChar(320)
+  emailVerified                Boolean                     @default(false)
+  emailVerifiedAt              DateTime?                   @db.Timestamptz(3)
+  displayName                  String                      @default("") @db.VarChar(120)
+  firstName                    String?                     @db.VarChar(100)
+  lastName                     String?                     @db.VarChar(100)
+  image                        String?                     @db.VarChar(500)
+  role                         UserRole                    @default(MEMBER)
+  status                       UserStatus                  @default(PENDING)
+  createdAt                    DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt                    DateTime                    @updatedAt @db.Timestamptz(3)
+  customerProfile              Customer?
+  orders                       Order[]                     @relation("OrderAccount")
+  orderEvents                  OrderEvent[]                @relation("OrderEventActor")
+  confidenceReviews            ConfidenceAnnotation[]      @relation("ConfidenceReviewer")
+  favorites                    Favorite[]
+  sessions                     Session[]
+  accounts                     Account[]
+  rightsRequests               RightsRequest[]             @relation("RightsRequestOwner")
+  partyConfirmations           ContractPartySnapshot[]     @relation("ContractPartyConfirmedBy")
+  rightsEvents                 RightsRequestEvent[]        @relation("RightsEventActor")
+  rightsMessages               RightsMessage[]             @relation("RightsMessageAuthor")
+  templateApprovals            ContractTemplate[]          @relation("ContractTemplateApprover")
+  contractAcceptances          ContractAcceptance[]        @relation("ContractAcceptanceActor")
+  splitProposals               RightsSplitProposal[]       @relation("RightsSplitProposer")
+  notificationEvents           NotificationEvent[]         @relation("NotificationEventActor")
+  refundRequests               RefundAttempt[]             @relation("RefundRequestedBy")
+  paymentAuditEvents           PaymentAuditEvent[]         @relation("PaymentAuditActor")
+  pricingVersionsCreated       MusicPricingVersion[]       @relation("MusicPricingVersionCreatedBy")
+  pricingConfigurationsUpdated MusicPricingConfiguration[] @relation("MusicPricingConfigurationUpdatedBy")
+  pricingActivations           MusicPricingActivation[]    @relation("MusicPricingActivationActor")
+  productsCreated              Product[]                   @relation("ProductCreatedBy")
+  productsUpdated              Product[]                   @relation("ProductUpdatedBy")
+  productStockAdjustments      ProductStockAdjustment[]    @relation("ProductStockAdjustmentActor")
+  productAuditEvents           ProductAuditEvent[]         @relation("ProductAuditEventActor")
 
   @@index([role, status])
   @@map("users")
@@ -737,6 +769,7 @@ model Asset {
   projects          ProjectAsset[]
   orders            OrderAsset[]
   contractDocuments ContractDocument[]
+  products          ProductAsset[]
 
   @@index([type, rightsStatus])
   @@index([storageBackend, visibility])
@@ -1346,4 +1379,138 @@ model Favorite {
   @@id([userId, projectId])
   @@index([projectId])
   @@map("favorites")
+}
+
+model MusicPricingVersion {
+  id                   String                      @id @default(uuid()) @db.Uuid
+  version              String                      @unique @db.VarChar(32)
+  status               MusicPricingStatus          @default(RETIRED)
+  currency             String                      @default("EUR") @db.VarChar(3)
+  basePriceCents       Int
+  coverPriceCents      Int
+  priorityPriceCents   Int
+  source               MusicPricingSource          @default(ADMIN)
+  createdByAdminId     String?                     @db.Uuid
+  activatedAt          DateTime?                   @db.Timestamptz(3)
+  retiredAt            DateTime?                   @db.Timestamptz(3)
+  createdAt            DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                    @updatedAt @db.Timestamptz(3)
+  createdByAdmin       User?                       @relation("MusicPricingVersionCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  activeConfigurations MusicPricingConfiguration[] @relation("MusicPricingConfigurationActiveVersion")
+  previousActivations  MusicPricingActivation[]    @relation("MusicPricingActivationPreviousVersion")
+  activatedActivations MusicPricingActivation[]    @relation("MusicPricingActivationActivatedVersion")
+
+  @@index([status, createdAt])
+  @@index([createdByAdminId])
+  @@map("music_pricing_versions")
+}
+
+model MusicPricingConfiguration {
+  key              String              @id @db.VarChar(64)
+  activeVersionId  String              @unique @db.Uuid
+  revision         Int                 @default(1)
+  updatedByAdminId String?             @db.Uuid
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+  activeVersion    MusicPricingVersion @relation("MusicPricingConfigurationActiveVersion", fields: [activeVersionId], references: [id], onDelete: Restrict)
+  updatedByAdmin   User?               @relation("MusicPricingConfigurationUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByAdminId])
+  @@map("music_pricing_configurations")
+}
+
+model MusicPricingActivation {
+  id                    String               @id @default(uuid()) @db.Uuid
+  previousVersionId     String?              @db.Uuid
+  activatedVersionId    String               @db.Uuid
+  actorAdminId          String?              @db.Uuid
+  source                MusicPricingSource
+  configurationRevision Int
+  occurredAt            DateTime             @default(now()) @db.Timestamptz(3)
+  previousVersion       MusicPricingVersion? @relation("MusicPricingActivationPreviousVersion", fields: [previousVersionId], references: [id], onDelete: Restrict)
+  activatedVersion      MusicPricingVersion  @relation("MusicPricingActivationActivatedVersion", fields: [activatedVersionId], references: [id], onDelete: Restrict)
+  actorAdmin            User?                @relation("MusicPricingActivationActor", fields: [actorAdminId], references: [id], onDelete: Restrict)
+
+  @@index([activatedVersionId, occurredAt])
+  @@index([previousVersionId])
+  @@index([actorAdminId])
+  @@map("music_pricing_activations")
+}
+
+model Product {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  slug               String                   @unique @db.VarChar(160)
+  title              String                   @db.VarChar(240)
+  description        String                   @db.Text
+  status             ProductStatus            @default(DRAFT)
+  priceCents         Int?
+  currency           String                   @default("EUR") @db.VarChar(3)
+  trackInventory     Boolean                  @default(false)
+  stock              Int?
+  shippingRequired   Boolean                  @default(false)
+  shippingPriceCents Int                      @default(0)
+  position           Int                      @default(0)
+  publishedAt        DateTime?                @db.Timestamptz(3)
+  archivedAt         DateTime?                @db.Timestamptz(3)
+  lockVersion        Int                      @default(1)
+  createdByAdminId   String?                  @db.Uuid
+  updatedByAdminId   String?                  @db.Uuid
+  createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                 @updatedAt @db.Timestamptz(3)
+  createdByAdmin     User?                    @relation("ProductCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  updatedByAdmin     User?                    @relation("ProductUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+  assets             ProductAsset[]
+  stockAdjustments   ProductStockAdjustment[]
+  auditEvents        ProductAuditEvent[]
+
+  @@index([status, position, createdAt])
+  @@index([createdByAdminId])
+  @@index([updatedByAdminId])
+  @@map("products")
+}
+
+model ProductAsset {
+  productId String   @db.Uuid
+  assetId   String   @db.Uuid
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([productId, assetId])
+  @@unique([productId, position])
+  @@index([assetId])
+  @@map("product_assets")
+}
+
+model ProductStockAdjustment {
+  id           String   @id @default(uuid()) @db.Uuid
+  productId    String   @db.Uuid
+  delta        Int
+  stockBefore  Int
+  stockAfter   Int
+  reason       String   @db.VarChar(500)
+  actorAdminId String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  actorAdmin   User?    @relation("ProductStockAdjustmentActor", fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([productId, createdAt])
+  @@index([actorAdminId])
+  @@map("product_stock_adjustments")
+}
+
+model ProductAuditEvent {
+  id           String             @id @default(uuid()) @db.Uuid
+  productId    String             @db.Uuid
+  action       ProductAuditAction
+  actorAdminId String?            @db.Uuid
+  metadata     Json               @default("{}")
+  occurredAt   DateTime           @default(now()) @db.Timestamptz(3)
+  product      Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  actorAdmin   User?              @relation("ProductAuditEventActor", fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([productId, occurredAt])
+  @@index([actorAdminId])
+  @@map("product_audit_events")
 }

@@ -9,6 +9,7 @@ import {
 } from "@/lib/payments/config";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import { notificationHealthSummary, parseNotificationConfiguration } from "@/lib/notifications/config";
+import { parseShopConfiguration, shopHealthSummary } from "@/lib/shop/config";
 
 export type HealthDependencies = Readonly<{
   assertPaymentRuntime(): Promise<void>;
@@ -54,8 +55,17 @@ export async function healthResponse(
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
+  let shop;
+  try {
+    shop = shopHealthSummary(parseShopConfiguration());
+  } catch {
+    return NextResponse.json(
+      { ok: false, service: "lnx-studio", check: "shop" },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   return NextResponse.json(
-    { ok: true, service: "lnx-studio", mediaStorage, payments, notifications },
+    { ok: true, service: "lnx-studio", mediaStorage, payments, notifications, shop },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }

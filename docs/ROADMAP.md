@@ -151,3 +151,14 @@
 - sauvegardes, observabilité et procédures d’incident
 - validation juridique et éditoriale
 - déploiement Railway et activation contrôlée du domaine
+
+## V1.1 — Boutique et tarification administrables
+
+- phase 1 : versions tarifaires et produits administrables, migration additive,
+  historique et stock audité, Boutique publique fermée ;
+- phase 2 : médias produit, catalogue public, panier, `ShopOrder`, snapshots et
+  réservation concurrente de stock ;
+- phase 3 : adaptation financière Stripe/PayPal dédiée, webhooks,
+  notifications et expédition ;
+- ouverture uniquement après QA, revue juridique/comptable et activation
+  humaine de `SHOP_ENABLED`.

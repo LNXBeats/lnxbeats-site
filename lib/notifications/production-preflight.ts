@@ -103,7 +103,7 @@ export async function evaluateProductionNotificationDatabase(
       (SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL) AS migrations,
       EXISTS (
         SELECT 1 FROM "_prisma_migrations"
-        WHERE migration_name = '20260826090000_order_illustration_format'
+        WHERE migration_name = '20260827120000_shop_pricing_foundation'
           AND finished_at IS NOT NULL
           AND rolled_back_at IS NULL
       ) AS latest_ready
@@ -137,7 +137,7 @@ export async function evaluateProductionNotificationDatabase(
   return [
     { name: "database.notificationTables", passed: first?.tables_ready === true },
     { name: "database.notificationIndexes", passed: first?.indexes_ready === true },
-    { name: "database.migrations", passed: Number(first?.migrations ?? 0) === 18 && first?.latest_ready === true, detail: `count=${Number(first?.migrations ?? 0)}` },
+    { name: "database.migrations", passed: Number(first?.migrations ?? 0) === 19 && first?.latest_ready === true, detail: `count=${Number(first?.migrations ?? 0)}` },
     { name: "outbox.foreignEnvironment", passed: foreignEnvironment === 0, detail: `count=${foreignEnvironment}` },
     { name: "outbox.qaRecipients", passed: qaRecipients === 0, detail: `count=${qaRecipients}` },
     { name: "outbox.expiredLeases", passed: expiredLeases === 0, detail: `count=${expiredLeases}` },
