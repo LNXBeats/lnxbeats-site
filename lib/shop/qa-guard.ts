@@ -5,23 +5,40 @@ import path from "node:path";
 
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import { parseShopConfiguration } from "@/lib/shop/config";
+import {
+  SHOP_PHASE2_QA_AUTH_CAPTURE_PATH,
+  SHOP_PHASE2_QA_CONFIRMATION,
+  SHOP_PHASE2_QA_HTTP_PORT,
+  SHOP_PHASE2_QA_NOTIFICATION_CAPTURE_PATH,
+  SHOP_PHASE2_QA_ORIGIN,
+  SHOP_PHASE2_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE2_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
+  SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME,
+  SHOP_PHASE2_QA_TARGET,
+} from "@/lib/shop/qa-contract";
 
-export const SHOP_PHASE2_QA_TARGET = "lnx-studio-v110-phase2-test";
-export const SHOP_PHASE2_QA_REQUESTED_DATABASE_PORT = "51260";
-export const SHOP_PHASE2_QA_HTTP_PORT = "31760";
-export const SHOP_PHASE2_QA_ORIGIN = `http://127.0.0.1:${SHOP_PHASE2_QA_HTTP_PORT}`;
-export const SHOP_PHASE2_QA_CONFIRMATION = "enable-local-shop-commerce-qa";
+export {
+  SHOP_PHASE2_QA_AUTH_CAPTURE_PATH,
+  SHOP_PHASE2_QA_CONFIRMATION,
+  SHOP_PHASE2_QA_HTTP_PORT,
+  SHOP_PHASE2_QA_MEDIA_ROOT,
+  SHOP_PHASE2_QA_NOTIFICATION_CAPTURE_PATH,
+  SHOP_PHASE2_QA_ORIGIN,
+  SHOP_PHASE2_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE2_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE2_QA_REQUESTED_DATABASE_PORT,
+  SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
+  SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME,
+  SHOP_PHASE2_QA_TARGET,
+} from "@/lib/shop/qa-contract";
+
 export const SHOP_PHASE2_QA_PROOF_FILE = path.join(
   homedir(),
   "Library/Application Support/prisma-dev-nodejs",
   SHOP_PHASE2_QA_TARGET,
   "server.json",
 );
-export const SHOP_PHASE2_QA_AUTH_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase2-auth-mailbox.jsonl";
-export const SHOP_PHASE2_QA_NOTIFICATION_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase2-notifications.jsonl";
-export const SHOP_PHASE2_QA_MEDIA_ROOT = "/private/tmp/lnx-studio-v110-phase2-media";
-export const SHOP_PHASE2_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE2_QA_MEDIA_ROOT}/public`;
-export const SHOP_PHASE2_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE2_QA_MEDIA_ROOT}/private`;
 
 const SHOP_PHASE2_QA_FORBIDDEN_NEXT_ENV_FILES = [
   ".env",
@@ -142,8 +159,9 @@ function assertNoExternalProviderEnvironment(environment: ShopQaEnvironment) {
 
 export function shopPhase2QaChildEnvironment(
   environment: ShopQaEnvironment = process.env,
+  options: Readonly<{ validatedRuntime?: boolean }> = {},
 ) {
-  return Object.fromEntries(
+  const childEnvironment = Object.fromEntries(
     [
       ...SHOP_PHASE2_QA_SYSTEM_ENVIRONMENT_NAMES,
       ...SHOP_PHASE2_QA_CHILD_ENVIRONMENT_NAMES,
@@ -152,6 +170,10 @@ export function shopPhase2QaChildEnvironment(
       return value === undefined ? [] : [[name, value] as const];
     }),
   ) as NodeJS.ProcessEnv;
+  if (options.validatedRuntime) {
+    childEnvironment[SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME] = SHOP_PHASE2_QA_RUNTIME_CONFIRMATION;
+  }
+  return childEnvironment;
 }
 
 export async function assertNoShopPhase2QaNextEnvironmentFiles(

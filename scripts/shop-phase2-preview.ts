@@ -25,7 +25,7 @@ async function run() {
 
   const child = spawn(process.execPath, args, {
     cwd: process.cwd(),
-    env: shopPhase2QaChildEnvironment(),
+    env: shopPhase2QaChildEnvironment(process.env, { validatedRuntime: true }),
     stdio: "inherit",
   });
   const exitCode = await new Promise<number>((resolve, reject) => {

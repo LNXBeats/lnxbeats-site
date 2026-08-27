@@ -7,13 +7,13 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 
 import { sendPasswordResetEmail } from "@/lib/auth/email-delivery";
 import { issueEmailVerification } from "@/lib/auth/email-verification";
-import { isPersistentLocalPreview } from "@/lib/auth/environment";
+import { shouldUseSecureAuthCookies } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 const authBaseUrl = process.env.AUTH_URL ?? process.env.SITE_URL ?? "http://localhost:3000";
 const isProduction = process.env.NODE_ENV === "production";
-const useSecureCookies = isProduction && !isPersistentLocalPreview();
+const useSecureCookies = shouldUseSecureAuthCookies(isProduction);
 const authSecret = process.env.AUTH_SECRET
   ?? (process.env.NEXT_PHASE === "phase-production-build" ? randomBytes(32).toString("base64url") : undefined);
 

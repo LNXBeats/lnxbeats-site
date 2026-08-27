@@ -12,6 +12,8 @@ import {
   SHOP_PHASE2_QA_ORIGIN,
   SHOP_PHASE2_QA_PRIVATE_MEDIA_ROOT,
   SHOP_PHASE2_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
+  SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME,
   SHOP_PHASE2_QA_TARGET,
   type ShopPhase2QaProof,
 } from "@/lib/shop/qa-guard";
@@ -133,6 +135,13 @@ test("Shop Phase 2 child processes receive only the explicit allowlist", () => {
   assert.equal(childEnvironment.PATH, "/usr/bin");
   assert.equal(childEnvironment.UNRELATED_SECRET, undefined);
   assert.equal(childEnvironment.RAILWAY_TOKEN, undefined);
+  assert.equal(childEnvironment[SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME], undefined);
+
+  const validatedChildEnvironment = shopPhase2QaChildEnvironment(environment, { validatedRuntime: true });
+  assert.equal(
+    validatedChildEnvironment[SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME],
+    SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
+  );
 });
 
 test("Shop Phase 2 expiry stays on the exact QA target after the commerce kill switch", () => {

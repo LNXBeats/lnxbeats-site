@@ -1,0 +1,12 @@
+export const SHOP_PHASE2_QA_TARGET = "lnx-studio-v110-phase2-test";
+export const SHOP_PHASE2_QA_REQUESTED_DATABASE_PORT = "51260";
+export const SHOP_PHASE2_QA_HTTP_PORT = "31760";
+export const SHOP_PHASE2_QA_ORIGIN = `http://127.0.0.1:${SHOP_PHASE2_QA_HTTP_PORT}`;
+export const SHOP_PHASE2_QA_CONFIRMATION = "enable-local-shop-commerce-qa";
+export const SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME = "LNX_SHOP_PHASE2_QA_RUNTIME_CONFIRM";
+export const SHOP_PHASE2_QA_RUNTIME_CONFIRMATION = "validated-local-shop-phase2-runtime";
+export const SHOP_PHASE2_QA_AUTH_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase2-auth-mailbox.jsonl";
+export const SHOP_PHASE2_QA_NOTIFICATION_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase2-notifications.jsonl";
+export const SHOP_PHASE2_QA_MEDIA_ROOT = "/private/tmp/lnx-studio-v110-phase2-media";
+export const SHOP_PHASE2_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE2_QA_MEDIA_ROOT}/public`;
+export const SHOP_PHASE2_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE2_QA_MEDIA_ROOT}/private`;
