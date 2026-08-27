@@ -40,14 +40,20 @@ export class MusicPricingValidationError extends Error {
  */
 export function parseEuroAmountToCents(
   value: unknown,
-  options: { allowZero: boolean; label: string },
+  options: { allowZero: boolean; label: string; maximumCents?: number },
 ) {
   if (typeof value !== "string") {
     throw new MusicPricingValidationError("INVALID_AMOUNT", `${options.label} est invalide.`);
   }
 
+  const maximumCents = options.maximumCents ?? MAX_COMPONENT_PRICE_CENTS;
+  if (!Number.isSafeInteger(maximumCents) || maximumCents < 0) {
+    throw new MusicPricingValidationError("INVALID_AMOUNT", `${options.label} est invalide.`);
+  }
   const normalized = value.trim();
-  const match = /^(0|[1-9]\d{0,4})(?:[,.](\d{1,2}))?$/.exec(normalized);
+  const maximumEuroDigits = String(Math.floor(maximumCents / 100)).length;
+  const amountPattern = new RegExp(`^(0|[1-9]\\d{0,${maximumEuroDigits - 1}})(?:[,.](\\d{1,2}))?$`);
+  const match = amountPattern.exec(normalized);
   if (!match) {
     throw new MusicPricingValidationError("INVALID_AMOUNT", `${options.label} est invalide.`);
   }
@@ -59,7 +65,7 @@ export function parseEuroAmountToCents(
   if (!Number.isSafeInteger(cents)) {
     throw new MusicPricingValidationError("INVALID_AMOUNT", `${options.label} est invalide.`);
   }
-  if ((!options.allowZero && cents === 0) || cents > MAX_COMPONENT_PRICE_CENTS) {
+  if ((!options.allowZero && cents === 0) || cents > maximumCents) {
     throw new MusicPricingValidationError("AMOUNT_OUT_OF_RANGE", `${options.label} est hors limites.`);
   }
 

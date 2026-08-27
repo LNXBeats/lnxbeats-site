@@ -1,3 +1,5 @@
+import { centsToAdminInput } from "@/lib/pricing/domain";
+
 type ProductFieldValues = {
   slug?: string;
   title?: string;
@@ -43,8 +45,19 @@ export function AdminProductFields({
       <textarea name="description" defaultValue={values.description ?? ""} maxLength={10_000} rows={8} required />
     </label>
     <label>
-      <span>Prix en centimes</span>
-      <input name="priceCents" type="number" min={1} max={10_000_000} step={1} defaultValue={values.priceCents ?? ""} placeholder="2500 pour 25 €" />
+      <span>Prix</span>
+      <span className="admin-money-field">
+        <input
+          name="price"
+          type="text"
+          inputMode="decimal"
+          defaultValue={values.priceCents === null || values.priceCents === undefined ? "" : centsToAdminInput(values.priceCents)}
+          placeholder="25,00"
+          aria-describedby="admin-product-price-help"
+        />
+        <span className="admin-money-field__currency" aria-hidden="true">€</span>
+      </span>
+      <small id="admin-product-price-help" className="admin-field-help">Montant en euros, avec deux décimales au maximum. Peut rester vide en brouillon.</small>
     </label>
     <label>
       <span>Devise</span>
@@ -64,8 +77,19 @@ export function AdminProductFields({
       <span>Expédition requise</span>
     </label>
     <label>
-      <span>Frais d’envoi en centimes</span>
-      <input name="shippingPriceCents" type="number" min={0} max={1_000_000} step={1} defaultValue={values.shippingPriceCents ?? 0} />
+      <span>Frais d’envoi</span>
+      <span className="admin-money-field">
+        <input
+          name="shippingPrice"
+          type="text"
+          inputMode="decimal"
+          defaultValue={centsToAdminInput(values.shippingPriceCents ?? 0)}
+          placeholder="5,00"
+          aria-describedby="admin-product-shipping-help"
+        />
+        <span className="admin-money-field__currency" aria-hidden="true">€</span>
+      </span>
+      <small id="admin-product-shipping-help" className="admin-field-help">Montant en euros. Ignoré si l’expédition n’est pas requise.</small>
     </label>
   </div>;
 }

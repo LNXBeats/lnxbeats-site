@@ -32,6 +32,17 @@ test("altered, negative, imprecise and unreasonable prices are rejected", () => 
   }
 });
 
+test("a caller can raise the ceiling without changing the established pricing limit", () => {
+  assert.equal(
+    parseEuroAmountToCents("100000,00", { allowZero: false, label: "Prix produit", maximumCents: 10_000_000 }),
+    10_000_000,
+  );
+  assert.throws(
+    () => parseEuroAmountToCents("100000,00", { allowZero: false, label: "Tarif" }),
+    (error: unknown) => error instanceof MusicPricingValidationError && error.code === "INVALID_AMOUNT",
+  );
+});
+
 test("base price must be positive while explicit zero supplements remain valid", () => {
   assert.throws(
     () => validateMusicPricingDraft({ currency: "EUR", basePrice: "0", coverPrice: "10", priorityPrice: "30" }),

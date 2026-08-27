@@ -80,7 +80,17 @@ test("requires a positive lock version and a reasoned non-zero stock adjustment"
     delta: -2,
     reason: "Deux exemplaires endommagés",
   });
+  assert.deepEqual(parseStockAdjustmentInput({ delta: "+5", reason: "Réception de cinq exemplaires" }), {
+    delta: 5,
+    reason: "Réception de cinq exemplaires",
+  });
+  assert.deepEqual(parseStockAdjustmentInput({ delta: "5", reason: "Réception de cinq exemplaires" }), {
+    delta: 5,
+    reason: "Réception de cinq exemplaires",
+  });
   assert.throws(() => parseStockAdjustmentInput({ delta: "0", reason: "Inventaire" }), /ne peut pas être nul/);
+  assert.throws(() => parseStockAdjustmentInput({ delta: "1.5", reason: "Inventaire" }), /nombre entier/);
+  assert.throws(() => parseStockAdjustmentInput({ delta: "1", reason: "ok" }), /entre 3 et 500/);
   assert.throws(() => parseStockAdjustmentInput({ delta: "1", reason: "ok", productId: "forged" }), /champ inattendu/);
 });
 
@@ -126,7 +136,7 @@ test("admin product surface has closed guards and no payment provider coupling",
   ]);
   assert.match(actions, /isSameOriginMutation/);
   assert.match(actions, /requireAdmin/);
-  assert.match(actions, /strictFormData/);
+  assert.match(actions, /strictAdminProductFormData/);
   assert.match(service, /pg_advisory_xact_lock/);
   assert.match(service, /lockVersion: \{ increment: 1 \}/);
   assert.match(service, /values\.slug !== current\.slug/);
@@ -145,7 +155,7 @@ test("admin product surface has closed guards and no payment provider coupling",
   assert.match(service, /stockConfigurationChanged && options\.stockChangeConfirmed !== true/);
   assert.match(
     actions,
-    /requireExactConfirmation\(input\.confirmation, PRODUCT_ACTION_CONFIRMATIONS\.stock\)/,
+    /assertAdminProductConfirmation\(input\.confirmation, PRODUCT_ACTION_CONFIRMATIONS\.stock\)/,
   );
   for (const key of Object.keys(PRODUCT_ACTION_CONFIRMATIONS)) {
     assert.match(
@@ -156,4 +166,28 @@ test("admin product surface has closed guards and no payment provider coupling",
   assert.equal((productPage.match(/name="confirmation"/g) ?? []).length, 5);
   assert.doesNotMatch(productPage, /\b(?:checked|defaultChecked)=/);
   assert.doesNotMatch(`${actions}\n${service}`, /stripe|paypal|PaymentIntent|checkout\.sessions/i);
+});
+
+test("admin product inputs are human-readable EUR fields and audit rows use the responsive timeline contract", async () => {
+  const [actions, fields, productPage, css] = await Promise.all([
+    readFile(new URL("../../app/admin/boutique/actions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../components/admin-product-fields.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/admin/boutique/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/admin/admin.css", import.meta.url), "utf8"),
+  ]);
+  assert.equal(
+    (actions.match(/adminProductEditorPayload\(input\)/g) ?? []).length,
+    2,
+    "creation and update must both cross the EUR-to-cents server adapter",
+  );
+  assert.match(fields, /name="price"/);
+  assert.match(fields, /name="shippingPrice"/);
+  assert.match(fields, /inputMode="decimal"/);
+  assert.match(fields, /admin-money-field__currency/);
+  assert.doesNotMatch(fields, /name="(?:priceCents|shippingPriceCents)"/);
+  assert.match(productPage, /name="delta" type="text" inputMode="text" pattern="\[\+\\-\]\?\\d\+"/);
+  assert.equal((productPage.match(/className="admin-rights-timeline"/g) ?? []).length, 2);
+  assert.equal((productPage.match(/className="admin-rights-timeline__when"/g) ?? []).length, 2);
+  assert.equal((productPage.match(/className="admin-rights-timeline__actor"/g) ?? []).length, 2);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.admin-rights-timeline li \{ grid-template-columns: 1fr/);
 });

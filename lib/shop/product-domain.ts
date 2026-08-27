@@ -173,7 +173,10 @@ export function parseProductLockVersion(value: unknown) {
 export function parseStockAdjustmentInput(input: Record<string, unknown>) {
   const allowed = new Set(["delta", "reason"]);
   assertClosedPayload(input, allowed);
-  const delta = integerValue(input.delta, "L’ajustement de stock", -1_000_000, 1_000_000);
+  const serializedDelta = typeof input.delta === "string" && /^\+\d+$/.test(input.delta)
+    ? input.delta.slice(1)
+    : input.delta;
+  const delta = integerValue(serializedDelta, "L’ajustement de stock", -1_000_000, 1_000_000);
   if (delta === 0) throw new ProductValidationError("L’ajustement de stock ne peut pas être nul.", "ZERO_ADJUSTMENT");
   return {
     delta,

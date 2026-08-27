@@ -50,9 +50,13 @@ function Feedback({ state }: { state?: string }) {
       : state === "produit-publie" ? "Le produit a été publié."
         : state === "produit-depublie" ? "Le produit est revenu en brouillon."
           : state === "produit-archive" ? "Le produit a été archivé."
-            : state === "stock-ajuste" ? "Le stock a été ajusté et historisé."
-              : null;
-  return message ? <p className="admin-feedback" role="status">{message}</p> : null;
+            : state === "stock-ajuste" ? "Stock mis à jour."
+              : state === "confirmation-requise" ? "Confirmez explicitement l’ajustement de stock."
+                : state === "conflit" ? "Le stock a changé dans un autre onglet. Rechargez la page avant de recommencer."
+                  : state === "operation-refusee" ? "Ajustement refusé. Vérifiez la quantité et le motif."
+                    : null;
+  const isError = state === "confirmation-requise" || state === "conflit" || state === "operation-refusee";
+  return message ? <p className="admin-feedback" role={isError ? "alert" : "status"}>{message}</p> : null;
 }
 
 export default async function AdminProductPage({
@@ -91,7 +95,7 @@ export default async function AdminProductPage({
           <input type="checkbox" name="confirmation" value={PRODUCT_ACTION_CONFIRMATIONS.stock} />
           <span>Je confirme toute modification du suivi de stock ou de sa quantité.</span>
         </label>
-        <p className="admin-work-note">Une sauvegarde concurrente sera refusée grâce à la version de cette fiche. Les montants restent des centimes entiers en EUR.</p>
+        <p className="admin-work-note">Une sauvegarde concurrente sera refusée grâce à la version de cette fiche. Les montants saisis en euros restent stockés en centimes entiers.</p>
         <button className="admin-button" type="submit">Enregistrer la fiche</button>
       </form> : <p className="admin-alert">Ce produit est archivé et conservé en lecture seule pour l’audit.</p>}
     </section>
@@ -154,7 +158,7 @@ export default async function AdminProductPage({
       <p>Stock actuel : <strong>{product.stock ?? 0}</strong></p>
       <form className="admin-inline-form" action={adjustProductStockAction}>
         <input type="hidden" name="productId" value={product.id} /><input type="hidden" name="lockVersion" value={product.lockVersion} />
-        <label><span>Ajustement</span><input name="delta" type="number" min={-1_000_000} max={1_000_000} step={1} placeholder="+5 ou -2" required /></label>
+        <label><span>Ajustement</span><input name="delta" type="text" inputMode="text" pattern="[+\-]?\d+" placeholder="+5 ou -2" required /></label>
         <label><span>Motif</span><input name="reason" minLength={3} maxLength={500} required /></label>
         <label className="admin-check">
           <input type="checkbox" name="confirmation" value={PRODUCT_ACTION_CONFIRMATIONS.stock} required />
@@ -162,24 +166,24 @@ export default async function AdminProductPage({
         </label>
         <button className="admin-button" type="submit">Enregistrer l’ajustement</button>
       </form>
-      {product.stockAdjustments.length ? <ul className="admin-timeline">
+      {product.stockAdjustments.length ? <ol className="admin-rights-timeline">
         {product.stockAdjustments.map((adjustment) => <li key={adjustment.id}>
-          <time dateTime={adjustment.createdAt.toISOString()}>{DATE_FORMAT.format(adjustment.createdAt)}</time>
-          <p><strong>{adjustment.stockBefore} → {adjustment.stockAfter}</strong> ({adjustment.delta > 0 ? "+" : ""}{adjustment.delta}) · {adjustment.reason}</p>
-          <small>{adjustment.actorAdmin?.displayName || "Administrateur supprimé"}</small>
+          <time className="admin-rights-timeline__when" dateTime={adjustment.createdAt.toISOString()}>{DATE_FORMAT.format(adjustment.createdAt)}</time>
+          <div className="admin-rights-timeline__content"><p><strong>{adjustment.stockBefore} → {adjustment.stockAfter}</strong> ({adjustment.delta > 0 ? "+" : ""}{adjustment.delta}) · {adjustment.reason}</p></div>
+          <small className="admin-rights-timeline__actor">{adjustment.actorAdmin?.displayName || "Administrateur supprimé"}</small>
         </li>)}
-      </ul> : null}
+      </ol> : null}
     </section> : null}
 
     <section className="admin-panel">
       <div className="admin-panel__heading"><h2>Journal d’audit</h2></div>
-      <ul className="admin-timeline">
+      <ol className="admin-rights-timeline">
         {product.auditEvents.map((event) => <li key={event.id}>
-          <time dateTime={event.occurredAt.toISOString()}>{DATE_FORMAT.format(event.occurredAt)}</time>
-          <p><strong>{ACTION_LABELS[event.action]}</strong></p>
-          <small>{event.actorAdmin?.displayName || "Administrateur supprimé"}</small>
+          <time className="admin-rights-timeline__when" dateTime={event.occurredAt.toISOString()}>{DATE_FORMAT.format(event.occurredAt)}</time>
+          <div className="admin-rights-timeline__content"><strong>{ACTION_LABELS[event.action]}</strong></div>
+          <small className="admin-rights-timeline__actor">{event.actorAdmin?.displayName || "Administrateur supprimé"}</small>
         </li>)}
-      </ul>
+      </ol>
     </section>
   </div>;
 }

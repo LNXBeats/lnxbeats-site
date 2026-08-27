@@ -9,6 +9,7 @@ import {
   MusicPricingServiceError,
 } from "@/lib/pricing/service";
 import { prisma } from "@/lib/prisma";
+import { adminProductEditorPayload } from "@/lib/shop/product-admin-form";
 import {
   adjustAdminProductStock,
   archiveAdminProduct,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/shop/product-image";
 
 const QA_TARGET = "lnx-studio-v110-test";
+const QA_PRISMA_DEV_TECHNICAL_DATABASE = "template1";
 const QA_ADMIN_EMAIL = "lnx-v110-admin@example.invalid";
 const QA_PRODUCT_SLUG = "lnx-v110-runtime-product";
 const QA_MEDIA_ROOT = "/private/tmp/lnx-v110-product-image-runtime-media";
@@ -34,19 +36,19 @@ const CONFIGURATION_KEY = "music-order";
 const SEEDED_ACTIVE_VERSION = "2026-08-v2";
 
 function productInput(overrides: Record<string, unknown> = {}) {
-  return {
+  return adminProductEditorPayload({
     slug: QA_PRODUCT_SLUG,
     title: "Produit physique V1.1 QA",
     description: "Fixture locale jetable pour valider la fondation Boutique sans vente ni fournisseur externe.",
-    priceCents: "4200",
+    price: "42,00",
     currency: "EUR",
     trackInventory: "on",
     stock: "5",
     shippingRequired: "on",
-    shippingPriceCents: "600",
+    shippingPrice: "6,00",
     position: "11",
     ...overrides,
-  };
+  });
 }
 
 async function assertDisposableDatabase() {
@@ -73,7 +75,26 @@ async function assertDisposableDatabase() {
     exports?: { database?: { connectionString?: string } };
   };
   assert.equal(proof.name, QA_TARGET);
-  assert.equal(proof.exports?.database?.connectionString, process.env.DATABASE_URL);
+  const proofConnectionString = proof.exports?.database?.connectionString ?? "";
+  const proofDatabaseUrl = assertSafeLocalPostgresUrl(
+    proofConnectionString,
+    "Prisma Dev proof connection string",
+  );
+  assert.equal(
+    process.env.DATABASE_URL,
+    proofConnectionString,
+    "The runtime must use the exact connection exported by the dedicated Prisma Dev proof.",
+  );
+  assert.equal(
+    decodeURIComponent(databaseUrl.pathname.slice(1)),
+    QA_PRISMA_DEV_TECHNICAL_DATABASE,
+    "Only the dedicated Prisma Dev technical database is accepted for this runtime.",
+  );
+  assert.equal(
+    decodeURIComponent(proofDatabaseUrl.pathname.slice(1)),
+    QA_PRISMA_DEV_TECHNICAL_DATABASE,
+    "The Prisma Dev proof must identify the authorized technical database.",
+  );
   assert.ok(Number.isInteger(proof.pid) && Number(proof.pid) > 0, "The disposable Prisma Dev server must be running.");
   try {
     process.kill(Number(proof.pid), 0);
@@ -84,7 +105,7 @@ async function assertDisposableDatabase() {
   const metadata = await prisma.$queryRaw<Array<{ database: string; schema: string }>>`
     SELECT current_database() AS database, current_schema() AS schema
   `;
-  assert.equal(metadata[0]?.database, decodeURIComponent(databaseUrl.pathname.slice(1)));
+  assert.equal(metadata[0]?.database, QA_PRISMA_DEV_TECHNICAL_DATABASE);
   assert.equal(metadata[0]?.schema, "public");
 
   const migrations = await prisma.$queryRaw<Array<{ count: bigint }>>`
@@ -187,7 +208,7 @@ async function productRuntime(actorAdminId: string, passed: string[]) {
   await assert.rejects(
     () => updateAdminProduct(created.id, created.lockVersion, productInput({
       title: "Produit physique V1.1 QA — révisé",
-      priceCents: "4500",
+      price: "45,00",
       stock: "6",
     }), actorAdminId),
     (error: unknown) => error instanceof ProductServiceError
@@ -199,7 +220,7 @@ async function productRuntime(actorAdminId: string, passed: string[]) {
 
   const updated = await updateAdminProduct(created.id, created.lockVersion, productInput({
     title: "Produit physique V1.1 QA — révisé",
-    priceCents: "4500",
+    price: "45,00",
     stock: "6",
   }), actorAdminId, { stockChangeConfirmed: true });
   assert.equal(updated.status, "DRAFT");
@@ -218,12 +239,45 @@ async function productRuntime(actorAdminId: string, passed: string[]) {
   const adjusted = await adjustAdminProductStock(
     created.id,
     updated.lockVersion,
-    { delta: "-2", reason: "Deux exemplaires réservés à la QA locale" },
+    { delta: "+5", reason: "Réception de cinq exemplaires en QA locale" },
     actorAdminId,
   );
-  assert.equal(adjusted.stock, 4);
+  assert.equal(adjusted.stock, 11);
   assert.equal(adjusted.lockVersion, 3);
-  passed.push("explicit stock adjustment is atomic and audited");
+  assert.deepEqual(
+    await prisma.productStockAdjustment.findFirstOrThrow({
+      where: { productId: created.id },
+      select: { stockBefore: true, stockAfter: true, delta: true, reason: true, actorAdminId: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    {
+      stockBefore: 6,
+      stockAfter: 11,
+      delta: 5,
+      reason: "Réception de cinq exemplaires en QA locale",
+      actorAdminId,
+    },
+  );
+  assert.equal(
+    await prisma.productAuditEvent.count({ where: { productId: created.id, action: "STOCK_ADJUSTED" } }),
+    1,
+  );
+  passed.push("explicit +5 stock adjustment is atomic and persists history plus audit actor");
+
+  await assert.rejects(
+    adjustAdminProductStock(
+      created.id,
+      adjusted.lockVersion,
+      { delta: "-12", reason: "Refus du stock final négatif" },
+      actorAdminId,
+    ),
+    (error: unknown) => error instanceof ProductServiceError && error.code === "INSUFFICIENT_STOCK",
+  );
+  const afterNegativeRefusal = await prisma.product.findUniqueOrThrow({ where: { id: created.id } });
+  assert.equal(afterNegativeRefusal.stock, 11);
+  assert.equal(afterNegativeRefusal.lockVersion, 3);
+  assert.equal(await prisma.productStockAdjustment.count({ where: { productId: created.id } }), 2);
+  passed.push("negative final stock is refused without mutation or audit row");
 
   const concurrent = await Promise.allSettled([
     adjustAdminProductStock(
@@ -245,7 +299,7 @@ async function productRuntime(actorAdminId: string, passed: string[]) {
   assert.ok(rejected.reason instanceof ProductServiceError);
   assert.equal(rejected.reason.code, "CONFLICT");
   const afterConcurrent = await prisma.product.findUniqueOrThrow({ where: { id: created.id } });
-  assert.equal(afterConcurrent.stock, 3);
+  assert.equal(afterConcurrent.stock, 10);
   assert.equal(afterConcurrent.lockVersion, 4);
   passed.push("concurrent stock writes produce one commit and one conflict");
 

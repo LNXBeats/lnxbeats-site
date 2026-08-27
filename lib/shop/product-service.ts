@@ -68,6 +68,11 @@ export async function getAdminProduct(slug: string) {
   });
 }
 
+export async function getAdminProductSlugById(productId: string) {
+  assertDatabaseConfigured();
+  return prisma.product.findUnique({ where: { id: productId }, select: { slug: true } });
+}
+
 export async function createAdminProduct(input: Record<string, unknown>, actorUserId: string) {
   assertDatabaseConfigured();
   const values = parseProductEditorInput(input);

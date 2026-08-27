@@ -17,12 +17,12 @@ export default async function AdminNewProductPage({ searchParams }: { searchPara
       <div><p className="admin-kicker">Nouveau produit</p><h1>Préparer une fiche.</h1></div>
       <p>Le produit sera créé en brouillon, jamais publié ni achetable automatiquement.</p>
     </header>
-    {etat ? <p className="admin-feedback" role="alert">{etat === "slug-occupe" ? "Ce slug est déjà utilisé." : "Création refusée. Vérifiez les champs en centimes et les informations du produit."}</p> : null}
+    {etat ? <p className="admin-feedback" role="alert">{etat === "slug-occupe" ? "Ce slug est déjà utilisé." : "Création refusée. Vérifiez les montants en euros et les informations du produit."}</p> : null}
     <section className="admin-detail-window">
       <p className="admin-section-label">Fiche produit initiale</p>
       <form className="admin-rights-detail" action={createProductAction}>
         <AdminProductFields />
-        <p className="admin-work-note">Les montants sont saisis en centimes entiers. Après création, ajoutez le visuel principal sur la fiche produit ; il sera obligatoire avant toute publication.</p>
+        <p className="admin-work-note">Les montants sont saisis en euros puis stockés exactement en centimes. Après création, ajoutez le visuel principal sur la fiche produit ; il sera obligatoire avant toute publication.</p>
         <button className="admin-button" type="submit">Créer le brouillon</button>
       </form>
     </section>

@@ -156,6 +156,10 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-card-list > * { display: grid; gap: .3rem; }
 .admin-card-list p { margin: 0; color: #aaa59c; }
 .admin-field-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; }
+.admin-money-field { position: relative; display: block; min-width: 0; }
+.admin-money-field input { padding-right: 2.7rem; }
+.admin-money-field__currency { position: absolute; top: 50%; right: .9rem; color: var(--admin-gold); font-size: .82rem; transform: translateY(-50%); pointer-events: none; }
+.admin-field-help { color: #8f8a82; font-size: .65rem; font-weight: 500; line-height: 1.45; }
 .admin-choice-row { display: flex; flex-wrap: wrap; gap: .6rem; }
 .admin-choice-row label, .admin-check { display: flex; min-height: 44px; align-items: center; gap: .5rem; padding: .55rem .7rem; border: 1px solid rgba(244,240,232,.12); border-radius: 10px; }
 .admin-choice-row input, .admin-check input { width: 18px !important; min-height: 18px !important; }

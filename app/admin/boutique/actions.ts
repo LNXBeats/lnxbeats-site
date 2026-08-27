@@ -7,6 +7,13 @@ import { redirect } from "next/navigation";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { requireAdmin } from "@/lib/auth/session";
 import {
+  ADMIN_PRODUCT_EDITOR_FORM_FIELDS,
+  ProductAdminFormError,
+  adminProductEditorPayload,
+  assertAdminProductConfirmation,
+  strictAdminProductFormData,
+} from "@/lib/shop/product-admin-form";
+import {
   parseProductIdentity,
   parseProductLockVersion,
   PRODUCT_ACTION_CONFIRMATIONS,
@@ -15,16 +22,12 @@ import {
   adjustAdminProductStock,
   archiveAdminProduct,
   createAdminProduct,
+  getAdminProductSlugById,
   ProductServiceError,
   publishAdminProduct,
   unpublishAdminProduct,
   updateAdminProduct,
 } from "@/lib/shop/product-service";
-
-const PRODUCT_FIELDS = [
-  "slug", "title", "description", "priceCents", "currency", "trackInventory", "stock",
-  "shippingRequired", "shippingPriceCents", "position",
-] as const;
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -35,22 +38,6 @@ async function authorize() {
   return requireAdmin();
 }
 
-function strictFormData(formData: FormData, allowedFields: readonly string[]) {
-  const allowed = new Set(allowedFields);
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of formData.entries()) {
-    if (!allowed.has(key) || key in result || typeof value !== "string") {
-      throw new Error("Formulaire produit invalide.");
-    }
-    result[key] = value;
-  }
-  return result;
-}
-
-function productEditorPayload(input: Record<string, unknown>) {
-  return Object.fromEntries(PRODUCT_FIELDS.filter((field) => field in input).map((field) => [field, input[field]]));
-}
-
 function refreshProduct(slug: string) {
   revalidatePath("/admin");
   revalidatePath("/admin/boutique");
@@ -59,6 +46,7 @@ function refreshProduct(slug: string) {
 }
 
 function stateForError(error: unknown) {
+  if (error instanceof ProductAdminFormError && error.code === "CONFIRMATION_REQUIRED") return "confirmation-requise";
   if (error instanceof ProductServiceError && error.code === "CONFLICT") return "conflit";
   if (error instanceof ProductServiceError && error.code === "SLUG_TAKEN") return "slug-occupe";
   if (error instanceof ProductServiceError && error.code === "SLUG_IMMUTABLE") return "slug-immuable";
@@ -72,11 +60,11 @@ function requireExactConfirmation(value: unknown, expected: string) {
 }
 
 export async function createProductAction(formData: FormData) {
-  const input = strictFormData(formData, PRODUCT_FIELDS);
   const session = await authorize();
   let product;
   try {
-    product = await createAdminProduct(input, session.user.id);
+    const input = strictAdminProductFormData(formData, ADMIN_PRODUCT_EDITOR_FORM_FIELDS);
+    product = await createAdminProduct(adminProductEditorPayload(input), session.user.id);
   } catch (error) {
     redirect(`/admin/boutique/nouveau?etat=${encodeURIComponent(stateForError(error))}`);
   }
@@ -85,15 +73,15 @@ export async function createProductAction(formData: FormData) {
 }
 
 export async function updateProductAction(formData: FormData) {
-  const input = strictFormData(formData, [...PRODUCT_FIELDS, "productId", "lockVersion", "confirmation"]);
-  const productId = parseProductIdentity(input.productId);
-  const lockVersion = parseProductLockVersion(input.lockVersion);
   const session = await authorize();
   try {
+    const input = strictAdminProductFormData(formData, [...ADMIN_PRODUCT_EDITOR_FORM_FIELDS, "productId", "lockVersion", "confirmation"]);
+    const productId = parseProductIdentity(input.productId);
+    const lockVersion = parseProductLockVersion(input.lockVersion);
     const product = await updateAdminProduct(
       productId,
       lockVersion,
-      productEditorPayload(input),
+      adminProductEditorPayload(input),
       session.user.id,
       { stockChangeConfirmed: input.confirmation === PRODUCT_ACTION_CONFIRMATIONS.stock },
     );
@@ -111,7 +99,7 @@ async function lifecycleAction(
   successState: string,
   expectedConfirmation: string,
 ) {
-  const input = strictFormData(formData, ["productId", "lockVersion", "confirmation"]);
+  const input = strictAdminProductFormData(formData, ["productId", "lockVersion", "confirmation"]);
   const productId = parseProductIdentity(input.productId);
   const lockVersion = parseProductLockVersion(input.lockVersion);
   const session = await authorize();
@@ -154,12 +142,13 @@ export async function archiveProductAction(formData: FormData) {
 }
 
 export async function adjustProductStockAction(formData: FormData) {
-  const input = strictFormData(formData, ["productId", "lockVersion", "delta", "reason", "confirmation"]);
-  const productId = parseProductIdentity(input.productId);
-  const lockVersion = parseProductLockVersion(input.lockVersion);
   const session = await authorize();
-  requireExactConfirmation(input.confirmation, PRODUCT_ACTION_CONFIRMATIONS.stock);
+  let productId: string | null = null;
   try {
+    const input = strictAdminProductFormData(formData, ["productId", "lockVersion", "delta", "reason", "confirmation"]);
+    productId = parseProductIdentity(input.productId);
+    const lockVersion = parseProductLockVersion(input.lockVersion);
+    assertAdminProductConfirmation(input.confirmation, PRODUCT_ACTION_CONFIRMATIONS.stock);
     const product = await adjustAdminProductStock(
       productId,
       lockVersion,
@@ -170,6 +159,10 @@ export async function adjustProductStockAction(formData: FormData) {
     redirect(`/admin/boutique/${encodeURIComponent(product.slug)}?etat=stock-ajuste`);
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
+    if (productId) {
+      const product = await getAdminProductSlugById(productId);
+      if (product) redirect(`/admin/boutique/${encodeURIComponent(product.slug)}?etat=${encodeURIComponent(stateForError(error))}`);
+    }
     redirect(`/admin/boutique?etat=${encodeURIComponent(stateForError(error))}`);
   }
 }
