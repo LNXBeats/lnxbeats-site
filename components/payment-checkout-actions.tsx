@@ -1,4 +1,8 @@
+"use client";
+
 import Image from "next/image";
+import Link from "next/link";
+import { useState } from "react";
 import { PaypalCheckoutAction } from "@/components/paypal-checkout-action";
 import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
 import type { PaymentProviderAvailability } from "@/lib/payments/availability";
@@ -20,11 +24,14 @@ export function PaymentCheckoutActions({
   orderNumber,
   amountCents,
   providers,
+  target = "music",
 }: {
   orderNumber: string;
   amountCents: number;
   providers: PaymentProviderAvailability;
+  target?: "music" | "shop";
 }) {
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const enabledProviders = enabledCheckoutPaymentProviders(providers);
   if (enabledProviders.length === 0) return null;
 
@@ -34,6 +41,18 @@ export function PaymentCheckoutActions({
         <p className="auth-panel__label">Moyen de paiement</p>
         <h3 id={`payment-methods-${orderNumber}`}>Choisissez un parcours sécurisé.</h3>
         <p>Une seule confirmation de paiement peut valider cette commande. Le retour sur le site ne suffit pas.</p>
+        {target === "shop" ? (
+          <label className="choice payment-methods__terms">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(event) => setTermsAccepted(event.target.checked)}
+            />
+            <span>
+              J’ai lu et j’accepte les <Link href="/cgv" target="_blank" rel="noreferrer">Conditions Générales de Vente</Link>.
+            </span>
+          </label>
+        ) : null}
       </div>
       <div className="payment-methods__actions">
         {enabledProviders.map((provider) => {
@@ -67,8 +86,8 @@ export function PaymentCheckoutActions({
               </header>
               <p className="payment-methods__choice-details">{presentation.details}</p>
               {provider === "stripe"
-                ? <StripeCheckoutAction orderNumber={orderNumber} amountCents={amountCents} />
-                : <PaypalCheckoutAction orderNumber={orderNumber} amountCents={amountCents} />}
+                ? <StripeCheckoutAction orderNumber={orderNumber} amountCents={amountCents} target={target} termsAccepted={termsAccepted} />
+                : <PaypalCheckoutAction orderNumber={orderNumber} amountCents={amountCents} target={target} termsAccepted={termsAccepted} />}
             </article>
           );
         })}

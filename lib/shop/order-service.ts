@@ -29,6 +29,7 @@ export type ShopServiceErrorCode =
   | "ORDER_NOT_FOUND"
   | "RESERVATION_EXPIRED"
   | "RESERVATION_CONFIRMED"
+  | "PAYMENT_REVIEW_REQUIRED"
   | "RATE_LIMITED"
   | "NUMBER_GENERATION_FAILED";
 
@@ -123,6 +124,22 @@ const shopOrderDetailInclude = {
     include: { reservation: true },
   },
   events: { orderBy: [{ occurredAt: "asc" as const }, { id: "asc" as const }] },
+  lifecycleEvents: { orderBy: [{ occurredAt: "asc" as const }, { id: "asc" as const }] },
+  payments: {
+    orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+    select: {
+      id: true,
+      provider: true,
+      mode: true,
+      status: true,
+      amountCents: true,
+      currency: true,
+      providerCheckoutId: true,
+      paidAt: true,
+      failureCode: true,
+      createdAt: true,
+    },
+  },
 } satisfies Prisma.ShopOrderInclude;
 
 type PublicProductRecord = Prisma.ProductGetPayload<{ select: typeof publicProductSelect }>;
@@ -517,6 +534,7 @@ export async function listAdminShopOrders(status?: "OPEN" | "EXPIRED" | "CANCELL
       userId: true,
       status: true,
       paymentStatus: true,
+      paymentReviewAt: true,
       fulfillmentStatus: true,
       totalCents: true,
       currency: true,
@@ -541,12 +559,29 @@ export async function getAdminShopOrder(orderNumber: string) {
 export async function releaseShopOrderReservation(shopOrderId: string, now = new Date()) {
   assertDatabaseConfigured();
   const outcome = await withShopTransaction(async (transaction) => {
-    await lock(transaction, `shop-order:${shopOrderId}`);
+    // Payment reconciliation uses this same parent lock. The row lock is kept as
+    // a second database-level boundary for checkout/cancellation paths that
+    // address the order by its public number before resolving its UUID.
+    await lock(transaction, `shop-payments:order:${shopOrderId}`);
+    const locked = await transaction.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "shop_orders"
+      WHERE "id" = ${shopOrderId}::uuid
+      FOR UPDATE
+    `;
+    if (locked.length !== 1) throw new ShopServiceError("Commande introuvable.", "ORDER_NOT_FOUND", 404);
     const order = await transaction.shopOrder.findUnique({
       where: { id: shopOrderId },
       include: { items: { include: { reservation: true } } },
     });
     if (!order) throw new ShopServiceError("Commande introuvable.", "ORDER_NOT_FOUND", 404);
+    if (order.paymentReviewAt) {
+      throw new ShopServiceError(
+        "Cette commande contient une preuve financière à vérifier.",
+        "PAYMENT_REVIEW_REQUIRED",
+        409,
+      );
+    }
     if (order.paymentStatus === "PAID" || order.items.some(({ reservation }) => reservation?.status === "CONFIRMED")) {
       throw new ShopServiceError(
         "Une réservation confirmée ne peut pas être libérée.",
@@ -597,64 +632,6 @@ export async function releaseShopOrderReservation(shopOrderId: string, now = new
   return outcome;
 }
 
-export async function confirmShopOrderPayment(shopOrderId: string, now = new Date()) {
-  assertDatabaseConfigured();
-  return withShopTransaction(async (transaction) => {
-    await lock(transaction, `shop-order:${shopOrderId}`);
-    const order = await transaction.shopOrder.findUnique({
-      where: { id: shopOrderId },
-      include: { items: { orderBy: { productId: "asc" }, include: { reservation: true } } },
-    });
-    if (!order) throw new ShopServiceError("Commande introuvable.", "ORDER_NOT_FOUND", 404);
-    if (order.paymentStatus === "PAID") return order;
-    if (order.status !== "OPEN" || order.paymentStatus !== "AWAITING_PAYMENT") {
-      throw new ShopServiceError("Cette commande n’est plus confirmable.", "RESERVATION_EXPIRED", 409);
-    }
-    const trackedItems = order.items.filter(({ inventoryTracked }) => inventoryTracked);
-    if (trackedItems.some(({ reservation }) => !reservation || reservation.status !== "ACTIVE" || reservation.expiresAt <= now)) {
-      throw new ShopServiceError("La réservation de stock a expiré.", "RESERVATION_EXPIRED", 409);
-    }
-    for (const item of trackedItems) await lock(transaction, `shop-product:${item.productId}`);
-    for (const item of trackedItems) {
-      const updated = await transaction.product.updateMany({
-        where: { id: item.productId, trackInventory: true, stock: { gte: item.quantity } },
-        data: { stock: { decrement: item.quantity }, lockVersion: { increment: 1 } },
-      });
-      if (updated.count !== 1) {
-        throw new ShopServiceError("Le stock ne peut pas être confirmé.", "OUT_OF_STOCK", 409, item.productId);
-      }
-      const product = await transaction.product.findUniqueOrThrow({ where: { id: item.productId }, select: { stock: true } });
-      const stockAfter = product.stock ?? 0;
-      await transaction.productStockAdjustment.create({
-        data: {
-          productId: item.productId,
-          stockBefore: stockAfter + item.quantity,
-          stockAfter,
-          delta: -item.quantity,
-          reason: `Confirmation interne de la commande ${order.orderNumber}`,
-        },
-      });
-      const reservation = item.reservation!;
-      await transaction.stockReservation.update({
-        where: { id: reservation.id },
-        data: { status: "CONFIRMED", confirmedAt: now },
-      });
-      await transaction.shopOrderEvent.create({
-        data: {
-          shopOrderId,
-          stockReservationId: reservation.id,
-          type: "STOCK_CONFIRMED",
-          metadata: { productId: item.productId, quantity: item.quantity },
-        },
-      });
-    }
-    return transaction.shopOrder.update({
-      where: { id: shopOrderId },
-      data: { paymentStatus: "PAID", paidAt: now },
-    });
-  });
-}
-
 export async function expireShopOrderReservations(
   now = new Date(),
   batchSize = 50,
@@ -667,6 +644,7 @@ export async function expireShopOrderReservations(
       FROM "shop_orders"
       WHERE "status" = 'OPEN'::"ShopOrderStatus"
         AND "paymentStatus" = 'AWAITING_PAYMENT'::"ShopPaymentStatus"
+        AND "paymentReviewAt" IS NULL
         AND "reservationExpiresAt" <= ${now}
       ORDER BY "reservationExpiresAt" ASC, "id" ASC
       FOR UPDATE SKIP LOCKED

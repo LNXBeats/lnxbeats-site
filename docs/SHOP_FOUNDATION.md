@@ -1,4 +1,8 @@
-# Boutique V1.1 — Phase 2 locale et fermée par défaut
+# Boutique V1.1 — Phase 2 + fondation paiements Phase 3A
+
+> Phase 3A reste une fondation locale/mock : aucun provider externe, aucune
+> migration Production et aucune ouverture publique ne sont autorisés par ce
+> document.
 
 ## Portée effectivement implémentée
 
@@ -108,15 +112,31 @@ une commande ouverte et non payée peut y être annulée.
 
 L'Admin consulte la liste filtrable et le détail dans
 `/admin/boutique/commandes`. Ces écrans montrent les snapshots, états,
-réservations, adresse et événements. Ils sont en lecture seule : aucun bouton
-ne paie, ne confirme le stock, ne prépare ou n'expédie une commande.
+réservations, adresse et événements. La Phase 3A y ajoute uniquement les
+transitions de fulfillment explicitement confirmées et réservées à un Admin
+actif, après paiement confirmé et hors revue financière. Le paiement reste
+exclusivement produit par les parcours provider et leurs preuves vérifiées :
+aucune action Admin ne peut le confirmer.
 
-## Frontière de la phase 3
+## Gates Phase 3A
 
-Les états `paymentStatus` et `fulfillmentStatus` préparent seulement une future
-machine métier. La phase 3 reste différée : architecture financière Boutique,
-provider de paiement, webhooks, rapprochement, facturation/TVA, notifications,
-préparation et expédition devront faire l'objet d'un gate et d'un audit dédiés.
+La préparation Checkout ajoute un kill switch dédié
+`SHOP_PAYMENTS_ENABLED=false`. Il ne peut être armé que si `SHOP_ENABLED`, le
+socle de paiements et au moins un provider sont déjà explicitement ouverts.
+Fermer ce switch interdit toute nouvelle tentative, mais ne bloque jamais la
+réconciliation d'une tentative déjà persistée.
+
+Le gate juridique est indépendant : `SHOP_LEGAL_READY=false` par défaut. Le
+seul registre présent est une empreinte technique QA, armable uniquement en
+runtime non-Production sur loopback. Il ne contient aucune CGV finale et ne
+peut pas ouvrir la Production. Voir
+[SHOP_LEGAL_TECHNICAL_GATES.md](SHOP_LEGAL_TECHNICAL_GATES.md).
+
+La Phase 3A réutilise les adapters Stripe/PayPal derrière mocks, le ledger
+`Payment`, les webhooks signés et l'outbox, sans contact provider pendant la
+validation automatisée. Les notifications client/propriétaire et SMS restent
+soumises à leurs flags existants. Le déploiement/sandbox et tout armement réel
+restent une action humaine ultérieure.
 
 ## Rollback applicatif
 

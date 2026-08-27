@@ -7,6 +7,7 @@ import {
   isAdminNotificationRetryConfirmed,
   isAdminNotificationSuppressionConfirmed,
   maskedProviderMessageId,
+  notificationKindPresentation,
 } from "@/lib/notifications/admin-presentation";
 import { manualRetryAllowed } from "@/lib/notifications/domain";
 
@@ -39,4 +40,12 @@ test("les identifiants fournisseur sont masqués sans révéler leur valeur comp
   assert.equal(masked.includes(source), false);
   assert.equal(maskedProviderMessageId(null), "Non attribué");
   assert.equal(maskedProviderMessageId("short"), "sh••••");
+});
+
+test("les libellés Admin incluent les notifications Boutique sans enum technique", () => {
+  assert.equal(notificationKindPresentation.OWNER_SHOP_ORDER_PAID, "Commande Boutique payée — propriétaire");
+  assert.equal(notificationKindPresentation.CUSTOMER_SHOP_PAYMENT_CONFIRMED, "Commande Boutique confirmée — client");
+  assert.equal(notificationKindPresentation.CUSTOMER_SHOP_PREPARING, "Commande Boutique en préparation — client");
+  assert.equal(notificationKindPresentation.CUSTOMER_SHOP_SHIPPED, "Commande Boutique expédiée — client");
+  assert.doesNotMatch(Object.values(notificationKindPresentation).join("\n"), /OWNER_SHOP|CUSTOMER_SHOP/);
 });

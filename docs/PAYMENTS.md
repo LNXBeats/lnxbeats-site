@@ -1,5 +1,9 @@
 # Paiements — Stripe Checkout et PayPal Orders V0.7.4
 
+> V1.1 Phase 3A relie ce ledger provider-neutre à `ShopOrder` sans réécrire les
+> paiements musicaux. Le contrat Boutique, encore fermé et testé hors ligne,
+> est documenté dans [SHOP_PAYMENTS.md](SHOP_PAYMENTS.md).
+
 > V0.7.6 ajoute un moteur commun de remboursements Stripe Test / PayPal Sandbox et un registre séparé des disputes, reversals et chargebacks. La règle approuvée est stricte : `Payment` porte l'état financier ; un remboursement ou incident ne modifie jamais automatiquement `Order.status`. Les procédures opérateur sont décrites dans [PAYMENT_REFUND_RUNBOOK.md](./PAYMENT_REFUND_RUNBOOK.md).
 
 > V0.8.0 ajoute les gardes techniques Stripe Live/PayPal Live sans les activer. Les règles production à jour et le runbook humain sont dans [PRODUCTION_PAYMENTS.md](PRODUCTION_PAYMENTS.md) et [PAYMENT_PRODUCTION_RUNBOOK.md](PAYMENT_PRODUCTION_RUNBOOK.md). Les paragraphes V0.7.4 ci-dessous restent l’historique de la fondation Sandbox.

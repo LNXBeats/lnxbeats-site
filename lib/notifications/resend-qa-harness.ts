@@ -143,7 +143,7 @@ type FixtureIdentity = Readonly<{
     status: string;
     customerEmail: string;
     title: string | null;
-  }>;
+  }> | null;
 }>;
 
 function assertFixtureIdentity(
@@ -154,6 +154,7 @@ function assertFixtureIdentity(
   if (
     fixture.recipient !== definition.recipient
     || fixture.kind !== "OWNER_NEW_ORDER"
+    || !fixture.order
     || fixture.order.orderNumber !== definition.orderNumber
     || fixture.order.userId !== null
     || fixture.order.customerId !== null

@@ -5,7 +5,12 @@ import {
   PAYMENT_PRODUCTION_CONFIRMATION,
   PAYMENT_STAGING_CONFIRMATION,
 } from "@/lib/payments/config";
-import { assertPaymentsRuntimeEnvironment, PaymentRuntimeError } from "@/lib/payments/runtime";
+import {
+  assertPaymentsRuntimeEnvironment,
+  assertPaypalWebhookRuntimeEnvironment,
+  assertStripeWebhookRuntimeEnvironment,
+  PaymentRuntimeError,
+} from "@/lib/payments/runtime";
 
 const staging = {
   PAYMENTS_ENABLED: "true",
@@ -56,6 +61,26 @@ test("keeps the global and provider flags fail-closed", async () => {
       (error) => error instanceof PaymentRuntimeError,
     );
   }
+});
+
+test("historical signed reconciliation remains configured after Checkout kill switches close", async () => {
+  const paypal = await assertPaypalWebhookRuntimeEnvironment({
+    ...staging,
+    PAYMENTS_ENABLED: "false",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+  });
+  assert.equal(paypal.paypal.environment, "sandbox");
+
+  const stripe = await assertStripeWebhookRuntimeEnvironment({
+    ...staging,
+    PAYMENTS_ENABLED: "false",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    STRIPE_PAYMENTS_ENABLED: "false",
+    STRIPE_MODE: "test",
+    STRIPE_SECRET_KEY: "sk_test_historical-runtime-fixture",
+    STRIPE_WEBHOOK_SECRET: "whsec_historical-runtime-fixture",
+  });
+  assert.equal(stripe.stripe.mode, "test");
 });
 
 test("accepts only explicitly armed live providers in the exact Railway production environment", async () => {

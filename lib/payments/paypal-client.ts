@@ -1,6 +1,10 @@
 import "server-only";
 
-import { assertPaypalServerEnvironment, parsePaymentsConfiguration } from "@/lib/payments/config";
+import {
+  assertPaypalReconciliationServerEnvironment,
+  assertPaypalServerEnvironment,
+  parsePaymentsConfiguration,
+} from "@/lib/payments/config";
 import type { PaypalPaymentConfiguration } from "@/lib/payments/types";
 
 const PAYPAL_API_ORIGINS = {
@@ -12,8 +16,19 @@ const PAYPAL_RESPONSE_MAX_BYTES = 1024 * 1024;
 type EnabledPaypalConfiguration = Extract<PaypalPaymentConfiguration, { enabled: true }>;
 type Fetch = typeof fetch;
 
+type PaypalCreateOrderSource =
+  | Readonly<{
+    paymentSource?: "MUSIC_ORDER";
+    orderId: string;
+    shopOrderId?: never;
+  }>
+  | Readonly<{
+    paymentSource: "SHOP_ORDER";
+    shopOrderId: string;
+    orderId?: never;
+  }>;
+
 export type PaypalCreateOrderRequest = Readonly<{
-  orderId: string;
   orderNumber: string;
   paymentId: string;
   amountCents: number;
@@ -21,7 +36,7 @@ export type PaypalCreateOrderRequest = Readonly<{
   description: string;
   returnUrl: string;
   cancelUrl: string;
-}>;
+}> & PaypalCreateOrderSource;
 
 export type PaypalOrderSession = Readonly<{
   id: string;
@@ -37,6 +52,25 @@ export type PaypalCaptureEvidence = Readonly<{
   amountCents: number;
   currency: "EUR";
   occurredAt: Date;
+}>;
+
+/**
+ * Evidence returned by the one and only PayPal capture request.
+ *
+ * A financially successful provider response must not disappear merely because
+ * its amount/currency/custom id is inconsistent with our immutable snapshot.
+ * The Shop flow persists that response for manual review; the historical music
+ * flow keeps applying the stricter `PaypalCaptureEvidence` contract below.
+ */
+export type PaypalCaptureResponseEvidence = Readonly<{
+  providerOrderId: string;
+  captureId?: string;
+  status: "COMPLETED" | "PENDING";
+  paymentId?: string;
+  amountCents?: number;
+  currency?: string;
+  occurredAt: Date;
+  evidenceConsistent?: boolean;
 }>;
 
 export type PaypalRefundEvidence = Readonly<{
@@ -59,7 +93,7 @@ export type PaypalWebhookHeaders = Readonly<{
 export interface PaypalGateway {
   createOrder(request: PaypalCreateOrderRequest, idempotencyKey: string): Promise<PaypalOrderSession>;
   retrieveOrder(providerOrderId: string): Promise<PaypalOrderSession>;
-  captureOrder(providerOrderId: string, idempotencyKey: string): Promise<PaypalCaptureEvidence>;
+  captureOrder(providerOrderId: string, idempotencyKey: string): Promise<PaypalCaptureResponseEvidence>;
   verifyWebhook(headers: PaypalWebhookHeaders, webhookEventBody: string): Promise<boolean>;
 }
 
@@ -111,6 +145,9 @@ export function paypalCentsFromAmount(value: unknown) {
 }
 
 export function paypalCreateOrderBody(request: PaypalCreateOrderRequest) {
+  const sourceId = request.paymentSource === "SHOP_ORDER"
+    ? request.shopOrderId
+    : request.orderId;
   return {
     intent: "CAPTURE",
     payment_source: {
@@ -128,7 +165,7 @@ export function paypalCreateOrderBody(request: PaypalCreateOrderRequest) {
       },
     },
     purchase_units: [{
-      reference_id: request.orderId,
+      reference_id: sourceId,
       custom_id: request.paymentId,
       invoice_id: `${request.orderNumber}:${request.paymentId}`,
       description: request.description,
@@ -178,10 +215,10 @@ export function paypalOrderSession(
   return { id, status, ...(approvalUrl ? { approvalUrl } : {}) };
 }
 
-export function paypalCaptureEvidence(value: unknown): PaypalCaptureEvidence {
+export function paypalCaptureResponseEvidence(value: unknown): PaypalCaptureResponseEvidence {
   const body = record(value);
   const providerOrderId = nonEmptyString(body?.id);
-  const status = body?.status;
+  const orderStatus = body?.status;
   const purchaseUnit = record(array(body?.purchase_units)[0]);
   const paymentId = nonEmptyString(purchaseUnit?.custom_id);
   const payments = record(purchaseUnit?.payments);
@@ -189,27 +226,63 @@ export function paypalCaptureEvidence(value: unknown): PaypalCaptureEvidence {
   const captureId = nonEmptyString(capture?.id);
   const captureStatus = capture?.status;
   const amount = record(capture?.amount);
-  const currency = amount?.currency_code;
+  const currency = nonEmptyString(amount?.currency_code, 3)?.toUpperCase();
   const updateTime = nonEmptyString(capture?.update_time, 80);
+  const ambiguousCompletedOrder = !captureId && orderStatus === "COMPLETED";
   if (
     !providerOrderId
-    || !paymentId
-    || !captureId
-    || (status !== "COMPLETED" && status !== "APPROVED")
-    || (captureStatus !== "COMPLETED" && captureStatus !== "PENDING")
-    || currency !== "EUR"
-    || capture?.final_capture !== true
+    || (!ambiguousCompletedOrder && !captureId)
+    || (!ambiguousCompletedOrder && captureStatus !== "COMPLETED" && captureStatus !== "PENDING")
   ) throw new PaypalClientError("INVALID_RESPONSE");
-  const occurredAt = updateTime ? new Date(updateTime) : new Date();
-  if (Number.isNaN(occurredAt.getTime())) throw new PaypalClientError("INVALID_RESPONSE");
+  const parsedOccurredAt = updateTime ? new Date(updateTime) : null;
+  const occurredAt = parsedOccurredAt && !Number.isNaN(parsedOccurredAt.getTime())
+    ? parsedOccurredAt
+    : new Date();
+  let amountCents: number | undefined;
+  try {
+    amountCents = paypalCentsFromAmount(amount?.value);
+  } catch {
+    amountCents = undefined;
+  }
+  const evidenceConsistent = (
+    (orderStatus === "COMPLETED" || orderStatus === "APPROVED")
+    && captureId !== null
+    && paymentId !== null
+    && amountCents !== undefined
+    && currency === "EUR"
+    && capture?.final_capture === true
+    && parsedOccurredAt !== null
+    && !Number.isNaN(parsedOccurredAt.getTime())
+  );
   return {
     providerOrderId,
-    captureId,
-    status: captureStatus,
-    paymentId,
-    amountCents: paypalCentsFromAmount(amount?.value),
-    currency,
+    ...(captureId ? { captureId } : {}),
+    status: ambiguousCompletedOrder ? "COMPLETED" : captureStatus as "COMPLETED" | "PENDING",
+    ...(paymentId ? { paymentId } : {}),
+    ...(amountCents !== undefined ? { amountCents } : {}),
+    ...(currency ? { currency } : {}),
     occurredAt,
+    evidenceConsistent,
+  };
+}
+
+export function paypalCaptureEvidence(value: unknown): PaypalCaptureEvidence {
+  const evidence = paypalCaptureResponseEvidence(value);
+  if (
+    evidence.evidenceConsistent !== true
+    || !evidence.captureId
+    || !evidence.paymentId
+    || evidence.amountCents === undefined
+    || evidence.currency !== "EUR"
+  ) throw new PaypalClientError("INVALID_RESPONSE");
+  return {
+    providerOrderId: evidence.providerOrderId,
+    captureId: evidence.captureId,
+    status: evidence.status,
+    paymentId: evidence.paymentId,
+    amountCents: evidence.amountCents,
+    currency: "EUR",
+    occurredAt: evidence.occurredAt,
   };
 }
 
@@ -359,7 +432,7 @@ function createPaypalGatewayWithConfiguration(
       ), configuration.environment);
     },
     async captureOrder(providerOrderId, idempotencyKey) {
-      return paypalCaptureEvidence(await api(
+      return paypalCaptureResponseEvidence(await api(
         `/v2/checkout/orders/${encodeURIComponent(providerOrderId)}/capture`,
         { method: "POST", body: "{}" },
         idempotencyKey,
@@ -420,6 +493,19 @@ export function createPaypalGateway(
     throw new PaypalClientError("UNAVAILABLE");
   }
   return createPaypalGatewayWithConfiguration(configuration, fetchImplementation, liveRefundsEnabled);
+}
+
+/** Provider verification/reconciliation remains available for historical
+ * attempts even when checkout feature flags are closed. */
+export function createPaypalReconciliationGateway(
+  fetchImplementation: Fetch = fetch,
+): PaypalGateway {
+  try {
+    const configuration = assertPaypalReconciliationServerEnvironment().paypal;
+    return createPaypalGatewayWithConfiguration(configuration, fetchImplementation);
+  } catch {
+    throw new PaypalClientError("UNAVAILABLE");
+  }
 }
 
 export function createTestPaypalGateway(

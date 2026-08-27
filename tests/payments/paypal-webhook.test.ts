@@ -170,7 +170,7 @@ test("accepts only the PayPal certificate host for the configured provider envir
 
 test("the default route returns the runtime configuration used to bind the certificate host", async () => {
   const source = await readFile(new URL("../../lib/payments/paypal-webhook-route-handler.ts", import.meta.url), "utf8");
-  assert.match(source, /assertRuntime:\s*assertPaymentsRuntimeEnvironment/);
+  assert.match(source, /assertRuntime:\s*assertPaypalWebhookRuntimeEnvironment/);
   assert.match(source, /runtimeConfiguration\?\.paypal\.enabled/);
 });
 

@@ -58,6 +58,18 @@ type PricingFixture = Readonly<{
   totalCents: number;
 }>;
 
+function musicPaymentOrderId(payment: Readonly<{ orderId: string | null; shopOrderId?: string | null }>) {
+  assert.equal(payment.shopOrderId ?? null, null, "The V1 payment runtime must never select a Shop payment.");
+  assert.ok(payment.orderId, "The V1 payment runtime requires a musical Order.");
+  return payment.orderId;
+}
+
+function musicCheckoutOrderId(request: HostedCheckoutRequest) {
+  assert.notEqual(request.paymentSource, "SHOP_ORDER", "The V1 runtime must create a musical Checkout.");
+  if (request.paymentSource === "SHOP_ORDER") throw new Error("Unexpected Shop Checkout request.");
+  return request.orderId;
+}
+
 const pricingFixtures: readonly PricingFixture[] = [
   {
     orderNumber: QA_ORDER_NUMBERS[0],
@@ -570,11 +582,11 @@ async function run() {
       );
     }
     const requestTotals = new Map(mock.requests.map(({ request }) => [
-      request.orderId,
+      musicCheckoutOrderId(request),
       request.lineItems.reduce((total, item) => total + item.price_data.unit_amount, 0),
     ]));
     for (const attempt of attempts) {
-      assert.equal(requestTotals.get(attempt.orderId), attempt.amountCents);
+      assert.equal(requestTotals.get(musicPaymentOrderId(attempt)), attempt.amountCents);
     }
     passed.push("server pricing 20/30/50/60 EUR and concurrent Checkout idempotency across independent DB clients");
 
@@ -613,9 +625,10 @@ async function run() {
     }));
     const pendingMaximum = attempts.find(({ amountCents }) => amountCents === 6_000);
     assert.ok(pendingMaximum);
+    const pendingMaximumOrderId = musicPaymentOrderId(pendingMaximum);
     await assert.rejects(prisma.payment.create({
       data: {
-        orderId: pendingMaximum.orderId,
+        orderId: pendingMaximumOrderId,
         mode: "TEST",
         amountCents: 6_000,
         currency: "EUR",
@@ -667,7 +680,7 @@ async function run() {
     await finalizeOrder(actor, QA_ORDER_NUMBERS[3], changedInput, true);
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[3], dependencies);
     const repricedAttempts = await prisma.payment.findMany({
-      where: { orderId: pendingMaximum.orderId },
+      where: { orderId: pendingMaximumOrderId },
       orderBy: { createdAt: "asc" },
       select: { id: true, status: true, amountCents: true, providerCheckoutId: true },
     });
@@ -679,7 +692,7 @@ async function run() {
     passed.push("editing expires the old Checkout before a new server-priced snapshot and Session");
 
     const repricedStripe = await prisma.payment.findFirstOrThrow({
-      where: { orderId: pendingMaximum.orderId, provider: "STRIPE", status: "PENDING" },
+      where: { orderId: pendingMaximumOrderId, provider: "STRIPE", status: "PENDING" },
     });
     assert.ok(repricedStripe.providerCheckoutId && repricedStripe.providerPaymentId);
     const paypal = createMockPaypalGateway();
@@ -689,7 +702,7 @@ async function run() {
       baseUrl: runtime.baseUrl,
     });
     const paypalAttempt = await prisma.payment.findFirstOrThrow({
-      where: { orderId: pendingMaximum.orderId, provider: "PAYPAL", status: "PENDING" },
+      where: { orderId: pendingMaximumOrderId, provider: "PAYPAL", status: "PENDING" },
     });
     assert.ok(paypalAttempt.providerCheckoutId);
     assert.deepEqual(paypal.counts(), { createCalls: 1, retrieveCalls: 0, captureCalls: 0 });
@@ -697,14 +710,14 @@ async function run() {
     const stripeWins = await processVerifiedStripeWebhookEvent(checkoutEvent({
       eventId: `${QA_EVENT_PREFIX}stripe_wins_double_provider`,
       paymentId: repricedStripe.id,
-      orderId: repricedStripe.orderId,
+      orderId: musicPaymentOrderId(repricedStripe),
       checkoutId: repricedStripe.providerCheckoutId,
       paymentIntentId: repricedStripe.providerPaymentId,
       amountCents: repricedStripe.amountCents,
     }));
     assert.equal(stripeWins.outcome, "PROCESSED");
     const [doubleProviderOrder, doubleProviderStripe, doubleProviderPaypal] = await Promise.all([
-      prisma.order.findUniqueOrThrow({ where: { id: pendingMaximum.orderId } }),
+      prisma.order.findUniqueOrThrow({ where: { id: pendingMaximumOrderId } }),
       prisma.payment.findUniqueOrThrow({ where: { id: repricedStripe.id } }),
       prisma.payment.findUniqueOrThrow({ where: { id: paypalAttempt.id } }),
     ]);
@@ -713,9 +726,9 @@ async function run() {
     assert.equal(doubleProviderPaypal.status, "CANCELED");
     assert.equal(doubleProviderPaypal.failureCode, "ORDER_PAID_BY_OTHER_PROVIDER");
     assert.equal(await prisma.payment.count({
-      where: { orderId: pendingMaximum.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+      where: { orderId: pendingMaximumOrderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
     }), 1);
-    await assertPaymentNotificationPair(pendingMaximum.orderId);
+    await assertPaymentNotificationPair(pendingMaximumOrderId);
     const latePaypalCapture = await processVerifiedPaypalWebhookEvent({
       id: `${QA_EVENT_PREFIX}paypal_after_stripe`,
       event_type: "PAYMENT.CAPTURE.COMPLETED",
@@ -732,9 +745,9 @@ async function run() {
     assert.equal(latePaypalCapture.outcome, "REQUIRES_REVIEW");
     assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: paypalAttempt.id } })).status, "REQUIRES_REVIEW");
     assert.equal(await prisma.payment.count({
-      where: { orderId: pendingMaximum.orderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+      where: { orderId: pendingMaximumOrderId, status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"] } },
     }), 1);
-    await assertPaymentNotificationPair(pendingMaximum.orderId);
+    await assertPaymentNotificationPair(pendingMaximumOrderId);
     await assert.rejects(
       capturePaypalOrderForOrder(actor, QA_ORDER_NUMBERS[3], paypalAttempt.providerCheckoutId, {
         repository: createPaymentDatabasePaypalCaptureRepository(prisma),
@@ -744,15 +757,16 @@ async function run() {
         && error.code === "PAYMENT_ALREADY_COMPLETED",
     );
     assert.equal(paypal.counts().captureCalls, 0);
-    await assertPaymentNotificationPair(pendingMaximum.orderId);
+    await assertPaymentNotificationPair(pendingMaximumOrderId);
     passed.push("Stripe and PayPal may be prepared concurrently; Stripe wins once and late PayPal capture is quarantined without duplicate notifications");
 
     const baseOnly = attempts.find(({ amountCents }) => amountCents === 2_000);
     assert.ok(baseOnly?.providerCheckoutId && baseOnly.providerPaymentId);
+    const baseOnlyOrderId = musicPaymentOrderId(baseOnly);
     const baseOnlyEvent = checkoutEvent({
       eventId: `${QA_EVENT_PREFIX}success_20`,
       paymentId: baseOnly.id,
-      orderId: baseOnly.orderId,
+      orderId: baseOnlyOrderId,
       checkoutId: baseOnly.providerCheckoutId,
       paymentIntentId: baseOnly.providerPaymentId,
       amountCents: baseOnly.amountCents,
@@ -771,18 +785,19 @@ async function run() {
     assert.equal(paid.status, "SUCCEEDED");
     assert.equal(paid.paymentMethod, "CARD");
     assert.ok(paid.paidAt);
+    assert.ok(paid.order);
     assert.equal(paid.order.status, "PAYMENT_CONFIRMED");
     assert.equal(await prisma.providerEvent.count({
       where: { providerEventId: baseOnlyEvent.id },
     }), 1);
     assert.equal(await prisma.orderEvent.count({
       where: {
-        orderId: baseOnly.orderId,
+        orderId: baseOnlyOrderId,
         fromStatus: "AWAITING_PAYMENT",
         toStatus: "PAYMENT_CONFIRMED",
       },
     }), 1);
-    await assertPaymentNotificationPair(baseOnly.orderId);
+    await assertPaymentNotificationPair(baseOnlyOrderId);
 
     const gatewayCallsAfterSuccess = mock.requests.length + mock.retrieved.length;
     await assert.rejects(
@@ -791,14 +806,14 @@ async function run() {
         && error.code === "PAYMENT_ALREADY_COMPLETED",
     );
     assert.equal(mock.requests.length + mock.retrieved.length, gatewayCallsAfterSuccess);
-    assert.equal(await prisma.payment.count({ where: { orderId: baseOnly.orderId } }), 1);
+    assert.equal(await prisma.payment.count({ where: { orderId: baseOnlyOrderId } }), 1);
     passed.push("a successful order rejects a new Checkout before any gateway call");
 
     const lateExpired = checkoutEvent({
       eventId: `${QA_EVENT_PREFIX}late_expired_20`,
       type: "checkout.session.expired",
       paymentId: baseOnly.id,
-      orderId: baseOnly.orderId,
+      orderId: baseOnlyOrderId,
       checkoutId: baseOnly.providerCheckoutId,
       paymentIntentId: baseOnly.providerPaymentId,
       amountCents: baseOnly.amountCents,
@@ -809,7 +824,7 @@ async function run() {
     assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: baseOnly.id } })).status, "SUCCEEDED");
     await assert.rejects(prisma.payment.create({
       data: {
-        orderId: baseOnly.orderId,
+        orderId: baseOnlyOrderId,
         mode: "TEST",
         status: "SUCCEEDED",
         amountCents: 2_000,
@@ -823,10 +838,11 @@ async function run() {
 
     const coverOnly = attempts.find(({ amountCents }) => amountCents === 3_000);
     assert.ok(coverOnly?.providerCheckoutId && coverOnly.providerPaymentId);
+    const coverOnlyOrderId = musicPaymentOrderId(coverOnly);
     const mismatch = await processVerifiedStripeWebhookEvent(checkoutEvent({
       eventId: `${QA_EVENT_PREFIX}mismatch_30`,
       paymentId: coverOnly.id,
-      orderId: coverOnly.orderId,
+      orderId: coverOnlyOrderId,
       checkoutId: coverOnly.providerCheckoutId,
       paymentIntentId: coverOnly.providerPaymentId,
       amountCents: coverOnly.amountCents + 1,
@@ -838,16 +854,18 @@ async function run() {
     });
     assert.equal(reviewed.status, "REQUIRES_REVIEW");
     assert.equal(reviewed.failureCode, "WEBHOOK_AMOUNT_MISMATCH");
+    assert.ok(reviewed.order);
     assert.equal(reviewed.order.status, "AWAITING_PAYMENT");
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: coverOnly.orderId } }), 0);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: coverOnlyOrderId } }), 0);
     passed.push("amount mismatch quarantined transactionally without confirming the order");
 
     const priorityOnly = attempts.find(({ amountCents }) => amountCents === 5_000);
     assert.ok(priorityOnly?.providerCheckoutId && priorityOnly.providerPaymentId);
+    const priorityOnlyOrderId = musicPaymentOrderId(priorityOnly);
     const failed = await processVerifiedStripeWebhookEvent(paymentIntentFailureEvent({
       eventId: `${QA_EVENT_PREFIX}card_declined_50`,
       paymentId: priorityOnly.id,
-      orderId: priorityOnly.orderId,
+      orderId: priorityOnlyOrderId,
       paymentIntentId: priorityOnly.providerPaymentId,
       amountCents: priorityOnly.amountCents,
     }));
@@ -856,7 +874,7 @@ async function run() {
     assert.equal(declined.status, "FAILED");
     assert.equal(declined.failureCode, "STRIPE_PAYMENT_ATTEMPT_FAILED");
     assert.equal(declined.paymentMethod, null);
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: priorityOnly.orderId } }), 0);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: priorityOnlyOrderId } }), 0);
 
     const requestsBeforeRetry = mock.requests.length;
     const retrievalsBeforeRetry = mock.retrieved.length;
@@ -864,13 +882,13 @@ async function run() {
     assert.equal(mock.requests.length, requestsBeforeRetry);
     assert.equal(mock.retrieved.length, retrievalsBeforeRetry + 1);
     assert.equal(mock.retrieved.at(-1), priorityOnly.providerCheckoutId);
-    assert.equal(await prisma.payment.count({ where: { orderId: priorityOnly.orderId } }), 1);
+    assert.equal(await prisma.payment.count({ where: { orderId: priorityOnlyOrderId } }), 1);
 
     await processVerifiedStripeWebhookEvent(checkoutEvent({
       eventId: `${QA_EVENT_PREFIX}expired_50`,
       type: "checkout.session.expired",
       paymentId: priorityOnly.id,
-      orderId: priorityOnly.orderId,
+      orderId: priorityOnlyOrderId,
       checkoutId: priorityOnly.providerCheckoutId,
       paymentIntentId: priorityOnly.providerPaymentId,
       amountCents: priorityOnly.amountCents,
@@ -881,7 +899,7 @@ async function run() {
 
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[2], dependencies);
     const secondPriority = await prisma.payment.findFirstOrThrow({
-      where: { orderId: priorityOnly.orderId, status: "PENDING" },
+      where: { orderId: priorityOnlyOrderId, status: "PENDING" },
       orderBy: { createdAt: "desc" },
     });
     assert.notEqual(secondPriority.id, priorityOnly.id);
@@ -890,7 +908,7 @@ async function run() {
       eventId: `${QA_EVENT_PREFIX}terminal_failed_50`,
       type: "checkout.session.async_payment_failed",
       paymentId: secondPriority.id,
-      orderId: secondPriority.orderId,
+      orderId: musicPaymentOrderId(secondPriority),
       checkoutId: secondPriority.providerCheckoutId,
       paymentIntentId: secondPriority.providerPaymentId,
       amountCents: secondPriority.amountCents,
@@ -908,7 +926,7 @@ async function run() {
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[2], dependencies);
     assert.deepEqual(
       (await prisma.payment.findMany({
-        where: { orderId: priorityOnly.orderId },
+        where: { orderId: priorityOnlyOrderId },
         select: { status: true },
         orderBy: { createdAt: "asc" },
       })).map(({ status }) => status),
@@ -943,7 +961,7 @@ async function run() {
       processVerifiedStripeWebhookEvent(checkoutEvent({
         eventId: `${QA_EVENT_PREFIX}success_cancel_race`,
         paymentId: racedPayment.id,
-        orderId: racedPayment.orderId,
+        orderId: musicPaymentOrderId(racedPayment),
         checkoutId: racedPayment.providerCheckoutId,
         paymentIntentId: racedPayment.providerPaymentId,
         amountCents: racedPayment.amountCents,
@@ -996,7 +1014,7 @@ async function run() {
       },
     });
     assert.equal(missingReceipt.paymentId, null);
-    await assert.rejects(prisma.order.delete({ where: { id: pendingMaximum.orderId } }));
+    await assert.rejects(prisma.order.delete({ where: { id: pendingMaximumOrderId } }));
     await assert.rejects(prisma.payment.delete({ where: { id: baseOnly.id } }));
     passed.push("unknown payment review receipt and restrictive payment foreign keys");
 

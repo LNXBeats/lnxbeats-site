@@ -8,13 +8,14 @@ import { Container } from "@/components/container";
 import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { qaAccessAvailable } from "@/lib/auth/qa-access";
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import { clientOrderAction, clientPaymentPresentation } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { listMemberOrders } from "@/lib/orders/service";
 import { completedOrderStatuses, orderStatusPresentation } from "@/lib/orders/status";
 import { rightsStatusPresentation } from "@/lib/rights/domain";
 import { listRightsRequestsForActor } from "@/lib/rights/service";
-import { effectiveShopOrderStatus, formatShopMoney } from "@/lib/shop/order-presentation";
+import { effectiveShopOrderStatus, formatShopMoney, shopFulfillmentLabel } from "@/lib/shop/order-presentation";
 import { listMemberShopOrders } from "@/lib/shop/order-service";
 
 export const dynamic = "force-dynamic";
@@ -39,11 +40,11 @@ export default async function AccountPage() {
     status: "ACTIVE",
     emailVerified: true,
   };
-  const [orders, rightsRequests, shopOrders] = await Promise.all([
-    listMemberOrders(actor),
-    listRightsRequestsForActor(actor),
-    listMemberShopOrders(session.user.id),
-  ]);
+  const [orders, rightsRequests, shopOrders] = await runSequentialDatabaseQueries(
+    () => listMemberOrders(actor),
+    () => listRightsRequestsForActor(actor),
+    () => listMemberShopOrders(session.user.id),
+  );
   const drafts = orders.filter((order) => order.status === "DRAFT");
   const awaitingPayment = orders.filter((order) => order.status === "AWAITING_PAYMENT");
   const completed = orders.filter((order) => completedOrderStatuses.has(order.status));
@@ -112,8 +113,8 @@ export default async function AccountPage() {
                         <small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small>
                       </span>
                       <span>
-                        <em>{effectiveStatus === "OPEN" ? "Prête pour paiement" : effectiveStatus === "EXPIRED" ? "Réservation expirée" : "Annulée"}</em>
-                        <small>{order.paymentStatus === "PAID" ? "Paiement confirmé" : "Paiement non activé"}</small>
+                        <em>{order.paymentReviewAt ? "Paiement à vérifier" : order.paymentStatus === "PAID" ? shopFulfillmentLabel(order.fulfillmentStatus) : effectiveStatus === "OPEN" ? "Prête pour paiement" : effectiveStatus === "EXPIRED" ? "Réservation expirée" : "Annulée"}</em>
+                        <small>{order.paymentReviewAt ? "Revue humaine requise" : order.paymentStatus === "PAID" ? "Paiement confirmé" : order.paymentStatus === "CANCELLED" ? "Paiement annulé" : "Paiement en attente"}</small>
                         <strong>{formatShopMoney(order.totalCents)}</strong>
                       </span>
                     </Link>

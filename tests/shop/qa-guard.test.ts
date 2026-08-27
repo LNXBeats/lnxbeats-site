@@ -5,6 +5,8 @@ import {
   assertShopPhase2QaEnvironment,
   assertShopPhase2QaExpiryEnvironment,
   shopPhase2QaChildEnvironment,
+  shopPhase3QaChildEnvironment,
+  shopPhase3QaRuntimeOverrides,
   SHOP_PHASE2_QA_AUTH_CAPTURE_PATH,
   SHOP_PHASE2_QA_CONFIRMATION,
   SHOP_PHASE2_QA_REQUESTED_DATABASE_PORT,
@@ -17,6 +19,11 @@ import {
   SHOP_PHASE2_QA_TARGET,
   type ShopPhase2QaProof,
 } from "@/lib/shop/qa-guard";
+import {
+  SHOP_LEGAL_QA_CONFIRMATION,
+  SHOP_LEGAL_QA_TERMS_VERSION,
+} from "@/lib/shop/legal";
+import { SHOP_PHASE3_QA_OWNER_EMAIL } from "@/lib/shop/qa-contract";
 
 function validEnvironment() {
   const databaseUrl = `postgresql://127.0.0.1:${SHOP_PHASE2_QA_REQUESTED_DATABASE_PORT}/template1?schema=public`;
@@ -142,6 +149,36 @@ test("Shop Phase 2 child processes receive only the explicit allowlist", () => {
     validatedChildEnvironment[SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME],
     SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
   );
+});
+
+test("Shop Phase 3 adds only fixed offline overrides after the Phase 2 allowlist", () => {
+  const environment: Record<string, string | undefined> = {
+    ...validEnvironment(),
+    PATH: "/usr/bin",
+    UNRELATED_SECRET: "must-not-leak",
+  };
+  assert.deepEqual(shopPhase3QaRuntimeOverrides(environment), {
+    SHOP_LEGAL_READY: "true",
+    SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+    SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+    SHOP_PAYMENTS_ENABLED: "false",
+    EMAIL_OWNER_RECIPIENT: SHOP_PHASE3_QA_OWNER_EMAIL,
+  });
+  const child: NodeJS.ProcessEnv = shopPhase3QaChildEnvironment(environment, { validatedRuntime: true });
+  assert.equal(child.UNRELATED_SECRET, undefined);
+  assert.equal(child.SHOP_PAYMENTS_ENABLED, "false");
+  assert.equal(child.EMAIL_OWNER_RECIPIENT, SHOP_PHASE3_QA_OWNER_EMAIL);
+  assert.equal(child[SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME], SHOP_PHASE2_QA_RUNTIME_CONFIRMATION);
+
+  for (const mutation of [
+    { SHOP_LEGAL_READY: "true" },
+    { SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION },
+    { SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION },
+    { SHOP_PAYMENTS_ENABLED: "true" },
+    { EMAIL_OWNER_RECIPIENT: SHOP_PHASE3_QA_OWNER_EMAIL },
+  ]) {
+    assert.throws(() => shopPhase3QaRuntimeOverrides({ ...environment, ...mutation }));
+  }
 });
 
 test("Shop Phase 2 expiry stays on the exact QA target after the commerce kill switch", () => {

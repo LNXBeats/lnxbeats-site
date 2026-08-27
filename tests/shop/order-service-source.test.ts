@@ -14,6 +14,11 @@ test("ShopOrder service keeps ownership, kill switch and PostgreSQL locking at t
   assert.match(service, /where:\s*\{ userId, orderNumber \}/);
   assert.match(service, /findFirst\(\{[\s\S]*where:\s*\{ userId, orderNumber \}/);
   assert.match(service, /pg_advisory_xact_lock/);
+  assert.match(
+    service,
+    /releaseShopOrderReservation[\s\S]*shop-payments:order:\$\{shopOrderId\}[\s\S]*FROM "shop_orders"[\s\S]*FOR UPDATE[\s\S]*paymentStatus === "PAID"/,
+    "Member cancellation must serialize on the same Shop payment parent and locked row before deciding whether stock may be released.",
+  );
   assert.match(service, /FOR UPDATE SKIP LOCKED/);
   assert.match(service, /shop-order:rate-limit:\$\{actor\.id\}/);
   assert.match(service, /product\.lockVersion !== item\.observedLockVersion/);

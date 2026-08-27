@@ -1,4 +1,4 @@
-# Guide Admin — Tarifs et Boutique (Phase 2 locale)
+# Guide Admin — Tarifs et Boutique (Phase 2 / Phase 3A fermée)
 
 ## Modifier un tarif
 
@@ -72,10 +72,17 @@ multipliés par la quantité de chaque ligne, puis additionnés au niveau comman
 
 ## Marquer une commande expédiée
 
-Indisponible dans la Phase 2. Les vues Admin sont strictement en lecture seule :
-elles ne confirment aucun paiement, ne décrémentent aucun stock et ne changent
-pas l'état de préparation. Paiement, préparation et expédition restent en
-Phase 3.
+La Phase 3A prépare deux actions Admin explicitement confirmées :
+
+- **Marquer en préparation**, uniquement depuis `PAID/PENDING` ;
+- **Marquer expédiée**, uniquement depuis `PAID/PREPARING`, avec transporteur,
+  numéro et URL HTTPS de suivi facultatifs.
+
+Chaque action relit et verrouille la commande, refuse un dossier financier en
+revue, écrit un `ShopOrderLifecycleEvent` idempotent puis prépare la
+notification dans la même transaction. Ces actions ne doivent être utilisées
+qu'en QA locale tant que les gates Boutique, paiements et juridiques ne sont pas
+validés. Elles ne contactent aucun transporteur externe.
 
 ## Annulation et expiration
 
@@ -89,13 +96,15 @@ Une réservation ne décrémente pas le stock physique. Tant qu'elle est active 
 non échue, elle réduit seulement la disponibilité calculée. La QA locale utilise
 30 minutes, valeur explicitement configurable entre 5 et 120 minutes.
 
-## Gate et limites de la Phase 2
+## Gates et limites Phase 3A
 
 La procédure d'activation locale et les comptes synthétiques sont décrits dans
 [`SHOP_PHASE2_LOCAL_QA.md`](SHOP_PHASE2_LOCAL_QA.md). Elle exige une origine
 loopback, un runtime non-Production, une confirmation non secrète, une allowlist
 pays et une durée explicite. Elle interdit les services externes.
 
-Il n'existe aucun Checkout Boutique, appel Stripe/PayPal, webhook, facture,
-notification ou action d'expédition dans cette phase. Les états financiers sont
-préparatoires. La Phase 3 et toute ouverture Production restent différées.
+`SHOP_PAYMENTS_ENABLED=false` ferme les nouvelles préparations Checkout et
+`SHOP_LEGAL_READY=false` ferme l'acceptation légale active. Les flags de
+notifications restent indépendants. La validation courante emploie uniquement
+des providers mockés et le transport capture; elle n'autorise ni appel
+Stripe/PayPal, ni email/SMS réel, ni ouverture Production.

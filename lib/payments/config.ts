@@ -15,6 +15,18 @@ export const PAYMENT_STAGING_CONFIRMATION = "payments-staging-sandbox-approved" 
 export const PAYMENT_PRODUCTION_CONFIRMATION = "payments-production-live-approved" as const;
 
 type PaymentEnvironment = Readonly<Record<string, string | undefined>>;
+type EnabledStripeConfiguration = Extract<StripePaymentConfiguration, { enabled: true }>;
+type EnabledPaypalConfiguration = Extract<PaypalPaymentConfiguration, { enabled: true }>;
+
+export type StripeReconciliationConfiguration = Readonly<{
+  deploymentEnvironment: PaymentDeploymentEnvironment;
+  stripe: EnabledStripeConfiguration;
+}>;
+
+export type PaypalReconciliationConfiguration = Readonly<{
+  deploymentEnvironment: PaymentDeploymentEnvironment;
+  paypal: EnabledPaypalConfiguration;
+}>;
 
 export type PaymentConfigurationErrorCode =
   | "INVALID_PAYMENTS_ENABLED"
@@ -323,6 +335,30 @@ export function assertPaypalServerEnvironment(
     );
   }
   return configuration.paypal;
+}
+
+/**
+ * Webhook reconciliation is deliberately independent from PAYMENTS_ENABLED and
+ * provider checkout flags. A signed provider proof for a persisted attempt is
+ * financial history and must remain processable after operators close sales.
+ * These accessors still require complete, mode-matched credentials.
+ */
+export function assertStripeReconciliationServerEnvironment(
+  environment: PaymentEnvironment = process.env,
+): StripeReconciliationConfiguration {
+  const deploymentEnvironment = configuredDeploymentEnvironment(environment);
+  const stripe = parseStripeConfiguration(environment, true, deploymentEnvironment);
+  if (!stripe.enabled) throw new PaymentConfigurationError("INCOMPLETE_CONFIGURATION", "Stripe reconciliation is unavailable.");
+  return { deploymentEnvironment, stripe };
+}
+
+export function assertPaypalReconciliationServerEnvironment(
+  environment: PaymentEnvironment = process.env,
+): PaypalReconciliationConfiguration {
+  const deploymentEnvironment = configuredDeploymentEnvironment(environment);
+  const paypal = parsePaypalConfiguration(environment, true, deploymentEnvironment);
+  if (!paypal.enabled) throw new PaymentConfigurationError("INCOMPLETE_CONFIGURATION", "PayPal reconciliation is unavailable.");
+  return { deploymentEnvironment, paypal };
 }
 
 export function paymentHealthSummary(

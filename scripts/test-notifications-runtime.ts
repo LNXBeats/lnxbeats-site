@@ -188,6 +188,7 @@ async function assertProductionOwnerSmokeRuntime() {
       where: { id: first.notificationId },
       include: { order: { include: { _count: { select: { payments: true, notifications: true } } } } },
     });
+    assert.ok(fixture.order, "The Production owner smoke notification must keep its Order parent.");
     assert.equal(fixture.idempotencyKey, PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY);
     assert.equal(fixture.deploymentEnvironment, "production");
     assert.equal(fixture.order.status, "CANCELLED");

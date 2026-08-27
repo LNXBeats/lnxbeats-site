@@ -1,4 +1,4 @@
-# Stock Boutique V1.1 — réservation et expiration Phase 2
+# Stock Boutique V1.1 — réservation, expiration et confirmation Phase 3A
 
 ## Stock suivi et non suivi
 
@@ -106,8 +106,30 @@ un produit, une ligne ou une commande qui porte cet historique.
 
 ## Frontière paiement
 
-Réserver ne signifie pas payer. Aucun provider, webhook ou action Admin ne
-confirme une réservation en Phase 2. La future confirmation atomique du
-paiement, la décrémentation définitive du stock, les remboursements et le
-fulfillment restent différés à la Phase 3 et devront conserver les mêmes
-verrous, preuves d'idempotence et événements d'audit.
+Réserver ne signifie pas payer. La Phase 2 ne confirmait aucune réservation;
+la confirmation atomique et la décrémentation définitive sont désormais prises
+en charge exclusivement par la réconciliation Phase 3A décrite ci-dessous.
+Une action Admin ne peut pas confirmer un paiement. Les remboursements
+automatiques, retours et décisions comptables restent hors scope; le
+fulfillment ne peut s'ouvrir qu'après paiement confirmé et sans incident
+financier.
+
+## Confirmation Phase 3A
+
+Le stock physique reste inchangé pendant `ACTIVE`. Une réussite provider ne
+peut le décrémenter qu'au sein de la transaction de finalisation Boutique :
+
+1. verrouiller la `ShopOrder`, la tentative gagnante et les produits suivis ;
+2. vérifier montant, devise, ownership et échéance réelle ;
+3. décrémenter chaque `Product.stock` une seule fois ;
+4. écrire le `ProductStockAdjustment` correspondant ;
+5. passer chaque réservation `ACTIVE` à `CONFIRMED` et écrire
+   `STOCK_CONFIRMED` ;
+6. passer la commande à `PAID` et créer une seule notification logique.
+
+Le replay du même événement est un no-op. L'index winner autorise une seule
+réussite financière par `ShopOrder`; les contraintes uniques des réservations
+et événements protègent la confirmation. Si `expiresAt` est dépassé, même
+avant le cleanup, le stock n'est pas confirmé : l'argent capturé est conservé
+dans le ledger financier et le dossier est marqué pour revue humaine. Aucun
+remboursement provider automatique n'est lancé en Phase 3A.

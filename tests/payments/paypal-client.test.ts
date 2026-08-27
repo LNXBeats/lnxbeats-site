@@ -5,6 +5,7 @@ import {
   createTestPaypalGateway,
   paypalAmountFromCents,
   paypalCaptureEvidence,
+  paypalCaptureResponseEvidence,
   paypalCentsFromAmount,
   paypalCreateOrderBody,
   paypalOrderSession,
@@ -90,6 +91,69 @@ test("accepts only sandbox approval links and complete capture evidence", () => 
     currency: "EUR",
     occurredAt: new Date("2026-08-21T10:00:00.000Z"),
   });
+});
+
+test("keeps usable successful capture identity when financial evidence is inconsistent", () => {
+  const mismatch = paypalCaptureResponseEvidence({
+    id: "PAYPAL-ORDER-REVIEW",
+    status: "COMPLETED",
+    purchase_units: [{
+      custom_id: request.paymentId,
+      payments: { captures: [{
+        id: "PAYPAL-CAPTURE-REVIEW",
+        status: "COMPLETED",
+        final_capture: true,
+        amount: { currency_code: "USD", value: "not-an-amount" },
+        update_time: "2026-08-21T10:00:00.000Z",
+      }] },
+    }],
+  });
+  assert.deepEqual(mismatch, {
+    providerOrderId: "PAYPAL-ORDER-REVIEW",
+    captureId: "PAYPAL-CAPTURE-REVIEW",
+    status: "COMPLETED",
+    paymentId: request.paymentId,
+    currency: "USD",
+    occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+    evidenceConsistent: false,
+  });
+  assert.throws(() => paypalCaptureEvidence({
+    id: "PAYPAL-ORDER-REVIEW",
+    status: "COMPLETED",
+    purchase_units: [{
+      custom_id: request.paymentId,
+      payments: { captures: [{
+        id: "PAYPAL-CAPTURE-REVIEW",
+        status: "COMPLETED",
+        final_capture: true,
+        amount: { currency_code: "USD", value: "90.00" },
+        update_time: "2026-08-21T10:00:00.000Z",
+      }] },
+    }],
+  }));
+
+  const ambiguous = paypalCaptureResponseEvidence({
+    id: "PAYPAL-ORDER-AMBIGUOUS",
+    status: "COMPLETED",
+    purchase_units: [{
+      custom_id: request.paymentId,
+      payments: { captures: [{
+        status: "COMPLETED",
+        final_capture: true,
+        amount: { currency_code: "EUR", value: "90.00" },
+        update_time: "2026-08-21T10:00:00.000Z",
+      }] },
+    }],
+  });
+  assert.equal(ambiguous.providerOrderId, "PAYPAL-ORDER-AMBIGUOUS");
+  assert.equal(ambiguous.captureId, undefined);
+  assert.equal(ambiguous.status, "COMPLETED");
+  assert.equal(ambiguous.evidenceConsistent, false);
+  assert.throws(() => paypalCaptureEvidence({
+    id: "PAYPAL-ORDER-AMBIGUOUS",
+    status: "COMPLETED",
+    purchase_units: [{ payments: { captures: [{ status: "COMPLETED" }] } }],
+  }));
 });
 
 test("uses PayPal Sandbox Orders v2 and the persisted provider idempotency key", async () => {

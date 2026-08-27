@@ -238,4 +238,9 @@ test("diagnostic repository is read exactly once and implementation has no mutat
   );
   assert.doesNotMatch(source, /\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/);
   assert.doesNotMatch(source, /stripe\.(?:checkout|paymentIntents|refunds)|api-m\.paypal\.com/);
+  assert.match(source, /"orderId" IS NULL AND "shopOrderId" IS NULL/);
+  assert.match(source, /"orderId" IS NOT NULL AND "shopOrderId" IS NOT NULL/);
+  assert.match(source, /GROUP BY "orderId"/);
+  assert.match(source, /GROUP BY "shopOrderId"/);
+  assert.match(source, /"shopOrderId" IS NOT NULL/);
 });

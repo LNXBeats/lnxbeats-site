@@ -38,12 +38,16 @@ const paypalLive = {
   PAYPAL_WEBHOOK_ID: "paypal-live-webhook-fixture",
 } as const;
 
-function databaseFixture() {
+function databaseFixture(options: Readonly<{
+  orderWinnerCounts?: Readonly<Record<string, number>>;
+  shopOrderWinnerCounts?: Readonly<Record<string, number>>;
+  invalidParents?: number;
+}> = {}) {
   let query = 0;
   return {
     $queryRaw: async () => {
       query += 1;
-      if (query === 1) return [{ count: 20n }];
+      if (query === 1) return [{ count: 21n }];
       if (query === 2) return [{ count: 0n }];
       return [
         { table_name: "payments", column_name: "mode" },
@@ -51,11 +55,60 @@ function databaseFixture() {
       ];
     },
     payment: {
-      groupBy: async () => [],
-      count: async () => 0,
+      groupBy: async (input: {
+        by: readonly string[];
+        where: Record<string, unknown>;
+      }) => {
+        const parent = input.by[0];
+        const counts = parent === "shopOrderId"
+          ? options.shopOrderWinnerCounts ?? {}
+          : options.orderWinnerCounts ?? {};
+        if (parent === "shopOrderId") {
+          assert.deepEqual(input.where.orderId, null);
+          assert.deepEqual(input.where.shopOrderId, { not: null });
+        } else {
+          assert.equal(parent, "orderId");
+          assert.deepEqual(input.where.orderId, { not: null });
+          assert.deepEqual(input.where.shopOrderId, null);
+        }
+        return Object.entries(counts)
+          .filter(([, count]) => count > 1)
+          .map(([id, count]) => ({ [parent]: id, _count: { _all: count } }));
+      },
+      count: async (input: { where?: { OR?: unknown } }) => input.where?.OR
+        ? options.invalidParents ?? 0
+        : 0,
     },
   } as unknown as PrismaClient;
 }
+
+test("winner preflight groups Shop payments by their non-null ShopOrder parent", async () => {
+  const environment = {
+    ...productionBase,
+    ...stripeLive,
+    PAYMENTS_ENABLED: "false",
+    STRIPE_PAYMENTS_ENABLED: "false",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+  };
+  const distinctParents = await runProductionPaymentPreflight(environment, databaseFixture({
+    shopOrderWinnerCounts: {
+      "11111111-1111-4111-8111-111111111111": 1,
+      "22222222-2222-4222-8222-222222222222": 1,
+    },
+  }));
+  assert.equal(distinctParents.rules.find(({ name }) => name === "database.winner.invariant")?.passed, true);
+
+  const duplicateParent = await runProductionPaymentPreflight(environment, databaseFixture({
+    shopOrderWinnerCounts: {
+      "11111111-1111-4111-8111-111111111111": 2,
+    },
+  }));
+  assert.equal(duplicateParent.status, "BLOCKED");
+  assert.equal(duplicateParent.rules.find(({ name }) => name === "database.winner.invariant")?.passed, false);
+
+  const xorViolation = await runProductionPaymentPreflight(environment, databaseFixture({ invalidParents: 1 }));
+  assert.equal(xorViolation.rules.find(({ name }) => name === "database.parent.xor")?.passed, false);
+});
 
 test("production remains safely disabled even when live credentials are preloaded", async () => {
   const environment = {

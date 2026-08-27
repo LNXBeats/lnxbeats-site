@@ -13,10 +13,12 @@ export function PaymentReturnNotice({
   state,
   paymentState,
   orderNumber,
+  target = "music",
 }: {
   state: "return" | "cancel";
   paymentState: ClientPaymentState;
   orderNumber: string;
+  target?: "music" | "shop";
 }) {
   const router = useRouter();
 
@@ -37,7 +39,7 @@ export function PaymentReturnNotice({
         <p className="auth-panel__label">Paiement non finalisé</p>
         <h2>Votre commande est conservée.</h2>
         <p>Aucun débit n’a été confirmé par ce retour : la commande reste impayée et conservée. Vous pouvez réessayer sans refaire votre brief.</p>
-        <Link className="text-link" href={`/compte/commandes/${encodeURIComponent(orderNumber)}`}>Voir la commande <span aria-hidden="true">→</span></Link>
+        <Link className="text-link" href={target === "shop" ? `/compte/achats/${encodeURIComponent(orderNumber)}` : `/compte/commandes/${encodeURIComponent(orderNumber)}`}>Voir la commande <span aria-hidden="true">→</span></Link>
       </section>
     );
   }

@@ -50,10 +50,11 @@ function shopOrderFilter(value: string | undefined): ShopOrderFilter | undefined
 export default async function AdminShopOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ statut?: string }>;
+  searchParams: Promise<{ statut?: string; etat?: string }>;
 }) {
   await requireAdmin();
-  const requestedFilter = (await searchParams).statut;
+  const query = await searchParams;
+  const requestedFilter = query.statut;
   const filter = shopOrderFilter(requestedFilter);
   const selectedFilter = filter ?? "all";
   const orders = await listAdminShopOrders(filter);
@@ -66,8 +67,10 @@ export default async function AdminShopOrdersPage({
           <p className="admin-kicker">Boutique · commandes</p>
           <h1>Les achats préparés.</h1>
         </div>
-        <p>Les ShopOrders restent séparées des commandes de créations. Cette vue est en lecture seule et ne déclenche aucun paiement.</p>
+        <p>Les ShopOrders restent séparées des commandes de créations. Les actions de préparation sont disponibles uniquement après confirmation financière.</p>
       </header>
+
+      {query.etat === "transition-refusee" ? <p className="admin-alert" role="alert">La transition demandée a été refusée par les règles de paiement ou de fulfillment.</p> : null}
 
       <nav className="admin-filters" aria-label="Filtrer les commandes Boutique">
         {FILTERS.map(({ value, label }) => {
@@ -93,7 +96,7 @@ export default async function AdminShopOrdersPage({
                   </span>
                   <span className="admin-order-list__facts">
                     <span>{ORDER_STATUS_LABELS[order.status]}</span>
-                    <small>{PAYMENT_STATUS_LABELS[order.paymentStatus]}</small>
+                    <small>{order.paymentReviewAt ? "Paiement à vérifier" : PAYMENT_STATUS_LABELS[order.paymentStatus]}</small>
                     <b>{FULFILLMENT_STATUS_LABELS[order.fulfillmentStatus]}</b>
                   </span>
                   <span className="admin-order-list__next">

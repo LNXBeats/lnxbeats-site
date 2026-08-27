@@ -1,5 +1,29 @@
+import type { OrderNotificationKind } from "@/lib/notifications/types";
+
 export const ADMIN_NOTIFICATION_RETRY_CONFIRMATION = "I_CONFIRM_THIS_NOTIFICATION_RETRY";
 export const ADMIN_NOTIFICATION_SUPPRESSION_CONFIRMATION = "I_CONFIRM_THIS_RECIPIENT_SUPPRESSION";
+
+export const notificationKindPresentation: Record<OrderNotificationKind, string> = {
+  OWNER_NEW_ORDER: "Nouvelle commande — propriétaire",
+  CUSTOMER_PAYMENT_CONFIRMED: "Paiement confirmé — client",
+  CUSTOMER_ORDER_ACCEPTED: "Commande acceptée — client",
+  CUSTOMER_CREATION_STARTED: "Création démarrée — client",
+  CUSTOMER_DELIVERY_READY: "Livraison disponible — client",
+  OWNER_RIGHTS_REQUESTED: "Nouvelle demande de droits — propriétaire",
+  CUSTOMER_RIGHTS_INFORMATION_REQUIRED: "Informations demandées — client",
+  CUSTOMER_RIGHTS_PREAUTHORIZATION_READY: "Préautorisation disponible — client",
+  CUSTOMER_RIGHTS_CONTRACT_READY: "Contrat prêt — client",
+  OWNER_RIGHTS_CLIENT_ACCEPTED: "Contrat accepté — propriétaire",
+  CUSTOMER_RIGHTS_REJECTED: "Demande de droits rejetée — client",
+  CUSTOMER_RIGHTS_READY_FOR_PAYMENT: "Dossier prêt pour paiement futur — client",
+  CUSTOMER_PARTIAL_REFUND: "Remboursement partiel — client",
+  CUSTOMER_REFUND_COMPLETED: "Remboursement total — client",
+  OWNER_PAYMENT_INCIDENT: "Incident de paiement — propriétaire",
+  OWNER_SHOP_ORDER_PAID: "Commande Boutique payée — propriétaire",
+  CUSTOMER_SHOP_PAYMENT_CONFIRMED: "Commande Boutique confirmée — client",
+  CUSTOMER_SHOP_PREPARING: "Commande Boutique en préparation — client",
+  CUSTOMER_SHOP_SHIPPED: "Commande Boutique expédiée — client",
+};
 
 export function isAdminNotificationRetryConfirmed(value: unknown) {
   return value === ADMIN_NOTIFICATION_RETRY_CONFIRMATION;

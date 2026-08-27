@@ -11,6 +11,7 @@ import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { getAllowedOrderTransitions, getOrderDeletionEligibility } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
+import { notificationKindPresentation } from "@/lib/notifications/admin-presentation";
 import { formatEuro } from "@/lib/orders/domain";
 import { orderAcceptsDeliveryUpload } from "@/lib/orders/delivery";
 import { assertPaymentServerEnvironment, parsePaymentsConfiguration } from "@/lib/payments/config";
@@ -44,24 +45,6 @@ const stateMessages: Record<string, string> = {
   "remboursement-a-verifier": "Le remboursement nécessite une réconciliation opérateur avant toute nouvelle tentative.",
   "remboursement-refuse": "La demande de remboursement a été refusée par les garde-fous serveur.",
 };
-
-const notificationKindPresentation = {
-  OWNER_NEW_ORDER: "Nouvelle commande — propriétaire",
-  CUSTOMER_PAYMENT_CONFIRMED: "Paiement confirmé — client",
-  CUSTOMER_ORDER_ACCEPTED: "Commande acceptée — client",
-  CUSTOMER_CREATION_STARTED: "Création démarrée — client",
-  CUSTOMER_DELIVERY_READY: "Livraison disponible — client",
-  OWNER_RIGHTS_REQUESTED: "Nouvelle demande de droits — propriétaire",
-  CUSTOMER_RIGHTS_INFORMATION_REQUIRED: "Informations demandées — client",
-  CUSTOMER_RIGHTS_PREAUTHORIZATION_READY: "Préautorisation disponible — client",
-  CUSTOMER_RIGHTS_CONTRACT_READY: "Contrat prêt — client",
-  OWNER_RIGHTS_CLIENT_ACCEPTED: "Contrat accepté — propriétaire",
-  CUSTOMER_RIGHTS_REJECTED: "Demande de droits rejetée — client",
-  CUSTOMER_RIGHTS_READY_FOR_PAYMENT: "Dossier prêt pour paiement futur — client",
-  CUSTOMER_PARTIAL_REFUND: "Remboursement partiel — client",
-  CUSTOMER_REFUND_COMPLETED: "Remboursement total — client",
-  OWNER_PAYMENT_INCIDENT: "Incident de paiement — propriétaire",
-} as const;
 
 const notificationStatusPresentation = {
   PENDING: "En attente",

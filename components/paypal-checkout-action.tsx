@@ -16,9 +16,13 @@ const messages: Record<string, string> = {
 export function PaypalCheckoutAction({
   orderNumber,
   amountCents,
+  target = "music",
+  termsAccepted = true,
 }: {
   orderNumber: string;
   amountCents: number;
+  target?: "music" | "shop";
+  termsAccepted?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -26,16 +30,31 @@ export function PaypalCheckoutAction({
 
   async function startCheckout() {
     if (pending) return;
+    if (target === "shop" && !termsAccepted) {
+      setMessage("Acceptez les Conditions Générales de Vente avant de poursuivre.");
+      return;
+    }
     setPending(true);
     setMessage("");
     try {
       const response = await fetch(
-        `/api/orders/${encodeURIComponent(orderNumber)}/payments/paypal/checkout`,
-        { method: "POST", headers: { accept: "application/json" } },
+        target === "shop"
+          ? `/api/shop/orders/${encodeURIComponent(orderNumber)}/payments/paypal/checkout`
+          : `/api/orders/${encodeURIComponent(orderNumber)}/payments/paypal/checkout`,
+        target === "shop"
+          ? {
+            method: "POST",
+            headers: { accept: "application/json", "content-type": "application/json" },
+            body: JSON.stringify({ termsAccepted: true }),
+          }
+          : { method: "POST", headers: { accept: "application/json" } },
       );
       const body = await response.json().catch(() => null) as { approvalUrl?: unknown; code?: unknown } | null;
       if (response.status === 401) {
-        router.push(`/connexion?retour=${encodeURIComponent(`/compte/commandes/${orderNumber}`)}`);
+        const returnTo = target === "shop"
+          ? `/compte/achats/${orderNumber}`
+          : `/compte/commandes/${orderNumber}`;
+        router.push(`/connexion?retour=${encodeURIComponent(returnTo)}`);
         return;
       }
       if (!response.ok || typeof body?.approvalUrl !== "string") {
