@@ -215,3 +215,18 @@ Le reset et la comparaison de drift requièrent une autorisation séparée ainsi
 ## Migration du catalogue
 
 La migration V0.6.0.3 est additive, idempotente et gardée par une liste fermée de cibles locales. Elle importe les 25 projets sans seed fictif, conserve les valeurs nulles et refuse d’écraser une ligne déjà différente. La parité compare la représentation publique complète après mapping. La procédure et le plan de retour arrière figurent dans [`docs/CATALOG_RUNTIME_MIGRATION.md`](CATALOG_RUNTIME_MIGRATION.md).
+
+## Fondations V1.1 — tarifs et produits
+
+La migration V1.1.0 est strictement additive. `MusicPricingVersion` conserve les
+grilles immuables, `MusicPricingConfiguration` désigne la version active avec
+une révision optimiste et `MusicPricingActivation` journalise chaque activation.
+Les snapshots `Order` et `Payment` existants ne sont ni réécrits ni reliés par
+une nouvelle clé étrangère.
+
+`Product` représente un futur article physique ou numérique sans le spécialiser
+pour les CD. `ProductAsset` prépare ses images, `ProductStockAdjustment` trace
+les corrections de stock et `ProductAuditEvent` les mutations sensibles. Aucun
+`ShopOrder` ni lien financier n'est ajouté en phase 1. Voir
+[`SHOP_FOUNDATION.md`](SHOP_FOUNDATION.md) et
+[`PRICING_ADMIN.md`](PRICING_ADMIN.md).

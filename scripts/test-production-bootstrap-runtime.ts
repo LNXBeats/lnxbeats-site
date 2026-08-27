@@ -53,7 +53,7 @@ async function migrationProof() {
     WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL
   `;
   assert.equal(Number(applied[0]?.count ?? 0), expected);
-  assert.equal(expected, 18);
+  assert.equal(expected, 19);
   return expected;
 }
 

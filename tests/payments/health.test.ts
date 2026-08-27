@@ -27,6 +27,8 @@ const names: readonly string[] = [
   "AUTH_URL",
   "SITE_URL",
   "NODE_ENV",
+  "SHOP_ENABLED",
+  "MUSIC_PRICING_SOURCE",
 ];
 
 async function withEnvironment(
@@ -81,6 +83,19 @@ test("health reports disabled payments without exposing configuration values", a
       },
     });
     assert.doesNotMatch(JSON.stringify(payload), /secretKey|webhookSecret|publishableKey/);
+    assert.deepEqual(payload.shop, { enabled: false, pricingSource: "legacy" });
+  });
+});
+
+test("health fails closed when the unimplemented database pricing cutover is requested", async () => {
+  await withEnvironment({ MUSIC_PRICING_SOURCE: "database" }, async () => {
+    const response = await healthResponse(healthyRuntime);
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      service: "lnx-studio",
+      check: "shop",
+    });
   });
 });
 

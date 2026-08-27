@@ -26,18 +26,10 @@ export async function readBoundedMultipartFormData(request: Request, maximumByte
   }
   if (!request.body) throw new BoundedMultipartRequestError("INVALID_MULTIPART");
 
-  // Keep the original browser request intact when its declared length is
-  // usable. WebKit's multipart parser depends on that original request.
-  if (parsedDeclaredLength !== null && parsedDeclaredLength > 0) {
-    try {
-      return await request.formData();
-    } catch {
-      throw new BoundedMultipartRequestError("INVALID_MULTIPART");
-    }
-  }
-
-  // Safari can expose a real streamed FormData request with Content-Length 0.
-  // Bound the stream before reconstructing it with its original boundary.
+  // Bound every request from the bytes actually received. Content-Length is a
+  // useful early rejection, but it is not trusted as the only size control.
+  // The same reconstruction also supports Safari requests that arrive with a
+  // real multipart stream and Content-Length: 0.
   const chunks: Uint8Array[] = [];
   const reader = request.body.getReader();
   let received = 0;
@@ -54,6 +46,10 @@ export async function readBoundedMultipartFormData(request: Request, maximumByte
     }
   } catch (error) {
     if (error instanceof BoundedMultipartRequestError) throw error;
+    throw new BoundedMultipartRequestError("INVALID_MULTIPART");
+  }
+
+  if (parsedDeclaredLength !== null && parsedDeclaredLength > 0 && received !== parsedDeclaredLength) {
     throw new BoundedMultipartRequestError("INVALID_MULTIPART");
   }
 
