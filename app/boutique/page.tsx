@@ -1,15 +1,24 @@
 import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
+
 import { ButtonLink } from "@/components/button";
+import { ShopAddButton } from "@/components/shop-add-button";
 import { Container } from "@/components/container";
 import { siteConfig } from "@/data/site";
+import { parseShopConfiguration } from "@/lib/shop/config";
+import { formatShopMoney } from "@/lib/shop/order-presentation";
+import { listPublicShopProducts } from "@/lib/shop/order-service";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Boutique",
-  description: "Les prolongements officiels de l’univers LNX Beats sur DistroKid Direct et Etsy.",
+  description: "Les éditions et objets officiels de l’univers LNX Beats.",
   alternates: { canonical: "/boutique" },
 };
 
-export default function ShopPage() {
+function ShopTeaser() {
   return (
     <>
       <header className="page-hero page-hero--shop">
@@ -49,5 +58,95 @@ export default function ShopPage() {
         </Container>
       </section>
     </>
+  );
+}
+
+function ShopEmptyState() {
+  return (
+    <div className="shop-commerce-shell">
+      <header className="shop-commerce-hero">
+        <Container>
+          <p className="eyebrow">Boutique LNX Beats</p>
+          <h1>La collection se prépare.</h1>
+          <p>La Boutique est activée, mais aucun produit publié n’est disponible pour le moment.</p>
+        </Container>
+      </header>
+      <section className="section">
+        <Container>
+          <div className="shop-cart-empty">
+            <h2>Aucune édition disponible.</h2>
+            <p>Revenez bientôt pour découvrir les prochaines éditions et créations LNX Beats.</p>
+          </div>
+        </Container>
+      </section>
+    </div>
+  );
+}
+
+export default async function ShopPage() {
+  let shopEnabled = false;
+  try {
+    shopEnabled = parseShopConfiguration().enabled;
+  } catch {
+    shopEnabled = false;
+  }
+  if (!shopEnabled) return <ShopTeaser />;
+
+  const products = await listPublicShopProducts();
+  if (!products.length) return <ShopEmptyState />;
+
+  return (
+    <div className="shop-commerce-shell">
+      <header className="shop-commerce-hero">
+        <Container>
+          <p className="eyebrow">Boutique LNX Beats</p>
+          <h1>Des histoires à garder.</h1>
+          <p>Éditions physiques et objets officiels, préparés en quantité maîtrisée.</p>
+        </Container>
+      </header>
+      <section className="section" aria-labelledby="shop-products-title">
+        <Container>
+          <div className="shop-commerce-heading">
+            <div>
+              <p className="eyebrow">Sélection disponible</p>
+              <h2 id="shop-products-title">La collection.</h2>
+            </div>
+            <Link className="text-link" href="/boutique/panier">Voir le panier <span aria-hidden="true">→</span></Link>
+          </div>
+          <div className="shop-product-grid">
+            {products.map((product) => (
+              <article className="shop-product-card" key={product.id}>
+                <Link className="shop-product-card__image" href={`/boutique/${encodeURIComponent(product.slug)}`}>
+                  {product.image ? (
+                    <Image
+                      alt={product.image.alt}
+                      height={product.image.height ?? 1200}
+                      src={`/media/boutique/${product.image.id}`}
+                      width={product.image.width ?? 1200}
+                    />
+                  ) : null}
+                </Link>
+                <div className="shop-product-card__body">
+                  <p className="shop-product-card__status">{product.soldOut ? "Épuisé" : "Disponible"}</p>
+                  <h3><Link href={`/boutique/${encodeURIComponent(product.slug)}`}>{product.title}</Link></h3>
+                  <p>{product.description}</p>
+                  <div className="shop-product-card__footer">
+                    <strong>{formatShopMoney(product.priceCents)}</strong>
+                    <div className="shop-product-card__actions">
+                      <Link className="text-link" href={`/boutique/${encodeURIComponent(product.slug)}`}>Voir le produit</Link>
+                      <ShopAddButton
+                        disabled={product.soldOut}
+                        maxQuantity={product.availableQuantity}
+                        productId={product.id}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </Container>
+      </section>
+    </div>
   );
 }

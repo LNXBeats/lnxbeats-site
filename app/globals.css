@@ -2284,6 +2284,10 @@ a {
 .member-order-list small { color: var(--text-soft); font-size: 0.68rem; }
 .member-order-list em { color: var(--gold-light); font-size: 0.68rem; font-style: normal; letter-spacing: 0.06em; text-transform: uppercase; }
 .member-order-list p { margin: 0.75rem 0 0; color: var(--text-soft); font-size: 0.75rem; }
+.account-shop-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 1rem; }
+.account-shop-line > span { display: grid; gap: 0.3rem; }
+.account-shop-line > span:last-child { justify-items: end; text-align: right; }
+.account-shop-address { margin: 0; color: var(--text-soft); font-style: normal; line-height: 1.75; }
 
 .order-detail-shell { display: block; }
 .order-detail { display: grid; gap: clamp(2rem, 5vw, 4rem); }
@@ -2400,6 +2404,8 @@ a {
   .member-orders__heading { align-items: stretch; flex-direction: column; }
   .member-order-list li > a { grid-template-columns: minmax(0, 1fr); }
   .member-order-list li > a > span:last-child { grid-template-columns: 1fr auto; justify-items: start; }
+  .account-shop-line { grid-template-columns: minmax(0, 1fr); }
+  .account-shop-line > span:last-child { grid-template-columns: 1fr auto; justify-items: start; text-align: left; }
   .order-detail__facts { grid-template-columns: minmax(0, 1fr); }
   .order-detail__facts > div, .order-detail__facts > div:nth-child(even) { border-right: 0; }
   .order-detail__facts .order-detail__fact--wide { grid-column: auto; }

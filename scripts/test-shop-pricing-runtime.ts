@@ -113,7 +113,7 @@ async function assertDisposableDatabase() {
     FROM "_prisma_migrations"
     WHERE "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
   `;
-  assert.equal(Number(migrations[0]?.count), 19, "All 19 migrations must be applied before the runtime test.");
+  assert.equal(Number(migrations[0]?.count), 20, "All 20 migrations must be applied before the runtime test.");
 }
 
 async function cleanupFixtures() {

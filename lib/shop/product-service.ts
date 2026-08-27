@@ -9,13 +9,14 @@ import {
   parseStockAdjustmentInput,
   ProductValidationError,
 } from "@/lib/shop/product-domain";
+import { getAvailableProductQuantity } from "@/lib/shop/order-domain";
 
 type Transaction = Prisma.TransactionClient;
 
 export class ProductServiceError extends Error {
   constructor(
     message: string,
-    readonly code: "NOT_FOUND" | "CONFLICT" | "SLUG_TAKEN" | "SLUG_IMMUTABLE" | "ARCHIVED" | "STOCK_DISABLED" | "STOCK_CONFIRMATION_REQUIRED" | "INSUFFICIENT_STOCK",
+    readonly code: "NOT_FOUND" | "CONFLICT" | "SLUG_TAKEN" | "SLUG_IMMUTABLE" | "ARCHIVED" | "STOCK_DISABLED" | "STOCK_CONFIRMATION_REQUIRED" | "INSUFFICIENT_STOCK" | "ACTIVE_RESERVATIONS",
   ) {
     super(message);
     this.name = "ProductServiceError";
@@ -58,7 +59,7 @@ export async function listAdminProducts(query = "", status = "all") {
 
 export async function getAdminProduct(slug: string) {
   assertDatabaseConfigured();
-  return prisma.product.findUnique({
+  const product = await prisma.product.findUnique({
     where: { slug },
     include: {
       assets: { include: { asset: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] },
@@ -66,6 +67,23 @@ export async function getAdminProduct(slug: string) {
       auditEvents: { include: { actorAdmin: { select: { displayName: true } } }, orderBy: { occurredAt: "desc" }, take: 30 },
     },
   });
+  if (!product) return null;
+  const aggregate = product.trackInventory
+    ? await prisma.stockReservation.aggregate({
+      where: { productId: product.id, status: "ACTIVE", expiresAt: { gt: new Date() } },
+      _sum: { quantity: true },
+    })
+    : null;
+  const activeReservedQuantity = aggregate?._sum.quantity ?? 0;
+  return {
+    ...product,
+    activeReservedQuantity,
+    availableQuantity: getAvailableProductQuantity({
+      trackInventory: product.trackInventory,
+      stock: product.stock,
+      activeReserved: activeReservedQuantity,
+    }),
+  };
 }
 
 export async function getAdminProductSlugById(productId: string) {
@@ -143,6 +161,20 @@ export async function updateAdminProduct(
         throw new ProductServiceError(
           "Toute modification du suivi de stock ou de sa quantité doit être confirmée explicitement.",
           "STOCK_CONFIRMATION_REQUIRED",
+        );
+      }
+      const activeReservations = await transaction.stockReservation.aggregate({
+        where: { productId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+        _sum: { quantity: true },
+      });
+      const activeReservedQuantity = activeReservations._sum.quantity ?? 0;
+      if (
+        activeReservedQuantity > 0
+        && (!values.trackInventory || (values.stock ?? 0) < activeReservedQuantity)
+      ) {
+        throw new ProductServiceError(
+          `Le stock ne peut pas être inférieur aux ${activeReservedQuantity} exemplaires réservés.`,
+          "ACTIVE_RESERVATIONS",
         );
       }
 
@@ -264,6 +296,16 @@ export async function archiveAdminProduct(productId: string, expectedLockVersion
     if (!current) throw new ProductServiceError("Produit introuvable.", "NOT_FOUND");
     if (current.lockVersion !== expectedLockVersion) throw new ProductServiceError("La fiche a changé. Rechargez la page.", "CONFLICT");
     if (current.status === "ARCHIVED") return current;
+    const activeReservations = await transaction.stockReservation.aggregate({
+      where: { productId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+      _sum: { quantity: true },
+    });
+    if ((activeReservations._sum.quantity ?? 0) > 0) {
+      throw new ProductServiceError(
+        "Ce produit conserve des réservations actives et ne peut pas être archivé.",
+        "ACTIVE_RESERVATIONS",
+      );
+    }
     const archivedAt = new Date();
     const update = await transaction.product.updateMany({
       where: { id: productId, lockVersion: expectedLockVersion, status: { not: "ARCHIVED" } },
@@ -296,6 +338,17 @@ export async function adjustAdminProductStock(
     const newQuantity = currentStock + adjustment.delta;
     if (!Number.isSafeInteger(newQuantity) || newQuantity < 0 || newQuantity > 1_000_000) {
       throw new ProductServiceError("Cet ajustement rendrait le stock invalide.", "INSUFFICIENT_STOCK");
+    }
+    const activeReservations = await transaction.stockReservation.aggregate({
+      where: { productId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+      _sum: { quantity: true },
+    });
+    const activeReservedQuantity = activeReservations._sum.quantity ?? 0;
+    if (newQuantity < activeReservedQuantity) {
+      throw new ProductServiceError(
+        `Le stock ne peut pas être inférieur aux ${activeReservedQuantity} exemplaires réservés.`,
+        "ACTIVE_RESERVATIONS",
+      );
     }
     const update = await transaction.product.updateMany({
       where: { id: productId, lockVersion: expectedLockVersion, stock: currentStock, trackInventory: true },

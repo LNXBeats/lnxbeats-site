@@ -14,6 +14,8 @@ import { listMemberOrders } from "@/lib/orders/service";
 import { completedOrderStatuses, orderStatusPresentation } from "@/lib/orders/status";
 import { rightsStatusPresentation } from "@/lib/rights/domain";
 import { listRightsRequestsForActor } from "@/lib/rights/service";
+import { effectiveShopOrderStatus, formatShopMoney } from "@/lib/shop/order-presentation";
+import { listMemberShopOrders } from "@/lib/shop/order-service";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,11 @@ export default async function AccountPage() {
     status: "ACTIVE",
     emailVerified: true,
   };
-  const [orders, rightsRequests] = await Promise.all([listMemberOrders(actor), listRightsRequestsForActor(actor)]);
+  const [orders, rightsRequests, shopOrders] = await Promise.all([
+    listMemberOrders(actor),
+    listRightsRequestsForActor(actor),
+    listMemberShopOrders(session.user.id),
+  ]);
   const drafts = orders.filter((order) => order.status === "DRAFT");
   const awaitingPayment = orders.filter((order) => order.status === "AWAITING_PAYMENT");
   const completed = orders.filter((order) => completedOrderStatuses.has(order.status));
@@ -80,6 +86,41 @@ export default async function AccountPage() {
                 <OrderGroup title="Brouillons" orders={drafts} draft />
                 <OrderGroup title="Terminées ou arrêtées" orders={completed} />
               </div>
+            )}
+          </section>
+
+          <section className="member-orders" aria-labelledby="member-shop-orders-title">
+            <div className="member-orders__heading">
+              <div>
+                <p className="auth-panel__label">Mes achats Boutique</p>
+                <h2 id="member-shop-orders-title">Vos commandes Boutique.</h2>
+              </div>
+              <Link className="button button--quiet" href="/boutique">Ouvrir la Boutique</Link>
+            </div>
+            {!shopOrders.length ? (
+              <div className="member-orders__empty">
+                <p><strong>Aucun achat Boutique préparé.</strong><br />Les commandes Boutique restent séparées de vos créations musicales.</p>
+              </div>
+            ) : (
+              <ul className="member-order-list">
+                {shopOrders.map((order) => {
+                  const effectiveStatus = effectiveShopOrderStatus(order);
+                  return <li key={order.orderNumber}>
+                    <Link href={`/compte/achats/${encodeURIComponent(order.orderNumber)}`}>
+                      <span>
+                        <strong>{order.items.map(({ productTitle }) => productTitle).join(" · ")}</strong>
+                        <small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small>
+                      </span>
+                      <span>
+                        <em>{effectiveStatus === "OPEN" ? "Prête pour paiement" : effectiveStatus === "EXPIRED" ? "Réservation expirée" : "Annulée"}</em>
+                        <small>{order.paymentStatus === "PAID" ? "Paiement confirmé" : "Paiement non activé"}</small>
+                        <strong>{formatShopMoney(order.totalCents)}</strong>
+                      </span>
+                    </Link>
+                    <p><strong>{order.items.length}</strong> produit{order.items.length > 1 ? "s" : ""}. Réservation jusqu’au {new Date(order.reservationExpiresAt).toLocaleString("fr-FR")}.</p>
+                  </li>
+                })}
+              </ul>
             )}
           </section>
 

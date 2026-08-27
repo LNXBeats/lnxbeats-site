@@ -1,4 +1,5 @@
 const PRODUCT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,158}[a-z0-9])?$/;
+const RESERVED_PRODUCT_SLUGS = new Set(["commandes", "nouveau"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const PRODUCT_ACTION_CONFIRMATIONS = {
@@ -79,7 +80,7 @@ export function normalizeProductSlug(value: unknown) {
 
 export function parseProductSlug(value: unknown) {
   const slug = normalizeProductSlug(value);
-  if (!slug || slug === "nouveau" || !PRODUCT_SLUG_PATTERN.test(slug)) {
+  if (!slug || RESERVED_PRODUCT_SLUGS.has(slug) || !PRODUCT_SLUG_PATTERN.test(slug)) {
     throw new ProductValidationError("Le slug produit est invalide.", "INVALID_SLUG");
   }
   return slug;

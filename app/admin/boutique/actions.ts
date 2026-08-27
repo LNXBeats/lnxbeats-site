@@ -51,6 +51,7 @@ function stateForError(error: unknown) {
   if (error instanceof ProductServiceError && error.code === "SLUG_TAKEN") return "slug-occupe";
   if (error instanceof ProductServiceError && error.code === "SLUG_IMMUTABLE") return "slug-immuable";
   if (error instanceof ProductServiceError && error.code === "STOCK_CONFIRMATION_REQUIRED") return "confirmation-requise";
+  if (error instanceof ProductServiceError && error.code === "ACTIVE_RESERVATIONS") return "stock-reserve";
   if (error instanceof Error && "code" in error && typeof error.code === "string" && error.code.startsWith("PUBLICATION_BLOCKED")) return "publication-incomplete";
   return "operation-refusee";
 }

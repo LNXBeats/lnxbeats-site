@@ -1,8 +1,8 @@
-# Modèle de données — V0.7.2
+# Modèle de données — V1.1
 
 ## Périmètre
 
-La V0.4 crée la fondation PostgreSQL avec Prisma ORM. La V0.6.0.3 migre les 25 projets de façon contrôlée et choisit PostgreSQL comme source runtime unique du site public. V0.7 ajoute les paiements test, la livraison privée et les droits post-livraison versionnés.
+La V0.4 crée la fondation PostgreSQL avec Prisma ORM. La V0.6.0.3 migre les 25 projets de façon contrôlée et choisit PostgreSQL comme source runtime unique du site public. V0.7 ajoute les paiements test, la livraison privée et les droits post-livraison versionnés. V1.1 ajoute, sans modifier ces flux, le catalogue produit et le ledger Boutique séparé.
 
 Le schéma prépare le catalogue administrable, les comptes, les clients, les commandes personnalisées, les fichiers et la traçabilité. La V0.6 active les brouillons, commandes et photos de référence privées. La V0.6.0.1 ajoute les demandes de droits post-livraison, sans back-office complet, paiement, facture, contrat électronique ni livraison audio.
 
@@ -30,6 +30,14 @@ erDiagram
   Asset ||--o{ ProjectAsset : associe
   Order ||--o{ OrderAsset : référence
   Asset ||--o{ OrderAsset : associe
+  Product ||--o{ ProductAsset : présente
+  Asset ||--o{ ProductAsset : associe
+  User ||--o{ ShopOrder : prépare
+  ShopOrder ||--|{ ShopOrderItem : fige
+  Product ||--o{ ShopOrderItem : référence
+  ShopOrderItem ||--o| StockReservation : réserve
+  ShopOrder ||--o{ ShopOrderEvent : audite
+  StockReservation o|--o{ ShopOrderEvent : détaille
 ```
 
 Les crédits peuvent appartenir soit à un projet, soit à une piste. Cette exclusivité est garantie par une contrainte SQL dans la migration initiale.
@@ -216,7 +224,7 @@ Le reset et la comparaison de drift requièrent une autorisation séparée ainsi
 
 La migration V0.6.0.3 est additive, idempotente et gardée par une liste fermée de cibles locales. Elle importe les 25 projets sans seed fictif, conserve les valeurs nulles et refuse d’écraser une ligne déjà différente. La parité compare la représentation publique complète après mapping. La procédure et le plan de retour arrière figurent dans [`docs/CATALOG_RUNTIME_MIGRATION.md`](CATALOG_RUNTIME_MIGRATION.md).
 
-## Fondations V1.1 — tarifs et produits
+## V1.1 — tarifs, produits et commandes Boutique
 
 La migration V1.1.0 est strictement additive. `MusicPricingVersion` conserve les
 grilles immuables, `MusicPricingConfiguration` désigne la version active avec
@@ -224,9 +232,54 @@ une révision optimiste et `MusicPricingActivation` journalise chaque activation
 Les snapshots `Order` et `Payment` existants ne sont ni réécrits ni reliés par
 une nouvelle clé étrangère.
 
-`Product` représente un futur article physique ou numérique sans le spécialiser
-pour les CD. `ProductAsset` prépare ses images, `ProductStockAdjustment` trace
-les corrections de stock et `ProductAuditEvent` les mutations sensibles. Aucun
-`ShopOrder` ni lien financier n'est ajouté en phase 1. Voir
-[`SHOP_FOUNDATION.md`](SHOP_FOUNDATION.md) et
+`Product` représente un article physique ou numérique sans le spécialiser pour
+les CD. `ProductAsset` relie son image principale à l'infrastructure `Asset`,
+`ProductStockAdjustment` trace les corrections de stock et
+`ProductAuditEvent` les mutations sensibles. Les relations et suppressions
+restent restrictives afin de conserver l'historique ; l'archivage est préféré.
+
+La Phase 2 ajoute un ledger distinct du modèle musical `Order`/`Payment` :
+
+- `ShopOrder` appartient à un `User`, possède un numéro
+  `LNX-SHOP-AAAA-NNNNNN`, une clé UUID de création unique par utilisateur et
+  l'empreinte SHA-256 de l'intention normalisée ;
+- `ShopOrderItem` fige le titre, le suivi de stock, le prix unitaire, la
+  quantité, les montants de ligne et les frais d'envoi unitaires/de ligne ;
+- `StockReservation` existe uniquement pour une ligne dont le stock est suivi
+  et porte son état ainsi que ses horodatages ;
+- `ShopOrderEvent` journalise séparément les événements de commande et ceux de
+  réservation, avec acteur optionnel et métadonnées JSON objet.
+
+L'adresse de livraison est snapshotée sur `ShopOrder` seulement si au moins une
+ligne exige un envoi. La devise reste `EUR`. Les contraintes SQL imposent
+notamment :
+
+```text
+lineTotalCents    = unitPriceCents × quantity
+lineShippingCents = unitShippingCents × quantity
+shippingCents     = somme des lineShippingCents
+totalCents        = subtotalCents + shippingCents
+```
+
+Le tarif d'envoi est donc **par exemplaire**, et non une seule fois par ligne.
+Le service calcule les agrégats ; les contraintes de ligne et de commande
+protègent leur cohérence persistée.
+
+Une création normale commence en `OPEN`, `AWAITING_PAYMENT` et `PENDING`, avec
+une échéance issue de `SHOP_RESERVATION_TTL_MINUTES`. L'environnement QA utilise
+30 minutes, mais exige que la valeur soit fournie explicitement avant
+l'activation (plage 5–120). Une réservation commence en `ACTIVE`; elle peut être
+`RELEASED` par annulation ou `EXPIRED` par le traitement d'échéance. La Phase 2
+ne crée aucun paiement et n'expose aucune transition de paiement ou
+d'expédition.
+
+La clé d'idempotence et l'empreinte garantissent qu'une répétition identique
+retrouve la même commande tandis qu'une réutilisation pour une intention
+différente est refusée. Les verrous advisory PostgreSQL sérialisent la création
+par clé et par produit. La disponibilité est calculée à partir de
+`Product.stock` moins les réservations `ACTIVE` non échues ; réserver ne
+décrémente pas le stock.
+
+Voir [`SHOP_FOUNDATION.md`](SHOP_FOUNDATION.md),
+[`SHOP_ORDER.md`](SHOP_ORDER.md), [`SHOP_INVENTORY.md`](SHOP_INVENTORY.md) et
 [`PRICING_ADMIN.md`](PRICING_ADMIN.md).

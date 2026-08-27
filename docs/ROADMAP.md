@@ -155,10 +155,15 @@
 ## V1.1 — Boutique et tarification administrables
 
 - phase 1 : versions tarifaires et produits administrables, migration additive,
-  historique et stock audité, Boutique publique fermée ;
-- phase 2 : médias produit, catalogue public, panier, `ShopOrder`, snapshots et
-  réservation concurrente de stock ;
-- phase 3 : adaptation financière Stripe/PayPal dédiée, webhooks,
-  notifications et expédition ;
-- ouverture uniquement après QA, revue juridique/comptable et activation
-  humaine de `SHOP_ENABLED`.
+  historique, stock audité et image principale produit ;
+- phase 2 implémentée pour QA locale uniquement : gate fail-closed, catalogue et
+  fiches publics sur loopback, panier, création idempotente de `ShopOrder`,
+  snapshots, frais d'envoi par exemplaire, réservation concurrente et
+  expiration configurable (30 minutes dans la QA), vues membre et Admin ;
+- aucun paiement/provider, webhook, facture, notification ou workflow
+  d'expédition n'est activé en phase 2 ;
+- phase 3 différée : adaptation financière Stripe/PayPal dédiée, webhooks,
+  rapprochement, conformité, notifications, préparation et expédition ;
+- ouverture Production différée après QA, revue juridique/comptable et nouveau
+  gate dédié : le gate actuel refuse explicitement `SHOP_ENABLED=true` en
+  Production.

@@ -43,7 +43,7 @@ function databaseFixture() {
   return {
     $queryRaw: async () => {
       query += 1;
-      if (query === 1) return [{ count: 19n }];
+      if (query === 1) return [{ count: 20n }];
       if (query === 2) return [{ count: 0n }];
       return [
         { table_name: "payments", column_name: "mode" },

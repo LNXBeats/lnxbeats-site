@@ -261,6 +261,42 @@ enum ProductAuditAction {
   STOCK_ADJUSTED
 }
 
+enum ShopOrderStatus {
+  OPEN
+  EXPIRED
+  CANCELLED
+}
+
+enum ShopPaymentStatus {
+  AWAITING_PAYMENT
+  PAID
+  CANCELLED
+}
+
+enum ShopFulfillmentStatus {
+  PENDING
+  PREPARING
+  SHIPPED
+  CANCELLED
+}
+
+enum ShopStockReservationStatus {
+  ACTIVE
+  CONFIRMED
+  RELEASED
+  EXPIRED
+}
+
+enum ShopOrderEventType {
+  SHOP_ORDER_CREATED
+  SHOP_ORDER_EXPIRED
+  SHOP_ORDER_CANCELLED
+  STOCK_RESERVED
+  STOCK_CONFIRMED
+  STOCK_RELEASED
+  STOCK_RESERVATION_EXPIRED
+}
+
 enum RightsRequestType {
   PUBLICATION_LICENSE
   EXPLOITATION_PARTNERSHIP
@@ -534,6 +570,8 @@ model User {
   productsUpdated              Product[]                   @relation("ProductUpdatedBy")
   productStockAdjustments      ProductStockAdjustment[]    @relation("ProductStockAdjustmentActor")
   productAuditEvents           ProductAuditEvent[]         @relation("ProductAuditEventActor")
+  shopOrders                   ShopOrder[]                 @relation("ShopOrderOwner")
+  shopOrderEvents              ShopOrderEvent[]            @relation("ShopOrderEventActor")
 
   @@index([role, status])
   @@map("users")
@@ -1462,6 +1500,7 @@ model Product {
   assets             ProductAsset[]
   stockAdjustments   ProductStockAdjustment[]
   auditEvents        ProductAuditEvent[]
+  shopOrderItems     ShopOrderItem[]
 
   @@index([status, position, createdAt])
   @@index([createdByAdminId])
@@ -1513,4 +1552,107 @@ model ProductAuditEvent {
   @@index([productId, occurredAt])
   @@index([actorAdminId])
   @@map("product_audit_events")
+}
+
+model ShopOrder {
+  id                       String                @id @default(uuid()) @db.Uuid
+  orderNumber              String                @unique @db.VarChar(32)
+  userId                   String                @db.Uuid
+  creationToken            String                @db.Uuid
+  requestFingerprintSha256 String                @db.Char(64)
+  status                   ShopOrderStatus       @default(OPEN)
+  paymentStatus            ShopPaymentStatus     @default(AWAITING_PAYMENT)
+  fulfillmentStatus        ShopFulfillmentStatus @default(PENDING)
+  currency                 String                @default("EUR") @db.VarChar(3)
+  subtotalCents            Int
+  shippingCents            Int
+  totalCents               Int
+  shippingRequired         Boolean               @default(false)
+  shippingFirstName        String?               @db.VarChar(100)
+  shippingLastName         String?               @db.VarChar(100)
+  shippingAddressLine1     String?               @db.VarChar(240)
+  shippingAddressLine2     String?               @db.VarChar(240)
+  shippingPostalCode       String?               @db.VarChar(32)
+  shippingCity             String?               @db.VarChar(120)
+  shippingCountryCode      String?               @db.Char(2)
+  reservationExpiresAt     DateTime              @db.Timestamptz(3)
+  paidAt                   DateTime?             @db.Timestamptz(3)
+  expiredAt                DateTime?             @db.Timestamptz(3)
+  cancelledAt              DateTime?             @db.Timestamptz(3)
+  createdAt                DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime              @updatedAt @db.Timestamptz(3)
+  user                     User                  @relation("ShopOrderOwner", fields: [userId], references: [id], onDelete: Restrict)
+  items                    ShopOrderItem[]
+  events                   ShopOrderEvent[]
+
+  @@unique([userId, creationToken])
+  @@index([userId, createdAt])
+  @@index([status, paymentStatus, reservationExpiresAt])
+  @@index([fulfillmentStatus, createdAt])
+  @@map("shop_orders")
+}
+
+model ShopOrderItem {
+  shopOrderId       String            @db.Uuid
+  productId         String            @db.Uuid
+  position          Int
+  productTitle      String            @db.VarChar(240)
+  inventoryTracked  Boolean
+  unitPriceCents    Int
+  quantity          Int
+  lineTotalCents    Int
+  shippingRequired  Boolean
+  unitShippingCents Int
+  lineShippingCents Int
+  currency          String            @default("EUR") @db.VarChar(3)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  shopOrder         ShopOrder         @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  reservation       StockReservation?
+
+  @@id([shopOrderId, productId])
+  @@unique([shopOrderId, productId, quantity])
+  @@unique([shopOrderId, position])
+  @@index([productId])
+  @@map("shop_order_items")
+}
+
+model StockReservation {
+  id          String                     @id @default(uuid()) @db.Uuid
+  shopOrderId String                     @db.Uuid
+  productId   String                     @db.Uuid
+  quantity    Int
+  status      ShopStockReservationStatus @default(ACTIVE)
+  expiresAt   DateTime                   @db.Timestamptz(3)
+  confirmedAt DateTime?                  @db.Timestamptz(3)
+  releasedAt  DateTime?                  @db.Timestamptz(3)
+  expiredAt   DateTime?                  @db.Timestamptz(3)
+  createdAt   DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                   @updatedAt @db.Timestamptz(3)
+  item        ShopOrderItem              @relation(fields: [shopOrderId, productId, quantity], references: [shopOrderId, productId, quantity], onDelete: Restrict)
+  events      ShopOrderEvent[]
+
+  @@unique([shopOrderId, productId])
+  @@unique([shopOrderId, productId, quantity])
+  @@index([productId, status, expiresAt])
+  @@index([status, expiresAt])
+  @@map("stock_reservations")
+}
+
+model ShopOrderEvent {
+  id                 String             @id @default(uuid()) @db.Uuid
+  shopOrderId        String             @db.Uuid
+  stockReservationId String?            @db.Uuid
+  type               ShopOrderEventType
+  actorUserId        String?            @db.Uuid
+  metadata           Json               @default("{}")
+  occurredAt         DateTime           @default(now()) @db.Timestamptz(3)
+  shopOrder          ShopOrder          @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  stockReservation   StockReservation?  @relation(fields: [stockReservationId], references: [id], onDelete: Restrict)
+  actor              User?              @relation("ShopOrderEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([shopOrderId, occurredAt])
+  @@index([stockReservationId, occurredAt])
+  @@index([actorUserId])
+  @@map("shop_order_events")
 }

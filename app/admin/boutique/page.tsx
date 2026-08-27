@@ -25,9 +25,9 @@ export default async function AdminShopPage({
   return <div className="admin-main">
     <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
     <header className="admin-page-heading">
-      <div><p className="admin-kicker">Fondation boutique</p><h1>Les produits, sous contrôle.</h1></div>
+      <div><p className="admin-kicker">Boutique</p><h1>Les produits, sous contrôle.</h1></div>
       <div className="admin-page-heading__actions">
-        <p>Les produits naissent en brouillon. La boutique publique, le panier et le paiement produit restent hors de cette phase.</p>
+        <p>Les produits naissent en brouillon. La publication alimente la Boutique QA ; le paiement produit reste volontairement désactivé.</p>
         <Link className="admin-primary-action" href="/admin/boutique/nouveau"><span aria-hidden="true">+</span> Nouveau produit</Link>
       </div>
     </header>
@@ -38,6 +38,7 @@ export default async function AdminShopPage({
           : params.etat === "slug-immuable" ? "Le slug d’un produit existant ne peut pas être modifié."
           : params.etat === "confirmation-requise" ? "Confirmez explicitement cette action sensible avant de continuer."
           : params.etat === "publication-incomplete" ? "Publication refusée : la fiche, le prix et au moins une image publique sont requis."
+          : params.etat === "stock-reserve" ? "Opération refusée : le stock doit couvrir toutes les réservations actives."
             : "L’opération a été refusée sans modifier le produit."}
     </p> : null}
 

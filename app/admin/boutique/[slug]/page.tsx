@@ -53,9 +53,10 @@ function Feedback({ state }: { state?: string }) {
             : state === "stock-ajuste" ? "Stock mis à jour."
               : state === "confirmation-requise" ? "Confirmez explicitement l’ajustement de stock."
                 : state === "conflit" ? "Le stock a changé dans un autre onglet. Rechargez la page avant de recommencer."
+                  : state === "stock-reserve" ? "Opération refusée : le stock doit couvrir toutes les réservations actives."
                   : state === "operation-refusee" ? "Ajustement refusé. Vérifiez la quantité et le motif."
                     : null;
-  const isError = state === "confirmation-requise" || state === "conflit" || state === "operation-refusee";
+  const isError = state === "confirmation-requise" || state === "conflit" || state === "stock-reserve" || state === "operation-refusee";
   return message ? <p className="admin-feedback" role={isError ? "alert" : "status"}>{message}</p> : null;
 }
 
@@ -81,7 +82,7 @@ export default async function AdminProductPage({
     <AdminBackLink href="/admin/boutique">Retour à la boutique</AdminBackLink>
     <header className="admin-page-heading">
       <div><p className="admin-kicker">Produit · {STATUS_LABELS[product.status]}</p><h1>{product.title}</h1></div>
-      <p>{formatProductPrice(product.priceCents, product.currency)} · {product.trackInventory ? `${product.stock ?? 0} en stock` : "Stock non suivi"} · version {product.lockVersion}</p>
+      <p>{formatProductPrice(product.priceCents, product.currency)} · {product.trackInventory ? `${product.stock ?? 0} physique · ${product.activeReservedQuantity} réservé · ${product.availableQuantity ?? 0} disponible` : "Stock non suivi"} · version {product.lockVersion}</p>
     </header>
     <Feedback state={etat} />
 
@@ -102,7 +103,7 @@ export default async function AdminProductPage({
 
     <section className="admin-panel">
       <div className="admin-panel__heading"><h2>Visuel du produit</h2></div>
-      <p className="admin-work-note">Une image principale suffit pour cette phase. Elle est stockée via le même MediaStorage que le catalogue, sans ouvrir la Boutique publique.</p>
+      <p className="admin-work-note">Une image principale suffit. Elle est stockée via le même MediaStorage que le catalogue et devient visible dans la Boutique QA uniquement après publication.</p>
       <AdminProductImageForm
         productId={product.id}
         lockVersion={product.lockVersion}
@@ -124,7 +125,7 @@ export default async function AdminProductPage({
 
     <section className="admin-panel">
       <div className="admin-panel__heading"><h2>Publication</h2></div>
-      <p className="admin-work-note">La boutique publique et les paiements produit ne sont pas activés dans cette fondation. Une publication exige néanmoins une fiche cohérente, un prix positif et un visuel principal public admissible.</p>
+      <p className="admin-work-note">La publication rend le produit visible uniquement lorsque la Boutique QA est explicitement armée. Le paiement produit reste désactivé ; une fiche cohérente, un prix positif et un visuel principal public admissible restent obligatoires.</p>
       {publicationBlockers.length ? <p className="admin-alert" role="status">Publication fermée : {publicationBlockers.map((blocker) => PUBLICATION_BLOCKER_LABELS[blocker] ?? "fiche incomplète").join(" · ")}</p> : null}
       {editable ? <div className="admin-action-row">
         {product.status === "DRAFT" ? <form action={publishProductAction}>
@@ -155,7 +156,9 @@ export default async function AdminProductPage({
 
     {product.trackInventory && editable ? <section className="admin-panel">
       <div className="admin-panel__heading"><h2>Ajuster le stock</h2></div>
-      <p>Stock actuel : <strong>{product.stock ?? 0}</strong></p>
+      <p>
+        Stock physique : <strong>{product.stock ?? 0}</strong> · Réservé : <strong>{product.activeReservedQuantity}</strong> · Disponible : <strong>{product.availableQuantity ?? 0}</strong>
+      </p>
       <form className="admin-inline-form" action={adjustProductStockAction}>
         <input type="hidden" name="productId" value={product.id} /><input type="hidden" name="lockVersion" value={product.lockVersion} />
         <label><span>Ajustement</span><input name="delta" type="text" inputMode="text" pattern="[+\-]?\d+" placeholder="+5 ou -2" required /></label>

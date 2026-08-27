@@ -1,75 +1,125 @@
-# Boutique V1.1 — fondations fermées
+# Boutique V1.1 — Phase 2 locale et fermée par défaut
 
-## Portée de la phase 1
+## Portée effectivement implémentée
 
-La V1.1.0 prépare un catalogue de produits administrable sans ouvrir une
-boutique publique. Elle ajoute les modèles `Product`, `ProductAsset`,
-`ProductStockAdjustment` et `ProductAuditEvent`, ainsi que les écrans privés
-`/admin/boutique`.
+La phase 1 a ajouté le catalogue administrable (`Product`, `ProductAsset`,
+`ProductStockAdjustment`, `ProductAuditEvent`) et l'image principale produit.
+La phase 2 ajoute, derrière un gate strictement local, le catalogue public
+dynamique, les fiches produit, un panier navigateur, la création idempotente de
+`ShopOrder`, les snapshots de commande, la réservation temporaire du stock et
+les vues membre/Admin.
 
-Cette phase ne contient volontairement aucun panier, `ShopOrder`, réservation
-de stock, Checkout Stripe/PayPal, notification Boutique ou adresse de
-livraison. Le modèle financier V1 reste exclusivement lié aux commandes
-musicales et n'est pas généralisé silencieusement.
+Ce flux est séparé des commandes musicales `Order`, de leurs `Payment` et de
+leurs providers. Il ne réalise aucun paiement, n'appelle ni Stripe ni PayPal,
+n'émet aucune notification Boutique et ne marque aucune expédition.
 
-## Fermeture par défaut
+## Gate local fail-closed
 
-`SHOP_ENABLED` est absent ou vaut `false` par défaut. La valeur `true` est
-elle-même refusée par le healthcheck de cette phase : elle ne pourra être
-acceptée qu'avec les routes publiques et les invariants de la phase 2. Aucun
-endpoint d'achat n'existe et la page publique `/boutique` conserve son contenu
-éditorial actuel. Un produit `PUBLISHED` signifie seulement qu'il est prêt pour
-une future ouverture contrôlée ; il ne devient pas achetable.
+`SHOP_ENABLED=false` est l'état normal. Dans cet état, `/boutique` conserve le
+teaser éditorial et les données commerce ne sont pas exposées. Une configuration
+invalide échoue également fermée.
 
-Le healthcheck expose uniquement l'état non sensible du flag. Une valeur autre
-que `true`, `false`, vide ou absente échoue fermée.
+Pour accepter `SHOP_ENABLED=true`, le serveur exige simultanément :
 
-## Produits
+- un runtime autre que `production` ;
+- `AUTH_URL` ou `SITE_URL` sur `localhost`, `127.0.0.1` ou `::1` ;
+- `SHOP_LOCAL_QA_CONFIRM=enable-local-shop-commerce-qa` ;
+- une allowlist explicite de codes pays ISO dans `SHOP_ALLOWED_COUNTRIES` ;
+- `SHOP_RESERVATION_TTL_MINUTES` explicite, entier entre 5 et 120 ;
+- `MUSIC_PRICING_SOURCE=legacy`.
 
-Un produit est créé en `DRAFT`. Son slug est normalisé et immuable. Les prix
-sont des entiers en centimes et la devise est exclusivement `EUR`. Un produit
-peut suivre un stock (`trackInventory=true`) ou ne pas être limité. Les
-mutations sensibles utilisent une session Admin, un contrôle d'origine, une
-transaction PostgreSQL, un verrou par produit et une version optimiste.
+La configuration QA documentée utilise une réservation de 30 minutes. Cette
+valeur n'ouvre rien à elle seule : les variables requises et la confirmation
+doivent toutes être présentes. Le gate refuse volontairement la Production ;
+il ne constitue pas un mécanisme de lancement commercial.
 
-La suppression physique n'est pas proposée. L'archivage conserve l'historique.
-Les ajustements numériques de stock enregistrent la quantité avant/après, le
-delta, le motif, l'acteur et la date. L'activation ou la désactivation du suivi
-reste également visible dans l'événement d'audit de la fiche.
+## Produits, images et catalogue public
 
-## Images
+Un produit naît en `DRAFT`, possède un slug normalisé immuable, un prix entier
+en centimes et une devise `EUR`. L'Admin peut suivre un stock ou laisser le
+produit sans limite quantitative, définir les frais d'envoi par exemplaire,
+ajouter une image principale et publier une fiche cohérente.
 
-`ProductAsset` prépare la relation avec l'infrastructure `Asset`. L'upload R2
-produit n'est pas activé dans cette phase : il devra réutiliser la validation
-MIME/signature/dimensions, la normalisation et la compensation déjà employées
-par le catalogue. Aucun blob ou base64 n'est stocké en PostgreSQL.
+L'image est validée, normalisée en WebP et stockée via `MediaStorage`, jamais en
+base64 dans PostgreSQL. Sa publication exige notamment une visibilité publique,
+des droits confirmés et un texte alternatif. La Boutique ne liste que les
+produits `PUBLISHED` ayant un prix et un visuel principal admissibles.
 
-## Phases suivantes
+Quand le gate local est armé, les routes suivantes sont disponibles :
 
-1. Phase 2 : média produit public sécurisé, catalogue public dynamique, panier,
-   `ShopOrder`, snapshots de lignes et réservation de stock.
-2. Phase 3 : adaptation financière dédiée Stripe/PayPal, webhooks,
-   notifications et expédition.
+- `/boutique` : catalogue dynamique ;
+- `/boutique/[slug]` : fiche et disponibilité courante ;
+- `/boutique/panier` : panier et préparation de commande ;
+- `/media/boutique/[assetId]` : diffusion bornée du visuel public admissible.
 
-Le paiement Boutique nécessitera un audit financier distinct : `Payment`, les
-index d'idempotence, les webhooks et l'outbox V1 sont aujourd'hui liés à
-`Order`.
+Le panier conserve seulement les identifiants produit et quantités dans le
+navigateur. Les prix, frais d'envoi, statuts de publication et disponibilités
+sont toujours relus par le serveur lors de la création.
 
-## Rollback
+## Création et snapshots de commande
 
-Le rollback applicatif consiste à conserver `SHOP_ENABLED=false`. La migration
-additive et les données Admin restent en place. Aucun `DROP`, `TRUNCATE`, reset
-Prisma ou suppression de produit n'est requis.
+`POST /api/shop/orders` exige une session `MEMBER` ou `CUSTOMER`, une origine
+autorisée, un JSON fermé et une clé UUID `Idempotency-Key`. Un rôle `ADMIN` ne
+peut pas préparer un achat. Le serveur limite aussi la fréquence de création.
 
-## Ordre de déploiement futur et sauvegarde
+La clé est unique par membre. Une répétition avec le même panier et la même
+adresse renvoie la commande existante ; sa réutilisation avec une empreinte de
+requête différente est refusée. Les verrous PostgreSQL sur la clé et les
+produits empêchent les doubles créations et la surréservation concurrente.
 
-Avant tout `prisma migrate deploy` en Production, l'opérateur devra vérifier un
-backup PostgreSQL/PITR récent et sa procédure de restauration, relever les
-compteurs protégés (`Order`, `Payment`, `ProviderEvent`, notifications, droits,
-catalogue et médias), puis conserver `SHOP_ENABLED=false` et
-`MUSIC_PRICING_SOURCE=legacy`. Le déploiement technique ajoute la 19e migration
-et doit être suivi d'un healthcheck et d'une comparaison des compteurs.
+La commande fige notamment :
 
-L'ancien code peut ignorer les nouvelles tables en cas de rollback applicatif ;
-la migration n'est jamais annulée par une down migration destructive. Aucune
-ouverture publique ni activation tarifaire ne fait partie de cette procédure.
+- le titre produit, le suivi de stock, le prix unitaire et la quantité ;
+- le sous-total de chaque ligne ;
+- le besoin d'expédition, le tarif unitaire et le total d'envoi de la ligne ;
+- la devise, les totaux commande et, si nécessaire, l'adresse de livraison.
+
+Les frais d'envoi sont tarifés **par exemplaire** :
+`lineShippingCents = unitShippingCents × quantity`, puis
+`shippingCents = somme(lineShippingCents)`. Enfin,
+`totalCents = subtotalCents + shippingCents`. PostgreSQL répète ces invariants
+par des contraintes.
+
+Voir [`SHOP_ORDER.md`](SHOP_ORDER.md) pour le contrat complet.
+
+## Réservation, annulation et expiration
+
+Une ligne avec stock suivi crée une `StockReservation` `ACTIVE`; une ligne sans
+suivi n'en crée pas. La création ne décrémente pas `Product.stock`. La
+disponibilité affichée et revalidée vaut stock courant moins réservations
+`ACTIVE` non expirées.
+
+La durée est calculée depuis `SHOP_RESERVATION_TTL_MINUTES` (30 minutes dans la
+QA locale). Le membre peut annuler une commande encore ouverte et non payée :
+ses réservations actives passent à `RELEASED`. La primitive d'expiration bornée
+marque les réservations arrivées à terme `EXPIRED` et la commande `EXPIRED`, en
+conservant `paymentStatus=AWAITING_PAYMENT`. Aucun scheduler de Production
+n'est activé dans cette phase.
+
+Chaque création, réservation, libération, annulation ou expiration produit un
+`ShopOrderEvent`. Les détails de concurrence et de stock figurent dans
+[`SHOP_INVENTORY.md`](SHOP_INVENTORY.md).
+
+## Vues membre et Admin
+
+Le membre retrouve ses commandes Boutique dans `/compte` et leur détail dans
+`/compte/achats/[orderNumber]`. La lecture est toujours bornée au propriétaire;
+une commande ouverte et non payée peut y être annulée.
+
+L'Admin consulte la liste filtrable et le détail dans
+`/admin/boutique/commandes`. Ces écrans montrent les snapshots, états,
+réservations, adresse et événements. Ils sont en lecture seule : aucun bouton
+ne paie, ne confirme le stock, ne prépare ou n'expédie une commande.
+
+## Frontière de la phase 3
+
+Les états `paymentStatus` et `fulfillmentStatus` préparent seulement une future
+machine métier. La phase 3 reste différée : architecture financière Boutique,
+provider de paiement, webhooks, rapprochement, facturation/TVA, notifications,
+préparation et expédition devront faire l'objet d'un gate et d'un audit dédiés.
+
+## Rollback applicatif
+
+Le rollback reste `SHOP_ENABLED=false`. Les migrations additives, produits,
+commandes et événements sont conservés pour l'audit. Aucun `DROP`, `TRUNCATE`,
+reset Prisma ou effacement de produit/commande n'est requis.
