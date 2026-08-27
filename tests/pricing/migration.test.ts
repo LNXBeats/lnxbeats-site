@@ -10,6 +10,7 @@ import { orderPricingVersions } from "../../data/order-offer";
 const MIGRATIONS_DIRECTORY = path.join(process.cwd(), "prisma", "migrations");
 const NOTIFICATION_ENUM_MIGRATION = "20260821120000_transactional_notifications";
 const PRICING_MIGRATION = "20260827120000_shop_pricing_foundation";
+const SHOP_COMMERCE_MIGRATION = "20260827180000_shop_commerce_foundation";
 
 async function applyMigration(database: PGlite, directory: string, sql: string) {
   if (directory !== NOTIFICATION_ENUM_MIGRATION) {
@@ -47,6 +48,7 @@ async function applyMigrationDirectory(database: PGlite, directory: string) {
 async function applyAllMigrations(database: PGlite) {
   const directories = await readMigrationDirectories();
   assert.ok(directories.includes(PRICING_MIGRATION), "V1.1.0 pricing migration is missing");
+  assert.ok(directories.includes(SHOP_COMMERCE_MIGRATION), "V1.1.0 Shop commerce migration is missing");
 
   for (const directory of directories) {
     await applyMigrationDirectory(database, directory);
@@ -99,14 +101,15 @@ test("V1.1.0 migration preserves existing Order, Payment and ProviderEvent snaps
   const database = new PGlite();
   try {
     const migrations = await readMigrationDirectories();
-    assert.equal(migrations.length, 19);
+    assert.equal(migrations.length, 20);
     assert.equal(
-      migrations.at(-1),
+      migrations.at(-2),
       PRICING_MIGRATION,
-      "the additive V1.1.0 migration must remain the nineteenth and latest migration",
+      "the additive pricing migration must remain the nineteenth migration",
     );
+    assert.equal(migrations.at(-1), SHOP_COMMERCE_MIGRATION, "Shop commerce must be the twentieth migration");
 
-    for (const directory of migrations.slice(0, -1)) {
+    for (const directory of migrations.slice(0, -2)) {
       await applyMigrationDirectory(database, directory);
     }
 
@@ -187,6 +190,7 @@ test("V1.1.0 migration preserves existing Order, Payment and ProviderEvent snaps
     assert.deepEqual(before.counts, { orders: 1, payments: 1, providerEvents: 1 });
 
     await applyMigrationDirectory(database, PRICING_MIGRATION);
+    await applyMigrationDirectory(database, SHOP_COMMERCE_MIGRATION);
 
     const after = await readProtectedCommerceSnapshot(database);
     assert.deepEqual(after.counts, before.counts, "protected table counts must remain unchanged");
@@ -206,7 +210,7 @@ test("all migrations apply and seed the immutable V1 pricing parity", async () =
   const database = new PGlite();
   try {
     const migrations = await applyAllMigrations(database);
-    assert.equal(migrations.length, 19);
+    assert.equal(migrations.length, 20);
 
     const pricing = await database.query<{
       version: string;

@@ -30,6 +30,7 @@ const completeInput = {
 test("normalizes a product slug without accepting reserved paths", () => {
   assert.equal(normalizeProductSlug("  Édition LNX — 2026  "), "edition-lnx-2026");
   assert.throws(() => parseProductEditorInput({ ...completeInput, slug: "nouveau" }), ProductValidationError);
+  assert.throws(() => parseProductEditorInput({ ...completeInput, slug: "commandes" }), ProductValidationError);
 });
 
 test("parses only integer cents, EUR and coherent inventory values", () => {

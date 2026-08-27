@@ -83,7 +83,11 @@ test("health reports disabled payments without exposing configuration values", a
       },
     });
     assert.doesNotMatch(JSON.stringify(payload), /secretKey|webhookSecret|publishableKey/);
-    assert.deepEqual(payload.shop, { enabled: false, pricingSource: "legacy" });
+    assert.deepEqual(payload.shop, {
+      enabled: false,
+      pricingSource: "legacy",
+      commerceConfigured: false,
+    });
   });
 });
 
