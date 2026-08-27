@@ -22,7 +22,7 @@ export default async function AdminNewProductPage({ searchParams }: { searchPara
       <p className="admin-section-label">Fiche produit initiale</p>
       <form className="admin-rights-detail" action={createProductAction}>
         <AdminProductFields />
-        <p className="admin-work-note">Les montants sont saisis en centimes entiers. Une image produit publique sera obligatoire avant toute publication.</p>
+        <p className="admin-work-note">Les montants sont saisis en centimes entiers. Après création, ajoutez le visuel principal sur la fiche produit ; il sera obligatoire avant toute publication.</p>
         <button className="admin-button" type="submit">Créer le brouillon</button>
       </form>
     </section>

@@ -198,6 +198,7 @@ export async function publishAdminProduct(productId: string, expectedLockVersion
       where: { id: productId },
       include: {
         assets: {
+          where: { position: 0 },
           select: {
             asset: {
               select: {

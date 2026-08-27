@@ -418,7 +418,13 @@ export async function deleteEligibleAdminOrder(orderNumber: string) {
     await transaction.orderEvent.deleteMany({ where: { orderId: order.id } });
     await transaction.order.delete({ where: { id: order.id } });
     const deletableAssets = assetIds.length ? await transaction.asset.findMany({
-      where: { id: { in: assetIds }, projects: { none: {} }, orders: { none: {} } },
+      where: {
+        id: { in: assetIds },
+        projects: { none: {} },
+        orders: { none: {} },
+        products: { none: {} },
+        contractDocuments: { none: {} },
+      },
       select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true },
     }) : [];
     if (assetIds.length) {

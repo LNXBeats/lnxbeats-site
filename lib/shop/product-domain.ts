@@ -8,6 +8,8 @@ export const PRODUCT_ACTION_CONFIRMATIONS = {
   stock: "CONFIRM_PRODUCT_STOCK_ADJUSTMENT",
 } as const;
 
+export const PRODUCT_IMAGE_DELETION_CONFIRMATION = "CONFIRM_PRODUCT_IMAGE_DELETION";
+
 const CREATE_UPDATE_FIELDS = new Set([
   "slug",
   "title",

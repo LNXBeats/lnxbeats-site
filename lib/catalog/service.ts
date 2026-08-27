@@ -185,7 +185,13 @@ export async function deleteCatalogProject(projectId: string, rawConfirmation: u
     await transaction.project.delete({ where: { id: projectId } });
 
     return assetIds.length ? transaction.asset.findMany({
-      where: { id: { in: assetIds }, projects: { none: {} }, orders: { none: {} } },
+      where: {
+        id: { in: assetIds },
+        projects: { none: {} },
+        orders: { none: {} },
+        products: { none: {} },
+        contractDocuments: { none: {} },
+      },
       select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true },
     }) : [];
   }));
@@ -193,10 +199,26 @@ export async function deleteCatalogProject(projectId: string, rawConfirmation: u
   let cleanupFailed = false;
   for (const asset of removableAssets) {
     try {
-      const stillOrphaned = await prisma.asset.count({ where: { id: asset.id, projects: { none: {} }, orders: { none: {} } } });
+      const stillOrphaned = await prisma.asset.count({
+        where: {
+          id: asset.id,
+          projects: { none: {} },
+          orders: { none: {} },
+          products: { none: {} },
+          contractDocuments: { none: {} },
+        },
+      });
       if (!stillOrphaned) continue;
       await deleteMediaObject(asset);
-      await prisma.asset.deleteMany({ where: { id: asset.id, projects: { none: {} }, orders: { none: {} } } });
+      await prisma.asset.deleteMany({
+        where: {
+          id: asset.id,
+          projects: { none: {} },
+          orders: { none: {} },
+          products: { none: {} },
+          contractDocuments: { none: {} },
+        },
+      });
     }
     catch { cleanupFailed = true; console.error("An orphaned catalogue media object could not be removed after project deletion."); }
   }

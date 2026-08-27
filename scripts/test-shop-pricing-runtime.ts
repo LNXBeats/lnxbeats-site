@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
+
+import sharp from "sharp";
 
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import {
@@ -16,11 +18,18 @@ import {
   unpublishAdminProduct,
   updateAdminProduct,
 } from "@/lib/shop/product-service";
+import {
+  deleteAdminProductImage,
+  getAdminProductImage,
+  ProductImageError,
+  replaceAdminProductImage,
+  updateAdminProductImageAlt,
+} from "@/lib/shop/product-image";
 
 const QA_TARGET = "lnx-studio-v110-test";
 const QA_ADMIN_EMAIL = "lnx-v110-admin@example.invalid";
 const QA_PRODUCT_SLUG = "lnx-v110-runtime-product";
-const QA_PRODUCT_ASSET_KEY = "qa/v110/products/runtime-product.webp";
+const QA_MEDIA_ROOT = "/private/tmp/lnx-v110-product-image-runtime-media";
 const CONFIGURATION_KEY = "music-order";
 const SEEDED_ACTIVE_VERSION = "2026-08-v2";
 
@@ -45,6 +54,9 @@ async function assertDisposableDatabase() {
   assert.equal(process.env.LNX_DATABASE_TARGET, QA_TARGET, `LNX_DATABASE_TARGET must be ${QA_TARGET}.`);
   assert.ok(!process.env.RAILWAY_ENVIRONMENT, "Railway environments are forbidden for this runtime.");
   assert.ok(!process.env.RAILWAY_ENVIRONMENT_NAME, "Railway environments are forbidden for this runtime.");
+  assert.equal(process.env.MEDIA_DEPLOYMENT_ENV, "test");
+  assert.equal(process.env.MEDIA_STORAGE_DRIVER, "local");
+  assert.equal(process.env.MEDIA_LOCAL_PUBLIC_ROOT, QA_MEDIA_ROOT);
 
   const databaseUrl = assertSafeLocalPostgresUrl(process.env.DATABASE_URL ?? "");
   const proofPath = process.env.LNX_PRISMA_DEV_SERVER_FILE;
@@ -86,17 +98,22 @@ async function assertDisposableDatabase() {
 async function cleanupFixtures() {
   await prisma.$transaction(async (transaction) => {
     const products = await transaction.product.findMany({
-      where: { slug: QA_PRODUCT_SLUG },
+      where: { slug: { startsWith: QA_PRODUCT_SLUG } },
       select: { id: true },
     });
     const productIds = products.map(({ id }) => id);
     if (productIds.length) {
+      const productAssets = await transaction.productAsset.findMany({
+        where: { productId: { in: productIds } },
+        select: { assetId: true },
+      });
       await transaction.productAsset.deleteMany({ where: { productId: { in: productIds } } });
       await transaction.productStockAdjustment.deleteMany({ where: { productId: { in: productIds } } });
       await transaction.productAuditEvent.deleteMany({ where: { productId: { in: productIds } } });
       await transaction.product.deleteMany({ where: { id: { in: productIds } } });
+      await transaction.asset.deleteMany({ where: { id: { in: productAssets.map(({ assetId }) => assetId) } } });
     }
-    await transaction.asset.deleteMany({ where: { storageKey: QA_PRODUCT_ASSET_KEY } });
+    await transaction.asset.deleteMany({ where: { filename: { startsWith: "runtime-product-" } } });
 
     const seededVersion = await transaction.musicPricingVersion.findUniqueOrThrow({
       where: { version: SEEDED_ACTIVE_VERSION },
@@ -121,12 +138,13 @@ async function cleanupFixtures() {
     await transaction.musicPricingVersion.deleteMany({ where: { source: "ADMIN" } });
     await transaction.user.deleteMany({ where: { email: QA_ADMIN_EMAIL } });
   });
+  await rm(QA_MEDIA_ROOT, { recursive: true, force: true });
 }
 
 async function assertClean(stage: string) {
   const [products, assets, admins, adminVersions, adminActivations, configuration] = await Promise.all([
-    prisma.product.count({ where: { slug: QA_PRODUCT_SLUG } }),
-    prisma.asset.count({ where: { storageKey: QA_PRODUCT_ASSET_KEY } }),
+    prisma.product.count({ where: { slug: { startsWith: QA_PRODUCT_SLUG } } }),
+    prisma.asset.count({ where: { filename: { startsWith: "runtime-product-" } } }),
     prisma.user.count({ where: { email: QA_ADMIN_EMAIL } }),
     prisma.musicPricingVersion.count({ where: { source: "ADMIN" } }),
     prisma.musicPricingActivation.count({ where: { source: "ADMIN" } }),
@@ -243,14 +261,14 @@ async function productRuntime(actorAdminId: string, passed: string[]) {
   assert.equal(afterBlockedPublish.lockVersion, 4);
   passed.push("publication fails closed without a public image and leaves the DRAFT unchanged");
 
-  const image = await prisma.asset.create({
+  const secondaryImage = await prisma.asset.create({
     data: {
       type: "IMAGE",
-      storageKey: QA_PRODUCT_ASSET_KEY,
+      storageKey: "catalog/images/11000000-0000-4000-8000-000000000001.webp",
       storageBackend: "LOCAL",
-      storageProvider: "local-qa",
+      storageProvider: "local",
       visibility: "PUBLIC",
-      filename: "runtime-product.webp",
+      filename: "runtime-product-secondary.webp",
       mimeType: "image/webp",
       sizeBytes: 128n,
       width: 1,
@@ -262,19 +280,165 @@ async function productRuntime(actorAdminId: string, passed: string[]) {
     },
   });
   await prisma.productAsset.create({
-    data: { productId: created.id, assetId: image.id, position: 0 },
+    data: { productId: created.id, assetId: secondaryImage.id, position: 1 },
   });
-  const published = await publishAdminProduct(created.id, afterBlockedPublish.lockVersion, actorAdminId);
+  await assert.rejects(
+    publishAdminProduct(created.id, afterBlockedPublish.lockVersion, actorAdminId),
+    (error: unknown) => error instanceof Error
+      && "code" in error
+      && typeof error.code === "string"
+      && error.code.includes("PUBLICATION_BLOCKED:IMAGE_MISSING"),
+  );
+  await prisma.productAsset.delete({ where: { productId_assetId: { productId: created.id, assetId: secondaryImage.id } } });
+  await prisma.asset.delete({ where: { id: secondaryImage.id } });
+  passed.push("an eligible gallery position cannot replace the required primary image at position zero");
+
+  const firstBytes = await sharp({
+    create: { width: 2_400, height: 1_200, channels: 3, background: { r: 38, g: 28, b: 18 } },
+  }).jpeg({ quality: 88 }).toBuffer();
+  await assert.rejects(replaceAdminProductImage({
+    productId: created.id,
+    expectedLockVersion: afterBlockedPublish.lockVersion,
+    expectedAssetId: null,
+    file: new File([firstBytes], "runtime-product-rollback.jpg", { type: "image/jpeg" }),
+    alt: "Visuel devant être compensé",
+    rightsConfirmed: true,
+    actorAdminId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  }));
+  const afterForcedRollback = await prisma.product.findUniqueOrThrow({ where: { id: created.id } });
+  assert.equal(afterForcedRollback.lockVersion, 4);
+  assert.equal(await prisma.productAsset.count({ where: { productId: created.id } }), 0);
+  assert.equal(await prisma.asset.count({ where: { filename: { startsWith: "runtime-product-" } } }), 0);
+  const remainingFiles = await readdir(QA_MEDIA_ROOT, { recursive: true }).catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
+    throw error;
+  });
+  assert.equal(remainingFiles.some((entry) => entry.endsWith(".webp")), false);
+  passed.push("database failure rolls back ProductAsset/Asset/product version and compensates the new local object");
+
+  const first = await replaceAdminProductImage({
+    productId: created.id,
+    expectedLockVersion: afterBlockedPublish.lockVersion,
+    expectedAssetId: null,
+    file: new File([firstBytes], "runtime-product-first.jpg", { type: "image/jpeg" }),
+    alt: "Premier visuel produit runtime",
+    rightsConfirmed: true,
+    actorAdminId,
+  });
+  const afterFirstImage = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+    include: { assets: { include: { asset: true } } },
+  });
+  assert.equal(afterFirstImage.lockVersion, 5);
+  assert.equal(afterFirstImage.assets.length, 1);
+  assert.equal(afterFirstImage.assets[0]?.position, 0);
+  assert.equal(afterFirstImage.assets[0]?.asset.id, first.assetId);
+  assert.equal(afterFirstImage.assets[0]?.asset.type, "IMAGE");
+  assert.equal(afterFirstImage.assets[0]?.asset.visibility, "PUBLIC");
+  assert.equal(afterFirstImage.assets[0]?.asset.rightsStatus, "CLEARED");
+  assert.deepEqual(
+    { width: afterFirstImage.assets[0]?.asset.width, height: afterFirstImage.assets[0]?.asset.height },
+    { width: 1_600, height: 800 },
+  );
+  assert.ok(await getAdminProductImage(created.id));
+  const firstStorageKey = afterFirstImage.assets[0]!.asset.storageKey;
+  assert.ok((await readFile(`${QA_MEDIA_ROOT}/${firstStorageKey}`)).length > 0);
+  passed.push("real JPEG persistence creates one normalized PUBLIC/CLEARED primary ProductAsset and local object");
+
+  const sharedProduct = await createAdminProduct(productInput({
+    slug: `${QA_PRODUCT_SLUG}-shared`,
+    title: "Produit partagé V1.1 QA",
+    position: "12",
+  }), actorAdminId);
+  await prisma.productAsset.create({
+    data: { productId: sharedProduct.id, assetId: first.assetId, position: 0 },
+  });
+  await assert.rejects(
+    updateAdminProductImageAlt({
+      productId: created.id,
+      expectedLockVersion: afterFirstImage.lockVersion,
+      expectedAssetId: first.assetId,
+      alt: "Modification interdite d’un Asset partagé",
+      actorAdminId,
+    }),
+    (error: unknown) => error instanceof ProductImageError && error.code === "SHARED_ASSET",
+  );
+  assert.equal((await prisma.asset.findUniqueOrThrow({ where: { id: first.assetId } })).alt, "Premier visuel produit runtime");
+  await prisma.$transaction(async (transaction) => {
+    await transaction.productAsset.deleteMany({ where: { productId: sharedProduct.id } });
+    await transaction.productAuditEvent.deleteMany({ where: { productId: sharedProduct.id } });
+    await transaction.product.delete({ where: { id: sharedProduct.id } });
+  });
+  passed.push("shared Asset alt mutation fails closed without changing either product");
+
+  const secondBytes = await sharp({
+    create: { width: 900, height: 1_200, channels: 3, background: { r: 20, g: 32, b: 40 } },
+  }).png().toBuffer();
+  await assert.rejects(
+    replaceAdminProductImage({
+      productId: created.id,
+      expectedLockVersion: 4,
+      expectedAssetId: first.assetId,
+      file: new File([secondBytes], "runtime-product-stale.png", { type: "image/png" }),
+      alt: "Tentative concurrente",
+      rightsConfirmed: true,
+      actorAdminId,
+    }),
+    (error: unknown) => error instanceof Error && error.name === "ProductImageConflictError",
+  );
+  assert.equal((await getAdminProductImage(created.id))?.id, first.assetId);
+
+  const second = await replaceAdminProductImage({
+    productId: created.id,
+    expectedLockVersion: 5,
+    expectedAssetId: first.assetId,
+    file: new File([secondBytes], "runtime-product-second.png", { type: "image/png" }),
+    alt: "Second visuel produit runtime",
+    rightsConfirmed: true,
+    actorAdminId,
+  });
+  const afterReplacement = await prisma.product.findUniqueOrThrow({
+    where: { id: created.id },
+    include: { assets: { include: { asset: true } } },
+  });
+  assert.equal(afterReplacement.lockVersion, 6);
+  assert.equal(afterReplacement.assets.length, 1);
+  assert.equal(afterReplacement.assets[0]?.asset.id, second.assetId);
+  assert.equal(await prisma.asset.count({ where: { id: first.assetId } }), 0);
+  await assert.rejects(readFile(`${QA_MEDIA_ROOT}/${firstStorageKey}`), (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT"));
+  passed.push("replacement switches atomically and cleans the obsolete Asset and local object");
+
+  const updatedAlt = await updateAdminProductImageAlt({
+    productId: created.id,
+    expectedLockVersion: 6,
+    expectedAssetId: second.assetId,
+    alt: "Visuel final accessible du produit",
+    actorAdminId,
+  });
+  assert.equal(updatedAlt.assetId, second.assetId);
+  assert.equal((await prisma.asset.findUniqueOrThrow({ where: { id: second.assetId } })).alt, "Visuel final accessible du produit");
+
+  const published = await publishAdminProduct(created.id, 7, actorAdminId);
   assert.equal(published.status, "PUBLISHED");
-  assert.equal(published.lockVersion, 5);
+  assert.equal(published.lockVersion, 8);
   assert.ok(published.publishedAt instanceof Date);
+  await assert.rejects(
+    deleteAdminProductImage({
+      productId: created.id,
+      expectedLockVersion: published.lockVersion,
+      expectedAssetId: second.assetId,
+      actorAdminId,
+    }),
+    (error: unknown) => error instanceof ProductImageError && error.code === "NOT_DRAFT",
+  );
+  assert.equal((await getAdminProductImage(created.id))?.id, second.assetId);
   const unpublished = await unpublishAdminProduct(
     created.id,
     published.lockVersion,
     actorAdminId,
   );
   assert.equal(unpublished.status, "DRAFT");
-  assert.equal(unpublished.lockVersion, 6);
+  assert.equal(unpublished.lockVersion, 9);
   assert.equal(unpublished.publishedAt, null);
   assert.deepEqual(
     await prisma.productAuditEvent.findMany({
@@ -284,11 +448,26 @@ async function productRuntime(actorAdminId: string, passed: string[]) {
     }),
     [{ action: "PUBLISHED" }, { action: "UNPUBLISHED" }],
   );
-  passed.push("a local PUBLIC image permits publish, then unpublish returns to DRAFT");
+  passed.push("a real primary image permits publish and published deletion is refused until explicit unpublish");
 
-  const archived = await archiveAdminProduct(created.id, unpublished.lockVersion, actorAdminId);
+  const secondStorageKey = (await prisma.asset.findUniqueOrThrow({ where: { id: second.assetId } })).storageKey;
+  await deleteAdminProductImage({
+    productId: created.id,
+    expectedLockVersion: unpublished.lockVersion,
+    expectedAssetId: second.assetId,
+    actorAdminId,
+  });
+  const afterDeletion = await prisma.product.findUniqueOrThrow({ where: { id: created.id } });
+  assert.equal(afterDeletion.status, "DRAFT");
+  assert.equal(afterDeletion.lockVersion, 10);
+  assert.equal(await prisma.productAsset.count({ where: { productId: created.id } }), 0);
+  assert.equal(await prisma.asset.count({ where: { id: second.assetId } }), 0);
+  await assert.rejects(readFile(`${QA_MEDIA_ROOT}/${secondStorageKey}`), (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT"));
+  passed.push("DRAFT deletion removes relation, dedicated Asset and local object while preserving product state");
+
+  const archived = await archiveAdminProduct(created.id, afterDeletion.lockVersion, actorAdminId);
   assert.equal(archived.status, "ARCHIVED");
-  assert.equal(archived.lockVersion, 7);
+  assert.equal(archived.lockVersion, 11);
   assert.ok(archived.archivedAt instanceof Date);
   await assert.rejects(
     adjustAdminProductStock(created.id, archived.lockVersion, { delta: "1", reason: "Refus après archivage" }, actorAdminId),

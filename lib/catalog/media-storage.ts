@@ -47,6 +47,18 @@ export function removeCatalogCover(input: string | CatalogReference) {
   return deleteMediaObject(reference(input));
 }
 
+export function writeCatalogImage(storageKey: string, bytes: Buffer) {
+  return writePublic(storageKey, bytes, "image/webp");
+}
+
+export async function readCatalogImage(input: string | CatalogReference) {
+  return Buffer.from(await readMediaObjectBytes(reference(input), 12 * 1024 * 1024));
+}
+
+export function removeCatalogImage(input: string | CatalogReference) {
+  return deleteMediaObject(reference(input));
+}
+
 export function writeCatalogAudioPreview(storageKey: string, bytes: Buffer) {
   return writePublic(storageKey, bytes, "audio/mpeg");
 }

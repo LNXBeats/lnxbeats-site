@@ -9,6 +9,7 @@ import {
   updateProductAction,
 } from "@/app/admin/boutique/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
+import { AdminProductImageForm } from "@/components/admin-product-image-form";
 import { AdminProductFields } from "@/components/admin-product-fields";
 import { requireAdmin } from "@/lib/auth/session";
 import {
@@ -23,6 +24,16 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Produit · Administration" };
 
 const STATUS_LABELS = { DRAFT: "Brouillon", PUBLISHED: "Publié", ARCHIVED: "Archivé" } as const;
+const PUBLICATION_BLOCKER_LABELS: Record<string, string> = {
+  TITLE_MISSING: "titre manquant",
+  DESCRIPTION_MISSING: "description manquante",
+  PRICE_INVALID: "prix invalide",
+  CURRENCY_INVALID: "devise invalide",
+  STOCK_INVALID: "stock invalide",
+  SHIPPING_INCOHERENT: "expédition incohérente",
+  SHIPPING_INVALID: "frais d’envoi invalides",
+  IMAGE_MISSING: "visuel principal public avec texte alternatif requis",
+};
 const ACTION_LABELS = {
   CREATED: "Produit créé",
   UPDATED: "Fiche modifiée",
@@ -57,9 +68,10 @@ export default async function AdminProductPage({
   if (!product) notFound();
   const publicationBlockers = getProductPublicationBlockers({
     ...product,
-    assetCount: countPublishableProductImages(product.assets.map(({ asset }) => asset)),
+    assetCount: countPublishableProductImages(product.assets.filter(({ position }) => position === 0).map(({ asset }) => asset)),
   });
   const editable = product.status !== "ARCHIVED";
+  const primaryImageRelation = product.assets.find(({ position }) => position === 0) ?? null;
 
   return <div className="admin-main admin-rights-detail">
     <AdminBackLink href="/admin/boutique">Retour à la boutique</AdminBackLink>
@@ -85,9 +97,31 @@ export default async function AdminProductPage({
     </section>
 
     <section className="admin-panel">
+      <div className="admin-panel__heading"><h2>Visuel du produit</h2></div>
+      <p className="admin-work-note">Une image principale suffit pour cette phase. Elle est stockée via le même MediaStorage que le catalogue, sans ouvrir la Boutique publique.</p>
+      <AdminProductImageForm
+        productId={product.id}
+        lockVersion={product.lockVersion}
+        productTitle={product.title}
+        status={product.status}
+        initialState={etat}
+        currentImage={primaryImageRelation ? {
+          id: primaryImageRelation.asset.id,
+          filename: primaryImageRelation.asset.filename,
+          mimeType: primaryImageRelation.asset.mimeType,
+          sizeBytes: primaryImageRelation.asset.sizeBytes.toString(),
+          width: primaryImageRelation.asset.width,
+          height: primaryImageRelation.asset.height,
+          alt: primaryImageRelation.asset.alt ?? "",
+          updatedAt: primaryImageRelation.asset.updatedAt.toISOString(),
+        } : null}
+      />
+    </section>
+
+    <section className="admin-panel">
       <div className="admin-panel__heading"><h2>Publication</h2></div>
-      <p className="admin-work-note">La boutique publique et les paiements produit ne sont pas activés dans cette fondation. Une publication exige néanmoins une fiche cohérente, un prix positif et au moins une image publique.</p>
-      {publicationBlockers.length ? <p className="admin-alert" role="status">Publication fermée : {publicationBlockers.join(" · ")}</p> : null}
+      <p className="admin-work-note">La boutique publique et les paiements produit ne sont pas activés dans cette fondation. Une publication exige néanmoins une fiche cohérente, un prix positif et un visuel principal public admissible.</p>
+      {publicationBlockers.length ? <p className="admin-alert" role="status">Publication fermée : {publicationBlockers.map((blocker) => PUBLICATION_BLOCKER_LABELS[blocker] ?? "fiche incomplète").join(" · ")}</p> : null}
       {editable ? <div className="admin-action-row">
         {product.status === "DRAFT" ? <form action={publishProductAction}>
           <input type="hidden" name="productId" value={product.id} /><input type="hidden" name="lockVersion" value={product.lockVersion} />
@@ -113,15 +147,6 @@ export default async function AdminProductPage({
           <button className="admin-button admin-button--danger" type="submit">Archiver</button>
         </form>
       </div> : null}
-    </section>
-
-    <section className="admin-panel">
-      <div className="admin-panel__heading"><h2>Images produit</h2></div>
-      {product.assets.length ? <ul className="admin-card-list">
-        {product.assets.map(({ asset, position }) => <li key={asset.id}>
-          <strong>Image {position + 1}</strong><p>{asset.alt ?? asset.filename} · {asset.mimeType}</p>
-        </li>)}
-      </ul> : <p className="admin-alert">Aucune image. L’upload R2 produit est volontairement différé ; la publication reste donc impossible.</p>}
     </section>
 
     {product.trackInventory && editable ? <section className="admin-panel">

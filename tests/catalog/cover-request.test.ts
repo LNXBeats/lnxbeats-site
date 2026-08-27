@@ -44,3 +44,20 @@ test("multipart without a boundary is refused", async () => {
     (error: unknown) => error instanceof CatalogCoverRequestError && error.code === "INVALID_MULTIPART",
   );
 });
+
+test("a positive but false Content-Length cannot bypass the actual byte bound", async () => {
+  const request = await multipartRequest(false);
+  const body = Buffer.from(await request.arrayBuffer());
+  const lied = new Request(request.url, {
+    method: "POST",
+    headers: {
+      "content-type": request.headers.get("content-type")!,
+      "content-length": String(body.length - 1),
+    },
+    body,
+  });
+  await assert.rejects(
+    readCatalogCoverFormData(lied),
+    (error: unknown) => error instanceof CatalogCoverRequestError && error.code === "INVALID_MULTIPART",
+  );
+});
