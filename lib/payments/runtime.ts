@@ -10,7 +10,12 @@ import {
   loadAndAssertPaymentQaRuntimeBaseEnvironment,
 } from "@/lib/payments/qa-guard";
 import type { PaymentDeploymentEnvironment } from "@/lib/payments/types";
-import { SHOP_PHASE2_QA_TARGET, SHOP_PHASE3B_STRIPE_QA_CONFIRMATION } from "@/lib/shop/qa-contract";
+import {
+  SHOP_PHASE2_QA_TARGET,
+  SHOP_PHASE3B_STRIPE_QA_CONFIRMATION,
+  SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION,
+} from "@/lib/shop/qa-contract";
+import { loadAndAssertShopPhase3CPaypalSandboxQaEnvironment } from "@/lib/shop/paypal-sandbox-qa-guard";
 import { loadAndAssertShopPhase3BStripeQaEnvironment } from "@/lib/shop/stripe-test-qa-guard";
 
 type PaymentEnvironment = Record<string, string | undefined>;
@@ -28,6 +33,13 @@ async function assertPaymentDeploymentRuntimeEnvironment(
   historicalReconciliation: boolean,
 ) {
   if (deploymentEnvironment === "development") {
+    if (
+      environment.LNX_DATABASE_TARGET === SHOP_PHASE2_QA_TARGET
+      && environment.SHOP_PHASE3C_PAYPAL_QA_CONFIRM === SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION
+    ) {
+      await loadAndAssertShopPhase3CPaypalSandboxQaEnvironment(environment, { historicalReconciliation });
+      return;
+    }
     if (
       environment.LNX_DATABASE_TARGET === SHOP_PHASE2_QA_TARGET
       && environment.SHOP_PHASE3B_STRIPE_QA_CONFIRM === SHOP_PHASE3B_STRIPE_QA_CONFIRMATION
