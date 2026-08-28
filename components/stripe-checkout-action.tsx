@@ -16,10 +16,14 @@ export function StripeCheckoutAction({
   orderNumber,
   amountCents,
   compact = false,
+  target = "music",
+  termsAccepted = true,
 }: {
   orderNumber: string;
   amountCents: number;
   compact?: boolean;
+  target?: "music" | "shop";
+  termsAccepted?: boolean;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -27,16 +31,30 @@ export function StripeCheckoutAction({
 
   async function startCheckout() {
     if (pending) return;
+    if (target === "shop" && !termsAccepted) {
+      setMessage("Acceptez les Conditions Générales de Vente avant de poursuivre.");
+      return;
+    }
     setPending(true);
     setMessage("");
     try {
       const response = await fetch(
-        `/api/orders/${encodeURIComponent(orderNumber)}/payments/stripe/checkout`,
-        { method: "POST", headers: { accept: "application/json" } },
+        target === "shop"
+          ? `/api/shop/orders/${encodeURIComponent(orderNumber)}/payments/stripe/checkout`
+          : `/api/orders/${encodeURIComponent(orderNumber)}/payments/stripe/checkout`,
+        target === "shop"
+          ? {
+            method: "POST",
+            headers: { accept: "application/json", "content-type": "application/json" },
+            body: JSON.stringify({ termsAccepted: true }),
+          }
+          : { method: "POST", headers: { accept: "application/json" } },
       );
       const body = await response.json().catch(() => null) as { checkoutUrl?: unknown; code?: unknown } | null;
       if (response.status === 401) {
-        const returnTo = `/compte/commandes/${encodeURIComponent(orderNumber)}`;
+        const returnTo = target === "shop"
+          ? `/compte/achats/${encodeURIComponent(orderNumber)}`
+          : `/compte/commandes/${encodeURIComponent(orderNumber)}`;
         router.push(`/connexion?retour=${encodeURIComponent(returnTo)}`);
         return;
       }

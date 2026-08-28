@@ -157,6 +157,7 @@ async function assertOneShotFixtureLifecycle() {
     where: { idempotencyKey: ONE_SHOT_KEY },
     include: { order: { include: { _count: { select: { payments: true, notifications: true } } } } },
   });
+  assert.ok(initial.order, "The scheduler QA notification must keep its Order parent.");
   assert.equal(initial.attempts, 0);
   assert.equal(initial.deploymentEnvironment, "staging");
   assert.equal(initial.recipient, RESEND_QA_SCENARIOS[ONE_SHOT_SCENARIO].recipient);

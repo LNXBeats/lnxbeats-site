@@ -5,6 +5,7 @@ import type {
   NotificationPayload,
   NotificationPriority,
   OrderNotificationKind,
+  ShopNotificationPayload,
 } from "@/lib/notifications/types";
 
 export const MAXIMUM_NOTIFICATION_ATTEMPTS = 5;
@@ -42,7 +43,22 @@ const definitions: Record<OrderNotificationKind, Readonly<{
   CUSTOMER_PARTIAL_REFUND: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-partial-refund" },
   CUSTOMER_REFUND_COMPLETED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-refund-completed" },
   OWNER_PAYMENT_INCIDENT: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-payment-incident" },
+  OWNER_SHOP_ORDER_PAID: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-shop-order-paid" },
+  CUSTOMER_SHOP_PAYMENT_CONFIRMED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-payment-confirmed" },
+  CUSTOMER_SHOP_PREPARING: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-preparing" },
+  CUSTOMER_SHOP_SHIPPED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-shipped" },
 };
+
+const shopNotificationKinds = new Set<OrderNotificationKind>([
+  "OWNER_SHOP_ORDER_PAID",
+  "CUSTOMER_SHOP_PAYMENT_CONFIRMED",
+  "CUSTOMER_SHOP_PREPARING",
+  "CUSTOMER_SHOP_SHIPPED",
+]);
+
+export function isShopNotificationKind(kind: OrderNotificationKind) {
+  return shopNotificationKinds.has(kind);
+}
 
 export function notificationDefinition(kind: OrderNotificationKind) {
   return definitions[kind];
@@ -97,16 +113,79 @@ export function automaticNotificationRetryIsSafe(
   return ageMs >= 0 && ageMs < NOTIFICATION_PROVIDER_IDEMPOTENCY_SAFE_AGE_MS;
 }
 
-const payloadKeys = new Set([
+const orderPayloadKeys = new Set([
   "orderNumber", "customerName", "customerEmail", "totalCents", "currency", "coverIncluded",
   "priorityProcessing", "createdAt", "workTitle", "rightsRequestNumber", "rightsRequestType", "requestedPriceCents",
   "refundAmountCents",
 ]);
 
-export function parseNotificationPayload(value: unknown): NotificationPayload {
+const shopPayloadKeys = new Set([
+  "orderNumber", "customerName", "customerEmail", "subtotalCents", "shippingCents", "totalCents", "currency",
+  "createdAt", "items", "paymentProvider", "termsVersion", "shippingAddress",
+]);
+
+const shopItemKeys = new Set(["productTitle", "quantity", "unitPriceCents", "lineTotalCents"]);
+const shopAddressKeys = new Set(["recipientName", "addressLine1", "addressLine2", "postalCode", "city", "countryCode"]);
+
+function parseShopNotificationPayload(payload: Record<string, unknown>): ShopNotificationPayload {
+  if (Object.keys(payload).some((key) => !shopPayloadKeys.has(key))) throw new Error("Notification payload contains an unknown field.");
+  if (
+    typeof payload.orderNumber !== "string" || !payload.orderNumber || payload.orderNumber.length > 80
+    || !(payload.customerName === null || (typeof payload.customerName === "string" && payload.customerName.length <= 200))
+    || typeof payload.customerEmail !== "string"
+    || !Number.isSafeInteger(payload.subtotalCents) || Number(payload.subtotalCents) < 0
+    || !Number.isSafeInteger(payload.shippingCents) || Number(payload.shippingCents) < 0
+    || !Number.isSafeInteger(payload.totalCents) || Number(payload.totalCents) <= 0
+    || Number(payload.subtotalCents) + Number(payload.shippingCents) !== Number(payload.totalCents)
+    || typeof payload.currency !== "string" || !/^[A-Z]{3}$/.test(payload.currency)
+    || typeof payload.createdAt !== "string" || Number.isNaN(Date.parse(payload.createdAt))
+    || !Array.isArray(payload.items) || payload.items.length < 1 || payload.items.length > 50
+    || !(payload.paymentProvider === null || payload.paymentProvider === "STRIPE" || payload.paymentProvider === "PAYPAL")
+    || !(payload.termsVersion === null || (typeof payload.termsVersion === "string" && payload.termsVersion.length > 0 && payload.termsVersion.length <= 80))
+  ) throw new Error("Notification payload is invalid.");
+  normalizeNotificationRecipient(payload.customerEmail as string);
+
+  let itemsTotal = 0;
+  for (const value of payload.items) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Notification payload is invalid.");
+    const item = value as Record<string, unknown>;
+    if (
+      Object.keys(item).some((key) => !shopItemKeys.has(key))
+      || typeof item.productTitle !== "string" || !item.productTitle || item.productTitle.length > 240
+      || !Number.isSafeInteger(item.quantity) || Number(item.quantity) < 1 || Number(item.quantity) > 1_000
+      || !Number.isSafeInteger(item.unitPriceCents) || Number(item.unitPriceCents) < 0
+      || !Number.isSafeInteger(item.lineTotalCents) || Number(item.lineTotalCents) < 0
+      || Number(item.unitPriceCents) * Number(item.quantity) !== Number(item.lineTotalCents)
+    ) throw new Error("Notification payload is invalid.");
+    itemsTotal += Number(item.lineTotalCents);
+    if (!Number.isSafeInteger(itemsTotal)) throw new Error("Notification payload is invalid.");
+  }
+  if (itemsTotal !== Number(payload.subtotalCents)) throw new Error("Notification payload is invalid.");
+
+  if (payload.shippingAddress !== null) {
+    if (!payload.shippingAddress || typeof payload.shippingAddress !== "object" || Array.isArray(payload.shippingAddress)) {
+      throw new Error("Notification payload is invalid.");
+    }
+    const address = payload.shippingAddress as Record<string, unknown>;
+    if (
+      Object.keys(address).some((key) => !shopAddressKeys.has(key))
+      || typeof address.recipientName !== "string" || !address.recipientName || address.recipientName.length > 201
+      || typeof address.addressLine1 !== "string" || !address.addressLine1 || address.addressLine1.length > 240
+      || !(address.addressLine2 === null || (typeof address.addressLine2 === "string" && address.addressLine2.length <= 240))
+      || typeof address.postalCode !== "string" || !address.postalCode || address.postalCode.length > 32
+      || typeof address.city !== "string" || !address.city || address.city.length > 120
+      || typeof address.countryCode !== "string" || !/^[A-Z]{2}$/.test(address.countryCode)
+    ) throw new Error("Notification payload is invalid.");
+  }
+  return payload as ShopNotificationPayload;
+}
+
+export function parseNotificationPayload(value: unknown, kind?: OrderNotificationKind): NotificationPayload {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Notification payload is invalid.");
   const payload = value as Record<string, unknown>;
-  if (Object.keys(payload).some((key) => !payloadKeys.has(key))) throw new Error("Notification payload contains an unknown field.");
+  const shopPayload = kind ? isShopNotificationKind(kind) : "items" in payload || "subtotalCents" in payload;
+  if (shopPayload) return parseShopNotificationPayload(payload);
+  if (Object.keys(payload).some((key) => !orderPayloadKeys.has(key))) throw new Error("Notification payload contains an unknown field.");
   if (
     typeof payload.orderNumber !== "string" || payload.orderNumber.length > 80
     || !(payload.customerName === null || (typeof payload.customerName === "string" && payload.customerName.length <= 200))

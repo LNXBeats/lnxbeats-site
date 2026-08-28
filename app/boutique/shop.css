@@ -463,6 +463,35 @@
   color: var(--text-soft);
 }
 
+.payment-methods__terms {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.7rem;
+  max-width: 44rem;
+  margin-top: 0.65rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(220, 180, 91, 0.28);
+  border-radius: 12px;
+  background: rgba(220, 180, 91, 0.055);
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.payment-methods__terms input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: 0.15rem;
+  accent-color: var(--gold);
+}
+
+.payment-methods__terms a {
+  color: var(--gold-light);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
 @media (max-width: 900px) {
   .shop-product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

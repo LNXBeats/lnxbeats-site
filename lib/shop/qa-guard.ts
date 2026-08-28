@@ -6,6 +6,10 @@ import path from "node:path";
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import { parseShopConfiguration } from "@/lib/shop/config";
 import {
+  SHOP_LEGAL_QA_CONFIRMATION,
+  SHOP_LEGAL_QA_TERMS_VERSION,
+} from "@/lib/shop/legal";
+import {
   SHOP_PHASE2_QA_AUTH_CAPTURE_PATH,
   SHOP_PHASE2_QA_CONFIRMATION,
   SHOP_PHASE2_QA_HTTP_PORT,
@@ -16,6 +20,7 @@ import {
   SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
   SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME,
   SHOP_PHASE2_QA_TARGET,
+  SHOP_PHASE3_QA_OWNER_EMAIL,
 } from "@/lib/shop/qa-contract";
 
 export {
@@ -174,6 +179,37 @@ export function shopPhase2QaChildEnvironment(
     childEnvironment[SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME] = SHOP_PHASE2_QA_RUNTIME_CONFIRMATION;
   }
   return childEnvironment;
+}
+
+const SHOP_PHASE3_QA_OVERRIDE_NAMES = [
+  "SHOP_LEGAL_READY",
+  "SHOP_TERMS_VERSION",
+  "SHOP_LEGAL_QA_CONFIRM",
+  "SHOP_PAYMENTS_ENABLED",
+  "EMAIL_OWNER_RECIPIENT",
+] as const;
+
+export function shopPhase3QaRuntimeOverrides(
+  environment: ShopQaEnvironment = process.env,
+) {
+  assertAbsent(environment, SHOP_PHASE3_QA_OVERRIDE_NAMES);
+  return {
+    SHOP_LEGAL_READY: "true",
+    SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+    SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+    SHOP_PAYMENTS_ENABLED: "false",
+    EMAIL_OWNER_RECIPIENT: SHOP_PHASE3_QA_OWNER_EMAIL,
+  } as const;
+}
+
+export function shopPhase3QaChildEnvironment(
+  environment: ShopQaEnvironment = process.env,
+  options: Readonly<{ validatedRuntime?: boolean }> = {},
+) {
+  return {
+    ...shopPhase2QaChildEnvironment(environment, options),
+    ...shopPhase3QaRuntimeOverrides(environment),
+  } satisfies NodeJS.ProcessEnv;
 }
 
 export async function assertNoShopPhase2QaNextEnvironmentFiles(

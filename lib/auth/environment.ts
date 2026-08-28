@@ -11,7 +11,14 @@ import {
   SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
   SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME,
   SHOP_PHASE2_QA_TARGET,
+  SHOP_PHASE3B_STRIPE_QA_CONFIRMATION,
+  SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION,
+  SHOP_PHASE3_QA_OWNER_EMAIL,
 } from "@/lib/shop/qa-contract";
+import {
+  SHOP_LEGAL_QA_CONFIRMATION,
+  SHOP_LEGAL_QA_TERMS_VERSION,
+} from "@/lib/shop/legal";
 
 export const ADMIN_PRINCIPAL_EMAIL = "lnx.beats.pro@gmail.com";
 export const LOCAL_PREVIEW_DATABASE_TARGET = "lnx-studio-local-preview";
@@ -70,6 +77,44 @@ const SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS = [
   "MEDIA_S3_SECRET_ACCESS_KEY",
 ] as const;
 
+const SHOP_PHASE3B_STRIPE_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
+  ...SHOP_PHASE2_AUTH_COOKIE_ENVIRONMENT,
+  PAYMENTS_ENABLED: "true",
+  STRIPE_PAYMENTS_ENABLED: "true",
+  STRIPE_MODE: "test",
+  PAYPAL_PAYMENTS_ENABLED: "false",
+  PAYPAL_ENVIRONMENT: "sandbox",
+  SHOP_PAYMENTS_ENABLED: "true",
+  SHOP_LEGAL_READY: "true",
+  SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+  SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+  SHOP_PHASE3B_STRIPE_QA_CONFIRM: SHOP_PHASE3B_STRIPE_QA_CONFIRMATION,
+  EMAIL_OWNER_RECIPIENT: SHOP_PHASE3_QA_OWNER_EMAIL,
+} satisfies Record<string, string>);
+
+const SHOP_PHASE3B_FORBIDDEN_EXTERNAL_SECRETS = SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.filter(
+  (name) => name !== "STRIPE_SECRET_KEY" && name !== "STRIPE_WEBHOOK_SECRET",
+);
+
+const SHOP_PHASE3C_PAYPAL_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
+  ...SHOP_PHASE2_AUTH_COOKIE_ENVIRONMENT,
+  PAYMENTS_ENABLED: "true",
+  STRIPE_PAYMENTS_ENABLED: "false",
+  STRIPE_MODE: "test",
+  PAYPAL_PAYMENTS_ENABLED: "true",
+  PAYPAL_ENVIRONMENT: "sandbox",
+  SHOP_PAYMENTS_ENABLED: "true",
+  SHOP_LEGAL_READY: "true",
+  SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+  SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+  SHOP_PHASE3C_PAYPAL_QA_CONFIRM: SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION,
+  EMAIL_OWNER_RECIPIENT: SHOP_PHASE3_QA_OWNER_EMAIL,
+} satisfies Record<string, string>);
+
+const SHOP_PHASE3C_FORBIDDEN_EXTERNAL_SECRETS = SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.filter(
+  (name) => name !== "PAYPAL_CLIENT_ID" && name !== "PAYPAL_CLIENT_SECRET" && name !== "PAYPAL_WEBHOOK_ID",
+);
+
 export function isLoopbackUrl(value: string | undefined) {
   if (!value) return false;
   try {
@@ -98,17 +143,11 @@ function hasDedicatedShopPhase2Database(environment: AuthEnvironment) {
   }
 }
 
-export function isSafeLocalShopPhase2QaHttpRuntime(
-  environment: AuthEnvironment = process.env,
-) {
-  if (Object.entries(SHOP_PHASE2_AUTH_COOKIE_ENVIRONMENT).some(
-    ([name, expected]) => environment[name] !== expected,
-  )) return false;
+function hasSafeLocalShopQaIdentity(environment: AuthEnvironment) {
   if (environment.LNX_PREVIEW_MODE?.trim()) return false;
   if (Object.entries(environment).some(
     ([name, value]) => name.startsWith("RAILWAY_") && Boolean(value?.trim()),
   )) return false;
-  if (SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
   if (environment[SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME] !== SHOP_PHASE2_QA_RUNTIME_CONFIRMATION) {
     return false;
   }
@@ -119,13 +158,55 @@ export function isSafeLocalShopPhase2QaHttpRuntime(
   return Boolean(environment.AUTH_SECRET && environment.AUTH_SECRET.length >= 32);
 }
 
+export function isSafeLocalShopPhase2QaHttpRuntime(
+  environment: AuthEnvironment = process.env,
+) {
+  if (Object.entries(SHOP_PHASE2_AUTH_COOKIE_ENVIRONMENT).some(
+    ([name, expected]) => environment[name] !== expected,
+  )) return false;
+  if (SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
+  return hasSafeLocalShopQaIdentity(environment);
+}
+
+export function isSafeLocalShopPhase3BStripeQaHttpRuntime(
+  environment: AuthEnvironment = process.env,
+) {
+  if (Object.entries(SHOP_PHASE3B_STRIPE_AUTH_COOKIE_ENVIRONMENT).some(
+    ([name, expected]) => environment[name] !== expected,
+  )) return false;
+  if (SHOP_PHASE3B_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
+  const stripeKey = environment.STRIPE_SECRET_KEY?.trim();
+  if (!stripeKey || !/^(?:sk|rk)_test_[A-Za-z0-9_-]{8,}$/.test(stripeKey) || /_live_/.test(stripeKey)) {
+    return false;
+  }
+  if (!/^whsec_[A-Za-z0-9_-]{8,}$/.test(environment.STRIPE_WEBHOOK_SECRET?.trim() ?? "")) {
+    return false;
+  }
+  return hasSafeLocalShopQaIdentity(environment);
+}
+
+export function isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(
+  environment: AuthEnvironment = process.env,
+) {
+  if (Object.entries(SHOP_PHASE3C_PAYPAL_AUTH_COOKIE_ENVIRONMENT).some(
+    ([name, expected]) => environment[name] !== expected,
+  )) return false;
+  if (SHOP_PHASE3C_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
+  if (!/^[A-Za-z0-9_-]{12,255}$/.test(environment.PAYPAL_CLIENT_ID?.trim() ?? "")) return false;
+  if (!/^[A-Za-z0-9_-]{12,255}$/.test(environment.PAYPAL_CLIENT_SECRET?.trim() ?? "")) return false;
+  if (!/^[A-Za-z0-9_-]{6,255}$/.test(environment.PAYPAL_WEBHOOK_ID?.trim() ?? "")) return false;
+  return hasSafeLocalShopQaIdentity(environment);
+}
+
 export function shouldUseSecureAuthCookies(
   productionBuild: boolean,
   environment: AuthEnvironment = process.env,
 ) {
   if (!productionBuild) return false;
   if (isPersistentLocalPreview(environment)) return false;
-  return !isSafeLocalShopPhase2QaHttpRuntime(environment);
+  return !isSafeLocalShopPhase2QaHttpRuntime(environment)
+    && !isSafeLocalShopPhase3BStripeQaHttpRuntime(environment)
+    && !isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment);
 }
 
 export function configuredAdminEmail() {

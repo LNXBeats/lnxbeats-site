@@ -6,7 +6,6 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { parseShopOrderIntent } from "@/lib/shop/order-domain";
 import {
-  confirmShopOrderPayment,
   createShopOrder,
   expireShopOrderReservations,
   getAdminShopOrder,
@@ -734,25 +733,20 @@ async function runtimeProof(passed: string[], originalV1Counts: V1Counts) {
   assert.equal(confirmable.items.find(({ productId }) => productId === untrackedProduct.id)?.reservation, null);
   passed.push("mixed cart sums shipping and creates no reservation for untracked stock");
 
-  const confirmedAt = new Date(expiryNow.getTime() + 6_000);
-  await confirmShopOrderPayment(confirmable.id, confirmedAt);
-  await confirmShopOrderPayment(confirmable.id, new Date(confirmedAt.getTime() + 1_000));
-  const confirmed = await prisma.shopOrder.findUniqueOrThrow({
+  const releasedAt = new Date(expiryNow.getTime() + 6_000);
+  assert.deepEqual(await releaseShopOrderReservation(confirmable.id, releasedAt), { released: 1 });
+  const releasedMixedOrder = await prisma.shopOrder.findUniqueOrThrow({
     where: { id: confirmable.id },
     include: { items: { include: { reservation: true } }, events: true },
   });
-  assert.equal(confirmed.paymentStatus, "PAID");
-  assert.equal(confirmed.paidAt?.toISOString(), confirmedAt.toISOString());
-  assert.equal(confirmed.items.find(({ productId }) => product.id === productId)?.reservation?.status, "CONFIRMED");
-  assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock, 0);
-  assert.equal(await prisma.productStockAdjustment.count({ where: { productId: product.id, delta: -1 } }), 1);
-  assert.equal(confirmed.events.filter(({ type }) => type === "STOCK_CONFIRMED").length, 1);
-  await assert.rejects(
-    releaseShopOrderReservation(confirmable.id, new Date(confirmedAt.getTime() + 2_000)),
-    (error: unknown) => error instanceof ShopServiceError && error.code === "RESERVATION_CONFIRMED",
-  );
+  assert.equal(releasedMixedOrder.paymentStatus, "CANCELLED");
+  assert.equal(releasedMixedOrder.paidAt, null);
+  assert.equal(releasedMixedOrder.items.find(({ productId }) => product.id === productId)?.reservation?.status, "RELEASED");
+  assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock, 1);
+  assert.equal(await prisma.productStockAdjustment.count({ where: { productId: product.id, delta: -1 } }), 0);
+  assert.equal(releasedMixedOrder.events.filter(({ type }) => type === "STOCK_CONFIRMED").length, 0);
   assert.equal(await expireShopOrderReservations(new Date(confirmable.reservationExpiresAt.getTime() + 1_000)), 0);
-  passed.push("fake internal confirmation is idempotent and sells stock once");
+  passed.push("Phase 2 order runtime cannot confirm payment or decrement stock without provider evidence");
 
   const noShippingIntent = parseShopOrderIntent({
     items: [{
@@ -763,7 +757,7 @@ async function runtimeProof(passed: string[], originalV1Counts: V1Counts) {
     shippingAddress: null,
   });
   const numbered = await Promise.all(members.map((actor, index) =>
-    createShopOrder(actor, noShippingIntent, CREATION_TOKENS[index + 6]!, new Date(confirmedAt.getTime() + 3_000))));
+    createShopOrder(actor, noShippingIntent, CREATION_TOKENS[index + 6]!, new Date(releasedAt.getTime() + 3_000))));
   const numbers = numbered.map(({ orderNumber }) => orderNumber);
   assert.equal(new Set(numbers).size, numbered.length);
   assert.ok(numbers.every((value) => /^LNX-SHOP-[0-9]{4}-[0-9]{6,}$/.test(value)));

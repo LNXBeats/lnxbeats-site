@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   isSafeLocalShopPhase2QaHttpRuntime,
+  isSafeLocalShopPhase3BStripeQaHttpRuntime,
+  isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime,
   shouldUseSecureAuthCookies,
 } from "@/lib/auth/environment";
 import {
@@ -15,7 +17,14 @@ import {
   SHOP_PHASE2_QA_RUNTIME_CONFIRMATION,
   SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME,
   SHOP_PHASE2_QA_TARGET,
+  SHOP_PHASE3B_STRIPE_QA_CONFIRMATION,
+  SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION,
+  SHOP_PHASE3_QA_OWNER_EMAIL,
 } from "@/lib/shop/qa-contract";
+import {
+  SHOP_LEGAL_QA_CONFIRMATION,
+  SHOP_LEGAL_QA_TERMS_VERSION,
+} from "@/lib/shop/legal";
 
 function shopPhase2Environment() {
   return {
@@ -80,6 +89,95 @@ test("the guarded Shop Phase 2 HTTP runtime disables secure auth cookies in a pr
   const environment = shopPhase2Environment();
   assert.equal(isSafeLocalShopPhase2QaHttpRuntime(environment), true);
   assert.equal(shouldUseSecureAuthCookies(true, environment), false);
+});
+
+function shopPhase3BStripeEnvironment() {
+  return {
+    ...shopPhase2Environment(),
+    PAYMENTS_ENABLED: "true",
+    STRIPE_PAYMENTS_ENABLED: "true",
+    STRIPE_MODE: "test",
+    STRIPE_SECRET_KEY: "rk_test_phase3b-cookie-fixture",
+    STRIPE_WEBHOOK_SECRET: "whsec_phase3b-cookie-fixture",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    PAYPAL_ENVIRONMENT: "sandbox",
+    SHOP_PAYMENTS_ENABLED: "true",
+    SHOP_LEGAL_READY: "true",
+    SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+    SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+    SHOP_PHASE3B_STRIPE_QA_CONFIRM: SHOP_PHASE3B_STRIPE_QA_CONFIRMATION,
+    EMAIL_OWNER_RECIPIENT: SHOP_PHASE3_QA_OWNER_EMAIL,
+  };
+}
+
+test("the explicitly guarded Shop Phase 3B Stripe TEST runtime disables secure HTTP cookies", () => {
+  const environment = shopPhase3BStripeEnvironment();
+  assert.equal(isSafeLocalShopPhase3BStripeQaHttpRuntime(environment), true);
+  assert.equal(shouldUseSecureAuthCookies(true, environment), false);
+});
+
+test("incomplete, live or externally coupled Shop Phase 3B environments keep secure cookies", () => {
+  const exact = shopPhase3BStripeEnvironment();
+  for (const mutation of [
+    { SHOP_PHASE3B_STRIPE_QA_CONFIRM: "" },
+    { STRIPE_SECRET_KEY: "sk_live_forbidden-fixture" },
+    { STRIPE_WEBHOOK_SECRET: "" },
+    { PAYPAL_PAYMENTS_ENABLED: "true" },
+    { PAYPAL_CLIENT_ID: "sandbox-client-forbidden" },
+    { NOTIFICATION_EMAIL_TRANSPORT: "resend" },
+    { SHOP_TERMS_VERSION: "production-terms" },
+    { LNX_DATABASE_TARGET: "another-target" },
+    { RAILWAY_ENVIRONMENT_NAME: "staging" },
+  ]) {
+    const environment = { ...exact, ...mutation };
+    assert.equal(isSafeLocalShopPhase3BStripeQaHttpRuntime(environment), false);
+    assert.equal(shouldUseSecureAuthCookies(true, environment), true);
+  }
+});
+
+function shopPhase3CPaypalEnvironment() {
+  return {
+    ...shopPhase2Environment(),
+    PAYMENTS_ENABLED: "true",
+    STRIPE_PAYMENTS_ENABLED: "false",
+    STRIPE_MODE: "test",
+    PAYPAL_PAYMENTS_ENABLED: "true",
+    PAYPAL_ENVIRONMENT: "sandbox",
+    PAYPAL_CLIENT_ID: "paypal_phase3c_cookie_client",
+    PAYPAL_CLIENT_SECRET: "paypal_phase3c_cookie_secret",
+    PAYPAL_WEBHOOK_ID: "paypal_phase3c_cookie_webhook",
+    SHOP_PAYMENTS_ENABLED: "true",
+    SHOP_LEGAL_READY: "true",
+    SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+    SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+    SHOP_PHASE3C_PAYPAL_QA_CONFIRM: SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION,
+    EMAIL_OWNER_RECIPIENT: SHOP_PHASE3_QA_OWNER_EMAIL,
+  };
+}
+
+test("the explicitly guarded Shop Phase 3C PayPal Sandbox runtime disables secure HTTP cookies", () => {
+  const environment = shopPhase3CPaypalEnvironment();
+  assert.equal(isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment), true);
+  assert.equal(shouldUseSecureAuthCookies(true, environment), false);
+});
+
+test("incomplete, live or externally coupled Shop Phase 3C environments keep secure cookies", () => {
+  const exact = shopPhase3CPaypalEnvironment();
+  for (const mutation of [
+    { SHOP_PHASE3C_PAYPAL_QA_CONFIRM: "" },
+    { PAYPAL_ENVIRONMENT: "live" },
+    { PAYPAL_CLIENT_SECRET: "" },
+    { STRIPE_PAYMENTS_ENABLED: "true" },
+    { STRIPE_SECRET_KEY: "sk_test_forbidden-fixture" },
+    { NOTIFICATION_EMAIL_TRANSPORT: "resend" },
+    { SHOP_TERMS_VERSION: "production-terms" },
+    { LNX_DATABASE_TARGET: "another-target" },
+    { RAILWAY_ENVIRONMENT_NAME: "staging" },
+  ]) {
+    const environment = { ...exact, ...mutation };
+    assert.equal(isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment), false);
+    assert.equal(shouldUseSecureAuthCookies(true, environment), true);
+  }
 });
 
 test("incomplete, remote or ambiguous Shop Phase 2 environments fail closed", () => {

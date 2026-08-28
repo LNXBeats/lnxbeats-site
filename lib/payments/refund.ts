@@ -222,11 +222,24 @@ export function createRefundDatabaseRepository(
         await lock(transaction, `payments:order:${input.orderNumber}`);
         const existing = await transaction.refundAttempt.findUnique({
           where: { localIdempotencyKey: input.localIdempotencyKey },
-          include: { payment: { select: { providerPaymentId: true, mode: true, order: { select: { orderNumber: true } } } } },
+          include: {
+            payment: {
+              select: {
+                orderId: true,
+                shopOrderId: true,
+                providerPaymentId: true,
+                mode: true,
+                order: { select: { orderNumber: true } },
+              },
+            },
+          },
         });
         if (existing) {
           if (
             existing.requestedByUserId !== input.actor.id
+            || existing.payment.shopOrderId !== null
+            || !existing.payment.orderId
+            || !existing.payment.order
             || existing.payment.order.orderNumber !== input.orderNumber
             || existing.payment.mode !== expectedMode
           ) {
@@ -361,7 +374,12 @@ export function createRefundDatabaseRepository(
           where: { id: attemptId },
           include: { payment: { include: { order: true } } },
         });
-        if (!attempt) throw new RefundServiceError(404, "PAYMENT_NOT_REFUNDABLE");
+        if (
+          !attempt
+          || attempt.payment.shopOrderId !== null
+          || !attempt.payment.orderId
+          || !attempt.payment.order
+        ) throw new RefundServiceError(404, "PAYMENT_NOT_REFUNDABLE");
         if (attempt.payment.mode !== expectedMode) throw new RefundServiceError(409, "REFUND_REQUIRES_REVIEW");
         await lock(transaction, `payments:order:${attempt.payment.order.orderNumber}`);
         const mismatch = evidence.provider !== attempt.provider

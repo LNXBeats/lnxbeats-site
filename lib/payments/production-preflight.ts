@@ -81,7 +81,16 @@ async function migrationDirectoryCount() {
 }
 
 async function databaseRules(client: PrismaClient): Promise<PaymentPreflightRule[]> {
-  const [migrationDirectories, appliedMigrations, failedMigrations, columns, winners, nonEuro] = await Promise.all([
+  const [
+    migrationDirectories,
+    appliedMigrations,
+    failedMigrations,
+    columns,
+    orderWinners,
+    shopOrderWinners,
+    invalidParents,
+    nonEuro,
+  ] = await Promise.all([
     migrationDirectoryCount(),
     client.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`,
     client.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL`,
@@ -94,11 +103,35 @@ async function databaseRules(client: PrismaClient): Promise<PaymentPreflightRule
     `,
     client.payment.groupBy({
       by: ["orderId"],
-      where: { status: { in: [...winningStatuses] } },
+      where: {
+        orderId: { not: null },
+        shopOrderId: null,
+        status: { in: [...winningStatuses] },
+      },
       _count: { _all: true },
       having: { orderId: { _count: { gt: 1 } } },
       orderBy: { orderId: "asc" },
       take: 1,
+    }),
+    client.payment.groupBy({
+      by: ["shopOrderId"],
+      where: {
+        orderId: null,
+        shopOrderId: { not: null },
+        status: { in: [...winningStatuses] },
+      },
+      _count: { _all: true },
+      having: { shopOrderId: { _count: { gt: 1 } } },
+      orderBy: { shopOrderId: "asc" },
+      take: 1,
+    }),
+    client.payment.count({
+      where: {
+        OR: [
+          { orderId: null, shopOrderId: null },
+          { orderId: { not: null }, shopOrderId: { not: null } },
+        ],
+      },
     }),
     client.payment.count({ where: { currency: { not: "EUR" } } }),
   ]);
@@ -112,7 +145,11 @@ async function databaseRules(client: PrismaClient): Promise<PaymentPreflightRule
       "database.mode.columns",
       requiredColumns.has("payments.mode") && requiredColumns.has("provider_events.livemode"),
     ),
-    rule("database.winner.invariant", winners.length === 0),
+    rule("database.parent.xor", invalidParents === 0, String(invalidParents)),
+    rule(
+      "database.winner.invariant",
+      orderWinners.length === 0 && shopOrderWinners.length === 0,
+    ),
     rule("database.currency.eur", nonEuro === 0, String(nonEuro)),
   ];
 }

@@ -1,37 +1,42 @@
 import "server-only";
 
-import { createPaypalGateway, type PaypalGateway, type PaypalWebhookHeaders } from "@/lib/payments/paypal-client";
+import { createPaypalReconciliationGateway, type PaypalGateway, type PaypalWebhookHeaders } from "@/lib/payments/paypal-client";
 import {
   processVerifiedPaypalWebhookEvent,
   type VerifiedPaypalWebhookEvent,
 } from "@/lib/payments/paypal-webhook";
-import { createPaymentDatabasePaypalCaptureRepository } from "@/lib/payments/paypal-service";
 import { logPaymentEvent } from "@/lib/payments/observability";
-import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
+import { assertPaypalWebhookRuntimeEnvironment } from "@/lib/payments/runtime";
 import { isPaypalFinancialEvent, processVerifiedPaypalFinancialEvent } from "@/lib/payments/provider-financial-events";
 import type { PaymentsConfiguration } from "@/lib/payments/types";
-import { prisma } from "@/lib/prisma";
+import type { PaypalReconciliationConfiguration } from "@/lib/payments/config";
+import { processVerifiedPaypalWebhookEventByPaymentSource } from "@/lib/shop/payment-webhooks";
 
 export const PAYPAL_WEBHOOK_MAX_BYTES = 256 * 1024;
 
 export type PaypalWebhookRouteDependencies = Readonly<{
-  assertRuntime(): Promise<PaymentsConfiguration | void>;
+  assertRuntime(): Promise<PaymentsConfiguration | PaypalReconciliationConfiguration | void>;
   gateway(): PaypalGateway;
   processEvent(event: VerifiedPaypalWebhookEvent): ReturnType<typeof processVerifiedPaypalWebhookEvent>;
 }>;
 
 const dependencies: PaypalWebhookRouteDependencies = {
-  assertRuntime: assertPaymentsRuntimeEnvironment,
-  gateway: createPaypalGateway,
+  assertRuntime: assertPaypalWebhookRuntimeEnvironment,
+  gateway: createPaypalReconciliationGateway,
   processEvent: async (event) => {
-    const configuration = await assertPaymentsRuntimeEnvironment();
-    const environment = configuration.paypal.enabled ? configuration.paypal.environment : "sandbox";
-    return isPaypalFinancialEvent(event.event_type)
-      ? { ...(await processVerifiedPaypalFinancialEvent(event, environment)), orderConfirmed: false }
-      : processVerifiedPaypalWebhookEvent(
-          event,
-          createPaymentDatabasePaypalCaptureRepository(prisma, environment === "live" ? "LIVE" : "TEST"),
-        );
+    const configuration = await assertPaypalWebhookRuntimeEnvironment();
+    const environment = configuration.paypal.environment;
+    if (isPaypalFinancialEvent(event.event_type)) {
+      return { ...(await processVerifiedPaypalFinancialEvent(event, environment)), orderConfirmed: false };
+    }
+    const result = await processVerifiedPaypalWebhookEventByPaymentSource(event, environment);
+    return "orderConfirmed" in result
+      ? result
+      : {
+        outcome: result.outcome,
+        duplicate: result.duplicate,
+        orderConfirmed: result.shopOrderPaid,
+      };
   },
 };
 
@@ -144,7 +149,7 @@ export async function handlePaypalWebhookPost(
   request: Request,
   routeDependencies: PaypalWebhookRouteDependencies = dependencies,
 ) {
-  let runtimeConfiguration: PaymentsConfiguration | void;
+  let runtimeConfiguration: PaymentsConfiguration | PaypalReconciliationConfiguration | void;
   try {
     runtimeConfiguration = await routeDependencies.assertRuntime();
   } catch {

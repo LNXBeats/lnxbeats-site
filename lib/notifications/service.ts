@@ -41,6 +41,10 @@ type Transaction = Prisma.TransactionClient;
 export const ownerNewOrderNotificationKey = (orderId: string) => `order:${orderId}:owner-new:email`;
 export const customerPaymentNotificationKey = (orderId: string) => `order:${orderId}:payment-confirmed:email`;
 export const customerDeliveryNotificationKey = (orderId: string) => `order:${orderId}:delivery-ready:email`;
+export const ownerShopOrderPaidNotificationKey = (shopOrderId: string) => `shop-order:${shopOrderId}:owner-paid:email`;
+export const customerShopPaymentConfirmedNotificationKey = (shopOrderId: string) => `shop-order:${shopOrderId}:payment-confirmed:email`;
+export const customerShopPreparingNotificationKey = (shopOrderId: string) => `shop-order:${shopOrderId}:preparing:email`;
+export const customerShopShippedNotificationKey = (shopOrderId: string) => `shop-order:${shopOrderId}:shipped:email`;
 
 export function clientNotificationEnqueueEnabled(
   environment: Record<string, string | undefined> = process.env,
@@ -189,6 +193,197 @@ export function enqueueCustomerDeliveryNotification(transaction: Transaction, or
   });
 }
 
+type ShopNotificationKind = Extract<
+  OrderNotificationKind,
+  "OWNER_SHOP_ORDER_PAID" | "CUSTOMER_SHOP_PAYMENT_CONFIRMED" | "CUSTOMER_SHOP_PREPARING" | "CUSTOMER_SHOP_SHIPPED"
+>;
+
+type ShopPaymentProvider = "STRIPE" | "PAYPAL";
+
+function shopCustomerName(user: {
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+}) {
+  const displayName = user.displayName.trim();
+  if (displayName) return displayName;
+  const legalName = [user.firstName?.trim(), user.lastName?.trim()].filter(Boolean).join(" ");
+  return legalName || null;
+}
+
+export async function enqueueShopOrderNotification(
+  transaction: Transaction,
+  input: Readonly<{
+    shopOrderId: string;
+    kind: ShopNotificationKind;
+    idempotencyKey: string;
+    recipient?: string | null;
+    paymentProvider?: ShopPaymentProvider | null;
+    termsVersion?: string | null;
+  }>,
+) {
+  const definition = notificationDefinition(input.kind);
+  const shopOrder = await transaction.shopOrder.findUniqueOrThrow({
+    where: { id: input.shopOrderId },
+    select: {
+      id: true,
+      orderNumber: true,
+      subtotalCents: true,
+      shippingCents: true,
+      totalCents: true,
+      currency: true,
+      shippingRequired: true,
+      shippingFirstName: true,
+      shippingLastName: true,
+      shippingAddressLine1: true,
+      shippingAddressLine2: true,
+      shippingPostalCode: true,
+      shippingCity: true,
+      shippingCountryCode: true,
+      termsVersion: true,
+      createdAt: true,
+      user: {
+        select: {
+          email: true,
+          emailVerified: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+      items: {
+        orderBy: { position: "asc" },
+        select: {
+          productTitle: true,
+          quantity: true,
+          unitPriceCents: true,
+          lineTotalCents: true,
+        },
+      },
+      payments: {
+        where: { status: "SUCCEEDED" },
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+        take: 1,
+        select: { provider: true },
+      },
+    },
+  });
+  const customerName = shopCustomerName(shopOrder.user);
+  const customerRecipient = shopOrder.user.emailVerified ? shopOrder.user.email : null;
+  const recipient = notificationRecipientSnapshot(input.recipient === undefined
+    ? definition.audience === "OWNER"
+      ? process.env.EMAIL_OWNER_RECIPIENT?.trim().toLowerCase() || null
+      : customerRecipient
+    : input.recipient);
+  const includeShippingAddress = input.kind === "CUSTOMER_SHOP_PAYMENT_CONFIRMED" && shopOrder.shippingRequired;
+  if (includeShippingAddress && (
+    !shopOrder.shippingFirstName
+    || !shopOrder.shippingLastName
+    || !shopOrder.shippingAddressLine1
+    || !shopOrder.shippingPostalCode
+    || !shopOrder.shippingCity
+    || !shopOrder.shippingCountryCode
+  )) throw new Error("Shop notification shipping snapshot is incomplete.");
+  const payload = {
+    orderNumber: shopOrder.orderNumber,
+    customerName,
+    customerEmail: shopOrder.user.email,
+    subtotalCents: shopOrder.subtotalCents,
+    shippingCents: shopOrder.shippingCents,
+    totalCents: shopOrder.totalCents,
+    currency: shopOrder.currency,
+    createdAt: shopOrder.createdAt.toISOString(),
+    items: shopOrder.items.map((item) => ({
+      productTitle: item.productTitle,
+      quantity: item.quantity,
+      unitPriceCents: item.unitPriceCents,
+      lineTotalCents: item.lineTotalCents,
+    })),
+    paymentProvider: input.paymentProvider ?? shopOrder.payments[0]?.provider ?? null,
+    termsVersion: input.termsVersion?.trim() || shopOrder.termsVersion,
+    shippingAddress: includeShippingAddress ? {
+      recipientName: `${shopOrder.shippingFirstName} ${shopOrder.shippingLastName}`,
+      addressLine1: shopOrder.shippingAddressLine1!,
+      addressLine2: shopOrder.shippingAddressLine2,
+      postalCode: shopOrder.shippingPostalCode!,
+      city: shopOrder.shippingCity!,
+      countryCode: shopOrder.shippingCountryCode!,
+    } : null,
+  } satisfies Prisma.InputJsonObject;
+  parseNotificationPayload(payload, input.kind);
+  const notification = await transaction.orderNotification.upsert({
+    where: { idempotencyKey: input.idempotencyKey },
+    update: {},
+    create: {
+      orderId: null,
+      shopOrderId: shopOrder.id,
+      kind: input.kind,
+      channel: "EMAIL",
+      priority: definition.priority,
+      recipient,
+      idempotencyKey: input.idempotencyKey,
+      templateKey: definition.templateKey,
+      templateVersion: NOTIFICATION_TEMPLATE_VERSION,
+      payloadVersion: NOTIFICATION_PAYLOAD_VERSION,
+      payload,
+      resourceType: "SHOP_ORDER",
+      resourceId: shopOrder.id,
+      resourceReference: shopOrder.orderNumber,
+      deploymentEnvironment: notificationEnvironmentSnapshot(),
+    },
+    select: { id: true, orderId: true, shopOrderId: true, kind: true, channel: true, resourceType: true, resourceId: true },
+  });
+  if (
+    notification.orderId !== null
+    || notification.shopOrderId !== shopOrder.id
+    || notification.kind !== input.kind
+    || notification.channel !== "EMAIL"
+    || notification.resourceType !== "SHOP_ORDER"
+    || notification.resourceId !== shopOrder.id
+  ) throw new Error("Notification idempotency key is already assigned to another logical event.");
+  return { id: notification.id };
+}
+
+export async function enqueueShopPaymentConfirmedNotifications(
+  transaction: Transaction,
+  input: Readonly<{
+    shopOrderId: string;
+    paymentProvider: ShopPaymentProvider;
+    termsVersion: string;
+  }>,
+) {
+  await enqueueShopOrderNotification(transaction, {
+    ...input,
+    kind: "OWNER_SHOP_ORDER_PAID",
+    idempotencyKey: ownerShopOrderPaidNotificationKey(input.shopOrderId),
+  });
+  if (clientNotificationEnqueueEnabled()) {
+    await enqueueShopOrderNotification(transaction, {
+      ...input,
+      kind: "CUSTOMER_SHOP_PAYMENT_CONFIRMED",
+      idempotencyKey: customerShopPaymentConfirmedNotificationKey(input.shopOrderId),
+    });
+  }
+}
+
+export function enqueueShopPreparingNotification(transaction: Transaction, shopOrderId: string) {
+  if (!clientNotificationEnqueueEnabled()) return Promise.resolve(null);
+  return enqueueShopOrderNotification(transaction, {
+    shopOrderId,
+    kind: "CUSTOMER_SHOP_PREPARING",
+    idempotencyKey: customerShopPreparingNotificationKey(shopOrderId),
+  });
+}
+
+export function enqueueShopShippedNotification(transaction: Transaction, shopOrderId: string) {
+  if (!clientNotificationEnqueueEnabled()) return Promise.resolve(null);
+  return enqueueShopOrderNotification(transaction, {
+    shopOrderId,
+    kind: "CUSTOMER_SHOP_SHIPPED",
+    idempotencyKey: customerShopShippedNotificationKey(shopOrderId),
+  });
+}
+
 export interface NotificationDispatchRepository {
   claim(id: string): Promise<OrderNotificationMessage | null>;
   markSent(id: string, result: NotificationTransportResult): Promise<void>;
@@ -232,6 +427,12 @@ export const databaseNotificationDispatchRepository: NotificationDispatchReposit
             select: {
               orderNumber: true, customerName: true, customerEmail: true, totalCents: true, currency: true,
               coverIncluded: true, priorityProcessing: true, createdAt: true,
+            },
+          },
+          shopOrder: {
+            select: {
+              orderNumber: true, totalCents: true, currency: true, createdAt: true,
+              user: { select: { email: true, displayName: true, firstName: true, lastName: true } },
             },
           },
         },
@@ -344,7 +545,7 @@ export const databaseNotificationDispatchRepository: NotificationDispatchReposit
       }
       let payload;
       try {
-        payload = parseNotificationPayload(notification.payload);
+        payload = parseNotificationPayload(notification.payload, notification.kind);
       } catch {
         await transaction.orderNotification.update({
           where: { id },
@@ -395,6 +596,14 @@ export const databaseNotificationDispatchRepository: NotificationDispatchReposit
         resourceReference: notification.resourceReference,
         deploymentEnvironment: notification.deploymentEnvironment as OrderNotificationMessage["deploymentEnvironment"],
         order: notification.order,
+        shopOrder: notification.shopOrder ? {
+          orderNumber: notification.shopOrder.orderNumber,
+          customerName: shopCustomerName(notification.shopOrder.user),
+          customerEmail: notification.shopOrder.user.email,
+          totalCents: notification.shopOrder.totalCents,
+          currency: notification.shopOrder.currency,
+          createdAt: notification.shopOrder.createdAt,
+        } : null,
       };
     }, { isolationLevel: "ReadCommitted" });
   },

@@ -104,7 +104,7 @@ type OwnerSmokeIdentity = Readonly<{
     customerEmail: string;
     title: string | null;
     _count: Readonly<{ payments: number; notifications: number }>;
-  }>;
+  }> | null;
 }>;
 
 function assertOwnerSmokeIdentity(recipient: string, fixture: OwnerSmokeIdentity) {
@@ -113,6 +113,7 @@ function assertOwnerSmokeIdentity(recipient: string, fixture: OwnerSmokeIdentity
     || fixture.kind !== "OWNER_NEW_ORDER"
     || fixture.channel !== "EMAIL"
     || fixture.idempotencyKey !== OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY
+    || !fixture.order
     || fixture.order.orderNumber !== OWNER_EMAIL_SMOKE_ORDER_NUMBER
     || fixture.order.userId !== null
     || fixture.order.customerId !== null

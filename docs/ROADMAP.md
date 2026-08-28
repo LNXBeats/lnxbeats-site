@@ -160,10 +160,13 @@
   fiches publics sur loopback, panier, création idempotente de `ShopOrder`,
   snapshots, frais d'envoi par exemplaire, réservation concurrente et
   expiration configurable (30 minutes dans la QA), vues membre et Admin ;
-- aucun paiement/provider, webhook, facture, notification ou workflow
-  d'expédition n'est activé en phase 2 ;
-- phase 3 différée : adaptation financière Stripe/PayPal dédiée, webhooks,
-  rapprochement, conformité, notifications, préparation et expédition ;
+- phase 3A implémentée comme fondation fermée : parent financier XOR,
+  winner multi-provider, confirmation atomique du stock, outbox Boutique,
+  acceptation CGV technique et fulfillment audité ;
+- validation Phase 3A uniquement locale/mock/capture : aucun provider externe,
+  aucune CGV finale, aucun remboursement automatique et aucun armement Live ;
+- phase 3B différée : QA Stripe Test/PayPal Sandbox explicitement autorisée,
+  revue juridique/comptable, runbook et décision humaine d'ouverture ;
 - ouverture Production différée après QA, revue juridique/comptable et nouveau
   gate dédié : le gate actuel refuse explicitement `SHOP_ENABLED=true` en
   Production.

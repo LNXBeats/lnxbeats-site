@@ -1,4 +1,9 @@
-# Commandes Boutique V1.1 — contrat Phase 2
+# Commandes Boutique V1.1 — contrat Phase 2 et fondation Phase 3A
+
+> La Phase 3A ajoute les relations financières, la preuve technique
+> d'acceptation et le fulfillment, mais conserve tous les gates fermés. Les
+> paragraphes Phase 2 décrivent toujours la création et la réservation avant
+> paiement.
 
 ## Frontière fonctionnelle
 
@@ -123,9 +128,22 @@ Les écrans Admin sont en lecture seule. La propriété utilisateur est incluse
 dans la requête de détail membre, de sorte qu'un autre compte reçoit une page
 introuvable plutôt que la commande.
 
-## Phase 3 différée
+## Fondation Phase 3A
 
-Le passage à une vente réelle exigera une architecture financière Boutique
-dédiée : idempotence provider, Checkout, webhooks signés, rapprochement,
-facturation/TVA, règles d'annulation/remboursement, notifications et
-fulfillment. Rien de cela n'est armé par `SHOP_ENABLED` en Phase 2.
+`Payment` et `OrderNotification` acceptent désormais un parent `ShopOrder`,
+avec une contrainte PostgreSQL imposant exactement un parent musical ou
+Boutique. La source métier est donc dérivée de ce XOR et n'est pas dupliquée
+dans une colonne susceptible de diverger.
+
+Une acceptation technique fige `termsVersion`, `termsHashSha256` et
+`termsAcceptedAt`. Elle ne constitue pas une CGV juridiquement approuvée : le
+registre actuel ne contient qu'une version QA et le gate Production reste
+fermé. Les tentatives provider et événements de paiement sont détaillés dans
+[SHOP_PAYMENTS.md](SHOP_PAYMENTS.md).
+
+Après une réussite authentifiée et une réservation encore valide, la même
+transaction confirme le stock et passe la commande à `PAID`. Une capture
+authentique après expiration reste portée par `Payment`, tandis que la
+`ShopOrder` demeure non fulfillable et reçoit un signal de revue. La
+préparation puis l'expédition exigent un paiement confirmé et sont auditées
+dans `ShopOrderLifecycleEvent`.

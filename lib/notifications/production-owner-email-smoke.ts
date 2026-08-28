@@ -135,7 +135,7 @@ type ProductionOwnerSmokeIdentity = Readonly<{
     pricingVersion: string;
     cancelledAt: Date | null;
     _count: Readonly<{ payments: number; notifications: number }>;
-  }>;
+  }> | null;
 }>;
 
 function assertProductionOwnerSmokeIdentity(recipient: string, fixture: ProductionOwnerSmokeIdentity) {
@@ -147,6 +147,7 @@ function assertProductionOwnerSmokeIdentity(recipient: string, fixture: Producti
     || fixture.resourceType !== "ORDER"
     || fixture.resourceReference !== PRODUCTION_OWNER_EMAIL_SMOKE_ORDER_NUMBER
     || fixture.deploymentEnvironment !== "production"
+    || !fixture.order
     || fixture.order.orderNumber !== PRODUCTION_OWNER_EMAIL_SMOKE_ORDER_NUMBER
     || fixture.order.userId !== null
     || fixture.order.customerId !== null

@@ -194,6 +194,15 @@ export function createPrismaPaymentDiagnosticRepository(
         client.$queryRaw<Array<{ count: bigint }>>`
           SELECT (
             (SELECT COUNT(*)
+              FROM "payments"
+              WHERE ("orderId" IS NULL AND "shopOrderId" IS NULL)
+                OR ("orderId" IS NOT NULL AND "shopOrderId" IS NOT NULL))
+            + (SELECT COUNT(*)
+              FROM "payments" payment
+              INNER JOIN "shop_orders" shop_order ON shop_order."id" = payment."shopOrderId"
+              WHERE payment."amountCents" <> shop_order."totalCents"
+                OR payment."currency" <> shop_order."currency")
+            + (SELECT COUNT(*)
               FROM "payments" payment
               INNER JOIN "orders" ordered ON ordered."id" = payment."orderId"
               WHERE payment."amountCents" <> ordered."totalCents"
@@ -209,10 +218,20 @@ export function createPrismaPaymentDiagnosticRepository(
               WHERE payment."status" IN ('SUCCEEDED', 'REFUND_PENDING', 'PARTIALLY_REFUNDED', 'REFUNDED')
                 AND ordered."status" IN ('DRAFT', 'AWAITING_PAYMENT'))
             + (SELECT COUNT(*) FROM (
-              SELECT "orderId"
+              SELECT 'ORDER' AS parent_type, "orderId" AS parent_id
               FROM "payments"
-              WHERE "status" IN ('SUCCEEDED', 'REFUND_PENDING', 'PARTIALLY_REFUNDED', 'REFUNDED')
+              WHERE "orderId" IS NOT NULL
+                AND "shopOrderId" IS NULL
+                AND "status" IN ('SUCCEEDED', 'REFUND_PENDING', 'PARTIALLY_REFUNDED', 'REFUNDED')
               GROUP BY "orderId"
+              HAVING COUNT(*) > 1
+              UNION ALL
+              SELECT 'SHOP_ORDER' AS parent_type, "shopOrderId" AS parent_id
+              FROM "payments"
+              WHERE "orderId" IS NULL
+                AND "shopOrderId" IS NOT NULL
+                AND "status" IN ('SUCCEEDED', 'REFUND_PENDING', 'PARTIALLY_REFUNDED', 'REFUNDED')
+              GROUP BY "shopOrderId"
               HAVING COUNT(*) > 1
             ) AS duplicate_winners)
           )::bigint AS count

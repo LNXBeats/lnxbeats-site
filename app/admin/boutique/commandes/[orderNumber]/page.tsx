@@ -1,9 +1,17 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import {
+  markShopOrderPreparingAction,
+  markShopOrderShippedAction,
+} from "@/app/admin/boutique/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
-import { formatShopMoney } from "@/lib/shop/order-presentation";
+import {
+  formatShopMoney,
+  shopPaymentAttemptPresentation,
+  shopPaymentIncidentLabel,
+} from "@/lib/shop/order-presentation";
 import { getAdminShopOrder } from "@/lib/shop/order-service";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +51,13 @@ const EVENT_LABELS = {
   STOCK_CONFIRMED: "Stock confirmé",
   STOCK_RELEASED: "Stock libéré",
   STOCK_RESERVATION_EXPIRED: "Réservation expirée",
+  SHOP_TERMS_ACCEPTED: "Conditions de vente acceptées",
+  SHOP_PAYMENT_PROCESSING: "Paiement Boutique initié",
+  SHOP_PAYMENT_CONFIRMED: "Paiement Boutique confirmé",
+  SHOP_PAYMENT_FAILED: "Tentative de paiement échouée",
+  SHOP_PAYMENT_REQUIRES_REVIEW: "Paiement Boutique à vérifier",
+  PREPARATION_STARTED: "Préparation démarrée",
+  ORDER_SHIPPED: "Commande expédiée",
 } as const;
 
 const DATE_FORMAT = new Intl.DateTimeFormat("fr-FR", {
@@ -92,18 +107,34 @@ function eventDetail(event: EventSummary, items: readonly ItemSummary[]) {
 
 export default async function AdminShopOrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orderNumber: string }>;
+  searchParams: Promise<{ etat?: string }>;
 }) {
   await requireAdmin();
   const { orderNumber } = await params;
   const order = await getAdminShopOrder(orderNumber);
   if (!order) notFound();
+  const state = (await searchParams).etat;
 
   const itemTitle = order.items.length === 1
     ? order.items[0].productTitle
     : `${order.items.length} produits`;
   const customerName = order.user.displayName?.trim() || "Membre Boutique";
+  const financialPayment = order.payments.find(({ status }) => [
+    "SUCCEEDED",
+    "REFUND_PENDING",
+    "PARTIALLY_REFUNDED",
+    "REFUNDED",
+  ].includes(status)) ?? order.payments.find(({ status }) => status === "REQUIRES_REVIEW") ?? null;
+  const paymentProvider = financialPayment?.provider === "STRIPE"
+    ? "Carte bancaire / Apple Pay"
+    : financialPayment?.provider === "PAYPAL"
+      ? "PayPal"
+      : "Non confirmé";
+  const auditEvents = [...order.events, ...order.lifecycleEvents]
+    .sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime() || left.id.localeCompare(right.id));
 
   return (
     <div className="admin-main admin-order-detail">
@@ -116,10 +147,13 @@ export default async function AdminShopOrderPage({
         </div>
         <div>
           <span>Statut paiement</span>
-          <strong>{PAYMENT_STATUS_LABELS[order.paymentStatus]}</strong>
-          <small>Commande {ORDER_STATUS_LABELS[order.status].toLowerCase()} · workflow Boutique Phase 2</small>
+          <strong>{order.paymentReviewAt ? "À vérifier" : PAYMENT_STATUS_LABELS[order.paymentStatus]}</strong>
+          <small>Commande {ORDER_STATUS_LABELS[order.status].toLowerCase()} · workflow Boutique</small>
         </div>
       </header>
+
+      {state === "preparation-demarree" ? <p className="admin-alert" role="status">La préparation de cette commande a commencé.</p> : null}
+      {state === "commande-expediee" ? <p className="admin-alert" role="status">La commande est marquée expédiée.</p> : null}
 
       {order.status === "EXPIRED" ? (
         <p className="admin-alert" role="status">Cette réservation a expiré : elle ne réduit plus la disponibilité. Aucun mouvement de stock physique n’a été nécessaire.</p>
@@ -168,9 +202,9 @@ export default async function AdminShopOrderPage({
           <section className="admin-detail-window" aria-labelledby="admin-shop-audit-title">
             <p className="admin-section-label">Historique réel</p>
             <h2 id="admin-shop-audit-title">Journal Boutique.</h2>
-            {order.events.length ? (
+            {auditEvents.length ? (
               <ol className="admin-rights-timeline">
-                {order.events.map((event) => (
+                {auditEvents.map((event) => (
                   <li key={event.id}>
                     <time className="admin-rights-timeline__when" dateTime={event.occurredAt.toISOString()}>{DATE_FORMAT.format(event.occurredAt)}</time>
                     <div className="admin-rights-timeline__content">
@@ -209,8 +243,83 @@ export default async function AdminShopOrderPage({
               <div><dt>Réservée jusqu’au</dt><dd><time dateTime={order.reservationExpiresAt.toISOString()}>{DATE_FORMAT.format(order.reservationExpiresAt)}</time></dd></div>
               {order.expiredAt ? <div><dt>Expirée</dt><dd><time dateTime={order.expiredAt.toISOString()}>{DATE_FORMAT.format(order.expiredAt)}</time></dd></div> : null}
               {order.cancelledAt ? <div><dt>Annulée</dt><dd><time dateTime={order.cancelledAt.toISOString()}>{DATE_FORMAT.format(order.cancelledAt)}</time></dd></div> : null}
+              {order.preparingAt ? <div><dt>Préparation démarrée</dt><dd><time dateTime={order.preparingAt.toISOString()}>{DATE_FORMAT.format(order.preparingAt)}</time></dd></div> : null}
+              {order.shippedAt ? <div><dt>Expédiée</dt><dd><time dateTime={order.shippedAt.toISOString()}>{DATE_FORMAT.format(order.shippedAt)}</time></dd></div> : null}
             </dl>
           </section>
+
+          <section className="admin-side-window" aria-labelledby="admin-shop-payment-title">
+            <p className="admin-section-label">Paiement</p>
+            <h2 id="admin-shop-payment-title">Preuve financière.</h2>
+            <dl>
+              <div><dt>Moyen</dt><dd>{paymentProvider}</dd></div>
+              <div><dt>Statut</dt><dd>{order.paymentReviewAt ? "À vérifier" : PAYMENT_STATUS_LABELS[order.paymentStatus]}</dd></div>
+              <div><dt>Montant</dt><dd>{financialPayment ? formatShopMoney(financialPayment.amountCents) : formatShopMoney(order.totalCents)}</dd></div>
+              {financialPayment?.paidAt ? <div><dt>Confirmé</dt><dd><time dateTime={financialPayment.paidAt.toISOString()}>{DATE_FORMAT.format(financialPayment.paidAt)}</time></dd></div> : null}
+              {order.paymentReviewAt ? <div><dt>Incident</dt><dd>{shopPaymentIncidentLabel(order.paymentReviewCode)}</dd></div> : null}
+              {order.termsVersion ? <div><dt>Conditions acceptées</dt><dd>{order.termsVersion}</dd></div> : null}
+            </dl>
+            <small>Aucun identifiant provider ni payload brut n’est exposé dans cette interface.</small>
+          </section>
+
+          <section className="admin-side-window" aria-labelledby="admin-shop-payment-attempts-title">
+            <p className="admin-section-label">Tentatives financières</p>
+            <h2 id="admin-shop-payment-attempts-title">Tous les moyens sollicités.</h2>
+            {order.payments.length ? (
+              <ol className="admin-card-list">
+                {order.payments.map((payment, index) => {
+                  const presentation = shopPaymentAttemptPresentation(payment);
+                  return (
+                    <li key={payment.id}>
+                      <p className="admin-section-label">Tentative {index + 1}</p>
+                      <h3>{presentation.providerLabel}</h3>
+                      <dl className="admin-detail-facts">
+                        <div><dt>Statut</dt><dd>{presentation.statusLabel}</dd></div>
+                        <div><dt>Montant</dt><dd>{formatShopMoney(payment.amountCents)}</dd></div>
+                        <div className="admin-detail-facts__wide"><dt>{presentation.dateLabel}</dt><dd><time dateTime={presentation.date.toISOString()}>{DATE_FORMAT.format(presentation.date)}</time></dd></div>
+                        {presentation.incidentLabel ? <div className="admin-detail-facts__wide"><dt>Incident</dt><dd>{presentation.incidentLabel}</dd></div> : null}
+                      </dl>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : <p>Aucune tentative de paiement enregistrée.</p>}
+            <small>Les références techniques et payloads provider restent masqués.</small>
+          </section>
+
+          {order.status === "OPEN" && order.paymentStatus === "PAID" && !order.paymentReviewAt && order.fulfillmentStatus === "PENDING" ? (
+            <section className="admin-side-window" aria-labelledby="admin-shop-preparing-title">
+              <p className="admin-section-label">Fulfillment</p>
+              <h2 id="admin-shop-preparing-title">Commencer la préparation.</h2>
+              <p>Cette action est disponible uniquement après paiement confirmé.</p>
+              <form action={markShopOrderPreparingAction}>
+                <input type="hidden" name="orderNumber" value={order.orderNumber} />
+                <label className="admin-check">
+                  <input type="checkbox" name="confirmation" value="CONFIRM_SHOP_PREPARATION" required />
+                  Je confirme le démarrage de la préparation.
+                </label>
+                <button className="admin-button" type="submit">MARQUER EN PRÉPARATION</button>
+              </form>
+            </section>
+          ) : null}
+
+          {order.status === "OPEN" && order.paymentStatus === "PAID" && !order.paymentReviewAt && order.fulfillmentStatus === "PREPARING" ? (
+            <section className="admin-side-window" aria-labelledby="admin-shop-shipped-title">
+              <p className="admin-section-label">Fulfillment</p>
+              <h2 id="admin-shop-shipped-title">Marquer expédiée.</h2>
+              <form action={markShopOrderShippedAction}>
+                <input type="hidden" name="orderNumber" value={order.orderNumber} />
+                <label>Transporteur (facultatif)<input name="carrier" maxLength={120} /></label>
+                <label>Numéro de suivi (facultatif)<input name="trackingNumber" maxLength={160} /></label>
+                <label>URL de suivi HTTPS (facultative)<input name="trackingUrl" type="url" maxLength={500} /></label>
+                <label className="admin-check">
+                  <input type="checkbox" name="confirmation" value="CONFIRM_SHOP_SHIPMENT" required />
+                  Je confirme que cette commande a été expédiée.
+                </label>
+                <button className="admin-button" type="submit">MARQUER EXPÉDIÉE</button>
+              </form>
+            </section>
+          ) : null}
 
           <section className="admin-side-window" aria-labelledby="admin-shop-customer-title">
             <p className="admin-section-label">Client</p>

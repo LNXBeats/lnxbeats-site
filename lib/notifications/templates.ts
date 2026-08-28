@@ -2,12 +2,13 @@ import "server-only";
 
 import type { NotificationConfiguration } from "@/lib/notifications/config";
 import {
+  isShopNotificationKind,
   notificationDefinition,
   NOTIFICATION_PAYLOAD_VERSION,
   NOTIFICATION_TEMPLATE_VERSION,
   PRODUCTION_OWNER_EMAIL_SMOKE_IDEMPOTENCY_KEY,
 } from "@/lib/notifications/domain";
-import type { NotificationTemplate, OrderNotificationMessage } from "@/lib/notifications/types";
+import type { NotificationTemplate, OrderNotificationMessage, OrderNotificationPayload, ShopNotificationPayload } from "@/lib/notifications/types";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({
@@ -36,10 +37,15 @@ function canonicalOrigin(configuration: NotificationConfiguration) {
 
 function resourceUrl(message: OrderNotificationMessage, configuration: NotificationConfiguration) {
   const owner = notificationDefinition(message.kind).audience === "OWNER";
-  const rightsReference = message.kind.includes("RIGHTS") ? message.payload.rightsRequestNumber : undefined;
+  if (isShopNotificationKind(message.kind)) {
+    const pathname = `${owner ? "/admin/boutique/commandes/" : "/compte/achats/"}${encodeURIComponent(message.payload.orderNumber)}`;
+    return new URL(pathname, canonicalOrigin(configuration)).toString();
+  }
+  const payload = message.payload as OrderNotificationPayload;
+  const rightsReference = message.kind.includes("RIGHTS") ? payload.rightsRequestNumber : undefined;
   const pathname = rightsReference
     ? `${owner ? "/admin/droits/" : "/compte/droits/"}${encodeURIComponent(rightsReference)}`
-    : `${owner ? "/admin/commandes/" : "/compte/commandes/"}${encodeURIComponent(message.payload.orderNumber)}`;
+    : `${owner ? "/admin/commandes/" : "/compte/commandes/"}${encodeURIComponent(payload.orderNumber)}`;
   return new URL(pathname, canonicalOrigin(configuration)).toString();
 }
 
@@ -115,6 +121,22 @@ function copy(message: OrderNotificationMessage) {
       "Incident de paiement à examiner — LNX Studio", "Paiement", "Une réconciliation opérateur est requise",
       "Un incident fournisseur a été enregistré sans modifier automatiquement l’état de la commande.", "Ouvrir la commande",
     ],
+    OWNER_SHOP_ORDER_PAID: [
+      `Nouvelle commande Boutique payée — ${message.payload.orderNumber}`, "Boutique", "Une commande Boutique attend votre préparation",
+      "Le paiement a été confirmé par le flux serveur. Les informations de traitement sont disponibles dans l’Admin.", "Ouvrir la commande Boutique",
+    ],
+    CUSTOMER_SHOP_PAYMENT_CONFIRMED: [
+      "Commande Boutique confirmée — LNX Studio", "Boutique", "Votre commande Boutique est confirmée",
+      "Votre paiement est confirmé. Le détail de la commande et son avancement restent disponibles dans votre Compte.", "Voir mon achat",
+    ],
+    CUSTOMER_SHOP_PREPARING: [
+      "Votre commande Boutique est en préparation — LNX Studio", "Boutique", "Votre commande est en préparation",
+      "LNX Studio prépare actuellement votre commande. Son état à jour reste disponible dans votre Compte.", "Suivre mon achat",
+    ],
+    CUSTOMER_SHOP_SHIPPED: [
+      "Votre commande Boutique a été expédiée — LNX Studio", "Boutique", "Votre commande a été expédiée",
+      "Votre commande a quitté l’atelier. Consultez votre Compte pour retrouver son état et les informations disponibles.", "Suivre mon achat",
+    ],
   } as const;
   const [subject, eyebrow, title, body, cta] = values[message.kind];
   return { subject, eyebrow, title, body, cta };
@@ -145,21 +167,49 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
     throw new Error("Notification template environment does not match the runtime.");
   }
   const content = copy(message);
-  const options = [message.payload.coverIncluded ? "Illustration personnalisée" : "", message.payload.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(", ") || "Aucune";
-  const details = [
-    `Commande : ${message.payload.orderNumber}`,
-    ...(message.payload.rightsRequestNumber ? [`Demande : ${message.payload.rightsRequestNumber}`] : []),
-    ...(message.kind === "OWNER_NEW_ORDER" ? [
-      `Client : ${message.payload.customerName || "Non renseigné"} — ${message.payload.customerEmail}`,
-      ...(message.payload.workTitle ? [`Projet : ${message.payload.workTitle}`] : []),
-      `Montant : ${formatEuro(message.payload.totalCents, message.payload.currency)}`,
-      `Options : ${options}`,
-      `Date : ${formatDate(message.payload.createdAt)}`,
-    ] : []),
-    ...(message.payload.refundAmountCents ? [
-      `Montant remboursé : ${formatEuro(message.payload.refundAmountCents, message.payload.currency)}`,
-    ] : []),
-  ];
+  let details: readonly string[];
+  if (isShopNotificationKind(message.kind)) {
+    const payload = message.payload as ShopNotificationPayload;
+    const owner = notificationDefinition(message.kind).audience === "OWNER";
+    const provider = payload.paymentProvider === "STRIPE" ? "Carte bancaire via Stripe"
+      : payload.paymentProvider === "PAYPAL" ? "PayPal" : "Paiement en ligne";
+    const items = payload.items.map((item) => `${item.quantity} × ${item.productTitle} — ${formatEuro(item.lineTotalCents, payload.currency)}`);
+    const address = payload.shippingAddress
+      ? [`Livraison : ${payload.shippingAddress.recipientName} — ${payload.shippingAddress.addressLine1}${payload.shippingAddress.addressLine2 ? `, ${payload.shippingAddress.addressLine2}` : ""} — ${payload.shippingAddress.postalCode} ${payload.shippingAddress.city} — ${payload.shippingAddress.countryCode}`]
+      : [];
+    const legal = message.kind === "CUSTOMER_SHOP_PAYMENT_CONFIRMED" && payload.termsVersion
+      ? [`Conditions acceptées : version ${payload.termsVersion}`, `Conditions générales : ${new URL("/cgv", canonicalOrigin(configuration)).toString()}`]
+      : [];
+    details = [
+      `Commande : ${payload.orderNumber}`,
+      ...(owner ? [`Client : ${payload.customerName || "Non renseigné"}`] : []),
+      ...items,
+      `Sous-total : ${formatEuro(payload.subtotalCents, payload.currency)}`,
+      `Frais de livraison : ${formatEuro(payload.shippingCents, payload.currency)}`,
+      `Total : ${formatEuro(payload.totalCents, payload.currency)}`,
+      `Moyen de paiement : ${provider}`,
+      ...address,
+      ...legal,
+      `Date : ${formatDate(payload.createdAt)}`,
+    ];
+  } else {
+    const payload = message.payload as OrderNotificationPayload;
+    const options = [payload.coverIncluded ? "Illustration personnalisée" : "", payload.priorityProcessing ? "Priorité" : ""].filter(Boolean).join(", ") || "Aucune";
+    details = [
+      `Commande : ${payload.orderNumber}`,
+      ...(payload.rightsRequestNumber ? [`Demande : ${payload.rightsRequestNumber}`] : []),
+      ...(message.kind === "OWNER_NEW_ORDER" ? [
+        `Client : ${payload.customerName || "Non renseigné"} — ${payload.customerEmail}`,
+        ...(payload.workTitle ? [`Projet : ${payload.workTitle}`] : []),
+        `Montant : ${formatEuro(payload.totalCents, payload.currency)}`,
+        `Options : ${options}`,
+        `Date : ${formatDate(payload.createdAt)}`,
+      ] : []),
+      ...(payload.refundAmountCents ? [
+        `Montant remboursé : ${formatEuro(payload.refundAmountCents, payload.currency)}`,
+      ] : []),
+    ];
+  }
   const environmentLabel = configuration.deploymentEnvironment === "production" ? null : configuration.deploymentEnvironment === "staging" ? "STAGING · MODE TEST" : "DÉVELOPPEMENT · CAPTURE";
   const rendered = layout({ ...content, preview: content.subject, details, url: resourceUrl(message, configuration), environmentLabel });
   const subject = configuration.deploymentEnvironment === "production" ? content.subject : `[TEST] ${content.subject}`;

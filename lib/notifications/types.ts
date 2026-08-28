@@ -13,13 +13,17 @@ export type OrderNotificationKind =
   | "CUSTOMER_RIGHTS_READY_FOR_PAYMENT"
   | "CUSTOMER_PARTIAL_REFUND"
   | "CUSTOMER_REFUND_COMPLETED"
-  | "OWNER_PAYMENT_INCIDENT";
+  | "OWNER_PAYMENT_INCIDENT"
+  | "OWNER_SHOP_ORDER_PAID"
+  | "CUSTOMER_SHOP_PAYMENT_CONFIRMED"
+  | "CUSTOMER_SHOP_PREPARING"
+  | "CUSTOMER_SHOP_SHIPPED";
 
 export type NotificationChannel = "EMAIL" | "SMS";
 export type NotificationPriority = "CRITICAL" | "INFORMATIONAL" | "INTERNAL";
 export type NotificationProvider = "CAPTURE" | "RESEND";
 
-export type NotificationPayload = Readonly<{
+export type OrderNotificationPayload = Readonly<{
   orderNumber: string;
   customerName: string | null;
   customerEmail: string;
@@ -33,6 +37,59 @@ export type NotificationPayload = Readonly<{
   rightsRequestType?: "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP";
   requestedPriceCents?: number;
   refundAmountCents?: number;
+}>;
+
+export type ShopNotificationItem = Readonly<{
+  productTitle: string;
+  quantity: number;
+  unitPriceCents: number;
+  lineTotalCents: number;
+}>;
+
+export type ShopNotificationShippingAddress = Readonly<{
+  recipientName: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  postalCode: string;
+  city: string;
+  countryCode: string;
+}>;
+
+export type ShopNotificationPayload = Readonly<{
+  orderNumber: string;
+  customerName: string | null;
+  customerEmail: string;
+  subtotalCents: number;
+  shippingCents: number;
+  totalCents: number;
+  currency: string;
+  createdAt: string;
+  items: readonly ShopNotificationItem[];
+  paymentProvider: "STRIPE" | "PAYPAL" | null;
+  termsVersion: string | null;
+  shippingAddress: ShopNotificationShippingAddress | null;
+}>;
+
+export type NotificationPayload = OrderNotificationPayload | ShopNotificationPayload;
+
+export type OrderNotificationSource = Readonly<{
+  orderNumber: string;
+  customerName: string | null;
+  customerEmail: string;
+  totalCents: number;
+  currency: string;
+  coverIncluded: boolean;
+  priorityProcessing: boolean;
+  createdAt: Date;
+}>;
+
+export type ShopNotificationSource = Readonly<{
+  orderNumber: string;
+  customerName: string | null;
+  customerEmail: string;
+  totalCents: number;
+  currency: string;
+  createdAt: Date;
 }>;
 
 export type OrderNotificationMessage = Readonly<{
@@ -50,16 +107,8 @@ export type OrderNotificationMessage = Readonly<{
   resourceId: string | null;
   resourceReference: string | null;
   deploymentEnvironment: "development" | "staging" | "production";
-  order: Readonly<{
-    orderNumber: string;
-    customerName: string | null;
-    customerEmail: string;
-    totalCents: number;
-    currency: string;
-    coverIncluded: boolean;
-    priorityProcessing: boolean;
-    createdAt: Date;
-  }>;
+  order?: OrderNotificationSource | null;
+  shopOrder?: ShopNotificationSource | null;
 }>;
 
 export type NotificationTemplate = Readonly<{

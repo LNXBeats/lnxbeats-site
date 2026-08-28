@@ -9,15 +9,28 @@ import {
 } from "@/lib/payments/config";
 import type { ServerCheckoutLineItem } from "@/lib/payments/types";
 
+type HostedCheckoutSource =
+  | Readonly<{
+    paymentSource?: "MUSIC_ORDER";
+    orderId: string;
+    shopOrderId?: never;
+    orderNumber?: never;
+  }>
+  | Readonly<{
+    paymentSource: "SHOP_ORDER";
+    shopOrderId: string;
+    orderNumber: string;
+    orderId?: never;
+  }>;
+
 export type HostedCheckoutRequest = Readonly<{
-  orderId: string;
   paymentId: string;
   pricingVersion: string;
   lineItems: readonly ServerCheckoutLineItem[];
   customerEmail: string;
   successUrl: string;
   cancelUrl: string;
-}>;
+}> & HostedCheckoutSource;
 
 export type HostedCheckoutSession = Readonly<{
   id: string;
@@ -120,6 +133,21 @@ function stripeRefundFailure(error: unknown) {
 export function hostedCheckoutParameters(
   request: HostedCheckoutRequest,
 ): Stripe.Checkout.SessionCreateParams {
+  const shopCheckout = request.paymentSource === "SHOP_ORDER";
+  const sourceId = shopCheckout ? request.shopOrderId : request.orderId;
+  const metadata: Stripe.MetadataParam = shopCheckout
+    ? {
+      paymentSource: "SHOP_ORDER",
+      paymentId: request.paymentId,
+      shopOrderId: request.shopOrderId,
+      orderNumber: request.orderNumber,
+      pricingVersion: request.pricingVersion,
+    }
+    : {
+      paymentId: request.paymentId,
+      orderId: request.orderId,
+      pricingVersion: request.pricingVersion,
+    };
   return {
     mode: "payment",
     adaptive_pricing: { enabled: false },
@@ -135,18 +163,10 @@ export function hostedCheckoutParameters(
         product_data: { name: lineItem.price_data.product_data.name },
       },
     })),
-    client_reference_id: request.orderId,
-    metadata: {
-      paymentId: request.paymentId,
-      orderId: request.orderId,
-      pricingVersion: request.pricingVersion,
-    },
+    client_reference_id: sourceId,
+    metadata,
     payment_intent_data: {
-      metadata: {
-        paymentId: request.paymentId,
-        orderId: request.orderId,
-        pricingVersion: request.pricingVersion,
-      },
+      metadata,
     },
     customer_email: request.customerEmail,
     locale: "fr",

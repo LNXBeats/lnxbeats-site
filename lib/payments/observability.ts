@@ -10,6 +10,7 @@ type PaymentLogEvent =
 type PaymentLogContext = Readonly<{
   paymentId?: string;
   orderId?: string;
+  shopOrderId?: string;
   providerEventId?: string;
   outcome?: string;
 }>;

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import type { Prisma } from "@/generated/prisma/client";
 
 import { enqueueOrderNotification } from "@/lib/notifications/service";
@@ -45,6 +47,7 @@ const stripeIncidentEvents = new Set([
   "charge.dispute.funds_withdrawn",
   "charge.dispute.funds_reinstated",
 ]);
+const SHOP_FINANCIAL_REVIEW_CODE = "SHOP_PROVIDER_FINANCIAL_EVENT_REVIEW" as const;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -124,6 +127,96 @@ async function createReceipt(transaction: Transaction, input: Readonly<{
   return result(input.outcome);
 }
 
+function shopFinancialLifecycleKey(paymentId: string, provider: Provider, eventId: string) {
+  const digest = createHash("sha256").update(`${provider}:${eventId}`).digest("hex");
+  return `shop-payment:${paymentId}:financial-review:${digest}`;
+}
+
+/**
+ * Refunds, reversals and disputes are intentionally not automated for Shop
+ * payments in Phase 3. A signed provider event still becomes durable evidence
+ * and atomically closes fulfillment behind the same order lock used by the
+ * Admin PREPARING/SHIPPED transitions.
+ */
+async function recordShopFinancialReview(
+  transaction: Transaction,
+  input: Readonly<{
+    provider: Provider;
+    eventId: string;
+    type: string;
+    objectId?: string;
+    paymentId: string;
+    shopOrderId: string;
+    occurredAt: Date;
+    livemode: boolean;
+  }>,
+) {
+  await lock(transaction, `shop-payments:order:${input.shopOrderId}`);
+  const rows = await transaction.$queryRaw<Array<{
+    id: string;
+    paymentReviewAt: Date | null;
+    paymentReviewCode: string | null;
+  }>>`
+    SELECT "id", "paymentReviewAt", "paymentReviewCode"
+    FROM "shop_orders"
+    WHERE "id" = ${input.shopOrderId}::uuid
+    FOR UPDATE
+  `;
+  const order = rows[0];
+  if (!order) {
+    return createReceipt(transaction, {
+      provider: input.provider,
+      eventId: input.eventId,
+      type: input.type,
+      objectId: input.objectId,
+      outcome: "REQUIRES_REVIEW",
+      paymentId: input.paymentId,
+      occurredAt: input.occurredAt,
+      livemode: input.livemode,
+    });
+  }
+  // Persist the signed receipt before the review mutation. Both writes remain
+  // atomic; a later failure rolls the receipt back with the transaction.
+  const receipt = await createReceipt(transaction, {
+    provider: input.provider,
+    eventId: input.eventId,
+    type: input.type,
+    objectId: input.objectId,
+    outcome: "REQUIRES_REVIEW",
+    paymentId: input.paymentId,
+    occurredAt: input.occurredAt,
+    livemode: input.livemode,
+  });
+  await transaction.shopOrder.update({
+    where: { id: input.shopOrderId },
+    data: {
+      paymentReviewAt: order.paymentReviewAt ?? input.occurredAt,
+      paymentReviewCode: order.paymentReviewCode ?? SHOP_FINANCIAL_REVIEW_CODE,
+    },
+    select: { id: true },
+  });
+  await transaction.shopOrderLifecycleEvent.upsert({
+    where: {
+      idempotencyKey: shopFinancialLifecycleKey(input.paymentId, input.provider, input.eventId),
+    },
+    create: {
+      shopOrderId: input.shopOrderId,
+      paymentId: input.paymentId,
+      type: "SHOP_PAYMENT_REQUIRES_REVIEW",
+      idempotencyKey: shopFinancialLifecycleKey(input.paymentId, input.provider, input.eventId),
+      metadata: {
+        provider: input.provider,
+        reviewCode: SHOP_FINANCIAL_REVIEW_CODE,
+        category: "PROVIDER_FINANCIAL_EVENT",
+      },
+      occurredAt: input.occurredAt,
+    },
+    update: {},
+    select: { id: true },
+  });
+  return receipt;
+}
+
 async function recordReview(input: Readonly<{
   provider: Provider;
   eventId: string;
@@ -144,9 +237,21 @@ async function recordReview(input: Readonly<{
             provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId },
             mode: input.livemode ? "LIVE" : "TEST",
           },
-          select: { id: true },
+          select: { id: true, orderId: true, shopOrderId: true },
         })
       : null;
+    if (payment?.shopOrderId && !payment.orderId) {
+      return recordShopFinancialReview(transaction, {
+        provider: input.provider,
+        eventId: input.eventId,
+        type: input.type,
+        objectId: input.objectId,
+        paymentId: payment.id,
+        shopOrderId: payment.shopOrderId,
+        occurredAt: input.occurredAt,
+        livemode: input.livemode,
+      });
+    }
     return createReceipt(transaction, {
       provider: input.provider,
       eventId: input.eventId,
@@ -173,7 +278,25 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
       },
       include: { order: true },
     });
-    if (!payment || !winningPaymentStatuses.includes(payment.status as typeof winningPaymentStatuses[number])) {
+    if (payment?.shopOrderId && !payment.orderId) {
+      return recordShopFinancialReview(transaction, {
+        provider: input.provider,
+        eventId: input.eventId,
+        type: input.eventType,
+        objectId: input.providerRefundId,
+        paymentId: payment.id,
+        shopOrderId: payment.shopOrderId,
+        occurredAt: input.occurredAt,
+        livemode: input.livemode,
+      });
+    }
+    if (
+      !payment
+      || payment.shopOrderId
+      || !payment.orderId
+      || !payment.order
+      || !winningPaymentStatuses.includes(payment.status as typeof winningPaymentStatuses[number])
+    ) {
       return createReceipt(transaction, {
         provider: input.provider, eventId: input.eventId, type: input.eventType,
         objectId: input.providerRefundId, outcome: "REQUIRES_REVIEW",
@@ -329,7 +452,25 @@ async function processIncident(input: IncidentInput) {
       },
       include: { order: true },
     });
-    if (!payment || !winningPaymentStatuses.includes(payment.status as typeof winningPaymentStatuses[number])) {
+    if (payment?.shopOrderId && !payment.orderId) {
+      return recordShopFinancialReview(transaction, {
+        provider: input.provider,
+        eventId: input.eventId,
+        type: input.eventType,
+        objectId: input.providerIncidentId,
+        paymentId: payment.id,
+        shopOrderId: payment.shopOrderId,
+        occurredAt: input.occurredAt,
+        livemode: input.livemode,
+      });
+    }
+    if (
+      !payment
+      || payment.shopOrderId
+      || !payment.orderId
+      || !payment.order
+      || !winningPaymentStatuses.includes(payment.status as typeof winningPaymentStatuses[number])
+    ) {
       return createReceipt(transaction, {
         provider: input.provider, eventId: input.eventId, type: input.eventType,
         objectId: input.providerIncidentId, outcome: "REQUIRES_REVIEW",
@@ -437,17 +578,60 @@ export function normalizeStripeRefundEvent(event: VerifiedStripeWebhookEvent): (
   };
 }
 
-function captureIdFromRefundResource(resource: Record<string, unknown>) {
-  const link = array(resource.links).map(record).find((candidate) => candidate?.rel === "up");
+export function captureIdFromRefundResource(
+  resource: Record<string, unknown>,
+  environment: "sandbox" | "live" = "sandbox",
+) {
+  const link = array(resource.links)
+    .map(record)
+    .find((candidate) => candidate?.rel === "up" && candidate?.method === "GET");
   const href = bounded(link?.href, 2_048);
   if (!href) return null;
   try {
     const url = new URL(href);
-    if (!url.pathname.startsWith("/v2/payments/captures/")) return null;
-    return decodeURIComponent(url.pathname.slice("/v2/payments/captures/".length));
+    const allowedHosts = environment === "live"
+      ? ["api-m.paypal.com", "api.paypal.com"]
+      : ["api-m.sandbox.paypal.com", "api.sandbox.paypal.com"];
+    if (
+      url.protocol !== "https:"
+      || !allowedHosts.includes(url.hostname)
+      || url.username
+      || url.password
+    ) return null;
+    const match = url.pathname.match(/^\/v2\/payments\/captures\/([^/]+)$/);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
   } catch {
     return null;
   }
+}
+
+export function stripeFinancialProviderPaymentId(event: VerifiedStripeWebhookEvent) {
+  const object = record(event.data.object);
+  return bounded(record(object?.payment_intent)?.id) ?? bounded(object?.payment_intent);
+}
+
+export function paypalFinancialProviderPaymentId(
+  event: VerifiedPaypalWebhookEvent,
+  environment: "sandbox" | "live" = "sandbox",
+) {
+  const resource = record(event.resource);
+  if (!resource) return null;
+  if (event.event_type === "PAYMENT.CAPTURE.REFUNDED"
+    || event.event_type === "PAYMENT.REFUND.PENDING"
+    || event.event_type === "PAYMENT.REFUND.FAILED") {
+    return captureIdFromRefundResource(resource, environment);
+  }
+  if (event.event_type === "PAYMENT.CAPTURE.REVERSED") return bounded(resource.id);
+  if (event.event_type.startsWith("CUSTOMER.DISPUTE.")) {
+    const disputedTransaction = record(array(resource.disputed_transactions)[0]);
+    const transactionInfo = record(
+      disputedTransaction?.seller_transaction_id
+        ? disputedTransaction
+        : disputedTransaction?.transaction_info,
+    );
+    return bounded(transactionInfo?.seller_transaction_id);
+  }
+  return null;
 }
 
 export function normalizePaypalRefundEvent(
@@ -554,6 +738,7 @@ export async function processVerifiedStripeFinancialEvent(event: VerifiedStripeW
   if (incident) return processIncident(incident);
   return recordReview({
     provider: "STRIPE", eventId: event.id, type: event.type,
+    providerPaymentId: stripeFinancialProviderPaymentId(event) ?? undefined,
     objectId: bounded(record(event.data.object)?.id) ?? undefined,
     occurredAt: eventDate(event.created) ?? new Date(),
     livemode: event.livemode,
@@ -574,9 +759,7 @@ export async function processVerifiedPaypalFinancialEvent(
   const incident = normalizePaypalIncidentEvent(event, livemode);
   if (incident) return processIncident(incident);
   const resource = record(event.resource);
-  const captureId = event.event_type === "PAYMENT.CAPTURE.REFUNDED"
-    ? bounded(resource?.id)
-    : resource ? captureIdFromRefundResource(resource) : null;
+  const captureId = paypalFinancialProviderPaymentId(event, environment);
   return recordReview({
     provider: "PAYPAL", eventId: event.id, type: event.event_type,
     providerPaymentId: captureId ?? undefined,

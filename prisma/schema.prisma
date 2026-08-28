@@ -154,6 +154,10 @@ enum OrderNotificationKind {
   CUSTOMER_PARTIAL_REFUND
   CUSTOMER_REFUND_COMPLETED
   OWNER_PAYMENT_INCIDENT
+  OWNER_SHOP_ORDER_PAID
+  CUSTOMER_SHOP_PAYMENT_CONFIRMED
+  CUSTOMER_SHOP_PREPARING
+  CUSTOMER_SHOP_SHIPPED
 }
 
 enum NotificationChannel {
@@ -295,6 +299,16 @@ enum ShopOrderEventType {
   STOCK_CONFIRMED
   STOCK_RELEASED
   STOCK_RESERVATION_EXPIRED
+}
+
+enum ShopOrderLifecycleEventType {
+  SHOP_TERMS_ACCEPTED
+  SHOP_PAYMENT_PROCESSING
+  SHOP_PAYMENT_CONFIRMED
+  SHOP_PAYMENT_FAILED
+  SHOP_PAYMENT_REQUIRES_REVIEW
+  PREPARATION_STARTED
+  ORDER_SHIPPED
 }
 
 enum RightsRequestType {
@@ -572,6 +586,7 @@ model User {
   productAuditEvents           ProductAuditEvent[]         @relation("ProductAuditEventActor")
   shopOrders                   ShopOrder[]                 @relation("ShopOrderOwner")
   shopOrderEvents              ShopOrderEvent[]            @relation("ShopOrderEventActor")
+  shopOrderLifecycleEvents     ShopOrderLifecycleEvent[]   @relation("ShopOrderLifecycleEventActor")
 
   @@index([role, status])
   @@map("users")
@@ -890,7 +905,8 @@ model Order {
 
 model OrderNotification {
   id                    String                @id @default(uuid()) @db.Uuid
-  orderId               String                @db.Uuid
+  orderId               String?               @db.Uuid
+  shopOrderId           String?               @db.Uuid
   kind                  OrderNotificationKind
   channel               NotificationChannel
   priority              NotificationPriority  @default(INFORMATIONAL)
@@ -918,12 +934,14 @@ model OrderNotification {
   lastErrorMessage      String?               @db.VarChar(240)
   createdAt             DateTime              @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
-  order                 Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  order                 Order?                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shopOrder             ShopOrder?            @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
   events                NotificationEvent[]
 
   @@index([status, availableAt])
   @@index([status, leaseExpiresAt])
   @@index([orderId, kind, channel])
+  @@index([shopOrderId, kind, channel])
   @@index([resourceType, resourceId])
   @@map("order_notifications")
 }
@@ -969,37 +987,42 @@ model NotificationSuppression {
 }
 
 model Payment {
-  id                  String              @id @default(uuid()) @db.Uuid
-  orderId             String              @db.Uuid
-  provider            PaymentProvider     @default(STRIPE)
-  mode                PaymentMode
-  status              PaymentStatus       @default(CREATED)
-  amountCents         Int
-  currency            String              @db.VarChar(3)
-  pricingVersion      String              @db.VarChar(32)
-  idempotencyKey      String              @unique @db.VarChar(255)
-  providerCheckoutId  String?             @db.VarChar(255)
-  providerPaymentId   String?             @db.VarChar(255)
-  paymentMethod       PaymentMethod?
-  failureCode         String?             @db.VarChar(120)
-  checkoutExpiresAt   DateTime?           @db.Timestamptz(3)
-  paidAt              DateTime?           @db.Timestamptz(3)
-  failedAt            DateTime?           @db.Timestamptz(3)
-  canceledAt          DateTime?           @db.Timestamptz(3)
-  expiredAt           DateTime?           @db.Timestamptz(3)
-  refundedAt          DateTime?           @db.Timestamptz(3)
-  refundedAmountCents Int                 @default(0)
-  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime            @updatedAt @db.Timestamptz(3)
-  order               Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  events              ProviderEvent[]
-  refundAttempts      RefundAttempt[]
-  incidents           PaymentIncident[]
-  auditEvents         PaymentAuditEvent[]
+  id                       String                    @id @default(uuid()) @db.Uuid
+  orderId                  String?                   @db.Uuid
+  shopOrderId              String?                   @db.Uuid
+  provider                 PaymentProvider           @default(STRIPE)
+  mode                     PaymentMode
+  status                   PaymentStatus             @default(CREATED)
+  amountCents              Int
+  currency                 String                    @db.VarChar(3)
+  pricingVersion           String                    @db.VarChar(32)
+  idempotencyKey           String                    @unique @db.VarChar(255)
+  providerCheckoutId       String?                   @db.VarChar(255)
+  providerPaymentId        String?                   @db.VarChar(255)
+  paymentMethod            PaymentMethod?
+  failureCode              String?                   @db.VarChar(120)
+  checkoutExpiresAt        DateTime?                 @db.Timestamptz(3)
+  paidAt                   DateTime?                 @db.Timestamptz(3)
+  failedAt                 DateTime?                 @db.Timestamptz(3)
+  canceledAt               DateTime?                 @db.Timestamptz(3)
+  expiredAt                DateTime?                 @db.Timestamptz(3)
+  refundedAt               DateTime?                 @db.Timestamptz(3)
+  refundedAmountCents      Int                       @default(0)
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                  @updatedAt @db.Timestamptz(3)
+  order                    Order?                    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shopOrder                ShopOrder?                @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  events                   ProviderEvent[]
+  refundAttempts           RefundAttempt[]
+  incidents                PaymentIncident[]
+  auditEvents              PaymentAuditEvent[]
+  shopOrderLifecycleEvents ShopOrderLifecycleEvent[] @relation("ShopOrderLifecycleEventPayment")
 
   @@unique([provider, providerCheckoutId])
   @@unique([provider, providerPaymentId])
+  @@unique([id, shopOrderId])
   @@index([orderId, createdAt])
+  @@index([shopOrderId, createdAt])
   @@index([provider, mode, status, updatedAt])
   @@map("payments")
 }
@@ -1555,35 +1578,48 @@ model ProductAuditEvent {
 }
 
 model ShopOrder {
-  id                       String                @id @default(uuid()) @db.Uuid
-  orderNumber              String                @unique @db.VarChar(32)
-  userId                   String                @db.Uuid
-  creationToken            String                @db.Uuid
-  requestFingerprintSha256 String                @db.Char(64)
-  status                   ShopOrderStatus       @default(OPEN)
-  paymentStatus            ShopPaymentStatus     @default(AWAITING_PAYMENT)
-  fulfillmentStatus        ShopFulfillmentStatus @default(PENDING)
-  currency                 String                @default("EUR") @db.VarChar(3)
+  id                       String                    @id @default(uuid()) @db.Uuid
+  orderNumber              String                    @unique @db.VarChar(32)
+  userId                   String                    @db.Uuid
+  creationToken            String                    @db.Uuid
+  requestFingerprintSha256 String                    @db.Char(64)
+  status                   ShopOrderStatus           @default(OPEN)
+  paymentStatus            ShopPaymentStatus         @default(AWAITING_PAYMENT)
+  fulfillmentStatus        ShopFulfillmentStatus     @default(PENDING)
+  currency                 String                    @default("EUR") @db.VarChar(3)
   subtotalCents            Int
   shippingCents            Int
   totalCents               Int
-  shippingRequired         Boolean               @default(false)
-  shippingFirstName        String?               @db.VarChar(100)
-  shippingLastName         String?               @db.VarChar(100)
-  shippingAddressLine1     String?               @db.VarChar(240)
-  shippingAddressLine2     String?               @db.VarChar(240)
-  shippingPostalCode       String?               @db.VarChar(32)
-  shippingCity             String?               @db.VarChar(120)
-  shippingCountryCode      String?               @db.Char(2)
-  reservationExpiresAt     DateTime              @db.Timestamptz(3)
-  paidAt                   DateTime?             @db.Timestamptz(3)
-  expiredAt                DateTime?             @db.Timestamptz(3)
-  cancelledAt              DateTime?             @db.Timestamptz(3)
-  createdAt                DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime              @updatedAt @db.Timestamptz(3)
-  user                     User                  @relation("ShopOrderOwner", fields: [userId], references: [id], onDelete: Restrict)
+  shippingRequired         Boolean                   @default(false)
+  shippingFirstName        String?                   @db.VarChar(100)
+  shippingLastName         String?                   @db.VarChar(100)
+  shippingAddressLine1     String?                   @db.VarChar(240)
+  shippingAddressLine2     String?                   @db.VarChar(240)
+  shippingPostalCode       String?                   @db.VarChar(32)
+  shippingCity             String?                   @db.VarChar(120)
+  shippingCountryCode      String?                   @db.Char(2)
+  termsVersion             String?                   @db.VarChar(64)
+  termsHashSha256          String?                   @db.Char(64)
+  termsAcceptedAt          DateTime?                 @db.Timestamptz(3)
+  reservationExpiresAt     DateTime                  @db.Timestamptz(3)
+  paidAt                   DateTime?                 @db.Timestamptz(3)
+  paymentReviewAt          DateTime?                 @db.Timestamptz(3)
+  paymentReviewCode        String?                   @db.VarChar(80)
+  preparingAt              DateTime?                 @db.Timestamptz(3)
+  shippedAt                DateTime?                 @db.Timestamptz(3)
+  shippingCarrier          String?                   @db.VarChar(120)
+  trackingNumber           String?                   @db.VarChar(160)
+  trackingUrl              String?                   @db.VarChar(1000)
+  expiredAt                DateTime?                 @db.Timestamptz(3)
+  cancelledAt              DateTime?                 @db.Timestamptz(3)
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                  @updatedAt @db.Timestamptz(3)
+  user                     User                      @relation("ShopOrderOwner", fields: [userId], references: [id], onDelete: Restrict)
   items                    ShopOrderItem[]
   events                   ShopOrderEvent[]
+  lifecycleEvents          ShopOrderLifecycleEvent[]
+  payments                 Payment[]
+  notifications            OrderNotification[]
 
   @@unique([userId, creationToken])
   @@index([userId, createdAt])
@@ -1655,4 +1691,23 @@ model ShopOrderEvent {
   @@index([stockReservationId, occurredAt])
   @@index([actorUserId])
   @@map("shop_order_events")
+}
+
+model ShopOrderLifecycleEvent {
+  id             String                      @id @default(uuid()) @db.Uuid
+  shopOrderId    String                      @db.Uuid
+  paymentId      String?                     @db.Uuid
+  type           ShopOrderLifecycleEventType
+  idempotencyKey String                      @unique @db.VarChar(255)
+  actorUserId    String?                     @db.Uuid
+  metadata       Json                        @default("{}")
+  occurredAt     DateTime                    @default(now()) @db.Timestamptz(3)
+  shopOrder      ShopOrder                   @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  payment        Payment?                    @relation("ShopOrderLifecycleEventPayment", fields: [paymentId, shopOrderId], references: [id, shopOrderId], onDelete: Restrict)
+  actor          User?                       @relation("ShopOrderLifecycleEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([shopOrderId, occurredAt])
+  @@index([paymentId, occurredAt])
+  @@index([actorUserId])
+  @@map("shop_order_lifecycle_events")
 }

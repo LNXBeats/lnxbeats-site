@@ -9,23 +9,32 @@ import {
   automaticNotificationRetryIsSafe,
   classifyNotificationFailure,
   isFictitiousRecipient,
+  isShopNotificationKind,
   manualRetryAllowed,
   notificationBackoffMs,
   notificationDefinition,
   NOTIFICATION_PROVIDER_IDEMPOTENCY_SAFE_AGE_MS,
   NotificationTransportError,
+  parseNotificationPayload,
 } from "@/lib/notifications/domain";
 import {
   clientNotificationEnqueueEnabled,
   customerDeliveryNotificationKey,
   customerPaymentNotificationKey,
+  customerShopPaymentConfirmedNotificationKey,
+  customerShopPreparingNotificationKey,
+  customerShopShippedNotificationKey,
   dispatchOrderNotification,
+  enqueueShopPreparingNotification,
+  enqueueShopOrderNotification,
+  enqueueShopShippedNotification,
   ownerNewOrderNotificationKey,
+  ownerShopOrderPaidNotificationKey,
   type NotificationDispatchRepository,
 } from "@/lib/notifications/service";
 import { orderNotificationTemplate } from "@/lib/notifications/templates";
 import { createNotificationTransport } from "@/lib/notifications/transport";
-import type { NotificationTransportResult, OrderNotificationMessage } from "@/lib/notifications/types";
+import type { NotificationTransportResult, OrderNotificationMessage, ShopNotificationPayload } from "@/lib/notifications/types";
 import { notificationWorkerAuthorized } from "@/lib/notifications/worker-auth";
 
 const message: OrderNotificationMessage = {
@@ -65,6 +74,55 @@ const message: OrderNotificationMessage = {
   },
 };
 
+const shopMessage: OrderNotificationMessage = {
+  id: "00000000-0000-4000-8000-000000000101",
+  kind: "CUSTOMER_SHOP_PAYMENT_CONFIRMED",
+  channel: "EMAIL",
+  priority: "CRITICAL",
+  recipient: "shop-client@example.invalid",
+  idempotencyKey: "shop-order:00000000-0000-4000-8000-000000000110:payment-confirmed:email",
+  templateKey: "customer-shop-payment-confirmed",
+  templateVersion: 1,
+  payloadVersion: 1,
+  payload: {
+    orderNumber: "LNX-SHOP-2026-000001",
+    customerName: "Client <Boutique>",
+    customerEmail: "shop-client@example.invalid",
+    subtotalCents: 2_800,
+    shippingCents: 200,
+    totalCents: 3_000,
+    currency: "EUR",
+    createdAt: "2026-08-27T10:00:00.000Z",
+    items: [
+      { productTitle: "Vinyle <édition>", quantity: 2, unitPriceCents: 1_000, lineTotalCents: 2_000 },
+      { productTitle: "Carte", quantity: 1, unitPriceCents: 800, lineTotalCents: 800 },
+    ],
+    paymentProvider: "STRIPE",
+    termsVersion: "shop-cgv-2026-08-v1",
+    shippingAddress: {
+      recipientName: "Client Boutique",
+      addressLine1: "1 rue du Test <privé>",
+      addressLine2: null,
+      postalCode: "75001",
+      city: "Paris",
+      countryCode: "FR",
+    },
+  },
+  resourceType: "SHOP_ORDER",
+  resourceId: "00000000-0000-4000-8000-000000000110",
+  resourceReference: "LNX-SHOP-2026-000001",
+  deploymentEnvironment: "development",
+  order: null,
+  shopOrder: {
+    orderNumber: "LNX-SHOP-2026-000001",
+    customerName: "Client <Boutique>",
+    customerEmail: "shop-client@example.invalid",
+    totalCents: 3_000,
+    currency: "EUR",
+    createdAt: new Date("2026-08-27T10:00:00.000Z"),
+  },
+};
+
 const captureConfiguration = parseNotificationConfiguration({
   NODE_ENV: "development",
   NOTIFICATION_DEPLOYMENT_ENV: "development",
@@ -93,6 +151,19 @@ test("les clés persistantes séparent paiement, propriétaire et livraison", ()
   assert.notEqual(customerPaymentNotificationKey(id), customerDeliveryNotificationKey(id));
 });
 
+test("les clés Boutique sont stables et séparent chaque événement logique", () => {
+  const id = shopMessage.resourceId!;
+  const keys = [
+    ownerShopOrderPaidNotificationKey(id),
+    customerShopPaymentConfirmedNotificationKey(id),
+    customerShopPreparingNotificationKey(id),
+    customerShopShippedNotificationKey(id),
+  ];
+  assert.equal(new Set(keys).size, 4);
+  assert.equal(keys[0], `shop-order:${id}:owner-paid:email`);
+  assert.equal(customerShopShippedNotificationKey(id), customerShopShippedNotificationKey(id));
+});
+
 test("la création de l’outbox client échoue fermée hors développement", () => {
   assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "production", NOTIFICATION_DEPLOYMENT_ENV: "production" }), false);
   assert.equal(clientNotificationEnqueueEnabled({ NODE_ENV: "production", NOTIFICATION_DEPLOYMENT_ENV: "staging" }), false);
@@ -106,6 +177,170 @@ test("le mapping métier définit audience, priorité et template", () => {
   assert.deepEqual(notificationDefinition("OWNER_NEW_ORDER"), { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-new-order" });
   assert.equal(notificationDefinition("CUSTOMER_DELIVERY_READY").priority, "CRITICAL");
   assert.equal(notificationDefinition("CUSTOMER_RIGHTS_CONTRACT_READY").audience, "CLIENT");
+  assert.deepEqual(notificationDefinition("OWNER_SHOP_ORDER_PAID"), { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-shop-order-paid" });
+  assert.deepEqual(notificationDefinition("CUSTOMER_SHOP_PREPARING"), { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-preparing" });
+  assert.equal(isShopNotificationKind("CUSTOMER_SHOP_SHIPPED"), true);
+  assert.equal(isShopNotificationKind("OWNER_NEW_ORDER"), false);
+});
+
+test("le payload Boutique est fermé, cohérent et conserve les snapshots financiers", () => {
+  const payload = shopMessage.payload as ShopNotificationPayload;
+  assert.deepEqual(parseNotificationPayload(payload, shopMessage.kind), payload);
+  assert.throws(() => parseNotificationPayload({ ...payload, unexpected: true }, shopMessage.kind), /unknown field/i);
+  assert.throws(() => parseNotificationPayload({ ...payload, totalCents: 3_001 }, shopMessage.kind), /invalid/i);
+  assert.throws(() => parseNotificationPayload({
+    ...payload,
+    items: [{ productTitle: "Produit", quantity: 2, unitPriceCents: 1_000, lineTotalCents: 1_000 }],
+    subtotalCents: 1_000,
+    shippingCents: 0,
+    totalCents: 1_000,
+  }, shopMessage.kind), /invalid/i);
+  assert.throws(() => parseNotificationPayload({
+    ...payload,
+    shippingAddress: { ...payload.shippingAddress!, countryCode: "France" },
+  }, shopMessage.kind), /invalid/i);
+});
+
+test("l’enqueue Boutique utilise le parent Shop, le snapshot et la clé persistante", async () => {
+  let observed: Record<string, unknown> | null = null;
+  const shopOrderId = shopMessage.resourceId!;
+  const transaction = {
+    shopOrder: {
+      findUniqueOrThrow: async () => ({
+        id: shopOrderId,
+        orderNumber: "LNX-SHOP-2026-000001",
+        subtotalCents: 2_800,
+        shippingCents: 200,
+        totalCents: 3_000,
+        currency: "EUR",
+        shippingRequired: true,
+        shippingFirstName: "Client",
+        shippingLastName: "Boutique",
+        shippingAddressLine1: "1 rue du Test",
+        shippingAddressLine2: null,
+        shippingPostalCode: "75001",
+        shippingCity: "Paris",
+        shippingCountryCode: "FR",
+        termsVersion: "shop-cgv-2026-08-v1",
+        createdAt: new Date("2026-08-27T10:00:00.000Z"),
+        user: {
+          email: "shop-client@example.invalid",
+          emailVerified: true,
+          displayName: "Client Boutique",
+          firstName: "Client",
+          lastName: "Boutique",
+        },
+        items: [
+          { productTitle: "Vinyle", quantity: 2, unitPriceCents: 1_000, lineTotalCents: 2_000 },
+          { productTitle: "Carte", quantity: 1, unitPriceCents: 800, lineTotalCents: 800 },
+        ],
+        payments: [{ provider: "STRIPE" }],
+      }),
+    },
+    orderNotification: {
+      upsert: async (input: { create: Record<string, unknown> }) => {
+        observed = input.create;
+        return {
+          id: "00000000-0000-4000-8000-000000000111",
+          orderId: null,
+          shopOrderId,
+          kind: "CUSTOMER_SHOP_PAYMENT_CONFIRMED",
+          channel: "EMAIL",
+          resourceType: "SHOP_ORDER",
+          resourceId: shopOrderId,
+        };
+      },
+    },
+  };
+  await enqueueShopOrderNotification(transaction as never, {
+    shopOrderId,
+    kind: "CUSTOMER_SHOP_PAYMENT_CONFIRMED",
+    recipient: "shop-client@example.invalid",
+    idempotencyKey: customerShopPaymentConfirmedNotificationKey(shopOrderId),
+    paymentProvider: "STRIPE",
+    termsVersion: "shop-cgv-2026-08-v1",
+  });
+  assert.notEqual(observed, null);
+  const created = observed as unknown as Record<string, unknown>;
+  assert.equal(created.orderId, null);
+  assert.equal(created.shopOrderId, shopOrderId);
+  assert.equal(created.resourceType, "SHOP_ORDER");
+  assert.equal(created.resourceId, shopOrderId);
+  assert.equal(created.idempotencyKey, customerShopPaymentConfirmedNotificationKey(shopOrderId));
+  assert.equal((created.payload as Record<string, unknown>).customerEmail, "shop-client@example.invalid");
+  assert.equal(Array.isArray((created.payload as Record<string, unknown>).items), true);
+});
+
+test("les notifications fulfillment Boutique respectent le flag client avant toute écriture", async () => {
+  const previous = process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED;
+  let reads = 0;
+  let writes = 0;
+  const payloads: Array<Record<string, unknown>> = [];
+  const shopOrderId = shopMessage.resourceId!;
+  const transaction = {
+    shopOrder: {
+      findUniqueOrThrow: async () => {
+        reads += 1;
+        return {
+          id: shopOrderId,
+          orderNumber: "LNX-SHOP-2026-000001",
+          subtotalCents: 2_800,
+          shippingCents: 200,
+          totalCents: 3_000,
+          currency: "EUR",
+          shippingRequired: true,
+          shippingFirstName: "Client",
+          shippingLastName: "Boutique",
+          shippingAddressLine1: "1 rue du Test",
+          shippingAddressLine2: null,
+          shippingPostalCode: "75001",
+          shippingCity: "Paris",
+          shippingCountryCode: "FR",
+          termsVersion: "shop-cgv-2026-08-v1",
+          createdAt: new Date("2026-08-27T10:00:00.000Z"),
+          user: {
+            email: "shop-client@example.invalid",
+            emailVerified: true,
+            displayName: "Client Boutique",
+            firstName: "Client",
+            lastName: "Boutique",
+          },
+          items: [{ productTitle: "Vinyle", quantity: 1, unitPriceCents: 2_800, lineTotalCents: 2_800 }],
+          payments: [{ provider: "STRIPE" }],
+        };
+      },
+    },
+    orderNotification: {
+      upsert: async (input: { create: Record<string, unknown> }) => {
+        writes += 1;
+        payloads.push(input.create.payload as Record<string, unknown>);
+        return {
+          id: `00000000-0000-4000-8000-00000000011${writes}`,
+          orderId: null,
+          shopOrderId,
+          kind: input.create.kind,
+          channel: input.create.channel,
+          resourceType: input.create.resourceType,
+          resourceId: input.create.resourceId,
+        };
+      },
+    },
+  };
+  try {
+    process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = "false";
+    assert.equal(await enqueueShopPreparingNotification(transaction as never, shopOrderId), null);
+    assert.equal(await enqueueShopShippedNotification(transaction as never, shopOrderId), null);
+    assert.deepEqual({ reads, writes }, { reads: 0, writes: 0 });
+
+    process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = "true";
+    await enqueueShopPreparingNotification(transaction as never, shopOrderId);
+    await enqueueShopShippedNotification(transaction as never, shopOrderId);
+    assert.deepEqual({ reads, writes }, { reads: 2, writes: 2 });
+    assert.ok(payloads.every((payload) => payload.shippingAddress === null));
+  } finally {
+    if (previous === undefined) delete process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED;
+    else process.env.CLIENT_EMAIL_NOTIFICATIONS_ENABLED = previous;
+  }
 });
 
 test("un second dispatch de la même ligne ne renvoie rien", async () => {
@@ -204,6 +439,60 @@ test("les templates ont HTML, texte, deep link et garde DRAFT", () => {
   }, captureConfiguration);
   assert.match(rights.text, /DRAFT|Aucun droit/i);
   assert.match(rights.text, /\/compte\/droits\/LNX-LIC-2026-000001/);
+});
+
+test("les templates Boutique sont humains, minimisés et liés à la bonne ressource", () => {
+  const customer = orderNotificationTemplate(shopMessage, captureConfiguration);
+  assert.match(customer.subject, /^\[TEST\] Commande Boutique confirmée/);
+  assert.match(customer.text, /\/compte\/achats\/LNX-SHOP-2026-000001/);
+  assert.match(customer.text, /2 × Vinyle ‹édition› — 20,00\s?€/u);
+  assert.match(customer.text, /Frais de livraison : 2,00\s?€/u);
+  assert.match(customer.text, /Total : 30,00\s?€/u);
+  assert.match(customer.text, /Carte bancaire via Stripe/);
+  assert.match(customer.text, /shop-cgv-2026-08-v1/);
+  assert.match(customer.text, /\/cgv/);
+  assert.match(customer.html, /Vinyle &lt;édition&gt;/);
+  assert.match(customer.html, /1 rue du Test &lt;privé&gt;/);
+  assert.doesNotMatch(`${customer.text}\n${customer.html}`, /sk_live_|providerPaymentId|DATABASE_URL|tracking pixel/i);
+
+  const payload = shopMessage.payload as ShopNotificationPayload;
+  const ownerMessage: OrderNotificationMessage = {
+    ...shopMessage,
+    kind: "OWNER_SHOP_ORDER_PAID",
+    recipient: "owner@example.invalid",
+    idempotencyKey: ownerShopOrderPaidNotificationKey(shopMessage.resourceId!),
+    templateKey: "owner-shop-order-paid",
+    payload: { ...payload, shippingAddress: null },
+  };
+  const owner = orderNotificationTemplate(ownerMessage, captureConfiguration);
+  assert.match(owner.text, /\/admin\/boutique\/commandes\/LNX-SHOP-2026-000001/);
+  assert.match(owner.text, /Client : Client ‹Boutique›/);
+  assert.doesNotMatch(owner.text, /1 rue du Test|shop-client@example.invalid/);
+});
+
+test("le transport Resend vérifie le destinataire client contre le parent Shop autoritatif", async () => {
+  const resend = parseNotificationConfiguration({
+    NODE_ENV: "development", NOTIFICATION_DEPLOYMENT_ENV: "staging", NOTIFICATION_EMAIL_TRANSPORT: "resend",
+    NOTIFICATION_STAGING_CONFIRM: "resend-staging-approved", EMAIL_NOTIFICATIONS_ENABLED: "true",
+    OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true", CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "true",
+    RESEND_API_KEY: "re_" + "fixture".repeat(6), RESEND_WEBHOOK_SECRET: "whsec_" + "fixture".repeat(6),
+    EMAIL_FROM: "LNX Beats <notifications@mail.example.com>", EMAIL_REPLY_TO: "reply@example.com",
+    EMAIL_OWNER_RECIPIENT: "owner@example.com", APP_CANONICAL_URL: "https://staging.example.com",
+  });
+  const mismatched: OrderNotificationMessage = {
+    ...shopMessage,
+    deploymentEnvironment: "staging",
+    recipient: "delivered@resend.dev",
+    payload: { ...(shopMessage.payload as ShopNotificationPayload), customerEmail: "delivered@resend.dev" },
+    shopOrder: { ...shopMessage.shopOrder!, customerEmail: "different@example.com" },
+  };
+  await assert.rejects(
+    () => createNotificationTransport(resend, { resendSender: async () => ({ data: { id: "must-not-send" }, error: null, headers: null }) }).send(
+      mismatched,
+      orderNotificationTemplate(mismatched, resend),
+    ),
+    (error: unknown) => error instanceof NotificationTransportError && error.failure.code === "CLIENT_DESTINATION_MISMATCH",
+  );
 });
 
 test("capture écrit une enveloppe privée et déterministe", async () => {

@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 export function PaypalReturnCapture({
   orderNumber,
   providerOrderId,
+  target = "music",
 }: {
   orderNumber: string;
   providerOrderId: string;
+  target?: "music" | "shop";
 }) {
   const router = useRouter();
   const started = useRef(false);
@@ -20,7 +22,9 @@ export function PaypalReturnCapture({
     void (async () => {
       try {
         const response = await fetch(
-          `/api/orders/${encodeURIComponent(orderNumber)}/payments/paypal/capture`,
+          target === "shop"
+            ? `/api/shop/orders/${encodeURIComponent(orderNumber)}/payments/paypal/capture`
+            : `/api/orders/${encodeURIComponent(orderNumber)}/payments/paypal/capture`,
           {
             method: "POST",
             headers: { "content-type": "application/json", accept: "application/json" },
@@ -42,7 +46,7 @@ export function PaypalReturnCapture({
         setMessage(error instanceof Error ? error.message : "La confirmation PayPal reste en attente.");
       }
     })();
-  }, [orderNumber, providerOrderId, router]);
+  }, [orderNumber, providerOrderId, router, target]);
 
   return <p className="form-message" role="status">{message}</p>;
 }

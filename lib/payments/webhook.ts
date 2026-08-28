@@ -734,9 +734,13 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
       await lock(transaction, `payments:attempt:${event.paymentId}`);
       const paymentOwner = await transaction.payment.findUnique({
         where: { id: event.paymentId, mode: event.livemode ? "LIVE" : "TEST" },
-        select: { order: { select: { orderNumber: true } } },
+        select: {
+          orderId: true,
+          shopOrderId: true,
+          order: { select: { orderNumber: true } },
+        },
       });
-      if (!paymentOwner) {
+      if (!paymentOwner || paymentOwner.shopOrderId || !paymentOwner.orderId || !paymentOwner.order) {
         return createReceipt(transaction, event, "REQUIRES_REVIEW");
       }
       await lock(transaction, `payments:order:${paymentOwner.order.orderNumber}`);
@@ -746,6 +750,7 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
         select: {
           id: true,
           orderId: true,
+          shopOrderId: true,
           provider: true,
           mode: true,
           status: true,
@@ -761,7 +766,9 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
           order: { select: { status: true } },
         },
       });
-      if (!payment) return createReceipt(transaction, event, "REQUIRES_REVIEW");
+      if (!payment || payment.shopOrderId || !payment.orderId || !payment.order) {
+        return createReceipt(transaction, event, "REQUIRES_REVIEW", payment?.id);
+      }
 
       const otherSuccessfulPayment = await transaction.payment.findFirst({
         where: {
@@ -799,7 +806,20 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
       });
 
       const plan = planStripeCheckoutReconciliation({
-        ...payment,
+        id: payment.id,
+        orderId: payment.orderId,
+        provider: payment.provider,
+        mode: payment.mode,
+        status: payment.status,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        pricingVersion: payment.pricingVersion,
+        providerCheckoutId: payment.providerCheckoutId,
+        providerPaymentId: payment.providerPaymentId,
+        paymentMethod: payment.paymentMethod,
+        failureCode: payment.failureCode,
+        paidAt: payment.paidAt,
+        failedAt: payment.failedAt,
         orderStatus: payment.order.status,
         orderHasOtherSuccessfulPayment: otherSuccessfulPayment !== null,
         orderHasOtherActivePayment: otherActivePayment !== null,
@@ -865,9 +885,13 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
       await lock(transaction, `payments:attempt:${event.paymentId}`);
       const paymentOwner = await transaction.payment.findUnique({
         where: { id: event.paymentId, mode: event.livemode ? "LIVE" : "TEST" },
-        select: { order: { select: { orderNumber: true } } },
+        select: {
+          orderId: true,
+          shopOrderId: true,
+          order: { select: { orderNumber: true } },
+        },
       });
-      if (!paymentOwner) {
+      if (!paymentOwner || paymentOwner.shopOrderId || !paymentOwner.orderId || !paymentOwner.order) {
         return createReceipt(transaction, event, "REQUIRES_REVIEW");
       }
       await lock(transaction, `payments:order:${paymentOwner.order.orderNumber}`);
@@ -877,6 +901,7 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
         select: {
           id: true,
           orderId: true,
+          shopOrderId: true,
           provider: true,
           mode: true,
           status: true,
@@ -892,7 +917,9 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
           order: { select: { status: true } },
         },
       });
-      if (!payment) return createReceipt(transaction, event, "REQUIRES_REVIEW");
+      if (!payment || payment.shopOrderId || !payment.orderId || !payment.order) {
+        return createReceipt(transaction, event, "REQUIRES_REVIEW", payment?.id);
+      }
 
       const otherSuccessfulPayment = await transaction.payment.findFirst({
         where: {
@@ -925,7 +952,20 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
       });
 
       const plan = planStripePaymentIntentFailure({
-        ...payment,
+        id: payment.id,
+        orderId: payment.orderId,
+        provider: payment.provider,
+        mode: payment.mode,
+        status: payment.status,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        pricingVersion: payment.pricingVersion,
+        providerCheckoutId: payment.providerCheckoutId,
+        providerPaymentId: payment.providerPaymentId,
+        paymentMethod: payment.paymentMethod,
+        failureCode: payment.failureCode,
+        paidAt: payment.paidAt,
+        failedAt: payment.failedAt,
         orderStatus: payment.order.status,
         orderHasOtherSuccessfulPayment: otherSuccessfulPayment !== null,
         orderHasOtherActivePayment: otherActivePayment !== null,

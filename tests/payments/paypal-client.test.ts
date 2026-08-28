@@ -5,6 +5,7 @@ import {
   createTestPaypalGateway,
   paypalAmountFromCents,
   paypalCaptureEvidence,
+  paypalCaptureResponseEvidence,
   paypalCentsFromAmount,
   paypalCreateOrderBody,
   paypalOrderSession,
@@ -92,6 +93,69 @@ test("accepts only sandbox approval links and complete capture evidence", () => 
   });
 });
 
+test("keeps usable successful capture identity when financial evidence is inconsistent", () => {
+  const mismatch = paypalCaptureResponseEvidence({
+    id: "PAYPAL-ORDER-REVIEW",
+    status: "COMPLETED",
+    purchase_units: [{
+      custom_id: request.paymentId,
+      payments: { captures: [{
+        id: "PAYPAL-CAPTURE-REVIEW",
+        status: "COMPLETED",
+        final_capture: true,
+        amount: { currency_code: "USD", value: "not-an-amount" },
+        update_time: "2026-08-21T10:00:00.000Z",
+      }] },
+    }],
+  });
+  assert.deepEqual(mismatch, {
+    providerOrderId: "PAYPAL-ORDER-REVIEW",
+    captureId: "PAYPAL-CAPTURE-REVIEW",
+    status: "COMPLETED",
+    paymentId: request.paymentId,
+    currency: "USD",
+    occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+    evidenceConsistent: false,
+  });
+  assert.throws(() => paypalCaptureEvidence({
+    id: "PAYPAL-ORDER-REVIEW",
+    status: "COMPLETED",
+    purchase_units: [{
+      custom_id: request.paymentId,
+      payments: { captures: [{
+        id: "PAYPAL-CAPTURE-REVIEW",
+        status: "COMPLETED",
+        final_capture: true,
+        amount: { currency_code: "USD", value: "90.00" },
+        update_time: "2026-08-21T10:00:00.000Z",
+      }] },
+    }],
+  }));
+
+  const ambiguous = paypalCaptureResponseEvidence({
+    id: "PAYPAL-ORDER-AMBIGUOUS",
+    status: "COMPLETED",
+    purchase_units: [{
+      custom_id: request.paymentId,
+      payments: { captures: [{
+        status: "COMPLETED",
+        final_capture: true,
+        amount: { currency_code: "EUR", value: "90.00" },
+        update_time: "2026-08-21T10:00:00.000Z",
+      }] },
+    }],
+  });
+  assert.equal(ambiguous.providerOrderId, "PAYPAL-ORDER-AMBIGUOUS");
+  assert.equal(ambiguous.captureId, undefined);
+  assert.equal(ambiguous.status, "COMPLETED");
+  assert.equal(ambiguous.evidenceConsistent, false);
+  assert.throws(() => paypalCaptureEvidence({
+    id: "PAYPAL-ORDER-AMBIGUOUS",
+    status: "COMPLETED",
+    purchase_units: [{ payments: { captures: [{ status: "COMPLETED" }] } }],
+  }));
+});
+
 test("uses PayPal Sandbox Orders v2 and the persisted provider idempotency key", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const gateway = createTestPaypalGateway(configuration, async (input, init = {}) => {
@@ -117,6 +181,41 @@ test("uses PayPal Sandbox Orders v2 and the persisted provider idempotency key",
   assert.equal(headers.get("PayPal-Request-Id"), "paypal-order:payment-fixture");
   const body = JSON.parse(String(calls[1]?.init.body)) as { purchase_units: Array<{ amount: { value: string } }> };
   assert.equal(body.purchase_units[0]?.amount.value, "90.00");
+});
+
+test("requests the complete PayPal capture representation required for financial reconciliation", async () => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  const gateway = createTestPaypalGateway(configuration, async (input, init = {}) => {
+    calls.push({ url: String(input), init });
+    if (String(input).endsWith("/v1/oauth2/token")) {
+      return new Response(JSON.stringify({ access_token: "access-token-fixture", token_type: "Bearer" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({
+      id: "PAYPAL-ORDER-01",
+      status: "COMPLETED",
+      purchase_units: [{
+        custom_id: request.paymentId,
+        payments: { captures: [{
+          id: "PAYPAL-CAPTURE-01",
+          status: "COMPLETED",
+          final_capture: true,
+          amount: { currency_code: "EUR", value: "90.00" },
+          update_time: "2026-08-21T10:00:00.000Z",
+        }] },
+      }],
+    }), { status: 201, headers: { "content-type": "application/json" } });
+  });
+
+  const result = await gateway.captureOrder("PAYPAL-ORDER-01", "shop:paypal:capture:fixture");
+  assert.equal(result.evidenceConsistent, true);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1]?.url, "https://api-m.sandbox.paypal.com/v2/checkout/orders/PAYPAL-ORDER-01/capture");
+  const headers = new Headers(calls[1]?.init.headers);
+  assert.equal(headers.get("prefer"), "return=representation");
+  assert.equal(headers.get("PayPal-Request-Id"), "shop:paypal:capture:fixture");
 });
 
 test("posts the exact raw event inside PayPal's official signature envelope", async () => {

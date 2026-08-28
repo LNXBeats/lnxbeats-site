@@ -22,12 +22,15 @@ import {
   type PaypalRefundGateway,
 } from "@/lib/payments/paypal-client";
 import {
+  captureIdFromRefundResource,
   isPaypalFinancialEvent,
   isStripeFinancialEvent,
   normalizePaypalIncidentEvent,
   normalizePaypalRefundEvent,
   normalizeStripeIncidentEvent,
   normalizeStripeRefundEvent,
+  paypalFinancialProviderPaymentId,
+  stripeFinancialProviderPaymentId,
 } from "@/lib/payments/provider-financial-events";
 import type { StripeRefundGateway } from "@/lib/payments/stripe-client";
 
@@ -258,6 +261,10 @@ test("financial webhook normalizers reject wrong currency and amount while prese
   assert.equal(normalizeStripeRefundEvent({ ...stripe, livemode: true })?.eventId, stripe.id);
   assert.equal(normalizeStripeRefundEvent({ ...stripe, data: { object: { ...stripe.data.object, currency: "usd" } } }), null);
   assert.equal(normalizeStripeRefundEvent({ ...stripe, data: { object: { ...stripe.data.object, amount: 1.5 } } }), null);
+  assert.equal(stripeFinancialProviderPaymentId({
+    ...stripe,
+    data: { object: { ...stripe.data.object, currency: "usd", amount: "invalid" } },
+  }), "pi_test_01");
   const paypal = {
     id: "WH-REFUND-01", event_type: "PAYMENT.REFUND.PENDING", create_time: "2026-08-22T12:00:00Z",
     resource: {
@@ -268,6 +275,26 @@ test("financial webhook normalizers reject wrong currency and amount while prese
   } as const;
   assert.equal(normalizePaypalRefundEvent(paypal)?.amountCents, 1_500);
   assert.equal(normalizePaypalRefundEvent({ ...paypal, resource: { ...paypal.resource, amount: { currency_code: "USD", value: "15.00" } } }), null);
+  const malformedPaypal = {
+    ...paypal,
+    event_type: "PAYMENT.CAPTURE.REFUNDED",
+    resource: { ...paypal.resource, amount: { currency_code: "USD", value: "invalid" } },
+  };
+  assert.equal(paypalFinancialProviderPaymentId(malformedPaypal), "PAYPAL-CAPTURE-01");
+  assert.equal(captureIdFromRefundResource({
+    links: [{
+      rel: "up",
+      method: "GET",
+      href: "https://attacker.invalid/v2/payments/captures/PAYPAL-CAPTURE-01",
+    }],
+  }), null);
+  assert.equal(captureIdFromRefundResource({
+    links: [{
+      rel: "up",
+      method: "POST",
+      href: "https://api-m.sandbox.paypal.com/v2/payments/captures/PAYPAL-CAPTURE-01",
+    }],
+  }), null);
 });
 
 test("PayPal reversals and disputes remain separate stable incidents", () => {
@@ -288,6 +315,15 @@ test("PayPal reversals and disputes remain separate stable incidents", () => {
   assert.equal(dispute?.incidentType, "CHARGEBACK");
   assert.equal(dispute?.status, "RESOLVED");
   assert.equal(dispute?.outcome, "SELLER_FAVOUR");
+  assert.equal(paypalFinancialProviderPaymentId({
+    id: "WH-DISPUTE-MALFORMED",
+    event_type: "CUSTOMER.DISPUTE.UPDATED",
+    create_time: "invalid-date",
+    resource: {
+      dispute_id: "PP-D-02",
+      disputed_transactions: [{ seller_transaction_id: "PAYPAL-CAPTURE-02" }],
+    },
+  }), "PAYPAL-CAPTURE-02");
 });
 
 test("Stripe dispute normalization preserves Payment mapping without changing business state", () => {
@@ -517,4 +553,21 @@ test("provider adapters enforce the Live mutation gate while inbound financial w
   assert.match(paypal, /configuration\.environment === "live" && !liveRefundsEnabled/);
   assert.match(paypal, /\/v2\/payments\/captures\/\$\{encodeURIComponent\(captureId\)\}\/refund/);
   assert.doesNotMatch(inbound, /LIVE_REFUNDS_ENABLED|liveRefundsEnabled/);
+});
+
+test("Shop financial events arm review behind the same fulfillment lock without automatic refund", async () => {
+  const [financialEvents, fulfillment] = await Promise.all([
+    readFile(new URL("../../lib/payments/provider-financial-events.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/shop/fulfillment-service.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(financialEvents, /SHOP_PROVIDER_FINANCIAL_EVENT_REVIEW/);
+  assert.match(financialEvents, /shop-payments:order:\$\{input\.shopOrderId\}/);
+  assert.match(financialEvents, /FROM "shop_orders"[\s\S]*FOR UPDATE/);
+  assert.match(financialEvents, /paymentReviewAt: order\.paymentReviewAt \?\? input\.occurredAt/);
+  assert.match(financialEvents, /outcome: "REQUIRES_REVIEW"[\s\S]*paymentId: input\.paymentId/);
+  assert.match(financialEvents, /category: "PROVIDER_FINANCIAL_EVENT"/);
+  assert.match(fulfillment, /shop-payments:order:\$\{shopOrderId\}/);
+  assert.match(fulfillment, /paymentReviewAt: null/);
+  const reviewHelper = financialEvents.match(/async function recordShopFinancialReview[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.doesNotMatch(reviewHelper, /refundAttempt\.create|enqueueOrderNotification/);
 });

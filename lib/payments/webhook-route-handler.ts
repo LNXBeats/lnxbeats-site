@@ -2,11 +2,17 @@ import "server-only";
 
 import Stripe from "stripe";
 
-import { assertPaymentServerEnvironment, STRIPE_API_VERSION } from "@/lib/payments/config";
+import { assertStripeReconciliationServerEnvironment, STRIPE_API_VERSION } from "@/lib/payments/config";
 import { normalizePaymentMethod } from "@/lib/payments/domain";
 import type { PaymentConfiguration } from "@/lib/payments/types";
 import { logPaymentEvent } from "@/lib/payments/observability";
-import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
+import { assertStripeWebhookRuntimeEnvironment } from "@/lib/payments/runtime";
+import {
+  enrichShopStripeWebhookEvent,
+  isShopStripeWebhookEvent,
+  processVerifiedShopStripeWebhookEvent,
+  resolveShopStripePaymentSource,
+} from "@/lib/shop/payment-webhooks";
 import { isStripeFinancialEvent, processVerifiedStripeFinancialEvent } from "@/lib/payments/provider-financial-events";
 import {
   findProcessedStripeWebhookEvent,
@@ -196,15 +202,23 @@ export async function enrichStripeWebhookEvent(
 
 const routeDependencies: StripeWebhookRouteDependencies = {
   assertQaRuntime: async () => {
-    await assertPaymentsRuntimeEnvironment();
+    await assertStripeWebhookRuntimeEnvironment();
   },
-  configuration: assertPaymentServerEnvironment,
+  configuration: () => assertStripeReconciliationServerEnvironment().stripe,
   constructEvent: constructStripeWebhookEvent,
-  enrichEvent: enrichStripeWebhookEvent,
+  enrichEvent: async (event, configuration) => {
+    const sourced = await resolveShopStripePaymentSource(event);
+    return isShopStripeWebhookEvent(sourced)
+      ? enrichShopStripeWebhookEvent(sourced, configuration)
+      : enrichStripeWebhookEvent(sourced, configuration);
+  },
   findDuplicateEvent: findProcessedStripeWebhookEvent,
-  processEvent: (event) => isStripeFinancialEvent(event.type)
-    ? processVerifiedStripeFinancialEvent(event)
-    : processVerifiedStripeWebhookEvent(event),
+  processEvent: (event) => {
+    if (isStripeFinancialEvent(event.type)) return processVerifiedStripeFinancialEvent(event);
+    return isShopStripeWebhookEvent(event)
+      ? processVerifiedShopStripeWebhookEvent(event)
+      : processVerifiedStripeWebhookEvent(event);
+  },
 };
 
 function webhookJson(body: object, status: number) {

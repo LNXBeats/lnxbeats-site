@@ -53,3 +53,37 @@ test("builds a hosted Checkout request with only the canonical internal metadata
   assert.equal(serializedParameters.includes("delivery"), false);
   assert.equal(serializedParameters.includes("storageKey"), false);
 });
+
+test("builds Shop Checkout metadata without leaking cart or shipping data", () => {
+  const parameters = hostedCheckoutParameters({
+    paymentSource: "SHOP_ORDER",
+    shopOrderId: "33333333-3333-4333-8333-333333333333",
+    orderNumber: "LNX-SHOP-2026-000001",
+    paymentId: "44444444-4444-4444-8444-444444444444",
+    pricingVersion: "shop-order-v1",
+    lineItems: [{
+      quantity: 1,
+      price_data: {
+        currency: "eur",
+        unit_amount: 3_000,
+        product_data: { name: "Commande Boutique LNX Beats" },
+      },
+    }],
+    customerEmail: "shop-owner@example.invalid",
+    successUrl: "https://www.lnxbeats.fr/compte/achats/LNX-SHOP-2026-000001?paiement=retour",
+    cancelUrl: "https://www.lnxbeats.fr/compte/achats/LNX-SHOP-2026-000001?paiement=annule",
+  });
+
+  assert.equal(parameters.client_reference_id, "33333333-3333-4333-8333-333333333333");
+  assert.deepEqual(parameters.metadata, {
+    paymentSource: "SHOP_ORDER",
+    paymentId: "44444444-4444-4444-8444-444444444444",
+    shopOrderId: "33333333-3333-4333-8333-333333333333",
+    orderNumber: "LNX-SHOP-2026-000001",
+    pricingVersion: "shop-order-v1",
+  });
+  assert.deepEqual(parameters.payment_intent_data?.metadata, parameters.metadata);
+  const serialized = JSON.stringify(parameters);
+  assert.equal(serialized.includes("shippingAddress"), false);
+  assert.equal(serialized.includes("productId"), false);
+});

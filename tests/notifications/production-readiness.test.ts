@@ -9,6 +9,7 @@ import {
 } from "@/lib/notifications/config";
 import {
   classifyNotificationFailure,
+  isShopNotificationKind,
   manualRetryAllowed,
   notificationDefinition,
 } from "@/lib/notifications/domain";
@@ -207,7 +208,7 @@ test("le préflight owner-only exige owner actif et client explicitement fermé"
 
 test("le préflight base reste strictement en lecture et valide le schéma courant", async () => {
   const database = {
-    $queryRaw: async () => [{ tables_ready: true, indexes_ready: true, migrations: 19n, latest_ready: true }],
+    $queryRaw: async () => [{ tables_ready: true, indexes_ready: true, migrations: 21n, latest_ready: true }],
     orderNotification: { count: async () => 0 },
     notificationEvent: { count: async () => 0 },
     notificationSuppression: { count: async () => 0 },
@@ -406,7 +407,8 @@ test("tous les événements ont un template déterministe et versionné", () => 
     "CUSTOMER_DELIVERY_READY", "OWNER_RIGHTS_REQUESTED", "CUSTOMER_RIGHTS_INFORMATION_REQUIRED",
     "CUSTOMER_RIGHTS_PREAUTHORIZATION_READY", "CUSTOMER_RIGHTS_CONTRACT_READY", "OWNER_RIGHTS_CLIENT_ACCEPTED",
     "CUSTOMER_RIGHTS_REJECTED", "CUSTOMER_RIGHTS_READY_FOR_PAYMENT", "CUSTOMER_PARTIAL_REFUND",
-    "CUSTOMER_REFUND_COMPLETED", "OWNER_PAYMENT_INCIDENT",
+    "CUSTOMER_REFUND_COMPLETED", "OWNER_PAYMENT_INCIDENT", "OWNER_SHOP_ORDER_PAID",
+    "CUSTOMER_SHOP_PAYMENT_CONFIRMED", "CUSTOMER_SHOP_PREPARING", "CUSTOMER_SHOP_SHIPPED",
   ];
   for (const kind of kinds) {
     const definition = notificationDefinition(kind);
@@ -415,6 +417,33 @@ test("tous les événements ont un template déterministe et versionné", () => 
       kind,
       priority: definition.priority,
       templateKey: definition.templateKey,
+      ...(isShopNotificationKind(kind) ? {
+        resourceType: "SHOP_ORDER",
+        resourceReference: "LNX-SHOP-2026-000001",
+        order: null,
+        shopOrder: {
+          orderNumber: "LNX-SHOP-2026-000001",
+          customerName: "Client QA",
+          customerEmail: "client@example.com",
+          totalCents: 3_000,
+          currency: "EUR",
+          createdAt: new Date("2026-08-27T10:00:00.000Z"),
+        },
+        payload: {
+          orderNumber: "LNX-SHOP-2026-000001",
+          customerName: "Client QA",
+          customerEmail: "client@example.com",
+          subtotalCents: 2_800,
+          shippingCents: 200,
+          totalCents: 3_000,
+          currency: "EUR",
+          createdAt: "2026-08-27T10:00:00.000Z",
+          items: [{ productTitle: "Vinyle", quantity: 1, unitPriceCents: 2_800, lineTotalCents: 2_800 }],
+          paymentProvider: "STRIPE" as const,
+          termsVersion: "shop-cgv-2026-08-v1",
+          shippingAddress: null,
+        },
+      } : {}),
     }, configuration);
     assert.equal(rendered.subject.startsWith("[TEST]"), false, kind);
     assert.match(rendered.html, /<!doctype html>/i, kind);

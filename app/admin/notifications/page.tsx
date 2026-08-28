@@ -5,7 +5,7 @@ import { retryNotificationAction, suppressNotificationRecipientAction } from "@/
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { adminNotificationFilters, listAdminNotificationReviewEvents, listAdminNotifications, listAdminNotificationSuppressions, parseAdminNotificationFilter, type AdminNotificationFilter } from "@/lib/notifications/admin";
-import { ADMIN_NOTIFICATION_RETRY_CONFIRMATION, ADMIN_NOTIFICATION_SUPPRESSION_CONFIRMATION, notificationEventOutcomePresentation, notificationSuppressionReasonPresentation } from "@/lib/notifications/admin-presentation";
+import { ADMIN_NOTIFICATION_RETRY_CONFIRMATION, ADMIN_NOTIFICATION_SUPPRESSION_CONFIRMATION, notificationEventOutcomePresentation, notificationKindPresentation, notificationSuppressionReasonPresentation } from "@/lib/notifications/admin-presentation";
 import { manualRetryAllowed } from "@/lib/notifications/domain";
 
 export const dynamic = "force-dynamic";
@@ -14,24 +14,6 @@ export const metadata: Metadata = { title: "Notifications" };
 const filterLabels: Record<AdminNotificationFilter, string> = {
   attention: "À examiner", pending: "En cours", sent: "Envoyées", suppressed: "Adresses à vérifier", all: "Toutes",
 };
-
-const kindLabels = {
-  OWNER_NEW_ORDER: "Nouvelle commande · propriétaire",
-  CUSTOMER_PAYMENT_CONFIRMED: "Paiement confirmé · client",
-  CUSTOMER_ORDER_ACCEPTED: "Commande acceptée · client",
-  CUSTOMER_CREATION_STARTED: "Création démarrée · client",
-  CUSTOMER_DELIVERY_READY: "Livraison disponible · client",
-  OWNER_RIGHTS_REQUESTED: "Demande de droits · propriétaire",
-  CUSTOMER_RIGHTS_INFORMATION_REQUIRED: "Informations demandées · client",
-  CUSTOMER_RIGHTS_PREAUTHORIZATION_READY: "Préautorisation DRAFT · client",
-  CUSTOMER_RIGHTS_CONTRACT_READY: "Document DRAFT · client",
-  OWNER_RIGHTS_CLIENT_ACCEPTED: "Acceptation · propriétaire",
-  CUSTOMER_RIGHTS_REJECTED: "Demande rejetée · client",
-  CUSTOMER_RIGHTS_READY_FOR_PAYMENT: "Étape future · client",
-  CUSTOMER_PARTIAL_REFUND: "Remboursement partiel · client",
-  CUSTOMER_REFUND_COMPLETED: "Remboursement total · client",
-  OWNER_PAYMENT_INCIDENT: "Incident paiement · propriétaire",
-} as const;
 
 type Props = { searchParams: Promise<{ filtre?: string; etat?: string }> };
 
@@ -61,7 +43,7 @@ export default async function AdminNotificationsPage({ searchParams }: Props) {
           attempts: notification.attempts,
         });
         return <tr key={notification.id}>
-          <td>{dateTime(notification.createdAt)}<small>{kindLabels[notification.kind]}</small><small>Mise à jour : {dateTime(notification.updatedAt)}</small></td>
+          <td>{dateTime(notification.createdAt)}<small>{notificationKindPresentation[notification.kind]}</small><small>Mise à jour : {dateTime(notification.updatedAt)}</small></td>
           <td>{notification.maskedRecipient}<small>{notification.channel} · {notification.provider ?? "En attente"}</small><small>ID fournisseur : {notification.maskedProviderMessageId}</small></td>
           <td>{notification.statusLabel}<small>{notification.lastErrorMessage ?? "Aucune erreur"}</small>{notification.lastErrorCode ? <small>Code : {notification.lastErrorCode}</small> : null}{notification.suppression ? <small>{notification.suppression.active ? "Adresse bloquée" : "Blocage levé"} · {notificationSuppressionReasonPresentation[notification.suppression.reason]} · {dateTime(notification.suppression.lastEventAt)}</small> : null}</td>
           <td>{notification.attempts} tentative{notification.attempts > 1 ? "s" : ""}<small>Disponible : {dateTime(notification.availableAt)}</small>{notification.processingStartedAt ? <small>Traitement : {dateTime(notification.processingStartedAt)}</small> : null}{notification.leaseExpiresAt ? <small>Échéance de la lease : {dateTime(notification.leaseExpiresAt)}</small> : null}{notification.sentAt ? <small>Acceptée : {dateTime(notification.sentAt)}</small> : null}{notification.deliveredAt ? <small>Livrée : {dateTime(notification.deliveredAt)}</small> : null}{notification.failedAt ? <small>Échec : {dateTime(notification.failedAt)}</small> : null}<details><summary>Événements ({notification.events.length})</summary>{notification.events.length ? <ul>{notification.events.map((event) => <li key={event.id}>{dateTime(event.occurredAt)} · {notificationEventOutcomePresentation[event.outcome]} · {event.providerEventType ?? event.code ?? "Événement interne"} · {event.maskedProviderMessageId}</li>)}</ul> : <small>Aucun événement enregistré.</small>}</details></td>

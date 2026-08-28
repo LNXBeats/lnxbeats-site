@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertPaypalReconciliationServerEnvironment,
   assertPaypalServerEnvironment,
   parsePaymentConfiguration,
   parsePaymentsConfiguration,
   assertPaymentServerEnvironment,
+  assertStripeReconciliationServerEnvironment,
   paymentHealthSummary,
   PaymentConfigurationError,
   STRIPE_API_VERSION,
@@ -136,6 +138,38 @@ test("a disabled foundation may be preconfigured without becoming reachable", ()
   assert.equal("secretKey" in configuration, false);
   assert.equal("webhookSecret" in configuration, false);
   assert.equal("publishableKey" in configuration, false);
+});
+
+test("configured webhook reconciliation survives closed payment and provider checkout switches", () => {
+  const stripe = assertStripeReconciliationServerEnvironment({
+    ...completeTestEnvironment,
+    PAYMENTS_ENABLED: "false",
+    STRIPE_PAYMENTS_ENABLED: "false",
+  });
+  assert.equal(stripe.deploymentEnvironment, "development");
+  assert.equal(stripe.stripe.enabled, true);
+  assert.equal(stripe.stripe.mode, "test");
+
+  const paypal = assertPaypalReconciliationServerEnvironment({
+    PAYMENTS_ENABLED: "false",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    PAYMENT_DEPLOYMENT_ENV: "development",
+    PAYPAL_ENVIRONMENT: "sandbox",
+    PAYPAL_CLIENT_ID: "paypal-client-fixture",
+    PAYPAL_CLIENT_SECRET: "paypal-secret-fixture",
+    PAYPAL_WEBHOOK_ID: "paypal-webhook-fixture",
+  });
+  assert.equal(paypal.deploymentEnvironment, "development");
+  assert.equal(paypal.paypal.enabled, true);
+  assert.equal(paypal.paypal.environment, "sandbox");
+
+  assert.throws(() => assertStripeReconciliationServerEnvironment({
+    ...completeTestEnvironment,
+    PAYMENTS_ENABLED: "false",
+    STRIPE_PAYMENTS_ENABLED: "false",
+    STRIPE_WEBHOOK_SECRET: undefined,
+  }), (error: unknown) => error instanceof PaymentConfigurationError
+    && error.code === "INCOMPLETE_CONFIGURATION");
 });
 
 test("live, malformed and ambiguous configurations fail closed", () => {

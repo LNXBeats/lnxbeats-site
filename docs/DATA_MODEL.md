@@ -38,6 +38,10 @@ erDiagram
   ShopOrderItem ||--o| StockReservation : réserve
   ShopOrder ||--o{ ShopOrderEvent : audite
   StockReservation o|--o{ ShopOrderEvent : détaille
+  ShopOrder ||--o{ Payment : "porte exclusivement"
+  ShopOrder ||--o{ OrderNotification : "met en file"
+  ShopOrder ||--o{ ShopOrderLifecycleEvent : "audite paiement et fulfillment"
+  Payment o|--o{ ShopOrderLifecycleEvent : contextualise
 ```
 
 Les crédits peuvent appartenir soit à un projet, soit à une piste. Cette exclusivité est garantie par une contrainte SQL dans la migration initiale.
@@ -283,3 +287,22 @@ décrémente pas le stock.
 Voir [`SHOP_FOUNDATION.md`](SHOP_FOUNDATION.md),
 [`SHOP_ORDER.md`](SHOP_ORDER.md), [`SHOP_INVENTORY.md`](SHOP_INVENTORY.md) et
 [`PRICING_ADMIN.md`](PRICING_ADMIN.md).
+
+## V1.1 Phase 3A — parent financier et audit Boutique
+
+`Payment.orderId` et `Payment.shopOrderId` sont optionnels individuellement,
+mais une contrainte SQL impose exactement un parent. Le même invariant vaut
+pour `OrderNotification`. Les lignes historiques musicales conservent leur
+`orderId`; aucune réécriture métier ou backfill de provider n'est effectué.
+La source `MUSIC_ORDER`/`SHOP_ORDER` se déduit de ce parent exclusif.
+
+Deux index partiels protègent la Boutique : une tentative active par provider
+et une seule réussite globale par `ShopOrder`. Le premier succès vérifié est le
+winner. Un autre succès authentique est audité pour revue sans confirmer une
+seconde fois le stock ou la commande.
+
+`ShopOrder` reçoit le snapshot de version/hash/horodatage des conditions
+acceptées, les champs de revue et les horodatages/données de suivi du
+fulfillment. `ShopOrderLifecycleEvent` possède une clé d'idempotence unique et
+sépare l'audit paiement/CGV/préparation de l'audit réservation Phase 2. La
+migration est la 21e et ne supprime ni ne réécrit une ligne existante.

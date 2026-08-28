@@ -28,6 +28,14 @@ import {
   unpublishAdminProduct,
   updateAdminProduct,
 } from "@/lib/shop/product-service";
+import {
+  parseShopPreparingForm,
+  parseShopShippedForm,
+} from "@/lib/shop/fulfillment-domain";
+import {
+  markShopOrderPreparing,
+  markShopOrderShipped,
+} from "@/lib/shop/fulfillment-service";
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -166,4 +174,39 @@ export async function adjustProductStockAction(formData: FormData) {
     }
     redirect(`/admin/boutique?etat=${encodeURIComponent(stateForError(error))}`);
   }
+}
+
+function refreshShopOrder(orderNumber: string) {
+  revalidatePath("/admin");
+  revalidatePath("/admin/boutique/commandes");
+  revalidatePath(`/admin/boutique/commandes/${orderNumber}`);
+  revalidatePath("/compte");
+  revalidatePath(`/compte/achats/${orderNumber}`);
+}
+
+export async function markShopOrderPreparingAction(formData: FormData) {
+  const session = await authorize();
+  let orderNumber: string;
+  try {
+    ({ orderNumber } = parseShopPreparingForm(formData));
+    await markShopOrderPreparing(orderNumber, session.user.id);
+  } catch {
+    redirect("/admin/boutique/commandes?etat=transition-refusee");
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=preparation-demarree`);
+}
+
+export async function markShopOrderShippedAction(formData: FormData) {
+  const session = await authorize();
+  let orderNumber: string;
+  try {
+    const input = parseShopShippedForm(formData);
+    orderNumber = input.orderNumber;
+    await markShopOrderShipped(orderNumber, session.user.id, input.shipment);
+  } catch {
+    redirect("/admin/boutique/commandes?etat=transition-refusee");
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=commande-expediee`);
 }

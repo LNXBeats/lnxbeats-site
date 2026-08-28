@@ -8,7 +8,7 @@ import { validateOrderPaymentSnapshot } from "@/lib/payments/domain";
 import {
   createPaypalGateway,
   PaypalClientError,
-  type PaypalCaptureEvidence,
+  type PaypalCaptureResponseEvidence,
   type PaypalCreateOrderRequest,
   type PaypalGateway,
 } from "@/lib/payments/paypal-client";
@@ -268,13 +268,19 @@ export function createPaymentDatabasePaypalCaptureRepository(
           select: {
             id: true,
             orderId: true,
+            shopOrderId: true,
             providerCheckoutId: true,
             amountCents: true,
             currency: true,
             pricingVersion: true,
           },
         });
-        if (!payment?.providerCheckoutId || payment.currency !== "EUR") {
+        if (
+          !payment?.providerCheckoutId
+          || !payment.orderId
+          || payment.shopOrderId
+          || payment.currency !== "EUR"
+        ) {
           throw new PaymentServiceError(409, "PAYMENT_SNAPSHOT_CONFLICT");
         }
         return {
@@ -312,7 +318,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
         const owner = event.paymentId
           ? await transaction.payment.findUnique({
               where: { id: event.paymentId, mode },
-              select: { id: true, order: { select: { orderNumber: true } } },
+              select: { id: true, orderId: true, shopOrderId: true, order: { select: { orderNumber: true } } },
             })
           : await transaction.payment.findUnique({
               where: {
@@ -322,14 +328,15 @@ export function createPaymentDatabasePaypalCaptureRepository(
                 },
                 mode,
               },
-              select: { id: true, order: { select: { orderNumber: true } } },
+              select: { id: true, orderId: true, shopOrderId: true, order: { select: { orderNumber: true } } },
             });
-        if (!owner) {
+        if (!owner?.order || !owner.orderId || owner.shopOrderId) {
           return receipt(transaction, {
             eventId: event.eventId,
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
             outcome: "REQUIRES_REVIEW",
+            paymentId: owner?.id,
             occurredAt: event.occurredAt,
           });
         }
@@ -342,6 +349,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
           select: {
             id: true,
             orderId: true,
+            shopOrderId: true,
             provider: true,
             mode: true,
             status: true,
@@ -365,11 +373,18 @@ export function createPaymentDatabasePaypalCaptureRepository(
             },
           },
         });
-        const currentPricing = payment
-          ? validateOrderPaymentSnapshot(currentOrderPaymentSnapshot(payment.order))
-          : null;
-        const mismatch = !payment
-          || payment.provider !== "PAYPAL"
+        if (!payment?.orderId || payment.shopOrderId || !payment.order) {
+          return receipt(transaction, {
+            eventId: event.eventId,
+            type: event.type,
+            objectId: event.captureId ?? event.providerOrderId,
+            outcome: "REQUIRES_REVIEW",
+            paymentId: payment?.id,
+            occurredAt: event.occurredAt,
+          });
+        }
+        const currentPricing = validateOrderPaymentSnapshot(currentOrderPaymentSnapshot(payment.order));
+        const mismatch = payment.provider !== "PAYPAL"
           || payment.mode !== mode
           || (event.paymentId !== undefined && payment.id !== event.paymentId)
           || payment.providerCheckoutId !== event.providerOrderId
@@ -380,8 +395,8 @@ export function createPaymentDatabasePaypalCaptureRepository(
           || payment.amountCents !== currentPricing.amountCents
           || payment.currency !== currentPricing.currency
           || payment.pricingVersion !== currentPricing.pricingVersion;
-        if (!payment || mismatch) {
-          if (payment && !paidPaymentStatuses.includes(payment.status as typeof paidPaymentStatuses[number])) {
+        if (mismatch) {
+          if (!paidPaymentStatuses.includes(payment.status as typeof paidPaymentStatuses[number])) {
             await transaction.payment.update({
               where: { id: payment.id },
               data: {
@@ -398,7 +413,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
             type: event.type,
             objectId: event.captureId ?? event.providerOrderId,
             outcome: "REQUIRES_REVIEW",
-            paymentId: payment?.id,
+            paymentId: payment.id,
             occurredAt: event.occurredAt,
           });
         }
@@ -618,12 +633,16 @@ export async function capturePaypalOrderForOrder(
     // This locked preflight runs before any provider call. If Stripe already
     // won, PayPal capture is never attempted.
     const reserved = await resolved.repository.reserveCapture(actor.id, orderNumber, providerOrderId);
-    const capture: PaypalCaptureEvidence = await resolved.gateway.captureOrder(
+    const capture: PaypalCaptureResponseEvidence = await resolved.gateway.captureOrder(
       reserved.providerOrderId,
       reserved.captureIdempotencyKey,
     );
     if (
-      capture.paymentId !== reserved.paymentId
+      capture.evidenceConsistent === false
+      || !capture.captureId
+      || !capture.paymentId
+      || capture.amountCents === undefined
+      || capture.paymentId !== reserved.paymentId
       || capture.providerOrderId !== reserved.providerOrderId
       || capture.amountCents !== reserved.amountCents
       || capture.currency !== reserved.currency
@@ -636,7 +655,7 @@ export async function capturePaypalOrderForOrder(
       providerOrderId: capture.providerOrderId,
       captureId: capture.captureId,
       amountCents: capture.amountCents,
-      currency: capture.currency,
+      currency: reserved.currency,
       status: capture.status,
     });
     return { confirmed: result.orderConfirmed, pending: capture.status === "PENDING" } as const;

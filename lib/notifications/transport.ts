@@ -94,7 +94,13 @@ function assertResendRecipient(message: OrderNotificationMessage, configuration:
     if (!configuration.clientEmailEnabled) {
       throw new NotificationTransportError({ code: "CLIENT_EMAIL_DISABLED", message: "Les notifications client sont désactivées.", retryable: false });
     }
-    if (recipient !== normalizeNotificationRecipient(message.order.customerEmail)) {
+    const authoritativeCustomerEmail = message.resourceType === "SHOP_ORDER"
+      ? message.shopOrder?.customerEmail
+      : message.order?.customerEmail;
+    if (!authoritativeCustomerEmail) {
+      throw new NotificationTransportError({ code: "CLIENT_SOURCE_MISSING", message: "La commande source de la notification est indisponible.", retryable: false });
+    }
+    if (recipient !== normalizeNotificationRecipient(authoritativeCustomerEmail)) {
       throw new NotificationTransportError({ code: "CLIENT_DESTINATION_MISMATCH", message: "La destination client ne correspond pas au compte de la commande.", retryable: false });
     }
     const stagingAllowed = isOfficialResendTestRecipient(recipient) || configuration.stagingRecipientAllowlist.includes(recipient);
