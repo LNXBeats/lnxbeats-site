@@ -14,8 +14,12 @@ import {
   phase4bMusicTermsCandidate,
   phase4bPrivacyCandidate,
   phase4bShopTermsCandidate,
+  phase4cMusicTermsCandidate,
+  phase4cShopTermsCandidate,
+  phase4cWithdrawalNoticeCandidate,
   privacyCandidate,
   shopTermsCandidate,
+  withdrawalNoticeCandidate,
 } from "../../data/legal";
 import { professionalInformation } from "../../data/professional";
 import { checkoutPaymentCtaLabel } from "../../lib/payments/presentation";
@@ -103,6 +107,58 @@ test("Phase 4B.1 publishes complete CM2C candidate metadata through a new immuta
   assert.match(component, /consumerMediatorInformation\.website/);
 });
 
+test("Phase 4C creates explicit candidate revisions without rewriting legal history", () => {
+  assert.equal(phase4cMusicTermsCandidate.version, "music-cgv-2026-03-draft");
+  assert.equal(phase4cShopTermsCandidate.version, "shop-cgv-2026-03-draft");
+  assert.equal(phase4cWithdrawalNoticeCandidate.version, "withdrawal-2026-02-draft");
+  for (const candidate of [phase4cMusicTermsCandidate, phase4cShopTermsCandidate, phase4cWithdrawalNoticeCandidate]) {
+    assert.equal(candidate.status, "AWAITING_LEGAL_REVIEW");
+    assert.equal(candidate.effectiveAt, null);
+    assert.equal(candidate.approvedAt, null);
+    assert.equal(candidate.approvedBy, null);
+  }
+  for (const historical of [
+    musicTermsCandidate, phase4bMusicTermsCandidate,
+    shopTermsCandidate, phase4bShopTermsCandidate,
+    withdrawalNoticeCandidate,
+  ]) assert.ok(legalCandidateHistory.includes(historical));
+  assert.notEqual(phase4cMusicTermsCandidate.hashSha256, phase4bMusicTermsCandidate.hashSha256);
+  assert.notEqual(phase4cShopTermsCandidate.hashSha256, phase4bShopTermsCandidate.hashSha256);
+  assert.notEqual(phase4cWithdrawalNoticeCandidate.hashSha256, withdrawalNoticeCandidate.hashSha256);
+});
+
+test("Phase 4C music wording treats the order as a creative service and preserves withdrawal rights", () => {
+  const body = JSON.stringify(phase4cMusicTermsCandidate);
+  assert.match(body, /prestation de services créatifs réalisée sur commande, donnant lieu à la livraison d’un contenu numérique/);
+  assert.match(body, /Je demande expressément que LNX Beats commence l’exécution de ma commande avant la fin du délai légal de rétractation de 14 jours/);
+  assert.match(body, /une fois la prestation entièrement exécutée, je ne pourrai plus exercer mon droit de rétractation/);
+  assert.match(body, /proportionnellement au service fourni, conformément à l’article L\. 221-25/);
+  assert.match(body, /case non précochée/);
+  assert.match(body, /Le commencement de la prestation ne provoque pas une renonciation immédiate/);
+  assert.doesNotMatch(body, /bien personnalisé[^.]*exclu(?:t|sion)|aucun droit de rétractation car personnalis/i);
+});
+
+test("Phase 4C Shop wording ties formation to server-confirmed payment and keeps sealed-audio guarantees", () => {
+  const body = JSON.stringify(phase4cShopTermsCandidate);
+  assert.match(body, /La vente est définitivement conclue après validation du paiement et confirmation de la commande par LNX Beats/);
+  assert.match(body, /En cas de refus ou d’échec du paiement, la commande n’est pas considérée comme définitivement validée/);
+  assert.match(body, /Le simple retour du navigateur depuis Stripe ou PayPal ne constitue jamais une preuve de paiement/);
+  assert.match(body, /le droit de rétractation ne peut être exercé pour les enregistrements audio descellés par le consommateur après leur livraison/);
+  assert.match(body, /Tant que le produit demeure scellé, le droit de rétractation reste applicable/);
+  assert.match(body, /garantie légale de conformité/);
+  assert.doesNotMatch(body, /CD non repris ni échangé/i);
+});
+
+test("Phase 4C keeps early-performance consent out of runtime until separate evidence exists", () => {
+  const commander = source("components/music-order-form.tsx");
+  const versioning = source("docs/LEGAL_VERSIONING.md");
+  assert.doesNotMatch(commander, /Je demande expressément que LNX Beats commence l’exécution/);
+  assert.match(versioning, /case distincte, non précochée/);
+  assert.match(versioning, /choix, la version, l’empreinte SHA-256 et l’horodatage côté serveur/);
+  assert.match(versioning, /Les champs `personalUseTerms\*` existants ne constituent pas une preuve distincte adaptée/);
+  assert.match(versioning, /Aucune migration ni collecte runtime n’est introduite en Phase 4C/);
+});
+
 test("the CM2C convention review dates are internal reminders and not candidate effective dates", () => {
   const register = source("docs/LEGAL_SOURCE_REGISTER.md");
   assert.match(register, /expire le \*\*27\/08\/2029\*\*/);
@@ -110,6 +166,18 @@ test("the CM2C convention review dates are internal reminders and not candidate 
   assert.match(register, /rappel interne/i);
   assert.equal(phase4b1LegalNoticesCandidate.effectiveAt, null);
   assert.equal(phase4b1LegalNoticesCandidate.approvedAt, null);
+});
+
+test("Phase 4C preserves CM2C and every unresolved source recheck marker", () => {
+  const body = JSON.stringify(legalCandidates);
+  assert.match(body, /Centre de la Médiation de la Consommation de Conciliateurs de Justice — CM2C/);
+  for (const code of [
+    "RAILWAY_LEGAL_ENTITY_AND_ADDRESS",
+    "CLOUDFLARE_LEGAL_ENTITY_AND_ADDRESS",
+    "OVHCLOUD_LEGAL_ENTITY_AND_ADDRESS",
+    "CM2C_CONTACT_DETAILS_BEFORE_PUBLICATION",
+    "PROCESSOR_TRANSFER_MECHANISMS",
+  ]) assert.match(body, new RegExp(code));
 });
 
 test("Shop payment labels visibly state payment obligation while music labels stay stable", () => {
@@ -132,6 +200,9 @@ test("public legal surfaces expose distinct terms, withdrawal, CM2C and no obsol
   assert.match(files, /CM2C/);
   assert.doesNotMatch(files, /ec\.europa\.eu\/consumers\/odr/i);
   assert.doesNotMatch(files, /date de naissance|sécurité sociale|pièce d’identité/i);
+  assert.match(source("app/cgv/creation-musicale/page.tsx"), /phase4cMusicTermsCandidate/);
+  assert.match(source("app/cgv/boutique/page.tsx"), /phase4cShopTermsCandidate/);
+  assert.match(source("app/retractation/page.tsx"), /phase4cWithdrawalNoticeCandidate/);
 });
 
 test("QA terms remain forbidden in production and candidates are not registered as approved", () => {

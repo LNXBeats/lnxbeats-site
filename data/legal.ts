@@ -489,21 +489,115 @@ export const phase4bPrivacyCandidate = revision(
   ] } : section),
 );
 
+export const phase4cMusicTermsCandidate = revision(
+  phase4bMusicTermsCandidate,
+  "music-cgv-2026-03-draft",
+  phase4bMusicTermsCandidate.sections.map((section) => {
+    if (section.title === "1. Professionnel, objet et périmètre") return {
+      title: section.title,
+      paragraphs: [
+        "Les présentes conditions candidates encadrent les créations musicales personnalisées proposées par Ludovic Mickaël Mathon, entrepreneur individuel, sous le nom LNX Beats, via le service LNX STUDIO.",
+        "La création musicale personnalisée LNX Beats est présentée, dans cette version candidate, principalement comme une prestation de services créatifs réalisée sur commande, donnant lieu à la livraison d’un contenu numérique.",
+        "Cette qualification reste soumise à validation juridique professionnelle avant toute activation. La création musicale n’est pas présentée comme un simple bien personnalisé et l’exception applicable aux biens confectionnés selon les spécifications du consommateur ne constitue pas automatiquement le fondement d’une absence de rétractation.",
+      ],
+      decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "MUSIC_CONTRACT_CLASSIFICATION" }],
+    };
+    if (section.title === "4. Formation, commencement et délai") return {
+      title: section.title,
+      paragraphs: [
+        "Le délai indicatif de réalisation est de sept à quatorze jours après confirmation du paiement et réception d’un brief exploitable. Une situation particulière annoncée explicitement peut conduire à un délai différent.",
+        "Je demande expressément que LNX Beats commence l’exécution de ma commande avant la fin du délai légal de rétractation de 14 jours. Je reconnais qu’une fois la prestation entièrement exécutée, je ne pourrai plus exercer mon droit de rétractation.",
+        "Si vous exercez votre droit de rétractation après le début de l’exécution mais avant son achèvement, le montant correspondant aux prestations déjà réalisées pourra rester dû, proportionnellement au service fourni, conformément à l’article L. 221-25 du Code de la consommation.",
+        "Cette demande devra être recueillie séparément, par une case non précochée, et faire l’objet d’une preuve versionnée et horodatée avant toute activation du texte.",
+      ],
+      decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "EARLY_PERFORMANCE_WITHDRAWAL_WORDING" }],
+    };
+    if (section.title === "6. Rétractation et annulation") return {
+      title: section.title,
+      paragraphs: [
+        "Le droit de rétractation et ses éventuelles exceptions ne peuvent être écartés automatiquement au seul motif que la création est personnalisée. L’éligibilité dépend notamment de la qualification du contrat, de l’état réel d’exécution et des consentements distincts effectivement recueillis.",
+        "Le commencement de la prestation ne provoque pas une renonciation immédiate. Avant l’exécution complète, une rétractation peut conduire au paiement proportionnel du service déjà fourni lorsque les conditions légales sont réunies. Le consommateur peut utiliser la fonctionnalité en ligne ; sa demande est instruite et ne déclenche aucun remboursement automatique.",
+      ],
+      decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "EARLY_PERFORMANCE_WITHDRAWAL_WORDING" }],
+    };
+    return section;
+  }),
+);
+
+export const phase4cShopTermsCandidate = revision(
+  phase4bShopTermsCandidate,
+  "shop-cgv-2026-03-draft",
+  phase4bShopTermsCandidate.sections.map((section) => {
+    if (section.title === "2. Panier, stock et formation du contrat") return {
+      title: section.title,
+      paragraphs: [
+        "Le client peut vérifier et corriger son panier avant paiement. La création technique d’une ShopOrder réserve temporairement le stock mais ne prouve pas à elle seule un paiement ni la formation définitive du contrat.",
+        "La vente est définitivement conclue après validation du paiement et confirmation de la commande par LNX Beats. Un accusé de réception de la commande est adressé au client par voie électronique. En cas de refus ou d’échec du paiement, la commande n’est pas considérée comme définitivement validée.",
+        "Le simple retour du navigateur depuis Stripe ou PayPal ne constitue jamais une preuve de paiement. Seule la confirmation serveur authentifiée et réconciliée peut rendre la commande payée.",
+      ],
+      decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "SHOP_CONTRACT_FORMATION_TIME" }],
+    };
+    if (section.title === "6. Réception, rétractation et retours") return {
+      title: section.title,
+      paragraphs: [
+        "Le consommateur dispose en principe de quatorze jours à compter de la réception pour exercer son droit de rétractation. Pour une rétractation de convenance légalement possible, les frais directs de retour sont à sa charge si cette information a été fournie avant la commande.",
+        "CD et autres enregistrements audio scellés : conformément à l’article L. 221-28 du Code de la consommation, le droit de rétractation ne peut être exercé pour les enregistrements audio descellés par le consommateur après leur livraison. Tant que le produit demeure scellé, le droit de rétractation reste applicable dans les conditions légales.",
+        "Cette exception ne limite jamais la garantie légale de conformité, la garantie des vices cachés ni les recours applicables aux produits défectueux, non conformes, erronés ou endommagés. Ces situations restent distinctes d’une rétractation de convenance.",
+        "Adresse de retour : LNX Beats, 35 Impasse des Orties, 07370 Ozon, France. Toute future modification crée une nouvelle version des conditions sans réécrire les snapshots historiques.",
+      ],
+      decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "SEALED_AUDIO_WITHDRAWAL_EXACT_WORDING" }],
+    };
+    return section;
+  }),
+);
+
+export const phase4cWithdrawalNoticeCandidate = revision(
+  withdrawalNoticeCandidate,
+  "withdrawal-2026-02-draft",
+  [
+    withdrawalNoticeCandidate.sections[0]!,
+    {
+      title: "Commencement anticipé d’une prestation",
+      paragraphs: [
+        "La demande expresse de commencement avant la fin du délai légal de quatorze jours ne vaut pas renonciation immédiate au droit de rétractation. Une fois la prestation entièrement exécutée, la perte du droit reste soumise aux conditions légales et au consentement effectivement recueilli.",
+        "En cas de rétractation après le début de l’exécution mais avant son achèvement, le montant correspondant aux prestations déjà réalisées peut rester dû proportionnellement au service fourni, conformément à l’article L. 221-25 du Code de la consommation.",
+      ],
+      decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "EARLY_PERFORMANCE_WITHDRAWAL_WORDING" }],
+    },
+    {
+      title: "CD et autres enregistrements audio scellés",
+      paragraphs: [
+        "CD et autres enregistrements audio scellés : conformément à l’article L. 221-28 du Code de la consommation, le droit de rétractation ne peut être exercé pour les enregistrements audio descellés par le consommateur après leur livraison. Tant que le produit demeure scellé, le droit de rétractation reste applicable dans les conditions légales.",
+        "Les garanties légales et les recours relatifs à un produit défectueux, non conforme, erroné ou endommagé restent applicables. Les frais directs de retour à la charge du consommateur concernent uniquement une rétractation de convenance légalement possible et correctement annoncée.",
+      ],
+      decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "SEALED_AUDIO_WITHDRAWAL_EXACT_WORDING" }],
+    },
+    withdrawalNoticeCandidate.sections[1]!,
+  ],
+);
+
 export const legalCandidates = Object.freeze([
   phase4b1LegalNoticesCandidate,
-  phase4bMusicTermsCandidate,
-  phase4bShopTermsCandidate,
+  phase4cMusicTermsCandidate,
+  phase4cShopTermsCandidate,
   phase4bPrivacyCandidate,
-  withdrawalNoticeCandidate,
+  phase4cWithdrawalNoticeCandidate,
 ]);
 
 export const legalCandidateHistory = Object.freeze([
   legalNoticesCandidate,
-  musicTermsCandidate,
-  shopTermsCandidate,
-  privacyCandidate,
   phase4bLegalNoticesCandidate,
-  ...legalCandidates,
+  phase4b1LegalNoticesCandidate,
+  musicTermsCandidate,
+  phase4bMusicTermsCandidate,
+  phase4cMusicTermsCandidate,
+  shopTermsCandidate,
+  phase4bShopTermsCandidate,
+  phase4cShopTermsCandidate,
+  privacyCandidate,
+  phase4bPrivacyCandidate,
+  withdrawalNoticeCandidate,
+  phase4cWithdrawalNoticeCandidate,
 ]);
 
 export function assertCandidateLegalRegistry() {

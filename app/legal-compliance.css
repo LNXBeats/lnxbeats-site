@@ -77,6 +77,7 @@
 .legal-document__navigation a:focus-visible { border-color: var(--gold); color: var(--gold-light); }
 
 .legal-document__sections { display: grid; gap: 1rem; counter-reset: legal-section; }
+.withdrawal-page__information { margin-top: 2rem; }
 .legal-document__sections > section {
   padding: clamp(1.35rem, 3vw, 2rem);
   border: 1px solid var(--line);

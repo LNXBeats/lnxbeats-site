@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Container } from "@/components/container";
-import { phase4bMusicTermsCandidate, phase4bShopTermsCandidate } from "@/data/legal";
+import { phase4cMusicTermsCandidate, phase4cShopTermsCandidate } from "@/data/legal";
 
 export const metadata: Metadata = {
   title: "Conditions générales",
@@ -22,15 +22,15 @@ export default function TermsIndexPage() {
           <article>
             <p className="eyebrow">Création musicale</p>
             <h2>Prestation et livrable numérique</h2>
-            <p>Brief, prix accepté, réalisation, retouches, livraison privée, droits d’usage et rétractation à qualifier.</p>
-            <dl><div><dt>Version</dt><dd>{phase4bMusicTermsCandidate.version}</dd></div><div><dt>Statut</dt><dd>{phase4bMusicTermsCandidate.status}</dd></div></dl>
+            <p>Prestation créative sur commande, livrable numérique, commencement anticipé et rétractation soumis à revue juridique.</p>
+            <dl><div><dt>Version</dt><dd>{phase4cMusicTermsCandidate.version}</dd></div><div><dt>Statut</dt><dd>{phase4cMusicTermsCandidate.status}</dd></div></dl>
             <Link className="button button--secondary" href="/cgv/creation-musicale">Lire la version candidate</Link>
           </article>
           <article>
             <p className="eyebrow">Boutique physique</p>
             <h2>Produits, livraison et garanties</h2>
             <p>Stock, paiement, livraison, transfert des risques, rétractation, retours et garanties légales.</p>
-            <dl><div><dt>Version</dt><dd>{phase4bShopTermsCandidate.version}</dd></div><div><dt>Statut</dt><dd>{phase4bShopTermsCandidate.status}</dd></div></dl>
+            <dl><div><dt>Version</dt><dd>{phase4cShopTermsCandidate.version}</dd></div><div><dt>Statut</dt><dd>{phase4cShopTermsCandidate.status}</dd></div></dl>
             <Link className="button button--secondary" href="/cgv/boutique">Lire la version candidate</Link>
           </article>
         </div>
