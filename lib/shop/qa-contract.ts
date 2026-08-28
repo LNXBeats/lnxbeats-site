@@ -12,6 +12,7 @@ export const SHOP_PHASE2_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE2_QA_MEDIA_ROOT}/pu
 export const SHOP_PHASE2_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE2_QA_MEDIA_ROOT}/private`;
 
 export const SHOP_PHASE3_QA_OWNER_EMAIL = "lnx-v110-phase3-owner@example.invalid";
+export const SHOP_PHASE3B_STRIPE_QA_CONFIRMATION = "enable-local-shop-stripe-test-qa";
 export const SHOP_PHASE3_QA_CREATION_TOKEN = "11030000-0000-4000-8000-000000000001";
 export const SHOP_PHASE3_QA_PROVIDER_CHECKOUT_ID = "cs_test_lnx_shop_phase3_mock_001";
 export const SHOP_PHASE3_QA_PROVIDER_PAYMENT_ID = "pi_lnx_shop_phase3_mock_001";
