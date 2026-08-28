@@ -275,6 +275,7 @@ async function setup() {
       city: "Paris",
       countryCode: "FR",
     },
+    shippingQuoteVersion: null,
   }, SHOP_PHASE3_QA_CREATION_TOKEN);
 
   const repository = createShopPaymentDatabaseRepository(prisma, "TEST");

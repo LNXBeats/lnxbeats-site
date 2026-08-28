@@ -450,6 +450,15 @@
   margin-top: 1rem;
 }
 
+.shop-cart__actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.shop-cart__shipping-proof {
+  color: var(--gold-soft);
+}
+
 .shop-cart-empty {
   max-width: 42rem;
 }

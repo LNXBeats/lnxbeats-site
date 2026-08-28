@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, type MouseEvent } from "react";
 
 import { useShopCart } from "@/components/shop-cart-provider";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
@@ -14,7 +14,6 @@ type CartProduct = Readonly<{
   title: string;
   priceCents: number;
   shippingRequired: boolean;
-  shippingPriceCents: number;
   lockVersion: number;
   availableQuantity: number | null;
   soldOut: boolean;
@@ -27,6 +26,17 @@ type CartProduct = Readonly<{
 }>;
 
 type CreatedOrder = Readonly<{ orderNumber: string }>;
+type ShippingQuote = Readonly<{
+  subtotalCents: number;
+  shippingCents: number;
+  totalCents: number;
+  currency: "EUR";
+  shippingRequired: boolean;
+  shippingQuoteVersion: string | null;
+  shippingMethod: string | null;
+  shippingWeightGrams: number | null;
+  shippingBillableGrams: number | null;
+}>;
 
 const IDEMPOTENCY_STORAGE_KEY = "lnx-shop-order-idempotency-v1";
 
@@ -51,6 +61,8 @@ export function ShopCart({
   const router = useRouter();
   const { lines, ready, setQuantity, remove, clear } = useShopCart();
   const [busy, setBusy] = useState(false);
+  const [quoting, setQuoting] = useState(false);
+  const [quote, setQuote] = useState<ShippingQuote | null>(null);
   const [error, setError] = useState("");
   const [changedProductId, setChangedProductId] = useState<string | null>(null);
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
@@ -63,14 +75,70 @@ export function ShopCart({
     || (product.availableQuantity !== null && quantity > product.availableQuantity)
   ));
   const subtotalCents = knownLines.reduce((sum, { product, quantity }) => sum + product.priceCents * quantity, 0);
-  const shippingCents = knownLines.reduce((sum, { product, quantity }) => (
-    sum + (product.shippingRequired ? product.shippingPriceCents * quantity : 0)
-  ), 0);
 
-  function resetIdempotency() {
+  function resetOrderPreparation() {
     window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
+    setQuote(null);
     setError("");
     setChangedProductId(null);
+  }
+
+  function shippingAddressFrom(form: FormData) {
+    return shippingRequired ? {
+      firstName: String(form.get("firstName") ?? ""),
+      lastName: String(form.get("lastName") ?? ""),
+      addressLine1: String(form.get("addressLine1") ?? ""),
+      addressLine2: String(form.get("addressLine2") ?? ""),
+      postalCode: String(form.get("postalCode") ?? ""),
+      city: String(form.get("city") ?? ""),
+      countryCode: String(form.get("countryCode") ?? ""),
+    } : null;
+  }
+
+  function requestPayload(form: FormData, shippingQuoteVersion: string | null) {
+    return {
+      items: lines.map(({ productId, quantity }) => ({
+        productId,
+        quantity,
+        observedLockVersion: productById.get(productId)?.lockVersion,
+      })),
+      shippingAddress: shippingAddressFrom(form),
+      shippingQuoteVersion,
+    };
+  }
+
+  async function calculateQuote(event: MouseEvent<HTMLButtonElement>) {
+    const formElement = event.currentTarget.form;
+    if (!formElement || !formElement.reportValidity() || invalid || quoting || busy) return;
+    setQuoting(true);
+    setError("");
+    setChangedProductId(null);
+    try {
+      const response = await fetch("/api/shop/shipping/quote", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload(new FormData(formElement), null)),
+      });
+      const body = await response.json() as {
+        quote?: ShippingQuote;
+        message?: string;
+        code?: string;
+        productId?: string;
+      };
+      if (!response.ok || !body.quote) {
+        if (body.productId) setChangedProductId(body.productId);
+        setQuote(null);
+        setError(messageFromResponse(body));
+        return;
+      }
+      setQuote(body.quote);
+    } catch {
+      setQuote(null);
+      setError("Le devis serveur n’a pas pu être reçu. Réessayez sans modifier le panier.");
+    } finally {
+      setQuoting(false);
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -86,15 +154,10 @@ export function ShopCart({
     if (!lines.length || invalid || busy) return;
 
     const form = new FormData(event.currentTarget);
-    const shippingAddress = shippingRequired ? {
-      firstName: String(form.get("firstName") ?? ""),
-      lastName: String(form.get("lastName") ?? ""),
-      addressLine1: String(form.get("addressLine1") ?? ""),
-      addressLine2: String(form.get("addressLine2") ?? ""),
-      postalCode: String(form.get("postalCode") ?? ""),
-      city: String(form.get("city") ?? ""),
-      countryCode: String(form.get("countryCode") ?? ""),
-    } : null;
+    if (!quote) {
+      setError("Calculez le devis serveur avant de préparer la commande.");
+      return;
+    }
     let idempotencyKey = window.sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY);
     if (!idempotencyKey) {
       idempotencyKey = crypto.randomUUID();
@@ -108,14 +171,7 @@ export function ShopCart({
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-        body: JSON.stringify({
-          items: lines.map(({ productId, quantity }) => ({
-            productId,
-            quantity,
-            observedLockVersion: productById.get(productId)?.lockVersion,
-          })),
-          shippingAddress,
-        }),
+        body: JSON.stringify(requestPayload(form, quote.shippingQuoteVersion)),
       });
       const body = await response.json() as {
         order?: CreatedOrder;
@@ -125,10 +181,11 @@ export function ShopCart({
       };
       if (!response.ok || !body.order) {
         if (body.code === "IDEMPOTENCY_CONFLICT") window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
-        if ((body.code === "PRODUCT_CHANGED" || body.code === "OUT_OF_STOCK" || body.code === "PRODUCT_UNAVAILABLE") && body.productId) {
+        if ((body.code === "PRODUCT_CHANGED" || body.code === "OUT_OF_STOCK" || body.code === "PRODUCT_UNAVAILABLE" || body.code === "SHIPPING_WEIGHT_REQUIRED") && body.productId) {
           setChangedProductId(body.productId);
           router.refresh();
         }
+        if (body.code === "SHIPPING_QUOTE_CHANGED") setQuote(null);
         if (response.status === 401) {
           router.push("/connexion?retour=%2Fboutique%2Fpanier");
           return;
@@ -158,7 +215,7 @@ export function ShopCart({
   }
 
   return (
-    <form className="shop-cart" onChange={resetIdempotency} onSubmit={submit}>
+    <form className="shop-cart" onChange={resetOrderPreparation} onSubmit={submit}>
       <div className="shop-cart__content">
         <section className="shop-cart__lines" aria-labelledby="shop-cart-lines-title">
           <h2 id="shop-cart-lines-title">Votre sélection</h2>
@@ -228,21 +285,32 @@ export function ShopCart({
         <p className="eyebrow">Récapitulatif</p>
         <h2 id="shop-cart-summary-title">Commande Boutique</h2>
         <dl>
-          <div><dt>Sous-total</dt><dd>{formatShopMoney(subtotalCents)}</dd></div>
-          <div><dt>Expédition</dt><dd>{formatShopMoney(shippingCents)}</dd></div>
-          <div className="shop-cart__total"><dt>Total</dt><dd>{formatShopMoney(subtotalCents + shippingCents)}</dd></div>
+          <div><dt>Sous-total</dt><dd>{formatShopMoney(quote?.subtotalCents ?? subtotalCents)}</dd></div>
+          <div><dt>Expédition</dt><dd>{quote ? formatShopMoney(quote.shippingCents) : "À calculer"}</dd></div>
+          <div className="shop-cart__total"><dt>Total</dt><dd>{quote ? formatShopMoney(quote.totalCents) : "—"}</dd></div>
         </dl>
-        <p>Aucun paiement ne sera créé. Le serveur revérifie prix, disponibilité et frais d’envoi avant de réserver le stock.</p>
+        {quote?.shippingRequired ? <p className="shop-cart__shipping-proof">Devis serveur {quote.shippingQuoteVersion} · {quote.shippingBillableGrams} g facturables. Fixture QA interne, non contractuelle.</p> : null}
+        <p>Aucun paiement n’est déclenché par le devis. Le serveur revérifie prix, disponibilité, poids et livraison avant de réserver le stock.</p>
         {error ? <p className="shop-cart__error" role="alert">{error}</p> : null}
         {authenticated ? (
-          <button
-            className="button button--primary"
-            disabled={busy || invalid}
-            formNoValidate={!memberAllowed}
-            type="submit"
-          >
-            {busy ? "Préparation…" : "Préparer ma commande"}
-          </button>
+          <div className="shop-cart__actions">
+            <button
+              className="button button--secondary"
+              disabled={quoting || busy || invalid || !memberAllowed}
+              onClick={calculateQuote}
+              type="button"
+            >
+              {quoting ? "Calcul…" : quote ? "Recalculer la livraison" : "Calculer la livraison"}
+            </button>
+            <button
+              className="button button--primary"
+              disabled={busy || quoting || invalid || !quote}
+              formNoValidate={!memberAllowed}
+              type="submit"
+            >
+              {busy ? "Préparation…" : "Préparer ma commande"}
+            </button>
+          </div>
         ) : (
           <Link className="button button--primary" href="/connexion?retour=%2Fboutique%2Fpanier">
             Se connecter pour continuer

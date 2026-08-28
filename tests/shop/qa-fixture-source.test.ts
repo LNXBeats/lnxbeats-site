@@ -88,3 +88,29 @@ test("Shop Phase 3 preview stays offline, disposable and payment-provider free",
     assert.doesNotMatch(scripts[name], /(?:^|\s)--env-file=\.env\.phase2-qa\.local/);
   }
 });
+
+test("Shop Phase 5A preview is local-only and logistics fixtures cannot contact providers", async () => {
+  const [fixture, preview, packageSource] = await Promise.all([
+    readFile(new URL("../../scripts/shop-phase5a-logistics-fixture.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../scripts/shop-phase5a-preview.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../package.json", import.meta.url), "utf8"),
+  ]);
+  assert.match(fixture, /lnx-studio-v110-logistics-preview-test/);
+  assert.match(fixture, /createInternalAuthUser/);
+  assert.match(fixture, /createAdminProduct[\s\S]*replaceAdminProductImage[\s\S]*publishAdminProduct/);
+  assert.match(fixture, /quoteShopOrderShipping[\s\S]*createShopOrder/);
+  assert.match(fixture, /shippingWeightGrams/);
+  assert.doesNotMatch(fixture, /fetch\s*\(|createStripeCheckout|createPaypalOrder|sendResendEmail/);
+  assert.doesNotMatch(fixture, /password:\s*["'`][^"'`]+["'`]/);
+
+  assert.match(preview, /http:\/\/127\.0\.0\.1:31775/);
+  assert.match(preview, /assertSafeLocalPostgresUrl/);
+  assert.match(preview, /PAYMENTS_ENABLED, "false"/);
+  assert.match(preview, /ALLOWED_ENV/);
+  assert.doesNotMatch(preview, /fetch\s*\(/);
+
+  const scripts = JSON.parse(packageSource).scripts as Record<string, string>;
+  for (const name of ["shop:phase5a:logistics:setup", "shop:phase5a:preview:build", "shop:phase5a:preview:start"]) {
+    assert.match(scripts[name], /--env-file-if-exists=\.env\.phase5a-qa\.local/);
+  }
+});

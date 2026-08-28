@@ -36,6 +36,7 @@ const PRODUCTS = [
     price: "25,00",
     stock: "3",
     shippingPrice: "5,00",
+    shippingWeightGrams: "120",
     position: "10",
     alt: "CD fictif doré utilisé pour la QA locale de la Boutique",
     width: 1_600,
@@ -50,6 +51,7 @@ const PRODUCTS = [
     price: "30,00",
     stock: "2",
     shippingPrice: "4,00",
+    shippingWeightGrams: "380",
     position: "20",
     alt: "CD fictif noir utilisé pour la QA locale de la Boutique",
     width: 1_000,
@@ -96,6 +98,7 @@ function productInput(definition: typeof PRODUCTS[number]) {
     stock: definition.stock,
     shippingRequired: "on",
     shippingPrice: definition.shippingPrice,
+    shippingWeightGrams: definition.shippingWeightGrams,
     position: definition.position,
   });
 }
@@ -441,6 +444,7 @@ async function setup(memberPassword: string, adminPassword: string) {
         trackInventory: true,
         shippingRequired: true,
         shippingPriceCents: true,
+        shippingWeightGrams: true,
         position: true,
         createdByAdminId: true,
         assets: {
@@ -480,6 +484,7 @@ async function setup(memberPassword: string, adminPassword: string) {
           trackInventory: product.trackInventory,
           shippingRequired: product.shippingRequired,
           shippingPriceCents: product.shippingPriceCents,
+          shippingWeightGrams: product.shippingWeightGrams,
           position: product.position,
           createdByAdminId: product.createdByAdminId,
         },
@@ -493,6 +498,7 @@ async function setup(memberPassword: string, adminPassword: string) {
           trackInventory: true,
           shippingRequired: true,
           shippingPriceCents: fixtureMoneyCents(definition.shippingPrice),
+          shippingWeightGrams: Number(definition.shippingWeightGrams),
           position: Number(definition.position),
           createdByAdminId: admin.id,
         },

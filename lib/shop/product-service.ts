@@ -124,6 +124,7 @@ export async function createAdminProduct(input: Record<string, unknown>, actorUs
             stock: product.stock,
             shippingRequired: product.shippingRequired,
             shippingPriceCents: product.shippingPriceCents,
+            shippingWeightGrams: product.shippingWeightGrams,
           }),
         },
       });
@@ -215,6 +216,8 @@ export async function updateAdminProduct(
             previousStock: current.stock,
             stock: values.stock,
             shippingRequired: values.shippingRequired,
+            previousShippingWeightGrams: current.shippingWeightGrams,
+            shippingWeightGrams: values.shippingWeightGrams,
           }),
         },
       });

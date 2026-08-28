@@ -21,6 +21,7 @@ function productForm(overrides: Record<string, string> = {}) {
     stock: "10",
     shippingRequired: "on",
     shippingPrice: "5,00",
+    shippingWeightGrams: "250",
     position: "1",
     ...overrides,
   };
@@ -99,6 +100,7 @@ test("product prices are parsed from human EUR input into exact integer cents", 
     ADMIN_PRODUCT_EDITOR_FORM_FIELDS,
   );
   assert.equal(adminProductEditorPayload(shippingDecimal).shippingPriceCents, 550);
+  assert.equal(adminProductEditorPayload(complete).shippingWeightGrams, 250);
 });
 
 test("product price input remains nullable in DRAFT and fails closed on altered amounts", () => {
@@ -122,6 +124,7 @@ test("product price input remains nullable in DRAFT and fails closed on altered 
   delete noShipping.shippingRequired;
   const closed = strictAdminProductFormData(asFormData(noShipping), ADMIN_PRODUCT_EDITOR_FORM_FIELDS);
   assert.equal(adminProductEditorPayload(closed).shippingPriceCents, 0);
+  assert.equal(adminProductEditorPayload(closed).shippingWeightGrams, null);
 
   const altered = asFormData({ ...productForm(), priceCents: "2500" });
   assert.throws(

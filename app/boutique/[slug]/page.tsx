@@ -57,7 +57,9 @@ export default async function ShopProductPage({ params }: Context) {
                   : `${product.availableQuantity} exemplaire${product.availableQuantity > 1 ? "s" : ""} disponible${product.availableQuantity > 1 ? "s" : ""}.`}
             </p>
             {product.shippingRequired ? (
-              <p className="shop-product-detail__shipping">Expédition : {formatShopMoney(product.shippingPriceCents)} par exemplaire.</p>
+              <p className="shop-product-detail__shipping">
+                Expédition calculée par le serveur selon le poids du panier et la grille QA active. Le montant exact est affiché avant la création de la commande.
+              </p>
             ) : <p className="shop-product-detail__shipping">Aucun envoi postal requis.</p>}
             <ShopAddButton
               disabled={product.soldOut}
@@ -65,7 +67,7 @@ export default async function ShopProductPage({ params }: Context) {
               productId={product.id}
               showQuantity
             />
-            <p className="shop-product-detail__notice">Votre panier ne déclenche aucun paiement. Les prix et le stock seront revérifiés par le serveur lors de la préparation de la commande.</p>
+            <p className="shop-product-detail__notice">Votre panier ne déclenche aucun paiement. Prix, poids, livraison et stock seront revérifiés par le serveur lors de la préparation de la commande.</p>
           </div>
         </article>
       </Container>

@@ -44,6 +44,7 @@ test("parses only integer cents, EUR and coherent inventory values", () => {
     stock: 12,
     shippingRequired: true,
     shippingPriceCents: 500,
+    shippingWeightGrams: null,
     position: 1,
   });
   assert.throws(() => parseProductEditorInput({ ...completeInput, priceCents: "25.50" }), /nombre entier/);
@@ -105,11 +106,16 @@ test("keeps publication fail-closed until at least one image exists", () => {
     stock: 12,
     shippingRequired: true,
     shippingPriceCents: 500,
+    shippingWeightGrams: 250,
     assetCount: 0,
   };
   assert.deepEqual(getProductPublicationBlockers(state), ["IMAGE_MISSING"]);
   assert.throws(() => assertProductPublishable(state), /ne peut pas être publié/);
   assert.doesNotThrow(() => assertProductPublishable({ ...state, assetCount: 1 }));
+  assert.deepEqual(
+    getProductPublicationBlockers({ ...state, assetCount: 1, shippingWeightGrams: null }),
+    ["SHIPPING_WEIGHT_MISSING"],
+  );
 });
 
 test("counts only public cleared product images with meaningful alt text", () => {

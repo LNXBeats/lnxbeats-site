@@ -12,6 +12,7 @@ export const ADMIN_PRODUCT_EDITOR_FORM_FIELDS = [
   "stock",
   "shippingRequired",
   "shippingPrice",
+  "shippingWeightGrams",
   "position",
 ] as const;
 
@@ -23,6 +24,7 @@ const PRODUCT_EDITOR_PASSTHROUGH_FIELDS = [
   "trackInventory",
   "stock",
   "shippingRequired",
+  "shippingWeightGrams",
   "position",
 ] as const;
 
@@ -73,6 +75,18 @@ function optionalPriceToCents(value: unknown) {
   });
 }
 
+function optionalShippingWeight(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || !/^\d+$/.test(value)) {
+    throw new ProductAdminFormError("INVALID_FORM");
+  }
+  const weight = Number(value);
+  if (!Number.isSafeInteger(weight) || weight < 1 || weight > 30_000) {
+    throw new ProductAdminFormError("INVALID_FORM");
+  }
+  return weight;
+}
+
 export function adminProductEditorPayload(input: Record<string, unknown>) {
   const result = Object.fromEntries(
     PRODUCT_EDITOR_PASSTHROUGH_FIELDS
@@ -82,6 +96,9 @@ export function adminProductEditorPayload(input: Record<string, unknown>) {
 
   return {
     ...result,
+    shippingWeightGrams: input.shippingRequired === "on"
+      ? optionalShippingWeight(input.shippingWeightGrams)
+      : null,
     priceCents: optionalPriceToCents(input.price),
     shippingPriceCents: input.shippingRequired === "on"
       ? parseEuroAmountToCents(input.shippingPrice, {

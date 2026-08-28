@@ -29,7 +29,7 @@ import {
 } from "@/lib/shop/qa-guard";
 import { SHOP_PAYMENT_PRICING_VERSION, type ShopPaymentProviderEvent } from "@/lib/shop/payment-types";
 
-const EXPECTED_MIGRATION_COUNT = 21;
+const REQUIRED_SHOP_PAYMENT_MIGRATION = "20260827220000_shop_payment_fulfillment_foundation";
 const TECHNICAL_DATABASE = "template1";
 const FIXTURE_PREFIX = "lnx-v110-phase3-runtime";
 const ORDER_NUMBER_PREFIX = "LNX-SHOP-2026-93";
@@ -68,7 +68,10 @@ async function assertMigrationState() {
         .update(await readFile(path.join(migrationRoot, name, "migration.sql")))
         .digest("hex"),
     })));
-  assert.equal(expected.length, EXPECTED_MIGRATION_COUNT, "The repository must contain exactly 21 migrations.");
+  assert.ok(
+    expected.some(({ name }) => name === REQUIRED_SHOP_PAYMENT_MIGRATION),
+    `The repository must contain ${REQUIRED_SHOP_PAYMENT_MIGRATION}.`,
+  );
 
   const applied = await prisma.$queryRaw<Array<{
     migrationName: string;
@@ -81,13 +84,14 @@ async function assertMigrationState() {
     FROM "_prisma_migrations"
     ORDER BY "migration_name" ASC, "started_at" ASC
   `;
-  assert.equal(applied.length, EXPECTED_MIGRATION_COUNT, "All 21 migrations must be applied.");
+  assert.equal(applied.length, expected.length, "Every migration in this checkout must be applied.");
   assert.ok(applied.every((row) => row.finishedAt !== null && row.rolledBackAt === null));
   assert.deepEqual(
     applied.map((row) => ({ name: row.migrationName, checksum: row.checksum })),
     expected,
     "The disposable database migration history must exactly match the repository.",
   );
+  return expected.length;
 }
 
 async function assertRuntimeIdentity(expectedPort: string) {
@@ -1265,7 +1269,7 @@ async function run() {
   const runtime = await loadAndAssertShopPhase2QaEnvironment();
   const databaseUrl = new URL(runtime.databaseUrl);
   await assertRuntimeIdentity(databaseUrl.port);
-  await assertMigrationState();
+  const migrationCount = await assertMigrationState();
   Object.assign(process.env, shopPhase3QaRuntimeOverrides(process.env));
   exactEnvironment("SHOP_LEGAL_READY", "true");
   exactEnvironment("SHOP_TERMS_VERSION", SHOP_LEGAL_QA_TERMS_VERSION);
@@ -1316,7 +1320,7 @@ async function run() {
 
   console.info(`Shop payment PostgreSQL runtime: ${passed.length} PASS`);
   for (const proof of passed) console.info(`PASS ${proof}`);
-  console.info(`PASS ${EXPECTED_MIGRATION_COUNT} exact migrations on guarded loopback PostgreSQL`);
+  console.info(`PASS ${migrationCount} repository migrations on guarded loopback PostgreSQL`);
   console.info("PASS fixture cleanup complete");
 }
 

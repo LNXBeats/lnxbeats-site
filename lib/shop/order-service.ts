@@ -10,6 +10,10 @@ import {
   shopOrderIntentFingerprint,
   type ShopOrderIntent,
 } from "@/lib/shop/order-domain";
+import {
+  quoteVersionedShopShipping,
+  ShopShippingServiceError,
+} from "@/lib/shop/shipping-service";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -30,6 +34,9 @@ export type ShopServiceErrorCode =
   | "RESERVATION_EXPIRED"
   | "RESERVATION_CONFIRMED"
   | "PAYMENT_REVIEW_REQUIRED"
+  | "SHIPPING_CONFIGURATION_REQUIRED"
+  | "SHIPPING_WEIGHT_REQUIRED"
+  | "SHIPPING_QUOTE_CHANGED"
   | "RATE_LIMITED"
   | "NUMBER_GENERATION_FAILED";
 
@@ -98,6 +105,7 @@ const publicProductSelect = {
   stock: true,
   shippingRequired: true,
   shippingPriceCents: true,
+  shippingWeightGrams: true,
   lockVersion: true,
   position: true,
   assets: {
@@ -198,6 +206,7 @@ function presentProduct(product: PublicProductRecord, activeReserved: number) {
     soldOut: availableQuantity === 0,
     shippingRequired: product.shippingRequired,
     shippingPriceCents: product.shippingPriceCents,
+    shippingWeightGrams: product.shippingWeightGrams,
     lockVersion: product.lockVersion,
     image: image ? {
       id: image.id,
@@ -339,18 +348,98 @@ async function resolveProducts(
       );
     }
     const lineTotalCents = checkedMoney((product.priceCents ?? 0) * item.quantity);
-    const unitShippingCents = product.shippingRequired ? product.shippingPriceCents : 0;
-    const lineShippingCents = checkedMoney(unitShippingCents * item.quantity);
+    const unitShippingWeightGrams = product.shippingRequired ? product.shippingWeightGrams : null;
+    if (product.shippingRequired && unitShippingWeightGrams === null) {
+      throw new ShopServiceError(
+        "Le poids logistique de ce produit doit être renseigné avant la commande.",
+        "SHIPPING_WEIGHT_REQUIRED",
+        409,
+        product.id,
+      );
+    }
+    const lineShippingWeightGrams = unitShippingWeightGrams === null
+      ? null
+      : unitShippingWeightGrams * item.quantity;
     lines.push({
       position,
       product,
       quantity: item.quantity,
       lineTotalCents,
-      unitShippingCents,
-      lineShippingCents,
+      unitShippingWeightGrams,
+      lineShippingWeightGrams,
     });
   }
   return lines;
+}
+
+async function resolveShippingQuote(
+  transaction: Transaction,
+  lines: Awaited<ReturnType<typeof resolveProducts>>,
+  intent: ShopOrderIntent,
+  allowedCountries: readonly string[],
+) {
+  const shippingRequired = lines.some(({ product }) => product.shippingRequired);
+  if (!shippingRequired) {
+    return { shippingRequired: false as const, address: null, quote: null, shippingCents: 0 };
+  }
+  const address = assertShippingAddress(intent.shippingAddress, allowedCountries);
+  try {
+    const quote = await quoteVersionedShopShipping(transaction, {
+      destinationCountryCode: address.countryCode,
+      lines: lines.map(({ product, quantity }) => ({
+        productId: product.id,
+        shippingRequired: product.shippingRequired,
+        shippingWeightGrams: product.shippingWeightGrams,
+        quantity,
+      })),
+    });
+    return {
+      shippingRequired: true as const,
+      address,
+      quote,
+      shippingCents: quote.amountCents,
+    };
+  } catch (error) {
+    if (error instanceof ShopShippingServiceError) {
+      throw new ShopServiceError(
+        error.message,
+        "SHIPPING_CONFIGURATION_REQUIRED",
+        503,
+      );
+    }
+    throw error;
+  }
+}
+
+export async function quoteShopOrderShipping(
+  actor: ShopOrderActor,
+  intent: ShopOrderIntent,
+  now = new Date(),
+) {
+  assertDatabaseConfigured();
+  assertMember(actor);
+  const configuration = configurationForCreation();
+  return withShopTransaction(async (transaction) => {
+    const lines = await resolveProducts(transaction, intent, now);
+    const subtotalCents = checkedMoney(...lines.map(({ lineTotalCents }) => lineTotalCents));
+    const shipping = await resolveShippingQuote(
+      transaction,
+      lines,
+      intent,
+      configuration.allowedCountries,
+    );
+    return Object.freeze({
+      subtotalCents,
+      shippingCents: shipping.shippingCents,
+      totalCents: checkedMoney(subtotalCents, shipping.shippingCents),
+      currency: "EUR" as const,
+      shippingRequired: shipping.shippingRequired,
+      shippingQuoteVersion: shipping.quote?.version ?? null,
+      shippingMethod: shipping.quote?.service ?? null,
+      shippingWeightGrams: shipping.quote?.productWeightGrams ?? null,
+      shippingBillableGrams: shipping.quote?.billableWeightGrams ?? null,
+    });
+  });
 }
 
 export async function createShopOrder(
@@ -385,12 +474,28 @@ export async function createShopOrder(
     await enforceShopOrderRateLimitInTransaction(transaction, actor.id, now.getTime());
 
     const lines = await resolveProducts(transaction, intent, now);
-    const shippingRequired = lines.some(({ product }) => product.shippingRequired);
-    const address = shippingRequired
-      ? assertShippingAddress(intent.shippingAddress, configuration.allowedCountries)
-      : null;
+    const shipping = await resolveShippingQuote(
+      transaction,
+      lines,
+      intent,
+      configuration.allowedCountries,
+    );
+    if (shipping.shippingRequired && intent.shippingQuoteVersion !== shipping.quote.version) {
+      throw new ShopServiceError(
+        "Le devis de livraison a changé. Recalculez-le avant de préparer la commande.",
+        "SHIPPING_QUOTE_CHANGED",
+        409,
+      );
+    }
+    if (!shipping.shippingRequired && intent.shippingQuoteVersion !== null) {
+      throw new ShopServiceError(
+        "Le devis de livraison ne correspond pas au panier.",
+        "SHIPPING_QUOTE_CHANGED",
+        409,
+      );
+    }
+    const { shippingRequired, address, quote, shippingCents } = shipping;
     const subtotalCents = checkedMoney(...lines.map(({ lineTotalCents }) => lineTotalCents));
-    const shippingCents = checkedMoney(...lines.map(({ lineShippingCents }) => lineShippingCents));
     const totalCents = checkedMoney(subtotalCents, shippingCents);
     const reservationExpiresAt = new Date(now.getTime() + configuration.reservationTtlMinutes * 60_000);
     const orderNumber = await nextShopOrderNumber(transaction, now);
@@ -412,6 +517,12 @@ export async function createShopOrder(
         shippingPostalCode: address?.postalCode ?? null,
         shippingCity: address?.city ?? null,
         shippingCountryCode: address?.countryCode ?? null,
+        shippingRateVersionId: quote?.rateVersionId ?? null,
+        shippingQuoteVersion: quote?.version ?? null,
+        shippingMethod: quote?.service ?? null,
+        shippingWeightGrams: quote?.productWeightGrams ?? null,
+        shippingPackagingGrams: quote?.packagingWeightGrams ?? null,
+        shippingBillableGrams: quote?.billableWeightGrams ?? null,
         reservationExpiresAt,
       },
     });
@@ -421,7 +532,14 @@ export async function createShopOrder(
         shopOrderId: created.id,
         type: "SHOP_ORDER_CREATED",
         actorUserId: actor.id,
-        metadata: { lineCount: lines.length, shippingRequired },
+        metadata: {
+          lineCount: lines.length,
+          shippingRequired,
+          shippingQuoteVersion: quote?.version ?? null,
+          shippingWeightGrams: quote?.productWeightGrams ?? null,
+          shippingBillableGrams: quote?.billableWeightGrams ?? null,
+          shippingCents,
+        },
       },
     });
     for (const line of lines) {
@@ -436,8 +554,10 @@ export async function createShopOrder(
           quantity: line.quantity,
           lineTotalCents: line.lineTotalCents,
           shippingRequired: line.product.shippingRequired,
-          unitShippingCents: line.unitShippingCents,
-          lineShippingCents: line.lineShippingCents,
+          unitShippingCents: 0,
+          lineShippingCents: 0,
+          unitShippingWeightGrams: line.unitShippingWeightGrams,
+          lineShippingWeightGrams: line.lineShippingWeightGrams,
           currency: "EUR",
         },
       });

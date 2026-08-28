@@ -142,7 +142,7 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
                     <span><strong>{item.productTitle}</strong><small>Quantité : {item.quantity}</small></span>
                     <span><small>{formatShopMoney(item.unitPriceCents)} par unité</small><strong>{formatShopMoney(item.lineTotalCents)}</strong></span>
                   </div>
-                  <p>Expédition : {item.shippingRequired ? formatShopMoney(item.lineShippingCents) : "aucune"}. Stock : {stockState}.</p>
+                  <p>Expédition : {item.shippingRequired ? order.shippingQuoteVersion ? "incluse dans le devis groupé" : formatShopMoney(item.lineShippingCents) : "aucune"}. Stock : {stockState}.</p>
                 </li>
               })}
             </ul>
@@ -153,6 +153,8 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
             <dl className="auth-profile">
               <div><dt>Sous-total</dt><dd>{formatShopMoney(order.subtotalCents)}</dd></div>
               <div><dt>Expédition</dt><dd>{formatShopMoney(order.shippingCents)}</dd></div>
+              {order.shippingQuoteVersion ? <div><dt>Devis logistique</dt><dd>{order.shippingQuoteVersion}</dd></div> : null}
+              {order.shippingBillableGrams ? <div><dt>Poids facturable</dt><dd>{order.shippingBillableGrams} g</dd></div> : null}
               <div><dt>Total</dt><dd><strong>{formatShopMoney(order.totalCents)}</strong></dd></div>
               <div><dt>Paiement</dt><dd>{order.paymentReviewAt ? "À vérifier" : order.paymentStatus === "PAID" ? "Confirmé" : order.paymentStatus === "CANCELLED" ? "Annulé" : "En attente"}</dd></div>
               {paymentProvider ? <div><dt>Moyen</dt><dd>{paymentProvider}</dd></div> : null}

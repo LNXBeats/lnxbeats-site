@@ -265,6 +265,20 @@ enum ProductAuditAction {
   STOCK_ADJUSTED
 }
 
+enum ShippingRateVersionStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum ShippingRateScope {
+  INTERNAL_QA
+}
+
+enum ShippingService {
+  STANDARD_TRACKED_SIGNATURE
+}
+
 enum ShopOrderStatus {
   OPEN
   EXPIRED
@@ -1601,36 +1615,73 @@ model MusicPricingActivation {
 }
 
 model Product {
-  id                 String                   @id @default(uuid()) @db.Uuid
-  slug               String                   @unique @db.VarChar(160)
-  title              String                   @db.VarChar(240)
-  description        String                   @db.Text
-  status             ProductStatus            @default(DRAFT)
-  priceCents         Int?
-  currency           String                   @default("EUR") @db.VarChar(3)
-  trackInventory     Boolean                  @default(false)
-  stock              Int?
-  shippingRequired   Boolean                  @default(false)
-  shippingPriceCents Int                      @default(0)
-  position           Int                      @default(0)
-  publishedAt        DateTime?                @db.Timestamptz(3)
-  archivedAt         DateTime?                @db.Timestamptz(3)
-  lockVersion        Int                      @default(1)
-  createdByAdminId   String?                  @db.Uuid
-  updatedByAdminId   String?                  @db.Uuid
-  createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime                 @updatedAt @db.Timestamptz(3)
-  createdByAdmin     User?                    @relation("ProductCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
-  updatedByAdmin     User?                    @relation("ProductUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
-  assets             ProductAsset[]
-  stockAdjustments   ProductStockAdjustment[]
-  auditEvents        ProductAuditEvent[]
-  shopOrderItems     ShopOrderItem[]
+  id                  String                   @id @default(uuid()) @db.Uuid
+  slug                String                   @unique @db.VarChar(160)
+  title               String                   @db.VarChar(240)
+  description         String                   @db.Text
+  status              ProductStatus            @default(DRAFT)
+  priceCents          Int?
+  currency            String                   @default("EUR") @db.VarChar(3)
+  trackInventory      Boolean                  @default(false)
+  stock               Int?
+  shippingRequired    Boolean                  @default(false)
+  shippingPriceCents  Int                      @default(0)
+  shippingWeightGrams Int?
+  position            Int                      @default(0)
+  publishedAt         DateTime?                @db.Timestamptz(3)
+  archivedAt          DateTime?                @db.Timestamptz(3)
+  lockVersion         Int                      @default(1)
+  createdByAdminId    String?                  @db.Uuid
+  updatedByAdminId    String?                  @db.Uuid
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                 @updatedAt @db.Timestamptz(3)
+  createdByAdmin      User?                    @relation("ProductCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  updatedByAdmin      User?                    @relation("ProductUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+  assets              ProductAsset[]
+  stockAdjustments    ProductStockAdjustment[]
+  auditEvents         ProductAuditEvent[]
+  shopOrderItems      ShopOrderItem[]
 
   @@index([status, position, createdAt])
   @@index([createdByAdminId])
   @@index([updatedByAdminId])
   @@map("products")
+}
+
+model ShippingRateVersion {
+  id                         String                    @id @default(uuid()) @db.Uuid
+  version                    String                    @unique @db.VarChar(64)
+  status                     ShippingRateVersionStatus @default(DRAFT)
+  scope                      ShippingRateScope         @default(INTERNAL_QA)
+  service                    ShippingService           @default(STANDARD_TRACKED_SIGNATURE)
+  currency                   String                    @default("EUR") @db.Char(3)
+  countryCode                String                    @default("FR") @db.Char(2)
+  minimumBillableWeightGrams Int                       @default(150)
+  packagingWeightGrams       Int                       @default(0)
+  activatedAt                DateTime?                 @db.Timestamptz(3)
+  retiredAt                  DateTime?                 @db.Timestamptz(3)
+  createdAt                  DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                  @updatedAt @db.Timestamptz(3)
+  tiers                      ShippingRateTier[]
+  shopOrders                 ShopOrder[]
+
+  @@index([status, scope, createdAt])
+  @@map("shipping_rate_versions")
+}
+
+model ShippingRateTier {
+  id                    String              @id @default(uuid()) @db.Uuid
+  shippingRateVersionId String              @db.Uuid
+  position              Int
+  maxWeightGrams        Int
+  priceCents            Int
+  createdAt             DateTime            @default(now()) @db.Timestamptz(3)
+  shippingRateVersion   ShippingRateVersion @relation(fields: [shippingRateVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([shippingRateVersionId, position])
+  @@unique([shippingRateVersionId, maxWeightGrams])
+  @@index([shippingRateVersionId, maxWeightGrams])
+  @@map("shipping_rate_tiers")
 }
 
 model ProductAsset {
@@ -1700,6 +1751,12 @@ model ShopOrder {
   shippingPostalCode       String?                     @db.VarChar(32)
   shippingCity             String?                     @db.VarChar(120)
   shippingCountryCode      String?                     @db.Char(2)
+  shippingRateVersionId    String?                     @db.Uuid
+  shippingQuoteVersion     String?                     @db.VarChar(64)
+  shippingMethod           String?                     @db.VarChar(80)
+  shippingWeightGrams      Int?
+  shippingPackagingGrams   Int?
+  shippingBillableGrams    Int?
   termsVersion             String?                     @db.VarChar(64)
   termsHashSha256          String?                     @db.Char(64)
   termsAcceptedAt          DateTime?                   @db.Timestamptz(3)
@@ -1724,11 +1781,13 @@ model ShopOrder {
   notifications            OrderNotification[]
   withdrawalRequests       ConsumerWithdrawalRequest[]
   invoices                 Invoice[]
+  shippingRateVersion      ShippingRateVersion?        @relation(fields: [shippingRateVersionId], references: [id], onDelete: Restrict)
 
   @@unique([userId, creationToken])
   @@index([userId, createdAt])
   @@index([status, paymentStatus, reservationExpiresAt])
   @@index([fulfillmentStatus, createdAt])
+  @@index([shippingRateVersionId])
   @@map("shop_orders")
 }
 
@@ -1888,22 +1947,24 @@ model BillingAuditEvent {
 }
 
 model ShopOrderItem {
-  shopOrderId       String            @db.Uuid
-  productId         String            @db.Uuid
-  position          Int
-  productTitle      String            @db.VarChar(240)
-  inventoryTracked  Boolean
-  unitPriceCents    Int
-  quantity          Int
-  lineTotalCents    Int
-  shippingRequired  Boolean
-  unitShippingCents Int
-  lineShippingCents Int
-  currency          String            @default("EUR") @db.VarChar(3)
-  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
-  shopOrder         ShopOrder         @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
-  product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
-  reservation       StockReservation?
+  shopOrderId             String            @db.Uuid
+  productId               String            @db.Uuid
+  position                Int
+  productTitle            String            @db.VarChar(240)
+  inventoryTracked        Boolean
+  unitPriceCents          Int
+  quantity                Int
+  lineTotalCents          Int
+  shippingRequired        Boolean
+  unitShippingCents       Int
+  lineShippingCents       Int
+  unitShippingWeightGrams Int?
+  lineShippingWeightGrams Int?
+  currency                String            @default("EUR") @db.VarChar(3)
+  createdAt               DateTime          @default(now()) @db.Timestamptz(3)
+  shopOrder               ShopOrder         @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  product                 Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  reservation             StockReservation?
 
   @@id([shopOrderId, productId])
   @@unique([shopOrderId, productId, quantity])

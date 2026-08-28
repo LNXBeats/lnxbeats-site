@@ -27,6 +27,7 @@ export type ShopShippingAddress = Readonly<{
 export type ShopOrderIntent = Readonly<{
   items: readonly ShopCartLineIntent[];
   shippingAddress: ShopShippingAddress | null;
+  shippingQuoteVersion: string | null;
 }>;
 
 export class ShopDomainError extends Error {
@@ -117,7 +118,7 @@ function parseObservedLockVersion(value: unknown) {
 
 export function parseShopOrderIntent(value: unknown): ShopOrderIntent {
   if (!record(value)) throw new ShopDomainError("Le panier transmis est invalide.", "INVALID_PAYLOAD");
-  assertExactKeys(value, ["items", "shippingAddress"]);
+  assertExactKeys(value, ["items", "shippingAddress", "shippingQuoteVersion"]);
   if (!Array.isArray(value.items) || value.items.length < 1 || value.items.length > MAX_CART_LINES) {
     throw new ShopDomainError("Le panier doit contenir entre 1 et 20 produits.", "INVALID_PAYLOAD");
   }
@@ -152,6 +153,9 @@ export function parseShopOrderIntent(value: unknown): ShopOrderIntent {
         .map(([productId, line]) => Object.freeze({ productId, ...line })),
     ),
     shippingAddress: parseShippingAddress(value.shippingAddress),
+    shippingQuoteVersion: value.shippingQuoteVersion === undefined || value.shippingQuoteVersion === null
+      ? null
+      : boundedText(value.shippingQuoteVersion, "La version du devis", 64),
   });
 }
 
@@ -181,6 +185,7 @@ export function shopOrderIntentFingerprint(intent: ShopOrderIntent) {
       observedLockVersion,
     })),
     shippingAddress: intent.shippingAddress,
+    shippingQuoteVersion: intent.shippingQuoteVersion,
   });
   return createHash("sha256").update(canonical).digest("hex");
 }

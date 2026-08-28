@@ -21,6 +21,7 @@ const CREATE_UPDATE_FIELDS = new Set([
   "stock",
   "shippingRequired",
   "shippingPriceCents",
+  "shippingWeightGrams",
   "position",
 ]);
 
@@ -34,6 +35,7 @@ export type ProductEditorInput = {
   stock: number | null;
   shippingRequired: boolean;
   shippingPriceCents: number;
+  shippingWeightGrams: number | null;
   position: number;
 };
 
@@ -46,6 +48,7 @@ export type ProductPublishState = {
   stock: number | null;
   shippingRequired: boolean;
   shippingPriceCents: number;
+  shippingWeightGrams: number | null;
   assetCount: number;
 };
 
@@ -143,6 +146,9 @@ export function parseProductEditorInput(input: Record<string, unknown>): Product
   const shippingPriceCents = shippingRequired
     ? integerValue(input.shippingPriceCents, "Les frais d’envoi", 0, 1_000_000)
     : 0;
+  const shippingWeightGrams = shippingRequired
+    ? integerValue(input.shippingWeightGrams, "Le poids logistique", 1, 30_000, true)
+    : null;
   if ((input.currency ?? "EUR") !== "EUR") {
     throw new ProductValidationError("Seule la devise EUR est autorisée pour cette fondation.", "INVALID_CURRENCY");
   }
@@ -156,6 +162,7 @@ export function parseProductEditorInput(input: Record<string, unknown>): Product
     stock,
     shippingRequired,
     shippingPriceCents,
+    shippingWeightGrams,
     position: integerValue(input.position ?? "0", "La position", 0, 1_000_000),
   };
 }
@@ -206,6 +213,7 @@ export function getProductPublicationBlockers(product: ProductPublishState) {
   if (product.trackInventory && (!Number.isInteger(product.stock) || (product.stock ?? -1) < 0)) blockers.push("STOCK_INVALID");
   if (!product.shippingRequired && product.shippingPriceCents !== 0) blockers.push("SHIPPING_INCOHERENT");
   if (product.shippingRequired && (!Number.isInteger(product.shippingPriceCents) || product.shippingPriceCents < 0)) blockers.push("SHIPPING_INVALID");
+  if (product.shippingRequired && (!Number.isInteger(product.shippingWeightGrams) || (product.shippingWeightGrams ?? 0) <= 0)) blockers.push("SHIPPING_WEIGHT_MISSING");
   if (product.assetCount < 1) blockers.push("IMAGE_MISSING");
   return blockers;
 }

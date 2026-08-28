@@ -34,6 +34,7 @@ const QA_PRODUCT_SLUG = "lnx-v110-runtime-product";
 const QA_MEDIA_ROOT = "/private/tmp/lnx-v110-product-image-runtime-media";
 const CONFIGURATION_KEY = "music-order";
 const SEEDED_ACTIVE_VERSION = "2026-08-v2";
+const REQUIRED_PRICING_MIGRATION = "20260827120000_shop_pricing_foundation";
 
 function productInput(overrides: Record<string, unknown> = {}) {
   return adminProductEditorPayload({
@@ -46,6 +47,7 @@ function productInput(overrides: Record<string, unknown> = {}) {
     stock: "5",
     shippingRequired: "on",
     shippingPrice: "6,00",
+    shippingWeightGrams: "250",
     position: "11",
     ...overrides,
   });
@@ -108,12 +110,20 @@ async function assertDisposableDatabase() {
   assert.equal(metadata[0]?.database, QA_PRISMA_DEV_TECHNICAL_DATABASE);
   assert.equal(metadata[0]?.schema, "public");
 
-  const migrations = await prisma.$queryRaw<Array<{ count: bigint }>>`
-    SELECT count(*)::bigint AS count
+  const migrations = await prisma.$queryRaw<Array<{ migrationName: string }>>`
+    SELECT "migration_name" AS "migrationName"
     FROM "_prisma_migrations"
     WHERE "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
   `;
-  assert.equal(Number(migrations[0]?.count), 20, "All 20 migrations must be applied before the runtime test.");
+  assert.ok(
+    migrations.some(({ migrationName }) => migrationName === REQUIRED_PRICING_MIGRATION),
+    `Required pricing migration ${REQUIRED_PRICING_MIGRATION} must be applied.`,
+  );
+  const failed = await prisma.$queryRaw<Array<{ count: bigint }>>`
+    SELECT count(*)::bigint AS count FROM "_prisma_migrations"
+    WHERE "finished_at" IS NULL OR "rolled_back_at" IS NOT NULL
+  `;
+  assert.equal(Number(failed[0]?.count), 0, "The disposable database must not contain a failed migration.");
 }
 
 async function cleanupFixtures() {

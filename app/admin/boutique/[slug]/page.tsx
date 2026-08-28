@@ -32,6 +32,7 @@ const PUBLICATION_BLOCKER_LABELS: Record<string, string> = {
   STOCK_INVALID: "stock invalide",
   SHIPPING_INCOHERENT: "expédition incohérente",
   SHIPPING_INVALID: "frais d’envoi invalides",
+  SHIPPING_WEIGHT_MISSING: "poids logistique requis",
   IMAGE_MISSING: "visuel principal public avec texte alternatif requis",
 };
 const ACTION_LABELS = {

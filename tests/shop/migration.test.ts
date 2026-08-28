@@ -11,6 +11,7 @@ const SHOP_MIGRATION = "20260827180000_shop_commerce_foundation";
 const SHOP_PAYMENT_MIGRATION = "20260827220000_shop_payment_fulfillment_foundation";
 const LEGAL_COMPLIANCE_MIGRATION = "20260828120000_legal_compliance_foundation";
 const INVOICING_MIGRATION = "20260828180000_invoicing_foundation";
+const SHIPPING_MIGRATION = "20260828220000_shop_shipping_quotes";
 
 async function directories() {
   return (await readdir(MIGRATIONS_DIRECTORY, { withFileTypes: true }))
@@ -52,12 +53,12 @@ test("Shop commerce is the twentieth additive migration and contains no destruct
   }
 });
 
-test("Shop payments are the twenty-first migration and preserve existing ledgers", async () => {
+test("Shop payments and its dependent additive migrations preserve their ordering and existing ledgers", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.length, 23);
-  assert.equal(migrationDirectories.at(-3), SHOP_PAYMENT_MIGRATION);
-  assert.equal(migrationDirectories.at(-2), LEGAL_COMPLIANCE_MIGRATION);
-  assert.equal(migrationDirectories.at(-1), INVOICING_MIGRATION);
+  assert.ok(migrationDirectories.includes(SHOP_PAYMENT_MIGRATION));
+  assert.ok(migrationDirectories.indexOf(SHOP_PAYMENT_MIGRATION) < migrationDirectories.indexOf(LEGAL_COMPLIANCE_MIGRATION));
+  assert.ok(migrationDirectories.indexOf(LEGAL_COMPLIANCE_MIGRATION) < migrationDirectories.indexOf(INVOICING_MIGRATION));
+  assert.ok(migrationDirectories.indexOf(INVOICING_MIGRATION) < migrationDirectories.indexOf(SHIPPING_MIGRATION));
   const sql = await readFile(
     path.join(MIGRATIONS_DIRECTORY, SHOP_PAYMENT_MIGRATION, "migration.sql"),
     "utf8",
@@ -69,6 +70,88 @@ test("Shop payments are the twenty-first migration and preserve existing ledgers
   assert.match(sql, /CONSTRAINT "order_notifications_parent_xor"/);
   assert.match(sql, /payments_one_succeeded_per_shop_order_idx/);
   assert.match(sql, /CREATE TABLE "shop_order_lifecycle_events"/);
+});
+
+test("Phase 5A shipping migration is additive, preserves legacy nulls and freezes used rate definitions", async () => {
+  const { database, migrationDirectories } = await migratedDatabase();
+  try {
+    assert.equal(migrationDirectories.at(-1), SHIPPING_MIGRATION);
+    const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, SHIPPING_MIGRATION, "migration.sql"), "utf8");
+    assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE|DELETE\s+FROM)\b/i);
+
+    await database.exec(`
+      INSERT INTO "users" ("id", "email", "displayName", "role", "status", "emailVerified", "createdAt", "updatedAt")
+      VALUES ('15000000-0000-4000-8000-000000000001', 'shipping-migration@example.invalid', 'Shipping migration', 'MEMBER', 'ACTIVE', true, now(), now());
+      INSERT INTO "products" (
+        "id", "slug", "title", "description", "status", "priceCents", "currency",
+        "trackInventory", "stock", "shippingRequired", "shippingPriceCents", "shippingWeightGrams", "publishedAt", "createdAt", "updatedAt"
+      ) VALUES (
+        '25000000-0000-4000-8000-000000000001', 'shipping-migration-product', 'Produit logistique',
+        'Produit fictif Phase 5A.', 'PUBLISHED', 2000, 'EUR', true, 2, true, 999, 100, now(), now(), now()
+      );
+      INSERT INTO "shipping_rate_versions" (
+        "id", "version", "status", "scope", "service", "currency", "countryCode",
+        "minimumBillableWeightGrams", "packagingWeightGrams", "activatedAt", "createdAt", "updatedAt"
+      ) VALUES (
+        '35000000-0000-4000-8000-000000000001', 'phase5a-migration-v1', 'ACTIVE', 'INTERNAL_QA',
+        'STANDARD_TRACKED_SIGNATURE', 'EUR', 'FR', 150, 0, now(), now(), now()
+      );
+      INSERT INTO "shipping_rate_tiers" (
+        "id", "shippingRateVersionId", "position", "maxWeightGrams", "priceCents", "createdAt"
+      ) VALUES (
+        '45000000-0000-4000-8000-000000000001', '35000000-0000-4000-8000-000000000001', 0, 250, 400, now()
+      );
+      INSERT INTO "shop_orders" (
+        "id", "orderNumber", "userId", "creationToken", "requestFingerprintSha256",
+        "subtotalCents", "shippingCents", "totalCents", "shippingRequired",
+        "shippingFirstName", "shippingLastName", "shippingAddressLine1", "shippingPostalCode", "shippingCity", "shippingCountryCode",
+        "shippingRateVersionId", "shippingQuoteVersion", "shippingMethod", "shippingWeightGrams",
+        "shippingPackagingGrams", "shippingBillableGrams", "reservationExpiresAt", "createdAt", "updatedAt"
+      ) VALUES (
+        '55000000-0000-4000-8000-000000000001', 'LNX-SHOP-2026-500001',
+        '15000000-0000-4000-8000-000000000001', '65000000-0000-4000-8000-000000000001', repeat('5', 64),
+        2000, 400, 2400, true, 'QA', 'Shipping', '1 rue locale', '75001', 'Paris', 'FR',
+        '35000000-0000-4000-8000-000000000001', 'phase5a-migration-v1', 'STANDARD_TRACKED_SIGNATURE',
+        100, 0, 150, now() + interval '30 minutes', now(), now()
+      );
+      INSERT INTO "shop_order_items" (
+        "shopOrderId", "productId", "position", "productTitle", "inventoryTracked", "unitPriceCents",
+        "quantity", "lineTotalCents", "shippingRequired", "unitShippingCents", "lineShippingCents",
+        "unitShippingWeightGrams", "lineShippingWeightGrams", "currency", "createdAt"
+      ) VALUES (
+        '55000000-0000-4000-8000-000000000001', '25000000-0000-4000-8000-000000000001', 0,
+        'Produit logistique', true, 2000, 1, 2000, true, 0, 0, 100, 100, 'EUR', now()
+      );
+    `);
+
+    const snapshot = (await database.query<{
+      shippingCents: number;
+      totalCents: number;
+      shippingQuoteVersion: string;
+      shippingBillableGrams: number;
+    }>(`
+      SELECT "shippingCents", "totalCents", "shippingQuoteVersion", "shippingBillableGrams"
+      FROM "shop_orders" WHERE "id" = '55000000-0000-4000-8000-000000000001'
+    `)).rows[0]!;
+    assert.deepEqual(snapshot, {
+      shippingCents: 400,
+      totalCents: 2400,
+      shippingQuoteVersion: "phase5a-migration-v1",
+      shippingBillableGrams: 150,
+    });
+    await assert.rejects(
+      database.exec(`UPDATE "shipping_rate_tiers" SET "priceCents" = 401 WHERE "id" = '45000000-0000-4000-8000-000000000001'`),
+      (error: unknown) => (error as { code?: string }).code === "23514",
+    );
+    await assert.rejects(
+      database.exec(`UPDATE "shipping_rate_versions" SET "packagingWeightGrams" = 1, "updatedAt" = now() WHERE "id" = '35000000-0000-4000-8000-000000000001'`),
+      (error: unknown) => (error as { code?: string }).code === "23514",
+    );
+    await database.exec(`UPDATE "shipping_rate_versions" SET "status" = 'RETIRED', "retiredAt" = now(), "updatedAt" = now() WHERE "id" = '35000000-0000-4000-8000-000000000001'`);
+    assert.equal((await database.query<{ status: string }>(`SELECT "status" FROM "shipping_rate_versions" WHERE "id" = '35000000-0000-4000-8000-000000000001'`)).rows[0]?.status, "RETIRED");
+  } finally {
+    await database.close();
+  }
 });
 
 test("the 20 to 21 migration preserves Phase 2 Product, ShopOrder and NotificationEvent rows", async () => {
@@ -226,7 +309,7 @@ test("the additive invoicing migration preserves existing Order, Payment, Provid
 test("fresh migrations enforce ShopOrder totals, address and reservation lifecycle", async () => {
   const { database, migrationDirectories } = await migratedDatabase();
   try {
-    assert.equal(migrationDirectories.length, 23);
+    assert.ok(migrationDirectories.includes(SHIPPING_MIGRATION));
     const tables = await database.query<{ table_name: string }>(`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public'
@@ -331,7 +414,7 @@ test("fresh migrations enforce ShopOrder totals, address and reservation lifecyc
 test("Phase 3 enforces Shop payment parents, winner, terms and lifecycle audit", async () => {
   const { database, migrationDirectories } = await migratedDatabase();
   try {
-    assert.equal(migrationDirectories.length, 23);
+    assert.ok(migrationDirectories.includes(SHIPPING_MIGRATION));
     await database.exec(`
       INSERT INTO "users" (
         "id", "email", "displayName", "role", "status", "emailVerified", "emailVerifiedAt", "createdAt", "updatedAt"

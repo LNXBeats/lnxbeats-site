@@ -9,6 +9,7 @@ type ProductFieldValues = {
   stock?: number | null;
   shippingRequired?: boolean;
   shippingPriceCents?: number;
+  shippingWeightGrams?: number | null;
   position?: number;
 };
 
@@ -77,7 +78,25 @@ export function AdminProductFields({
       <span>Expédition requise</span>
     </label>
     <label>
-      <span>Frais d’envoi</span>
+      <span>Poids logistique</span>
+      <span className="admin-money-field">
+        <input
+          name="shippingWeightGrams"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={30_000}
+          step={1}
+          defaultValue={values.shippingWeightGrams ?? ""}
+          placeholder="250"
+          aria-describedby="admin-product-shipping-weight-help"
+        />
+        <span className="admin-money-field__currency" aria-hidden="true">g</span>
+      </span>
+      <small id="admin-product-shipping-weight-help" className="admin-field-help">Obligatoire avant publication pour un produit expédiable. Aucun poids fictif n’est appliqué.</small>
+    </label>
+    <label>
+      <span>Ancien frais fixe</span>
       <span className="admin-money-field">
         <input
           name="shippingPrice"
@@ -89,7 +108,7 @@ export function AdminProductFields({
         />
         <span className="admin-money-field__currency" aria-hidden="true">€</span>
       </span>
-      <small id="admin-product-shipping-help" className="admin-field-help">Montant en euros. Ignoré si l’expédition n’est pas requise.</small>
+      <small id="admin-product-shipping-help" className="admin-field-help">Compatibilité historique uniquement. Les nouvelles commandes Phase 5A utilisent le devis serveur versionné et ne cumulent jamais ce montant.</small>
     </label>
   </div>;
 }

@@ -21,8 +21,7 @@ import {
   updateAdminProduct,
 } from "@/lib/shop/product-service";
 
-const EXPECTED_MIGRATION_COUNT = 20;
-const EXPECTED_BASELINE_MIGRATION_COUNT = 19;
+const SHOP_COMMERCE_MIGRATION = "20260827180000_shop_commerce_foundation";
 const TECHNICAL_DATABASE = "template1";
 const BASELINE_MODE = "migration-baseline";
 const MIGRATION_BASELINE_PATH = "/private/tmp/lnx-studio-v110-phase2-migration-baseline.json";
@@ -92,13 +91,24 @@ async function expectedMigrations() {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
-  assert.equal(names.length, EXPECTED_MIGRATION_COUNT);
+  assert.ok(names.includes(SHOP_COMMERCE_MIGRATION));
   return Promise.all(names.map(async (name) => ({
     name,
     checksum: createHash("sha256")
       .update(await readFile(path.join(root, name, "migration.sql")))
       .digest("hex"),
   })));
+}
+
+async function migrationBoundaries() {
+  const expected = await expectedMigrations();
+  const shopMigrationIndex = expected.findIndex(({ name }) => name === SHOP_COMMERCE_MIGRATION);
+  assert.ok(shopMigrationIndex > 0, `${SHOP_COMMERCE_MIGRATION} must have a migration baseline.`);
+  return {
+    expected,
+    baselineCount: shopMigrationIndex,
+    currentCount: expected.length,
+  };
 }
 
 async function runtimeIdentity(): Promise<RuntimeIdentity> {
@@ -141,8 +151,9 @@ async function assertExactRuntimeDatabase(runtime: GuardedRuntime) {
   return identity;
 }
 
-async function assertRuntimeMigrationCount(expectedCount: 19 | 20) {
-  const expected = await expectedMigrations();
+async function assertRuntimeMigrationState(stage: "baseline" | "current") {
+  const { expected, baselineCount, currentCount } = await migrationBoundaries();
+  const expectedCount = stage === "baseline" ? baselineCount : currentCount;
   const applied = await prisma.$queryRaw<MigrationRow[]>`
     SELECT "migration_name" AS "migrationName", "checksum",
       "finished_at" AS "finishedAt", "rolled_back_at" AS "rolledBackAt"
@@ -155,6 +166,7 @@ async function assertRuntimeMigrationCount(expectedCount: 19 | 20) {
     applied.map(({ migrationName, checksum }) => ({ name: migrationName, checksum })),
     expected.slice(0, expectedCount),
   );
+  return { baselineCount, currentCount };
 }
 
 async function v1Counts(): Promise<V1Counts> {
@@ -296,13 +308,13 @@ function assertV1Counts(value: unknown): asserts value is V1Counts {
   }
 }
 
-function assertMigrationBaseline(value: unknown): asserts value is MigrationBaseline {
+function assertMigrationBaseline(value: unknown, expectedBaselineCount: number): asserts value is MigrationBaseline {
   assert.ok(value && typeof value === "object" && !Array.isArray(value));
   const baseline = value as Partial<MigrationBaseline>;
   assert.equal(baseline.version, MIGRATION_BASELINE_VERSION);
   assert.equal(baseline.target, SHOP_PHASE2_QA_TARGET);
   assert.ok(Number.isInteger(baseline.proofPid) && Number(baseline.proofPid) > 0);
-  assert.equal(baseline.migrationCount, EXPECTED_BASELINE_MIGRATION_COUNT);
+  assert.equal(baseline.migrationCount, expectedBaselineCount);
   assert.ok(baseline.identity && typeof baseline.identity === "object");
   assert.equal(baseline.identity.database, TECHNICAL_DATABASE);
   assert.equal(baseline.identity.schema, "public");
@@ -324,7 +336,7 @@ function assertMigrationBaseline(value: unknown): asserts value is MigrationBase
 }
 
 async function createMigrationBaseline(runtime: GuardedRuntime, identity: RuntimeIdentity) {
-  await assertRuntimeMigrationCount(EXPECTED_BASELINE_MIGRATION_COUNT);
+  const { baselineCount } = await assertRuntimeMigrationState("baseline");
   await assert.rejects(access(MIGRATION_BASELINE_PATH), { code: "ENOENT" });
   await assertBaselineFixturesAbsent();
   const beforeFixture = await v1Counts();
@@ -337,7 +349,7 @@ async function createMigrationBaseline(runtime: GuardedRuntime, identity: Runtim
     await assertV1BaselineFixturePreserved();
     await writeFile(MIGRATION_BASELINE_PATH, `${JSON.stringify({
       version: MIGRATION_BASELINE_VERSION, target: runtime.target, proofPid: runtime.proofPid,
-      identity, migrationCount: EXPECTED_BASELINE_MIGRATION_COUNT, beforeFixture, withFixture,
+      identity, migrationCount: baselineCount, beforeFixture, withFixture,
     } satisfies MigrationBaseline)}\n`, { flag: "wx", mode: 0o600 });
   } catch (error) {
     if (fixtureCreated) await cleanupV1BaselineFixture();
@@ -345,14 +357,14 @@ async function createMigrationBaseline(runtime: GuardedRuntime, identity: Runtim
   }
   console.info(JSON.stringify({
     event: "shop.order.migration-baseline.created", outcome: "passed",
-    target: runtime.target, migrations: EXPECTED_BASELINE_MIGRATION_COUNT,
+    target: runtime.target, migrations: baselineCount,
   }));
 }
 
 async function assertMigrationParity(runtime: GuardedRuntime, identity: RuntimeIdentity) {
-  await assertRuntimeMigrationCount(EXPECTED_MIGRATION_COUNT);
+  const { baselineCount, currentCount } = await assertRuntimeMigrationState("current");
   const value: unknown = JSON.parse(await readFile(MIGRATION_BASELINE_PATH, "utf8"));
-  assertMigrationBaseline(value);
+  assertMigrationBaseline(value, baselineCount);
   assert.equal(value.proofPid, runtime.proofPid);
   assert.deepEqual(value.identity, identity, "The migration baseline belongs to another PostgreSQL runtime.");
   assert.deepEqual(await v1Counts(), value.withFixture);
@@ -364,7 +376,7 @@ async function assertMigrationParity(runtime: GuardedRuntime, identity: RuntimeI
   await cleanupV1BaselineFixture();
   assert.deepEqual(await v1Counts(), value.beforeFixture);
   await unlink(MIGRATION_BASELINE_PATH);
-  return value.beforeFixture;
+  return { beforeFixture: value.beforeFixture, baselineCount, currentCount };
 }
 
 async function fixtureIds() {
@@ -450,6 +462,7 @@ async function createFixtures() {
       description: "Produit fictif réservé au runtime PostgreSQL jetable.", status: "PUBLISHED",
       priceCents: 2_500, currency: "EUR", trackInventory: true, stock: 1,
       shippingRequired: true, shippingPriceCents: 500, position: 0, publishedAt: now,
+      shippingWeightGrams: 250,
       assets: { create: { assetId: asset.id, position: 0 } },
     } });
     const untrackedAsset = await transaction.asset.create({ data: {
@@ -792,8 +805,9 @@ async function main() {
       return;
     }
     normalRuntime = true;
-    originalV1Counts = await assertMigrationParity(runtime, identity);
-    passed.push("19→20 migration preserves V1 fixture and all five requested counters");
+    const parity = await assertMigrationParity(runtime, identity);
+    originalV1Counts = parity.beforeFixture;
+    passed.push(`${parity.baselineCount}→${parity.currentCount} migrations preserve V1 fixture and all five requested counters`);
     await cleanupFixtures();
     await assertNoShopRuntimeFixtures("before runtime");
     await runtimeProof(passed, originalV1Counts);
@@ -808,7 +822,7 @@ async function main() {
   }
   console.info(JSON.stringify({
     event: "shop.order.runtime.completed", outcome: "passed",
-    migrations: EXPECTED_MIGRATION_COUNT, checks: passed,
+    migrations: (await migrationBoundaries()).currentCount, checks: passed,
   }));
 }
 

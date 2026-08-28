@@ -173,7 +173,8 @@ export default async function AdminShopOrderPage({
                     <div><dt>Quantité</dt><dd>{item.quantity}</dd></div>
                     <div><dt>Prix unitaire</dt><dd>{formatShopMoney(item.unitPriceCents)}</dd></div>
                     <div><dt>Sous-total produit</dt><dd>{formatShopMoney(item.lineTotalCents)}</dd></div>
-                    <div><dt>Frais d’envoi</dt><dd>{formatShopMoney(item.lineShippingCents)}</dd></div>
+                    <div><dt>Frais d’envoi</dt><dd>{item.shippingRequired && order.shippingQuoteVersion ? "Devis groupé" : formatShopMoney(item.lineShippingCents)}</dd></div>
+                    {item.lineShippingWeightGrams ? <div><dt>Poids logistique</dt><dd>{item.lineShippingWeightGrams} g</dd></div> : null}
                     <div><dt>Stock suivi</dt><dd>{item.inventoryTracked ? "Oui" : "Non"}</dd></div>
                     <div><dt>Stock réservé</dt><dd>{item.reservation ? `${item.reservation.quantity} · ${RESERVATION_STATUS_LABELS[item.reservation.status]}` : "Aucune réservation quantitative"}</dd></div>
                     {item.reservation ? <div className="admin-detail-facts__wide"><dt>Expiration réservation</dt><dd><time dateTime={item.reservation.expiresAt.toISOString()}>{DATE_FORMAT.format(item.reservation.expiresAt)}</time></dd></div> : null}
@@ -195,6 +196,10 @@ export default async function AdminShopOrderPage({
                 <div><dt>Code postal</dt><dd>{order.shippingPostalCode || "Non renseigné"}</dd></div>
                 <div><dt>Ville</dt><dd>{order.shippingCity || "Non renseignée"}</dd></div>
                 <div><dt>Pays</dt><dd>{order.shippingCountryCode || "Non renseigné"}</dd></div>
+                {order.shippingQuoteVersion ? <div><dt>Version devis</dt><dd>{order.shippingQuoteVersion}</dd></div> : null}
+                {order.shippingMethod ? <div><dt>Service interne</dt><dd>{order.shippingMethod}</dd></div> : null}
+                {order.shippingWeightGrams ? <div><dt>Poids produits</dt><dd>{order.shippingWeightGrams} g</dd></div> : null}
+                {order.shippingBillableGrams ? <div><dt>Poids facturable</dt><dd>{order.shippingBillableGrams} g</dd></div> : null}
               </dl>
             ) : <p>Cette commande ne nécessite aucune expédition.</p>}
           </section>

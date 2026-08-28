@@ -31,6 +31,7 @@ test("shop order intent is closed, normalized and deterministically fingerprinte
       city: "Paris",
       countryCode: "FR",
     },
+    shippingQuoteVersion: " phase5a-test-v1 ",
   });
   assert.deepEqual(intent.items, [
     { productId: firstProduct, quantity: 3, observedLockVersion: 3 },
@@ -38,15 +39,24 @@ test("shop order intent is closed, normalized and deterministically fingerprinte
   ]);
   assert.equal(intent.shippingAddress?.firstName, "Camille");
   assert.equal(intent.shippingAddress?.addressLine2, null);
+  assert.equal(intent.shippingQuoteVersion, "phase5a-test-v1");
   assert.equal(shopOrderIntentFingerprint(intent), shopOrderIntentFingerprint(parseShopOrderIntent({
     items: [
       { productId: firstProduct, quantity: 3, observedLockVersion: 3 },
       { productId: secondProduct, quantity: 1, observedLockVersion: 7 },
     ],
     shippingAddress: intent.shippingAddress,
+    shippingQuoteVersion: intent.shippingQuoteVersion,
   })));
   assert.throws(
     () => parseShopOrderIntent({ items: [{ productId: firstProduct, quantity: 1, observedLockVersion: 1, priceCents: 1 }] }),
+    /champ inattendu/,
+  );
+  assert.throws(
+    () => parseShopOrderIntent({
+      items: [{ productId: firstProduct, quantity: 1, observedLockVersion: 1 }],
+      shippingCents: 1,
+    }),
     /champ inattendu/,
   );
   assert.throws(

@@ -29,6 +29,7 @@ export default async function AdminShopPage({
       <div className="admin-page-heading__actions">
         <p>Les produits naissent en brouillon. La publication alimente la Boutique QA ; le paiement produit reste volontairement désactivé.</p>
         <Link className="admin-primary-action" href="/admin/boutique/nouveau"><span aria-hidden="true">+</span> Nouveau produit</Link>
+        <Link className="admin-row-action" href="/admin/boutique/logistique">Consulter la logistique <span aria-hidden="true">→</span></Link>
       </div>
     </header>
 
@@ -37,7 +38,7 @@ export default async function AdminShopPage({
         : params.etat === "slug-occupe" ? "Ce slug est déjà utilisé."
           : params.etat === "slug-immuable" ? "Le slug d’un produit existant ne peut pas être modifié."
           : params.etat === "confirmation-requise" ? "Confirmez explicitement cette action sensible avant de continuer."
-          : params.etat === "publication-incomplete" ? "Publication refusée : la fiche, le prix et au moins une image publique sont requis."
+          : params.etat === "publication-incomplete" ? "Publication refusée : la fiche, le prix, le poids logistique et au moins une image publique sont requis."
           : params.etat === "stock-reserve" ? "Opération refusée : le stock doit couvrir toutes les réservations actives."
             : "L’opération a été refusée sans modifier le produit."}
     </p> : null}
@@ -59,7 +60,7 @@ export default async function AdminShopPage({
             <div><dt>Prix</dt><dd>{formatProductPrice(product.priceCents, product.currency)}</dd></div>
             <div><dt>Stock</dt><dd>{product.trackInventory ? product.stock ?? 0 : "Non suivi"}</dd></div>
             <div><dt>Images</dt><dd>{product._count.assets}</dd></div>
-            <div><dt>Expédition</dt><dd>{product.shippingRequired ? formatProductPrice(product.shippingPriceCents, product.currency) : "Non"}</dd></div>
+            <div><dt>Expédition</dt><dd>{product.shippingRequired ? product.shippingWeightGrams ? `${product.shippingWeightGrams} g · devis serveur` : "Poids à renseigner" : "Non"}</dd></div>
           </dl>
           <Link className="admin-row-action" href={`/admin/boutique/${product.slug}`}>Modifier <span aria-hidden="true">→</span></Link>
         </li>)}
