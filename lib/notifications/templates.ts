@@ -35,13 +35,31 @@ function canonicalOrigin(configuration: NotificationConfiguration) {
   return parsed.origin;
 }
 
+function legalSupportDetails(termsVersion: string, configuration: NotificationConfiguration) {
+  const origin = canonicalOrigin(configuration);
+  return [
+    `Conditions acceptées : version ${termsVersion}`,
+    `Conditions contractuelles archivées : ${new URL(`/documents-juridiques/${encodeURIComponent(termsVersion)}`, origin).toString()}`,
+    `Droit de rétractation : ${new URL("/retractation", origin).toString()}`,
+    `Vendeur / prestataire : Ludovic Mathon, Entrepreneur individuel — LNX Beats`,
+    `Médiation de la consommation : CM2C — https://www.cm2c.net`,
+  ] as const;
+}
+
 function resourceUrl(message: OrderNotificationMessage, configuration: NotificationConfiguration) {
   const owner = notificationDefinition(message.kind).audience === "OWNER";
   if (isShopNotificationKind(message.kind)) {
+    const shopPayload = message.payload as ShopNotificationPayload;
+    if (!owner && message.kind === "CUSTOMER_SHOP_PAYMENT_CONFIRMED" && shopPayload.invoiceNumber) {
+      return new URL(`/compte/factures/${encodeURIComponent(shopPayload.invoiceNumber)}`, canonicalOrigin(configuration)).toString();
+    }
     const pathname = `${owner ? "/admin/boutique/commandes/" : "/compte/achats/"}${encodeURIComponent(message.payload.orderNumber)}`;
     return new URL(pathname, canonicalOrigin(configuration)).toString();
   }
   const payload = message.payload as OrderNotificationPayload;
+  if (!owner && message.kind === "CUSTOMER_PAYMENT_CONFIRMED" && payload.invoiceNumber) {
+    return new URL(`/compte/factures/${encodeURIComponent(payload.invoiceNumber)}`, canonicalOrigin(configuration)).toString();
+  }
   const rightsReference = message.kind.includes("RIGHTS") ? payload.rightsRequestNumber : undefined;
   const pathname = rightsReference
     ? `${owner ? "/admin/droits/" : "/compte/droits/"}${encodeURIComponent(rightsReference)}`
@@ -178,7 +196,7 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
       ? [`Livraison : ${payload.shippingAddress.recipientName} — ${payload.shippingAddress.addressLine1}${payload.shippingAddress.addressLine2 ? `, ${payload.shippingAddress.addressLine2}` : ""} — ${payload.shippingAddress.postalCode} ${payload.shippingAddress.city} — ${payload.shippingAddress.countryCode}`]
       : [];
     const legal = message.kind === "CUSTOMER_SHOP_PAYMENT_CONFIRMED" && payload.termsVersion
-      ? [`Conditions acceptées : version ${payload.termsVersion}`, `Conditions générales : ${new URL("/cgv", canonicalOrigin(configuration)).toString()}`]
+      ? legalSupportDetails(payload.termsVersion, configuration)
       : [];
     details = [
       `Commande : ${payload.orderNumber}`,
@@ -188,6 +206,7 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
       `Frais de livraison : ${formatEuro(payload.shippingCents, payload.currency)}`,
       `Total : ${formatEuro(payload.totalCents, payload.currency)}`,
       `Moyen de paiement : ${provider}`,
+      ...(payload.invoiceNumber ? [`Facture : ${payload.invoiceNumber}`] : []),
       ...address,
       ...legal,
       `Date : ${formatDate(payload.createdAt)}`,
@@ -208,6 +227,8 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
       ...(payload.refundAmountCents ? [
         `Montant remboursé : ${formatEuro(payload.refundAmountCents, payload.currency)}`,
       ] : []),
+      ...(payload.invoiceNumber ? [`Facture : ${payload.invoiceNumber}`] : []),
+      ...(message.kind === "CUSTOMER_PAYMENT_CONFIRMED" && payload.termsVersion ? legalSupportDetails(payload.termsVersion, configuration) : []),
     ];
   }
   const environmentLabel = configuration.deploymentEnvironment === "production" ? null : configuration.deploymentEnvironment === "staging" ? "STAGING · MODE TEST" : "DÉVELOPPEMENT · CAPTURE";

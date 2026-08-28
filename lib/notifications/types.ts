@@ -37,6 +37,8 @@ export type OrderNotificationPayload = Readonly<{
   rightsRequestType?: "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP";
   requestedPriceCents?: number;
   refundAmountCents?: number;
+  invoiceNumber?: string;
+  termsVersion?: string | null;
 }>;
 
 export type ShopNotificationItem = Readonly<{
@@ -68,6 +70,7 @@ export type ShopNotificationPayload = Readonly<{
   paymentProvider: "STRIPE" | "PAYPAL" | null;
   termsVersion: string | null;
   shippingAddress: ShopNotificationShippingAddress | null;
+  invoiceNumber?: string;
 }>;
 
 export type NotificationPayload = OrderNotificationPayload | ShopNotificationPayload;

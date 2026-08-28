@@ -10,6 +10,7 @@ const adminNavigation = [
   { href: "/admin/commandes", label: "Commandes" },
   { href: "/admin/droits", label: "Droits & contrats" },
   { href: "/admin/notifications", label: "Notifications" },
+  { href: "/admin/facturation", label: "Facturation" },
   { href: "/admin/tarifs", label: "Tarifs" },
   { href: "/admin/boutique", label: "Boutique" },
   { href: "/admin/boutique/commandes", label: "Commandes Boutique" },

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 import { enqueueShopPaymentConfirmedNotifications } from "@/lib/notifications/service";
+import { issueInvoiceForPayment } from "@/lib/billing/service";
 import {
   enforcePaymentRateLimit,
   inLockedPaymentTransaction,
@@ -1007,6 +1008,7 @@ export function createShopPaymentDatabaseRepository(
           metadata: { provider: payment.provider },
           occurredAt: event.occurredAt,
         });
+        await issueInvoiceForPayment(transaction, payment.id);
         await enqueueShopPaymentConfirmedNotifications(transaction, {
           shopOrderId: order.id,
           paymentProvider: payment.provider,

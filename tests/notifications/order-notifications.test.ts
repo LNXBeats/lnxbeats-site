@@ -450,7 +450,9 @@ test("les templates Boutique sont humains, minimisés et liés à la bonne resso
   assert.match(customer.text, /Total : 30,00\s?€/u);
   assert.match(customer.text, /Carte bancaire via Stripe/);
   assert.match(customer.text, /shop-cgv-2026-08-v1/);
-  assert.match(customer.text, /\/cgv/);
+  assert.match(customer.text, /\/documents-juridiques\/shop-cgv-2026-08-v1/);
+  assert.match(customer.text, /\/retractation/);
+  assert.match(customer.text, /CM2C/);
   assert.match(customer.html, /Vinyle &lt;édition&gt;/);
   assert.match(customer.html, /1 rue du Test &lt;privé&gt;/);
   assert.doesNotMatch(`${customer.text}\n${customer.html}`, /sk_live_|providerPaymentId|DATABASE_URL|tracking pixel/i);

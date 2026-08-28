@@ -8,6 +8,7 @@ import { Container } from "@/components/container";
 import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { qaAccessAvailable } from "@/lib/auth/qa-access";
+import { listMemberInvoices } from "@/lib/billing/service";
 import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import { listMemberWithdrawalRequests } from "@/lib/legal/withdrawal";
 import { clientOrderAction, clientPaymentPresentation } from "@/lib/orders/checkout";
@@ -41,11 +42,12 @@ export default async function AccountPage() {
     status: "ACTIVE",
     emailVerified: true,
   };
-  const [orders, rightsRequests, shopOrders, withdrawalRequests] = await runSequentialDatabaseQueries(
+  const [orders, rightsRequests, shopOrders, withdrawalRequests, invoices] = await runSequentialDatabaseQueries(
     () => listMemberOrders(actor),
     () => listRightsRequestsForActor(actor),
     () => listMemberShopOrders(session.user.id),
     () => listMemberWithdrawalRequests(session.user.id),
+    () => listMemberInvoices(session.user.id),
   );
   const drafts = orders.filter((order) => order.status === "DRAFT");
   const awaitingPayment = orders.filter((order) => order.status === "AWAITING_PAYMENT");
@@ -124,6 +126,16 @@ export default async function AccountPage() {
                   </li>
                 })}
               </ul>
+            )}
+          </section>
+
+          <section className="member-orders" aria-labelledby="account-invoices-title">
+            <div className="member-orders__heading"><div><p className="auth-panel__label">Factures et avoirs</p><h2 id="account-invoices-title">Vos documents.</h2></div></div>
+            {!invoices.length ? <div className="member-orders__empty"><p><strong>Aucun document émis.</strong><br />Une facture apparaît après confirmation serveur d’un paiement.</p></div> : (
+              <ul className="member-order-list">{invoices.map((invoice) => <li key={invoice.id}>
+                <Link href={`/compte/factures/${encodeURIComponent(invoice.invoiceNumber)}`}><span><strong>{invoice.invoiceNumber}</strong><small>{invoice.orderNumberSnapshot} · {new Date(invoice.issuedAt).toLocaleDateString("fr-FR")}</small></span><span><em>{invoice.documentType === "SHOP" ? "Boutique" : "Création musicale"}</em><small>{invoice.creditNotes.length ? `${invoice.creditNotes.length} avoir${invoice.creditNotes.length > 1 ? "s" : ""}` : "Aucun avoir"}</small><strong>{formatEuro(invoice.totalCents)}</strong></span></Link>
+                {invoice.creditNotes.map((creditNote) => <p key={creditNote.id}><Link className="text-link" href={`/compte/avoirs/${encodeURIComponent(creditNote.creditNoteNumber)}`}>Avoir {creditNote.creditNoteNumber} · {formatEuro(creditNote.amountCents)} <span aria-hidden="true">→</span></Link></p>)}
+              </li>)}</ul>
             )}
           </section>
 

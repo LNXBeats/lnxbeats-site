@@ -10,6 +10,7 @@ const NOTIFICATION_ENUM_MIGRATION = "20260821120000_transactional_notifications"
 const SHOP_MIGRATION = "20260827180000_shop_commerce_foundation";
 const SHOP_PAYMENT_MIGRATION = "20260827220000_shop_payment_fulfillment_foundation";
 const LEGAL_COMPLIANCE_MIGRATION = "20260828120000_legal_compliance_foundation";
+const INVOICING_MIGRATION = "20260828180000_invoicing_foundation";
 
 async function directories() {
   return (await readdir(MIGRATIONS_DIRECTORY, { withFileTypes: true }))
@@ -53,9 +54,10 @@ test("Shop commerce is the twentieth additive migration and contains no destruct
 
 test("Shop payments are the twenty-first migration and preserve existing ledgers", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.length, 22);
-  assert.equal(migrationDirectories.at(-2), SHOP_PAYMENT_MIGRATION);
-  assert.equal(migrationDirectories.at(-1), LEGAL_COMPLIANCE_MIGRATION);
+  assert.equal(migrationDirectories.length, 23);
+  assert.equal(migrationDirectories.at(-3), SHOP_PAYMENT_MIGRATION);
+  assert.equal(migrationDirectories.at(-2), LEGAL_COMPLIANCE_MIGRATION);
+  assert.equal(migrationDirectories.at(-1), INVOICING_MIGRATION);
   const sql = await readFile(
     path.join(MIGRATIONS_DIRECTORY, SHOP_PAYMENT_MIGRATION, "migration.sql"),
     "utf8",
@@ -177,10 +179,54 @@ test("the 20 to 21 migration preserves Phase 2 Product, ShopOrder and Notificati
   }
 });
 
+test("the additive invoicing migration preserves existing Order, Payment, ProviderEvent, Notification and ShopOrder rows", async () => {
+  const database = new PGlite();
+  try {
+    const migrationDirectories = await directories();
+    const invoicingIndex = migrationDirectories.indexOf(INVOICING_MIGRATION);
+    assert.equal(invoicingIndex, 22);
+    for (const directory of migrationDirectories.slice(0, invoicingIndex)) await apply(database, directory);
+    await database.exec(`
+      INSERT INTO "users" ("id", "email", "emailVerified", "displayName", "role", "status", "createdAt", "updatedAt")
+      VALUES ('14000000-0000-4000-8000-000000000001', 'billing-preservation@example.invalid', true, 'Billing preservation', 'MEMBER', 'ACTIVE', now(), now());
+      INSERT INTO "orders" ("id", "orderNumber", "userId", "customerEmail", "customerName", "status", "brief", "basePriceCents", "totalCents", "currency", "createdAt", "updatedAt")
+      VALUES ('24000000-0000-4000-8000-000000000001', 'LNX-2099-940001', '14000000-0000-4000-8000-000000000001', 'billing-preservation@example.invalid', 'Billing preservation', 'PAYMENT_CONFIRMED', 'Fixture historique.', 2000, 2000, 'EUR', now(), now());
+      INSERT INTO "payments" ("id", "orderId", "provider", "mode", "status", "amountCents", "currency", "pricingVersion", "idempotencyKey", "providerCheckoutId", "paidAt", "createdAt", "updatedAt")
+      VALUES ('34000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001', 'STRIPE', 'TEST', 'SUCCEEDED', 2000, 'EUR', 'historical', 'billing-preservation-payment', 'cs-billing-preservation', now(), now(), now());
+      INSERT INTO "provider_events" ("id", "provider", "providerEventId", "type", "livemode", "objectId", "outcome", "paymentId", "processedAt", "createdAt")
+      VALUES ('44000000-0000-4000-8000-000000000001', 'STRIPE', 'evt-billing-preservation', 'checkout.session.completed', false, 'cs-billing-preservation', 'PROCESSED', '34000000-0000-4000-8000-000000000001', now(), now());
+      INSERT INTO "order_notifications" ("id", "orderId", "kind", "channel", "recipient", "idempotencyKey", "createdAt", "updatedAt")
+      VALUES ('54000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000001', 'CUSTOMER_PAYMENT_CONFIRMED', 'EMAIL', 'billing-preservation@example.invalid', 'billing-preservation-notification', now(), now());
+      INSERT INTO "shop_orders" ("id", "orderNumber", "userId", "creationToken", "requestFingerprintSha256", "subtotalCents", "shippingCents", "totalCents", "shippingRequired", "termsVersion", "termsHashSha256", "termsAcceptedAt", "reservationExpiresAt", "createdAt", "updatedAt")
+      VALUES ('64000000-0000-4000-8000-000000000001', 'LNX-SHOP-2099-940001', '14000000-0000-4000-8000-000000000001', '74000000-0000-4000-8000-000000000001', repeat('9', 64), 3000, 0, 3000, false, 'shop-cgv-phase3-qa-v1', repeat('8', 64), now(), now() + interval '30 minutes', now(), now());
+    `);
+    const tableIds = {
+      orders: "24000000-0000-4000-8000-000000000001",
+      payments: "34000000-0000-4000-8000-000000000001",
+      provider_events: "44000000-0000-4000-8000-000000000001",
+      order_notifications: "54000000-0000-4000-8000-000000000001",
+      shop_orders: "64000000-0000-4000-8000-000000000001",
+    } as const;
+    const before = Object.fromEntries(await Promise.all(Object.entries(tableIds).map(async ([table, id]) => [
+      table,
+      (await database.query<{ snapshot: Record<string, unknown> }>(`SELECT to_jsonb(row) AS snapshot FROM "${table}" row WHERE "id" = '${id}'`)).rows[0]!.snapshot,
+    ])));
+    await apply(database, INVOICING_MIGRATION);
+    for (const [table, id] of Object.entries(tableIds)) {
+      const after = (await database.query<{ snapshot: Record<string, unknown> }>(`SELECT to_jsonb(row) AS snapshot FROM "${table}" row WHERE "id" = '${id}'`)).rows[0]!.snapshot;
+      assert.deepEqual(after, before[table], `${table} must remain byte-for-byte equivalent`);
+    }
+    assert.equal((await database.query<{ count: number }>('SELECT count(*)::int AS count FROM "invoices"')).rows[0]?.count, 0);
+    assert.equal((await database.query<{ count: number }>('SELECT count(*)::int AS count FROM "credit_notes"')).rows[0]?.count, 0);
+  } finally {
+    await database.close();
+  }
+});
+
 test("fresh migrations enforce ShopOrder totals, address and reservation lifecycle", async () => {
   const { database, migrationDirectories } = await migratedDatabase();
   try {
-    assert.equal(migrationDirectories.length, 22);
+    assert.equal(migrationDirectories.length, 23);
     const tables = await database.query<{ table_name: string }>(`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public'
@@ -285,7 +331,7 @@ test("fresh migrations enforce ShopOrder totals, address and reservation lifecyc
 test("Phase 3 enforces Shop payment parents, winner, terms and lifecycle audit", async () => {
   const { database, migrationDirectories } = await migratedDatabase();
   try {
-    assert.equal(migrationDirectories.length, 22);
+    assert.equal(migrationDirectories.length, 23);
     await database.exec(`
       INSERT INTO "users" (
         "id", "email", "displayName", "role", "status", "emailVerified", "emailVerifiedAt", "createdAt", "updatedAt"

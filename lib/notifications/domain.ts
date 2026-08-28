@@ -116,12 +116,12 @@ export function automaticNotificationRetryIsSafe(
 const orderPayloadKeys = new Set([
   "orderNumber", "customerName", "customerEmail", "totalCents", "currency", "coverIncluded",
   "priorityProcessing", "createdAt", "workTitle", "rightsRequestNumber", "rightsRequestType", "requestedPriceCents",
-  "refundAmountCents",
+  "refundAmountCents", "invoiceNumber", "termsVersion",
 ]);
 
 const shopPayloadKeys = new Set([
   "orderNumber", "customerName", "customerEmail", "subtotalCents", "shippingCents", "totalCents", "currency",
-  "createdAt", "items", "paymentProvider", "termsVersion", "shippingAddress",
+  "createdAt", "items", "paymentProvider", "termsVersion", "shippingAddress", "invoiceNumber",
 ]);
 
 const shopItemKeys = new Set(["productTitle", "quantity", "unitPriceCents", "lineTotalCents"]);
@@ -142,6 +142,7 @@ function parseShopNotificationPayload(payload: Record<string, unknown>): ShopNot
     || !Array.isArray(payload.items) || payload.items.length < 1 || payload.items.length > 50
     || !(payload.paymentProvider === null || payload.paymentProvider === "STRIPE" || payload.paymentProvider === "PAYPAL")
     || !(payload.termsVersion === null || (typeof payload.termsVersion === "string" && payload.termsVersion.length > 0 && payload.termsVersion.length <= 80))
+    || !(payload.invoiceNumber === undefined || (typeof payload.invoiceNumber === "string" && /^LNX-[0-9]{8}-[0-9]{4,}$/.test(payload.invoiceNumber)))
   ) throw new Error("Notification payload is invalid.");
   normalizeNotificationRecipient(payload.customerEmail as string);
 
@@ -202,6 +203,8 @@ export function parseNotificationPayload(value: unknown, kind?: OrderNotificatio
   if (payload.rightsRequestType !== undefined && !["PUBLICATION_LICENSE", "EXPLOITATION_PARTNERSHIP"].includes(String(payload.rightsRequestType))) throw new Error("Notification payload is invalid.");
   if (payload.requestedPriceCents !== undefined && (!Number.isInteger(payload.requestedPriceCents) || Number(payload.requestedPriceCents) <= 0)) throw new Error("Notification payload is invalid.");
   if (payload.refundAmountCents !== undefined && (!Number.isInteger(payload.refundAmountCents) || Number(payload.refundAmountCents) <= 0)) throw new Error("Notification payload is invalid.");
+  if (payload.invoiceNumber !== undefined && (typeof payload.invoiceNumber !== "string" || !/^LNX-[0-9]{8}-[0-9]{4,}$/.test(payload.invoiceNumber))) throw new Error("Notification payload is invalid.");
+  if (payload.termsVersion !== undefined && !(payload.termsVersion === null || (typeof payload.termsVersion === "string" && payload.termsVersion.length > 0 && payload.termsVersion.length <= 80))) throw new Error("Notification payload is invalid.");
   return payload as NotificationPayload;
 }
 

@@ -16,7 +16,7 @@ const shopOrderNumber = `LNX-SHOP-2099-${suffix.slice(0, 6).replace(/[a-f]/g, "2
 async function main() {
   const createdAt = new Date();
   const migrations = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT count(*)::bigint AS count FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL`;
-  assert.equal(Number(migrations[0]?.count), 22);
+  assert.equal(Number(migrations[0]?.count), 23);
 
   await prisma.user.create({
     data: { id: userId, email, emailVerified: true, displayName: "Legal Runtime", role: "MEMBER", status: "ACTIVE" },

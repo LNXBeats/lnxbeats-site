@@ -7,6 +7,10 @@ import {
   legalCandidates,
   legalNoticesCandidate,
   musicTermsCandidate,
+  phase4bLegalNoticesCandidate,
+  phase4bMusicTermsCandidate,
+  phase4bPrivacyCandidate,
+  phase4bShopTermsCandidate,
   privacyCandidate,
   shopTermsCandidate,
 } from "../../data/legal";
@@ -50,13 +54,27 @@ test("all Phase 4 legal documents are immutable-looking, hashed, non-approved ca
 test("the mandatory human decisions are visible in the candidate corpus", () => {
   const body = JSON.stringify(legalCandidates);
   for (const code of [
-    "MUSIC_CONTRACT_CLASSIFICATION", "EARLY_PERFORMANCE_OF_MUSIC_SERVICE", "MUSIC_DELIVERY_DELAY",
-    "MUSIC_REVISION_POLICY", "SHOP_CONTRACT_FORMATION_TIME", "SEALED_AUDIO_PRODUCT_POLICY",
-    "WHO_PAYS_WITHDRAWAL_RETURN_COSTS", "MUSIC_REFERENCE_FILE_RETENTION", "B2B_TERMS_SCOPE",
-    "VAT_AND_INVOICING_STATUS", "ACCOUNTING_RETENTION_AND_INVOICE_FORMAT", "DELIVERY_COUNTRIES",
-    "HANDLING_TIME", "DELIVERY_ESTIMATE", "RETURN_ADDRESS", "MINIMUM_BILLABLE_WEIGHT_150G",
-    "COLISSIMO_RATE_POLICY", "COLISSIMO_SIGNATURE_POLICY", "TRACKING_POLICY",
+    "MUSIC_CONTRACT_CLASSIFICATION", "EARLY_PERFORMANCE_WITHDRAWAL_WORDING",
+    "SHOP_CONTRACT_FORMATION_TIME", "SEALED_AUDIO_WITHDRAWAL_EXACT_WORDING",
   ]) assert.match(body, new RegExp(code));
+  for (const resolvedCode of ["VAT_AND_INVOICING_STATUS", "MUSIC_DELIVERY_DELAY", "MUSIC_REVISION_POLICY", "B2B_TERMS_SCOPE"]) {
+    assert.doesNotMatch(body, new RegExp(resolvedCode), `${resolvedCode} must not remain a candidate blocker.`);
+  }
+});
+
+test("Phase 4B creates new immutable candidates without rewriting Phase 4A hashes", () => {
+  assert.equal(legalNoticesCandidate.version, "legal-notices-2026-01-draft");
+  assert.equal(musicTermsCandidate.version, "music-cgv-2026-01-draft");
+  assert.equal(phase4bLegalNoticesCandidate.version, "legal-notices-2026-02-draft");
+  assert.equal(phase4bMusicTermsCandidate.version, "music-cgv-2026-02-draft");
+  assert.equal(phase4bShopTermsCandidate.version, "shop-cgv-2026-02-draft");
+  assert.equal(phase4bPrivacyCandidate.version, "privacy-2026-02-draft");
+  assert.notEqual(phase4bMusicTermsCandidate.hashSha256, musicTermsCandidate.hashSha256);
+  assert.match(JSON.stringify(phase4bLegalNoticesCandidate), /entrepreneur individuel/i);
+  assert.doesNotMatch(JSON.stringify(phase4bLegalNoticesCandidate), /micro-entrepreneur|auto-entrepreneur/i);
+  assert.match(JSON.stringify(phase4bMusicTermsCandidate), /sept à quatorze jours/);
+  assert.match(JSON.stringify(phase4bShopTermsCandidate), /Colissimo avec signature/);
+  assert.match(JSON.stringify(phase4bPrivacyCandidate), /dix ans/);
 });
 
 test("Shop payment labels visibly state payment obligation while music labels stay stable", () => {

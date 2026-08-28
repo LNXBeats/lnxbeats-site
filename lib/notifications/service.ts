@@ -107,6 +107,8 @@ export async function enqueueOrderNotification(
       priorityProcessing: true,
       createdAt: true,
       title: true,
+      personalUseTermsVersion: true,
+      invoices: { take: 1, orderBy: { issuedAt: "desc" }, select: { invoiceNumber: true } },
     },
   });
   const workTitle = input.resource?.workTitle ?? order.title;
@@ -126,6 +128,8 @@ export async function enqueueOrderNotification(
       requestedPriceCents: input.resource.requestedPriceCents,
     } : {}),
     ...(input.resource?.refundAmountCents ? { refundAmountCents: input.resource.refundAmountCents } : {}),
+    ...(order.invoices[0]?.invoiceNumber ? { invoiceNumber: order.invoices[0].invoiceNumber } : {}),
+    termsVersion: order.personalUseTermsVersion,
   } satisfies Prisma.InputJsonObject;
   const recipient = notificationRecipientSnapshot(input.recipient);
   const resourceType = input.resource?.type ?? "ORDER";
@@ -266,6 +270,7 @@ export async function enqueueShopOrderNotification(
         take: 1,
         select: { provider: true },
       },
+      invoices: { take: 1, orderBy: { issuedAt: "desc" }, select: { invoiceNumber: true } },
     },
   });
   const customerName = shopCustomerName(shopOrder.user);
@@ -309,6 +314,7 @@ export async function enqueueShopOrderNotification(
       city: shopOrder.shippingCity!,
       countryCode: shopOrder.shippingCountryCode!,
     } : null,
+    ...(shopOrder.invoices?.[0]?.invoiceNumber ? { invoiceNumber: shopOrder.invoices[0].invoiceNumber } : {}),
   } satisfies Prisma.InputJsonObject;
   parseNotificationPayload(payload, input.kind);
   const notification = await transaction.orderNotification.upsert({

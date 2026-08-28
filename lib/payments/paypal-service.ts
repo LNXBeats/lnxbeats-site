@@ -25,6 +25,7 @@ import {
 import { logPaymentEvent } from "@/lib/payments/observability";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import { enqueuePaymentConfirmedNotifications } from "@/lib/notifications/service";
+import { issueInvoiceForPayment } from "@/lib/billing/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 const payableOrderNumber = /^LNX-[0-9]{4}-[0-9]{6}$/;
@@ -572,6 +573,7 @@ export function createPaymentDatabasePaypalCaptureRepository(
           },
           select: { id: true },
         });
+        await issueInvoiceForPayment(transaction, payment.id);
         await enqueuePaymentConfirmedNotifications(transaction, payment.orderId);
         const eventReceipt = await receipt(transaction, {
           eventId: event.eventId,

@@ -6,6 +6,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 import type { OrderActor } from "@/lib/orders/domain";
 import { enqueueOrderNotification } from "@/lib/notifications/service";
+import { issueCreditNoteForRefundIfInvoiceExists } from "@/lib/billing/service";
 import {
   createPaypalGateway,
   PaypalClientError,
@@ -451,6 +452,7 @@ export function createRefundDatabaseRepository(
           },
         });
         if (nextStatus === "SUCCEEDED") {
+          await issueCreditNoteForRefundIfInvoiceExists(transaction, attempt.id);
           const total = confirmedCents === attempt.payment.amountCents;
           await transaction.orderEvent.create({
             data: {

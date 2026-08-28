@@ -13,6 +13,7 @@ const PRICING_MIGRATION = "20260827120000_shop_pricing_foundation";
 const SHOP_COMMERCE_MIGRATION = "20260827180000_shop_commerce_foundation";
 const SHOP_PAYMENT_MIGRATION = "20260827220000_shop_payment_fulfillment_foundation";
 const LEGAL_COMPLIANCE_MIGRATION = "20260828120000_legal_compliance_foundation";
+const INVOICING_MIGRATION = "20260828180000_invoicing_foundation";
 
 async function applyMigration(database: PGlite, directory: string, sql: string) {
   if (directory !== NOTIFICATION_ENUM_MIGRATION) {
@@ -53,6 +54,7 @@ async function applyAllMigrations(database: PGlite) {
   assert.ok(directories.includes(SHOP_COMMERCE_MIGRATION), "V1.1.0 Shop commerce migration is missing");
   assert.ok(directories.includes(SHOP_PAYMENT_MIGRATION), "V1.1.0 Shop payment migration is missing");
   assert.ok(directories.includes(LEGAL_COMPLIANCE_MIGRATION), "V1.1.0 legal compliance migration is missing");
+  assert.ok(directories.includes(INVOICING_MIGRATION), "V1.1.0 invoicing migration is missing");
 
   for (const directory of directories) {
     await applyMigrationDirectory(database, directory);
@@ -105,17 +107,18 @@ test("V1.1.0 migration preserves existing Order, Payment and ProviderEvent snaps
   const database = new PGlite();
   try {
     const migrations = await readMigrationDirectories();
-    assert.equal(migrations.length, 22);
+    assert.equal(migrations.length, 23);
     assert.equal(
-      migrations.at(-4),
+      migrations.at(-5),
       PRICING_MIGRATION,
       "the additive pricing migration must remain the nineteenth migration",
     );
-    assert.equal(migrations.at(-3), SHOP_COMMERCE_MIGRATION, "Shop commerce must be the twentieth migration");
-    assert.equal(migrations.at(-2), SHOP_PAYMENT_MIGRATION, "Shop payments must be the twenty-first migration");
-    assert.equal(migrations.at(-1), LEGAL_COMPLIANCE_MIGRATION, "Legal compliance must be the twenty-second migration");
+    assert.equal(migrations.at(-4), SHOP_COMMERCE_MIGRATION, "Shop commerce must be the twentieth migration");
+    assert.equal(migrations.at(-3), SHOP_PAYMENT_MIGRATION, "Shop payments must be the twenty-first migration");
+    assert.equal(migrations.at(-2), LEGAL_COMPLIANCE_MIGRATION, "Legal compliance must be the twenty-second migration");
+    assert.equal(migrations.at(-1), INVOICING_MIGRATION, "Invoicing must be the twenty-third migration");
 
-    for (const directory of migrations.slice(0, -4)) {
+    for (const directory of migrations.slice(0, -5)) {
       await applyMigrationDirectory(database, directory);
     }
 
@@ -199,6 +202,7 @@ test("V1.1.0 migration preserves existing Order, Payment and ProviderEvent snaps
     await applyMigrationDirectory(database, SHOP_COMMERCE_MIGRATION);
     await applyMigrationDirectory(database, SHOP_PAYMENT_MIGRATION);
     await applyMigrationDirectory(database, LEGAL_COMPLIANCE_MIGRATION);
+    await applyMigrationDirectory(database, INVOICING_MIGRATION);
 
     const after = await readProtectedCommerceSnapshot(database);
     assert.deepEqual(after.counts, before.counts, "protected table counts must remain unchanged");
@@ -224,7 +228,7 @@ test("all migrations apply and seed the immutable V1 pricing parity", async () =
   const database = new PGlite();
   try {
     const migrations = await applyAllMigrations(database);
-    assert.equal(migrations.length, 22);
+    assert.equal(migrations.length, 23);
 
     const pricing = await database.query<{
       version: string;

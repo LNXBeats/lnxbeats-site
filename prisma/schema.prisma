@@ -371,6 +371,41 @@ enum ConsumerWithdrawalAcknowledgementStatus {
   FAILED
 }
 
+enum BillingCustomerType {
+  INDIVIDUAL
+  PROFESSIONAL
+}
+
+enum InvoiceDocumentType {
+  MUSIC
+  SHOP
+}
+
+enum InvoiceOperationCategory {
+  SERVICES
+  GOODS
+}
+
+enum InvoiceVatRegime {
+  FRANCHISE_EN_BASE_TVA
+  VAT_LIABLE
+}
+
+enum CreditNoteReasonCode {
+  WITHDRAWAL
+  NON_CONFORMITY
+  SELLER_ERROR
+  DAMAGED_PRODUCT
+  OTHER_REVIEWED
+}
+
+enum BillingAuditAction {
+  INVOICE_ISSUED
+  INVOICE_PDF_GENERATED
+  CREDIT_NOTE_ISSUED
+  CREDIT_NOTE_PDF_GENERATED
+}
+
 enum RightsRequestType {
   PUBLICATION_LICENSE
   EXPLOITATION_PARTNERSHIP
@@ -649,6 +684,7 @@ model User {
   shopOrderLifecycleEvents     ShopOrderLifecycleEvent[]   @relation("ShopOrderLifecycleEventActor")
   legalDocumentApprovals       LegalDocumentVersion[]      @relation("LegalDocumentApprover")
   withdrawalReviews            ConsumerWithdrawalRequest[] @relation("ConsumerWithdrawalReviewer")
+  billingAuditEvents           BillingAuditEvent[]         @relation("BillingAuditActor")
 
   @@index([role, status])
   @@map("users")
@@ -958,6 +994,7 @@ model Order {
   payments                   Payment[]
   notifications              OrderNotification[]
   withdrawalRequests         ConsumerWithdrawalRequest[]
+  invoices                   Invoice[]
 
   @@index([status, createdAt])
   @@index([userId])
@@ -1080,6 +1117,7 @@ model Payment {
   incidents                PaymentIncident[]
   auditEvents              PaymentAuditEvent[]
   shopOrderLifecycleEvents ShopOrderLifecycleEvent[] @relation("ShopOrderLifecycleEventPayment")
+  invoice                  Invoice?
 
   @@unique([provider, providerCheckoutId])
   @@unique([provider, providerPaymentId])
@@ -1112,6 +1150,7 @@ model RefundAttempt {
   requestedBy            User?               @relation("RefundRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   providerEvents         ProviderEvent[]
   auditEvents            PaymentAuditEvent[]
+  creditNotes            CreditNote[]
 
   @@unique([provider, providerRefundId])
   @@unique([provider, providerIdempotencyKey])
@@ -1684,6 +1723,7 @@ model ShopOrder {
   payments                 Payment[]
   notifications            OrderNotification[]
   withdrawalRequests       ConsumerWithdrawalRequest[]
+  invoices                 Invoice[]
 
   @@unique([userId, creationToken])
   @@index([userId, createdAt])
@@ -1750,12 +1790,101 @@ model ConsumerWithdrawalRequest {
   order                     Order?                                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
   shopOrder                 ShopOrder?                              @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
   reviewedBy                User?                                   @relation("ConsumerWithdrawalReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  creditNotes               CreditNote[]
 
   @@index([status, receivedAt])
   @@index([orderId, receivedAt])
   @@index([shopOrderId, receivedAt])
   @@index([reviewedByUserId])
   @@map("consumer_withdrawal_requests")
+}
+
+model Invoice {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  invoiceNumber       String                   @unique @db.VarChar(48)
+  sequenceNumber      BigInt                   @unique
+  issuedAt            DateTime                 @db.Timestamptz(3)
+  documentType        InvoiceDocumentType
+  operationCategory   InvoiceOperationCategory
+  orderId             String?                  @db.Uuid
+  shopOrderId         String?                  @db.Uuid
+  paymentId           String                   @unique @db.Uuid
+  orderNumberSnapshot String                   @db.VarChar(32)
+  customerType        BillingCustomerType
+  customerNameSearch  String                   @db.VarChar(240)
+  customerEmailSearch String                   @db.VarChar(320)
+  sellerSnapshot      Json
+  customerSnapshot    Json
+  lineItemsSnapshot   Json
+  currency            String                   @db.Char(3)
+  subtotalCents       Int
+  shippingCents       Int                      @default(0)
+  totalCents          Int
+  vatRegime           InvoiceVatRegime
+  vatAmountCents      Int                      @default(0)
+  vatLegalNotice      String                   @db.VarChar(240)
+  paymentMethodLabel  String                   @db.VarChar(120)
+  paidAt              DateTime                 @db.Timestamptz(3)
+  termsVersion        String?                  @db.VarChar(80)
+  termsHashSha256     String?                  @db.Char(64)
+  snapshotHashSha256  String                   @unique @db.Char(64)
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
+  order               Order?                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shopOrder           ShopOrder?               @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  payment             Payment                  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  creditNotes         CreditNote[]
+  auditEvents         BillingAuditEvent[]
+
+  @@unique([orderId])
+  @@unique([shopOrderId])
+  @@index([documentType, issuedAt])
+  @@index([customerNameSearch, issuedAt])
+  @@index([customerEmailSearch, issuedAt])
+  @@map("invoices")
+}
+
+model CreditNote {
+  id                      String                     @id @default(uuid()) @db.Uuid
+  creditNoteNumber        String                     @unique @db.VarChar(52)
+  sequenceNumber          BigInt                     @unique
+  invoiceId               String                     @db.Uuid
+  refundAttemptId         String?                    @unique @db.Uuid
+  withdrawalRequestId     String?                    @db.Uuid
+  idempotencyKey          String                     @unique @db.VarChar(255)
+  issuedAt                DateTime                   @db.Timestamptz(3)
+  amountCents             Int
+  cumulativeCreditedCents Int
+  remainingBalanceCents   Int
+  currency                String                     @db.Char(3)
+  reasonCode              CreditNoteReasonCode
+  reasonText              String?                    @db.VarChar(500)
+  snapshotHashSha256      String                     @unique @db.Char(64)
+  createdAt               DateTime                   @default(now()) @db.Timestamptz(3)
+  invoice                 Invoice                    @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  refundAttempt           RefundAttempt?             @relation(fields: [refundAttemptId], references: [id], onDelete: Restrict)
+  withdrawalRequest       ConsumerWithdrawalRequest? @relation(fields: [withdrawalRequestId], references: [id], onDelete: Restrict)
+  auditEvents             BillingAuditEvent[]
+
+  @@index([invoiceId, issuedAt])
+  @@index([withdrawalRequestId])
+  @@map("credit_notes")
+}
+
+model BillingAuditEvent {
+  id           String             @id @default(uuid()) @db.Uuid
+  invoiceId    String             @db.Uuid
+  creditNoteId String?            @db.Uuid
+  actorUserId  String?            @db.Uuid
+  action       BillingAuditAction
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  invoice      Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  creditNote   CreditNote?        @relation(fields: [creditNoteId], references: [id], onDelete: Restrict)
+  actor        User?              @relation("BillingAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, createdAt])
+  @@index([creditNoteId, createdAt])
+  @@index([actorUserId])
+  @@map("billing_audit_events")
 }
 
 model ShopOrderItem {

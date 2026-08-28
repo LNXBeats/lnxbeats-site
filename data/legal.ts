@@ -33,6 +33,20 @@ function candidate(input: Omit<LegalCandidate, "hashSha256">): LegalCandidate {
   });
 }
 
+function revision(base: LegalCandidate, version: string, sections: readonly LegalSection[]) {
+  return candidate({
+    type: base.type,
+    version,
+    title: base.title,
+    status: "AWAITING_LEGAL_REVIEW",
+    createdAt,
+    effectiveAt: null,
+    approvedBy: null,
+    approvedAt: null,
+    sections,
+  });
+}
+
 const createdAt = "2026-08-28T00:00:00.000Z";
 
 export const legalNoticesCandidate = candidate({
@@ -367,12 +381,102 @@ export const withdrawalNoticeCandidate = candidate({
   ],
 });
 
+export const phase4bLegalNoticesCandidate = revision(
+  legalNoticesCandidate,
+  "legal-notices-2026-02-draft",
+  legalNoticesCandidate.sections.map((section) => section.title === "Éditeur du service" ? {
+    title: section.title,
+    paragraphs: [
+      "Le site est édité par Ludovic Mickaël Mathon, entrepreneur individuel, sous le nom commercial LNX Beats. LNX STUDIO désigne le service en ligne et n’est pas une société distincte.",
+      "Adresse professionnelle : 35 Impasse des Orties, 07370 Ozon, France. Contact : lnx.beats.pro@gmail.com — 06 71 66 70 32.",
+      "SIREN : 106 870 850. SIRET : 106 870 850 00018. Code APE : 9003B. Activité déclarée : auteur-compositeur et auteur de textes, conception et création d’œuvres musicales originales avec ou sans paroles.",
+      "Forme et activité : entrepreneur individuel, activité libérale non réglementée, régime spécial BNC.",
+      "Régime actuel : franchise en base de TVA, sans option d’assujettissement déclarée. Le numéro de TVA communiqué n’est pas affiché comme preuve d’assujettissement.",
+      "Directeur de la publication : Ludovic Mickaël Mathon.",
+    ],
+  } : section),
+);
+
+export const phase4bMusicTermsCandidate = revision(
+  musicTermsCandidate,
+  "music-cgv-2026-02-draft",
+  musicTermsCandidate.sections.map((section) => {
+    if (section.title === "3. Prix et paiement") return { title: section.title, paragraphs: [
+      "Le prix applicable est celui affiché, calculé côté serveur et accepté lors de la commande. Les options et le total sont récapitulés avant toute redirection vers le prestataire de paiement.",
+      "Une facture ne peut être émise qu’après confirmation serveur effective du paiement. Le régime actuel est la franchise en base de TVA : aucune TVA n’est ajoutée au prix et la facture porte la mention « TVA non applicable, article 293 B du CGI ».",
+    ] };
+    if (section.title === "4. Formation, commencement et délai") return { title: section.title, paragraphs: [
+      "Le délai indicatif de réalisation est de sept à quatorze jours après confirmation du paiement et réception d’un brief exploitable. Une situation particulière annoncée explicitement peut conduire à un délai différent.",
+      "Un commencement avant l’expiration du délai de rétractation n’est possible qu’après demande expresse séparée. La qualification du contrat et la formulation exacte des conséquences restent soumises à revue juridique.",
+    ], decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "EARLY_PERFORMANCE_WITHDRAWAL_WORDING" }] };
+    if (section.title === "5. Retouches, demandes nouvelles et livraison") return { title: section.title, paragraphs: [
+      "Le prix comprend une retouche raisonnable restant dans le périmètre du brief accepté. Une modification substantielle du brief, de la structure ou de la direction artistique constitue une nouvelle demande susceptible de devis ou commande distincte.",
+      "La livraison numérique intervient dans le Compte sécurisé. Les fichiers sources transmis pour le brief sont conservés jusqu’à quatre-vingt-dix jours après livraison, sauf obligation légale, litige ou demande justifiée imposant une conservation différente.",
+    ] };
+    if (section.title === "9. Réclamation, médiation, archivage et version") return { title: section.title, paragraphs: [
+      "Une réclamation préalable doit être adressée à LNX Beats. En cas de désaccord persistant, le consommateur peut saisir gratuitement le CM2C.",
+      "La commande conserve le numéro, le prix, la version et l’empreinte SHA-256 des conditions acceptées. Les factures, avoirs et pièces comptables sont conservés dix ans. Un parcours professionnel doit recueillir une identité de facturation distincte sans accorder de droits sur une simple déclaration navigateur.",
+    ] };
+    return section;
+  }),
+);
+
+export const phase4bShopTermsCandidate = revision(
+  shopTermsCandidate,
+  "shop-cgv-2026-02-draft",
+  shopTermsCandidate.sections.map((section) => {
+    if (section.title === "3. Prix, TVA, livraison et total") return { title: section.title, paragraphs: [
+      "Le prix applicable est celui affiché et accepté lors de la commande. Les quantités, sous-total, frais de livraison et total sont calculés côté serveur et snapshotés avant paiement. La facture reprend exactement ces frais sans recalcul ultérieur.",
+      "Le régime actuel est la franchise en base de TVA : aucune TVA n’est ajoutée et la facture porte la mention « TVA non applicable, article 293 B du CGI ». Au lancement, la livraison est limitée à la France métropolitaine.",
+      "La préparation prend normalement deux à trois jours ouvrés après paiement. Le transport prévu est Colissimo avec signature ; son délai indicatif et son coût devront être affichés avant l’obligation de paiement. En l’absence de tarif valide, le futur Checkout Production doit refuser la vente.",
+    ] };
+    if (section.title === "5. Livraison, suivi et transfert des risques") return { title: section.title, paragraphs: [
+      "La livraison de lancement est prévue en France métropolitaine par Colissimo avec signature. La préparation LNX Beats de deux à trois jours ouvrés est distincte du délai indicatif du transporteur. Une fiche produit peut annoncer explicitement une précommande ou un délai particulier.",
+      "Le transfert des risques intervient lors de la prise de possession physique, sous réserve des règles impératives. L’intégration La Poste n’est pas active : le suivi automatique futur devra conserver un fallback manuel, sans promesse d’API existante.",
+      "Les poids produit, emballage et protection devront être administrables. Le poids facturable minimal décidé est de 150 g. Les grilles de transport seront versionnées et snapshotées, jamais codées en dur dans les conditions.",
+    ] };
+    if (section.title === "6. Réception, rétractation et retours") return { title: section.title, paragraphs: [
+      "Le consommateur dispose en principe de quatorze jours à compter de la réception pour exercer son droit de rétractation. Pour une rétractation de convenance, les frais directs de retour sont à sa charge si cette information a été fournie avant la commande.",
+      "Les CD audio sont expédiés scellés. L’exception légale applicable aux enregistrements audio descellés est interprétée strictement et ne supprime jamais les garanties pour défaut, non-conformité, erreur vendeur ou dommage. Le formulaire de rétractation demeure disponible pour les cas éligibles.",
+      "Adresse de retour : LNX Beats, 35 Impasse des Orties, 07370 Ozon, France. Toute future modification crée une nouvelle version des conditions sans réécrire les snapshots historiques.",
+    ], decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "SEALED_AUDIO_WITHDRAWAL_EXACT_WORDING" }] };
+    if (section.title === "8. Réclamation, médiation, données et archivage") return { title: section.title, paragraphs: [
+      "Après une réclamation préalable auprès de LNX Beats, le consommateur peut saisir gratuitement le CM2C en cas de désaccord persistant.",
+      "La commande et son snapshot contractuel sont archivés. Les factures, avoirs et pièces comptables sont conservés dix ans. La distinction B2C/B2B et les mentions propres au professionnel restent soumises au périmètre contractuel final.",
+    ] };
+    return section;
+  }),
+);
+
+export const phase4bPrivacyCandidate = revision(
+  privacyCandidate,
+  "privacy-2026-02-draft",
+  privacyCandidate.sections.map((section) => section.title === "Données et finalités" ? { title: section.title, paragraphs: [
+    "Les traitements couvrent les comptes, sessions, commandes, briefs, références privées, livrables, produits, adresses de livraison et de facturation, choix B2C/B2B, paiements, factures, avoirs, notifications, contrats, rétractations, retours, réclamations et journaux de sécurité.",
+    "Les finalités sont les mesures précontractuelles, l’exécution, la preuve, la facturation, la livraison, le support, la sécurité et le respect des obligations légales. Un futur numéro de suivi ne sera traité qu’après activation réelle de la logistique.",
+  ] } : section.title === "Durées de conservation" ? { title: section.title, paragraphs: [
+    "Les factures, avoirs et pièces comptables sont conservés dix ans. Les fichiers de référence musicale sont conservés jusqu’à quatre-vingt-dix jours après livraison, sauf obligation légale, litige ou demande justifiée imposant une durée différente.",
+    "La suppression d’un compte ne supprime pas les données soumises à conservation légale ; leur accès est restreint. Les autres durées restent proportionnées à la finalité, au contrat, à la sécurité et aux délais de recours.",
+  ] } : section.title === "Paiements et destinataires" ? { title: section.title, paragraphs: [
+    "LNX STUDIO ne stocke pas de numéro de carte complet, CVC ou mot de passe PayPal. Les données financières et de facturation sont limitées aux références, statuts, montants, devises, événements, factures, avoirs et remboursements nécessaires.",
+    "Railway, Cloudflare R2, Resend, Stripe, PayPal et OVHcloud interviennent selon leurs rôles techniques. La Poste/Colissimo n’est pas présenté comme destinataire actif tant que l’intégration n’est pas réalisée.",
+  ] } : section),
+);
+
 export const legalCandidates = Object.freeze([
+  phase4bLegalNoticesCandidate,
+  phase4bMusicTermsCandidate,
+  phase4bShopTermsCandidate,
+  phase4bPrivacyCandidate,
+  withdrawalNoticeCandidate,
+]);
+
+export const legalCandidateHistory = Object.freeze([
   legalNoticesCandidate,
   musicTermsCandidate,
   shopTermsCandidate,
   privacyCandidate,
-  withdrawalNoticeCandidate,
+  ...legalCandidates,
 ]);
 
 export function assertCandidateLegalRegistry() {

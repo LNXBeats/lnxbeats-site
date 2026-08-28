@@ -5,6 +5,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import type { PaymentMethod } from "@/lib/payments/types";
 import { enqueuePaymentConfirmedNotifications } from "@/lib/notifications/service";
+import { issueInvoiceForPayment } from "@/lib/billing/service";
 
 export const STRIPE_CHECKOUT_WEBHOOK_EVENTS = [
   "checkout.session.completed",
@@ -868,6 +869,7 @@ const databasePaymentWebhookRepository: PaymentWebhookRepository = {
           },
           select: { id: true },
         });
+        await issueInvoiceForPayment(transaction, payment.id);
         await enqueuePaymentConfirmedNotifications(transaction, payment.orderId);
       }
 

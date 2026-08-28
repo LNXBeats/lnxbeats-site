@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 
 import { enqueueOrderNotification } from "@/lib/notifications/service";
+import { issueCreditNoteForRefundIfInvoiceExists } from "@/lib/billing/service";
 import { paypalCentsFromAmount, paypalRefundEvidence } from "@/lib/payments/paypal-client";
 import { paymentStatusAfterRefund, refundableAmount, type RefundProviderEvidence } from "@/lib/payments/refund";
 import type { VerifiedPaypalWebhookEvent } from "@/lib/payments/paypal-webhook";
@@ -412,6 +413,7 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
       });
     }
     if (input.status === "SUCCEEDED" && !wasSucceeded) {
+      await issueCreditNoteForRefundIfInvoiceExists(transaction, attempt.id);
       const total = confirmedCents === payment.amountCents;
       await transaction.orderEvent.create({
         data: {

@@ -1,25 +1,24 @@
 # Exigences juridiques de la future logistique
 
-Colissimo n’est pas actif et aucune valeur tarifaire n’est codée par cette phase.
+Colissimo n’est pas actif. Aucun appel La Poste, tarif réel, étiquette ou suivi n’est implémenté par la Phase 4B.
 
-## Information avant paiement
+## OWNER-APPROVED REQUIREMENTS
 
-- pays desservi ;
-- caractéristiques, quantité et disponibilité ;
-- délai de préparation et estimation de livraison ;
-- transporteur/service ;
-- frais exacts et total ;
-- suivi/signature si applicable ;
-- adresse de livraison validée ;
-- droit de rétractation, adresse et coût de retour ;
-- garanties légales et parcours SAV.
+- destination initiale : France métropolitaine uniquement ;
+- préparation : 2 à 3 jours ouvrés après paiement, sauf exception explicite de fiche produit ;
+- service de lancement : Colissimo avec signature ;
+- retour : LNX Beats, 35 Impasse des Orties, 07370 Ozon, France ;
+- frais directs de rétractation de convenance : client, si l’information précontractuelle est fournie ; vendeur lorsque la loi l’impose ;
+- CD audio expédiés scellés ; garanties légales intactes ;
+- poids : somme produits × quantité + emballage + protection, puis minimum facturable interne de 150 g ;
+- suivi : automatisation Colissimo future avec fallback Admin manuel.
 
-## Architecture future
+Avant l’obligation de paiement, le Checkout devra afficher pays, service avec signature, préparation, estimation transport, frais exacts et total. Une quote de livraison absente ou périmée devra fermer le Checkout Production. `shippingCents` est snapshoté dans `ShopOrder` puis repris sans recalcul dans la facture.
 
-Chaque produit devra porter son poids propre. Emballage, protection et calage devront être administrables séparément. Le poids facturable sera calculé puis snapshoté avec la grille tarifaire versionnée dans la ShopOrder. Le minimum interne de 150 g requiert une décision logistique ; il ne doit pas être présenté comme une règle La Poste.
+## FUTURE TECHNICAL IMPLEMENTATION
 
-Le suivi doit accepter une intégration automatisée et un fallback Admin manuel. Numéro, lien et état seront visibles au client. Aucun texte ne doit prétendre que les risques sont transférés dès la remise du colis au transporteur : la règle impérative de prise de possession physique doit être respectée.
+Prévoir `PackagingProfile`, poids propres aux produits, emballage et protection, capacités/dimensions, activation et priorité. Prévoir des grilles transport versionnées, datées, liées au service et au palier de poids, snapshotées sur la commande. Aucun tarif courant ne doit être inscrit dans les CGV.
 
-## Gates
+Statuts cibles à adapter à l’API réelle : `PREPARING`, `HANDED_TO_CARRIER`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED`, `DELIVERY_EXCEPTION`, `RETURNING`, `RETURNED`. Le fallback doit permettre à l’Admin de saisir transporteur, numéro, date et lien ; le client les voit dans son Compte. Le transfert des risques demeure lié à la prise de possession physique selon la règle impérative.
 
-Voir `LEGAL_DECISIONS_REQUIRED.md` pour les huit décisions logistiques. Les tarifs, conditions Colissimo et zones devront être revérifiés dans les documents La Poste en vigueur au jour de l’activation.
+À l’intégration, revérifier les conditions La Poste, mappings d’événements, délais, tarifs et mentions juridiques. Une modification future de grille ne réécrit jamais une commande ni une facture historique.

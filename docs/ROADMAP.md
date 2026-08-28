@@ -170,3 +170,8 @@
 - ouverture Production différée après QA, revue juridique/comptable et nouveau
   gate dédié : le gate actuel refuse explicitement `SHOP_ENABLED=true` en
   Production.
+- phase 4A : textes candidats versionnés et rétractation en ligne fail-closed ;
+- phase 4B : fondation commune factures/avoirs, PDF et accès Compte/Admin en QA,
+  décisions TVA/logistique consolidées et nouveaux drafts 2026-02 ;
+- restant avant activation : conseil juridique, professionnel comptable,
+  facturation électronique, moteur Colissimo, CGV actives et checklist humaine.

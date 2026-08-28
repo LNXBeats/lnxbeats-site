@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { LegalCandidateDocument } from "@/components/legal-candidate-document";
-import { privacyCandidate } from "@/data/legal";
+import { phase4bPrivacyCandidate } from "@/data/legal";
 
 export const metadata: Metadata = {
   title: "Politique de confidentialité",
@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPage() {
-  return <LegalCandidateDocument document={privacyCandidate} introduction="Cartographie candidate des données, finalités, bases légales, destinataires, durées, cookies et droits." />;
+  return <LegalCandidateDocument document={phase4bPrivacyCandidate} introduction="Cartographie candidate des données, finalités, bases légales, destinataires, durées, cookies et droits." />;
 }
