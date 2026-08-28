@@ -1,0 +1,179 @@
+.legal-document,
+.legal-index,
+.withdrawal-page {
+  padding: clamp(7rem, 12vw, 10rem) 0 clamp(4rem, 8vw, 8rem);
+  background:
+    radial-gradient(circle at 85% 4%, rgba(216, 177, 85, 0.09), transparent 26rem),
+    #080808;
+}
+
+.legal-document__container,
+.withdrawal-page__container { max-width: 920px; }
+
+.legal-document h1,
+.legal-index h1,
+.withdrawal-page h1 {
+  max-width: 18ch;
+  margin: 0.55rem 0 1.25rem;
+  overflow-wrap: anywhere;
+  font-size: clamp(2.35rem, 7vw, 5.6rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+}
+
+.legal-document__lead,
+.legal-index__lead,
+.withdrawal-page__container > header > p:not(.eyebrow):not(.legal-document__warning) {
+  max-width: 68ch;
+  color: var(--text-soft);
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.7;
+}
+
+.legal-document__metadata {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 2rem 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--line);
+}
+
+.legal-document__metadata > div { min-width: 0; padding: 1rem; background: #111; }
+.legal-document__metadata dt { color: #8f897d; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.legal-document__metadata dd { margin: 0.45rem 0 0; overflow-wrap: anywhere; color: var(--text); }
+.legal-document__metadata code { font-size: 0.78rem; }
+
+.legal-document__warning {
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(216, 177, 85, 0.42);
+  border-radius: 0.85rem;
+  background: rgba(216, 177, 85, 0.08);
+  color: #e5d3a5;
+  line-height: 1.6;
+}
+
+.legal-document__navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 2rem 0 3rem;
+}
+.legal-document__navigation a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+.legal-document__navigation a:hover,
+.legal-document__navigation a:focus-visible { border-color: var(--gold); color: var(--gold-light); }
+
+.legal-document__sections { display: grid; gap: 1rem; counter-reset: legal-section; }
+.legal-document__sections > section {
+  padding: clamp(1.35rem, 3vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: rgba(18, 18, 18, 0.86);
+  break-inside: avoid;
+}
+.legal-document__sections h2 { margin: 0 0 1rem; color: var(--text); font-size: clamp(1.25rem, 3vw, 1.75rem); line-height: 1.2; }
+.legal-document__sections p { margin: 0.7rem 0 0; color: var(--text-soft); line-height: 1.75; }
+.legal-document__decisions { display: grid; gap: 0.5rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
+.legal-document__decisions li { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; align-items: baseline; padding: 0.7rem 0.8rem; border-left: 2px solid var(--gold); background: rgba(216, 177, 85, 0.06); }
+.legal-document__decisions strong { color: var(--gold-light); font-size: 0.66rem; letter-spacing: 0.08em; }
+.legal-document__decisions code { overflow-wrap: anywhere; color: var(--text-soft); font-size: 0.72rem; }
+.legal-document__footer { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--text-soft); }
+.legal-document__footer a { color: var(--gold-light); text-decoration: underline; text-underline-offset: 0.2em; }
+
+.legal-index__cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 2.5rem 0; }
+.legal-index__cards article { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; padding: clamp(1.35rem, 3vw, 2rem); border: 1px solid var(--line); border-radius: 1rem; background: #111; }
+.legal-index__cards h2 { margin: 0.4rem 0 0.8rem; font-size: clamp(1.4rem, 3vw, 2rem); }
+.legal-index__cards p:not(.eyebrow) { flex: 1; color: var(--text-soft); line-height: 1.65; }
+.legal-index__cards dl { width: 100%; margin: 1rem 0 1.5rem; }
+.legal-index__cards dl div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.55rem 0; border-top: 1px solid var(--line); }
+.legal-index__cards dt { color: #8f897d; }
+.legal-index__cards dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
+
+.withdrawal-form,
+.withdrawal-review,
+.withdrawal-receipt { margin-top: 2rem; padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: 1rem; background: #111; }
+.withdrawal-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.withdrawal-form label { display: grid; min-width: 0; gap: 0.45rem; color: var(--text); }
+.withdrawal-form label > span { font-size: 0.82rem; font-weight: 650; }
+.withdrawal-form input,
+.withdrawal-form select,
+.withdrawal-form textarea { width: 100%; min-height: 48px; padding: 0.8rem; border: 1px solid var(--line); border-radius: 0.65rem; background: #080808; color: var(--text); font: inherit; }
+.withdrawal-form textarea { resize: vertical; }
+.withdrawal-form input:focus-visible,
+.withdrawal-form select:focus-visible,
+.withdrawal-form textarea:focus-visible { border-color: var(--gold); outline: 2px solid rgba(216, 177, 85, 0.25); outline-offset: 2px; }
+.withdrawal-form__wide { grid-column: 1 / -1; }
+.withdrawal-form small,
+.withdrawal-form__privacy { color: #918c82; font-size: 0.76rem; line-height: 1.55; }
+.withdrawal-form__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
+.withdrawal-review h2 { margin: 0.45rem 0 1.3rem; }
+.withdrawal-review dl,
+.withdrawal-receipt dl { display: grid; gap: 0; margin: 0; }
+.withdrawal-review dl div,
+.withdrawal-receipt dl div { display: grid; grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr); gap: 1rem; padding: 0.75rem 0; border-top: 1px solid var(--line); }
+.withdrawal-review dt,
+.withdrawal-receipt dt { color: #8f897d; }
+.withdrawal-review dd,
+.withdrawal-receipt dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.withdrawal-review__declaration,
+.withdrawal-receipt blockquote { margin: 1.5rem 0; padding: 1rem; border-left: 2px solid var(--gold); background: rgba(216, 177, 85, 0.06); color: var(--text); line-height: 1.65; }
+
+@media (max-width: 700px) {
+  .legal-document,
+  .legal-index,
+  .withdrawal-page { padding-top: 6rem; }
+  .legal-document__metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .legal-index__cards,
+  .withdrawal-form__grid { grid-template-columns: 1fr; }
+  .withdrawal-form__wide { grid-column: auto; }
+  .withdrawal-review dl div,
+  .withdrawal-receipt dl div { grid-template-columns: 1fr; gap: 0.25rem; }
+  .withdrawal-form__actions .button { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 360px) {
+  .legal-document__metadata { grid-template-columns: 1fr; }
+  .legal-document__navigation { display: grid; }
+  .legal-document__navigation a { justify-content: center; }
+}
+
+@media print {
+  .site-header,
+  .quick-access,
+  .site-footer,
+  .legal-document__navigation,
+  .skip-link,
+  .withdrawal-form__actions { display: none !important; }
+  .legal-document,
+  .legal-index,
+  .withdrawal-page { padding: 0; background: #fff !important; color: #000 !important; }
+  .legal-document__container,
+  .withdrawal-page__container { max-width: none; }
+  .legal-document h1,
+  .legal-index h1,
+  .withdrawal-page h1 { color: #000 !important; font-size: 28pt; }
+  .legal-document__sections > section,
+  .legal-index__cards article,
+  .withdrawal-receipt { border-color: #bbb; background: #fff !important; color: #000 !important; }
+  .legal-document p,
+  .legal-document h2,
+  .legal-document dd,
+  .legal-document dt,
+  .withdrawal-receipt p,
+  .withdrawal-receipt dd,
+  .withdrawal-receipt dt { color: #000 !important; }
+  a { color: #000 !important; text-decoration: underline; }
+}

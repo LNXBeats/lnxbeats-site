@@ -311,6 +311,66 @@ enum ShopOrderLifecycleEventType {
   ORDER_SHIPPED
 }
 
+enum LegalDocumentType {
+  LEGAL_NOTICES
+  MUSIC_TERMS
+  SHOP_TERMS
+  PRIVACY_NOTICE
+  WITHDRAWAL_NOTICE
+}
+
+enum LegalDocumentStatus {
+  DRAFT
+  AWAITING_LEGAL_REVIEW
+  APPROVED
+  ACTIVE
+  RETIRED
+}
+
+enum ConsumerContractType {
+  MUSIC_ORDER
+  SHOP_ORDER
+}
+
+enum ConsumerWithdrawalStatus {
+  RECEIVED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum ConsumerWithdrawalEligibilityReview {
+  PENDING_REVIEW
+  ELIGIBLE
+  INELIGIBLE
+}
+
+enum ConsumerWithdrawalIdentityMatch {
+  MATCHED
+  UNMATCHED
+}
+
+enum ConsumerWithdrawalReturnStatus {
+  NOT_APPLICABLE
+  PENDING
+  AUTHORIZED
+  RECEIVED
+}
+
+enum ConsumerWithdrawalRefundStatus {
+  NOT_EVALUATED
+  NOT_REQUIRED
+  REFUND_REQUIRED
+  COMPLETED
+}
+
+enum ConsumerWithdrawalAcknowledgementStatus {
+  CAPTURED
+  SENT
+  FAILED
+}
+
 enum RightsRequestType {
   PUBLICATION_LICENSE
   EXPLOITATION_PARTNERSHIP
@@ -587,6 +647,8 @@ model User {
   shopOrders                   ShopOrder[]                 @relation("ShopOrderOwner")
   shopOrderEvents              ShopOrderEvent[]            @relation("ShopOrderEventActor")
   shopOrderLifecycleEvents     ShopOrderLifecycleEvent[]   @relation("ShopOrderLifecycleEventActor")
+  legalDocumentApprovals       LegalDocumentVersion[]      @relation("LegalDocumentApprover")
+  withdrawalReviews            ConsumerWithdrawalRequest[] @relation("ConsumerWithdrawalReviewer")
 
   @@index([role, status])
   @@map("users")
@@ -845,56 +907,57 @@ model ProjectAsset {
 }
 
 model Order {
-  id                         String                   @id @default(uuid()) @db.Uuid
-  orderNumber                String                   @unique @db.VarChar(32)
-  userId                     String?                  @db.Uuid
-  customerId                 String?                  @db.Uuid
-  customerEmail              String                   @db.VarChar(320)
-  customerName               String?                  @db.VarChar(200)
-  status                     OrderStatus              @default(DRAFT)
-  title                      String?                  @db.VarChar(240)
-  recipient                  String?                  @db.VarChar(200)
-  occasion                   String?                  @db.VarChar(200)
-  brief                      String                   @db.Text
-  musicalDirection           String?                  @db.Text
-  emotion                    String?                  @db.Text
-  importantDetails           String?                  @db.Text
-  wordsToInclude             String?                  @db.Text
-  avoid                      String?                  @db.Text
-  pronunciationNotes         String?                  @db.Text
+  id                         String                      @id @default(uuid()) @db.Uuid
+  orderNumber                String                      @unique @db.VarChar(32)
+  userId                     String?                     @db.Uuid
+  customerId                 String?                     @db.Uuid
+  customerEmail              String                      @db.VarChar(320)
+  customerName               String?                     @db.VarChar(200)
+  status                     OrderStatus                 @default(DRAFT)
+  title                      String?                     @db.VarChar(240)
+  recipient                  String?                     @db.VarChar(200)
+  occasion                   String?                     @db.VarChar(200)
+  brief                      String                      @db.Text
+  musicalDirection           String?                     @db.Text
+  emotion                    String?                     @db.Text
+  importantDetails           String?                     @db.Text
+  wordsToInclude             String?                     @db.Text
+  avoid                      String?                     @db.Text
+  pronunciationNotes         String?                     @db.Text
   illustrationFormat         OrderIllustrationFormat?
-  illustrationFormatCustom   String?                  @db.VarChar(240)
-  notes                      String?                  @db.Text
-  usage                      OrderUsage               @default(PERSONAL)
-  coverIncluded              Boolean                  @default(false)
-  priorityProcessing         Boolean                  @default(false)
-  basePriceCents             Int                      @default(5000)
-  coverPriceCents            Int                      @default(0)
-  priorityPriceCents         Int                      @default(0)
-  totalCents                 Int                      @default(5000)
-  currency                   String                   @default("EUR") @db.VarChar(3)
-  pricingVersion             String                   @default("2026-08-v1") @db.VarChar(32)
-  personalUseTermsVersion    String?                  @db.VarChar(48)
-  personalUseTermsHashSha256 String?                  @db.VarChar(64)
-  personalUseTermsAcceptedAt DateTime?                @db.Timestamptz(3)
-  contractRequired           Boolean                  @default(false)
-  revisionAllowance          Int                      @default(1)
-  revisionUsed               Int                      @default(0)
-  submittedAt                DateTime?                @db.Timestamptz(3)
-  serviceStartedAt           DateTime?                @db.Timestamptz(3)
-  deliveredAt                DateTime?                @db.Timestamptz(3)
-  downloadExpiresAt          DateTime?                @db.Timestamptz(3)
-  cancelledAt                DateTime?                @db.Timestamptz(3)
-  createdAt                  DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime                 @updatedAt @db.Timestamptz(3)
-  account                    User?                    @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
-  customer                   Customer?                @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  illustrationFormatCustom   String?                     @db.VarChar(240)
+  notes                      String?                     @db.Text
+  usage                      OrderUsage                  @default(PERSONAL)
+  coverIncluded              Boolean                     @default(false)
+  priorityProcessing         Boolean                     @default(false)
+  basePriceCents             Int                         @default(5000)
+  coverPriceCents            Int                         @default(0)
+  priorityPriceCents         Int                         @default(0)
+  totalCents                 Int                         @default(5000)
+  currency                   String                      @default("EUR") @db.VarChar(3)
+  pricingVersion             String                      @default("2026-08-v1") @db.VarChar(32)
+  personalUseTermsVersion    String?                     @db.VarChar(48)
+  personalUseTermsHashSha256 String?                     @db.VarChar(64)
+  personalUseTermsAcceptedAt DateTime?                   @db.Timestamptz(3)
+  contractRequired           Boolean                     @default(false)
+  revisionAllowance          Int                         @default(1)
+  revisionUsed               Int                         @default(0)
+  submittedAt                DateTime?                   @db.Timestamptz(3)
+  serviceStartedAt           DateTime?                   @db.Timestamptz(3)
+  deliveredAt                DateTime?                   @db.Timestamptz(3)
+  downloadExpiresAt          DateTime?                   @db.Timestamptz(3)
+  cancelledAt                DateTime?                   @db.Timestamptz(3)
+  createdAt                  DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                    @updatedAt @db.Timestamptz(3)
+  account                    User?                       @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
+  customer                   Customer?                   @relation(fields: [customerId], references: [id], onDelete: SetNull)
   events                     OrderEvent[]
   assets                     OrderAsset[]
   rightsRequests             RightsRequest[]
   commercialLicenses         CommercialLicense[]
   payments                   Payment[]
   notifications              OrderNotification[]
+  withdrawalRequests         ConsumerWithdrawalRequest[]
 
   @@index([status, createdAt])
   @@index([userId])
@@ -1578,54 +1641,121 @@ model ProductAuditEvent {
 }
 
 model ShopOrder {
-  id                       String                    @id @default(uuid()) @db.Uuid
-  orderNumber              String                    @unique @db.VarChar(32)
-  userId                   String                    @db.Uuid
-  creationToken            String                    @db.Uuid
-  requestFingerprintSha256 String                    @db.Char(64)
-  status                   ShopOrderStatus           @default(OPEN)
-  paymentStatus            ShopPaymentStatus         @default(AWAITING_PAYMENT)
-  fulfillmentStatus        ShopFulfillmentStatus     @default(PENDING)
-  currency                 String                    @default("EUR") @db.VarChar(3)
+  id                       String                      @id @default(uuid()) @db.Uuid
+  orderNumber              String                      @unique @db.VarChar(32)
+  userId                   String                      @db.Uuid
+  creationToken            String                      @db.Uuid
+  requestFingerprintSha256 String                      @db.Char(64)
+  status                   ShopOrderStatus             @default(OPEN)
+  paymentStatus            ShopPaymentStatus           @default(AWAITING_PAYMENT)
+  fulfillmentStatus        ShopFulfillmentStatus       @default(PENDING)
+  currency                 String                      @default("EUR") @db.VarChar(3)
   subtotalCents            Int
   shippingCents            Int
   totalCents               Int
-  shippingRequired         Boolean                   @default(false)
-  shippingFirstName        String?                   @db.VarChar(100)
-  shippingLastName         String?                   @db.VarChar(100)
-  shippingAddressLine1     String?                   @db.VarChar(240)
-  shippingAddressLine2     String?                   @db.VarChar(240)
-  shippingPostalCode       String?                   @db.VarChar(32)
-  shippingCity             String?                   @db.VarChar(120)
-  shippingCountryCode      String?                   @db.Char(2)
-  termsVersion             String?                   @db.VarChar(64)
-  termsHashSha256          String?                   @db.Char(64)
-  termsAcceptedAt          DateTime?                 @db.Timestamptz(3)
-  reservationExpiresAt     DateTime                  @db.Timestamptz(3)
-  paidAt                   DateTime?                 @db.Timestamptz(3)
-  paymentReviewAt          DateTime?                 @db.Timestamptz(3)
-  paymentReviewCode        String?                   @db.VarChar(80)
-  preparingAt              DateTime?                 @db.Timestamptz(3)
-  shippedAt                DateTime?                 @db.Timestamptz(3)
-  shippingCarrier          String?                   @db.VarChar(120)
-  trackingNumber           String?                   @db.VarChar(160)
-  trackingUrl              String?                   @db.VarChar(1000)
-  expiredAt                DateTime?                 @db.Timestamptz(3)
-  cancelledAt              DateTime?                 @db.Timestamptz(3)
-  createdAt                DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime                  @updatedAt @db.Timestamptz(3)
-  user                     User                      @relation("ShopOrderOwner", fields: [userId], references: [id], onDelete: Restrict)
+  shippingRequired         Boolean                     @default(false)
+  shippingFirstName        String?                     @db.VarChar(100)
+  shippingLastName         String?                     @db.VarChar(100)
+  shippingAddressLine1     String?                     @db.VarChar(240)
+  shippingAddressLine2     String?                     @db.VarChar(240)
+  shippingPostalCode       String?                     @db.VarChar(32)
+  shippingCity             String?                     @db.VarChar(120)
+  shippingCountryCode      String?                     @db.Char(2)
+  termsVersion             String?                     @db.VarChar(64)
+  termsHashSha256          String?                     @db.Char(64)
+  termsAcceptedAt          DateTime?                   @db.Timestamptz(3)
+  reservationExpiresAt     DateTime                    @db.Timestamptz(3)
+  paidAt                   DateTime?                   @db.Timestamptz(3)
+  paymentReviewAt          DateTime?                   @db.Timestamptz(3)
+  paymentReviewCode        String?                     @db.VarChar(80)
+  preparingAt              DateTime?                   @db.Timestamptz(3)
+  shippedAt                DateTime?                   @db.Timestamptz(3)
+  shippingCarrier          String?                     @db.VarChar(120)
+  trackingNumber           String?                     @db.VarChar(160)
+  trackingUrl              String?                     @db.VarChar(1000)
+  expiredAt                DateTime?                   @db.Timestamptz(3)
+  cancelledAt              DateTime?                   @db.Timestamptz(3)
+  createdAt                DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                    @updatedAt @db.Timestamptz(3)
+  user                     User                        @relation("ShopOrderOwner", fields: [userId], references: [id], onDelete: Restrict)
   items                    ShopOrderItem[]
   events                   ShopOrderEvent[]
   lifecycleEvents          ShopOrderLifecycleEvent[]
   payments                 Payment[]
   notifications            OrderNotification[]
+  withdrawalRequests       ConsumerWithdrawalRequest[]
 
   @@unique([userId, creationToken])
   @@index([userId, createdAt])
   @@index([status, paymentStatus, reservationExpiresAt])
   @@index([fulfillmentStatus, createdAt])
   @@map("shop_orders")
+}
+
+model LegalDocumentVersion {
+  id                   String                @id @default(uuid()) @db.Uuid
+  type                 LegalDocumentType
+  version              String                @db.VarChar(80)
+  hashSha256           String                @db.Char(64)
+  status               LegalDocumentStatus   @default(DRAFT)
+  effectiveAt          DateTime?             @db.Timestamptz(3)
+  approvedByUserId     String?               @db.Uuid
+  approvedAt           DateTime?             @db.Timestamptz(3)
+  replacesVersionId    String?               @unique @db.Uuid
+  legalReviewReference String?               @db.VarChar(240)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @db.Timestamptz(3)
+  approvedBy           User?                 @relation("LegalDocumentApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  replaces             LegalDocumentVersion? @relation("LegalDocumentReplacement", fields: [replacesVersionId], references: [id], onDelete: Restrict)
+  replacedBy           LegalDocumentVersion? @relation("LegalDocumentReplacement")
+
+  @@unique([type, version])
+  @@index([type, status, createdAt])
+  @@index([approvedByUserId])
+  @@map("legal_document_versions")
+}
+
+model ConsumerWithdrawalRequest {
+  id                        String                                  @id @default(uuid()) @db.Uuid
+  requestNumber             String                                  @unique @db.VarChar(32)
+  publicReceiptTokenHash    String                                  @unique @db.Char(64)
+  deduplicationHashSha256   String                                  @unique @db.Char(64)
+  contractType              ConsumerContractType
+  claimedOrderReference     String                                  @db.VarChar(64)
+  orderId                   String?                                 @db.Uuid
+  shopOrderId               String?                                 @db.Uuid
+  identityMatch             ConsumerWithdrawalIdentityMatch
+  claimantFirstName         String                                  @db.VarChar(100)
+  claimantLastName          String                                  @db.VarChar(100)
+  claimantEmail             String                                  @db.VarChar(320)
+  productDescription        String                                  @db.VarChar(500)
+  quantity                  Int?
+  reason                    String?                                 @db.VarChar(1000)
+  declarationText           String                                  @db.Text
+  receivedAt                DateTime                                @db.Timestamptz(3)
+  status                    ConsumerWithdrawalStatus                @default(RECEIVED)
+  eligibilityReview         ConsumerWithdrawalEligibilityReview     @default(PENDING_REVIEW)
+  reviewedAt                DateTime?                               @db.Timestamptz(3)
+  reviewedByUserId          String?                                 @db.Uuid
+  acknowledgementStatus     ConsumerWithdrawalAcknowledgementStatus @default(CAPTURED)
+  acknowledgementSnapshot   Json
+  acknowledgementHashSha256 String                                  @db.Char(64)
+  acknowledgementCreatedAt  DateTime                                @db.Timestamptz(3)
+  acknowledgementSentAt     DateTime?                               @db.Timestamptz(3)
+  termsVersion              String?                                 @db.VarChar(80)
+  returnStatus              ConsumerWithdrawalReturnStatus          @default(NOT_APPLICABLE)
+  refundStatus              ConsumerWithdrawalRefundStatus          @default(NOT_EVALUATED)
+  createdAt                 DateTime                                @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                                @updatedAt @db.Timestamptz(3)
+  order                     Order?                                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shopOrder                 ShopOrder?                              @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  reviewedBy                User?                                   @relation("ConsumerWithdrawalReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, receivedAt])
+  @@index([orderId, receivedAt])
+  @@index([shopOrderId, receivedAt])
+  @@index([reviewedByUserId])
+  @@map("consumer_withdrawal_requests")
 }
 
 model ShopOrderItem {

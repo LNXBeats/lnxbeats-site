@@ -9,6 +9,7 @@ const MIGRATIONS_DIRECTORY = path.join(process.cwd(), "prisma", "migrations");
 const NOTIFICATION_ENUM_MIGRATION = "20260821120000_transactional_notifications";
 const SHOP_MIGRATION = "20260827180000_shop_commerce_foundation";
 const SHOP_PAYMENT_MIGRATION = "20260827220000_shop_payment_fulfillment_foundation";
+const LEGAL_COMPLIANCE_MIGRATION = "20260828120000_legal_compliance_foundation";
 
 async function directories() {
   return (await readdir(MIGRATIONS_DIRECTORY, { withFileTypes: true }))
@@ -52,8 +53,9 @@ test("Shop commerce is the twentieth additive migration and contains no destruct
 
 test("Shop payments are the twenty-first migration and preserve existing ledgers", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.length, 21);
-  assert.equal(migrationDirectories.at(-1), SHOP_PAYMENT_MIGRATION);
+  assert.equal(migrationDirectories.length, 22);
+  assert.equal(migrationDirectories.at(-2), SHOP_PAYMENT_MIGRATION);
+  assert.equal(migrationDirectories.at(-1), LEGAL_COMPLIANCE_MIGRATION);
   const sql = await readFile(
     path.join(MIGRATIONS_DIRECTORY, SHOP_PAYMENT_MIGRATION, "migration.sql"),
     "utf8",
@@ -71,7 +73,9 @@ test("the 20 to 21 migration preserves Phase 2 Product, ShopOrder and Notificati
   const database = new PGlite();
   try {
     const migrationDirectories = await directories();
-    for (const directory of migrationDirectories.slice(0, -1)) await apply(database, directory);
+    const shopPaymentMigrationIndex = migrationDirectories.indexOf(SHOP_PAYMENT_MIGRATION);
+    assert.equal(shopPaymentMigrationIndex, 20);
+    for (const directory of migrationDirectories.slice(0, shopPaymentMigrationIndex)) await apply(database, directory);
 
     await database.exec(`
       INSERT INTO "users" (
@@ -176,7 +180,7 @@ test("the 20 to 21 migration preserves Phase 2 Product, ShopOrder and Notificati
 test("fresh migrations enforce ShopOrder totals, address and reservation lifecycle", async () => {
   const { database, migrationDirectories } = await migratedDatabase();
   try {
-    assert.equal(migrationDirectories.length, 21);
+    assert.equal(migrationDirectories.length, 22);
     const tables = await database.query<{ table_name: string }>(`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public'
@@ -281,7 +285,7 @@ test("fresh migrations enforce ShopOrder totals, address and reservation lifecyc
 test("Phase 3 enforces Shop payment parents, winner, terms and lifecycle audit", async () => {
   const { database, migrationDirectories } = await migratedDatabase();
   try {
-    assert.equal(migrationDirectories.length, 21);
+    assert.equal(migrationDirectories.length, 22);
     await database.exec(`
       INSERT INTO "users" (
         "id", "email", "displayName", "role", "status", "emailVerified", "emailVerifiedAt", "createdAt", "updatedAt"

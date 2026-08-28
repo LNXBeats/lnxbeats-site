@@ -39,8 +39,9 @@ test("shared checkout UI keeps provider actions isolated without adding wallet l
   assert.match(choices, /data-payment-provider=\{provider\}/);
   assert.match(choices, /provider === "stripe"[\s\S]*?<StripeCheckoutAction[\s\S]*?: <PaypalCheckoutAction/);
   assert.doesNotMatch(choices, /Carte bancaire — Stripe/);
-  assert.match(stripe, /checkoutPaymentCtaLabel\("stripe", amountCents\)/);
-  assert.match(paypal, /checkoutPaymentCtaLabel\("paypal", amountCents\)/);
+  assert.match(stripe, /checkoutPaymentCtaLabel\("stripe", amountCents, target\)/);
+  assert.match(paypal, /checkoutPaymentCtaLabel\("paypal", amountCents, target\)/);
+  assert.match(choices, /target=\{target\}/);
   assert.doesNotMatch(`${choices}\n${stripe}\n${paypal}`, /ApplePaySession|PaymentRequest|Elements|loadStripe/);
   assert.match(css, /\.payment-methods__actions \{[^}]*repeat\(auto-fit, minmax\(min\(100%, 19rem\), 1fr\)\)/);
   assert.match(css, /\.payment-methods__choice \{[\s\S]*?height: 100%;/);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
 import test from "node:test";
 
 import type { PrismaClient } from "@/generated/prisma/client";
@@ -13,6 +14,8 @@ import { runProductionPaymentPreflight } from "@/lib/payments/production-preflig
 const liveSecretKey = ["sk", "live", "production-readiness-fixture"].join("_");
 const livePublishableKey = ["pk", "live", "production-readiness-fixture"].join("_");
 const webhookSecret = ["whsec", "production-readiness-fixture"].join("_");
+const migrationCount = readdirSync("prisma/migrations", { withFileTypes: true })
+  .filter((entry) => entry.isDirectory()).length;
 
 const productionBase = {
   PAYMENT_DEPLOYMENT_ENV: "production",
@@ -47,7 +50,7 @@ function databaseFixture(options: Readonly<{
   return {
     $queryRaw: async () => {
       query += 1;
-      if (query === 1) return [{ count: 21n }];
+      if (query === 1) return [{ count: BigInt(migrationCount) }];
       if (query === 2) return [{ count: 0n }];
       return [
         { table_name: "payments", column_name: "mode" },

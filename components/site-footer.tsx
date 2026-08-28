@@ -70,6 +70,9 @@ export function SiteFooter() {
             <Link href="/mentions-legales">Mentions légales</Link>
             <Link href="/confidentialite">Confidentialité</Link>
             <Link href="/cgv">CGV</Link>
+            <Link href="/retractation">Rétractation</Link>
+            <Link href="/contact">Contact</Link>
+            <a href="https://www.cm2c.net/" target="_blank" rel="noopener noreferrer">Médiation CM2C</a>
           </nav>
         </div>
       </Container>

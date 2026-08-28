@@ -9,6 +9,7 @@ import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { qaAccessAvailable } from "@/lib/auth/qa-access";
 import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
+import { listMemberWithdrawalRequests } from "@/lib/legal/withdrawal";
 import { clientOrderAction, clientPaymentPresentation } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { listMemberOrders } from "@/lib/orders/service";
@@ -40,10 +41,11 @@ export default async function AccountPage() {
     status: "ACTIVE",
     emailVerified: true,
   };
-  const [orders, rightsRequests, shopOrders] = await runSequentialDatabaseQueries(
+  const [orders, rightsRequests, shopOrders, withdrawalRequests] = await runSequentialDatabaseQueries(
     () => listMemberOrders(actor),
     () => listRightsRequestsForActor(actor),
     () => listMemberShopOrders(session.user.id),
+    () => listMemberWithdrawalRequests(session.user.id),
   );
   const drafts = orders.filter((order) => order.status === "DRAFT");
   const awaitingPayment = orders.filter((order) => order.status === "AWAITING_PAYMENT");
@@ -128,6 +130,39 @@ export default async function AccountPage() {
           <section className="member-orders rights-account" aria-labelledby="account-rights-title">
             <div className="member-orders__heading"><div><p className="auth-panel__label">Droits et autorisations</p><h2 id="account-rights-title">Vos demandes contractuelles.</h2></div></div>
             {!rightsRequests.length ? <div className="member-orders__empty"><p><strong>Aucune demande de droits.</strong><br />Les options apparaissent après la livraison d’une création.</p></div> : <ul className="member-order-list">{rightsRequests.map((request) => { const presentation = rightsStatusPresentation[request.status]; return <li key={request.requestNumber}><Link href={`/compte/droits/${request.requestNumber}`}><span><strong>{request.type === "PUBLICATION_LICENSE" ? "Licence de publication" : "Partenariat d’exploitation"}</strong><small>{request.requestNumber} · {request.orderNumber}</small></span><span><em>{presentation.label}</em><small>{presentation.action}</small><strong>{formatEuro(request.requestedPriceCents)}</strong></span></Link><p><strong>Création :</strong> {request.workTitle}. <strong>Paiement :</strong> non disponible dans cette version.</p></li>; })}</ul>}
+          </section>
+
+          <section className="member-orders" aria-labelledby="account-withdrawals-title">
+            <div className="member-orders__heading">
+              <div>
+                <p className="auth-panel__label">Rétractation</p>
+                <h2 id="account-withdrawals-title">Vos demandes enregistrées.</h2>
+              </div>
+              <Link className="button button--quiet" href="/retractation">Exercer mon droit</Link>
+            </div>
+            {!withdrawalRequests.length ? (
+              <div className="member-orders__empty">
+                <p><strong>Aucune demande enregistrée.</strong><br />Le formulaire reste accessible sans connexion et n’exige aucun motif.</p>
+              </div>
+            ) : (
+              <ul className="member-order-list">
+                {withdrawalRequests.map((request) => (
+                  <li key={request.requestNumber}>
+                    <div>
+                      <span>
+                        <strong>{request.contractType === "SHOP_ORDER" ? "Commande Boutique" : "Création musicale"}</strong>
+                        <small>{request.requestNumber} · reçue le {new Date(request.receivedAt).toLocaleDateString("fr-FR")}</small>
+                      </span>
+                      <span>
+                        <em>{request.status === "RECEIVED" ? "Reçue" : request.status === "UNDER_REVIEW" ? "En cours d’examen" : request.status === "ACCEPTED" ? "Acceptée" : request.status === "REJECTED" ? "Non éligible" : "Annulée"}</em>
+                        <small>{request.eligibilityReview === "PENDING_REVIEW" ? "Éligibilité à vérifier" : request.eligibilityReview === "ELIGIBLE" ? "Éligibilité confirmée" : "Éligibilité non confirmée"}</small>
+                      </span>
+                    </div>
+                    <p><strong>Commande déclarée :</strong> {request.claimedOrderReference}. Accusé persistant archivé sous empreinte SHA-256.</p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="account-settings" aria-labelledby="account-settings-title">

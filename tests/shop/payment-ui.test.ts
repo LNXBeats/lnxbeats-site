@@ -19,7 +19,7 @@ test("Shop payment reuses the premium shell with a non-prechecked legal acceptan
   assert.match(shell, /target = "music"/);
   assert.match(shell, /useState\(false\)/);
   assert.match(shell, /J’ai lu et j’accepte les/);
-  assert.match(shell, /href="\/cgv"/);
+  assert.match(shell, /href="\/cgv\/boutique"/);
   assert.match(page, /target="shop"/);
   assert.match(page, /shopPaymentProvidersAvailable/);
   assert.match(stripe, /\/api\/shop\/orders\/\$\{encodeURIComponent\(orderNumber\)\}\/payments\/stripe\/checkout/);
@@ -37,6 +37,7 @@ test("the member account sequences music, rights, and Shop reads on the shared d
   assert.match(account, /\(\) => listMemberOrders\(actor\)/);
   assert.match(account, /\(\) => listRightsRequestsForActor\(actor\)/);
   assert.match(account, /\(\) => listMemberShopOrders\(session\.user\.id\)/);
+  assert.match(account, /\(\) => listMemberWithdrawalRequests\(session\.user\.id\)/);
   assert.doesNotMatch(account, /Promise\.all\(\[\s*listMemberOrders\(actor\)/);
 });
 

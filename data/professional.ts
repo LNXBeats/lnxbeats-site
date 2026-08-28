@@ -1,10 +1,16 @@
 export const professionalInformation = {
-  name: "Ludovic Mathon",
+  name: "Ludovic Mickaël Mathon",
   artisticName: "LNX Beats",
+  serviceName: "LNX STUDIO",
   legalForm: "Entrepreneur individuel",
-  activity: "Autre création artistique — 9003B",
+  activity: "Auteur-compositeur, auteur de textes et créateur d’œuvres musicales originales, avec ou sans paroles, sous le nom LNX Beats. Vente accessoire de produits physiques liés à l’activité artistique.",
+  apeCodeCommunicated: "9003B",
   siren: "106 870 850",
   siret: "106 870 850 00018",
   vatNumberCommunicated: "FR14106870850",
+  addressLines: ["35 Impasse des Orties", "07370 Ozon", "France"],
+  email: "lnx.beats.pro@gmail.com",
+  phone: "06 71 66 70 32",
+  publicationDirector: "Ludovic Mickaël Mathon",
   vatNotice: "Le régime effectif de TVA applicable aux ventes doit être vérifié avant activation du paiement et de la facturation.",
 } as const;

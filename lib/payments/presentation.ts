@@ -52,8 +52,13 @@ export function enabledCheckoutPaymentProviders(
   return enabled;
 }
 
-export function checkoutPaymentCtaLabel(provider: CheckoutPaymentProvider, amountCents: number) {
+export function checkoutPaymentCtaLabel(
+  provider: CheckoutPaymentProvider,
+  amountCents: number,
+  target: "music" | "shop" = "music",
+) {
   const amount = formatEuro(amountCents);
+  if (target === "shop") return `Payer ${amount} — commande avec obligation de paiement`;
   return provider === "stripe"
     ? `Payer ${amount} en toute sécurité`
     : `Payer ${amount} avec PayPal`;

@@ -75,7 +75,7 @@ export function PaypalCheckoutAction({
   return (
     <div className="checkout-action">
       <button className="form-button" type="button" onClick={startCheckout} disabled={pending}>
-        {pending ? "Préparation PayPal…" : checkoutPaymentCtaLabel("paypal", amountCents)}
+        {pending ? "Préparation PayPal…" : checkoutPaymentCtaLabel("paypal", amountCents, target)}
       </button>
       <small>{checkoutPaymentChoicePresentation.paypal.assurance}</small>
       {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}

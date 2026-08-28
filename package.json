@@ -56,6 +56,8 @@
     "test:security": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/security/*.test.ts",
     "test:pricing": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/pricing/*.test.ts",
     "test:shop": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/shop/*.test.ts",
+    "test:legal": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/legal/*.test.ts",
+    "test:legal:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-legal-runtime.ts",
     "test:shop-pricing:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-shop-pricing-runtime.ts",
     "test:shop-order:runtime": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase2-qa.local --import tsx scripts/test-shop-order-runtime.ts",
     "shop:phase2:migrate": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase2-qa.local --import tsx scripts/shop-phase2-migrate.ts",

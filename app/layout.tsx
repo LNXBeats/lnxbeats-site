@@ -11,6 +11,7 @@ import "./v064-quick-access.css";
 import "./v072-rights.css";
 import "./v085-mobile-polish.css";
 import "./v0854-audio-payment.css";
+import "./legal-compliance.css";
 
 const siteUrl = process.env.SITE_URL ?? siteConfig.url;
 const socialImage = new URL("/og.png", siteUrl).toString();

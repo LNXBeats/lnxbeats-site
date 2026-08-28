@@ -17,6 +17,7 @@ export default function robots(): MetadataRoute.Robots {
         "/verifier-email",
         "/compte",
         "/admin",
+        "/retractation/confirmation",
       ],
     },
     sitemap: `${baseUrl}/sitemap.xml`,

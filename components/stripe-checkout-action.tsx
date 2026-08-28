@@ -74,7 +74,7 @@ export function StripeCheckoutAction({
   return (
     <div className={compact ? "checkout-action checkout-action--compact" : "checkout-action"}>
       <button className="form-button form-button--primary" type="button" onClick={startCheckout} disabled={pending}>
-        {pending ? "Préparation sécurisée…" : checkoutPaymentCtaLabel("stripe", amountCents)}
+        {pending ? "Préparation sécurisée…" : checkoutPaymentCtaLabel("stripe", amountCents, target)}
       </button>
       <small>{checkoutPaymentChoicePresentation.stripe.assurance}</small>
       {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}

@@ -49,7 +49,7 @@ export function PaymentCheckoutActions({
               onChange={(event) => setTermsAccepted(event.target.checked)}
             />
             <span>
-              J’ai lu et j’accepte les <Link href="/cgv" target="_blank" rel="noreferrer">Conditions Générales de Vente</Link>.
+              J’ai lu et j’accepte les <Link href="/cgv/boutique" target="_blank" rel="noreferrer">Conditions Générales de Vente de la Boutique</Link>.
             </span>
           </label>
         ) : null}
