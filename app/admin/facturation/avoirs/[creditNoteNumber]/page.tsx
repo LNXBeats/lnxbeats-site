@@ -21,7 +21,7 @@ export default async function AdminCreditNotePage({ params }: { params: Promise<
     <section className="admin-panel">
       <dl className="admin-definition-grid"><div><dt>Émission</dt><dd>{creditNote.issuedAt.toLocaleString("fr-FR")}</dd></div><div><dt>Facture source</dt><dd>{creditNote.invoice.invoiceNumber}<small>{creditNote.invoice.orderNumberSnapshot}</small></dd></div><div><dt>Montant</dt><dd>{formatEuro(creditNote.amountCents)}</dd></div><div><dt>Avoirs cumulés</dt><dd>{formatEuro(creditNote.cumulativeCreditedCents)}</dd></div><div><dt>Solde documentaire restant</dt><dd>{formatEuro(creditNote.remainingBalanceCents)}</dd></div><div><dt>Motif</dt><dd>{creditNote.reasonCode}</dd></div><div><dt>Empreinte</dt><dd><code>{creditNote.snapshotHashSha256}</code></dd></div></dl>
       <p className="admin-alert">DOCUMENT QA — SANS VALEUR COMPTABLE. Aucun bouton de modification ou suppression n’est exposé.</p>
-      <p className="admin-action-row"><a className="admin-button" href={`/api/billing/credit-notes/${encodeURIComponent(creditNote.creditNoteNumber)}/pdf`}>TÉLÉCHARGER LE PDF</a><Link className="admin-button admin-button--quiet" href={`/admin/facturation/${encodeURIComponent(creditNote.invoice.invoiceNumber)}`}>VOIR LA FACTURE SOURCE</Link></p>
+      <div className="admin-action-row" role="group" aria-label="Actions du document"><a className="admin-button admin-button--primary" href={`/api/billing/credit-notes/${encodeURIComponent(creditNote.creditNoteNumber)}/pdf`}>TÉLÉCHARGER LE PDF</a><Link className="admin-button admin-button--quiet" href={`/admin/facturation/${encodeURIComponent(creditNote.invoice.invoiceNumber)}`}>VOIR LA FACTURE SOURCE</Link></div>
     </section>
   </main>;
 }

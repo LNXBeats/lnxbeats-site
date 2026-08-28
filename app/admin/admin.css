@@ -131,6 +131,9 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-rights textarea, .admin-rights-detail textarea { min-height: 110px; resize: vertical; }
 .admin-rights :is(input,select,textarea):focus-visible, .admin-rights-detail :is(input,select,textarea):focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 2px; }
 .admin-button { display: inline-flex; width: fit-content; min-height: 46px; align-items: center; justify-content: center; padding: .7rem 1rem; border: 1px solid rgba(214,179,106,.5); border-radius: 12px; background: rgba(214,179,106,.1); color: #ead39f; font-size: .7rem; font-weight: 800; letter-spacing: .04em; }
+.admin-button--primary { border-color: #d6b36a; background: linear-gradient(115deg, #b78e44, #e4c985); color: #11100e; box-shadow: 0 12px 28px rgba(214,179,106,.16); transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+.admin-button--primary:is(:hover, :focus-visible) { background: linear-gradient(115deg, #c89e52, #f1d99f); box-shadow: 0 16px 34px rgba(214,179,106,.24); transform: translateY(-2px); }
+.admin-button--primary:active { box-shadow: 0 7px 18px rgba(214,179,106,.14); transform: translateY(0) scale(.985); }
 .admin-button--quiet { border-color: rgba(244,240,232,.2); background: transparent; color: #b7b1a7; }
 .admin-button--danger { border-color: rgba(214,110,94,.55); color: #ffc4b8; }
 .admin-table-wrap { overflow-x: auto; margin-top: 1.3rem; }
@@ -729,6 +732,7 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .admin-button--primary { transition: none; }
   .admin-back-link .link-icon { transition: none; }
   .admin-header__nav { scroll-behavior: auto; scroll-snap-type: none; }
 }

@@ -164,6 +164,36 @@ test("Admin billing supports invoice, credit-note, order, customer and date look
   assert.doesNotMatch(`${list}${detail}${credit}`, />\s*Supprimer\s*</i);
 });
 
+test("billing document pages expose one accessible premium PDF action before quiet navigation", async () => {
+  const memberInvoice = await read("app/compte/factures/[invoiceNumber]/page.tsx");
+  const memberCredit = await read("app/compte/avoirs/[creditNoteNumber]/page.tsx");
+  const adminInvoice = await read("app/admin/facturation/[invoiceNumber]/page.tsx");
+  const adminCredit = await read("app/admin/facturation/avoirs/[creditNoteNumber]/page.tsx");
+  const globalCss = await read("app/globals.css");
+  const adminCss = await read("app/admin/admin.css");
+
+  for (const source of [memberInvoice, memberCredit]) {
+    assert.match(source, /className="billing-document-actions" role="group" aria-label="Actions du document"/);
+    assert.match(source, /className="button button--primary billing-document-download"/);
+    assert.match(source, /className="button button--quiet"/);
+    assert.equal((source.match(/Télécharger le PDF/g) ?? []).length, 1);
+  }
+  assert.match(memberInvoice, /\/api\/billing\/invoices\/.*\/pdf/);
+  assert.match(memberCredit, /\/api\/billing\/credit-notes\/.*\/pdf/);
+
+  for (const source of [adminInvoice, adminCredit]) {
+    assert.match(source, /className="admin-action-row" role="group" aria-label="Actions du document"/);
+    assert.match(source, /className="admin-button admin-button--primary"/);
+    assert.match(source, /className="admin-button admin-button--quiet"/);
+    assert.equal((source.match(/TÉLÉCHARGER LE PDF/g) ?? []).length, 1);
+  }
+  assert.match(globalCss, /\.billing-document-download:is\(:hover, :focus-visible\)/);
+  assert.match(globalCss, /\.billing-document-download:active/);
+  assert.match(globalCss, /\.billing-document-actions \.button \{ width: 100%; \}/);
+  assert.match(adminCss, /\.admin-button--primary:is\(:hover, :focus-visible\)/);
+  assert.match(adminCss, /\.admin-button--primary:active/);
+});
+
 test("billing PDF layout reserves non-overlapping metadata, QA banner, body and footer bands", () => {
   assert.ok(billingPdfLayout.metadataY + billingPdfLayout.metadataHeight < billingPdfLayout.qaBannerY);
   assert.ok(billingPdfLayout.qaBannerY + billingPdfLayout.qaBannerHeight < billingPdfLayout.qaBodyY);
