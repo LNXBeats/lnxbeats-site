@@ -47,6 +47,22 @@ const dark = "#151515";
 const gray = "#5d5d5d";
 const qaWatermark = "DOCUMENT QA — SANS VALEUR COMPTABLE";
 
+export const billingPdfLayout = Object.freeze({
+  pageWidth: PAGE.width,
+  pageHeight: PAGE.height,
+  safePrintMargin: margin,
+  titleY: 68,
+  metadataY: 101,
+  metadataHeight: 11,
+  qaBannerY: 126,
+  qaBannerHeight: 34,
+  qaBodyY: 180,
+  standardBodyY: 128,
+  continuationBodyY: 68,
+  footerY: 779,
+  footerHeight: 10,
+});
+
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} is invalid.`);
   return value as Record<string, unknown>;
@@ -100,26 +116,70 @@ function frenchDate(value: Date) {
 }
 
 async function render(title: string, number: string, issuedAt: Date, hash: string, qa: boolean, body: (document: PDFKit.PDFDocument) => void) {
-  const document = new PDFDocument({ size: "A4", margin, compress: true, info: { Title: `${title} ${number}`, Author: "LNX Beats", Creator: "LNX STUDIO V1.1.0", CreationDate: issuedAt, ModDate: issuedAt } });
+  const document = new PDFDocument({
+    size: "A4",
+    bufferPages: true,
+    margins: { top: margin, right: margin, bottom: 96, left: margin },
+    compress: true,
+    info: { Title: `${title} ${number}`, Author: "LNX Beats", Creator: "LNX STUDIO V1.1.0", CreationDate: issuedAt, ModDate: issuedAt },
+  });
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const completion = new Promise<Buffer>((resolve, reject) => { document.on("end", () => resolve(Buffer.concat(chunks))); document.on("error", reject); });
-  document.rect(0, 0, PAGE.width, 10).fill(gold);
-  document.fillColor(dark).font("Helvetica-Bold").fontSize(12).text("LNX STUDIO", margin, 34);
-  document.fillColor(gray).font("Helvetica").fontSize(9).text(number, PAGE.width - margin - 220, 36, { width: 220, align: "right" });
-  document.moveDown(2.2);
-  document.fillColor(dark).font("Helvetica-Bold").fontSize(24).text(title);
-  document.fillColor(gray).font("Helvetica").fontSize(9).text(`Émis le ${frenchDate(issuedAt)} · Empreinte ${hash.slice(0, 16).toUpperCase()}`);
+
+  function drawPageChrome() {
+    document.save();
+    document.rect(0, 0, PAGE.width, 10).fill(gold);
+    document.fillColor(dark).font("Helvetica-Bold").fontSize(12).text("LNX STUDIO", margin, 34, { lineBreak: false });
+    document.fillColor(gray).font("Helvetica").fontSize(9).text(number, PAGE.width - margin - 220, 36, { width: 220, align: "right", lineBreak: false });
+    document.restore();
+  }
+
+  document.on("pageAdded", () => {
+    drawPageChrome();
+    document.x = margin;
+    document.y = billingPdfLayout.continuationBodyY;
+  });
+
+  drawPageChrome();
+  document.fillColor(dark).font("Helvetica-Bold").fontSize(24).text(title, margin, billingPdfLayout.titleY, { lineBreak: false });
+  document.fillColor(gray).font("Helvetica").fontSize(9).text(
+    `Émis le ${frenchDate(issuedAt)} · Empreinte ${hash.slice(0, 16).toUpperCase()}`,
+    margin,
+    billingPdfLayout.metadataY,
+    { width: PAGE.width - margin * 2, lineBreak: false },
+  );
   if (qa) {
-    document.moveDown(.8);
-    document.roundedRect(margin, document.y, PAGE.width - margin * 2, 34, 6).fill("#fff1d6");
-    document.fillColor("#704708").font("Helvetica-Bold").fontSize(10).text(qaWatermark, margin + 12, document.y - 23, { width: PAGE.width - margin * 2 - 24, align: "center" });
-    document.moveDown(2.2);
-  } else document.moveDown(1.2);
+    document.roundedRect(margin, billingPdfLayout.qaBannerY, PAGE.width - margin * 2, billingPdfLayout.qaBannerHeight, 6).fill("#fff1d6");
+    document.fillColor("#704708").font("Helvetica-Bold").fontSize(10).text(
+      qaWatermark,
+      margin + 12,
+      billingPdfLayout.qaBannerY + 12,
+      { width: PAGE.width - margin * 2 - 24, align: "center", lineBreak: false },
+    );
+    document.x = margin;
+    document.y = billingPdfLayout.qaBodyY;
+  } else {
+    document.x = margin;
+    document.y = billingPdfLayout.standardBodyY;
+  }
   body(document);
-  document.fillColor(gray).font("Helvetica").fontSize(7.5).text("Document généré à partir d’un snapshot immuable. Conservation comptable : 10 ans.", margin, PAGE.height - 48, { width: PAGE.width - margin * 2, align: "center" });
+
+  const range = document.bufferedPageRange();
+  for (let index = 0; index < range.count; index += 1) {
+    document.switchToPage(index);
+    document.page.margins.bottom = 0;
+    document.save();
+    document.fillColor(gray).font("Helvetica").fontSize(7.5).text(
+      `Document généré à partir d’un snapshot immuable. Conservation comptable : 10 ans. · Page ${index + 1} / ${range.count}`,
+      margin,
+      billingPdfLayout.footerY,
+      { width: PAGE.width - margin * 2, align: "center", lineBreak: false },
+    );
+    document.restore();
+  }
   document.end();
-  return { bytes: await completion, filename: `${number}.pdf` };
+  return { bytes: await completion, filename: `${number}.pdf`, pageCount: range.count };
 }
 
 function party(document: PDFKit.PDFDocument, title: string, lines: readonly string[], x: number) {

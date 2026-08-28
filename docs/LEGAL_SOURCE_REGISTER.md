@@ -30,6 +30,10 @@ Vérification : 28 août 2026. Ce registre prépare une revue humaine ; il ne co
 | OVHcloud | [Mentions légales OVHcloud](https://www.ovhcloud.com/fr/terms-and-conditions) et [contrats/DPA](https://www.ovhcloud.com/fr/terms-and-conditions/contracts/) | Domaine/DNS ; OVH SAS, 2 rue Kellermann, 59100 Roubaix, France. | Mentions/confidentialité | Service exact à confirmer |
 | Colissimo futur | [La Poste Pro — conditions contractuelles](https://www.laposte.fr/professionnel/conditions-contractuelles) | Tarifs et conditions sont versionnés et changeants ; aucune valeur figée dans les CGV candidates. | Runbook logistique | Non actif |
 
+## Suivi interne de la convention CM2C
+
+La convention CM2C actuelle expire le **27/08/2029**. Sa revue et son éventuel renouvellement doivent être anticipés à partir du **27/05/2029**. Ces dates constituent un rappel interne : elles ne valent ni approbation juridique des textes candidats, ni date d’effet contractuelle.
+
 ## Règle de maintenance
 
 Chaque approbation doit enregistrer la date de relecture, le professionnel ayant validé le texte, sa référence de revue, l’empreinte SHA-256 et la version remplacée. Aucun document `DRAFT` ou `AWAITING_LEGAL_REVIEW` ne peut devenir la version active d’une commande.

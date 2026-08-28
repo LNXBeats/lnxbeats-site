@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { inflateSync } from "node:zlib";
 
 import {
   billingSnapshotHash,
@@ -13,10 +14,55 @@ import {
   parseBillingCustomerSnapshot,
   validateBillingCustomerIdentity,
 } from "@/lib/billing/domain";
-import { generateCreditNotePdf, generateInvoicePdf } from "@/lib/billing/pdf";
+import { billingPdfLayout, generateCreditNotePdf, generateInvoicePdf, type InvoicePdfRecord } from "@/lib/billing/pdf";
 
 const root = process.cwd();
 const read = (path: string) => readFile(`${root}/${path}`, "utf8");
+
+function decodedPdfPageText(bytes: Buffer): string[] {
+  const source = bytes.toString("latin1");
+  const objects = new Map<number, string>();
+  for (const match of source.matchAll(/(\d+)\s+0\s+obj\b([\s\S]*?)endobj/g)) objects.set(Number(match[1]), match[2]!);
+  const decoder = new TextDecoder("windows-1252");
+  return [...objects.entries()]
+    .filter(([, body]) => /\/Type\s*\/Page(?!s)\b/.test(body))
+    .sort(([left], [right]) => left - right)
+    .map(([, page]) => {
+      const contents = page.match(/\/Contents\s+(\d+)\s+0\s+R/);
+      assert.ok(contents, "A billing PDF page must reference its content stream.");
+      const object = objects.get(Number(contents[1]));
+      assert.ok(object, "The referenced billing PDF content stream must exist.");
+      const stream = object.match(/stream\r?\n([\s\S]*?)\r?\nendstream/);
+      assert.ok(stream, "The billing PDF page content stream must be readable.");
+      const compressed = Buffer.from(stream[1]!, "latin1");
+      const content = /\/FlateDecode/.test(object) ? inflateSync(compressed).toString("latin1") : compressed.toString("latin1");
+      const lines: string[] = [];
+      for (const textArray of content.matchAll(/\[([\s\S]*?)\]\s*TJ/g)) {
+        const parts = [...textArray[1]!.matchAll(/<([0-9A-Fa-f]+)>/g)].map((part) => decoder.decode(Buffer.from(part[1]!, "hex")));
+        if (parts.length) lines.push(parts.join(""));
+      }
+      for (const textValue of content.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) lines.push(decoder.decode(Buffer.from(textValue[1]!, "hex")));
+      return lines.join("\n");
+    });
+}
+
+const sellerSnapshot = {
+  legalName: "Ludovic Mickaël Mathon", legalForm: "Entrepreneur individuel", tradeName: "LNX Beats", serviceName: "LNX STUDIO",
+  address: { line1: "35 Impasse des Orties", postalCode: "07370", city: "Ozon", countryCode: "FR" },
+  siren: "106870850", siret: "10687085000018", ape: "9003B", email: "lnx.beats.pro@gmail.com", phone: "06 71 66 70 32",
+};
+
+function invoiceFixture(overrides: Partial<InvoicePdfRecord> = {}): InvoicePdfRecord {
+  return {
+    invoiceNumber: "LNX-20990101-0001", issuedAt: new Date("2099-01-01T12:00:00Z"), orderNumberSnapshot: "LNX-2099-000001",
+    sellerSnapshot,
+    customerSnapshot: { type: "INDIVIDUAL", name: "Camille Exemple", email: "camille@example.invalid", companyName: null, billingAddress: null, businessIdentifier: null, vatId: null },
+    lineItemsSnapshot: [{ description: "Création musicale fictive QA", quantity: 1, unitPriceCents: 3000, lineTotalCents: 3000 }],
+    subtotalCents: 3000, shippingCents: 0, totalCents: 3000, currency: "EUR", vatLegalNotice: CURRENT_VAT_LEGAL_NOTICE,
+    paymentMethodLabel: "Carte bancaire / Apple Pay via Stripe", paidAt: new Date("2099-01-01T11:55:00Z"), termsVersion: "music-cgv-qa", snapshotHashSha256: "a".repeat(64),
+    ...overrides,
+  };
+}
 
 test("billing numbers use the Paris issue date and a continuous untruncated sequence", () => {
   assert.equal(invoiceNumber(new Date("2026-08-28T21:59:59.999Z"), 1n), "LNX-20260828-0001");
@@ -118,24 +164,75 @@ test("Admin billing supports invoice, credit-note, order, customer and date look
   assert.doesNotMatch(`${list}${detail}${credit}`, />\s*Supprimer\s*</i);
 });
 
-test("invoice and credit-note PDFs are private QA documents generated from snapshots", async () => {
-  const invoice = {
-    invoiceNumber: "LNX-20990101-0001", issuedAt: new Date("2099-01-01T12:00:00Z"), orderNumberSnapshot: "LNX-2099-000001",
-    sellerSnapshot: { legalName: "Ludovic Mickaël Mathon", legalForm: "Entrepreneur individuel", tradeName: "LNX Beats", serviceName: "LNX STUDIO", address: { line1: "35 Impasse des Orties", postalCode: "07370", city: "Ozon", countryCode: "FR" }, siren: "106870850", siret: "10687085000018", ape: "9003B", email: "lnx.beats.pro@gmail.com", phone: "06 71 66 70 32" },
+test("billing PDF layout reserves non-overlapping metadata, QA banner, body and footer bands", () => {
+  assert.ok(billingPdfLayout.metadataY + billingPdfLayout.metadataHeight < billingPdfLayout.qaBannerY);
+  assert.ok(billingPdfLayout.qaBannerY + billingPdfLayout.qaBannerHeight < billingPdfLayout.qaBodyY);
+  assert.ok(billingPdfLayout.footerY + billingPdfLayout.footerHeight <= billingPdfLayout.pageHeight - billingPdfLayout.safePrintMargin);
+});
+
+test("four short billing QA fixtures render on exactly one page with complete snapshot text", async () => {
+  const individualMusic = invoiceFixture();
+  const professionalMusic = invoiceFixture({
+    invoiceNumber: "LNX-20990101-0002", totalCents: 5000, subtotalCents: 5000,
+    lineItemsSnapshot: [{ description: "Création musicale avec priorité fictive QA", quantity: 1, unitPriceCents: 5000, lineTotalCents: 5000 }],
     customerSnapshot: { type: "PROFESSIONAL", name: "Marie Exemple", email: "qa@example.invalid", companyName: "Entreprise Exemple SAS", billingAddress: { line1: "12 rue Exemple", line2: null, postalCode: "75000", city: "Paris", countryCode: "FR" }, businessIdentifier: "12345678900012", vatId: null },
-    lineItemsSnapshot: [{ description: "Création musicale fictive QA", quantity: 1, unitPriceCents: 3000, lineTotalCents: 3000 }],
-    subtotalCents: 3000, shippingCents: 0, totalCents: 3000, currency: "EUR", vatLegalNotice: CURRENT_VAT_LEGAL_NOTICE,
-    paymentMethodLabel: "Carte bancaire / Apple Pay via Stripe", paidAt: new Date("2099-01-01T11:55:00Z"), termsVersion: "music-cgv-qa", snapshotHashSha256: "a".repeat(64),
-  };
-  const pdf = await generateInvoicePdf(invoice);
-  assert.equal(pdf.filename, "LNX-20990101-0001.pdf");
-  assert.equal(pdf.bytes.subarray(0, 4).toString(), "%PDF");
-  assert.ok(pdf.bytes.length > 1_000);
-  const credit = await generateCreditNotePdf({ creditNoteNumber: "AV-LNX-20990101-0001", issuedAt: invoice.issuedAt, amountCents: 1000, cumulativeCreditedCents: 1000, remainingBalanceCents: 2000, currency: "EUR", reasonCode: "NON_CONFORMITY", reasonText: null, snapshotHashSha256: "b".repeat(64), invoice });
-  assert.equal(credit.filename, "AV-LNX-20990101-0001.pdf");
-  assert.equal(credit.bytes.subarray(0, 4).toString(), "%PDF");
-  assert.ok(credit.bytes.length > 1_000);
-  assert.doesNotMatch(Buffer.concat([pdf.bytes, credit.bytes]).toString("latin1"), /sk_live_|sk_test_|whsec_|DATABASE_URL|AUTH_SECRET/);
+  });
+  const shop = invoiceFixture({
+    invoiceNumber: "LNX-20990101-0003", orderNumberSnapshot: "LNX-SHOP-2099-000001", subtotalCents: 2500, shippingCents: 500, totalCents: 3000,
+    lineItemsSnapshot: [{ description: "CD audio fictif QA", quantity: 1, unitPriceCents: 2500, lineTotalCents: 2500 }], termsVersion: "shop-cgv-qa",
+  });
+  const creditInvoice = invoiceFixture({ invoiceNumber: "LNX-20990101-0004" });
+  const results = [
+    await generateInvoicePdf(individualMusic),
+    await generateInvoicePdf(professionalMusic),
+    await generateInvoicePdf(shop),
+    await generateCreditNotePdf({ creditNoteNumber: "AV-LNX-20990101-0001", issuedAt: creditInvoice.issuedAt, amountCents: 1000, cumulativeCreditedCents: 1000, remainingBalanceCents: 2000, currency: "EUR", reasonCode: "NON_CONFORMITY", reasonText: null, snapshotHashSha256: "b".repeat(64), invoice: creditInvoice }),
+  ];
+  for (const [index, result] of results.entries()) {
+    const pages = decodedPdfPageText(result.bytes);
+    const rendered = pages.join("\n");
+    const normalized = rendered.replace(/\s+/g, " ");
+    assert.equal(result.bytes.subarray(0, 4).toString(), "%PDF");
+    assert.ok(result.bytes.length > 1_000);
+    assert.equal(result.pageCount, 1);
+    assert.equal(pages.length, 1);
+    assert.match(rendered, /DOCUMENT QA — SANS VALEUR COMPTABLE/);
+    assert.match(normalized, /TVA non applicable, article 293 B du CGI/);
+    if (index < 3) assert.match(rendered, /Ludovic Mickaël Mathon/);
+    assert.match(rendered, /Conservation comptable : 10 ans\./);
+    assert.match(rendered, /Page 1 \/ 1/);
+  }
+  const normalized = results.map((result) => decodedPdfPageText(result.bytes).join("\n").replace(/\s+/g, " "));
+  assert.match(normalized[0]!, /TOTAL : 30,00 €/);
+  assert.match(normalized[1]!, /TOTAL : 50,00 €/);
+  assert.match(normalized[2]!, /Livraison : 5,00 €/);
+  assert.match(normalized[3]!, /Montant de l’avoir : 10,00 €/);
+  assert.match(normalized[3]!, /Solde documentaire restant : 20,00 €/);
+  assert.doesNotMatch(Buffer.concat(results.map((result) => result.bytes)).toString("latin1"), /sk_live_|sk_test_|whsec_|DATABASE_URL|AUTH_SECRET/);
+});
+
+test("non-QA billing output omits the QA watermark", async () => {
+  const result = await generateInvoicePdf(invoiceFixture(), false);
+  assert.equal(result.pageCount, 1);
+  assert.doesNotMatch(decodedPdfPageText(result.bytes).join("\n"), /DOCUMENT QA|SANS VALEUR COMPTABLE/);
+});
+
+test("long invoices paginate naturally and repeat the safe footer on every real page", async () => {
+  const lineItems = Array.from({ length: 36 }, (_, index) => ({
+    description: `Ligne fictive QA ${index + 1} — prestation détaillée destinée à vérifier la pagination réelle du document`,
+    quantity: 1,
+    unitPriceCents: 100,
+    lineTotalCents: 100,
+  }));
+  const result = await generateInvoicePdf(invoiceFixture({ lineItemsSnapshot: lineItems, subtotalCents: 3600, totalCents: 3600 }));
+  const pages = decodedPdfPageText(result.bytes);
+  assert.equal(result.pageCount, pages.length);
+  assert.ok(result.pageCount > 1, "A genuinely long invoice must remain multipage.");
+  for (const [index, page] of pages.entries()) {
+    assert.match(page, /LNX STUDIO/);
+    assert.match(page, /Conservation comptable : 10 ans\./);
+    assert.match(page, new RegExp(`Page ${index + 1} / ${pages.length}`));
+  }
 });
 
 test("billing browser fixtures are bound to one disposable local database and env-backed credentials", async () => {

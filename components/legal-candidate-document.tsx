@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Container } from "@/components/container";
-import type { LegalCandidate } from "@/data/legal";
+import { consumerMediatorInformation, type LegalCandidate } from "@/data/legal";
 
 export function LegalCandidateDocument({ document, introduction }: { document: LegalCandidate; introduction: string }) {
   return (
@@ -43,7 +43,7 @@ export function LegalCandidateDocument({ document, introduction }: { document: L
         </div>
         <footer className="legal-document__footer">
           <p>Une réclamation préalable peut être adressée à <a href="mailto:lnx.beats.pro@gmail.com">lnx.beats.pro@gmail.com</a>.</p>
-          <p><Link href="/retractation">Exercer mon droit de rétractation</Link> · <a href="https://www.cm2c.net/" target="_blank" rel="noopener noreferrer">Médiateur CM2C</a></p>
+          <p><Link href="/retractation">Exercer mon droit de rétractation</Link> · <a href={`tel:${consumerMediatorInformation.phoneE164}`}>{consumerMediatorInformation.phone}</a> · <a href={consumerMediatorInformation.website} target="_blank" rel="noopener noreferrer">Médiateur CM2C</a></p>
         </footer>
       </Container>
     </article>

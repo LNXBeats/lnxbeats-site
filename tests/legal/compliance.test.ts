@@ -4,9 +4,12 @@ import test from "node:test";
 
 import {
   assertCandidateLegalRegistry,
+  consumerMediatorInformation,
+  legalCandidateHistory,
   legalCandidates,
   legalNoticesCandidate,
   musicTermsCandidate,
+  phase4b1LegalNoticesCandidate,
   phase4bLegalNoticesCandidate,
   phase4bMusicTermsCandidate,
   phase4bPrivacyCandidate,
@@ -75,6 +78,38 @@ test("Phase 4B creates new immutable candidates without rewriting Phase 4A hashe
   assert.match(JSON.stringify(phase4bMusicTermsCandidate), /sept à quatorze jours/);
   assert.match(JSON.stringify(phase4bShopTermsCandidate), /Colissimo avec signature/);
   assert.match(JSON.stringify(phase4bPrivacyCandidate), /dix ans/);
+});
+
+test("Phase 4B.1 publishes complete CM2C candidate metadata through a new immutable revision", () => {
+  assert.equal(phase4bLegalNoticesCandidate.version, "legal-notices-2026-02-draft");
+  assert.equal(phase4b1LegalNoticesCandidate.version, "legal-notices-2026-03-draft");
+  assert.notEqual(phase4b1LegalNoticesCandidate.hashSha256, phase4bLegalNoticesCandidate.hashSha256);
+  assert.ok(legalCandidateHistory.includes(phase4bLegalNoticesCandidate));
+  assert.ok(legalCandidateHistory.includes(phase4b1LegalNoticesCandidate));
+  assert.equal(consumerMediatorInformation.name, "Centre de la Médiation de la Consommation de Conciliateurs de Justice — CM2C");
+  assert.deepEqual(consumerMediatorInformation.addressLines, ["49 rue de Ponthieu", "75008 Paris", "France"]);
+  assert.equal(consumerMediatorInformation.phone, "01 89 47 00 14");
+  assert.equal(consumerMediatorInformation.phoneE164, "+33189470014");
+  assert.equal(consumerMediatorInformation.website, "https://www.cm2c.net/");
+  const candidate = JSON.stringify(phase4b1LegalNoticesCandidate);
+  assert.match(candidate, /49 rue de Ponthieu/);
+  assert.match(candidate, /01 89 47 00 14/);
+  assert.match(candidate, /https:\/\/www\.cm2c\.net\//);
+  assert.notEqual(professionalInformation.phone, consumerMediatorInformation.phone);
+  const page = source("app/mentions-legales/page.tsx");
+  assert.match(page, /phase4b1LegalNoticesCandidate/);
+  const component = source("components/legal-candidate-document.tsx");
+  assert.match(component, /consumerMediatorInformation\.phone/);
+  assert.match(component, /consumerMediatorInformation\.website/);
+});
+
+test("the CM2C convention review dates are internal reminders and not candidate effective dates", () => {
+  const register = source("docs/LEGAL_SOURCE_REGISTER.md");
+  assert.match(register, /expire le \*\*27\/08\/2029\*\*/);
+  assert.match(register, /à partir du \*\*27\/05\/2029\*\*/);
+  assert.match(register, /rappel interne/i);
+  assert.equal(phase4b1LegalNoticesCandidate.effectiveAt, null);
+  assert.equal(phase4b1LegalNoticesCandidate.approvedAt, null);
 });
 
 test("Shop payment labels visibly state payment obligation while music labels stay stable", () => {

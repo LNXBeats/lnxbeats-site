@@ -49,6 +49,19 @@ function revision(base: LegalCandidate, version: string, sections: readonly Lega
 
 const createdAt = "2026-08-28T00:00:00.000Z";
 
+export const consumerMediatorInformation = Object.freeze({
+  name: "Centre de la Médiation de la Consommation de Conciliateurs de Justice — CM2C",
+  addressLines: ["49 rue de Ponthieu", "75008 Paris", "France"] as const,
+  phone: "01 89 47 00 14",
+  phoneE164: "+33189470014",
+  website: "https://www.cm2c.net/",
+});
+
+function consumerMediatorParagraph() {
+  const mediator = consumerMediatorInformation;
+  return `En cas de désaccord persistant, le consommateur peut saisir gratuitement le ${mediator.name}, ${mediator.addressLines.join(", ")} — ${mediator.phone} — ${mediator.website}.`;
+}
+
 export const legalNoticesCandidate = candidate({
   type: "LEGAL_NOTICES",
   version: "legal-notices-2026-01-draft",
@@ -397,6 +410,19 @@ export const phase4bLegalNoticesCandidate = revision(
   } : section),
 );
 
+export const phase4b1LegalNoticesCandidate = revision(
+  phase4bLegalNoticesCandidate,
+  "legal-notices-2026-03-draft",
+  phase4bLegalNoticesCandidate.sections.map((section) => section.title === "Réclamation et médiation" ? {
+    title: section.title,
+    paragraphs: [
+      "Toute réclamation préalable peut être adressée à lnx.beats.pro@gmail.com ou au 06 71 66 70 32.",
+      consumerMediatorParagraph(),
+    ],
+    decisions: section.decisions,
+  } : section),
+);
+
 export const phase4bMusicTermsCandidate = revision(
   musicTermsCandidate,
   "music-cgv-2026-02-draft",
@@ -464,7 +490,7 @@ export const phase4bPrivacyCandidate = revision(
 );
 
 export const legalCandidates = Object.freeze([
-  phase4bLegalNoticesCandidate,
+  phase4b1LegalNoticesCandidate,
   phase4bMusicTermsCandidate,
   phase4bShopTermsCandidate,
   phase4bPrivacyCandidate,
@@ -476,6 +502,7 @@ export const legalCandidateHistory = Object.freeze([
   musicTermsCandidate,
   shopTermsCandidate,
   privacyCandidate,
+  phase4bLegalNoticesCandidate,
   ...legalCandidates,
 ]);
 
