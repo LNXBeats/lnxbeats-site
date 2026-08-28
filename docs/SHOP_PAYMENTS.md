@@ -1,5 +1,7 @@
 # Paiements Boutique V1.1 — fondation Phase 3A
 
+> Phase 4 juridique : le CTA Shop affiche visiblement une formulation équivalente à « commande avec obligation de paiement ». La case CGV reste non précochée et la version est choisie côté serveur. Les gates restent fermés sans version juridiquement approuvée.
+
 > La Phase 3A est validée uniquement en local, avec providers mockés et
 > transports externes fermés. Elle ne constitue ni un runbook d'activation
 > Production, ni une autorisation d'encaissement réel.

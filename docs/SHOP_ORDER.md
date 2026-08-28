@@ -1,5 +1,7 @@
 # Commandes Boutique V1.1 — contrat Phase 2 et fondation Phase 3A
 
+> Phase 4 juridique : `termsVersion`, `termsHashSha256`, `termsAcceptedAt` et `userId` forment le snapshot d’acceptation. Une future version juridique ne le réécrit jamais. Les rétractations sont conservées séparément et ne déclenchent aucun remboursement automatique.
+
 > La Phase 3A ajoute les relations financières, la preuve technique
 > d'acceptation et le fulfillment, mais conserve tous les gates fermés. Les
 > paragraphes Phase 2 décrivent toujours la création et la réservation avant

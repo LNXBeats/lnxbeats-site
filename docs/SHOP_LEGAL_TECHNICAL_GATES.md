@@ -1,5 +1,7 @@
 # Gates juridiques techniques Boutique — Phase 3A
 
+> Phase 4 : `shop-cgv-phase3-qa-v0` et `shop-cgv-phase3-qa-v1` restent des preuves historiques `QA_ONLY`. `shop-cgv-2026-01-draft` est une candidate de revue, pas une entrée `APPROVED`. `SHOP_LEGAL_READY=false` demeure la valeur sûre.
+
 > Ce document décrit uniquement des mécanismes techniques. Il ne contient pas
 > de CGV, ne remplace pas une revue juridique et n'autorise aucune vente.
 

@@ -1,5 +1,7 @@
 # Modèle de données — V1.1
 
+> Phase 4 ajoute `legal_document_versions` et `consumer_withdrawal_requests` de façon additive. Les documents candidats ne sont pas activés. Une déclaration conserve horodatage, référence, parent vérifié éventuel, revue d’éligibilité et empreinte d’accusé, sans mutation automatique du paiement.
+
 ## Périmètre
 
 La V0.4 crée la fondation PostgreSQL avec Prisma ORM. La V0.6.0.3 migre les 25 projets de façon contrôlée et choisit PostgreSQL comme source runtime unique du site public. V0.7 ajoute les paiements test, la livraison privée et les droits post-livraison versionnés. V1.1 ajoute, sans modifier ces flux, le catalogue produit et le ledger Boutique séparé.

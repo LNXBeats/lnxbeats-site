@@ -1,5 +1,7 @@
 # Legal review gate
 
+> Mise à jour Phase 4 : les versions structurées restent `DRAFT` ou `AWAITING_LEGAL_REVIEW`. Voir `LEGAL_SOURCE_REGISTER.md`, `LEGAL_DECISIONS_REQUIRED.md`, `LEGAL_VERSIONING.md` et `LEGAL_HUMAN_REVIEW_CHECKLIST.md`. Aucune n’est une version Production active.
+
 ## Principe
 
 `DRAFT → AWAITING_LEGAL_REVIEW → APPROVED → RETIRED` est un workflow versionné. L’approbation n’est pas un booléen d’environnement : elle exige une mutation Admin, un Admin actif, un timestamp et une référence de revue ; PostgreSQL la refuse sinon.
