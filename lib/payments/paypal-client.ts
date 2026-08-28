@@ -434,7 +434,14 @@ function createPaypalGatewayWithConfiguration(
     async captureOrder(providerOrderId, idempotencyKey) {
       return paypalCaptureResponseEvidence(await api(
         `/v2/checkout/orders/${encodeURIComponent(providerOrderId)}/capture`,
-        { method: "POST", body: "{}" },
+        {
+          method: "POST",
+          // PayPal defaults to return=minimal. The Shop reconciliation needs
+          // the capture id, immutable custom_id, amount, currency and final
+          // capture marker in the same authenticated response.
+          headers: { prefer: "return=representation" },
+          body: "{}",
+        },
         idempotencyKey,
       ));
     },

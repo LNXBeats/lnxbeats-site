@@ -515,8 +515,16 @@ function shopPaypalProviderEvent(
       ? resource?.status === "DECLINED"
       : event.event_type === "PAYMENT.CAPTURE.PENDING"
         ? resource?.status === "PENDING"
-        : resource?.status === "APPROVED";
+        // PayPal can deliver CHECKOUT.ORDER.APPROVED after the application has
+        // already captured the Order. In that race the signed event type still
+        // means "approval only", while its embedded Order reflects the newer
+        // COMPLETED state. It must remain non-financial PENDING evidence and
+        // must never poison an already confirmed payment.
+        : resource?.status === "APPROVED" || resource?.status === "COMPLETED";
   const normalized = normalizePaypalWebhookEvent(event);
+  const evidenceConsistent = event.event_type === "CHECKOUT.ORDER.APPROVED"
+    ? providerStatusConsistent && amountCents !== undefined && rawCurrency === "EUR"
+    : normalized !== null && providerStatusConsistent;
   return {
     eventId: event.id,
     type: event.event_type,
@@ -530,7 +538,7 @@ function shopPaypalProviderEvent(
     ...(identity.providerPaymentId ? { providerPaymentId: identity.providerPaymentId } : {}),
     ...(amountCents !== undefined ? { amountCents } : {}),
     ...(rawCurrency ? { currency: rawCurrency } : {}),
-    ...(normalized && providerStatusConsistent ? {} : { evidenceConsistent: false }),
+    ...(evidenceConsistent ? {} : { evidenceConsistent: false }),
     status,
     occurredAt: identity.occurredAt,
     ...(status === "SUCCEEDED" ? { paymentMethod: "PAYPAL" as const } : {}),

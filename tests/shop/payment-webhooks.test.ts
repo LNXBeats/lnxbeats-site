@@ -555,6 +555,52 @@ test("verified PayPal events route by persisted Payment source, including captur
   assert.equal(musicEvents.length, 1);
 });
 
+test("a delayed PayPal approval webhook carrying the newer COMPLETED Order state remains pending evidence", async () => {
+  const events: ShopPaymentProviderEvent[] = [];
+  const approvedAfterCapture = {
+    id: "WH-SHOP-APPROVED-AFTER-CAPTURE",
+    event_type: "CHECKOUT.ORDER.APPROVED",
+    create_time: occurredAt,
+    resource: {
+      id: "PAYPAL-SHOP-ORDER-1",
+      status: "COMPLETED",
+      purchase_units: [{
+        custom_id: paymentId,
+        amount: { currency_code: "EUR", value: "30.00" },
+      }],
+    },
+  } as const;
+  const result = await processVerifiedPaypalWebhookEventByPaymentSource(
+    approvedAfterCapture,
+    "sandbox",
+    {
+      sourceLookup: {
+        async resolvePaypalPayment(providerOrderId, sourcePaymentId) {
+          assert.equal(providerOrderId, "PAYPAL-SHOP-ORDER-1");
+          assert.equal(sourcePaymentId, paymentId);
+          return { id: paymentId, orderId: null, shopOrderId };
+        },
+      },
+      shopRepository: {
+        async reconcile(event) {
+          events.push(event);
+          return { outcome: "PROCESSED", duplicate: false, shopOrderPaid: false, stockConfirmed: false };
+        },
+        async recordUnmatched() {
+          throw new Error("The persisted Shop payment source must be used.");
+        },
+      },
+      musicRepository: musicRepository([]),
+    },
+  );
+  assert.equal(result.outcome, "PROCESSED");
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.status, "PENDING");
+  assert.equal(events[0]?.evidenceConsistent, undefined);
+  assert.equal(events[0]?.amountCents, 3_000);
+  assert.equal(events[0]?.currency, "EUR");
+});
+
 test("a signed PayPal event recovers a Shop attempt by custom_id after create-order persistence crashes", async () => {
   const shopEvents: ShopPaymentProviderEvent[] = [];
   let lookups = 0;
