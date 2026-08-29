@@ -18,3 +18,12 @@ export const SHOP_PHASE3_QA_CREATION_TOKEN = "11030000-0000-4000-8000-0000000000
 export const SHOP_PHASE3_QA_PROVIDER_CHECKOUT_ID = "cs_test_lnx_shop_phase3_mock_001";
 export const SHOP_PHASE3_QA_PROVIDER_PAYMENT_ID = "pi_lnx_shop_phase3_mock_001";
 export const SHOP_PHASE3_QA_PROVIDER_EVENT_ID = "evt_lnx_shop_phase3_mock_001";
+
+export const SHOP_PHASE5A_QA_TARGET = "lnx-studio-v110-logistics-preview-test";
+export const SHOP_PHASE5A_QA_HTTP_PORT = "31775";
+export const SHOP_PHASE5A_QA_ORIGIN = `http://127.0.0.1:${SHOP_PHASE5A_QA_HTTP_PORT}`;
+export const SHOP_PHASE5A_QA_AUTH_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase5a-auth-mailbox.jsonl";
+export const SHOP_PHASE5A_QA_NOTIFICATION_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase5a-notifications.jsonl";
+export const SHOP_PHASE5A_QA_MEDIA_ROOT = "/private/tmp/lnx-studio-v110-phase5a-media";
+export const SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE5A_QA_MEDIA_ROOT}/public`;
+export const SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE5A_QA_MEDIA_ROOT}/private`;

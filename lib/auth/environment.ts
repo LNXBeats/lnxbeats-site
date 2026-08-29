@@ -14,11 +14,18 @@ import {
   SHOP_PHASE3B_STRIPE_QA_CONFIRMATION,
   SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION,
   SHOP_PHASE3_QA_OWNER_EMAIL,
+  SHOP_PHASE5A_QA_AUTH_CAPTURE_PATH,
+  SHOP_PHASE5A_QA_NOTIFICATION_CAPTURE_PATH,
+  SHOP_PHASE5A_QA_ORIGIN,
+  SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE5A_QA_TARGET,
 } from "@/lib/shop/qa-contract";
 import {
   SHOP_LEGAL_QA_CONFIRMATION,
   SHOP_LEGAL_QA_TERMS_VERSION,
 } from "@/lib/shop/legal";
+import { SHOP_SHIPPING_QA_CONFIRMATION } from "@/lib/shop/shipping-config";
 
 export const ADMIN_PRINCIPAL_EMAIL = "lnx.beats.pro@gmail.com";
 export const LOCAL_PREVIEW_DATABASE_TARGET = "lnx-studio-local-preview";
@@ -115,6 +122,51 @@ const SHOP_PHASE3C_FORBIDDEN_EXTERNAL_SECRETS = SHOP_PHASE2_FORBIDDEN_EXTERNAL_S
   (name) => name !== "PAYPAL_CLIENT_ID" && name !== "PAYPAL_CLIENT_SECRET" && name !== "PAYPAL_WEBHOOK_ID",
 );
 
+const SHOP_PHASE5A_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
+  LNX_DATABASE_TARGET: SHOP_PHASE5A_QA_TARGET,
+  AUTH_URL: SHOP_PHASE5A_QA_ORIGIN,
+  SITE_URL: SHOP_PHASE5A_QA_ORIGIN,
+  APP_CANONICAL_URL: SHOP_PHASE5A_QA_ORIGIN,
+  AUTH_QA_ACCESS_ENABLED: "false",
+  EMAIL_PROVIDER: "capture",
+  AUTH_EMAIL_CAPTURE_PATH: SHOP_PHASE5A_QA_AUTH_CAPTURE_PATH,
+  NOTIFICATION_DEPLOYMENT_ENV: "development",
+  NOTIFICATION_EMAIL_TRANSPORT: "capture",
+  NOTIFICATION_CAPTURE_PATH: SHOP_PHASE5A_QA_NOTIFICATION_CAPTURE_PATH,
+  NOTIFICATION_WORKER_ENABLED: "false",
+  NOTIFICATION_SCHEDULER_MODE: "disabled",
+  EMAIL_NOTIFICATIONS_ENABLED: "true",
+  OWNER_EMAIL_NOTIFICATIONS_ENABLED: "false",
+  CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
+  SMS_TRANSPORT: "disabled",
+  SMS_NOTIFICATIONS_ENABLED: "false",
+  PAYMENTS_ENABLED: "false",
+  PAYMENT_DEPLOYMENT_ENV: "development",
+  LIVE_REFUNDS_ENABLED: "false",
+  STRIPE_PAYMENTS_ENABLED: "false",
+  STRIPE_MODE: "test",
+  PAYPAL_PAYMENTS_ENABLED: "false",
+  PAYPAL_ENVIRONMENT: "sandbox",
+  SHOP_ENABLED: "true",
+  SHOP_LOCAL_QA_CONFIRM: SHOP_PHASE2_QA_CONFIRMATION,
+  SHOP_ALLOWED_COUNTRIES: "FR",
+  SHOP_RESERVATION_TTL_MINUTES: "30",
+  SHOP_PAYMENTS_ENABLED: "false",
+  MUSIC_PRICING_SOURCE: "legacy",
+  SHOP_SHIPPING_ENABLED: "true",
+  SHOP_SHIPPING_QA_CONFIRM: SHOP_SHIPPING_QA_CONFIRMATION,
+  SHOP_LEGAL_READY: "true",
+  SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+  SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+  MEDIA_DEPLOYMENT_ENV: "test",
+  MEDIA_STORAGE_DRIVER: "local",
+  MEDIA_LOCAL_PUBLIC_ROOT: SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT,
+  MEDIA_LOCAL_PRIVATE_ROOT: SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
+  MEDIA_STORAGE_ROOT: SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT,
+  ORDER_UPLOAD_MODE: "local-qa",
+  ORDER_UPLOAD_DIR: SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
+} satisfies Record<string, string>);
+
 export function isLoopbackUrl(value: string | undefined) {
   if (!value) return false;
   try {
@@ -153,6 +205,18 @@ function hasSafeLocalShopQaIdentity(environment: AuthEnvironment) {
   }
   if (!environment.LNX_PRISMA_DEV_SERVER_FILE?.endsWith(
     `/prisma-dev-nodejs/${SHOP_PHASE2_QA_TARGET}/server.json`,
+  )) return false;
+  if (!hasDedicatedShopPhase2Database(environment)) return false;
+  return Boolean(environment.AUTH_SECRET && environment.AUTH_SECRET.length >= 32);
+}
+
+function hasSafeLocalShopPhase5AIdentity(environment: AuthEnvironment) {
+  if (environment.LNX_PREVIEW_MODE?.trim()) return false;
+  if (Object.entries(environment).some(
+    ([name, value]) => name.startsWith("RAILWAY_") && Boolean(value?.trim()),
+  )) return false;
+  if (!environment.LNX_PRISMA_DEV_SERVER_FILE?.endsWith(
+    `/prisma-dev-nodejs/${SHOP_PHASE5A_QA_TARGET}/server.json`,
   )) return false;
   if (!hasDedicatedShopPhase2Database(environment)) return false;
   return Boolean(environment.AUTH_SECRET && environment.AUTH_SECRET.length >= 32);
@@ -198,6 +262,17 @@ export function isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(
   return hasSafeLocalShopQaIdentity(environment);
 }
 
+export function isSafeLocalShopPhase5ALogisticsQaHttpRuntime(
+  environment: AuthEnvironment = process.env,
+) {
+  if (environment.NODE_ENV !== "test" && environment.NODE_ENV !== "production") return false;
+  if (Object.entries(SHOP_PHASE5A_AUTH_COOKIE_ENVIRONMENT).some(
+    ([name, expected]) => environment[name] !== expected,
+  )) return false;
+  if (SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
+  return hasSafeLocalShopPhase5AIdentity(environment);
+}
+
 export function shouldUseSecureAuthCookies(
   productionBuild: boolean,
   environment: AuthEnvironment = process.env,
@@ -206,7 +281,8 @@ export function shouldUseSecureAuthCookies(
   if (isPersistentLocalPreview(environment)) return false;
   return !isSafeLocalShopPhase2QaHttpRuntime(environment)
     && !isSafeLocalShopPhase3BStripeQaHttpRuntime(environment)
-    && !isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment);
+    && !isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment)
+    && !isSafeLocalShopPhase5ALogisticsQaHttpRuntime(environment);
 }
 
 export function configuredAdminEmail() {

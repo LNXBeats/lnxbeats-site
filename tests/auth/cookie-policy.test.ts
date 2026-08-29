@@ -5,6 +5,7 @@ import {
   isSafeLocalShopPhase2QaHttpRuntime,
   isSafeLocalShopPhase3BStripeQaHttpRuntime,
   isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime,
+  isSafeLocalShopPhase5ALogisticsQaHttpRuntime,
   shouldUseSecureAuthCookies,
 } from "@/lib/auth/environment";
 import {
@@ -20,11 +21,18 @@ import {
   SHOP_PHASE3B_STRIPE_QA_CONFIRMATION,
   SHOP_PHASE3C_PAYPAL_QA_CONFIRMATION,
   SHOP_PHASE3_QA_OWNER_EMAIL,
+  SHOP_PHASE5A_QA_AUTH_CAPTURE_PATH,
+  SHOP_PHASE5A_QA_NOTIFICATION_CAPTURE_PATH,
+  SHOP_PHASE5A_QA_ORIGIN,
+  SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE5A_QA_TARGET,
 } from "@/lib/shop/qa-contract";
 import {
   SHOP_LEGAL_QA_CONFIRMATION,
   SHOP_LEGAL_QA_TERMS_VERSION,
 } from "@/lib/shop/legal";
+import { SHOP_SHIPPING_QA_CONFIRMATION } from "@/lib/shop/shipping-config";
 
 function shopPhase2Environment() {
   return {
@@ -176,6 +184,69 @@ test("incomplete, live or externally coupled Shop Phase 3C environments keep sec
   ]) {
     const environment = { ...exact, ...mutation };
     assert.equal(isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment), false);
+    assert.equal(shouldUseSecureAuthCookies(true, environment), true);
+  }
+});
+
+function shopPhase5ALogisticsEnvironment() {
+  return {
+    ...shopPhase2Environment(),
+    NODE_ENV: "production",
+    LNX_DATABASE_TARGET: SHOP_PHASE5A_QA_TARGET,
+    LNX_PRISMA_DEV_SERVER_FILE: `/private/tmp/prisma-dev-nodejs/${SHOP_PHASE5A_QA_TARGET}/server.json`,
+    DATABASE_URL: "postgresql://127.0.0.1:51270/template1?schema=public",
+    AUTH_URL: SHOP_PHASE5A_QA_ORIGIN,
+    SITE_URL: SHOP_PHASE5A_QA_ORIGIN,
+    APP_CANONICAL_URL: SHOP_PHASE5A_QA_ORIGIN,
+    AUTH_EMAIL_CAPTURE_PATH: SHOP_PHASE5A_QA_AUTH_CAPTURE_PATH,
+    NOTIFICATION_CAPTURE_PATH: SHOP_PHASE5A_QA_NOTIFICATION_CAPTURE_PATH,
+    OWNER_EMAIL_NOTIFICATIONS_ENABLED: "false",
+    CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
+    STRIPE_MODE: "test",
+    PAYPAL_ENVIRONMENT: "sandbox",
+    SHOP_PAYMENTS_ENABLED: "false",
+    SHOP_SHIPPING_ENABLED: "true",
+    SHOP_SHIPPING_QA_CONFIRM: SHOP_SHIPPING_QA_CONFIRMATION,
+    SHOP_LEGAL_READY: "true",
+    SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION,
+    SHOP_LEGAL_QA_CONFIRM: SHOP_LEGAL_QA_CONFIRMATION,
+    MEDIA_LOCAL_PUBLIC_ROOT: SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT,
+    MEDIA_LOCAL_PRIVATE_ROOT: SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
+    MEDIA_STORAGE_ROOT: SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT,
+    ORDER_UPLOAD_DIR: SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
+    [SHOP_PHASE2_QA_RUNTIME_CONFIRMATION_NAME]: undefined,
+  } as Record<string, string | undefined>;
+}
+
+test("the exact guarded Shop Phase 5A logistics runtime disables secure HTTP cookies", () => {
+  const environment = shopPhase5ALogisticsEnvironment();
+  assert.equal(isSafeLocalShopPhase5ALogisticsQaHttpRuntime(environment), true);
+  assert.equal(shouldUseSecureAuthCookies(true, environment), false);
+  assert.equal(isSafeLocalShopPhase5ALogisticsQaHttpRuntime({
+    ...environment,
+    NODE_ENV: "test",
+  }), true);
+});
+
+test("incomplete, remote or externally coupled Shop Phase 5A environments keep secure cookies", () => {
+  const exact = shopPhase5ALogisticsEnvironment();
+  for (const mutation of [
+    { AUTH_URL: "https://qa.example.invalid" },
+    { AUTH_URL: "http://127.0.0.1:31776" },
+    { RAILWAY_ENVIRONMENT_NAME: "production" },
+    { DATABASE_URL: "postgresql://db.example.invalid:51270/template1?schema=public" },
+    { DATABASE_URL: "postgresql://127.0.0.1:5432/template1?schema=public" },
+    { SHOP_SHIPPING_QA_CONFIRM: "" },
+    { SHOP_SHIPPING_QA_CONFIRM: "wrong-confirmation" },
+    { SHOP_SHIPPING_ENABLED: "false" },
+    { RESEND_API_KEY: "re_forbidden-phase5a-fixture" },
+    { LNX_DATABASE_TARGET: "another-target" },
+    { LNX_PRISMA_DEV_SERVER_FILE: "/private/tmp/prisma-dev-nodejs/another-target/server.json" },
+    { PAYMENTS_ENABLED: "true" },
+    { NODE_ENV: "development" },
+  ]) {
+    const environment = { ...exact, ...mutation };
+    assert.equal(isSafeLocalShopPhase5ALogisticsQaHttpRuntime(environment), false);
     assert.equal(shouldUseSecureAuthCookies(true, environment), true);
   }
 });

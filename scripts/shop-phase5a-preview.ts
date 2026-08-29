@@ -32,6 +32,10 @@ async function guard() {
   assert.equal(process.env.SHOP_SHIPPING_QA_CONFIRM, "enable-internal-shop-shipping-qa");
   assert.equal(process.env.EMAIL_PROVIDER, "capture");
   assert.equal(process.env.PAYMENTS_ENABLED, "false");
+  assert.ok(
+    process.env.SHOP_PAYMENTS_ENABLED === undefined || process.env.SHOP_PAYMENTS_ENABLED === "false",
+    "SHOP_PAYMENTS_ENABLED must remain disabled in the logistics preview.",
+  );
   assert.ok(!process.env.RAILWAY_ENVIRONMENT && !process.env.RAILWAY_ENVIRONMENT_NAME);
   for (const key of ["STRIPE_SECRET_KEY", "PAYPAL_CLIENT_SECRET", "RESEND_API_KEY", "MEDIA_S3_SECRET_ACCESS_KEY"]) {
     assert.ok(!process.env[key], `${key} is forbidden in the logistics preview.`);
@@ -52,8 +56,9 @@ async function run() {
   const nextCli = fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url));
   const args = operation === "build" ? [nextCli, "build", "--webpack"] : [nextCli, "start", "-H", "127.0.0.1", "-p", "31775"];
   const env: NodeJS.ProcessEnv = {
-    NODE_ENV: "test",
     ...Object.fromEntries(ALLOWED_ENV.flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]!]])),
+    NODE_ENV: "test",
+    SHOP_PAYMENTS_ENABLED: "false",
   };
   console.info(operation === "build" ? "Building guarded Phase 5A preview." : `Starting guarded Phase 5A preview at ${ORIGIN}.`);
   const child = spawn(process.execPath, args, { cwd: process.cwd(), env, stdio: "inherit" });
