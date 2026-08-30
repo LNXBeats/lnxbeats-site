@@ -15,6 +15,7 @@ import {
   validateBillingCustomerIdentity,
 } from "@/lib/billing/domain";
 import { billingPdfLayout, generateCreditNotePdf, generateInvoicePdf, type InvoicePdfRecord } from "@/lib/billing/pdf";
+import { creditNoteReasonLabel } from "@/lib/billing/presentation";
 
 const root = process.cwd();
 const read = (path: string) => readFile(`${root}/${path}`, "utf8");
@@ -198,6 +199,37 @@ test("billing PDF layout reserves non-overlapping metadata, QA banner, body and 
   assert.ok(billingPdfLayout.metadataY + billingPdfLayout.metadataHeight < billingPdfLayout.qaBannerY);
   assert.ok(billingPdfLayout.qaBannerY + billingPdfLayout.qaBannerHeight < billingPdfLayout.qaBodyY);
   assert.ok(billingPdfLayout.footerY + billingPdfLayout.footerHeight <= billingPdfLayout.pageHeight - billingPdfLayout.safePrintMargin);
+});
+
+test("reviewed after-sales credit notes keep their internal code but expose a French customer label", async () => {
+  assert.equal(creditNoteReasonLabel("OTHER_REVIEWED"), "Remboursement après traitement SAV");
+  const memberPage = await read("app/compte/avoirs/[creditNoteNumber]/page.tsx");
+  assert.match(memberPage, /creditNoteReasonLabel\(creditNote\.reasonCode\)/);
+  assert.doesNotMatch(memberPage, /<dd>\{creditNote\.reasonCode\}<\/dd>/);
+  const invoice = invoiceFixture({
+    invoiceNumber: "LNX-20990101-5002",
+    orderNumberSnapshot: "LNX-SHOP-2099-500002",
+    subtotalCents: 7500,
+    shippingCents: 800,
+    totalCents: 8300,
+  });
+  const result = await generateCreditNotePdf({
+    creditNoteNumber: "AV-LNX-20990101-0005",
+    issuedAt: invoice.issuedAt,
+    amountCents: 2500,
+    cumulativeCreditedCents: 2500,
+    remainingBalanceCents: 5800,
+    currency: "EUR",
+    reasonCode: "OTHER_REVIEWED",
+    reasonText: "Dossier SAV LNX-SAV-2099-EXEMPLE",
+    snapshotHashSha256: "c".repeat(64),
+    invoice,
+  });
+  const rendered = decodedPdfPageText(result.bytes).join("\n");
+  assert.match(rendered, /Remboursement après traitement SAV/);
+  assert.doesNotMatch(rendered, /OTHER_REVIEWED/);
+  assert.match(rendered, /Montant de l’avoir : 25,00[ \u00a0]€/);
+  assert.match(rendered, /Solde documentaire restant : 58,00[ \u00a0]€/);
 });
 
 test("four short billing QA fixtures render on exactly one page with complete snapshot text", async () => {

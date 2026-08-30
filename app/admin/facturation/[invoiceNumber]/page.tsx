@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { parseBillingCustomerSnapshot } from "@/lib/billing/domain";
+import { creditNoteReasonLabel } from "@/lib/billing/presentation";
 import { getInvoiceForAdmin } from "@/lib/billing/service";
 import { formatEuro } from "@/lib/orders/domain";
 
@@ -24,7 +25,7 @@ export default async function AdminInvoicePage({ params }: { params: Promise<{ i
       <p className="admin-alert">DOCUMENT QA — SANS VALEUR COMPTABLE. Activation juridique et comptable non autorisée.</p>
       <div className="admin-action-row" role="group" aria-label="Actions du document"><a className="admin-button admin-button--primary" href={`/api/billing/invoices/${encodeURIComponent(invoice.invoiceNumber)}/pdf`}>TÉLÉCHARGER LE PDF</a>{invoice.documentType === "SHOP" ? <Link className="admin-button admin-button--quiet" href={`/admin/boutique/commandes/${encodeURIComponent(invoice.orderNumberSnapshot)}`}>VOIR LA COMMANDE</Link> : <Link className="admin-button admin-button--quiet" href={`/admin/commandes/${encodeURIComponent(invoice.orderNumberSnapshot)}`}>VOIR LA COMMANDE</Link>}</div>
     </section>
-    <section className="admin-panel"><div className="admin-panel__heading"><p className="admin-section-label">Corrections</p><h2>Avoirs</h2></div>{invoice.creditNotes.length ? <ul className="admin-card-list">{invoice.creditNotes.map((note) => <li key={note.id}><strong>{note.creditNoteNumber} · {formatEuro(note.amountCents)}</strong><small>{note.issuedAt.toLocaleString("fr-FR")} · {note.reasonCode}</small><Link href={`/admin/facturation/avoirs/${encodeURIComponent(note.creditNoteNumber)}`}>Consulter l’avoir</Link></li>)}</ul> : <p>Aucun avoir lié.</p>}</section>
+    <section className="admin-panel"><div className="admin-panel__heading"><p className="admin-section-label">Corrections</p><h2>Avoirs</h2></div>{invoice.creditNotes.length ? <ul className="admin-card-list">{invoice.creditNotes.map((note) => <li key={note.id}><strong>{note.creditNoteNumber} · {formatEuro(note.amountCents)}</strong><small>{note.issuedAt.toLocaleString("fr-FR")} · {creditNoteReasonLabel(note.reasonCode)}</small><Link href={`/admin/facturation/avoirs/${encodeURIComponent(note.creditNoteNumber)}`}>Consulter l’avoir</Link></li>)}</ul> : <p>Aucun avoir lié.</p>}</section>
     <section className="admin-panel"><div className="admin-panel__heading"><p className="admin-section-label">Audit</p><h2>Journal append-only</h2></div><ul className="admin-timeline">{invoice.auditEvents.map((event) => <li key={event.id}><time>{event.createdAt.toLocaleString("fr-FR")}</time><p>{event.action}</p><small>{event.actorUserId ? "Action authentifiée" : "Émission transactionnelle système"}</small></li>)}</ul></section>
   </main>;
 }

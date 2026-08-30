@@ -9,6 +9,7 @@ import { PaymentReturnNotice } from "@/components/payment-return-notice";
 import { PaypalReturnCapture } from "@/components/paypal-return-capture";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { shopAfterSalesQaEnabled } from "@/lib/shop/after-sales-config";
+import { shopReturnStatusLabel } from "@/lib/shop/after-sales-presentation";
 import { listShopReturnsForOrder } from "@/lib/shop/after-sales-service";
 import { parseShopOrderNumber } from "@/lib/shop/order-domain";
 import {
@@ -81,6 +82,7 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
     : confirmedPayment?.provider === "PAYPAL"
       ? "PayPal"
       : null;
+  const hasTrackingDetails = Boolean(order.shippingCarrier || order.trackingNumber || order.trackingUrl);
 
   return (
     <div className="auth-shell account-shell">
@@ -188,11 +190,11 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
           {order.fulfillmentStatus === "SHIPPED" ? (
             <section className="member-orders" aria-labelledby="shop-order-shipping-title">
               <div className="member-orders__heading"><div><p className="auth-panel__label">Expédition</p><h2 id="shop-order-shipping-title">Votre commande est partie.</h2></div></div>
-              <dl className="auth-profile">
+              {hasTrackingDetails ? <dl className="auth-profile">
                 {order.shippingCarrier ? <div><dt>Transporteur</dt><dd>{order.shippingCarrier}</dd></div> : null}
                 {order.trackingNumber ? <div><dt>Numéro de suivi</dt><dd>{order.trackingNumber}</dd></div> : null}
                 {order.trackingUrl ? <div><dt>Suivi</dt><dd><a className="text-link" href={order.trackingUrl} target="_blank" rel="noreferrer">Ouvrir le suivi <span aria-hidden="true">↗</span></a></dd></div> : null}
-              </dl>
+              </dl> : <p className="auth-form__notice">Les informations de suivi seront affichées ici lorsqu’elles seront disponibles.</p>}
             </section>
           ) : null}
 
@@ -201,7 +203,7 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
               <div className="member-orders__heading"><div><p className="auth-panel__label">Après-vente</p><h2 id="shop-order-sav-title">Retour ou incident.</h2></div></div>
               <p>Déclarez les articles concernés. Toute demande est relue humainement avant retour, remboursement ou remise en stock.</p>
               <div className="auth-form__secondary-actions"><Link className="button button--quiet" href={`/compte/achats/${encodeURIComponent(order.orderNumber)}/sav`}>OUVRIR UNE DEMANDE SAV</Link></div>
-              {returnRequests.length ? <ul className="member-order-list">{returnRequests.map((request) => <li key={request.id}><Link className="text-link" href={`/compte/sav/${encodeURIComponent(request.requestNumber)}`}>{request.requestNumber} · {request.status}</Link></li>)}</ul> : null}
+              {returnRequests.length ? <ul className="member-order-list">{returnRequests.map((request) => <li key={request.id}><Link className="text-link" href={`/compte/sav/${encodeURIComponent(request.requestNumber)}`}>{request.requestNumber} · {shopReturnStatusLabel(request.status)}</Link></li>)}</ul> : null}
             </section>
           ) : null}
 

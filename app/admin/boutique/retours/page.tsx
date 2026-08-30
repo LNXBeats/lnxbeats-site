@@ -6,6 +6,7 @@ import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { shopAfterSalesQaEnabled } from "@/lib/shop/after-sales-config";
 import { listAdminShopReturns } from "@/lib/shop/after-sales-service";
+import { shopReturnStatusLabel, shopReturnTypeLabel } from "@/lib/shop/after-sales-presentation";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export default async function AdminShopReturnsPage({ searchParams }: { searchPar
     <section className="admin-list-window" aria-labelledby="shop-returns-title"><div className="admin-list-window__heading"><h2 id="shop-returns-title">Dossiers SAV</h2><span>{requests.length} résultat{requests.length === 1 ? "" : "s"}</span></div>
       {requests.length ? <ul className="admin-order-list">{requests.map((request) => <li key={request.id}><Link href={`/admin/boutique/retours/${encodeURIComponent(request.requestNumber)}`}>
         <span className="admin-order-list__identity"><small>{DATE.format(request.requestedAt)}</small><strong>{request.requestNumber}</strong><em>{request.shopOrder.orderNumber}</em></span>
-        <span className="admin-order-list__facts"><span>{request.status}</span><small>{request.type}</small><b>{request.shopOrder.user.displayName || request.shopOrder.user.email}</b></span>
+        <span className="admin-order-list__facts"><span>{shopReturnStatusLabel(request.status)}</span><small>{shopReturnTypeLabel(request.type)}</small><b>{request.shopOrder.user.displayName || request.shopOrder.user.email}</b></span>
         <span className="admin-order-list__next"><strong>{request.totalRefundCents ? formatShopMoney(request.totalRefundCents) : "À déterminer"}</strong><small>{request.items.length} ligne{request.items.length === 1 ? "" : "s"}</small></span><span className="admin-order-list__arrow" aria-hidden="true">→</span>
       </Link></li>)}</ul> : <div className="admin-empty"><h2>Aucun dossier SAV.</h2><p>Les demandes membres apparaîtront ici après enregistrement.</p></div>}
     </section>

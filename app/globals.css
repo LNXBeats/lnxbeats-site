@@ -2154,6 +2154,27 @@ a {
 
 .auth-form { gap: 1.4rem; }
 
+.shop-return-form .auth-check {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+.shop-return-form .auth-check input[type="checkbox"] {
+  flex: 0 0 1.15rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 1.15rem;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+.shop-return-form .auth-check span { min-width: 0; }
+
 .auth-form__heading { display: grid; gap: 0.45rem; }
 .auth-form__heading h2 { margin: 0; font-family: var(--font-display), Georgia, serif; font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 500; }
 .auth-form__heading p { margin: 0; color: var(--text-soft); line-height: 1.65; }

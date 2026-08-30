@@ -8,6 +8,7 @@ import { requireVerifiedUser } from "@/lib/auth/session";
 import { SHOP_RETURN_REQUEST_CONFIRMATION } from "@/lib/shop/after-sales-domain";
 import { shopAfterSalesQaEnabled } from "@/lib/shop/after-sales-config";
 import { listShopReturnsForOrder } from "@/lib/shop/after-sales-service";
+import { shopReturnStatusLabel } from "@/lib/shop/after-sales-presentation";
 import { parseShopOrderNumber } from "@/lib/shop/order-domain";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
 import { getMemberShopOrder } from "@/lib/shop/order-service";
@@ -60,7 +61,7 @@ export default async function MemberShopReturnCreatePage({
           <button className="button button--primary" type="submit">ENREGISTRER LA DEMANDE</button>
         </form>
       </section>
-      {requests.length ? <section className="member-orders"><div className="member-orders__heading"><div><p className="auth-panel__label">Historique</p><h2>Dossiers liés.</h2></div></div><ul className="member-order-list">{requests.map((request) => <li key={request.id}><Link className="text-link" href={`/compte/sav/${encodeURIComponent(request.requestNumber)}`}>{request.requestNumber} · {request.status}</Link></li>)}</ul></section> : null}
+      {requests.length ? <section className="member-orders"><div className="member-orders__heading"><div><p className="auth-panel__label">Historique</p><h2>Dossiers liés.</h2></div></div><ul className="member-order-list">{requests.map((request) => <li key={request.id}><Link className="text-link" href={`/compte/sav/${encodeURIComponent(request.requestNumber)}`}>{request.requestNumber} · {shopReturnStatusLabel(request.status)}</Link></li>)}</ul></section> : null}
     </div>
   </Container></div>;
 }

@@ -3,6 +3,7 @@ import "server-only";
 import PDFDocument from "pdfkit";
 
 import { formatBillingMoney } from "@/lib/billing/domain";
+import { creditNoteReasonLabel } from "@/lib/billing/presentation";
 
 type Address = { line1: string; line2?: string | null; postalCode: string; city: string; countryCode: string };
 type Seller = { legalName: string; legalForm: string; tradeName: string; serviceName: string; address: Address; siren: string; siret: string; ape: string; email: string; phone: string };
@@ -223,7 +224,7 @@ export async function generateCreditNotePdf(record: CreditNotePdfRecord, qa = tr
   return render("AVOIR", record.creditNoteNumber, record.issuedAt, record.snapshotHashSha256, qa, (document) => {
     document.fillColor(dark).font("Helvetica-Bold").fontSize(11).text(`Facture d’origine : ${record.invoice.invoiceNumber}`);
     document.font("Helvetica").fontSize(9.5).text(`Commande : ${record.invoice.orderNumberSnapshot}`);
-    document.text(`Motif : ${record.reasonCode}${record.reasonText ? ` — ${record.reasonText}` : ""}`);
+    document.text(`Motif : ${creditNoteReasonLabel(record.reasonCode)}${record.reasonText ? ` — ${record.reasonText}` : ""}`);
     document.moveDown(1.5);
     document.font("Helvetica-Bold").fontSize(18).text(`Montant de l’avoir : ${formatBillingMoney(record.amountCents)}`, { align: "right" });
     document.font("Helvetica").fontSize(9.5).text(`Total cumulé des avoirs : ${formatBillingMoney(record.cumulativeCreditedCents)}`, { align: "right" });

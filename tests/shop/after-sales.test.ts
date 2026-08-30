@@ -15,6 +15,13 @@ import {
   SHOP_AFTER_SALES_QA_ORIGIN,
   SHOP_AFTER_SALES_QA_TARGET,
 } from "@/lib/shop/after-sales-config";
+import {
+  shopReturnAuditActionLabel,
+  shopReturnCostDecisionLabel,
+  shopReturnRefundStatusLabel,
+  shopReturnStatusLabel,
+  shopReturnTypeLabel,
+} from "@/lib/shop/after-sales-presentation";
 
 const productId = "11111111-1111-4111-8111-111111111111";
 
@@ -99,6 +106,36 @@ test("the state machine keeps physical receipt, inspection, refund and closure e
   assert.doesNotThrow(() => assertTransition("INSPECTED", "REFUND_PENDING"));
   assert.throws(() => assertTransition("AWAITING_RETURN", "REFUNDED"), ShopAfterSalesError);
   assert.throws(() => assertTransition("REFUND_PENDING", "CLOSED"), ShopAfterSalesError);
+});
+
+test("Phase 5B presentation replaces technical SAV enums without changing their persisted values", () => {
+  assert.equal(shopReturnStatusLabel("CLOSED"), "Clôturée");
+  assert.equal(shopReturnTypeLabel("DEFECTIVE"), "Produit défectueux");
+  assert.equal(shopReturnRefundStatusLabel("NOT_REQUESTED"), "Non demandé");
+  assert.equal(shopReturnRefundStatusLabel("SUCCEEDED"), "Confirmé");
+  assert.equal(shopReturnRefundStatusLabel("PENDING"), "En attente");
+  assert.equal(shopReturnRefundStatusLabel("FAILED"), "Échec");
+  assert.equal(shopReturnRefundStatusLabel("REQUIRES_REVIEW"), "Revue requise");
+  assert.equal(shopReturnCostDecisionLabel("MERCHANT"), "Vendeur");
+  assert.equal(shopReturnAuditActionLabel("REFUND_CONFIRMED"), "Remboursement confirmé");
+});
+
+test("Phase 5B member UI aligns confirmations and never renders an empty tracking definition list", async () => {
+  const [css, createPage, detailPage, orderPage] = await Promise.all([
+    readFile(new URL("../../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../../app/compte/achats/[orderNumber]/sav/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/compte/sav/[requestNumber]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/compte/achats/[orderNumber]/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(createPage, /className="auth-check"[\s\S]*SHOP_RETURN_REQUEST_CONFIRMATION/);
+  assert.match(detailPage, /className="auth-check"[\s\S]*SHOP_RETURN_CANCEL_CONFIRMATION/);
+  assert.match(detailPage, /<form className="shop-return-form" action=\{cancelShopReturnAction\}>/);
+  assert.match(css, /\.shop-return-form \.auth-check \{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*gap: 0\.65rem;/);
+  assert.match(css, /\.auth-check input\[type="checkbox"\][\s\S]*flex: 0 0 1\.15rem;[\s\S]*width: 1\.15rem;/);
+  assert.match(orderPage, /const hasTrackingDetails = Boolean\(order\.shippingCarrier \|\| order\.trackingNumber \|\| order\.trackingUrl\)/);
+  assert.match(orderPage, /hasTrackingDetails \? <dl className="auth-profile">/);
+  assert.match(orderPage, /Les informations de suivi seront affichées ici lorsqu’elles seront disponibles\./);
+  assert.doesNotMatch(orderPage, /◁▷/);
 });
 
 test("service source uses PostgreSQL locks, DB ownership, stable idempotency and never couples refund to restock", async () => {
