@@ -6,14 +6,15 @@ import {
   enqueueShopShippedNotification,
 } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
-import type { ShopShipmentDetails } from "@/lib/shop/fulfillment-domain";
+import type { ShopTrackingDetails } from "@/lib/shop/fulfillment-domain";
+import { assertShopShippingOperationsQaEnabled } from "@/lib/shop/shipping-operations-config";
 
 type Transaction = Prisma.TransactionClient;
 
 export class ShopFulfillmentError extends Error {
   constructor(
     message: string,
-    readonly code: "ORDER_NOT_FOUND" | "PAYMENT_REQUIRED" | "INVALID_TRANSITION" | "ACTOR_NOT_ADMIN",
+    readonly code: "ORDER_NOT_FOUND" | "PAYMENT_REQUIRED" | "INVALID_TRANSITION" | "ACTOR_NOT_ADMIN" | "TRACKING_REQUIRED",
   ) {
     super(message);
     this.name = "ShopFulfillmentError";
@@ -71,6 +72,14 @@ async function loadLockedOrder(transaction: Transaction, orderNumber: string) {
       paymentStatus: true,
       paymentReviewAt: true,
       fulfillmentStatus: true,
+      shippingRequired: true,
+      shippingMethod: true,
+      shippingBillableGrams: true,
+      shippingCarrier: true,
+      trackingNumber: true,
+      trackingUrl: true,
+      trackingSource: true,
+      trackingRevision: true,
     },
   });
   if (!order) throw new ShopFulfillmentError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
@@ -91,6 +100,7 @@ export async function markShopOrderPreparing(
   actorAdminId: string,
   now = new Date(),
 ) {
+  assertShopShippingOperationsQaEnabled();
   assertDatabaseConfigured();
   return lockedTransaction(async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
@@ -124,24 +134,24 @@ export async function markShopOrderPreparing(
       },
     });
     await enqueueShopPreparingNotification(transaction, order.id);
+    console.info(JSON.stringify({ event: "shop.shipment.preparation_started", shopOrderId: order.id }));
     return transaction.shopOrder.findUniqueOrThrow({ where: { id: order.id } });
   });
 }
 
-export async function markShopOrderShipped(
+export async function markShopOrderReadyToShip(
   orderNumber: string,
   actorAdminId: string,
-  shipment: ShopShipmentDetails,
   now = new Date(),
 ) {
+  assertShopShippingOperationsQaEnabled();
   assertDatabaseConfigured();
   return lockedTransaction(async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
     assertPaid(order);
-    if (order.fulfillmentStatus === "SHIPPED") return order;
     if (order.fulfillmentStatus !== "PREPARING") {
-      throw new ShopFulfillmentError("Seule une commande en préparation peut être expédiée.", "INVALID_TRANSITION");
+      throw new ShopFulfillmentError("Seule une commande en préparation peut être déclarée prête.", "INVALID_TRANSITION");
     }
     const changed = await transaction.shopOrder.updateMany({
       where: {
@@ -152,11 +162,8 @@ export async function markShopOrderShipped(
         fulfillmentStatus: "PREPARING",
       },
       data: {
-        fulfillmentStatus: "SHIPPED",
-        shippedAt: now,
-        shippingCarrier: shipment.carrier,
-        trackingNumber: shipment.trackingNumber,
-        trackingUrl: shipment.trackingUrl,
+        fulfillmentStatus: "READY_TO_SHIP",
+        readyToShipAt: now,
       },
     });
     if (changed.count !== 1) throw new ShopFulfillmentError(
@@ -167,17 +174,132 @@ export async function markShopOrderShipped(
       data: {
         shopOrderId: order.id,
         actorUserId: actorAdminId,
+        type: "SHIPMENT_READY",
+        idempotencyKey: `shop-order:${order.id}:ready-to-ship:v1`,
+        metadata: {
+          fulfillmentStatus: "READY_TO_SHIP",
+          shippingMethodSnapshot: order.shippingMethod,
+          shippingBillableGramsSnapshot: order.shippingBillableGrams,
+        },
+      },
+    });
+    console.info(JSON.stringify({ event: "shop.shipment.ready", shopOrderId: order.id }));
+    return transaction.shopOrder.findUniqueOrThrow({ where: { id: order.id } });
+  });
+}
+
+export async function recordShopOrderTracking(
+  orderNumber: string,
+  actorAdminId: string,
+  tracking: ShopTrackingDetails,
+  now = new Date(),
+) {
+  assertShopShippingOperationsQaEnabled();
+  assertDatabaseConfigured();
+  return lockedTransaction(async (transaction) => {
+    await assertActiveAdmin(transaction, actorAdminId);
+    const order = await loadLockedOrder(transaction, orderNumber);
+    assertPaid(order);
+    if (!order.shippingRequired || order.fulfillmentStatus !== "READY_TO_SHIP") {
+      throw new ShopFulfillmentError("Le suivi ne peut être enregistré que pour une expédition prête.", "INVALID_TRANSITION");
+    }
+    if (
+      order.trackingSource === "MANUAL"
+      && order.shippingCarrier === tracking.carrier
+      && order.trackingNumber === tracking.trackingNumber
+      && order.trackingUrl === tracking.trackingUrl
+    ) return order;
+    const nextRevision = order.trackingRevision + 1;
+    const changed = await transaction.shopOrder.updateMany({
+      where: {
+        id: order.id,
+        status: "OPEN",
+        paymentStatus: "PAID",
+        paymentReviewAt: null,
+        fulfillmentStatus: "READY_TO_SHIP",
+        trackingRevision: order.trackingRevision,
+      },
+      data: {
+        shippingCarrier: tracking.carrier,
+        trackingNumber: tracking.trackingNumber,
+        trackingUrl: tracking.trackingUrl,
+        trackingSource: "MANUAL",
+        trackingRecordedAt: now,
+        trackingRevision: { increment: 1 },
+      },
+    });
+    if (changed.count !== 1) throw new ShopFulfillmentError("Le suivi a été modifié par une autre action.", "INVALID_TRANSITION");
+    await transaction.shopOrderLifecycleEvent.create({
+      data: {
+        shopOrderId: order.id,
+        actorUserId: actorAdminId,
+        type: "TRACKING_RECORDED",
+        idempotencyKey: `shop-order:${order.id}:tracking:${nextRevision}`,
+        metadata: {
+          source: "MANUAL",
+          revision: nextRevision,
+          carrier: tracking.carrier,
+          trackingNumber: tracking.trackingNumber,
+          trackingUrl: tracking.trackingUrl,
+        },
+      },
+    });
+    console.info(JSON.stringify({ event: "shop.shipment.tracking_recorded", shopOrderId: order.id, source: "MANUAL", revision: nextRevision }));
+    return transaction.shopOrder.findUniqueOrThrow({ where: { id: order.id } });
+  });
+}
+
+export async function markShopOrderShipped(
+  orderNumber: string,
+  actorAdminId: string,
+  now = new Date(),
+) {
+  assertShopShippingOperationsQaEnabled();
+  assertDatabaseConfigured();
+  return lockedTransaction(async (transaction) => {
+    await assertActiveAdmin(transaction, actorAdminId);
+    const order = await loadLockedOrder(transaction, orderNumber);
+    assertPaid(order);
+    if (order.fulfillmentStatus === "SHIPPED") return order;
+    if (order.fulfillmentStatus !== "READY_TO_SHIP") {
+      throw new ShopFulfillmentError("Seule une expédition prête peut être confirmée.", "INVALID_TRANSITION");
+    }
+    if (order.shippingRequired && (!order.trackingNumber || !order.trackingSource)) {
+      throw new ShopFulfillmentError("Un suivi validé est requis avant l’expédition.", "TRACKING_REQUIRED");
+    }
+    const changed = await transaction.shopOrder.updateMany({
+      where: {
+        id: order.id,
+        status: "OPEN",
+        paymentStatus: "PAID",
+        paymentReviewAt: null,
+        fulfillmentStatus: "READY_TO_SHIP",
+        trackingRevision: order.trackingRevision,
+      },
+      data: { fulfillmentStatus: "SHIPPED", shippedAt: now },
+    });
+    if (changed.count !== 1) throw new ShopFulfillmentError(
+      "La confirmation d’expédition a été précédée par une autre mutation.",
+      "INVALID_TRANSITION",
+    );
+    await transaction.shopOrderLifecycleEvent.create({
+      data: {
+        shopOrderId: order.id,
+        actorUserId: actorAdminId,
         type: "ORDER_SHIPPED",
         idempotencyKey: `shop-order:${order.id}:shipped:v1`,
         metadata: {
           fulfillmentStatus: "SHIPPED",
-          carrierProvided: shipment.carrier !== null,
-          trackingProvided: shipment.trackingNumber !== null,
-          trackingUrlProvided: shipment.trackingUrl !== null,
+          trackingSource: order.trackingSource,
+          trackingRevision: order.trackingRevision,
+          carrierProvided: order.shippingCarrier !== null,
+          trackingProvided: order.trackingNumber !== null,
+          trackingUrlProvided: order.trackingUrl !== null,
         },
       },
     });
     await enqueueShopShippedNotification(transaction, order.id);
+    console.info(JSON.stringify({ event: "shop.shipment.confirmed", shopOrderId: order.id, trackingRevision: order.trackingRevision }));
     return transaction.shopOrder.findUniqueOrThrow({ where: { id: order.id } });
   });
 }

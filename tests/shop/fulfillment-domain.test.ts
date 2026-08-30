@@ -4,7 +4,9 @@ import test from "node:test";
 
 import {
   parseShopPreparingForm,
+  parseShopReadyForm,
   parseShopShippedForm,
+  parseShopTrackingForm,
   SHOP_FULFILLMENT_CONFIRMATIONS,
 } from "@/lib/shop/fulfillment-domain";
 
@@ -25,26 +27,62 @@ test("Shop fulfillment forms are exact and require explicit confirmations", () =
   extra.set("confirmation", SHOP_FULFILLMENT_CONFIRMATIONS.preparing);
   extra.set("role", "ADMIN");
   assert.throws(() => parseShopPreparingForm(extra));
-});
 
-test("Shop shipment accepts bounded optional tracking and HTTPS only", () => {
+  const ready = new FormData();
+  ready.set("orderNumber", ORDER_NUMBER);
+  ready.set("confirmation", SHOP_FULFILLMENT_CONFIRMATIONS.ready);
+  assert.deepEqual(parseShopReadyForm(ready), { orderNumber: ORDER_NUMBER });
+
   const shipped = new FormData();
   shipped.set("orderNumber", ORDER_NUMBER);
   shipped.set("confirmation", SHOP_FULFILLMENT_CONFIRMATIONS.shipped);
-  shipped.set("carrier", "La Poste");
-  shipped.set("trackingNumber", "QA-0001");
-  shipped.set("trackingUrl", "https://tracking.example.invalid/QA-0001");
-  assert.deepEqual(parseShopShippedForm(shipped), {
+  assert.deepEqual(parseShopShippedForm(shipped), { orderNumber: ORDER_NUMBER });
+});
+
+function trackingForm(overrides: Record<string, string> = {}) {
+  const form = new FormData();
+  const values = {
     orderNumber: ORDER_NUMBER,
-    shipment: {
-      carrier: "La Poste",
-      trackingNumber: "QA-0001",
+    confirmation: SHOP_FULFILLMENT_CONFIRMATIONS.tracking,
+    carrier: "Transporteur QA",
+    trackingNumber: "QA-0001/FR",
+    trackingUrl: "https://tracking.example.invalid/QA-0001",
+    ...overrides,
+  };
+  for (const [name, value] of Object.entries(values)) form.set(name, value);
+  return form;
+}
+
+test("manual tracking is normalized, bounded and independent from any carrier-specific format", () => {
+  assert.deepEqual(parseShopTrackingForm(trackingForm({ carrier: "  Transporteur QA  ", trackingNumber: " QA-0001/FR " })), {
+    orderNumber: ORDER_NUMBER,
+    tracking: {
+      carrier: "Transporteur QA",
+      trackingNumber: "QA-0001/FR",
       trackingUrl: "https://tracking.example.invalid/QA-0001",
     },
   });
 
-  shipped.set("trackingUrl", "http://tracking.example.invalid/QA-0001");
-  assert.throws(() => parseShopShippedForm(shipped), /HTTPS/);
+  assert.equal(parseShopTrackingForm(trackingForm({ trackingUrl: "" })).tracking.trackingUrl, null);
+  assert.throws(() => parseShopTrackingForm(trackingForm({ carrier: "" })), /requis/);
+  assert.throws(() => parseShopTrackingForm(trackingForm({ trackingNumber: "" })), /requis/);
+  assert.throws(() => parseShopTrackingForm(trackingForm({ trackingNumber: "<script>" })), /caractères/);
+  assert.throws(() => parseShopTrackingForm(trackingForm({ trackingNumber: "A".repeat(161) })));
+  assert.throws(() => parseShopTrackingForm(trackingForm({ carrier: "A".repeat(121) })));
+});
+
+test("tracking URLs accept HTTPS only and reject active schemes or embedded credentials", () => {
+  for (const trackingUrl of [
+    "http://tracking.example.invalid/QA-0001",
+    "javascript:alert(1)",
+    "data:text/html,test",
+    "file:///tmp/test",
+    "ftp://tracking.example.invalid/QA-0001",
+    "https://user:password@tracking.example.invalid/QA-0001",
+  ]) {
+    assert.throws(() => parseShopTrackingForm(trackingForm({ trackingUrl })), /URL|HTTPS/);
+  }
+  assert.throws(() => parseShopTrackingForm(trackingForm({ trackingUrl: `https://tracking.example.invalid/${"x".repeat(1000)}` })));
 });
 
 test("fulfillment service keeps paid-state guards and transaction-bound notifications", async () => {
@@ -55,6 +93,10 @@ test("fulfillment service keeps paid-state guards and transaction-bound notifica
   assert.match(source, /ACTOR_NOT_ADMIN/);
   assert.match(source, /fulfillmentStatus !== "PENDING"/);
   assert.match(source, /fulfillmentStatus !== "PREPARING"/);
+  assert.match(source, /fulfillmentStatus !== "READY_TO_SHIP"/);
+  assert.match(source, /trackingSource: "MANUAL"/);
+  assert.match(source, /trackingRevision: \{ increment: 1 \}/);
+  assert.match(source, /TRACKING_REQUIRED/);
   assert.match(source, /enqueueShopPreparingNotification\(transaction, order\.id\)/);
   assert.match(source, /enqueueShopShippedNotification\(transaction, order\.id\)/);
   assert.match(source, /pg_advisory_xact_lock/);

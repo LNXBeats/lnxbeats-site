@@ -30,11 +30,15 @@ import {
 } from "@/lib/shop/product-service";
 import {
   parseShopPreparingForm,
+  parseShopReadyForm,
   parseShopShippedForm,
+  parseShopTrackingForm,
 } from "@/lib/shop/fulfillment-domain";
 import {
   markShopOrderPreparing,
+  markShopOrderReadyToShip,
   markShopOrderShipped,
+  recordShopOrderTracking,
 } from "@/lib/shop/fulfillment-service";
 
 async function authorize() {
@@ -203,10 +207,37 @@ export async function markShopOrderShippedAction(formData: FormData) {
   try {
     const input = parseShopShippedForm(formData);
     orderNumber = input.orderNumber;
-    await markShopOrderShipped(orderNumber, session.user.id, input.shipment);
+    await markShopOrderShipped(orderNumber, session.user.id);
   } catch {
     redirect("/admin/boutique/commandes?etat=transition-refusee");
   }
   refreshShopOrder(orderNumber);
   redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=commande-expediee`);
+}
+
+export async function markShopOrderReadyAction(formData: FormData) {
+  const session = await authorize();
+  let orderNumber: string;
+  try {
+    ({ orderNumber } = parseShopReadyForm(formData));
+    await markShopOrderReadyToShip(orderNumber, session.user.id);
+  } catch {
+    redirect("/admin/boutique/commandes?etat=transition-refusee");
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=expedition-prete`);
+}
+
+export async function recordShopOrderTrackingAction(formData: FormData) {
+  const session = await authorize();
+  let orderNumber: string;
+  try {
+    const input = parseShopTrackingForm(formData);
+    orderNumber = input.orderNumber;
+    await recordShopOrderTracking(orderNumber, session.user.id, input.tracking);
+  } catch {
+    redirect("/admin/boutique/commandes?etat=transition-refusee");
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=suivi-enregistre`);
 }

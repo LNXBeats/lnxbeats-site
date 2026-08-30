@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 
 import {
   markShopOrderPreparingAction,
+  markShopOrderReadyAction,
   markShopOrderShippedAction,
+  recordShopOrderTrackingAction,
 } from "@/app/admin/boutique/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
@@ -11,6 +13,8 @@ import {
   formatShopMoney,
   shopPaymentAttemptPresentation,
   shopPaymentIncidentLabel,
+  shopShippingMethodLabel,
+  shopTrackingSourceLabel,
 } from "@/lib/shop/order-presentation";
 import { getAdminShopOrder } from "@/lib/shop/order-service";
 
@@ -32,6 +36,7 @@ const PAYMENT_STATUS_LABELS = {
 const FULFILLMENT_STATUS_LABELS = {
   PENDING: "En attente",
   PREPARING: "En préparation",
+  READY_TO_SHIP: "Prête à expédier",
   SHIPPED: "Expédiée",
   CANCELLED: "Annulée",
 } as const;
@@ -57,6 +62,8 @@ const EVENT_LABELS = {
   SHOP_PAYMENT_FAILED: "Tentative de paiement échouée",
   SHOP_PAYMENT_REQUIRES_REVIEW: "Paiement Boutique à vérifier",
   PREPARATION_STARTED: "Préparation démarrée",
+  SHIPMENT_READY: "Expédition prête",
+  TRACKING_RECORDED: "Suivi enregistré",
   ORDER_SHIPPED: "Commande expédiée",
 } as const;
 
@@ -102,6 +109,10 @@ function eventDetail(event: EventSummary, items: readonly ItemSummary[]) {
     return "La durée de réservation est arrivée à son terme.";
   }
   if (event.type === "SHOP_ORDER_CANCELLED") return "La commande non payée a été annulée.";
+  if (event.type === "PREPARATION_STARTED") return "L’atelier a commencé la préparation de la commande.";
+  if (event.type === "SHIPMENT_READY") return "Le colis est prêt pour sa remise au transporteur.";
+  if (event.type === "TRACKING_RECORDED") return "Un suivi manuel a été enregistré ou corrigé avant expédition.";
+  if (event.type === "ORDER_SHIPPED") return "LNX Beats a enregistré la remise du colis au transporteur ; cela ne confirme pas sa livraison.";
   return "Événement enregistré par le service Boutique.";
 }
 
@@ -153,6 +164,8 @@ export default async function AdminShopOrderPage({
       </header>
 
       {state === "preparation-demarree" ? <p className="admin-alert" role="status">La préparation de cette commande a commencé.</p> : null}
+      {state === "expedition-prete" ? <p className="admin-alert" role="status">Le colis est prêt à être remis au transporteur.</p> : null}
+      {state === "suivi-enregistre" ? <p className="admin-alert" role="status">Le suivi manuel a été enregistré.</p> : null}
       {state === "commande-expediee" ? <p className="admin-alert" role="status">La commande est marquée expédiée.</p> : null}
 
       {order.status === "EXPIRED" ? (
@@ -197,11 +210,26 @@ export default async function AdminShopOrderPage({
                 <div><dt>Ville</dt><dd>{order.shippingCity || "Non renseignée"}</dd></div>
                 <div><dt>Pays</dt><dd>{order.shippingCountryCode || "Non renseigné"}</dd></div>
                 {order.shippingQuoteVersion ? <div><dt>Version devis</dt><dd>{order.shippingQuoteVersion}</dd></div> : null}
-                {order.shippingMethod ? <div><dt>Service interne</dt><dd>{order.shippingMethod}</dd></div> : null}
+                {order.shippingMethod ? <div><dt>Mode d’expédition</dt><dd>{shopShippingMethodLabel(order.shippingMethod)}</dd></div> : null}
                 {order.shippingWeightGrams ? <div><dt>Poids produits</dt><dd>{order.shippingWeightGrams} g</dd></div> : null}
                 {order.shippingBillableGrams ? <div><dt>Poids facturable</dt><dd>{order.shippingBillableGrams} g</dd></div> : null}
               </dl>
             ) : <p>Cette commande ne nécessite aucune expédition.</p>}
+          </section>
+
+          <section className="admin-detail-window" aria-labelledby="admin-shop-shipment-title">
+            <p className="admin-section-label">Expédition opérationnelle</p>
+            <h2 id="admin-shop-shipment-title">Snapshots et suivi.</h2>
+            <dl className="admin-detail-facts">
+              <div><dt>État</dt><dd>{FULFILLMENT_STATUS_LABELS[order.fulfillmentStatus]}</dd></div>
+              <div><dt>Mode</dt><dd>{shopShippingMethodLabel(order.shippingMethod)}</dd></div>
+              {order.shippingCarrier ? <div><dt>Transporteur</dt><dd>{order.shippingCarrier}</dd></div> : null}
+              {order.trackingNumber ? <div><dt>Numéro de suivi</dt><dd>{order.trackingNumber}</dd></div> : null}
+              {order.trackingSource ? <div><dt>Source du suivi</dt><dd>{shopTrackingSourceLabel(order.trackingSource)}</dd></div> : null}
+              {order.trackingRecordedAt ? <div><dt>Suivi enregistré</dt><dd><time dateTime={order.trackingRecordedAt.toISOString()}>{DATE_FORMAT.format(order.trackingRecordedAt)}</time></dd></div> : null}
+              {order.trackingUrl ? <div className="admin-detail-facts__wide"><dt>Lien de suivi</dt><dd><a className="admin-inline-link" href={order.trackingUrl} target="_blank" rel="noopener noreferrer">Ouvrir le suivi</a></dd></div> : null}
+            </dl>
+            {!order.trackingNumber ? <p className="admin-alert">Aucun suivi n’est encore enregistré.</p> : null}
           </section>
 
           <section className="admin-detail-window" aria-labelledby="admin-shop-audit-title">
@@ -249,6 +277,7 @@ export default async function AdminShopOrderPage({
               {order.expiredAt ? <div><dt>Expirée</dt><dd><time dateTime={order.expiredAt.toISOString()}>{DATE_FORMAT.format(order.expiredAt)}</time></dd></div> : null}
               {order.cancelledAt ? <div><dt>Annulée</dt><dd><time dateTime={order.cancelledAt.toISOString()}>{DATE_FORMAT.format(order.cancelledAt)}</time></dd></div> : null}
               {order.preparingAt ? <div><dt>Préparation démarrée</dt><dd><time dateTime={order.preparingAt.toISOString()}>{DATE_FORMAT.format(order.preparingAt)}</time></dd></div> : null}
+              {order.readyToShipAt ? <div><dt>Prête à expédier</dt><dd><time dateTime={order.readyToShipAt.toISOString()}>{DATE_FORMAT.format(order.readyToShipAt)}</time></dd></div> : null}
               {order.shippedAt ? <div><dt>Expédiée</dt><dd><time dateTime={order.shippedAt.toISOString()}>{DATE_FORMAT.format(order.shippedAt)}</time></dd></div> : null}
             </dl>
           </section>
@@ -309,19 +338,51 @@ export default async function AdminShopOrderPage({
           ) : null}
 
           {order.status === "OPEN" && order.paymentStatus === "PAID" && !order.paymentReviewAt && order.fulfillmentStatus === "PREPARING" ? (
-            <section className="admin-side-window" aria-labelledby="admin-shop-shipped-title">
+            <section className="admin-side-window" aria-labelledby="admin-shop-ready-title">
               <p className="admin-section-label">Fulfillment</p>
-              <h2 id="admin-shop-shipped-title">Marquer expédiée.</h2>
+              <h2 id="admin-shop-ready-title">Déclarer le colis prêt.</h2>
+              <p>Cette étape termine la préparation interne sans déclarer le colis expédié.</p>
+              <form action={markShopOrderReadyAction}>
+                <input type="hidden" name="orderNumber" value={order.orderNumber} />
+                <label className="admin-check">
+                  <input type="checkbox" name="confirmation" value="CONFIRM_SHOP_READY_TO_SHIP" required />
+                  Je confirme que le colis est prêt à être remis au transporteur.
+                </label>
+                <button className="admin-button" type="submit">MARQUER PRÊTE À EXPÉDIER</button>
+              </form>
+            </section>
+          ) : null}
+
+          {order.status === "OPEN" && order.paymentStatus === "PAID" && !order.paymentReviewAt && order.fulfillmentStatus === "READY_TO_SHIP" ? (
+            <section className="admin-side-window" aria-labelledby="admin-shop-tracking-title">
+              <p className="admin-section-label">Suivi manuel</p>
+              <h2 id="admin-shop-tracking-title">{order.trackingNumber ? "Corriger le suivi avant départ." : "Enregistrer le suivi."}</h2>
+              <form action={recordShopOrderTrackingAction}>
+                <input type="hidden" name="orderNumber" value={order.orderNumber} />
+                <label>Transporteur ou mode<input name="carrier" maxLength={120} defaultValue={order.shippingCarrier ?? "Transporteur QA"} required /></label>
+                <label>Numéro de suivi<input name="trackingNumber" maxLength={160} defaultValue={order.trackingNumber ?? ""} required /></label>
+                <label>URL de suivi HTTPS (facultative)<input name="trackingUrl" type="url" maxLength={1000} defaultValue={order.trackingUrl ?? ""} /></label>
+                <label className="admin-check">
+                  <input type="checkbox" name="confirmation" value="CONFIRM_SHOP_TRACKING" required />
+                  Je confirme la saisie manuelle de ces informations de suivi.
+                </label>
+                <button className="admin-button" type="submit">ENREGISTRER LE SUIVI</button>
+              </form>
+            </section>
+          ) : null}
+
+          {order.status === "OPEN" && order.paymentStatus === "PAID" && !order.paymentReviewAt && order.fulfillmentStatus === "READY_TO_SHIP" && order.trackingNumber ? (
+            <section className="admin-side-window" aria-labelledby="admin-shop-shipped-title">
+              <p className="admin-section-label">Confirmation d’expédition</p>
+              <h2 id="admin-shop-shipped-title">Confirmer la remise au transporteur.</h2>
+              <p>Cette action signifie que LNX Beats a remis le colis au transporteur. Elle n’affirme ni livraison, ni distribution, ni réception par le client.</p>
               <form action={markShopOrderShippedAction}>
                 <input type="hidden" name="orderNumber" value={order.orderNumber} />
-                <label>Transporteur (facultatif)<input name="carrier" maxLength={120} /></label>
-                <label>Numéro de suivi (facultatif)<input name="trackingNumber" maxLength={160} /></label>
-                <label>URL de suivi HTTPS (facultative)<input name="trackingUrl" type="url" maxLength={500} /></label>
                 <label className="admin-check">
                   <input type="checkbox" name="confirmation" value="CONFIRM_SHOP_SHIPMENT" required />
-                  Je confirme que cette commande a été expédiée.
+                  Je confirme la remise effective du colis au transporteur.
                 </label>
-                <button className="admin-button" type="submit">MARQUER EXPÉDIÉE</button>
+                <button className="admin-button" type="submit">CONFIRMER L’EXPÉDITION</button>
               </form>
             </section>
           ) : null}

@@ -299,8 +299,14 @@ enum ShopPaymentStatus {
 enum ShopFulfillmentStatus {
   PENDING
   PREPARING
+  READY_TO_SHIP
   SHIPPED
   CANCELLED
+}
+
+enum ShopTrackingSource {
+  MANUAL
+  PROVIDER
 }
 
 enum ShopStockReservationStatus {
@@ -327,6 +333,8 @@ enum ShopOrderLifecycleEventType {
   SHOP_PAYMENT_FAILED
   SHOP_PAYMENT_REQUIRES_REVIEW
   PREPARATION_STARTED
+  SHIPMENT_READY
+  TRACKING_RECORDED
   ORDER_SHIPPED
 }
 
@@ -1850,10 +1858,14 @@ model ShopOrder {
   paymentReviewAt          DateTime?                   @db.Timestamptz(3)
   paymentReviewCode        String?                     @db.VarChar(80)
   preparingAt              DateTime?                   @db.Timestamptz(3)
+  readyToShipAt            DateTime?                   @db.Timestamptz(3)
   shippedAt                DateTime?                   @db.Timestamptz(3)
   shippingCarrier          String?                     @db.VarChar(120)
   trackingNumber           String?                     @db.VarChar(160)
   trackingUrl              String?                     @db.VarChar(1000)
+  trackingSource           ShopTrackingSource?
+  trackingRecordedAt       DateTime?                   @db.Timestamptz(3)
+  trackingRevision         Int                         @default(0)
   expiredAt                DateTime?                   @db.Timestamptz(3)
   cancelledAt              DateTime?                   @db.Timestamptz(3)
   createdAt                DateTime                    @default(now()) @db.Timestamptz(3)

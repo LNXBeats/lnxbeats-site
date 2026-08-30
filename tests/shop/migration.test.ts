@@ -13,6 +13,7 @@ const LEGAL_COMPLIANCE_MIGRATION = "20260828120000_legal_compliance_foundation";
 const INVOICING_MIGRATION = "20260828180000_invoicing_foundation";
 const SHIPPING_MIGRATION = "20260828220000_shop_shipping_quotes";
 const AFTER_SALES_MIGRATION = "20260830120000_shop_after_sales_foundation";
+const SHIPPING_OPERATIONS_MIGRATION = "20260830220000_shop_shipping_operations";
 
 async function directories() {
   return (await readdir(MIGRATIONS_DIRECTORY, { withFileTypes: true }))
@@ -157,7 +158,7 @@ test("Phase 5A shipping migration is additive, preserves legacy nulls and freeze
 
 test("Phase 5B after-sales migration is additive and separates refund from restock", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.at(-1), AFTER_SALES_MIGRATION);
+  assert.ok(migrationDirectories.indexOf(AFTER_SALES_MIGRATION) < migrationDirectories.indexOf(SHIPPING_OPERATIONS_MIGRATION));
   const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, AFTER_SALES_MIGRATION, "migration.sql"), "utf8");
   assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE|DELETE\s+FROM)\b/i);
   for (const table of ["shop_return_requests", "shop_return_items", "shop_return_audit_events"]) {
@@ -167,6 +168,19 @@ test("Phase 5B after-sales migration is additive and separates refund from resto
   assert.match(sql, /enforce_shop_return_item_limits/);
   assert.match(sql, /shopReturnRequestId/);
   assert.match(sql, /product_stock_adjustments_idempotencyKey_key/);
+});
+
+test("Phase 5C shipping operations migration is additive and preserves legacy shipment snapshots", async () => {
+  const migrationDirectories = await directories();
+  assert.equal(migrationDirectories.at(-1), SHIPPING_OPERATIONS_MIGRATION);
+  const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, SHIPPING_OPERATIONS_MIGRATION, "migration.sql"), "utf8");
+  assert.doesNotMatch(sql, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE|DELETE\s+FROM|UPDATE\s+"|INSERT\s+INTO)\b/i);
+  assert.match(sql, /READY_TO_SHIP/);
+  assert.match(sql, /CREATE TYPE "ShopTrackingSource" AS ENUM \('MANUAL', 'PROVIDER'\)/);
+  assert.match(sql, /"trackingRevision" INTEGER NOT NULL DEFAULT 0/);
+  assert.match(sql, /Compatibility for ShopOrders shipped before Phase 5C/);
+  assert.match(sql, /SHIPMENT_READY/);
+  assert.match(sql, /TRACKING_RECORDED/);
 });
 
 test("the 20 to 21 migration preserves Phase 2 Product, ShopOrder and NotificationEvent rows", async () => {

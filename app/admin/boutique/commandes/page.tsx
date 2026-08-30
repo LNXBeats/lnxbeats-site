@@ -33,6 +33,7 @@ const PAYMENT_STATUS_LABELS = {
 const FULFILLMENT_STATUS_LABELS = {
   PENDING: "Préparation en attente",
   PREPARING: "En préparation",
+  READY_TO_SHIP: "Prête à expédier",
   SHIPPED: "Expédiée",
   CANCELLED: "Préparation annulée",
 } as const;

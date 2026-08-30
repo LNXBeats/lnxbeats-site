@@ -9,7 +9,13 @@ import {
   processVerifiedStripeFinancialEvent,
 } from "@/lib/payments/provider-financial-events";
 import { prisma } from "@/lib/prisma";
-import { markShopOrderPreparing, markShopOrderShipped, ShopFulfillmentError } from "@/lib/shop/fulfillment-service";
+import {
+  markShopOrderPreparing,
+  markShopOrderReadyToShip,
+  markShopOrderShipped,
+  recordShopOrderTracking,
+  ShopFulfillmentError,
+} from "@/lib/shop/fulfillment-service";
 import {
   SHOP_LEGAL_QA_CONFIRMATION,
   SHOP_LEGAL_QA_TERMS_VERSION,
@@ -507,16 +513,14 @@ async function disabledAfterAttemptAndFulfillmentRuntime(fixture: Fixture, passe
   );
   await markShopOrderPreparing(fixture.orderNumber, fixture.adminId);
   await markShopOrderPreparing(fixture.orderNumber, fixture.adminId);
-  await markShopOrderShipped(fixture.orderNumber, fixture.adminId, {
+  await markShopOrderReadyToShip(fixture.orderNumber, fixture.adminId);
+  await recordShopOrderTracking(fixture.orderNumber, fixture.adminId, {
     carrier: "Transporteur fictif",
     trackingNumber: "QA-PHASE3-0001",
     trackingUrl: "https://example.invalid/tracking/QA-PHASE3-0001",
   });
-  await markShopOrderShipped(fixture.orderNumber, fixture.adminId, {
-    carrier: "Autre valeur ignorée par idempotence",
-    trackingNumber: null,
-    trackingUrl: null,
-  });
+  await markShopOrderShipped(fixture.orderNumber, fixture.adminId);
+  await markShopOrderShipped(fixture.orderNumber, fixture.adminId);
   const fulfilled = await prisma.shopOrder.findUniqueOrThrow({ where: { id: fixture.shopOrderId } });
   assert.equal(fulfilled.fulfillmentStatus, "SHIPPED");
   assert.equal(fulfilled.shippingCarrier, "Transporteur fictif");
@@ -534,7 +538,7 @@ async function disabledAfterAttemptAndFulfillmentRuntime(fixture: Fixture, passe
   assert.equal(await prisma.orderNotification.count({
     where: { shopOrderId: fixture.shopOrderId, kind: "CUSTOMER_SHOP_SHIPPED" },
   }), 1);
-  passed.push("ADMIN PREPARING/SHIPPED transitions and notifications are idempotent");
+  passed.push("ADMIN PREPARING/READY/TRACKING/SHIPPED transitions and notifications are idempotent");
 }
 
 async function lateCaptureRuntime(fixture: Fixture, passed: string[]) {
@@ -1080,11 +1084,7 @@ async function financialReviewVsFulfillmentRuntime(fixture: Fixture, passed: str
   const preparingNotifications = order.fulfillmentStatus === "PREPARING" ? 1 : 0;
   assert.equal(await prisma.orderNotification.count({ where: { shopOrderId: fixture.shopOrderId } }), 2 + preparingNotifications);
   await assert.rejects(
-    () => markShopOrderShipped(fixture.orderNumber, fixture.adminId, {
-      carrier: "Transporteur fictif",
-      trackingNumber: "QA-FINANCIAL-REVIEW",
-      trackingUrl: "https://example.invalid/tracking/QA-FINANCIAL-REVIEW",
-    }),
+    () => markShopOrderShipped(fixture.orderNumber, fixture.adminId),
     (error: unknown) => error instanceof ShopFulfillmentError && error.code === "PAYMENT_REQUIRED",
   );
   const replay = await processVerifiedStripeFinancialEvent(financialEvent);

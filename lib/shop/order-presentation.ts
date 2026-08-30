@@ -110,11 +110,21 @@ export function shopPaymentAttemptPresentation(payment: Readonly<{
   } as const;
 }
 
-export function shopFulfillmentLabel(status: "PENDING" | "PREPARING" | "SHIPPED" | "CANCELLED") {
+export function shopFulfillmentLabel(status: "PENDING" | "PREPARING" | "READY_TO_SHIP" | "SHIPPED" | "CANCELLED") {
   return ({
     PENDING: "En attente de préparation",
     PREPARING: "En préparation",
+    READY_TO_SHIP: "Prête à expédier",
     SHIPPED: "Expédiée",
     CANCELLED: "Annulée",
   } as const)[status];
+}
+
+export function shopShippingMethodLabel(method: string | null) {
+  if (method === "STANDARD_TRACKED_SIGNATURE") return "Expédition suivie avec remise contre signature";
+  return method ? "Mode d’expédition snapshoté" : "Mode d’expédition non renseigné";
+}
+
+export function shopTrackingSourceLabel(source: "MANUAL" | "PROVIDER" | null) {
+  return source === "MANUAL" ? "Saisie manuelle" : source === "PROVIDER" ? "Transporteur connecté" : "Non renseignée";
 }

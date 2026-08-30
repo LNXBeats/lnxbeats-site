@@ -26,9 +26,17 @@ test("Admin exposes ShopOrders and strictly guarded fulfillment actions", async 
   assert.match(detailPage, /AWAITING_PAYMENT/);
   assert.match(detailPage, /paymentReviewAt/);
   assert.match(detailPage, /markShopOrderPreparingAction/);
+  assert.match(detailPage, /markShopOrderReadyAction/);
+  assert.match(detailPage, /recordShopOrderTrackingAction/);
   assert.match(detailPage, /markShopOrderShippedAction/);
   assert.match(detailPage, /CONFIRM_SHOP_PREPARATION/);
+  assert.match(detailPage, /CONFIRM_SHOP_READY_TO_SHIP/);
+  assert.match(detailPage, /CONFIRM_SHOP_TRACKING/);
   assert.match(detailPage, /CONFIRM_SHOP_SHIPMENT/);
+  assert.match(detailPage, /Transporteur ou mode/);
+  assert.match(detailPage, /Prête à expédier/);
+  assert.match(detailPage, /ne confirme pas sa livraison/);
+  assert.doesNotMatch(detailPage, />Livré</);
   assert.match(detailPage, /Aucun identifiant provider ni payload brut/);
   assert.match(detailPage, /elle ne réduit plus la disponibilité/);
   assert.match(detailPage, /Aucun mouvement de stock physique n’a été nécessaire/);

@@ -2,12 +2,14 @@ const SHOP_ORDER_NUMBER = /^LNX-SHOP-[0-9]{4}-[0-9]{6,}$/;
 
 export const SHOP_FULFILLMENT_CONFIRMATIONS = {
   preparing: "CONFIRM_SHOP_PREPARATION",
+  ready: "CONFIRM_SHOP_READY_TO_SHIP",
+  tracking: "CONFIRM_SHOP_TRACKING",
   shipped: "CONFIRM_SHOP_SHIPMENT",
 } as const;
 
-export type ShopShipmentDetails = Readonly<{
-  carrier: string | null;
-  trackingNumber: string | null;
+export type ShopTrackingDetails = Readonly<{
+  carrier: string;
+  trackingNumber: string;
   trackingUrl: string | null;
 }>;
 
@@ -51,8 +53,30 @@ function optionalText(value: string | undefined, maximum: number) {
   return normalized;
 }
 
+function requiredText(value: string | undefined, maximum: number, message: string) {
+  const normalized = optionalText(value, maximum);
+  if (!normalized) throw new ShopFulfillmentInputError(message);
+  return normalized;
+}
+
+function carrier(value: string | undefined) {
+  const normalized = requiredText(value, 120, "Le transporteur ou mode d’expédition est requis.");
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} .,'’&()+/_-]*$/u.test(normalized)) {
+    throw new ShopFulfillmentInputError("Le libellé du transporteur est invalide.");
+  }
+  return normalized;
+}
+
+function trackingNumber(value: string | undefined) {
+  const normalized = requiredText(value, 160, "Le numéro de suivi est requis.");
+  if (!/^[A-Za-z0-9][A-Za-z0-9 ._+:/-]*$/.test(normalized)) {
+    throw new ShopFulfillmentInputError("Le numéro de suivi contient des caractères invalides.");
+  }
+  return normalized;
+}
+
 function optionalHttpsUrl(value: string | undefined) {
-  const normalized = optionalText(value, 500);
+  const normalized = optionalText(value, 1000);
   if (!normalized) return null;
   let url: URL;
   try {
@@ -63,7 +87,9 @@ function optionalHttpsUrl(value: string | undefined) {
   if (url.protocol !== "https:" || url.username || url.password) {
     throw new ShopFulfillmentInputError("L’URL de suivi doit utiliser HTTPS.");
   }
-  return url.toString();
+  const serialized = url.toString();
+  if (serialized.length > 1000) throw new ShopFulfillmentInputError("L’URL de suivi est trop longue.");
+  return serialized;
 }
 
 export function parseShopPreparingForm(formData: FormData) {
@@ -74,7 +100,15 @@ export function parseShopPreparingForm(formData: FormData) {
   return Object.freeze({ orderNumber: orderNumber(values.get("orderNumber")) });
 }
 
-export function parseShopShippedForm(formData: FormData) {
+export function parseShopReadyForm(formData: FormData) {
+  const values = exactFormValues(formData, ["orderNumber", "confirmation"]);
+  if (values.get("confirmation") !== SHOP_FULFILLMENT_CONFIRMATIONS.ready) {
+    throw new ShopFulfillmentInputError("La confirmation de fin de préparation est requise.");
+  }
+  return Object.freeze({ orderNumber: orderNumber(values.get("orderNumber")) });
+}
+
+export function parseShopTrackingForm(formData: FormData) {
   const values = exactFormValues(formData, [
     "orderNumber",
     "confirmation",
@@ -82,15 +116,23 @@ export function parseShopShippedForm(formData: FormData) {
     "trackingNumber",
     "trackingUrl",
   ]);
-  if (values.get("confirmation") !== SHOP_FULFILLMENT_CONFIRMATIONS.shipped) {
-    throw new ShopFulfillmentInputError("La confirmation d’expédition est requise.");
+  if (values.get("confirmation") !== SHOP_FULFILLMENT_CONFIRMATIONS.tracking) {
+    throw new ShopFulfillmentInputError("La confirmation du suivi manuel est requise.");
   }
   return Object.freeze({
     orderNumber: orderNumber(values.get("orderNumber")),
-    shipment: Object.freeze({
-      carrier: optionalText(values.get("carrier"), 120),
-      trackingNumber: optionalText(values.get("trackingNumber"), 160),
+    tracking: Object.freeze({
+      carrier: carrier(values.get("carrier")),
+      trackingNumber: trackingNumber(values.get("trackingNumber")),
       trackingUrl: optionalHttpsUrl(values.get("trackingUrl")),
     }),
   });
+}
+
+export function parseShopShippedForm(formData: FormData) {
+  const values = exactFormValues(formData, ["orderNumber", "confirmation"]);
+  if (values.get("confirmation") !== SHOP_FULFILLMENT_CONFIRMATIONS.shipped) {
+    throw new ShopFulfillmentInputError("La confirmation d’expédition est requise.");
+  }
+  return Object.freeze({ orderNumber: orderNumber(values.get("orderNumber")) });
 }

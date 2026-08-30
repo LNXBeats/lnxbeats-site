@@ -19,6 +19,7 @@ import {
   shopFulfillmentLabel,
   shopOrderPaymentState,
   shopReservationIsActive,
+  shopShippingMethodLabel,
 } from "@/lib/shop/order-presentation";
 import { shopPaymentProvidersAvailable } from "@/lib/shop/payment-config";
 import { getMemberShopOrder } from "@/lib/shop/order-service";
@@ -168,6 +169,7 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
               <div><dt>Réservation jusqu’au</dt><dd>{new Date(order.reservationExpiresAt).toLocaleString("fr-FR")}</dd></div>
               {order.termsVersion ? <div><dt>Conditions acceptées</dt><dd>{order.termsVersion}</dd></div> : null}
               {order.preparingAt ? <div><dt>Préparation démarrée</dt><dd>{order.preparingAt.toLocaleString("fr-FR")}</dd></div> : null}
+              {order.readyToShipAt ? <div><dt>Prête à expédier</dt><dd>{order.readyToShipAt.toLocaleString("fr-FR")}</dd></div> : null}
               {order.shippedAt ? <div><dt>Expédiée</dt><dd>{order.shippedAt.toLocaleString("fr-FR")}</dd></div> : null}
             </dl>
           </section>
@@ -187,14 +189,18 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
             <p className="auth-form__notice" role="status">Aucun moyen de paiement Boutique n’est disponible dans cet environnement. Votre commande reste enregistrée jusqu’à l’expiration indiquée.</p>
           ) : null}
 
-          {order.fulfillmentStatus === "SHIPPED" ? (
+          {order.shippingRequired && order.paymentStatus === "PAID" ? (
             <section className="member-orders" aria-labelledby="shop-order-shipping-title">
-              <div className="member-orders__heading"><div><p className="auth-panel__label">Expédition</p><h2 id="shop-order-shipping-title">Votre commande est partie.</h2></div></div>
-              {hasTrackingDetails ? <dl className="auth-profile">
+              <div className="member-orders__heading"><div><p className="auth-panel__label">Expédition</p><h2 id="shop-order-shipping-title">{order.fulfillmentStatus === "SHIPPED" ? "Votre commande a été remise au transporteur." : "Suivi de votre expédition."}</h2></div></div>
+              {order.fulfillmentStatus === "SHIPPED" && hasTrackingDetails ? <dl className="auth-profile">
+                <div><dt>Statut</dt><dd>Expédiée par LNX Beats</dd></div>
+                {order.shippedAt ? <div><dt>Date d’expédition</dt><dd>{order.shippedAt.toLocaleString("fr-FR")}</dd></div> : null}
+                {order.shippingMethod ? <div><dt>Mode</dt><dd>{shopShippingMethodLabel(order.shippingMethod)}</dd></div> : null}
                 {order.shippingCarrier ? <div><dt>Transporteur</dt><dd>{order.shippingCarrier}</dd></div> : null}
                 {order.trackingNumber ? <div><dt>Numéro de suivi</dt><dd>{order.trackingNumber}</dd></div> : null}
-                {order.trackingUrl ? <div><dt>Suivi</dt><dd><a className="text-link" href={order.trackingUrl} target="_blank" rel="noreferrer">Ouvrir le suivi <span aria-hidden="true">↗</span></a></dd></div> : null}
+                {order.trackingUrl ? <div><dt>Suivi</dt><dd><a className="text-link" href={order.trackingUrl} target="_blank" rel="noopener noreferrer">Suivre l’expédition</a></dd></div> : null}
               </dl> : <p className="auth-form__notice">Les informations de suivi seront affichées ici lorsqu’elles seront disponibles.</p>}
+              {order.fulfillmentStatus === "SHIPPED" ? <p className="auth-form__notice">« Expédiée » signifie que LNX Beats a enregistré la remise du colis au transporteur. Cela ne confirme pas sa livraison au client.</p> : null}
             </section>
           ) : null}
 
