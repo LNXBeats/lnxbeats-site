@@ -130,7 +130,9 @@ test("Phase 5B member UI aligns confirmations and never renders an empty trackin
   assert.match(createPage, /className="auth-check"[\s\S]*SHOP_RETURN_REQUEST_CONFIRMATION/);
   assert.match(detailPage, /className="auth-check"[\s\S]*SHOP_RETURN_CANCEL_CONFIRMATION/);
   assert.match(detailPage, /<form className="shop-return-form" action=\{cancelShopReturnAction\}>/);
+  assert.match(detailPage, /<dl className="auth-profile shop-return-summary">/);
   assert.match(css, /\.shop-return-form \.auth-check \{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*gap: 0\.65rem;/);
+  assert.match(css, /\.shop-return-summary > div \{ grid-template-columns: minmax\(9rem, 0\.45fr\) minmax\(0, 1fr\); \}/);
   assert.match(css, /\.auth-check input\[type="checkbox"\][\s\S]*flex: 0 0 1\.15rem;[\s\S]*width: 1\.15rem;/);
   assert.match(orderPage, /const hasTrackingDetails = Boolean\(order\.shippingCarrier \|\| order\.trackingNumber \|\| order\.trackingUrl\)/);
   assert.match(orderPage, /hasTrackingDetails \? <dl className="auth-profile">/);

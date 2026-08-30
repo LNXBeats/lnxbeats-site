@@ -28,7 +28,7 @@ export default async function MemberShopReturnPage({ params, searchParams }: { p
     {state === "demande-annulee" ? <p className="auth-form__success" role="status">Votre demande a été annulée.</p> : null}
     {state === "operation-refusee" ? <p className="auth-form__error" role="alert">L’opération a été refusée sans modifier le dossier.</p> : null}
     <div className="auth-account-stack">
-      <section className="member-orders"><div className="member-orders__heading"><div><p className="auth-panel__label">État</p><h2>{shopReturnStatusLabel(request.status)}</h2></div></div><dl className="auth-profile">
+      <section className="member-orders"><div className="member-orders__heading"><div><p className="auth-panel__label">État</p><h2>{shopReturnStatusLabel(request.status)}</h2></div></div><dl className="auth-profile shop-return-summary">
         <div><dt>Commande</dt><dd><Link className="text-link" href={`/compte/achats/${encodeURIComponent(request.shopOrder.orderNumber)}`}>{request.shopOrder.orderNumber}</Link></dd></div>
         <div><dt>Demande reçue</dt><dd>{request.requestedAt.toLocaleString("fr-FR")}</dd></div>
         <div><dt>Retour physique</dt><dd>{request.physicalReturnRequired === null ? "Décision en attente" : request.physicalReturnRequired ? "Requis" : "Non requis"}</dd></div>
