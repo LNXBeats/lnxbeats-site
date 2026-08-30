@@ -200,7 +200,15 @@ export function enqueueCustomerDeliveryNotification(transaction: Transaction, or
 
 type ShopNotificationKind = Extract<
   OrderNotificationKind,
-  "OWNER_SHOP_ORDER_PAID" | "CUSTOMER_SHOP_PAYMENT_CONFIRMED" | "CUSTOMER_SHOP_PREPARING" | "CUSTOMER_SHOP_SHIPPED"
+  | "OWNER_SHOP_ORDER_PAID"
+  | "CUSTOMER_SHOP_PAYMENT_CONFIRMED"
+  | "CUSTOMER_SHOP_PREPARING"
+  | "CUSTOMER_SHOP_SHIPPED"
+  | "OWNER_SHOP_RETURN_REQUESTED"
+  | "CUSTOMER_SHOP_RETURN_APPROVED"
+  | "CUSTOMER_SHOP_RETURN_REJECTED"
+  | "CUSTOMER_SHOP_RETURN_RECEIVED"
+  | "CUSTOMER_SHOP_REFUND_CONFIRMED"
 >;
 
 type ShopPaymentProvider = "STRIPE" | "PAYPAL";
@@ -225,6 +233,10 @@ export async function enqueueShopOrderNotification(
     recipient?: string | null;
     paymentProvider?: ShopPaymentProvider | null;
     termsVersion?: string | null;
+    shopReturnRequestId?: string;
+    returnRequestNumber?: string;
+    refundAmountCents?: number;
+    creditNoteNumber?: string;
   }>,
 ) {
   const definition = notificationDefinition(input.kind);
@@ -308,14 +320,21 @@ export async function enqueueShopOrderNotification(
       countryCode: shopOrder.shippingCountryCode!,
     } : null,
     ...(shopOrder.invoices?.[0]?.invoiceNumber ? { invoiceNumber: shopOrder.invoices[0].invoiceNumber } : {}),
+    ...(input.returnRequestNumber ? { returnRequestNumber: input.returnRequestNumber } : {}),
+    ...(input.refundAmountCents ? { refundAmountCents: input.refundAmountCents } : {}),
+    ...(input.creditNoteNumber ? { creditNoteNumber: input.creditNoteNumber } : {}),
   } satisfies Prisma.InputJsonObject;
   parseNotificationPayload(payload, input.kind);
+  const resourceType = "SHOP_ORDER";
+  const resourceId = shopOrder.id;
+  const resourceReference = shopOrder.orderNumber;
   const notification = await transaction.orderNotification.upsert({
     where: { idempotencyKey: input.idempotencyKey },
     update: {},
     create: {
       orderId: null,
       shopOrderId: shopOrder.id,
+      shopReturnRequestId: input.shopReturnRequestId ?? null,
       kind: input.kind,
       channel: "EMAIL",
       priority: definition.priority,
@@ -325,9 +344,9 @@ export async function enqueueShopOrderNotification(
       templateVersion: NOTIFICATION_TEMPLATE_VERSION,
       payloadVersion: NOTIFICATION_PAYLOAD_VERSION,
       payload,
-      resourceType: "SHOP_ORDER",
-      resourceId: shopOrder.id,
-      resourceReference: shopOrder.orderNumber,
+      resourceType,
+      resourceId,
+      resourceReference,
       deploymentEnvironment: notificationEnvironmentSnapshot(),
     },
     select: { id: true, orderId: true, shopOrderId: true, kind: true, channel: true, resourceType: true, resourceId: true },
@@ -337,10 +356,39 @@ export async function enqueueShopOrderNotification(
     || notification.shopOrderId !== shopOrder.id
     || notification.kind !== input.kind
     || notification.channel !== "EMAIL"
-    || notification.resourceType !== "SHOP_ORDER"
-    || notification.resourceId !== shopOrder.id
+    || notification.resourceType !== resourceType
+    || notification.resourceId !== resourceId
   ) throw new Error("Notification idempotency key is already assigned to another logical event.");
   return { id: notification.id };
+}
+
+export function enqueueShopAfterSalesNotification(
+  transaction: Transaction,
+  input: Readonly<{
+    shopOrderId: string;
+    requestId: string;
+    requestNumber: string;
+    kind: Extract<
+      ShopNotificationKind,
+      | "OWNER_SHOP_RETURN_REQUESTED"
+      | "CUSTOMER_SHOP_RETURN_APPROVED"
+      | "CUSTOMER_SHOP_RETURN_REJECTED"
+      | "CUSTOMER_SHOP_RETURN_RECEIVED"
+      | "CUSTOMER_SHOP_REFUND_CONFIRMED"
+    >;
+    refundAmountCents?: number;
+    creditNoteNumber?: string;
+  }>,
+) {
+  return enqueueShopOrderNotification(transaction, {
+    shopOrderId: input.shopOrderId,
+    kind: input.kind,
+    idempotencyKey: `shop-return:${input.requestId}:${input.kind.toLowerCase()}:email`,
+    shopReturnRequestId: input.requestId,
+    returnRequestNumber: input.requestNumber,
+    refundAmountCents: input.refundAmountCents,
+    creditNoteNumber: input.creditNoteNumber,
+  });
 }
 
 export async function enqueueShopPaymentConfirmedNotifications(

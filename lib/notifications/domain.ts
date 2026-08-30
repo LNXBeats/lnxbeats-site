@@ -47,6 +47,11 @@ const definitions: Record<OrderNotificationKind, Readonly<{
   CUSTOMER_SHOP_PAYMENT_CONFIRMED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-payment-confirmed" },
   CUSTOMER_SHOP_PREPARING: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-preparing" },
   CUSTOMER_SHOP_SHIPPED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-shipped" },
+  OWNER_SHOP_RETURN_REQUESTED: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-shop-return-requested" },
+  CUSTOMER_SHOP_RETURN_APPROVED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-return-approved" },
+  CUSTOMER_SHOP_RETURN_REJECTED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-return-rejected" },
+  CUSTOMER_SHOP_RETURN_RECEIVED: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-return-received" },
+  CUSTOMER_SHOP_REFUND_CONFIRMED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-refund-confirmed" },
 };
 
 const shopNotificationKinds = new Set<OrderNotificationKind>([
@@ -54,6 +59,11 @@ const shopNotificationKinds = new Set<OrderNotificationKind>([
   "CUSTOMER_SHOP_PAYMENT_CONFIRMED",
   "CUSTOMER_SHOP_PREPARING",
   "CUSTOMER_SHOP_SHIPPED",
+  "OWNER_SHOP_RETURN_REQUESTED",
+  "CUSTOMER_SHOP_RETURN_APPROVED",
+  "CUSTOMER_SHOP_RETURN_REJECTED",
+  "CUSTOMER_SHOP_RETURN_RECEIVED",
+  "CUSTOMER_SHOP_REFUND_CONFIRMED",
 ]);
 
 export function isShopNotificationKind(kind: OrderNotificationKind) {
@@ -122,6 +132,7 @@ const orderPayloadKeys = new Set([
 const shopPayloadKeys = new Set([
   "orderNumber", "customerName", "customerEmail", "subtotalCents", "shippingCents", "totalCents", "currency",
   "createdAt", "items", "paymentProvider", "termsVersion", "shippingAddress", "invoiceNumber",
+  "returnRequestNumber", "refundAmountCents", "creditNoteNumber",
 ]);
 
 const shopItemKeys = new Set(["productTitle", "quantity", "unitPriceCents", "lineTotalCents"]);
@@ -143,6 +154,9 @@ function parseShopNotificationPayload(payload: Record<string, unknown>): ShopNot
     || !(payload.paymentProvider === null || payload.paymentProvider === "STRIPE" || payload.paymentProvider === "PAYPAL")
     || !(payload.termsVersion === null || (typeof payload.termsVersion === "string" && payload.termsVersion.length > 0 && payload.termsVersion.length <= 80))
     || !(payload.invoiceNumber === undefined || (typeof payload.invoiceNumber === "string" && /^LNX-[0-9]{8}-[0-9]{4,}$/.test(payload.invoiceNumber)))
+    || !(payload.returnRequestNumber === undefined || (typeof payload.returnRequestNumber === "string" && /^LNX-SAV-[0-9]{4}-[A-F0-9]{12}$/.test(payload.returnRequestNumber)))
+    || !(payload.refundAmountCents === undefined || (Number.isSafeInteger(payload.refundAmountCents) && Number(payload.refundAmountCents) > 0))
+    || !(payload.creditNoteNumber === undefined || (typeof payload.creditNoteNumber === "string" && payload.creditNoteNumber.length > 0 && payload.creditNoteNumber.length <= 52))
   ) throw new Error("Notification payload is invalid.");
   normalizeNotificationRecipient(payload.customerEmail as string);
 

@@ -20,7 +20,14 @@ import {
   SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
   SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT,
   SHOP_PHASE5A_QA_TARGET,
+  SHOP_PHASE5B_QA_AUTH_CAPTURE_PATH,
+  SHOP_PHASE5B_QA_NOTIFICATION_CAPTURE_PATH,
+  SHOP_PHASE5B_QA_ORIGIN,
+  SHOP_PHASE5B_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE5B_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE5B_QA_TARGET,
 } from "@/lib/shop/qa-contract";
+import { SHOP_AFTER_SALES_QA_CONFIRMATION } from "@/lib/shop/after-sales-config";
 import {
   SHOP_LEGAL_QA_CONFIRMATION,
   SHOP_LEGAL_QA_TERMS_VERSION,
@@ -167,6 +174,25 @@ const SHOP_PHASE5A_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
   ORDER_UPLOAD_DIR: SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT,
 } satisfies Record<string, string>);
 
+const SHOP_PHASE5B_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
+  ...SHOP_PHASE5A_AUTH_COOKIE_ENVIRONMENT,
+  LNX_DATABASE_TARGET: SHOP_PHASE5B_QA_TARGET,
+  AUTH_URL: SHOP_PHASE5B_QA_ORIGIN,
+  SITE_URL: SHOP_PHASE5B_QA_ORIGIN,
+  APP_CANONICAL_URL: SHOP_PHASE5B_QA_ORIGIN,
+  AUTH_EMAIL_CAPTURE_PATH: SHOP_PHASE5B_QA_AUTH_CAPTURE_PATH,
+  NOTIFICATION_CAPTURE_PATH: SHOP_PHASE5B_QA_NOTIFICATION_CAPTURE_PATH,
+  OWNER_EMAIL_NOTIFICATIONS_ENABLED: "true",
+  CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "true",
+  MEDIA_LOCAL_PUBLIC_ROOT: SHOP_PHASE5B_QA_PUBLIC_MEDIA_ROOT,
+  MEDIA_LOCAL_PRIVATE_ROOT: SHOP_PHASE5B_QA_PRIVATE_MEDIA_ROOT,
+  MEDIA_STORAGE_ROOT: SHOP_PHASE5B_QA_PUBLIC_MEDIA_ROOT,
+  ORDER_UPLOAD_DIR: SHOP_PHASE5B_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_AFTER_SALES_ENABLED: "true",
+  SHOP_AFTER_SALES_QA_CONFIRM: SHOP_AFTER_SALES_QA_CONFIRMATION,
+  SHOP_AFTER_SALES_REFUND_PROVIDER: "fake",
+} satisfies Record<string, string>);
+
 export function isLoopbackUrl(value: string | undefined) {
   if (!value) return false;
   try {
@@ -222,6 +248,14 @@ function hasSafeLocalShopPhase5AIdentity(environment: AuthEnvironment) {
   return Boolean(environment.AUTH_SECRET && environment.AUTH_SECRET.length >= 32);
 }
 
+function hasSafeLocalShopPhase5BIdentity(environment: AuthEnvironment) {
+  if (environment.LNX_PREVIEW_MODE?.trim()) return false;
+  if (Object.entries(environment).some(([name, value]) => name.startsWith("RAILWAY_") && Boolean(value?.trim()))) return false;
+  if (!environment.LNX_PRISMA_DEV_SERVER_FILE?.endsWith(`/prisma-dev-nodejs/${SHOP_PHASE5B_QA_TARGET}/server.json`)) return false;
+  if (!hasDedicatedShopPhase2Database(environment)) return false;
+  return Boolean(environment.AUTH_SECRET && environment.AUTH_SECRET.length >= 32);
+}
+
 export function isSafeLocalShopPhase2QaHttpRuntime(
   environment: AuthEnvironment = process.env,
 ) {
@@ -273,6 +307,13 @@ export function isSafeLocalShopPhase5ALogisticsQaHttpRuntime(
   return hasSafeLocalShopPhase5AIdentity(environment);
 }
 
+export function isSafeLocalShopPhase5BAfterSalesQaHttpRuntime(environment: AuthEnvironment = process.env) {
+  if (environment.NODE_ENV !== "test" && environment.NODE_ENV !== "production") return false;
+  if (Object.entries(SHOP_PHASE5B_AUTH_COOKIE_ENVIRONMENT).some(([name, expected]) => environment[name] !== expected)) return false;
+  if (SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
+  return hasSafeLocalShopPhase5BIdentity(environment);
+}
+
 export function shouldUseSecureAuthCookies(
   productionBuild: boolean,
   environment: AuthEnvironment = process.env,
@@ -282,7 +323,8 @@ export function shouldUseSecureAuthCookies(
   return !isSafeLocalShopPhase2QaHttpRuntime(environment)
     && !isSafeLocalShopPhase3BStripeQaHttpRuntime(environment)
     && !isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment)
-    && !isSafeLocalShopPhase5ALogisticsQaHttpRuntime(environment);
+    && !isSafeLocalShopPhase5ALogisticsQaHttpRuntime(environment)
+    && !isSafeLocalShopPhase5BAfterSalesQaHttpRuntime(environment);
 }
 
 export function configuredAdminEmail() {

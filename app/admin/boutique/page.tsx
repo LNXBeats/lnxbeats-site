@@ -30,6 +30,7 @@ export default async function AdminShopPage({
         <p>Les produits naissent en brouillon. La publication alimente la Boutique QA ; le paiement produit reste volontairement désactivé.</p>
         <Link className="admin-primary-action" href="/admin/boutique/nouveau"><span aria-hidden="true">+</span> Nouveau produit</Link>
         <Link className="admin-row-action" href="/admin/boutique/logistique">Consulter la logistique <span aria-hidden="true">→</span></Link>
+        {process.env.SHOP_AFTER_SALES_ENABLED === "true" ? <Link className="admin-row-action" href="/admin/boutique/retours">Consulter le SAV <span aria-hidden="true">→</span></Link> : null}
       </div>
     </header>
 

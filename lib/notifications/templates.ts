@@ -50,6 +50,10 @@ function resourceUrl(message: OrderNotificationMessage, configuration: Notificat
   const owner = notificationDefinition(message.kind).audience === "OWNER";
   if (isShopNotificationKind(message.kind)) {
     const shopPayload = message.payload as ShopNotificationPayload;
+    if (shopPayload.returnRequestNumber) {
+      const pathname = `${owner ? "/admin/boutique/retours/" : "/compte/sav/"}${encodeURIComponent(shopPayload.returnRequestNumber)}`;
+      return new URL(pathname, canonicalOrigin(configuration)).toString();
+    }
     if (!owner && message.kind === "CUSTOMER_SHOP_PAYMENT_CONFIRMED" && shopPayload.invoiceNumber) {
       return new URL(`/compte/factures/${encodeURIComponent(shopPayload.invoiceNumber)}`, canonicalOrigin(configuration)).toString();
     }
@@ -155,6 +159,26 @@ function copy(message: OrderNotificationMessage) {
       "Votre commande Boutique a été expédiée — LNX Studio", "Boutique", "Votre commande a été expédiée",
       "Votre commande a quitté l’atelier. Consultez votre Compte pour retrouver son état et les informations disponibles.", "Suivre mon achat",
     ],
+    OWNER_SHOP_RETURN_REQUESTED: [
+      `Nouvelle demande SAV — ${message.payload.orderNumber}`, "Boutique · SAV", "Une demande SAV attend votre revue",
+      "Le client a enregistré une demande liée à un achat Boutique. Aucune décision juridique, aucun remboursement et aucun restock n’ont été automatisés.", "Ouvrir la demande",
+    ],
+    CUSTOMER_SHOP_RETURN_APPROVED: [
+      "Votre demande SAV est acceptée — LNX Studio", "Boutique · SAV", "Votre demande SAV est acceptée",
+      "Consultez votre dossier pour connaître les quantités autorisées et, le cas échéant, les instructions de retour.", "Voir mon dossier SAV",
+    ],
+    CUSTOMER_SHOP_RETURN_REJECTED: [
+      "Décision sur votre demande SAV — LNX Studio", "Boutique · SAV", "Votre demande SAV a été examinée",
+      "La décision et les informations disponibles sont consignées dans votre dossier. Aucun remboursement n’a été effectué.", "Voir mon dossier SAV",
+    ],
+    CUSTOMER_SHOP_RETURN_RECEIVED: [
+      "Retour reçu — LNX Studio", "Boutique · SAV", "Votre retour a été reçu",
+      "La réception physique est enregistrée. L’inspection, le remboursement et le restock restent des décisions distinctes.", "Suivre mon dossier SAV",
+    ],
+    CUSTOMER_SHOP_REFUND_CONFIRMED: [
+      "Remboursement Boutique confirmé — LNX Studio", "Boutique · SAV", "Votre remboursement est confirmé",
+      "Le remboursement a été confirmé par le prestataire de paiement. L’avoir correspondant est disponible depuis votre Compte.", "Voir mon dossier SAV",
+    ],
   } as const;
   const [subject, eyebrow, title, body, cta] = values[message.kind];
   return { subject, eyebrow, title, body, cta };
@@ -200,6 +224,7 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
       : [];
     details = [
       `Commande : ${payload.orderNumber}`,
+      ...(payload.returnRequestNumber ? [`Dossier SAV : ${payload.returnRequestNumber}`] : []),
       ...(owner ? [`Client : ${payload.customerName || "Non renseigné"}`] : []),
       ...items,
       `Sous-total : ${formatEuro(payload.subtotalCents, payload.currency)}`,
@@ -207,6 +232,8 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
       `Total : ${formatEuro(payload.totalCents, payload.currency)}`,
       `Moyen de paiement : ${provider}`,
       ...(payload.invoiceNumber ? [`Facture : ${payload.invoiceNumber}`] : []),
+      ...(payload.refundAmountCents ? [`Montant remboursé : ${formatEuro(payload.refundAmountCents, payload.currency)}`] : []),
+      ...(payload.creditNoteNumber ? [`Avoir : ${payload.creditNoteNumber}`] : []),
       ...address,
       ...legal,
       `Date : ${formatDate(payload.createdAt)}`,

@@ -14,6 +14,7 @@ const adminNavigation = [
   { href: "/admin/tarifs", label: "Tarifs" },
   { href: "/admin/boutique", label: "Boutique" },
   { href: "/admin/boutique/commandes", label: "Commandes Boutique" },
+  { href: "/admin/boutique/retours", label: "SAV Boutique" },
   { href: "/admin/catalogue", label: "Catalogue" },
   { href: "/admin/membres", label: "Membres" },
 ] as const;

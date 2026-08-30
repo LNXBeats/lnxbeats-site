@@ -188,6 +188,13 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-client-wishes dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 0; }
 .admin-client-wishes dl > div { min-width: 0; }
 .admin-work-note { max-width: 68rem; margin: 0; color: #aaa59c; font-size: .72rem; line-height: 1.6; }
+.admin-form { display: grid; gap: .9rem; }
+.admin-form > label:not(.admin-check), .admin-form fieldset label { display: grid; gap: .4rem; color: #d8d2c7; font-size: .72rem; font-weight: 700; }
+.admin-form :is(input, select, textarea) { width: 100%; min-height: 46px; padding: .72rem .82rem; border: 1px solid rgba(244,240,232,.17); border-radius: 11px; background: #080807; color: #f4f0e8; font: inherit; }
+.admin-form textarea { min-height: 90px; resize: vertical; }
+.admin-form fieldset { display: grid; gap: .8rem; min-width: 0; margin: 0; padding: 1rem; border: 1px solid rgba(244,240,232,.14); border-radius: 14px; }
+.admin-form legend { padding-inline: .35rem; color: var(--admin-gold); font-size: .7rem; font-weight: 800; }
+.admin-form :is(input, select, textarea):focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 2px; }
 .admin-rights-grant-fieldset { display: grid; gap: 1rem; min-width: 0; margin: 0; padding: clamp(1rem, 2.5vw, 1.5rem); border: 1px solid rgba(244,240,232,.14); border-radius: 16px; }
 .admin-rights-grant-fieldset legend { padding-inline: .45rem; color: #e5c982; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .admin-disabled-action { display: grid; gap: .5rem; }

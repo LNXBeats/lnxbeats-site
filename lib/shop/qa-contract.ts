@@ -27,3 +27,12 @@ export const SHOP_PHASE5A_QA_NOTIFICATION_CAPTURE_PATH = "/private/tmp/lnx-studi
 export const SHOP_PHASE5A_QA_MEDIA_ROOT = "/private/tmp/lnx-studio-v110-phase5a-media";
 export const SHOP_PHASE5A_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE5A_QA_MEDIA_ROOT}/public`;
 export const SHOP_PHASE5A_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE5A_QA_MEDIA_ROOT}/private`;
+
+export const SHOP_PHASE5B_QA_TARGET = "lnx-studio-v110-after-sales-preview-test";
+export const SHOP_PHASE5B_QA_HTTP_PORT = "31776";
+export const SHOP_PHASE5B_QA_ORIGIN = `http://127.0.0.1:${SHOP_PHASE5B_QA_HTTP_PORT}`;
+export const SHOP_PHASE5B_QA_AUTH_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase5b-auth-mailbox.jsonl";
+export const SHOP_PHASE5B_QA_NOTIFICATION_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase5b-notifications.jsonl";
+export const SHOP_PHASE5B_QA_MEDIA_ROOT = "/private/tmp/lnx-studio-v110-phase5b-media";
+export const SHOP_PHASE5B_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE5B_QA_MEDIA_ROOT}/public`;
+export const SHOP_PHASE5B_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE5B_QA_MEDIA_ROOT}/private`;

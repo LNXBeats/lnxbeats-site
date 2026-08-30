@@ -239,6 +239,7 @@ export async function issueCreditNoteForRefund(
   input: Readonly<{
     refundAttemptId: string;
     withdrawalRequestId?: string | null;
+    shopReturnRequestId?: string | null;
     reasonCode?: "WITHDRAWAL" | "NON_CONFORMITY" | "SELLER_ERROR" | "DAMAGED_PRODUCT" | "OTHER_REVIEWED";
     reasonText?: string | null;
     issuedAt?: Date;
@@ -269,6 +270,17 @@ export async function issueCreditNoteForRefund(
       throw new BillingServiceError("CREDIT_NOTE_WITHDRAWAL_INVALID");
     }
   }
+  if (input.shopReturnRequestId) {
+    const shopReturn = await transaction.shopReturnRequest.findUnique({
+      where: { id: input.shopReturnRequestId },
+      select: { shopOrderId: true, refundAttempt: { select: { id: true } } },
+    });
+    if (
+      !shopReturn
+      || shopReturn.shopOrderId !== invoice.shopOrderId
+      || shopReturn.refundAttempt?.id !== attempt.id
+    ) throw new BillingServiceError("CREDIT_NOTE_SHOP_RETURN_INVALID");
+  }
   const aggregate = await transaction.creditNote.aggregate({ where: { invoiceId: invoice.id }, _sum: { amountCents: true } });
   const alreadyCredited = aggregate._sum.amountCents ?? 0;
   if (attempt.amountCents <= 0 || alreadyCredited + attempt.amountCents > invoice.totalCents) throw new BillingServiceError("CREDIT_NOTE_AMOUNT_EXCEEDED");
@@ -287,6 +299,7 @@ export async function issueCreditNoteForRefund(
     sourceInvoice: invoice.invoiceNumber,
     refundAttemptId: attempt.id,
     withdrawalRequestId: input.withdrawalRequestId ?? null,
+    shopReturnRequestId: input.shopReturnRequestId ?? null,
     amountCents: attempt.amountCents,
     cumulativeCreditedCents,
     remainingBalanceCents,
@@ -301,6 +314,7 @@ export async function issueCreditNoteForRefund(
       invoiceId: invoice.id,
       refundAttemptId: attempt.id,
       withdrawalRequestId: input.withdrawalRequestId ?? null,
+      shopReturnRequestId: input.shopReturnRequestId ?? null,
       idempotencyKey: `refund-attempt:${attempt.id}:credit-note`,
       issuedAt,
       amountCents: attempt.amountCents,

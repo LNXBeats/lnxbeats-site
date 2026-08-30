@@ -17,7 +17,12 @@ export type OrderNotificationKind =
   | "OWNER_SHOP_ORDER_PAID"
   | "CUSTOMER_SHOP_PAYMENT_CONFIRMED"
   | "CUSTOMER_SHOP_PREPARING"
-  | "CUSTOMER_SHOP_SHIPPED";
+  | "CUSTOMER_SHOP_SHIPPED"
+  | "OWNER_SHOP_RETURN_REQUESTED"
+  | "CUSTOMER_SHOP_RETURN_APPROVED"
+  | "CUSTOMER_SHOP_RETURN_REJECTED"
+  | "CUSTOMER_SHOP_RETURN_RECEIVED"
+  | "CUSTOMER_SHOP_REFUND_CONFIRMED";
 
 export type NotificationChannel = "EMAIL" | "SMS";
 export type NotificationPriority = "CRITICAL" | "INFORMATIONAL" | "INTERNAL";
@@ -71,6 +76,9 @@ export type ShopNotificationPayload = Readonly<{
   termsVersion: string | null;
   shippingAddress: ShopNotificationShippingAddress | null;
   invoiceNumber?: string;
+  returnRequestNumber?: string;
+  refundAmountCents?: number;
+  creditNoteNumber?: string;
 }>;
 
 export type NotificationPayload = OrderNotificationPayload | ShopNotificationPayload;

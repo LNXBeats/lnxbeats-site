@@ -8,6 +8,8 @@ import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
 import { PaypalReturnCapture } from "@/components/paypal-return-capture";
 import { requireVerifiedUser } from "@/lib/auth/session";
+import { shopAfterSalesQaEnabled } from "@/lib/shop/after-sales-config";
+import { listShopReturnsForOrder } from "@/lib/shop/after-sales-service";
 import { parseShopOrderNumber } from "@/lib/shop/order-domain";
 import {
   canResumeShopPaypalCapture,
@@ -51,6 +53,8 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
   }
   const order = await getMemberShopOrder(session.user.id, orderNumber);
   if (!order) notFound();
+  const afterSalesEnabled = shopAfterSalesQaEnabled();
+  const returnRequests = afterSalesEnabled ? await listShopReturnsForOrder(session.user.id, order.id) : [];
   const query = await searchParams;
   const state = query.etat;
   const effectiveStatus = effectiveShopOrderStatus(order);
@@ -189,6 +193,15 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
                 {order.trackingNumber ? <div><dt>Numéro de suivi</dt><dd>{order.trackingNumber}</dd></div> : null}
                 {order.trackingUrl ? <div><dt>Suivi</dt><dd><a className="text-link" href={order.trackingUrl} target="_blank" rel="noreferrer">Ouvrir le suivi <span aria-hidden="true">↗</span></a></dd></div> : null}
               </dl>
+            </section>
+          ) : null}
+
+          {afterSalesEnabled && order.paymentStatus === "PAID" && !order.paymentReviewAt ? (
+            <section className="member-orders" aria-labelledby="shop-order-sav-title">
+              <div className="member-orders__heading"><div><p className="auth-panel__label">Après-vente</p><h2 id="shop-order-sav-title">Retour ou incident.</h2></div></div>
+              <p>Déclarez les articles concernés. Toute demande est relue humainement avant retour, remboursement ou remise en stock.</p>
+              <div className="auth-form__secondary-actions"><Link className="button button--quiet" href={`/compte/achats/${encodeURIComponent(order.orderNumber)}/sav`}>OUVRIR UNE DEMANDE SAV</Link></div>
+              {returnRequests.length ? <ul className="member-order-list">{returnRequests.map((request) => <li key={request.id}><Link className="text-link" href={`/compte/sav/${encodeURIComponent(request.requestNumber)}`}>{request.requestNumber} · {request.status}</Link></li>)}</ul> : null}
             </section>
           ) : null}
 

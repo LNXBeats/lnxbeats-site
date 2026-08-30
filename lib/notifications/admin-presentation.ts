@@ -23,6 +23,11 @@ export const notificationKindPresentation: Record<OrderNotificationKind, string>
   CUSTOMER_SHOP_PAYMENT_CONFIRMED: "Commande Boutique confirmée — client",
   CUSTOMER_SHOP_PREPARING: "Commande Boutique en préparation — client",
   CUSTOMER_SHOP_SHIPPED: "Commande Boutique expédiée — client",
+  OWNER_SHOP_RETURN_REQUESTED: "Demande SAV Boutique — propriétaire",
+  CUSTOMER_SHOP_RETURN_APPROVED: "Demande SAV acceptée — client",
+  CUSTOMER_SHOP_RETURN_REJECTED: "Demande SAV refusée — client",
+  CUSTOMER_SHOP_RETURN_RECEIVED: "Retour Boutique reçu — client",
+  CUSTOMER_SHOP_REFUND_CONFIRMED: "Remboursement Boutique confirmé — client",
 };
 
 export function isAdminNotificationRetryConfirmed(value: unknown) {

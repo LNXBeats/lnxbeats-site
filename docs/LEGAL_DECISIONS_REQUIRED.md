@@ -28,6 +28,11 @@ Date des décisions propriétaire de cette phase : **2026-08-28**. Une décision
 | `COLISSIMO_RATE_POLICY` | `FUTURE_IMPLEMENTATION` | Grilles datées/versionnées, service et paliers, snapshot à la commande ; aucun tarif codé en dur. | Conditions La Poste en vigueur | 2026-08-28 | Relecture à l’intégration | Non implémenté |
 | `DELIVERY_ESTIMATE` | `FUTURE_IMPLEMENTATION` | Estimation transport dynamique distincte de la préparation. | Conditions La Poste en vigueur | 2026-08-28 | Relecture à l’intégration | Non implémenté |
 | `PACKAGING_PROFILE` | `FUTURE_IMPLEMENTATION` | Emballage/protection administrables avec poids, capacité et règles. | Décision propriétaire Phase 4B | 2026-08-28 | Non | Non implémenté |
+| `SHOP_PARTIAL_RETURN_SHIPPING_REFUND` | `OPEN_PHASE5B` | Déterminer quand et dans quelle proportion les frais d’expédition initiaux sont remboursés pour un retour partiel. La QA propose uniquement une décision Admin explicite `NONE/FULL`. | À valider juridiquement et comptablement | — | Oui | Aucun automatisme ; fondation technique seulement |
+| `SHOP_RETURN_DEADLINE_AND_EVIDENCE` | `OPEN_PHASE5B` | Fixer les délais, preuves et communications applicables selon rétractation, non-conformité, dommage ou incident logistique. | À valider juridiquement | — | Oui | États et journal disponibles ; aucune règle générale activée |
+| `SHOP_OPENED_AUDIO_RESTOCK_POLICY` | `OPEN_PHASE5B` | Définir les conditions sanitaires, commerciales et comptables permettant ou interdisant la remise en stock d’un support audio ouvert. | À valider juridiquement et opérationnellement | — | Oui | Inspection manuelle et décision `RESTOCKABLE/NOT_RESTOCKABLE` uniquement |
+| `SHOP_REFUND_EXECUTION_DELAY` | `OPEN_PHASE5B` | Définir le délai opératoire et l’information client après acceptation, réception ou inspection. | À valider juridiquement | — | Oui | Aucun scheduler et aucune promesse de délai activés |
+| `SHOP_AFTER_SALES_RETENTION` | `OPEN_PHASE5B` | Fixer la durée de conservation des commentaires, inspections et preuves SAV au regard des obligations comptables, contentieuses et RGPD. | Conseil juridique / registre de traitement | — | Oui | Conservation DB sans purge automatique |
 
 ## Sources à revérifier le jour de l’approbation
 
