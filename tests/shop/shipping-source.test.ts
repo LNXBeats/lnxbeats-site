@@ -35,3 +35,20 @@ test("the Phase 5A UI identifies internal QA rates and keeps carrier integration
   assert.match(fixture, /not[\s\S]*contractual tariffs/i);
   assert.doesNotMatch(`${admin}\n${fixture}\n${packageJson}`, /api\.laposte|colissimo/i);
 });
+
+test("the PostgreSQL runtime isolates its intentional trigger rejection", async () => {
+  const runtime = await readFile(
+    new URL("../../scripts/test-shop-logistics-runtime.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(runtime, /new PrismaClient\(\{ adapter: new PrismaPg\(\{ connectionString \}\) \}\)/);
+  assert.match(runtime, /await assertUsedShippingRateIsImmutable\(v1\.id\)/);
+  assert.doesNotMatch(
+    runtime,
+    /assert\.rejects\(\s*prisma\.shippingRateTier\.updateMany/,
+  );
+  assert.match(runtime, /await isolatedClient\.\$disconnect\(\)/);
+  assert.match(runtime, /client\.query\(\) when the client is already executing a query/);
+  assert.match(runtime, /assert\.equal\(\s*overlappingTransactionQueryWarning,\s*null/);
+});

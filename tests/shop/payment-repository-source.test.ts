@@ -37,3 +37,20 @@ test("review persistence keeps non-conflicting captured provider evidence", asyn
   assert.match(source, /persistPaymentMethod: !payment\.paymentMethod/);
   assert.doesNotMatch(source, /persistProviderIdentifiers: false/);
 });
+
+test("Shop payment transactions load ShopOrder relations sequentially", async () => {
+  const source = await readFile(
+    new URL("../../lib/shop/payment-repository.ts", import.meta.url),
+    "utf8",
+  );
+  const loader = source.match(/async function shopOrderWithItems[\s\S]*?\n\}/)?.[0] ?? "";
+
+  assert.match(loader, /runSequentialDatabaseQueries\(/);
+  assert.match(loader, /transaction\.shopOrderItem\.findMany/);
+  assert.match(loader, /transaction\.stockReservation\.findMany/);
+  assert.equal(source.match(/shopOrderWithItems\(transaction,/g)?.length, 3);
+  assert.doesNotMatch(
+    source,
+    /transaction\.shopOrder\.findUniqueOrThrow\([\s\S]{0,500}include:\s*\{\s*items:/,
+  );
+});

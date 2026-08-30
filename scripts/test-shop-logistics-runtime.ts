@@ -3,6 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/generated/prisma/client";
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import { prisma } from "@/lib/prisma";
 import { parseShopOrderIntent } from "@/lib/shop/order-domain";
@@ -26,6 +28,12 @@ const PRODUCT_SLUGS = [
   `${FIXTURE_PREFIX}-race`,
 ] as const;
 const RATE_V2 = "phase5a-runtime-v2";
+let overlappingTransactionQueryWarning: Error | null = null;
+process.on("warning", (warning) => {
+  if (warning.message.includes("client.query() when the client is already executing a query")) {
+    overlappingTransactionQueryWarning = warning;
+  }
+});
 const ADDRESS = {
   firstName: "Membre",
   lastName: "Logistique QA",
@@ -183,6 +191,25 @@ async function createQuotedOrder(userId: string, product: { id: string; lockVers
   return { order, quote };
 }
 
+async function assertUsedShippingRateIsImmutable(shippingRateVersionId: string) {
+  const connectionString = process.env.DATABASE_URL;
+  assert.ok(connectionString);
+  const isolatedClient = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  try {
+    await assert.rejects(
+      () => isolatedClient.shippingRateTier.updateMany({
+        where: { shippingRateVersionId },
+        data: { priceCents: 401 },
+      }),
+      (error: unknown) => error !== null,
+    );
+  } finally {
+    // A PostgreSQL trigger rejection can leave the adapter connection that
+    // received it unusable. This client exists only for that negative proof.
+    await isolatedClient.$disconnect();
+  }
+}
+
 async function confirmSyntheticPayment(order: Awaited<ReturnType<typeof createShopOrder>>) {
   const repository = createShopPaymentDatabaseRepository(prisma, "TEST");
   const attempt = await repository.reserveAttempt(order.userId, order.orderNumber, "STRIPE", "TEST", true);
@@ -229,10 +256,7 @@ async function run() {
     assert.equal(first.order.items[0]?.unitShippingWeightGrams, 100);
     proofs.push("first server quote snapshots 150 g minimum and never adds the legacy 999 cents");
 
-    await assert.rejects(
-      prisma.shippingRateTier.updateMany({ where: { shippingRateVersionId: v1.id }, data: { priceCents: 401 } }),
-      (error: unknown) => error !== null,
-    );
+    await assertUsedShippingRateIsImmutable(v1.id);
     await prisma.product.update({ where: { id: fixture.history.id }, data: {
       priceCents: 3_000,
       shippingWeightGrams: 300,
@@ -294,6 +318,12 @@ async function run() {
     assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
     assert.equal(await prisma.stockReservation.count({ where: { productId: raceProduct.id, status: "ACTIVE" } }), 1);
     proofs.push("concurrent checkout of the final item creates exactly one active reservation");
+
+    assert.equal(
+      overlappingTransactionQueryWarning,
+      null,
+      "The Phase 5A runtime must not overlap queries on one transactional PostgreSQL client.",
+    );
 
     console.info(JSON.stringify({
       event: "shop.logistics.runtime.completed",

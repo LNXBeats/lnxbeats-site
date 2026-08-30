@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import { parseNotificationConfiguration } from "@/lib/notifications/config";
 import {
   automaticNotificationRetryIsSafe,
@@ -227,52 +228,44 @@ export async function enqueueShopOrderNotification(
   }>,
 ) {
   const definition = notificationDefinition(input.kind);
-  const shopOrder = await transaction.shopOrder.findUniqueOrThrow({
+  const shopOrderRow = await transaction.shopOrder.findUniqueOrThrow({
     where: { id: input.shopOrderId },
-    select: {
-      id: true,
-      orderNumber: true,
-      subtotalCents: true,
-      shippingCents: true,
-      totalCents: true,
-      currency: true,
-      shippingRequired: true,
-      shippingFirstName: true,
-      shippingLastName: true,
-      shippingAddressLine1: true,
-      shippingAddressLine2: true,
-      shippingPostalCode: true,
-      shippingCity: true,
-      shippingCountryCode: true,
-      termsVersion: true,
-      createdAt: true,
-      user: {
-        select: {
-          email: true,
-          emailVerified: true,
-          displayName: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
-      items: {
-        orderBy: { position: "asc" },
-        select: {
-          productTitle: true,
-          quantity: true,
-          unitPriceCents: true,
-          lineTotalCents: true,
-        },
-      },
-      payments: {
-        where: { status: "SUCCEEDED" },
-        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
-        take: 1,
-        select: { provider: true },
-      },
-      invoices: { take: 1, orderBy: { issuedAt: "desc" }, select: { invoiceNumber: true } },
-    },
   });
+  const [user, items, payments, invoices] = await runSequentialDatabaseQueries(
+    () => transaction.user.findUniqueOrThrow({
+      where: { id: shopOrderRow.userId },
+      select: {
+        email: true,
+        emailVerified: true,
+        displayName: true,
+        firstName: true,
+        lastName: true,
+      },
+    }),
+    () => transaction.shopOrderItem.findMany({
+      where: { shopOrderId: shopOrderRow.id },
+      orderBy: { position: "asc" },
+      select: {
+        productTitle: true,
+        quantity: true,
+        unitPriceCents: true,
+        lineTotalCents: true,
+      },
+    }),
+    () => transaction.payment.findMany({
+      where: { shopOrderId: shopOrderRow.id, status: "SUCCEEDED" },
+      orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+      take: 1,
+      select: { provider: true },
+    }),
+    () => transaction.invoice.findMany({
+      where: { shopOrderId: shopOrderRow.id },
+      take: 1,
+      orderBy: { issuedAt: "desc" },
+      select: { invoiceNumber: true },
+    }),
+  );
+  const shopOrder = { ...shopOrderRow, user, items, payments, invoices };
   const customerName = shopCustomerName(shopOrder.user);
   const customerRecipient = shopOrder.user.emailVerified ? shopOrder.user.email : null;
   const recipient = notificationRecipientSnapshot(input.recipient === undefined

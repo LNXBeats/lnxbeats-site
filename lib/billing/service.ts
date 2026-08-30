@@ -72,39 +72,39 @@ export async function issueInvoiceForPayment(
   const existing = await transaction.invoice.findUnique({ where: { paymentId } });
   if (existing) return { invoice: existing, created: false } as const;
 
-  const payment = await transaction.payment.findUnique({
-    where: { id: paymentId },
+  const payment = await transaction.payment.findUnique({ where: { id: paymentId } });
+  const musicOrder = payment?.orderId ? await transaction.order.findUnique({
+    where: { id: payment.orderId },
     select: {
       id: true,
-      status: true,
-      provider: true,
-      paymentMethod: true,
-      amountCents: true,
-      currency: true,
-      paidAt: true,
-      orderId: true,
-      shopOrderId: true,
-      order: {
-        select: {
-          id: true, orderNumber: true, status: true, customerName: true, customerEmail: true,
-          title: true, basePriceCents: true, coverIncluded: true, coverPriceCents: true,
-          priorityProcessing: true, priorityPriceCents: true, totalCents: true, currency: true,
-          personalUseTermsVersion: true, personalUseTermsHashSha256: true,
-        },
-      },
-      shopOrder: {
-        select: {
-          id: true, orderNumber: true, status: true, paymentStatus: true, paymentReviewAt: true,
-          subtotalCents: true, shippingCents: true, totalCents: true, currency: true,
-          termsVersion: true, termsHashSha256: true,
-          shippingFirstName: true, shippingLastName: true, shippingAddressLine1: true,
-          shippingAddressLine2: true, shippingPostalCode: true, shippingCity: true, shippingCountryCode: true,
-          user: { select: { email: true, displayName: true, firstName: true, lastName: true } },
-          items: { orderBy: { position: "asc" }, select: { productTitle: true, unitPriceCents: true, quantity: true, lineTotalCents: true } },
-        },
-      },
+      orderNumber: true, status: true, customerName: true, customerEmail: true,
+      title: true, basePriceCents: true, coverIncluded: true, coverPriceCents: true,
+      priorityProcessing: true, priorityPriceCents: true, totalCents: true, currency: true,
+      personalUseTermsVersion: true, personalUseTermsHashSha256: true,
     },
-  });
+  }) : null;
+  const shopOrderRow = payment?.shopOrderId ? await transaction.shopOrder.findUnique({
+    where: { id: payment.shopOrderId },
+    select: {
+      id: true, userId: true, orderNumber: true, status: true, paymentStatus: true, paymentReviewAt: true,
+      subtotalCents: true, shippingCents: true, totalCents: true, currency: true,
+      termsVersion: true, termsHashSha256: true,
+      shippingFirstName: true, shippingLastName: true, shippingAddressLine1: true,
+      shippingAddressLine2: true, shippingPostalCode: true, shippingCity: true, shippingCountryCode: true,
+    },
+  }) : null;
+  const shopUser = shopOrderRow ? await transaction.user.findUnique({
+    where: { id: shopOrderRow.userId },
+    select: { email: true, displayName: true, firstName: true, lastName: true },
+  }) : null;
+  const shopItems = shopOrderRow ? await transaction.shopOrderItem.findMany({
+    where: { shopOrderId: shopOrderRow.id },
+    orderBy: { position: "asc" },
+    select: { productTitle: true, unitPriceCents: true, quantity: true, lineTotalCents: true },
+  }) : [];
+  const shopOrder = shopOrderRow && shopUser
+    ? { ...shopOrderRow, user: shopUser, items: shopItems }
+    : null;
   if (!payment || payment.status !== "SUCCEEDED" || !payment.paidAt) throw new BillingServiceError("PAYMENT_NOT_INVOICEABLE");
   if ((payment.orderId ? 1 : 0) + (payment.shopOrderId ? 1 : 0) !== 1) throw new BillingServiceError("INVOICE_PARENT_INVALID");
   if (payment.currency !== "EUR" || payment.amountCents <= 0) throw new BillingServiceError("INVOICE_FINANCIAL_SNAPSHOT_INVALID");
@@ -120,54 +120,54 @@ export async function issueInvoiceForPayment(
   let termsVersion: string | null;
   let termsHashSha256: string | null;
 
-  if (payment.order && payment.orderId) {
-    if (payment.order.status === "DRAFT" || payment.order.status === "AWAITING_PAYMENT") throw new BillingServiceError("ORDER_NOT_INVOICEABLE");
-    if (payment.order.totalCents !== payment.amountCents || payment.order.currency !== payment.currency) throw new BillingServiceError("INVOICE_FINANCIAL_SNAPSHOT_INVALID");
+  if (musicOrder && payment.orderId) {
+    if (musicOrder.status === "DRAFT" || musicOrder.status === "AWAITING_PAYMENT") throw new BillingServiceError("ORDER_NOT_INVOICEABLE");
+    if (musicOrder.totalCents !== payment.amountCents || musicOrder.currency !== payment.currency) throw new BillingServiceError("INVOICE_FINANCIAL_SNAPSHOT_INVALID");
     documentType = "MUSIC";
     operationCategory = "SERVICES";
-    orderNumberSnapshot = payment.order.orderNumber;
-    customer = options.customer ? validateBillingCustomerIdentity(options.customer) : individualIdentity({ name: payment.order.customerName, email: payment.order.customerEmail });
+    orderNumberSnapshot = musicOrder.orderNumber;
+    customer = options.customer ? validateBillingCustomerIdentity(options.customer) : individualIdentity({ name: musicOrder.customerName, email: musicOrder.customerEmail });
     lineItems = [
-      { description: payment.order.title?.trim() || "Création musicale personnalisée", quantity: 1, unitPriceCents: payment.order.basePriceCents, lineTotalCents: payment.order.basePriceCents },
-      ...(payment.order.coverIncluded && payment.order.coverPriceCents > 0 ? [{ description: "Illustration personnalisée", quantity: 1, unitPriceCents: payment.order.coverPriceCents, lineTotalCents: payment.order.coverPriceCents }] : []),
-      ...(payment.order.priorityProcessing && payment.order.priorityPriceCents > 0 ? [{ description: "Traitement prioritaire", quantity: 1, unitPriceCents: payment.order.priorityPriceCents, lineTotalCents: payment.order.priorityPriceCents }] : []),
+      { description: musicOrder.title?.trim() || "Création musicale personnalisée", quantity: 1, unitPriceCents: musicOrder.basePriceCents, lineTotalCents: musicOrder.basePriceCents },
+      ...(musicOrder.coverIncluded && musicOrder.coverPriceCents > 0 ? [{ description: "Illustration personnalisée", quantity: 1, unitPriceCents: musicOrder.coverPriceCents, lineTotalCents: musicOrder.coverPriceCents }] : []),
+      ...(musicOrder.priorityProcessing && musicOrder.priorityPriceCents > 0 ? [{ description: "Traitement prioritaire", quantity: 1, unitPriceCents: musicOrder.priorityPriceCents, lineTotalCents: musicOrder.priorityPriceCents }] : []),
     ];
-    subtotalCents = payment.order.totalCents;
+    subtotalCents = musicOrder.totalCents;
     shippingCents = 0;
-    termsVersion = payment.order.personalUseTermsVersion;
-    termsHashSha256 = payment.order.personalUseTermsHashSha256;
-  } else if (payment.shopOrder && payment.shopOrderId) {
-    if (payment.shopOrder.paymentStatus !== "PAID" || payment.shopOrder.paymentReviewAt || payment.shopOrder.status !== "OPEN") throw new BillingServiceError("SHOP_ORDER_NOT_INVOICEABLE");
-    if (payment.shopOrder.totalCents !== payment.amountCents || payment.shopOrder.currency !== payment.currency) throw new BillingServiceError("INVOICE_FINANCIAL_SNAPSHOT_INVALID");
+    termsVersion = musicOrder.personalUseTermsVersion;
+    termsHashSha256 = musicOrder.personalUseTermsHashSha256;
+  } else if (shopOrder && payment.shopOrderId) {
+    if (shopOrder.paymentStatus !== "PAID" || shopOrder.paymentReviewAt || shopOrder.status !== "OPEN") throw new BillingServiceError("SHOP_ORDER_NOT_INVOICEABLE");
+    if (shopOrder.totalCents !== payment.amountCents || shopOrder.currency !== payment.currency) throw new BillingServiceError("INVOICE_FINANCIAL_SNAPSHOT_INVALID");
     documentType = "SHOP";
     operationCategory = "GOODS";
-    orderNumberSnapshot = payment.shopOrder.orderNumber;
-    if (!payment.shopOrder.shippingAddressLine1 || !payment.shopOrder.shippingPostalCode || !payment.shopOrder.shippingCity || payment.shopOrder.shippingCountryCode !== "FR") {
+    orderNumberSnapshot = shopOrder.orderNumber;
+    if (!shopOrder.shippingAddressLine1 || !shopOrder.shippingPostalCode || !shopOrder.shippingCity || shopOrder.shippingCountryCode !== "FR") {
       throw new BillingServiceError("INVOICE_BILLING_ADDRESS_INVALID");
     }
-    const userName = [payment.shopOrder.user.firstName, payment.shopOrder.user.lastName].filter(Boolean).join(" ") || payment.shopOrder.user.displayName;
+    const userName = [shopOrder.user.firstName, shopOrder.user.lastName].filter(Boolean).join(" ") || shopOrder.user.displayName;
     customer = options.customer ? validateBillingCustomerIdentity(options.customer) : validateBillingCustomerIdentity({
       type: "INDIVIDUAL",
       name: userName || "Client LNX Beats",
-      email: payment.shopOrder.user.email,
+      email: shopOrder.user.email,
       billingAddress: {
-        line1: payment.shopOrder.shippingAddressLine1,
-        line2: payment.shopOrder.shippingAddressLine2,
-        postalCode: payment.shopOrder.shippingPostalCode,
-        city: payment.shopOrder.shippingCity,
-        countryCode: payment.shopOrder.shippingCountryCode as "FR",
+        line1: shopOrder.shippingAddressLine1,
+        line2: shopOrder.shippingAddressLine2,
+        postalCode: shopOrder.shippingPostalCode,
+        city: shopOrder.shippingCity,
+        countryCode: shopOrder.shippingCountryCode as "FR",
       },
     });
-    lineItems = payment.shopOrder.items.map((item) => ({
+    lineItems = shopOrder.items.map((item) => ({
       description: item.productTitle,
       quantity: item.quantity,
       unitPriceCents: item.unitPriceCents,
       lineTotalCents: item.lineTotalCents,
     }));
-    subtotalCents = payment.shopOrder.subtotalCents;
-    shippingCents = payment.shopOrder.shippingCents;
-    termsVersion = payment.shopOrder.termsVersion;
-    termsHashSha256 = payment.shopOrder.termsHashSha256;
+    subtotalCents = shopOrder.subtotalCents;
+    shippingCents = shopOrder.shippingCents;
+    termsVersion = shopOrder.termsVersion;
+    termsHashSha256 = shopOrder.termsHashSha256;
   } else {
     throw new BillingServiceError("INVOICE_PARENT_INVALID");
   }

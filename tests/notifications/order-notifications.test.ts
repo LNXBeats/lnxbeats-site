@@ -208,6 +208,7 @@ test("l’enqueue Boutique utilise le parent Shop, le snapshot et la clé persis
     shopOrder: {
       findUniqueOrThrow: async () => ({
         id: shopOrderId,
+        userId: "00000000-0000-4000-8000-000000000222",
         orderNumber: "LNX-SHOP-2026-000001",
         subtotalCents: 2_800,
         shippingCents: 200,
@@ -223,20 +224,25 @@ test("l’enqueue Boutique utilise le parent Shop, le snapshot et la clé persis
         shippingCountryCode: "FR",
         termsVersion: "shop-cgv-2026-08-v1",
         createdAt: new Date("2026-08-27T10:00:00.000Z"),
-        user: {
+      }),
+    },
+    user: {
+      findUniqueOrThrow: async () => ({
           email: "shop-client@example.invalid",
           emailVerified: true,
           displayName: "Client Boutique",
           firstName: "Client",
           lastName: "Boutique",
-        },
-        items: [
-          { productTitle: "Vinyle", quantity: 2, unitPriceCents: 1_000, lineTotalCents: 2_000 },
-          { productTitle: "Carte", quantity: 1, unitPriceCents: 800, lineTotalCents: 800 },
-        ],
-        payments: [{ provider: "STRIPE" }],
       }),
     },
+    shopOrderItem: {
+      findMany: async () => [
+          { productTitle: "Vinyle", quantity: 2, unitPriceCents: 1_000, lineTotalCents: 2_000 },
+          { productTitle: "Carte", quantity: 1, unitPriceCents: 800, lineTotalCents: 800 },
+      ],
+    },
+    payment: { findMany: async () => [{ provider: "STRIPE" }] },
+    invoice: { findMany: async () => [] },
     orderNotification: {
       upsert: async (input: { create: Record<string, unknown> }) => {
         observed = input.create;
@@ -283,6 +289,7 @@ test("les notifications fulfillment Boutique respectent le flag client avant tou
         reads += 1;
         return {
           id: shopOrderId,
+          userId: "00000000-0000-4000-8000-000000000222",
           orderNumber: "LNX-SHOP-2026-000001",
           subtotalCents: 2_800,
           shippingCents: 200,
@@ -298,18 +305,25 @@ test("les notifications fulfillment Boutique respectent le flag client avant tou
           shippingCountryCode: "FR",
           termsVersion: "shop-cgv-2026-08-v1",
           createdAt: new Date("2026-08-27T10:00:00.000Z"),
-          user: {
+        };
+      },
+    },
+    user: {
+      findUniqueOrThrow: async () => ({
             email: "shop-client@example.invalid",
             emailVerified: true,
             displayName: "Client Boutique",
             firstName: "Client",
             lastName: "Boutique",
-          },
-          items: [{ productTitle: "Vinyle", quantity: 1, unitPriceCents: 2_800, lineTotalCents: 2_800 }],
-          payments: [{ provider: "STRIPE" }],
-        };
-      },
+      }),
     },
+    shopOrderItem: {
+      findMany: async () => [
+        { productTitle: "Vinyle", quantity: 1, unitPriceCents: 2_800, lineTotalCents: 2_800 },
+      ],
+    },
+    payment: { findMany: async () => [{ provider: "STRIPE" }] },
+    invoice: { findMany: async () => [] },
     orderNotification: {
       upsert: async (input: { create: Record<string, unknown> }) => {
         writes += 1;

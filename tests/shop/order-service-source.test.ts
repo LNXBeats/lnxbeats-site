@@ -38,3 +38,22 @@ test("the internal payment-confirmation preparation has no public Phase 2 call s
   ]);
   assert.ok(routeSources.every((source) => !source.includes("confirmShopOrderPayment")));
 });
+
+test("ShopOrder interactive transactions do not fan relation queries out on one PostgreSQL client", async () => {
+  const service = await readFile(new URL("../../lib/shop/order-service.ts", import.meta.url), "utf8");
+
+  assert.match(service, /select:\s*orderProductSelect/);
+  assert.match(service, /transaction\.productAsset\.count/);
+  assert.doesNotMatch(
+    service,
+    /transaction\.product\.findMany\([\s\S]{0,400}select:\s*publicProductSelect/,
+  );
+  assert.doesNotMatch(
+    service,
+    /transaction\.shopOrder\.find(?:Unique|UniqueOrThrow)\([\s\S]{0,500}include:\s*shopOrderDetailInclude/,
+  );
+  assert.match(
+    service,
+    /const order = await prisma\.shopOrder\.findUniqueOrThrow\([\s\S]*?include:\s*shopOrderDetailInclude/,
+  );
+});

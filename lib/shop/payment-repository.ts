@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
+import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import { enqueueShopPaymentConfirmedNotifications } from "@/lib/notifications/service";
 import { issueInvoiceForPayment } from "@/lib/billing/service";
 import {
@@ -162,6 +163,27 @@ function activeReservationsValid(
       item.reservation?.status === "ACTIVE"
       && item.reservation.expiresAt > now
     ));
+}
+
+async function shopOrderWithItems(transaction: Transaction, shopOrderId: string) {
+  const [order, items, reservations] = await runSequentialDatabaseQueries(
+    () => transaction.shopOrder.findUniqueOrThrow({ where: { id: shopOrderId } }),
+    () => transaction.shopOrderItem.findMany({
+      where: { shopOrderId },
+      orderBy: [{ position: "asc" }, { productId: "asc" }],
+    }),
+    () => transaction.stockReservation.findMany({ where: { shopOrderId } }),
+  );
+  const reservationByProduct = new Map(
+    reservations.map((reservation) => [reservation.productId, reservation]),
+  );
+  return {
+    ...order,
+    items: items.map((item) => ({
+      ...item,
+      reservation: reservationByProduct.get(item.productId) ?? null,
+    })),
+  };
 }
 
 async function createProviderReceipt(
@@ -397,15 +419,7 @@ export function createShopPaymentDatabaseRepository(
         if (!row || !await lockShopOrderRow(transaction, row.id)) {
           throw new ShopPaymentServiceError(404, "ORDER_NOT_PAYABLE");
         }
-        const order = await transaction.shopOrder.findUniqueOrThrow({
-          where: { id: row.id },
-          include: {
-            items: {
-              orderBy: [{ position: "asc" }, { productId: "asc" }],
-              include: { reservation: true },
-            },
-          },
-        });
+        const order = await shopOrderWithItems(transaction, row.id);
         let terms: ReturnType<typeof requireAcceptedShopTermsForOrder>;
         try {
           terms = requireAcceptedShopTermsForOrder(termsAccepted, order, process.env, now);
@@ -575,10 +589,7 @@ export function createShopPaymentDatabaseRepository(
         if (!row || !await lockShopOrderRow(transaction, row.id)) {
           throw new ShopPaymentServiceError(404, "ORDER_NOT_PAYABLE");
         }
-        const order = await transaction.shopOrder.findUniqueOrThrow({
-          where: { id: row.id },
-          include: { items: { include: { reservation: true } } },
-        });
+        const order = await shopOrderWithItems(transaction, row.id);
         if (
           order.status !== "OPEN"
           || order.paymentStatus !== "AWAITING_PAYMENT"
@@ -767,15 +778,7 @@ export function createShopPaymentDatabaseRepository(
             paidAt: true,
           },
         });
-        const order = await transaction.shopOrder.findUniqueOrThrow({
-          where: { id: owner.shopOrderId },
-          include: {
-            items: {
-              orderBy: [{ productId: "asc" }],
-              include: { reservation: true },
-            },
-          },
-        });
+        const order = await shopOrderWithItems(transaction, owner.shopOrderId);
         const providerCheckoutBelongsToAnother = event.providerCheckoutId
           ? await transaction.payment.findFirst({
             where: {

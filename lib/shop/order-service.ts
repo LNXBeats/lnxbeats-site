@@ -93,7 +93,7 @@ const productImageWhere = {
   },
 } as const;
 
-const publicProductSelect = {
+const orderProductSelect = {
   id: true,
   status: true,
   slug: true,
@@ -108,6 +108,10 @@ const publicProductSelect = {
   shippingWeightGrams: true,
   lockVersion: true,
   position: true,
+} satisfies Prisma.ProductSelect;
+
+const publicProductSelect = {
+  ...orderProductSelect,
   assets: {
     where: productImageWhere,
     orderBy: { position: "asc" as const },
@@ -304,19 +308,24 @@ async function resolveProducts(
   for (const productId of productIds) await lock(transaction, `shop-product:${productId}`);
   const products = await transaction.product.findMany({
     where: { id: { in: productIds } },
-    select: publicProductSelect,
+    select: orderProductSelect,
   });
   const byId = new Map(products.map((product) => [product.id, product]));
   const lines = [];
   for (const [position, item] of intent.items.entries()) {
     const product = byId.get(item.productId);
+    const productImageCount = product
+      ? await transaction.productAsset.count({
+          where: { productId: product.id, ...productImageWhere },
+        })
+      : 0;
     if (
       !product
       || product.status !== "PUBLISHED"
       || product.currency !== "EUR"
       || !Number.isSafeInteger(product.priceCents)
       || (product.priceCents ?? 0) <= 0
-      || product.assets.length !== 1
+      || productImageCount !== 1
     ) {
       throw new ShopServiceError(
         "Un produit du panier n’est plus disponible.",
@@ -457,7 +466,7 @@ export async function createShopOrder(
     await lock(transaction, `shop-order:create:${actor.id}:${creationToken}`);
     const existing = await transaction.shopOrder.findUnique({
       where: { userId_creationToken: { userId: actor.id, creationToken } },
-      include: shopOrderDetailInclude,
+      select: { id: true, requestFingerprintSha256: true },
     });
     if (existing) {
       if (existing.requestFingerprintSha256 !== fingerprint) {
@@ -467,7 +476,7 @@ export async function createShopOrder(
           409,
         );
       }
-      return { order: existing, created: false } as const;
+      return { orderId: existing.id, created: false } as const;
     }
 
     await lock(transaction, `shop-order:rate-limit:${actor.id}`);
@@ -580,14 +589,13 @@ export async function createShopOrder(
         },
       });
     }
-    const order = await transaction.shopOrder.findUniqueOrThrow({
-      where: { id: created.id },
-      include: shopOrderDetailInclude,
-    });
-    return { order, created: true } as const;
+    return { orderId: created.id, created: true } as const;
   });
 
-  const { order } = outcome;
+  const order = await prisma.shopOrder.findUniqueOrThrow({
+    where: { id: outcome.orderId },
+    include: shopOrderDetailInclude,
+  });
   const reservations = order.items.flatMap(({ reservation }) => reservation ? [reservation] : []);
   const reservationCount = reservations.length;
   if (outcome.created) {
@@ -692,9 +700,13 @@ export async function releaseShopOrderReservation(shopOrderId: string, now = new
     if (locked.length !== 1) throw new ShopServiceError("Commande introuvable.", "ORDER_NOT_FOUND", 404);
     const order = await transaction.shopOrder.findUnique({
       where: { id: shopOrderId },
-      include: { items: { include: { reservation: true } } },
+      select: { status: true, paymentStatus: true, paymentReviewAt: true },
     });
     if (!order) throw new ShopServiceError("Commande introuvable.", "ORDER_NOT_FOUND", 404);
+    const reservations = await transaction.stockReservation.findMany({
+      where: { shopOrderId },
+      select: { id: true, productId: true, quantity: true, status: true },
+    });
     if (order.paymentReviewAt) {
       throw new ShopServiceError(
         "Cette commande contient une preuve financière à vérifier.",
@@ -702,14 +714,14 @@ export async function releaseShopOrderReservation(shopOrderId: string, now = new
         409,
       );
     }
-    if (order.paymentStatus === "PAID" || order.items.some(({ reservation }) => reservation?.status === "CONFIRMED")) {
+    if (order.paymentStatus === "PAID" || reservations.some(({ status }) => status === "CONFIRMED")) {
       throw new ShopServiceError(
         "Une réservation confirmée ne peut pas être libérée.",
         "RESERVATION_CONFIRMED",
         409,
       );
     }
-    const active = order.items.flatMap(({ reservation }) => reservation?.status === "ACTIVE" ? [reservation] : []);
+    const active = reservations.filter(({ status }) => status === "ACTIVE");
     for (const reservation of active) {
       const changed = await transaction.stockReservation.updateMany({
         where: { id: reservation.id, status: "ACTIVE" },
