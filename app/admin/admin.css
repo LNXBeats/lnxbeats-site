@@ -339,6 +339,39 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-side-window dl { display: grid; margin: 0; border-top: 1px solid rgba(244, 240, 232, 0.1); }
 .admin-side-window dl div { display: flex; justify-content: space-between; gap: 1rem; padding-block: 0.75rem; border-bottom: 1px solid rgba(244, 240, 232, 0.1); }
 .admin-side-window > small { display: block; margin-top: 1rem; color: #858179; }
+.admin-payment-attempt-facts { grid-template-columns: minmax(0, 1fr); }
+.admin-side-window .admin-payment-attempt-facts > div,
+.admin-side-window .admin-payment-attempt-facts > div:nth-child(even) {
+  display: grid;
+  grid-template-columns: minmax(5rem, 1fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.75rem 0;
+  border-left: 0;
+}
+.admin-payment-attempt-facts > .admin-detail-facts__wide { grid-column: 1; }
+.admin-payment-attempt-facts dd {
+  min-width: 0;
+  text-align: right;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.admin-payment-attempt-facts__compact dd { white-space: nowrap; }
+.admin-shipping-tracking-form { min-width: 0; gap: 1rem; }
+.admin-shipping-tracking-form > label:not(.admin-check) { min-width: 0; }
+.admin-shipping-tracking-form > label:not(.admin-check) > input {
+  box-sizing: border-box;
+  display: block;
+  min-width: 0;
+  border-color: rgba(214, 179, 106, 0.42);
+  background: linear-gradient(145deg, rgba(214, 179, 106, 0.055), rgba(8, 8, 7, 0.96));
+  box-shadow: inset 0 1px 0 rgba(244, 240, 232, 0.04);
+}
+.admin-shipping-tracking-form > label:not(.admin-check) > input:is(:hover, :focus-visible) { border-color: #d6b36a; }
+.admin-shipping-tracking-form > .admin-check { margin-top: 0.15rem; }
+.admin-shipping-tracking-form > .admin-button { width: 100%; }
 .admin-delivery-picker {
   position: relative;
   isolation: isolate;

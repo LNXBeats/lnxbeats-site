@@ -28,6 +28,8 @@ test("Admin exposes ShopOrders and strictly guarded fulfillment actions", async 
   assert.match(detailPage, /markShopOrderPreparingAction/);
   assert.match(detailPage, /markShopOrderReadyAction/);
   assert.match(detailPage, /recordShopOrderTrackingAction/);
+  assert.match(detailPage, /admin-form admin-shipping-tracking-form/);
+  assert.match(detailPage, /admin-payment-attempt-facts/);
   assert.match(detailPage, /markShopOrderShippedAction/);
   assert.match(detailPage, /CONFIRM_SHOP_PREPARATION/);
   assert.match(detailPage, /CONFIRM_SHOP_READY_TO_SHIP/);
@@ -55,6 +57,10 @@ test("Admin navigation selects only the longest matching route and mobile orders
   assert.match(navigation, /const active = activeHref === item\.href/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.admin-order-list a \{ grid-template-columns: 1fr 20px/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.admin-rights-timeline li \{ grid-template-columns: 1fr/);
+  assert.match(css, /\.admin-payment-attempt-facts__compact dd \{ white-space: nowrap/);
+  assert.match(css, /\.admin-shipping-tracking-form > label:not\(\.admin-check\) > input/);
+  assert.match(css, /\.admin-shipping-tracking-form[\s\S]*box-sizing: border-box/);
+  assert.match(css, /\.admin-shipping-tracking-form[\s\S]*focus-visible/);
 });
 
 test("Admin Shop payment presentation lists a winner and a reviewed second capture without provider ids", async () => {

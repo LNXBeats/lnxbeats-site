@@ -307,9 +307,9 @@ export default async function AdminShopOrderPage({
                     <li key={payment.id}>
                       <p className="admin-section-label">Tentative {index + 1}</p>
                       <h3>{presentation.providerLabel}</h3>
-                      <dl className="admin-detail-facts">
-                        <div><dt>Statut</dt><dd>{presentation.statusLabel}</dd></div>
-                        <div><dt>Montant</dt><dd>{formatShopMoney(payment.amountCents)}</dd></div>
+                      <dl className="admin-detail-facts admin-payment-attempt-facts">
+                        <div className="admin-payment-attempt-facts__compact"><dt>Statut</dt><dd>{presentation.statusLabel}</dd></div>
+                        <div className="admin-payment-attempt-facts__compact"><dt>Montant</dt><dd>{formatShopMoney(payment.amountCents)}</dd></div>
                         <div className="admin-detail-facts__wide"><dt>{presentation.dateLabel}</dt><dd><time dateTime={presentation.date.toISOString()}>{DATE_FORMAT.format(presentation.date)}</time></dd></div>
                         {presentation.incidentLabel ? <div className="admin-detail-facts__wide"><dt>Incident</dt><dd>{presentation.incidentLabel}</dd></div> : null}
                       </dl>
@@ -357,7 +357,7 @@ export default async function AdminShopOrderPage({
             <section className="admin-side-window" aria-labelledby="admin-shop-tracking-title">
               <p className="admin-section-label">Suivi manuel</p>
               <h2 id="admin-shop-tracking-title">{order.trackingNumber ? "Corriger le suivi avant départ." : "Enregistrer le suivi."}</h2>
-              <form action={recordShopOrderTrackingAction}>
+              <form className="admin-form admin-shipping-tracking-form" action={recordShopOrderTrackingAction}>
                 <input type="hidden" name="orderNumber" value={order.orderNumber} />
                 <label>Transporteur ou mode<input name="carrier" maxLength={120} defaultValue={order.shippingCarrier ?? "Transporteur QA"} required /></label>
                 <label>Numéro de suivi<input name="trackingNumber" maxLength={160} defaultValue={order.trackingNumber ?? ""} required /></label>
