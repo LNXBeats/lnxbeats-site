@@ -4,6 +4,7 @@ import { OrderJourneyProvider } from "@/components/order-journey-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteConfig } from "@/data/site";
+import { CANONICAL_SITE_ORIGIN } from "@/lib/seo/canonical";
 import "./globals.css";
 import "./visual-phase2.css";
 import "./visual-phase3.css";
@@ -13,7 +14,7 @@ import "./v085-mobile-polish.css";
 import "./v0854-audio-payment.css";
 import "./legal-compliance.css";
 
-const siteUrl = process.env.SITE_URL ?? siteConfig.url;
+const siteUrl = CANONICAL_SITE_ORIGIN;
 const socialImage = new URL("/og.png", siteUrl).toString();
 
 export const metadata: Metadata = {

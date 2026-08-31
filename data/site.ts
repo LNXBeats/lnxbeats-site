@@ -23,7 +23,7 @@ export const quickAccessPlatforms = [
 
 export const siteConfig = {
   name: "LNX Beats",
-  url: "https://lnxbeats.fr",
+  url: "https://www.lnxbeats.fr",
   email: "lnx.beats.pro@gmail.com",
   featuredRelease: {
     title: "J’ai adopté un humain",

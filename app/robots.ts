@@ -1,8 +1,7 @@
 import type { MetadataRoute } from "next";
-import { siteConfig } from "@/data/site";
+import { CANONICAL_SITE_ORIGIN, canonicalPublicUrl } from "@/lib/seo/canonical";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.SITE_URL ?? siteConfig.url;
   return {
     rules: {
       userAgent: "*",
@@ -17,10 +16,11 @@ export default function robots(): MetadataRoute.Robots {
         "/verifier-email",
         "/compte",
         "/admin",
-        "/retractation/confirmation",
+        "/commande/",
+        "/qa/",
       ],
     },
-    sitemap: `${baseUrl}/sitemap.xml`,
-    host: baseUrl,
+    sitemap: canonicalPublicUrl("/sitemap.xml"),
+    host: CANONICAL_SITE_ORIGIN,
   };
 }
