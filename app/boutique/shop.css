@@ -1,8 +1,11 @@
 .shop-commerce-nav {
   position: fixed;
-  z-index: 85;
-  right: clamp(1rem, 3vw, 2.5rem);
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 190;
+  right: max(clamp(1rem, 3vw, 2.5rem), env(safe-area-inset-right, 0px));
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  max-width: calc(100vw - 2rem);
+  pointer-events: none;
+  transform: translateZ(0);
 }
 
 .shop-cart-link {
@@ -21,6 +24,7 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   backdrop-filter: blur(16px);
+  pointer-events: auto;
 }
 
 .shop-cart-link span {
@@ -354,6 +358,18 @@
   color: #f2b5a8;
 }
 
+.shop-cart__error p {
+  margin: 0;
+}
+
+.shop-cart__error .text-link {
+  margin-top: 0.55rem;
+}
+
+.shop-cart__pending {
+  color: var(--gold-light);
+}
+
 .shop-cart__lines label {
   display: grid;
   gap: 0.25rem;
@@ -522,8 +538,9 @@
 
 @media (max-width: 620px) {
   .shop-commerce-nav {
-    right: 0.8rem;
-    bottom: max(0.8rem, env(safe-area-inset-bottom));
+    right: max(0.8rem, env(safe-area-inset-right, 0px));
+    bottom: calc(0.8rem + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 1.6rem);
   }
 
   .shop-commerce-hero {

@@ -46,16 +46,6 @@ function dependencies(
 
 const validPayload = {
   items: [{ productId, quantity: 1, observedLockVersion: 1 }],
-  shippingAddress: {
-    firstName: "Membre",
-    lastName: "QA",
-    addressLine1: "5 rue du Test",
-    addressLine2: null,
-    postalCode: "75005",
-    city: "Paris",
-    countryCode: "FR",
-  },
-  shippingQuoteVersion: null,
 };
 
 test("shipping quote rejects origin and authentication before calculation", async () => {
@@ -89,14 +79,14 @@ test("shipping quote rejects origin and authentication before calculation", asyn
 });
 
 test("shipping quote accepts only cart identity and returns the server snapshot", async () => {
-  let capturedVersion: string | null | undefined;
+  let capturedItems: readonly unknown[] | undefined;
   const result = await handleShopShippingQuote(request(validPayload), dependencies({
     quote: async (_actor, intent) => {
-      capturedVersion = intent.shippingQuoteVersion;
+      capturedItems = intent.items;
       return dependencies().quote(_actor, intent);
     },
   }));
-  assert.equal(capturedVersion, null);
+  assert.deepEqual(capturedItems, validPayload.items);
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, {
     ok: true,
@@ -121,6 +111,23 @@ test("shipping quote rejects browser prices and arbitrary fields", async () => {
   const result = await handleShopShippingQuote(request({
     ...validPayload,
     shippingCents: 1,
+  }), dependencies({
+    quote: async () => {
+      called = true;
+      throw new Error("unreachable");
+    },
+  }));
+  assert.equal(result.status, 422);
+  assert.equal(result.body.code, "INVALID_PAYLOAD");
+  assert.equal(called, false);
+});
+
+test("shipping quote does not accept a browser-selected address or tariff version", async () => {
+  let called = false;
+  const result = await handleShopShippingQuote(request({
+    ...validPayload,
+    shippingAddress: { countryCode: "FR" },
+    shippingQuoteVersion: "browser-controlled",
   }), dependencies({
     quote: async () => {
       called = true;

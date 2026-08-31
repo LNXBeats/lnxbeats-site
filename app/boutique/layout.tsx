@@ -16,7 +16,7 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
   if (!enabled) return children;
   return (
     <ShopCartProvider>
-      <div className="shop-commerce-nav"><ShopCartLink /></div>
+      <ShopCartLink />
       {children}
     </ShopCartProvider>
   );

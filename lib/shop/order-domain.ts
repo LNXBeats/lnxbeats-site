@@ -30,6 +30,10 @@ export type ShopOrderIntent = Readonly<{
   shippingQuoteVersion: string | null;
 }>;
 
+export type ShopShippingQuoteIntent = Readonly<{
+  items: readonly ShopCartLineIntent[];
+}>;
+
 export class ShopDomainError extends Error {
   constructor(
     message: string,
@@ -157,6 +161,17 @@ export function parseShopOrderIntent(value: unknown): ShopOrderIntent {
       ? null
       : boundedText(value.shippingQuoteVersion, "La version du devis", 64),
   });
+}
+
+export function parseShopShippingQuoteIntent(value: unknown): ShopShippingQuoteIntent {
+  if (!record(value)) throw new ShopDomainError("Le panier transmis est invalide.", "INVALID_PAYLOAD");
+  assertExactKeys(value, ["items"]);
+  const intent = parseShopOrderIntent({
+    items: value.items,
+    shippingAddress: null,
+    shippingQuoteVersion: null,
+  });
+  return Object.freeze({ items: intent.items });
 }
 
 export function parseShopIdempotencyKey(value: string | null) {

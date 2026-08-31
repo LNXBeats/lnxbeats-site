@@ -1,5 +1,7 @@
 import "server-only";
 
+import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
+
 export const SHOP_SHIPPING_QA_CONFIRMATION = "enable-internal-shop-shipping-qa";
 export const SHOP_PRODUCTION_READINESS_QA_CONFIRMATION = "enable-phase5e-production-readiness-qa";
 
@@ -37,11 +39,12 @@ export function parseShopShippingConfiguration(
   const enabled = exactBoolean(environment.SHOP_SHIPPING_ENABLED);
   if (!enabled) return Object.freeze({ enabled: false, scope: "INTERNAL_QA" });
   const productionReadiness = environment.SHOP_SHIPPING_RATE_SCOPE === "COMMERCIAL_CANDIDATE";
+  const exactProductionReadinessQa = productionReadinessQaEnabled(environment);
   const expectedConfirmation = productionReadiness
     ? SHOP_PRODUCTION_READINESS_QA_CONFIRMATION
     : SHOP_SHIPPING_QA_CONFIRMATION;
   if (
-    environment.NODE_ENV === "production"
+    (environment.NODE_ENV === "production" && !exactProductionReadinessQa)
     || environment.RAILWAY_ENVIRONMENT
     || environment.RAILWAY_ENVIRONMENT_NAME
     || environment.SHOP_ENABLED !== "true"
@@ -54,4 +57,9 @@ export function parseShopShippingConfiguration(
     throw new ShopShippingConfigurationError("QA_CONTEXT_REQUIRED");
   }
   return Object.freeze({ enabled: true, scope: productionReadiness ? "COMMERCIAL_CANDIDATE" : "INTERNAL_QA" });
+}
+
+function productionReadinessQaEnabled(environment: NodeJS.ProcessEnv) {
+  return environment.SHOP_SHIPPING_RATE_SCOPE === "COMMERCIAL_CANDIDATE"
+    && shopProductionReadinessQaEnabled(environment);
 }

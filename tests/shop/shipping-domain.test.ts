@@ -3,6 +3,11 @@ import test from "node:test";
 
 import { SHOP_SHIPPING_QA_CONFIRMATION, parseShopShippingConfiguration } from "@/lib/shop/shipping-config";
 import {
+  SHOP_PHASE5E_CONFIRMATION,
+  SHOP_PHASE5E_ORIGIN,
+  SHOP_PHASE5E_PREVIEW_TARGET,
+} from "@/lib/shop/production-readiness-config";
+import {
   quoteShipping,
   ShippingQuoteError,
   type ShippingRateDefinition,
@@ -94,6 +99,23 @@ test("shipping quote inputs fail closed for unsafe weights, destinations and gri
     { position: 1, maxWeightGrams: 250, priceCents: 600 },
   ] }));
   code(() => quote(1_001));
+  const commercialDraft = {
+    ...rate,
+    status: "DRAFT" as const,
+    scope: "COMMERCIAL_CANDIDATE" as const,
+    service: "COLISSIMO_HOME_FRANCE" as const,
+  };
+  code(() => quoteShipping({
+    rate: commercialDraft,
+    destinationCountryCode: "FR",
+    lines: [{ productId: "one", shippingRequired: true, shippingWeightGrams: 100, quantity: 1 }],
+  }));
+  assert.equal(quoteShipping({
+    rate: commercialDraft,
+    destinationCountryCode: "FR",
+    lines: [{ productId: "one", shippingRequired: true, shippingWeightGrams: 100, quantity: 1 }],
+    allowCommercialDraft: true,
+  }).amountCents, 400);
 });
 
 test("the internal QA shipping gate is disabled by default and impossible in production or Railway", () => {
@@ -118,5 +140,45 @@ test("the internal QA shipping gate is disabled by default and impossible in pro
   assert.throws(
     () => parseShopShippingConfiguration({ SHOP_SHIPPING_ENABLED: "yes" } as unknown as NodeJS.ProcessEnv),
     /INVALID_FLAG/,
+  );
+
+  const exactPhase5E = {
+    NODE_ENV: "production",
+    DATABASE_URL: "postgresql://127.0.0.1:51280/template1?schema=public",
+    LNX_DATABASE_TARGET: SHOP_PHASE5E_PREVIEW_TARGET,
+    LNX_PRISMA_DEV_SERVER_FILE: `/tmp/prisma-dev-nodejs/${SHOP_PHASE5E_PREVIEW_TARGET}/server.json`,
+    AUTH_URL: SHOP_PHASE5E_ORIGIN,
+    SITE_URL: SHOP_PHASE5E_ORIGIN,
+    SHOP_PRODUCTION_READINESS_QA: "true",
+    SHOP_PRODUCTION_READINESS_QA_CONFIRM: SHOP_PHASE5E_CONFIRMATION,
+    SHOP_ENABLED: "true",
+    SHOP_CUSTOMER_SCOPE: "INDIVIDUALS_ONLY",
+    SHOP_ALLOWED_COUNTRIES: "FR",
+    SHOP_RESERVATION_TTL_MINUTES: "30",
+    SHOP_SHIPPING_ENABLED: "true",
+    SHOP_SHIPPING_RATE_SCOPE: "COMMERCIAL_CANDIDATE",
+    SHOP_SHIPPING_QA_CONFIRM: SHOP_PHASE5E_CONFIRMATION,
+    SHOP_PAYMENTS_ENABLED: "false",
+    PAYMENTS_ENABLED: "false",
+    STRIPE_PAYMENTS_ENABLED: "false",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    LIVE_REFUNDS_ENABLED: "false",
+    NOTIFICATION_EMAIL_TRANSPORT: "capture",
+    NOTIFICATION_WORKER_ENABLED: "false",
+    SHOP_TERMS_VERSION: "shop-cgv-phase3-qa-v1",
+    SHOP_ORDER_SNAPSHOT_VERSION: "shop-order-v1",
+    MUSIC_PRICING_SOURCE: "legacy",
+  } as NodeJS.ProcessEnv;
+  assert.deepEqual(parseShopShippingConfiguration(exactPhase5E), {
+    enabled: true,
+    scope: "COMMERCIAL_CANDIDATE",
+  });
+  for (const environment of [
+    { ...exactPhase5E, RAILWAY_ENVIRONMENT: "production" },
+    { ...exactPhase5E, LNX_DATABASE_TARGET: "wrong-target" },
+    { ...exactPhase5E, SITE_URL: "https://www.lnxbeats.fr" },
+  ]) assert.throws(
+    () => parseShopShippingConfiguration(environment as NodeJS.ProcessEnv),
+    /QA_CONTEXT_REQUIRED/,
   );
 });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useShopCart } from "@/components/shop-cart-provider";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
@@ -61,8 +61,8 @@ export function ShopCart({
   const router = useRouter();
   const { lines, ready, setQuantity, remove, clear } = useShopCart();
   const [busy, setBusy] = useState(false);
-  const [quoting, setQuoting] = useState(false);
-  const [quote, setQuote] = useState<ShippingQuote | null>(null);
+  const [quotingKey, setQuotingKey] = useState<string | null>(null);
+  const [quoted, setQuoted] = useState<Readonly<{ key: string; value: ShippingQuote }> | null>(null);
   const [error, setError] = useState("");
   const [changedProductId, setChangedProductId] = useState<string | null>(null);
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
@@ -75,10 +75,26 @@ export function ShopCart({
     || (product.availableQuantity !== null && quantity > product.availableQuantity)
   ));
   const subtotalCents = knownLines.reduce((sum, { product, quantity }) => sum + product.priceCents * quantity, 0);
+  const quoteItems = useMemo(() => lines.map(({ productId, quantity }) => ({
+    productId,
+    quantity,
+    observedLockVersion: productById.get(productId)?.lockVersion,
+  })), [lines, productById]);
+  const quoteKey = useMemo(() => JSON.stringify(quoteItems), [quoteItems]);
+  const quoting = ready
+    && authenticated
+    && memberAllowed
+    && !invalid
+    && quoteItems.length > 0
+    && quotingKey === quoteKey;
+  const quote = authenticated && memberAllowed && quoted?.key === quoteKey ? quoted.value : null;
+  const validationError = invalid
+    ? "Vérifiez les produits et quantités du panier avant le calcul automatique de la livraison."
+    : "";
+  const displayedError = validationError || error;
 
   function resetOrderPreparation() {
     window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
-    setQuote(null);
     setError("");
     setChangedProductId(null);
   }
@@ -97,49 +113,58 @@ export function ShopCart({
 
   function requestPayload(form: FormData, shippingQuoteVersion: string | null) {
     return {
-      items: lines.map(({ productId, quantity }) => ({
-        productId,
-        quantity,
-        observedLockVersion: productById.get(productId)?.lockVersion,
-      })),
+      items: quoteItems,
       shippingAddress: shippingAddressFrom(form),
       shippingQuoteVersion,
     };
   }
 
-  async function calculateQuote(event: MouseEvent<HTMLButtonElement>) {
-    const formElement = event.currentTarget.form;
-    if (!formElement || !formElement.reportValidity() || invalid || quoting || busy) return;
-    setQuoting(true);
-    setError("");
-    setChangedProductId(null);
-    try {
-      const response = await fetch("/api/shop/shipping/quote", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestPayload(new FormData(formElement), null)),
-      });
-      const body = await response.json() as {
-        quote?: ShippingQuote;
-        message?: string;
-        code?: string;
-        productId?: string;
-      };
-      if (!response.ok || !body.quote) {
-        if (body.productId) setChangedProductId(body.productId);
-        setQuote(null);
-        setError(messageFromResponse(body));
-        return;
+  const [quoteAttempt, setQuoteAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!ready || !authenticated || !memberAllowed || !quoteItems.length) return;
+    if (invalid) return;
+    const controller = new AbortController();
+    let current = true;
+    async function calculateQuote() {
+      setQuotingKey(quoteKey);
+      setQuoted(null);
+      setError("");
+      setChangedProductId(null);
+      try {
+        const response = await fetch("/api/shop/shipping/quote", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: quoteItems }),
+          signal: controller.signal,
+        });
+        const body = await response.json() as {
+          quote?: ShippingQuote;
+          message?: string;
+          code?: string;
+          productId?: string;
+        };
+        if (!current) return;
+        if (!response.ok || !body.quote) {
+          if (body.productId) setChangedProductId(body.productId);
+          setError(messageFromResponse(body));
+          return;
+        }
+        setQuoted({ key: quoteKey, value: body.quote });
+      } catch (caught) {
+        if (!current || (caught instanceof DOMException && caught.name === "AbortError")) return;
+        setError("Le devis serveur n’a pas pu être reçu. Réessayez sans modifier le panier.");
+      } finally {
+        if (current) setQuotingKey(null);
       }
-      setQuote(body.quote);
-    } catch {
-      setQuote(null);
-      setError("Le devis serveur n’a pas pu être reçu. Réessayez sans modifier le panier.");
-    } finally {
-      setQuoting(false);
     }
-  }
+    void calculateQuote();
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [authenticated, invalid, memberAllowed, quoteAttempt, quoteItems, quoteKey, ready]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -155,7 +180,7 @@ export function ShopCart({
 
     const form = new FormData(event.currentTarget);
     if (!quote) {
-      setError("Calculez le devis serveur avant de préparer la commande.");
+      setError("Le devis automatique n’est pas encore disponible. Attendez sa confirmation avant de préparer la commande.");
       return;
     }
     let idempotencyKey = window.sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY);
@@ -185,7 +210,7 @@ export function ShopCart({
           setChangedProductId(body.productId);
           router.refresh();
         }
-        if (body.code === "SHIPPING_QUOTE_CHANGED") setQuote(null);
+        if (body.code === "SHIPPING_QUOTE_CHANGED") setQuoted(null);
         if (response.status === 401) {
           router.push("/connexion?retour=%2Fboutique%2Fpanier");
           return;
@@ -281,27 +306,29 @@ export function ShopCart({
         ) : null}
       </div>
 
-      <aside className="shop-cart__summary" aria-labelledby="shop-cart-summary-title">
+      <aside className="shop-cart__summary" aria-busy={quoting} aria-labelledby="shop-cart-summary-title">
         <p className="eyebrow">Récapitulatif</p>
         <h2 id="shop-cart-summary-title">Commande Boutique</h2>
         <dl>
           <div><dt>Sous-total</dt><dd>{formatShopMoney(quote?.subtotalCents ?? subtotalCents)}</dd></div>
-          <div><dt>Expédition</dt><dd>{quote ? formatShopMoney(quote.shippingCents) : "À calculer"}</dd></div>
-          <div className="shop-cart__total"><dt>Total</dt><dd>{quote ? formatShopMoney(quote.totalCents) : "—"}</dd></div>
+          <div><dt>Expédition</dt><dd>{quote ? formatShopMoney(quote.shippingCents) : quoting ? "Calcul…" : "Indisponible"}</dd></div>
+          <div className="shop-cart__total"><dt>Total</dt><dd>{quote ? formatShopMoney(quote.totalCents) : quoting ? "Calcul…" : "—"}</dd></div>
         </dl>
         {quote?.shippingRequired ? <p className="shop-cart__shipping-proof">Devis serveur {quote.shippingQuoteVersion} · {quote.shippingBillableGrams} g facturables. Fixture QA interne, non contractuelle.</p> : null}
+        {quoting ? <p className="shop-cart__pending" role="status">Calcul automatique de la livraison en cours…</p> : null}
         <p>Aucun paiement n’est déclenché par le devis. Le serveur revérifie prix, disponibilité, poids et livraison avant de réserver le stock.</p>
-        {error ? <p className="shop-cart__error" role="alert">{error}</p> : null}
+        {displayedError ? (
+          <div className="shop-cart__error" role="alert">
+            <p>{displayedError}</p>
+            {error && authenticated && memberAllowed && !invalid ? (
+              <button className="text-link" onClick={() => setQuoteAttempt((attempt) => attempt + 1)} type="button">
+                Réessayer le calcul
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {authenticated ? (
           <div className="shop-cart__actions">
-            <button
-              className="button button--secondary"
-              disabled={quoting || busy || invalid || !memberAllowed}
-              onClick={calculateQuote}
-              type="button"
-            >
-              {quoting ? "Calcul…" : quote ? "Recalculer la livraison" : "Calculer la livraison"}
-            </button>
             <button
               className="button button--primary"
               disabled={busy || quoting || invalid || !quote}

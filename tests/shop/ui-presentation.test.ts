@@ -64,6 +64,39 @@ test("cart identifies changed lines, keeps product imagery and submits an observ
   assert.match(cart, /src=\{`\/media\/boutique\/\$\{product\.image\.id\}`\}/);
 });
 
+test("cart shipping quote is automatic, race-safe and keeps visible failure feedback", async () => {
+  const cart = await readFile(new URL("../../components/shop-cart.tsx", import.meta.url), "utf8");
+
+  assert.match(cart, /useEffect\(\(\) => \{/);
+  assert.match(cart, /body: JSON\.stringify\(\{ items: quoteItems \}\)/);
+  assert.match(cart, /const controller = new AbortController\(\)/);
+  assert.match(cart, /quotingKey === quoteKey/);
+  assert.match(cart, /quoted\?\.key === quoteKey \? quoted\.value : null/);
+  assert.match(cart, /controller\.abort\(\)/);
+  assert.match(cart, /Calcul automatique de la livraison en cours/);
+  assert.match(cart, /Réessayer le calcul/);
+  assert.doesNotMatch(cart, />Calculer la livraison</);
+  assert.doesNotMatch(cart, /reportValidity\(\)/);
+});
+
+test("floating cart is present only for a hydrated non-empty cart outside the cart page", async () => {
+  const [link, layout, css] = await Promise.all([
+    readFile(new URL("../../components/shop-cart-link.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/boutique/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/boutique/shop.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(link, /usePathname\(\)/);
+  assert.match(link, /!ready \|\| itemCount === 0 \|\| pathname\.startsWith\("\/boutique\/panier"\)/);
+  assert.match(link, /className="shop-commerce-nav"/);
+  assert.match(layout, /<ShopCartLink \/>/);
+  assert.doesNotMatch(layout, /<div className="shop-commerce-nav"/);
+  assert.match(css, /\.shop-commerce-nav \{[\s\S]*position: fixed/);
+  assert.match(css, /safe-area-inset-bottom/);
+  assert.match(css, /safe-area-inset-right/);
+  assert.match(css, /max-width: calc\(100vw -/);
+});
+
 test("admin product detail distinguishes physical, reserved and available stock", async () => {
   const [page, service] = await Promise.all([
     readFile(new URL("../../app/admin/boutique/[slug]/page.tsx", import.meta.url), "utf8"),

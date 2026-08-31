@@ -84,7 +84,7 @@ function boundedInteger(value: number, minimum: number, maximum: number) {
   return Number.isSafeInteger(value) && value >= minimum && value <= maximum;
 }
 
-function validateRate(rate: ShippingRateDefinition) {
+function validateRate(rate: ShippingRateDefinition, allowCommercialDraft: boolean) {
   const expectedService = rate.scope === SHOP_COMMERCIAL_SHIPPING_SCOPE
     ? SHOP_COMMERCIAL_SHIPPING_SERVICE
     : SHOP_SHIPPING_SERVICE;
@@ -110,7 +110,10 @@ function validateRate(rate: ShippingRateDefinition) {
     || rate.packagingProfile.customerBillableWeightIncluded
     || rate.packagingProfile.physicalWeightGrams !== rate.packagingWeightGrams
   )) throw new ShippingQuoteError("Le profil d’emballage est invalide.", "INVALID_RATE");
-  if (rate.status !== "ACTIVE") {
+  const allowedDraft = allowCommercialDraft
+    && rate.status === "DRAFT"
+    && rate.scope === SHOP_COMMERCIAL_SHIPPING_SCOPE;
+  if (rate.status !== "ACTIVE" && !allowedDraft) {
     throw new ShippingQuoteError("La grille logistique n’est pas active.", "INACTIVE_RATE");
   }
 
@@ -146,8 +149,9 @@ export function quoteShipping(input: Readonly<{
   rate: ShippingRateDefinition;
   lines: readonly ShippingQuoteLine[];
   destinationCountryCode: string;
+  allowCommercialDraft?: boolean;
 }>): ShippingQuote {
-  validateRate(input.rate);
+  validateRate(input.rate, input.allowCommercialDraft === true);
   if (input.destinationCountryCode !== input.rate.countryCode) {
     throw new ShippingQuoteError(
       "La livraison n’est pas disponible pour cette destination.",

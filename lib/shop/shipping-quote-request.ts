@@ -6,7 +6,7 @@ import {
   OrderRequestError,
   readOrderJson,
 } from "@/lib/orders/request";
-import { parseShopOrderIntent, ShopDomainError } from "@/lib/shop/order-domain";
+import { parseShopShippingQuoteIntent, ShopDomainError } from "@/lib/shop/order-domain";
 import {
   quoteShopOrderShipping,
   ShopServiceError,
@@ -24,7 +24,7 @@ export type ShopShippingQuoteRequestDependencies = Readonly<{
   allowed(request: Request): boolean;
   actor(headers: Headers): Promise<ShopOrderActor | null>;
   readJson(request: Request): Promise<unknown>;
-  quote(actor: ShopOrderActor, intent: ReturnType<typeof parseShopOrderIntent>): Promise<QuoteSnapshot>;
+  quote(actor: ShopOrderActor, intent: ReturnType<typeof parseShopShippingQuoteIntent>): Promise<QuoteSnapshot>;
 }>;
 
 const defaultDependencies: ShopShippingQuoteRequestDependencies = {
@@ -68,7 +68,7 @@ export async function handleShopShippingQuote(
     if (!actor) {
       return { status: 401, body: { ok: false, code: "AUTH_REQUIRED", message: "Connectez-vous pour calculer la livraison." } };
     }
-    const quote = await dependencies.quote(actor, parseShopOrderIntent(await dependencies.readJson(request)));
+    const quote = await dependencies.quote(actor, parseShopShippingQuoteIntent(await dependencies.readJson(request)));
     return {
       status: 200,
       body: { ok: true, quote },

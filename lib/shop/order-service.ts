@@ -10,6 +10,7 @@ import {
   getPublicAvailabilityState,
   shopOrderIntentFingerprint,
   type ShopOrderIntent,
+  type ShopShippingQuoteIntent,
 } from "@/lib/shop/order-domain";
 import {
   quoteVersionedShopShipping,
@@ -429,33 +430,63 @@ async function resolveShippingQuote(
 
 export async function quoteShopOrderShipping(
   actor: ShopOrderActor,
-  intent: ShopOrderIntent,
+  quoteIntent: ShopShippingQuoteIntent,
   now = new Date(),
 ) {
   assertDatabaseConfigured();
   assertMember(actor);
   const configuration = configurationForCreation();
   return withShopTransaction(async (transaction) => {
+    const intent: ShopOrderIntent = {
+      items: quoteIntent.items,
+      shippingAddress: null,
+      shippingQuoteVersion: null,
+    };
     const lines = await resolveProducts(transaction, intent, now);
     const subtotalCents = checkedMoney(...lines.map(({ lineTotalCents }) => lineTotalCents));
-    const shipping = await resolveShippingQuote(
-      transaction,
-      lines,
-      intent,
-      configuration.allowedCountries,
-    );
+    const shippingRequired = lines.some(({ product }) => product.shippingRequired);
+    const destinationCountryCode = configuration.allowedCountries.length === 1
+      ? configuration.allowedCountries[0]
+      : null;
+    if (shippingRequired && !destinationCountryCode) {
+      throw new ShopServiceError(
+        "La destination de livraison ne peut pas être déterminée automatiquement.",
+        "SHIPPING_CONFIGURATION_REQUIRED",
+        503,
+      );
+    }
+    let shipping: Awaited<ReturnType<typeof quoteVersionedShopShipping>> | null = null;
+    if (shippingRequired) {
+      try {
+        shipping = await quoteVersionedShopShipping(transaction, {
+          destinationCountryCode: destinationCountryCode!,
+          lines: lines.map(({ product, quantity }) => ({
+            productId: product.id,
+            shippingRequired: product.shippingRequired,
+            shippingWeightGrams: product.shippingWeightGrams,
+            quantity,
+          })),
+        });
+      } catch (error) {
+        if (error instanceof ShopShippingServiceError) {
+          throw new ShopServiceError(error.message, "SHIPPING_CONFIGURATION_REQUIRED", 503);
+        }
+        throw error;
+      }
+    }
+    const shippingCents = shipping?.amountCents ?? 0;
     return Object.freeze({
       subtotalCents,
-      shippingCents: shipping.shippingCents,
-      totalCents: checkedMoney(subtotalCents, shipping.shippingCents),
+      shippingCents,
+      totalCents: checkedMoney(subtotalCents, shippingCents),
       currency: "EUR" as const,
-      shippingRequired: shipping.shippingRequired,
-      shippingQuoteVersion: shipping.quote?.version ?? null,
-      shippingMethod: shipping.quote?.service ?? null,
-      shippingWeightGrams: shipping.quote?.productWeightGrams ?? null,
-      shippingPhysicalGrams: shipping.quote?.physicalWeightGrams ?? null,
-      shippingBillableGrams: shipping.quote?.billableWeightGrams ?? null,
-      shippingTierMaxGrams: shipping.quote?.tierMaximumWeightGrams ?? null,
+      shippingRequired,
+      shippingQuoteVersion: shipping?.version ?? null,
+      shippingMethod: shipping?.service ?? null,
+      shippingWeightGrams: shipping?.productWeightGrams ?? null,
+      shippingPhysicalGrams: shipping?.physicalWeightGrams ?? null,
+      shippingBillableGrams: shipping?.billableWeightGrams ?? null,
+      shippingTierMaxGrams: shipping?.tierMaximumWeightGrams ?? null,
     });
   });
 }

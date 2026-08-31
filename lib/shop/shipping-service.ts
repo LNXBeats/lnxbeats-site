@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 import { PHASE5A_QA_SHIPPING_RATE, PHASE5E_COLISSIMO_FRANCE_2026_RATE } from "@/data/shop-shipping";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
 import { parseShopShippingConfiguration } from "@/lib/shop/shipping-config";
 import {
   quoteShipping,
@@ -36,9 +37,9 @@ const rateInclude = {
 
 export const SHOP_COMMERCIAL_RATE_ACTIVATION_CONFIRMATION = "ACTIVATE_COLISSIMO_FRANCE_2026_CANDIDATE";
 
-function requireEnabledConfiguration() {
+function requireEnabledConfiguration(environment: NodeJS.ProcessEnv = process.env) {
   try {
-    const configuration = parseShopShippingConfiguration();
+    const configuration = parseShopShippingConfiguration(environment);
     if (!configuration.enabled) {
       throw new ShopShippingServiceError(
         "La tarification logistique n’est pas activée pour cette QA.",
@@ -61,10 +62,19 @@ export async function quoteVersionedShopShipping(
     lines: readonly ShippingQuoteLine[];
     destinationCountryCode: string;
   }>,
+  environment: NodeJS.ProcessEnv = process.env,
 ): Promise<ShippingQuote> {
-  const configuration = requireEnabledConfiguration();
+  const configuration = requireEnabledConfiguration(environment);
+  const exactProductionReadinessQa = configuration.scope === "COMMERCIAL_CANDIDATE"
+    && shopProductionReadinessQaEnabled(environment);
   const rate = await database.shippingRateVersion.findFirst({
-    where: { status: "ACTIVE", scope: configuration.scope },
+    where: exactProductionReadinessQa
+      ? {
+          version: PHASE5E_COLISSIMO_FRANCE_2026_RATE.version,
+          status: "DRAFT",
+          scope: "COMMERCIAL_CANDIDATE",
+        }
+      : { status: "ACTIVE", scope: configuration.scope },
     include: rateInclude,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
@@ -75,7 +85,7 @@ export async function quoteVersionedShopShipping(
     );
   }
   try {
-    return quoteShipping({ rate, ...input });
+    return quoteShipping({ rate, ...input, allowCommercialDraft: exactProductionReadinessQa });
   } catch (error) {
     if (error instanceof ShippingQuoteError) {
       throw new ShopShippingServiceError(error.message, "SHIPPING_QUOTE_INVALID");
