@@ -32,6 +32,12 @@ import {
   SHOP_PHASE5C_QA_PRIVATE_MEDIA_ROOT,
   SHOP_PHASE5C_QA_PUBLIC_MEDIA_ROOT,
   SHOP_PHASE5C_QA_TARGET,
+  SHOP_PHASE5D_QA_AUTH_CAPTURE_PATH,
+  SHOP_PHASE5D_QA_NOTIFICATION_CAPTURE_PATH,
+  SHOP_PHASE5D_QA_ORIGIN,
+  SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE5D_QA_TARGET,
 } from "@/lib/shop/qa-contract";
 import { SHOP_AFTER_SALES_QA_CONFIRMATION } from "@/lib/shop/after-sales-config";
 import {
@@ -40,6 +46,7 @@ import {
 } from "@/lib/shop/legal";
 import { SHOP_SHIPPING_QA_CONFIRMATION } from "@/lib/shop/shipping-config";
 import { SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION } from "@/lib/shop/shipping-operations-config";
+import { SHOP_SHIPPING_PROVIDER_QA_CONFIRMATION } from "@/lib/shop/shipping-provider-config";
 
 export const ADMIN_PRINCIPAL_EMAIL = "lnx.beats.pro@gmail.com";
 export const LOCAL_PREVIEW_DATABASE_TARGET = "lnx-studio-local-preview";
@@ -96,6 +103,12 @@ const SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS = [
   "MEDIA_S3_ENDPOINT",
   "MEDIA_S3_ACCESS_KEY_ID",
   "MEDIA_S3_SECRET_ACCESS_KEY",
+  "COLISSIMO_API_KEY",
+  "LA_POSTE_API_KEY",
+  "COLISSIMO_CLIENT_SECRET",
+  "COLISSIMO_CONTRACT_NUMBER",
+  "COLISSIMO_PASSWORD",
+  "LA_POSTE_CLIENT_SECRET",
 ] as const;
 
 const SHOP_PHASE3B_STRIPE_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
@@ -219,6 +232,23 @@ const SHOP_PHASE5C_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
   SHOP_SHIPPING_OPERATIONS_PROVIDER: "manual",
 } satisfies Record<string, string>);
 
+const SHOP_PHASE5D_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
+  ...SHOP_PHASE5C_AUTH_COOKIE_ENVIRONMENT,
+  LNX_DATABASE_TARGET: SHOP_PHASE5D_QA_TARGET,
+  AUTH_URL: SHOP_PHASE5D_QA_ORIGIN,
+  SITE_URL: SHOP_PHASE5D_QA_ORIGIN,
+  APP_CANONICAL_URL: SHOP_PHASE5D_QA_ORIGIN,
+  AUTH_EMAIL_CAPTURE_PATH: SHOP_PHASE5D_QA_AUTH_CAPTURE_PATH,
+  NOTIFICATION_CAPTURE_PATH: SHOP_PHASE5D_QA_NOTIFICATION_CAPTURE_PATH,
+  MEDIA_LOCAL_PUBLIC_ROOT: SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
+  MEDIA_LOCAL_PRIVATE_ROOT: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+  MEDIA_STORAGE_ROOT: SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
+  ORDER_UPLOAD_DIR: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_SHIPPING_PROVIDER_ENABLED: "true",
+  SHOP_SHIPPING_PROVIDER: "FAKE_LOCAL",
+  SHOP_SHIPPING_PROVIDER_QA_CONFIRM: SHOP_SHIPPING_PROVIDER_QA_CONFIRMATION,
+} satisfies Record<string, string>);
+
 export function isLoopbackUrl(value: string | undefined) {
   if (!value) return false;
   try {
@@ -290,6 +320,14 @@ function hasSafeLocalShopPhase5CIdentity(environment: AuthEnvironment) {
   return Boolean(environment.AUTH_SECRET && environment.AUTH_SECRET.length >= 32);
 }
 
+function hasSafeLocalShopPhase5DIdentity(environment: AuthEnvironment) {
+  if (environment.LNX_PREVIEW_MODE?.trim()) return false;
+  if (Object.entries(environment).some(([name, value]) => name.startsWith("RAILWAY_") && Boolean(value?.trim()))) return false;
+  if (!environment.LNX_PRISMA_DEV_SERVER_FILE?.endsWith(`/prisma-dev-nodejs/${SHOP_PHASE5D_QA_TARGET}/server.json`)) return false;
+  if (!hasDedicatedShopPhase2Database(environment)) return false;
+  return Boolean(environment.AUTH_SECRET && environment.AUTH_SECRET.length >= 32);
+}
+
 export function isSafeLocalShopPhase2QaHttpRuntime(
   environment: AuthEnvironment = process.env,
 ) {
@@ -355,6 +393,13 @@ export function isSafeLocalShopPhase5CShippingOperationsQaHttpRuntime(environmen
   return hasSafeLocalShopPhase5CIdentity(environment);
 }
 
+export function isSafeLocalShopPhase5DShippingProviderQaHttpRuntime(environment: AuthEnvironment = process.env) {
+  if (environment.NODE_ENV !== "test" && environment.NODE_ENV !== "production") return false;
+  if (Object.entries(SHOP_PHASE5D_AUTH_COOKIE_ENVIRONMENT).some(([name, expected]) => environment[name] !== expected)) return false;
+  if (SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
+  return hasSafeLocalShopPhase5DIdentity(environment);
+}
+
 export function shouldUseSecureAuthCookies(
   productionBuild: boolean,
   environment: AuthEnvironment = process.env,
@@ -366,7 +411,8 @@ export function shouldUseSecureAuthCookies(
     && !isSafeLocalShopPhase3CPaypalSandboxQaHttpRuntime(environment)
     && !isSafeLocalShopPhase5ALogisticsQaHttpRuntime(environment)
     && !isSafeLocalShopPhase5BAfterSalesQaHttpRuntime(environment)
-    && !isSafeLocalShopPhase5CShippingOperationsQaHttpRuntime(environment);
+    && !isSafeLocalShopPhase5CShippingOperationsQaHttpRuntime(environment)
+    && !isSafeLocalShopPhase5DShippingProviderQaHttpRuntime(environment);
 }
 
 export function configuredAdminEmail() {

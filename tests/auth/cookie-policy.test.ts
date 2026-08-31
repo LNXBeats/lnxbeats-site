@@ -8,6 +8,7 @@ import {
   isSafeLocalShopPhase5ALogisticsQaHttpRuntime,
   isSafeLocalShopPhase5BAfterSalesQaHttpRuntime,
   isSafeLocalShopPhase5CShippingOperationsQaHttpRuntime,
+  isSafeLocalShopPhase5DShippingProviderQaHttpRuntime,
   shouldUseSecureAuthCookies,
 } from "@/lib/auth/environment";
 import {
@@ -41,6 +42,12 @@ import {
   SHOP_PHASE5C_QA_PRIVATE_MEDIA_ROOT,
   SHOP_PHASE5C_QA_PUBLIC_MEDIA_ROOT,
   SHOP_PHASE5C_QA_TARGET,
+  SHOP_PHASE5D_QA_AUTH_CAPTURE_PATH,
+  SHOP_PHASE5D_QA_NOTIFICATION_CAPTURE_PATH,
+  SHOP_PHASE5D_QA_ORIGIN,
+  SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
+  SHOP_PHASE5D_QA_TARGET,
 } from "@/lib/shop/qa-contract";
 import { SHOP_AFTER_SALES_QA_CONFIRMATION } from "@/lib/shop/after-sales-config";
 import {
@@ -49,6 +56,7 @@ import {
 } from "@/lib/shop/legal";
 import { SHOP_SHIPPING_QA_CONFIRMATION } from "@/lib/shop/shipping-config";
 import { SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION } from "@/lib/shop/shipping-operations-config";
+import { SHOP_SHIPPING_PROVIDER_QA_CONFIRMATION } from "@/lib/shop/shipping-provider-config";
 
 function shopPhase2Environment() {
   return {
@@ -348,6 +356,48 @@ test("the exact guarded Phase 5C shipping runtime alone permits an HTTP QA cooki
   ]) {
     const invalid = { ...environment, ...mutation };
     assert.equal(isSafeLocalShopPhase5CShippingOperationsQaHttpRuntime(invalid), false);
+    assert.equal(shouldUseSecureAuthCookies(true, invalid), true);
+  }
+});
+
+function shopPhase5DShippingProviderEnvironment() {
+  return {
+    ...shopPhase5CShippingOperationsEnvironment(),
+    LNX_DATABASE_TARGET: SHOP_PHASE5D_QA_TARGET,
+    LNX_PRISMA_DEV_SERVER_FILE: `/private/tmp/prisma-dev-nodejs/${SHOP_PHASE5D_QA_TARGET}/server.json`,
+    DATABASE_URL: "postgresql://127.0.0.1:51279/template1?schema=public",
+    AUTH_URL: SHOP_PHASE5D_QA_ORIGIN,
+    SITE_URL: SHOP_PHASE5D_QA_ORIGIN,
+    APP_CANONICAL_URL: SHOP_PHASE5D_QA_ORIGIN,
+    AUTH_EMAIL_CAPTURE_PATH: SHOP_PHASE5D_QA_AUTH_CAPTURE_PATH,
+    NOTIFICATION_CAPTURE_PATH: SHOP_PHASE5D_QA_NOTIFICATION_CAPTURE_PATH,
+    MEDIA_LOCAL_PUBLIC_ROOT: SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
+    MEDIA_LOCAL_PRIVATE_ROOT: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+    MEDIA_STORAGE_ROOT: SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
+    ORDER_UPLOAD_DIR: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+    SHOP_SHIPPING_PROVIDER_ENABLED: "true",
+    SHOP_SHIPPING_PROVIDER: "FAKE_LOCAL",
+    SHOP_SHIPPING_PROVIDER_QA_CONFIRM: SHOP_SHIPPING_PROVIDER_QA_CONFIRMATION,
+  } as Record<string, string | undefined>;
+}
+
+test("the exact guarded Phase 5D fake provider runtime alone permits an HTTP QA cookie", () => {
+  const environment = shopPhase5DShippingProviderEnvironment();
+  assert.equal(isSafeLocalShopPhase5DShippingProviderQaHttpRuntime(environment), true);
+  assert.equal(shouldUseSecureAuthCookies(true, environment), false);
+  for (const mutation of [
+    { SHOP_SHIPPING_PROVIDER_QA_CONFIRM: "wrong" },
+    { SHOP_SHIPPING_PROVIDER: "COLISSIMO" },
+    { AUTH_URL: "https://www.lnxbeats.fr" },
+    { DATABASE_URL: "postgresql://db.example.invalid:51279/template1" },
+    { DATABASE_URL: "postgresql://127.0.0.1:5432/template1" },
+    { LNX_DATABASE_TARGET: "lnx-studio-production" },
+    { RAILWAY_ENVIRONMENT_NAME: "production" },
+    { COLISSIMO_API_KEY: "forbidden" },
+    { STRIPE_SECRET_KEY: "forbidden" },
+  ]) {
+    const invalid = { ...environment, ...mutation };
+    assert.equal(isSafeLocalShopPhase5DShippingProviderQaHttpRuntime(invalid), false);
     assert.equal(shouldUseSecureAuthCookies(true, invalid), true);
   }
 });

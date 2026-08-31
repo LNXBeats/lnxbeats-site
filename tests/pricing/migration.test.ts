@@ -17,6 +17,7 @@ const INVOICING_MIGRATION = "20260828180000_invoicing_foundation";
 const SHIPPING_MIGRATION = "20260828220000_shop_shipping_quotes";
 const AFTER_SALES_MIGRATION = "20260830120000_shop_after_sales_foundation";
 const SHIPPING_OPERATIONS_MIGRATION = "20260830220000_shop_shipping_operations";
+const SHIPPING_PROVIDER_MIGRATION = "20260831200000_shop_shipping_provider_foundation";
 
 async function applyMigration(database: PGlite, directory: string, sql: string) {
   if (directory !== NOTIFICATION_ENUM_MIGRATION) {
@@ -234,7 +235,8 @@ test("all migrations apply and seed the immutable V1 pricing parity", async () =
     const migrations = await applyAllMigrations(database);
     assert.ok(migrations.includes(PRICING_MIGRATION));
     assert.ok(migrations.indexOf(AFTER_SALES_MIGRATION) < migrations.indexOf(SHIPPING_OPERATIONS_MIGRATION));
-    assert.equal(migrations.at(-1), SHIPPING_OPERATIONS_MIGRATION);
+    assert.ok(migrations.indexOf(SHIPPING_OPERATIONS_MIGRATION) < migrations.indexOf(SHIPPING_PROVIDER_MIGRATION));
+    assert.equal(migrations.at(-1), SHIPPING_PROVIDER_MIGRATION);
 
     const pricing = await database.query<{
       version: string;

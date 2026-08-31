@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import {
+  createShopShippingProviderAttemptAction,
   markShopOrderPreparingAction,
   markShopOrderReadyAction,
   markShopOrderShippedAction,
+  reconcileShopShippingProviderAttemptAction,
   recordShopOrderTrackingAction,
 } from "@/app/admin/boutique/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
@@ -17,6 +19,7 @@ import {
   shopTrackingSourceLabel,
 } from "@/lib/shop/order-presentation";
 import { getAdminShopOrder } from "@/lib/shop/order-service";
+import { shopShippingProviderQaEnabled } from "@/lib/shop/shipping-provider-config";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Détail commande Boutique" };
@@ -41,6 +44,30 @@ const FULFILLMENT_STATUS_LABELS = {
   CANCELLED: "Annulée",
 } as const;
 
+const SHIPPING_PROVIDER_STATUS_LABELS = {
+  REQUESTED: "Demande enregistrée",
+  PENDING: "En attente de réconciliation",
+  SUCCEEDED: "Résultat fictif obtenu",
+  FAILED: "Échec fictif confirmé",
+  REQUIRES_REVIEW: "Revue humaine requise",
+} as const;
+
+const SHIPPING_PROVIDER_SCENARIO_LABELS = {
+  SUCCEEDED: "Succès déterministe",
+  PENDING: "Attente puis réconciliation",
+  FAILED: "Échec déterministe",
+  AMBIGUOUS: "Acceptation ambiguë",
+} as const;
+
+const SHIPPING_PROVIDER_ERROR_LABELS: Record<string, string> = {
+  FAKE_LOCAL_REQUEST_REJECTED: "La demande fictive a été refusée.",
+  AMBIGUOUS_PROVIDER_ACCEPTANCE: "Le résultat fictif est ambigu : aucune hypothèse de succès n’est autorisée.",
+  MANUAL_TRACKING_CONFLICT: "Un suivi manuel est déjà actif. Il reste prioritaire et n’a pas été écrasé.",
+  ACTIVE_PROVIDER_TRACKING_CONFLICT: "Un autre suivi provider est actif. Une revue humaine est nécessaire.",
+  PROVIDER_RESPONSE_UNCERTAIN: "La réponse provider est incertaine. Une revue humaine est nécessaire.",
+  ORDER_ALREADY_SHIPPED: "La remise physique a gagné la course. Le résultat provider est conservé pour revue sans modifier le suivi actif.",
+};
+
 const RESERVATION_STATUS_LABELS = {
   ACTIVE: "Actif",
   CONFIRMED: "Confirmé",
@@ -64,6 +91,8 @@ const EVENT_LABELS = {
   PREPARATION_STARTED: "Préparation démarrée",
   SHIPMENT_READY: "Expédition prête",
   TRACKING_RECORDED: "Suivi enregistré",
+  SHIPPING_PROVIDER_REQUESTED: "Demande provider QA enregistrée",
+  SHIPPING_PROVIDER_RECONCILED: "Provider transporteur QA réconcilié",
   ORDER_SHIPPED: "Commande expédiée",
 } as const;
 
@@ -111,7 +140,13 @@ function eventDetail(event: EventSummary, items: readonly ItemSummary[]) {
   if (event.type === "SHOP_ORDER_CANCELLED") return "La commande non payée a été annulée.";
   if (event.type === "PREPARATION_STARTED") return "L’atelier a commencé la préparation de la commande.";
   if (event.type === "SHIPMENT_READY") return "Le colis est prêt pour sa remise au transporteur.";
-  if (event.type === "TRACKING_RECORDED") return "Un suivi manuel a été enregistré ou corrigé avant expédition.";
+  if (event.type === "TRACKING_RECORDED") {
+    return metadata?.source === "PROVIDER"
+      ? "Le suivi fictif confirmé par le provider QA a été adopté avant expédition."
+      : "Un suivi manuel a été enregistré ou corrigé avant expédition.";
+  }
+  if (event.type === "SHIPPING_PROVIDER_REQUESTED") return "Une intention unique a été enregistrée pour le provider transporteur fictif QA.";
+  if (event.type === "SHIPPING_PROVIDER_RECONCILED") return "Le résultat fictif a été persisté sans confirmer la remise physique du colis.";
   if (event.type === "ORDER_SHIPPED") return "LNX Beats a enregistré la remise du colis au transporteur ; cela ne confirme pas sa livraison.";
   return "Événement enregistré par le service Boutique.";
 }
@@ -128,6 +163,8 @@ export default async function AdminShopOrderPage({
   const order = await getAdminShopOrder(orderNumber);
   if (!order) notFound();
   const state = (await searchParams).etat;
+  const providerQaEnabled = shopShippingProviderQaEnabled();
+  const latestProviderAttempt = order.shippingProviderAttempts[0] ?? null;
 
   const itemTitle = order.items.length === 1
     ? order.items[0].productTitle
@@ -167,6 +204,8 @@ export default async function AdminShopOrderPage({
       {state === "expedition-prete" ? <p className="admin-alert" role="status">Le colis est prêt à être remis au transporteur.</p> : null}
       {state === "suivi-enregistre" ? <p className="admin-alert" role="status">Le suivi manuel a été enregistré.</p> : null}
       {state === "commande-expediee" ? <p className="admin-alert" role="status">La commande est marquée expédiée.</p> : null}
+      {state === "provider-qa-enregistre" ? <p className="admin-alert" role="status">Le résultat du provider transporteur fictif QA a été enregistré.</p> : null}
+      {state === "provider-qa-reconcilie" ? <p className="admin-alert" role="status">La tentative provider fictive QA a été réconciliée.</p> : null}
 
       {order.status === "EXPIRED" ? (
         <p className="admin-alert" role="status">Cette réservation a expiré : elle ne réduit plus la disponibilité. Aucun mouvement de stock physique n’a été nécessaire.</p>
@@ -350,6 +389,67 @@ export default async function AdminShopOrderPage({
                 </label>
                 <button className="admin-button" type="submit">MARQUER PRÊTE À EXPÉDIER</button>
               </form>
+            </section>
+          ) : null}
+
+          {providerQaEnabled && order.status === "OPEN" && order.paymentStatus === "PAID" && !order.paymentReviewAt && (order.fulfillmentStatus === "READY_TO_SHIP" || latestProviderAttempt) ? (
+            <section className="admin-side-window admin-shipping-provider-qa" aria-labelledby="admin-shop-provider-title">
+              <p className="admin-section-label">Provider transporteur — QA</p>
+              <h2 id="admin-shop-provider-title">Simulation locale sans affranchissement.</h2>
+              <p>Provider déterministe fictif. Aucun réseau, achat, bordereau postal réel ou remise physique au transporteur.</p>
+              {latestProviderAttempt ? (
+                <div className="admin-payment-attempt-card">
+                  <dl className="admin-detail-facts">
+                    <div><dt>Statut QA</dt><dd>{SHIPPING_PROVIDER_STATUS_LABELS[latestProviderAttempt.status]}</dd></div>
+                    <div><dt>Scénario</dt><dd>{SHIPPING_PROVIDER_SCENARIO_LABELS[latestProviderAttempt.scenario]}</dd></div>
+                    <div><dt>Tentative logique</dt><dd>#{latestProviderAttempt.attemptNumber}</dd></div>
+                    <div><dt>Réconciliations</dt><dd>{latestProviderAttempt.reconciliationCount}</dd></div>
+                    {latestProviderAttempt.providerShipmentId ? <div className="admin-detail-facts__wide"><dt>Identifiant fictif interne</dt><dd>{latestProviderAttempt.providerShipmentId}</dd></div> : null}
+                    {latestProviderAttempt.trackingNumber ? <div className="admin-detail-facts__wide"><dt>Suivi fictif reçu</dt><dd>{latestProviderAttempt.trackingNumber}</dd></div> : null}
+                    {latestProviderAttempt.errorCode ? <div className="admin-detail-facts__wide"><dt>Décision sûre</dt><dd>{SHIPPING_PROVIDER_ERROR_LABELS[latestProviderAttempt.errorCode] ?? "Résultat technique à examiner."}</dd></div> : null}
+                  </dl>
+                  <small>La clé d’idempotence reste persistée côté serveur. Aucun secret ni payload provider brut n’est conservé.</small>
+                  {latestProviderAttempt.status === "REQUESTED" || latestProviderAttempt.status === "PENDING" ? (
+                    <form action={reconcileShopShippingProviderAttemptAction}>
+                      <input type="hidden" name="orderNumber" value={order.orderNumber} />
+                      <input type="hidden" name="attemptId" value={latestProviderAttempt.id} />
+                      <label className="admin-check">
+                        <input type="checkbox" name="confirmation" value="CONFIRM_FAKE_SHIPPING_PROVIDER_RECONCILIATION_QA" required />
+                        Je confirme la réconciliation du provider transporteur fictif QA.
+                      </label>
+                      <button className="admin-button admin-button--secondary" type="submit">RÉCONCILIER LA TENTATIVE QA</button>
+                    </form>
+                  ) : null}
+                  {latestProviderAttempt.status === "REQUIRES_REVIEW" ? (
+                    <p className="admin-alert" role="status">Aucune nouvelle tentative automatique : une vérification humaine serait obligatoire avec un vrai provider.</p>
+                  ) : null}
+                  {latestProviderAttempt.status === "SUCCEEDED" ? (
+                    <p className="admin-alert">{order.fulfillmentStatus === "SHIPPED"
+                      ? "La confirmation physique distincte a depuis marqué la commande expédiée ; le succès provider ne l’avait pas fait."
+                      : "Le suivi est disponible, mais la commande reste prête à expédier jusqu’à la confirmation physique distincte."}</p>
+                  ) : null}
+                  {latestProviderAttempt.status === "FAILED" ? (
+                    <p className="admin-alert">Échec final de cette intention QA. Aucun retry automatique n’est autorisé.</p>
+                  ) : null}
+                </div>
+              ) : (
+                <form className="admin-form" action={createShopShippingProviderAttemptAction}>
+                  <input type="hidden" name="orderNumber" value={order.orderNumber} />
+                  <label>Scénario fictif
+                    <select name="scenario" defaultValue="SUCCEEDED" required>
+                      <option value="SUCCEEDED">SUCCEEDED — suivi fictif disponible</option>
+                      <option value="PENDING">PENDING — réconciliation requise</option>
+                      <option value="FAILED">FAILED — aucun suivi actif</option>
+                      <option value="AMBIGUOUS">AMBIGUOUS — revue humaine requise</option>
+                    </select>
+                  </label>
+                  <label className="admin-check">
+                    <input type="checkbox" name="confirmation" value="CONFIRM_FAKE_SHIPPING_PROVIDER_QA" required />
+                    Je confirme l’exécution du provider transporteur fictif QA.
+                  </label>
+                  <button className="admin-button" type="submit">PRÉPARER UNE ÉTIQUETTE FICTIVE QA</button>
+                </form>
+              )}
             </section>
           ) : null}
 

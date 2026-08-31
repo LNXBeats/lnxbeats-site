@@ -680,6 +680,9 @@ export async function getAdminShopOrder(orderNumber: string) {
     include: {
       ...shopOrderDetailInclude,
       user: { select: { id: true, displayName: true, email: true } },
+      shippingProviderAttempts: {
+        orderBy: [{ attemptNumber: "desc" }, { id: "desc" }],
+      },
     },
   });
 }

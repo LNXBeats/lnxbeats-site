@@ -14,6 +14,7 @@ const INVOICING_MIGRATION = "20260828180000_invoicing_foundation";
 const SHIPPING_MIGRATION = "20260828220000_shop_shipping_quotes";
 const AFTER_SALES_MIGRATION = "20260830120000_shop_after_sales_foundation";
 const SHIPPING_OPERATIONS_MIGRATION = "20260830220000_shop_shipping_operations";
+const SHIPPING_PROVIDER_MIGRATION = "20260831200000_shop_shipping_provider_foundation";
 
 async function directories() {
   return (await readdir(MIGRATIONS_DIRECTORY, { withFileTypes: true }))
@@ -172,7 +173,7 @@ test("Phase 5B after-sales migration is additive and separates refund from resto
 
 test("Phase 5C shipping operations migration is additive and preserves legacy shipment snapshots", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.at(-1), SHIPPING_OPERATIONS_MIGRATION);
+  assert.ok(migrationDirectories.indexOf(SHIPPING_OPERATIONS_MIGRATION) < migrationDirectories.indexOf(SHIPPING_PROVIDER_MIGRATION));
   const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, SHIPPING_OPERATIONS_MIGRATION, "migration.sql"), "utf8");
   assert.doesNotMatch(sql, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE|DELETE\s+FROM|UPDATE\s+"|INSERT\s+INTO)\b/i);
   assert.match(sql, /READY_TO_SHIP/);
@@ -181,6 +182,18 @@ test("Phase 5C shipping operations migration is additive and preserves legacy sh
   assert.match(sql, /Compatibility for ShopOrders shipped before Phase 5C/);
   assert.match(sql, /SHIPMENT_READY/);
   assert.match(sql, /TRACKING_RECORDED/);
+});
+
+test("Phase 5D shipping provider migration is additive and preserves the physical shipment boundary", async () => {
+  const migrationDirectories = await directories();
+  assert.equal(migrationDirectories.at(-1), SHIPPING_PROVIDER_MIGRATION);
+  const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, SHIPPING_PROVIDER_MIGRATION, "migration.sql"), "utf8");
+  assert.doesNotMatch(sql, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE|DELETE\s+FROM|UPDATE\s+"|INSERT\s+INTO)\b/i);
+  assert.match(sql, /CREATE TABLE "shop_shipping_provider_attempts"/);
+  assert.match(sql, /FAKE_LOCAL/);
+  assert.match(sql, /REQUIRES_REVIEW/);
+  assert.match(sql, /idempotencyKey/);
+  assert.doesNotMatch(sql, /ALTER TABLE "shop_orders"/);
 });
 
 test("the 20 to 21 migration preserves Phase 2 Product, ShopOrder and NotificationEvent rows", async () => {

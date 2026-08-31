@@ -40,6 +40,14 @@ import {
   markShopOrderShipped,
   recordShopOrderTracking,
 } from "@/lib/shop/fulfillment-service";
+import {
+  parseShopShippingProviderCreateForm,
+  parseShopShippingProviderReconcileForm,
+} from "@/lib/shop/shipping-provider-domain";
+import {
+  createShopShippingProviderAttempt,
+  reconcileShopShippingProviderAttempt,
+} from "@/lib/shop/shipping-provider-service";
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -240,4 +248,32 @@ export async function recordShopOrderTrackingAction(formData: FormData) {
   }
   refreshShopOrder(orderNumber);
   redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=suivi-enregistre`);
+}
+
+export async function createShopShippingProviderAttemptAction(formData: FormData) {
+  const session = await authorize();
+  let orderNumber: string;
+  try {
+    const input = parseShopShippingProviderCreateForm(formData);
+    orderNumber = input.orderNumber;
+    await createShopShippingProviderAttempt(orderNumber, session.user.id, input.scenario);
+  } catch {
+    redirect("/admin/boutique/commandes?etat=provider-qa-refuse");
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=provider-qa-enregistre`);
+}
+
+export async function reconcileShopShippingProviderAttemptAction(formData: FormData) {
+  const session = await authorize();
+  let orderNumber: string;
+  try {
+    const input = parseShopShippingProviderReconcileForm(formData);
+    orderNumber = input.orderNumber;
+    await reconcileShopShippingProviderAttempt(orderNumber, input.attemptId, session.user.id);
+  } catch {
+    redirect("/admin/boutique/commandes?etat=provider-qa-refuse");
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=provider-qa-reconcilie`);
 }

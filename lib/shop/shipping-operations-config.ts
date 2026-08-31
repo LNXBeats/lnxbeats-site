@@ -5,6 +5,9 @@ import {
   SHOP_PHASE5C_QA_ORIGIN,
   SHOP_PHASE5C_QA_TARGET,
   SHOP_PHASE5C_RUNTIME_QA_TARGET,
+  SHOP_PHASE5D_QA_ORIGIN,
+  SHOP_PHASE5D_QA_TARGET,
+  SHOP_PHASE5D_RUNTIME_QA_TARGET,
 } from "@/lib/shop/qa-contract";
 
 export const SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION = "enable-local-shop-shipping-operations-qa";
@@ -30,9 +33,17 @@ export function shopShippingOperationsQaEnabled(environment: NodeJS.ProcessEnv =
   if (environment.SHOP_SHIPPING_OPERATIONS_ENABLED !== "true") return false;
   if (environment.SHOP_SHIPPING_OPERATIONS_QA_CONFIRM !== SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION) return false;
   if (environment.SHOP_SHIPPING_OPERATIONS_PROVIDER !== "manual") return false;
-  if (environment.AUTH_URL !== SHOP_PHASE5C_QA_ORIGIN || environment.SITE_URL !== SHOP_PHASE5C_QA_ORIGIN) return false;
+  const phase5c = environment.AUTH_URL === SHOP_PHASE5C_QA_ORIGIN
+    && environment.SITE_URL === SHOP_PHASE5C_QA_ORIGIN
+    && (environment.LNX_DATABASE_TARGET === SHOP_PHASE5C_QA_TARGET
+      || environment.LNX_DATABASE_TARGET === SHOP_PHASE5C_RUNTIME_QA_TARGET);
+  const phase5d = environment.AUTH_URL === SHOP_PHASE5D_QA_ORIGIN
+    && environment.SITE_URL === SHOP_PHASE5D_QA_ORIGIN
+    && (environment.LNX_DATABASE_TARGET === SHOP_PHASE5D_QA_TARGET
+      || environment.LNX_DATABASE_TARGET === SHOP_PHASE5D_RUNTIME_QA_TARGET);
+  if (!phase5c && !phase5d) return false;
   const target = environment.LNX_DATABASE_TARGET;
-  if (target !== SHOP_PHASE5C_QA_TARGET && target !== SHOP_PHASE5C_RUNTIME_QA_TARGET) return false;
+  if (!target) return false;
   if (!environment.LNX_PRISMA_DEV_SERVER_FILE?.endsWith(`/prisma-dev-nodejs/${target}/server.json`)) return false;
   if (Object.entries(environment).some(([name, value]) => name.startsWith("RAILWAY_") && Boolean(value?.trim()))) return false;
   if (

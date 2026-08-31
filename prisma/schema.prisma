@@ -309,6 +309,25 @@ enum ShopTrackingSource {
   PROVIDER
 }
 
+enum ShopShippingProvider {
+  FAKE_LOCAL
+}
+
+enum ShopShippingProviderScenario {
+  SUCCEEDED
+  PENDING
+  FAILED
+  AMBIGUOUS
+}
+
+enum ShopShippingProviderAttemptStatus {
+  REQUESTED
+  PENDING
+  SUCCEEDED
+  FAILED
+  REQUIRES_REVIEW
+}
+
 enum ShopStockReservationStatus {
   ACTIVE
   CONFIRMED
@@ -335,6 +354,8 @@ enum ShopOrderLifecycleEventType {
   PREPARATION_STARTED
   SHIPMENT_READY
   TRACKING_RECORDED
+  SHIPPING_PROVIDER_REQUESTED
+  SHIPPING_PROVIDER_RECONCILED
   ORDER_SHIPPED
 }
 
@@ -738,51 +759,53 @@ enum ProviderEventOutcome {
 }
 
 model User {
-  id                           String                      @id @default(uuid()) @db.Uuid
-  email                        String                      @unique @db.VarChar(320)
-  emailVerified                Boolean                     @default(false)
-  emailVerifiedAt              DateTime?                   @db.Timestamptz(3)
-  displayName                  String                      @default("") @db.VarChar(120)
-  firstName                    String?                     @db.VarChar(100)
-  lastName                     String?                     @db.VarChar(100)
-  image                        String?                     @db.VarChar(500)
-  role                         UserRole                    @default(MEMBER)
-  status                       UserStatus                  @default(PENDING)
-  createdAt                    DateTime                    @default(now()) @db.Timestamptz(3)
-  updatedAt                    DateTime                    @updatedAt @db.Timestamptz(3)
-  customerProfile              Customer?
-  orders                       Order[]                     @relation("OrderAccount")
-  orderEvents                  OrderEvent[]                @relation("OrderEventActor")
-  confidenceReviews            ConfidenceAnnotation[]      @relation("ConfidenceReviewer")
-  favorites                    Favorite[]
-  sessions                     Session[]
-  accounts                     Account[]
-  rightsRequests               RightsRequest[]             @relation("RightsRequestOwner")
-  partyConfirmations           ContractPartySnapshot[]     @relation("ContractPartyConfirmedBy")
-  rightsEvents                 RightsRequestEvent[]        @relation("RightsEventActor")
-  rightsMessages               RightsMessage[]             @relation("RightsMessageAuthor")
-  templateApprovals            ContractTemplate[]          @relation("ContractTemplateApprover")
-  contractAcceptances          ContractAcceptance[]        @relation("ContractAcceptanceActor")
-  splitProposals               RightsSplitProposal[]       @relation("RightsSplitProposer")
-  notificationEvents           NotificationEvent[]         @relation("NotificationEventActor")
-  refundRequests               RefundAttempt[]             @relation("RefundRequestedBy")
-  paymentAuditEvents           PaymentAuditEvent[]         @relation("PaymentAuditActor")
-  pricingVersionsCreated       MusicPricingVersion[]       @relation("MusicPricingVersionCreatedBy")
-  pricingConfigurationsUpdated MusicPricingConfiguration[] @relation("MusicPricingConfigurationUpdatedBy")
-  pricingActivations           MusicPricingActivation[]    @relation("MusicPricingActivationActor")
-  productsCreated              Product[]                   @relation("ProductCreatedBy")
-  productsUpdated              Product[]                   @relation("ProductUpdatedBy")
-  productStockAdjustments      ProductStockAdjustment[]    @relation("ProductStockAdjustmentActor")
-  productAuditEvents           ProductAuditEvent[]         @relation("ProductAuditEventActor")
-  shopOrders                   ShopOrder[]                 @relation("ShopOrderOwner")
-  shopOrderEvents              ShopOrderEvent[]            @relation("ShopOrderEventActor")
-  shopOrderLifecycleEvents     ShopOrderLifecycleEvent[]   @relation("ShopOrderLifecycleEventActor")
-  legalDocumentApprovals       LegalDocumentVersion[]      @relation("LegalDocumentApprover")
-  withdrawalReviews            ConsumerWithdrawalRequest[] @relation("ConsumerWithdrawalReviewer")
-  billingAuditEvents           BillingAuditEvent[]         @relation("BillingAuditActor")
-  shopReturnRequests           ShopReturnRequest[]         @relation("ShopReturnOwner")
-  shopReturnReviews            ShopReturnRequest[]         @relation("ShopReturnReviewer")
-  shopReturnAuditEvents        ShopReturnAuditEvent[]      @relation("ShopReturnAuditActor")
+  id                                 String                        @id @default(uuid()) @db.Uuid
+  email                              String                        @unique @db.VarChar(320)
+  emailVerified                      Boolean                       @default(false)
+  emailVerifiedAt                    DateTime?                     @db.Timestamptz(3)
+  displayName                        String                        @default("") @db.VarChar(120)
+  firstName                          String?                       @db.VarChar(100)
+  lastName                           String?                       @db.VarChar(100)
+  image                              String?                       @db.VarChar(500)
+  role                               UserRole                      @default(MEMBER)
+  status                             UserStatus                    @default(PENDING)
+  createdAt                          DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                          DateTime                      @updatedAt @db.Timestamptz(3)
+  customerProfile                    Customer?
+  orders                             Order[]                       @relation("OrderAccount")
+  orderEvents                        OrderEvent[]                  @relation("OrderEventActor")
+  confidenceReviews                  ConfidenceAnnotation[]        @relation("ConfidenceReviewer")
+  favorites                          Favorite[]
+  sessions                           Session[]
+  accounts                           Account[]
+  rightsRequests                     RightsRequest[]               @relation("RightsRequestOwner")
+  partyConfirmations                 ContractPartySnapshot[]       @relation("ContractPartyConfirmedBy")
+  rightsEvents                       RightsRequestEvent[]          @relation("RightsEventActor")
+  rightsMessages                     RightsMessage[]               @relation("RightsMessageAuthor")
+  templateApprovals                  ContractTemplate[]            @relation("ContractTemplateApprover")
+  contractAcceptances                ContractAcceptance[]          @relation("ContractAcceptanceActor")
+  splitProposals                     RightsSplitProposal[]         @relation("RightsSplitProposer")
+  notificationEvents                 NotificationEvent[]           @relation("NotificationEventActor")
+  refundRequests                     RefundAttempt[]               @relation("RefundRequestedBy")
+  paymentAuditEvents                 PaymentAuditEvent[]           @relation("PaymentAuditActor")
+  pricingVersionsCreated             MusicPricingVersion[]         @relation("MusicPricingVersionCreatedBy")
+  pricingConfigurationsUpdated       MusicPricingConfiguration[]   @relation("MusicPricingConfigurationUpdatedBy")
+  pricingActivations                 MusicPricingActivation[]      @relation("MusicPricingActivationActor")
+  productsCreated                    Product[]                     @relation("ProductCreatedBy")
+  productsUpdated                    Product[]                     @relation("ProductUpdatedBy")
+  productStockAdjustments            ProductStockAdjustment[]      @relation("ProductStockAdjustmentActor")
+  productAuditEvents                 ProductAuditEvent[]           @relation("ProductAuditEventActor")
+  shopOrders                         ShopOrder[]                   @relation("ShopOrderOwner")
+  shopOrderEvents                    ShopOrderEvent[]              @relation("ShopOrderEventActor")
+  shopOrderLifecycleEvents           ShopOrderLifecycleEvent[]     @relation("ShopOrderLifecycleEventActor")
+  shippingProviderAttemptsCreated    ShopShippingProviderAttempt[] @relation("ShopShippingProviderAttemptCreatedBy")
+  shippingProviderAttemptsReconciled ShopShippingProviderAttempt[] @relation("ShopShippingProviderAttemptReconciledBy")
+  legalDocumentApprovals             LegalDocumentVersion[]        @relation("LegalDocumentApprover")
+  withdrawalReviews                  ConsumerWithdrawalRequest[]   @relation("ConsumerWithdrawalReviewer")
+  billingAuditEvents                 BillingAuditEvent[]           @relation("BillingAuditActor")
+  shopReturnRequests                 ShopReturnRequest[]           @relation("ShopReturnOwner")
+  shopReturnReviews                  ShopReturnRequest[]           @relation("ShopReturnReviewer")
+  shopReturnAuditEvents              ShopReturnAuditEvent[]        @relation("ShopReturnAuditActor")
 
   @@index([role, status])
   @@map("users")
@@ -1824,53 +1847,53 @@ model ProductAuditEvent {
 }
 
 model ShopOrder {
-  id                       String                      @id @default(uuid()) @db.Uuid
-  orderNumber              String                      @unique @db.VarChar(32)
-  userId                   String                      @db.Uuid
-  creationToken            String                      @db.Uuid
-  requestFingerprintSha256 String                      @db.Char(64)
-  status                   ShopOrderStatus             @default(OPEN)
-  paymentStatus            ShopPaymentStatus           @default(AWAITING_PAYMENT)
-  fulfillmentStatus        ShopFulfillmentStatus       @default(PENDING)
-  currency                 String                      @default("EUR") @db.VarChar(3)
+  id                       String                        @id @default(uuid()) @db.Uuid
+  orderNumber              String                        @unique @db.VarChar(32)
+  userId                   String                        @db.Uuid
+  creationToken            String                        @db.Uuid
+  requestFingerprintSha256 String                        @db.Char(64)
+  status                   ShopOrderStatus               @default(OPEN)
+  paymentStatus            ShopPaymentStatus             @default(AWAITING_PAYMENT)
+  fulfillmentStatus        ShopFulfillmentStatus         @default(PENDING)
+  currency                 String                        @default("EUR") @db.VarChar(3)
   subtotalCents            Int
   shippingCents            Int
   totalCents               Int
-  shippingRequired         Boolean                     @default(false)
-  shippingFirstName        String?                     @db.VarChar(100)
-  shippingLastName         String?                     @db.VarChar(100)
-  shippingAddressLine1     String?                     @db.VarChar(240)
-  shippingAddressLine2     String?                     @db.VarChar(240)
-  shippingPostalCode       String?                     @db.VarChar(32)
-  shippingCity             String?                     @db.VarChar(120)
-  shippingCountryCode      String?                     @db.Char(2)
-  shippingRateVersionId    String?                     @db.Uuid
-  shippingQuoteVersion     String?                     @db.VarChar(64)
-  shippingMethod           String?                     @db.VarChar(80)
+  shippingRequired         Boolean                       @default(false)
+  shippingFirstName        String?                       @db.VarChar(100)
+  shippingLastName         String?                       @db.VarChar(100)
+  shippingAddressLine1     String?                       @db.VarChar(240)
+  shippingAddressLine2     String?                       @db.VarChar(240)
+  shippingPostalCode       String?                       @db.VarChar(32)
+  shippingCity             String?                       @db.VarChar(120)
+  shippingCountryCode      String?                       @db.Char(2)
+  shippingRateVersionId    String?                       @db.Uuid
+  shippingQuoteVersion     String?                       @db.VarChar(64)
+  shippingMethod           String?                       @db.VarChar(80)
   shippingWeightGrams      Int?
   shippingPackagingGrams   Int?
   shippingBillableGrams    Int?
-  termsVersion             String?                     @db.VarChar(64)
-  termsHashSha256          String?                     @db.Char(64)
-  termsAcceptedAt          DateTime?                   @db.Timestamptz(3)
-  reservationExpiresAt     DateTime                    @db.Timestamptz(3)
-  paidAt                   DateTime?                   @db.Timestamptz(3)
-  paymentReviewAt          DateTime?                   @db.Timestamptz(3)
-  paymentReviewCode        String?                     @db.VarChar(80)
-  preparingAt              DateTime?                   @db.Timestamptz(3)
-  readyToShipAt            DateTime?                   @db.Timestamptz(3)
-  shippedAt                DateTime?                   @db.Timestamptz(3)
-  shippingCarrier          String?                     @db.VarChar(120)
-  trackingNumber           String?                     @db.VarChar(160)
-  trackingUrl              String?                     @db.VarChar(1000)
+  termsVersion             String?                       @db.VarChar(64)
+  termsHashSha256          String?                       @db.Char(64)
+  termsAcceptedAt          DateTime?                     @db.Timestamptz(3)
+  reservationExpiresAt     DateTime                      @db.Timestamptz(3)
+  paidAt                   DateTime?                     @db.Timestamptz(3)
+  paymentReviewAt          DateTime?                     @db.Timestamptz(3)
+  paymentReviewCode        String?                       @db.VarChar(80)
+  preparingAt              DateTime?                     @db.Timestamptz(3)
+  readyToShipAt            DateTime?                     @db.Timestamptz(3)
+  shippedAt                DateTime?                     @db.Timestamptz(3)
+  shippingCarrier          String?                       @db.VarChar(120)
+  trackingNumber           String?                       @db.VarChar(160)
+  trackingUrl              String?                       @db.VarChar(1000)
   trackingSource           ShopTrackingSource?
-  trackingRecordedAt       DateTime?                   @db.Timestamptz(3)
-  trackingRevision         Int                         @default(0)
-  expiredAt                DateTime?                   @db.Timestamptz(3)
-  cancelledAt              DateTime?                   @db.Timestamptz(3)
-  createdAt                DateTime                    @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime                    @updatedAt @db.Timestamptz(3)
-  user                     User                        @relation("ShopOrderOwner", fields: [userId], references: [id], onDelete: Restrict)
+  trackingRecordedAt       DateTime?                     @db.Timestamptz(3)
+  trackingRevision         Int                           @default(0)
+  expiredAt                DateTime?                     @db.Timestamptz(3)
+  cancelledAt              DateTime?                     @db.Timestamptz(3)
+  createdAt                DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime                      @updatedAt @db.Timestamptz(3)
+  user                     User                          @relation("ShopOrderOwner", fields: [userId], references: [id], onDelete: Restrict)
   items                    ShopOrderItem[]
   events                   ShopOrderEvent[]
   lifecycleEvents          ShopOrderLifecycleEvent[]
@@ -1878,8 +1901,9 @@ model ShopOrder {
   notifications            OrderNotification[]
   withdrawalRequests       ConsumerWithdrawalRequest[]
   invoices                 Invoice[]
-  shippingRateVersion      ShippingRateVersion?        @relation(fields: [shippingRateVersionId], references: [id], onDelete: Restrict)
+  shippingRateVersion      ShippingRateVersion?          @relation(fields: [shippingRateVersionId], references: [id], onDelete: Restrict)
   returnRequests           ShopReturnRequest[]
+  shippingProviderAttempts ShopShippingProviderAttempt[]
 
   @@unique([userId, creationToken])
   @@unique([id, userId])
@@ -1888,6 +1912,39 @@ model ShopOrder {
   @@index([fulfillmentStatus, createdAt])
   @@index([shippingRateVersionId])
   @@map("shop_orders")
+}
+
+model ShopShippingProviderAttempt {
+  id                     String                            @id @default(uuid()) @db.Uuid
+  shopOrderId            String                            @db.Uuid
+  provider               ShopShippingProvider
+  scenario               ShopShippingProviderScenario
+  status                 ShopShippingProviderAttemptStatus @default(REQUESTED)
+  attemptNumber          Int
+  idempotencyKey         String                            @unique @db.VarChar(255)
+  providerShipmentId     String?                           @unique @db.VarChar(160)
+  trackingCarrier        String?                           @db.VarChar(120)
+  trackingNumber         String?                           @db.VarChar(160)
+  trackingUrl            String?                           @db.VarChar(1000)
+  errorCode              String?                           @db.VarChar(120)
+  reconciliationCount    Int                               @default(0)
+  lastReconciledAt       DateTime?                         @db.Timestamptz(3)
+  requestedAt            DateTime                          @default(now()) @db.Timestamptz(3)
+  resolvedAt             DateTime?                         @db.Timestamptz(3)
+  createdByUserId        String                            @db.Uuid
+  lastReconciledByUserId String?                           @db.Uuid
+  createdAt              DateTime                          @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                          @updatedAt @db.Timestamptz(3)
+  shopOrder              ShopOrder                         @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  createdBy              User                              @relation("ShopShippingProviderAttemptCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lastReconciledBy       User?                             @relation("ShopShippingProviderAttemptReconciledBy", fields: [lastReconciledByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([shopOrderId, attemptNumber])
+  @@index([shopOrderId, createdAt])
+  @@index([status, requestedAt])
+  @@index([createdByUserId])
+  @@index([lastReconciledByUserId])
+  @@map("shop_shipping_provider_attempts")
 }
 
 model LegalDocumentVersion {
