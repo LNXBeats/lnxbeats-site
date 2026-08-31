@@ -36,7 +36,9 @@ function dependencies(
       shippingQuoteVersion: "phase5a-qa-internal-v1",
       shippingMethod: "STANDARD_TRACKED_SIGNATURE",
       shippingWeightGrams: 100,
+      shippingPhysicalGrams: 160,
       shippingBillableGrams: 150,
+      shippingTierMaxGrams: 250,
     }),
     ...overrides,
   };
@@ -107,7 +109,9 @@ test("shipping quote accepts only cart identity and returns the server snapshot"
       shippingQuoteVersion: "phase5a-qa-internal-v1",
       shippingMethod: "STANDARD_TRACKED_SIGNATURE",
       shippingWeightGrams: 100,
+      shippingPhysicalGrams: 160,
       shippingBillableGrams: 150,
+      shippingTierMaxGrams: 250,
     },
   });
 });

@@ -5,6 +5,8 @@ const VERSION_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/i;
 
 export const SHOP_SHIPPING_SERVICE = "STANDARD_TRACKED_SIGNATURE" as const;
 export const SHOP_SHIPPING_SCOPE = "INTERNAL_QA" as const;
+export const SHOP_COMMERCIAL_SHIPPING_SERVICE = "COLISSIMO_HOME_FRANCE" as const;
+export const SHOP_COMMERCIAL_SHIPPING_SCOPE = "COMMERCIAL_CANDIDATE" as const;
 export const SHOP_SHIPPING_CURRENCY = "EUR" as const;
 export const SHOP_SHIPPING_COUNTRY = "FR" as const;
 export const SHOP_SHIPPING_MINIMUM_BILLABLE_GRAMS = 150;
@@ -19,13 +21,21 @@ export type ShippingRateTierDefinition = Readonly<{
 export type ShippingRateDefinition = Readonly<{
   id: string;
   version: string;
-  status: "DRAFT" | "ACTIVE" | "RETIRED";
-  scope: "INTERNAL_QA";
-  service: "STANDARD_TRACKED_SIGNATURE";
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED" | "RETIRED";
+  scope: "INTERNAL_QA" | "COMMERCIAL_CANDIDATE";
+  service: "STANDARD_TRACKED_SIGNATURE" | "COLISSIMO_HOME_FRANCE";
   currency: string;
   countryCode: string;
   minimumBillableWeightGrams: number;
   packagingWeightGrams: number;
+  billableWeightPolicy?: "PACKAGED" | "PRODUCTS_ONLY";
+  packagingProfile?: Readonly<{
+    id: string;
+    version: string;
+    physicalWeightGrams: number;
+    maximumItemQuantity: number;
+    customerBillableWeightIncluded: boolean;
+  }> | null;
   tiers: readonly ShippingRateTierDefinition[];
 }>;
 
@@ -40,12 +50,16 @@ export type ShippingQuote = Readonly<{
   required: true;
   rateVersionId: string;
   version: string;
-  service: "STANDARD_TRACKED_SIGNATURE";
+  service: "STANDARD_TRACKED_SIGNATURE" | "COLISSIMO_HOME_FRANCE";
   currency: "EUR";
   countryCode: "FR";
   productWeightGrams: number;
   packagingWeightGrams: number;
+  physicalWeightGrams: number;
   billableWeightGrams: number;
+  billableWeightPolicy: "PACKAGED" | "PRODUCTS_ONLY";
+  packagingProfileId: string | null;
+  packagingProfileVersion: string | null;
   amountCents: number;
   tierPosition: number;
   tierMaximumWeightGrams: number;
@@ -71,19 +85,31 @@ function boundedInteger(value: number, minimum: number, maximum: number) {
 }
 
 function validateRate(rate: ShippingRateDefinition) {
+  const expectedService = rate.scope === SHOP_COMMERCIAL_SHIPPING_SCOPE
+    ? SHOP_COMMERCIAL_SHIPPING_SERVICE
+    : SHOP_SHIPPING_SERVICE;
   if (
     !rate.id
     || !VERSION_PATTERN.test(rate.version)
-    || rate.scope !== SHOP_SHIPPING_SCOPE
-    || rate.service !== SHOP_SHIPPING_SERVICE
+    || ![SHOP_SHIPPING_SCOPE, SHOP_COMMERCIAL_SHIPPING_SCOPE].includes(rate.scope)
+    || rate.service !== expectedService
     || rate.currency !== SHOP_SHIPPING_CURRENCY
     || rate.countryCode !== SHOP_SHIPPING_COUNTRY
     || !boundedInteger(rate.minimumBillableWeightGrams, 1, MAX_WEIGHT_GRAMS)
     || !boundedInteger(rate.packagingWeightGrams, 0, MAX_WEIGHT_GRAMS)
+    || !["PACKAGED", "PRODUCTS_ONLY"].includes(rate.billableWeightPolicy ?? "PACKAGED")
     || !rate.tiers.length
   ) {
     throw new ShippingQuoteError("La grille logistique est invalide.", "INVALID_RATE");
   }
+  if (rate.packagingProfile && (
+    !rate.packagingProfile.id
+    || !VERSION_PATTERN.test(rate.packagingProfile.version)
+    || !boundedInteger(rate.packagingProfile.physicalWeightGrams, 0, MAX_WEIGHT_GRAMS)
+    || !boundedInteger(rate.packagingProfile.maximumItemQuantity, 1, 1_000)
+    || rate.packagingProfile.customerBillableWeightIncluded
+    || rate.packagingProfile.physicalWeightGrams !== rate.packagingWeightGrams
+  )) throw new ShippingQuoteError("Le profil d’emballage est invalide.", "INVALID_RATE");
   if (rate.status !== "ACTIVE") {
     throw new ShippingQuoteError("La grille logistique n’est pas active.", "INACTIVE_RATE");
   }
@@ -134,6 +160,7 @@ export function quoteShipping(input: Readonly<{
     throw new ShippingQuoteError("Aucun produit expédiable n’est présent.", "PRODUCT_WEIGHT_REQUIRED");
   }
   let productWeightGrams = 0;
+  let physicalItemQuantity = 0;
   for (const line of shippable) {
     if (line.shippingWeightGrams === null) {
       throw new ShippingQuoteError(
@@ -142,19 +169,26 @@ export function quoteShipping(input: Readonly<{
       );
     }
     const lineWeight = checkedProductWeight(line.shippingWeightGrams, line.quantity);
+    physicalItemQuantity += line.quantity;
     productWeightGrams += lineWeight;
     if (!boundedInteger(productWeightGrams, 1, MAX_WEIGHT_GRAMS)) {
       throw new ShippingQuoteError("Le poids logistique calculé est trop élevé.", "WEIGHT_OVERFLOW");
     }
   }
+  if (input.rate.packagingProfile && physicalItemQuantity > input.rate.packagingProfile.maximumItemQuantity) {
+    throw new ShippingQuoteError("Le panier dépasse la capacité de l’emballage disponible.", "RATE_LIMIT_EXCEEDED");
+  }
 
-  const packedWeightGrams = productWeightGrams + input.rate.packagingWeightGrams;
+  const packagingWeightGrams = input.rate.packagingProfile?.physicalWeightGrams ?? input.rate.packagingWeightGrams;
+  const packedWeightGrams = productWeightGrams + packagingWeightGrams;
   if (!boundedInteger(packedWeightGrams, 1, MAX_WEIGHT_GRAMS)) {
     throw new ShippingQuoteError("Le poids emballé calculé est trop élevé.", "WEIGHT_OVERFLOW");
   }
+  const billableWeightPolicy = input.rate.billableWeightPolicy ?? "PACKAGED";
+  const billableBasisGrams = billableWeightPolicy === "PRODUCTS_ONLY" ? productWeightGrams : packedWeightGrams;
   const billableWeightGrams = Math.max(
     input.rate.minimumBillableWeightGrams,
-    packedWeightGrams,
+    billableBasisGrams,
   );
   const tier = input.rate.tiers.find(({ maxWeightGrams }) => billableWeightGrams <= maxWeightGrams);
   if (!tier) {
@@ -172,8 +206,12 @@ export function quoteShipping(input: Readonly<{
     currency: SHOP_SHIPPING_CURRENCY,
     countryCode: SHOP_SHIPPING_COUNTRY,
     productWeightGrams,
-    packagingWeightGrams: input.rate.packagingWeightGrams,
+    packagingWeightGrams,
+    physicalWeightGrams: packedWeightGrams,
     billableWeightGrams,
+    billableWeightPolicy,
+    packagingProfileId: input.rate.packagingProfile?.id ?? null,
+    packagingProfileVersion: input.rate.packagingProfile?.version ?? null,
     amountCents: tier.priceCents,
     tierPosition: tier.position,
     tierMaximumWeightGrams: tier.maxWeightGrams,

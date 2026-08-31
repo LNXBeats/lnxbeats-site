@@ -256,3 +256,16 @@ export function getAvailableProductQuantity(input: {
   if (!Number.isSafeInteger(input.activeReserved) || input.activeReserved < 0) return 0;
   return Math.max(0, (input.stock ?? 0) - input.activeReserved);
 }
+
+export type ShopPublicAvailabilityState = "AVAILABLE" | "TEMPORARILY_UNAVAILABLE" | "SOLD_OUT";
+
+export function getPublicAvailabilityState(input: {
+  trackInventory: boolean;
+  stock: number | null;
+  activeReserved: number;
+}): ShopPublicAvailabilityState {
+  if (!input.trackInventory) return "AVAILABLE";
+  const stock = Number.isSafeInteger(input.stock) && Number(input.stock) >= 0 ? Number(input.stock) : 0;
+  if (stock === 0) return "SOLD_OUT";
+  return getAvailableProductQuantity(input) === 0 ? "TEMPORARILY_UNAVAILABLE" : "AVAILABLE";
+}

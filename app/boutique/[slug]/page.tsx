@@ -50,8 +50,10 @@ export default async function ShopProductPage({ params }: Context) {
             <p className="shop-product-detail__description">{product.description}</p>
             <strong className="shop-product-detail__price">{formatShopMoney(product.priceCents)}</strong>
             <p className="shop-product-detail__availability">
-              {product.soldOut
-                ? "Ce produit est actuellement épuisé."
+              {product.availabilityState === "SOLD_OUT"
+                ? "Ce produit est épuisé."
+                : product.availabilityState === "TEMPORARILY_UNAVAILABLE"
+                  ? "Indisponible temporairement : les derniers exemplaires sont réservés pendant un paiement."
                 : product.availableQuantity === null
                   ? "Disponible."
                   : `${product.availableQuantity} exemplaire${product.availableQuantity > 1 ? "s" : ""} disponible${product.availableQuantity > 1 ? "s" : ""}.`}

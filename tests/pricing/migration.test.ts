@@ -18,8 +18,23 @@ const SHIPPING_MIGRATION = "20260828220000_shop_shipping_quotes";
 const AFTER_SALES_MIGRATION = "20260830120000_shop_after_sales_foundation";
 const SHIPPING_OPERATIONS_MIGRATION = "20260830220000_shop_shipping_operations";
 const SHIPPING_PROVIDER_MIGRATION = "20260831200000_shop_shipping_provider_foundation";
+const PRODUCTION_READINESS_MIGRATION = "20260831230000_shop_production_readiness_contract";
+
+test("Phase 5E keeps historical paid timestamps on refunded cancellations", async () => {
+  const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, PRODUCTION_READINESS_MIGRATION, "migration.sql"), "utf8");
+  assert.match(sql, /DROP CONSTRAINT "shop_orders_payment_timestamp"/);
+  assert.match(sql, /OR "paymentStatus" = 'CANCELLED'/);
+});
 
 async function applyMigration(database: PGlite, directory: string, sql: string) {
+  if (directory === PRODUCTION_READINESS_MIGRATION) {
+    const marker = 'CREATE TYPE "ShippingBillableWeightPolicy"';
+    const offset = sql.indexOf(marker);
+    assert.notEqual(offset, -1, "Phase 5E enum migration marker is missing");
+    for (const statement of sql.slice(0, offset).match(/ALTER TYPE[\s\S]*?;/g) ?? []) await database.exec(statement);
+    await database.exec(sql.slice(offset));
+    return;
+  }
   if (directory !== NOTIFICATION_ENUM_MIGRATION) {
     await database.exec(sql);
     return;
@@ -236,7 +251,8 @@ test("all migrations apply and seed the immutable V1 pricing parity", async () =
     assert.ok(migrations.includes(PRICING_MIGRATION));
     assert.ok(migrations.indexOf(AFTER_SALES_MIGRATION) < migrations.indexOf(SHIPPING_OPERATIONS_MIGRATION));
     assert.ok(migrations.indexOf(SHIPPING_OPERATIONS_MIGRATION) < migrations.indexOf(SHIPPING_PROVIDER_MIGRATION));
-    assert.equal(migrations.at(-1), SHIPPING_PROVIDER_MIGRATION);
+    assert.ok(migrations.indexOf(SHIPPING_PROVIDER_MIGRATION) < migrations.indexOf(PRODUCTION_READINESS_MIGRATION));
+    assert.equal(migrations.at(-1), PRODUCTION_READINESS_MIGRATION);
 
     const pricing = await database.query<{
       version: string;

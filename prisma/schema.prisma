@@ -163,6 +163,13 @@ enum OrderNotificationKind {
   CUSTOMER_SHOP_RETURN_REJECTED
   CUSTOMER_SHOP_RETURN_RECEIVED
   CUSTOMER_SHOP_REFUND_CONFIRMED
+  OWNER_SHOP_SAV_EVIDENCE_ADDED
+  OWNER_SHOP_CANCELLATION_REQUESTED
+  CUSTOMER_SHOP_CANCELLATION_APPROVED
+  CUSTOMER_SHOP_CANCELLATION_REJECTED
+  OWNER_SHOP_ADDRESS_CORRECTION_REQUESTED
+  CUSTOMER_SHOP_ADDRESS_CORRECTION_APPROVED
+  CUSTOMER_SHOP_ADDRESS_CORRECTION_REJECTED
 }
 
 enum NotificationChannel {
@@ -273,15 +280,29 @@ enum ProductAuditAction {
 enum ShippingRateVersionStatus {
   DRAFT
   ACTIVE
+  ARCHIVED
   RETIRED
 }
 
 enum ShippingRateScope {
   INTERNAL_QA
+  COMMERCIAL_CANDIDATE
 }
 
 enum ShippingService {
   STANDARD_TRACKED_SIGNATURE
+  COLISSIMO_HOME_FRANCE
+}
+
+enum ShippingBillableWeightPolicy {
+  PACKAGED
+  PRODUCTS_ONLY
+}
+
+enum PackagingProfileStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
 }
 
 enum ShopOrderStatus {
@@ -425,6 +446,43 @@ enum ShopReturnAuditAction {
   REFUND_REQUIRES_REVIEW
   RESTOCK_COMPLETED
   REQUEST_CLOSED
+  EVIDENCE_ADDED
+  EVIDENCE_PURGED
+}
+
+enum ShopReturnEvidenceStatus {
+  ACTIVE
+  PURGED
+}
+
+enum ShopCustomerRequestType {
+  PAID_ORDER_CANCELLATION
+  SHIPPING_ADDRESS_CORRECTION
+}
+
+enum ShopCustomerRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum ShopReadinessAlertKind {
+  SAV_FIRST_ANALYSIS_OVERDUE
+  PAYMENT_REVIEW_REQUIRED
+  REFUND_REVIEW_REQUIRED
+  SHIPPING_REVIEW_REQUIRED
+}
+
+enum ShopReadinessAlertStatus {
+  OPEN
+  RESOLVED
+}
+
+enum ShopMaintenanceRunOutcome {
+  COMPLETED
+  SKIPPED_OVERLAP
+  FAILED
 }
 
 enum LegalDocumentType {
@@ -1253,27 +1311,29 @@ model Payment {
 }
 
 model RefundAttempt {
-  id                     String              @id @default(uuid()) @db.Uuid
-  paymentId              String              @db.Uuid
+  id                     String                    @id @default(uuid()) @db.Uuid
+  paymentId              String                    @db.Uuid
   provider               PaymentProvider
-  source                 RefundAttemptSource @default(ADMIN)
+  source                 RefundAttemptSource       @default(ADMIN)
   amountCents            Int
-  currency               String              @db.VarChar(3)
-  requestedByUserId      String?             @db.Uuid
-  shopReturnRequestId    String?             @unique @db.Uuid
-  localIdempotencyKey    String              @unique @db.VarChar(255)
-  providerRefundId       String?             @db.VarChar(255)
-  providerIdempotencyKey String              @db.VarChar(255)
-  status                 RefundAttemptStatus @default(PROCESSING)
-  failureCode            String?             @db.VarChar(120)
-  attempts               Int                 @default(0)
-  lastAttemptAt          DateTime?           @db.Timestamptz(3)
-  confirmedAt            DateTime?           @db.Timestamptz(3)
-  createdAt              DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt              DateTime            @updatedAt @db.Timestamptz(3)
-  payment                Payment             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  requestedBy            User?               @relation("RefundRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  shopReturnRequest      ShopReturnRequest?  @relation(fields: [shopReturnRequestId], references: [id], onDelete: Restrict)
+  currency               String                    @db.VarChar(3)
+  requestedByUserId      String?                   @db.Uuid
+  shopReturnRequestId    String?                   @unique @db.Uuid
+  shopCustomerRequestId  String?                   @unique @db.Uuid
+  localIdempotencyKey    String                    @unique @db.VarChar(255)
+  providerRefundId       String?                   @db.VarChar(255)
+  providerIdempotencyKey String                    @db.VarChar(255)
+  status                 RefundAttemptStatus       @default(PROCESSING)
+  failureCode            String?                   @db.VarChar(120)
+  attempts               Int                       @default(0)
+  lastAttemptAt          DateTime?                 @db.Timestamptz(3)
+  confirmedAt            DateTime?                 @db.Timestamptz(3)
+  createdAt              DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                  @updatedAt @db.Timestamptz(3)
+  payment                Payment                   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  requestedBy            User?                     @relation("RefundRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  shopReturnRequest      ShopReturnRequest?        @relation(fields: [shopReturnRequestId], references: [id], onDelete: Restrict)
+  shopCustomerRequest    ShopOrderCustomerRequest? @relation(fields: [shopCustomerRequestId], references: [id], onDelete: Restrict)
   providerEvents         ProviderEvent[]
   auditEvents            PaymentAuditEvent[]
   creditNotes            CreditNote[]
@@ -1760,24 +1820,50 @@ model Product {
   @@map("products")
 }
 
+model PackagingProfile {
+  id                             String                 @id @default(uuid()) @db.Uuid
+  version                        String                 @unique @db.VarChar(64)
+  name                           String                 @db.VarChar(160)
+  status                         PackagingProfileStatus @default(DRAFT)
+  physicalWeightGrams            Int
+  maximumItemQuantity            Int
+  customerBillableWeightIncluded Boolean                @default(false)
+  activatedAt                    DateTime?              @db.Timestamptz(3)
+  archivedAt                     DateTime?              @db.Timestamptz(3)
+  createdAt                      DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt                      DateTime               @updatedAt @db.Timestamptz(3)
+  shippingRateVersions           ShippingRateVersion[]
+  shopOrders                     ShopOrder[]
+
+  @@index([status, createdAt])
+  @@map("packaging_profiles")
+}
+
 model ShippingRateVersion {
-  id                         String                    @id @default(uuid()) @db.Uuid
-  version                    String                    @unique @db.VarChar(64)
-  status                     ShippingRateVersionStatus @default(DRAFT)
-  scope                      ShippingRateScope         @default(INTERNAL_QA)
-  service                    ShippingService           @default(STANDARD_TRACKED_SIGNATURE)
-  currency                   String                    @default("EUR") @db.Char(3)
-  countryCode                String                    @default("FR") @db.Char(2)
-  minimumBillableWeightGrams Int                       @default(150)
-  packagingWeightGrams       Int                       @default(0)
-  activatedAt                DateTime?                 @db.Timestamptz(3)
-  retiredAt                  DateTime?                 @db.Timestamptz(3)
-  createdAt                  DateTime                  @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime                  @updatedAt @db.Timestamptz(3)
+  id                         String                       @id @default(uuid()) @db.Uuid
+  version                    String                       @unique @db.VarChar(64)
+  status                     ShippingRateVersionStatus    @default(DRAFT)
+  scope                      ShippingRateScope            @default(INTERNAL_QA)
+  service                    ShippingService              @default(STANDARD_TRACKED_SIGNATURE)
+  currency                   String                       @default("EUR") @db.Char(3)
+  countryCode                String                       @default("FR") @db.Char(2)
+  minimumBillableWeightGrams Int                          @default(150)
+  packagingWeightGrams       Int                          @default(0)
+  billableWeightPolicy       ShippingBillableWeightPolicy @default(PACKAGED)
+  packagingProfileId         String?                      @db.Uuid
+  sourceLabel                String?                      @db.VarChar(240)
+  validFrom                  DateTime?                    @db.Date
+  activatedAt                DateTime?                    @db.Timestamptz(3)
+  archivedAt                 DateTime?                    @db.Timestamptz(3)
+  retiredAt                  DateTime?                    @db.Timestamptz(3)
+  createdAt                  DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                     @updatedAt @db.Timestamptz(3)
   tiers                      ShippingRateTier[]
   shopOrders                 ShopOrder[]
+  packagingProfile           PackagingProfile?            @relation(fields: [packagingProfileId], references: [id], onDelete: Restrict)
 
   @@index([status, scope, createdAt])
+  @@index([packagingProfileId])
   @@map("shipping_rate_versions")
 }
 
@@ -1811,23 +1897,26 @@ model ProductAsset {
 }
 
 model ProductStockAdjustment {
-  id                  String             @id @default(uuid()) @db.Uuid
-  productId           String             @db.Uuid
-  delta               Int
-  stockBefore         Int
-  stockAfter          Int
-  reason              String             @db.VarChar(500)
-  actorAdminId        String?            @db.Uuid
-  shopReturnRequestId String?            @db.Uuid
-  idempotencyKey      String?            @unique @db.VarChar(255)
-  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
-  product             Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
-  actorAdmin          User?              @relation("ProductStockAdjustmentActor", fields: [actorAdminId], references: [id], onDelete: SetNull)
-  shopReturnRequest   ShopReturnRequest? @relation(fields: [shopReturnRequestId], references: [id], onDelete: Restrict)
+  id                    String                    @id @default(uuid()) @db.Uuid
+  productId             String                    @db.Uuid
+  delta                 Int
+  stockBefore           Int
+  stockAfter            Int
+  reason                String                    @db.VarChar(500)
+  actorAdminId          String?                   @db.Uuid
+  shopReturnRequestId   String?                   @db.Uuid
+  shopCustomerRequestId String?                   @db.Uuid
+  idempotencyKey        String?                   @unique @db.VarChar(255)
+  createdAt             DateTime                  @default(now()) @db.Timestamptz(3)
+  product               Product                   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  actorAdmin            User?                     @relation("ProductStockAdjustmentActor", fields: [actorAdminId], references: [id], onDelete: SetNull)
+  shopReturnRequest     ShopReturnRequest?        @relation(fields: [shopReturnRequestId], references: [id], onDelete: Restrict)
+  shopCustomerRequest   ShopOrderCustomerRequest? @relation(fields: [shopCustomerRequestId], references: [id], onDelete: Restrict)
 
   @@index([productId, createdAt])
   @@index([actorAdminId])
   @@index([shopReturnRequestId])
+  @@index([shopCustomerRequestId])
   @@map("product_stock_adjustments")
 }
 
@@ -1872,7 +1961,12 @@ model ShopOrder {
   shippingMethod           String?                       @db.VarChar(80)
   shippingWeightGrams      Int?
   shippingPackagingGrams   Int?
+  shippingPhysicalGrams    Int?
   shippingBillableGrams    Int?
+  shippingTierMaxGrams     Int?
+  packagingProfileId       String?                       @db.Uuid
+  packagingProfileVersion  String?                       @db.VarChar(64)
+  shippingWeightPolicy     ShippingBillableWeightPolicy?
   termsVersion             String?                       @db.VarChar(64)
   termsHashSha256          String?                       @db.Char(64)
   termsAcceptedAt          DateTime?                     @db.Timestamptz(3)
@@ -1902,7 +1996,9 @@ model ShopOrder {
   withdrawalRequests       ConsumerWithdrawalRequest[]
   invoices                 Invoice[]
   shippingRateVersion      ShippingRateVersion?          @relation(fields: [shippingRateVersionId], references: [id], onDelete: Restrict)
+  packagingProfile         PackagingProfile?             @relation(fields: [packagingProfileId], references: [id], onDelete: Restrict)
   returnRequests           ShopReturnRequest[]
+  customerRequests         ShopOrderCustomerRequest[]
   shippingProviderAttempts ShopShippingProviderAttempt[]
 
   @@unique([userId, creationToken])
@@ -1911,6 +2007,7 @@ model ShopOrder {
   @@index([status, paymentStatus, reservationExpiresAt])
   @@index([fulfillmentStatus, createdAt])
   @@index([shippingRateVersionId])
+  @@index([packagingProfileId])
   @@map("shop_orders")
 }
 
@@ -2168,6 +2265,7 @@ model ShopReturnRequest {
   withdrawalRequest      ConsumerWithdrawalRequest? @relation(fields: [withdrawalRequestId], references: [id], onDelete: Restrict)
   items                  ShopReturnItem[]
   auditEvents            ShopReturnAuditEvent[]
+  evidence               ShopReturnEvidence[]
   refundAttempt          RefundAttempt?
   creditNote             CreditNote?
   stockAdjustments       ProductStockAdjustment[]
@@ -2179,6 +2277,83 @@ model ShopReturnRequest {
   @@index([status, requestedAt])
   @@index([reviewedByUserId])
   @@map("shop_return_requests")
+}
+
+model ShopReturnEvidence {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  shopReturnRequestId String                   @db.Uuid
+  uploaderUserId      String                   @db.Uuid
+  originalName        String                   @db.VarChar(240)
+  storageKey          String                   @unique @db.VarChar(500)
+  mimeType            String                   @db.VarChar(80)
+  byteSize            Int
+  sha256              String                   @db.Char(64)
+  status              ShopReturnEvidenceStatus @default(ACTIVE)
+  uploadedAt          DateTime                 @default(now()) @db.Timestamptz(3)
+  purgeDueAt          DateTime?                @db.Timestamptz(3)
+  purgedAt            DateTime?                @db.Timestamptz(3)
+  request             ShopReturnRequest        @relation(fields: [shopReturnRequestId], references: [id], onDelete: Restrict)
+
+  @@unique([shopReturnRequestId, sha256])
+  @@index([shopReturnRequestId, status])
+  @@index([status, purgeDueAt])
+  @@map("shop_return_evidence")
+}
+
+model ShopOrderCustomerRequest {
+  id                  String                    @id @default(uuid()) @db.Uuid
+  requestNumber       String                    @unique @db.VarChar(40)
+  shopOrderId         String                    @db.Uuid
+  userId              String                    @db.Uuid
+  type                ShopCustomerRequestType
+  status              ShopCustomerRequestStatus @default(REQUESTED)
+  reason              String                    @db.VarChar(1000)
+  requestedSnapshot   Json                      @default("{}")
+  previousAddressHash String?                   @db.Char(64)
+  decidedByUserId     String?                   @db.Uuid
+  decisionComment     String?                   @db.VarChar(1000)
+  requestedAt         DateTime                  @default(now()) @db.Timestamptz(3)
+  decidedAt           DateTime?                 @db.Timestamptz(3)
+  completedAt         DateTime?                 @db.Timestamptz(3)
+  createdAt           DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                  @updatedAt @db.Timestamptz(3)
+  shopOrder           ShopOrder                 @relation(fields: [shopOrderId, userId], references: [id, userId], onDelete: Restrict)
+  refundAttempt       RefundAttempt?
+  stockAdjustments    ProductStockAdjustment[]
+
+  @@index([shopOrderId, requestedAt])
+  @@index([userId, requestedAt])
+  @@index([type, status, requestedAt])
+  @@map("shop_order_customer_requests")
+}
+
+model ShopReadinessAlert {
+  id              String                   @id @default(uuid()) @db.Uuid
+  kind            ShopReadinessAlertKind
+  status          ShopReadinessAlertStatus @default(OPEN)
+  entityType      String                   @db.VarChar(80)
+  entityId        String                   @db.VarChar(160)
+  summary         String                   @db.VarChar(500)
+  firstDetectedAt DateTime                 @default(now()) @db.Timestamptz(3)
+  lastDetectedAt  DateTime                 @default(now()) @db.Timestamptz(3)
+  resolvedAt      DateTime?                @db.Timestamptz(3)
+
+  @@unique([kind, entityType, entityId])
+  @@index([status, kind, firstDetectedAt])
+  @@map("shop_readiness_alerts")
+}
+
+model ShopMaintenanceRun {
+  id             String                    @id @default(uuid()) @db.Uuid
+  idempotencyKey String                    @unique @db.VarChar(160)
+  outcome        ShopMaintenanceRunOutcome
+  metrics        Json                      @default("{}")
+  startedAt      DateTime                  @db.Timestamptz(3)
+  completedAt    DateTime?                 @db.Timestamptz(3)
+  errorCode      String?                   @db.VarChar(160)
+
+  @@index([startedAt])
+  @@map("shop_maintenance_runs")
 }
 
 model ShopReturnItem {

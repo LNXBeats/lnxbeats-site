@@ -24,16 +24,17 @@ test("ShopOrder creation recalculates and snapshots one server shipping quote", 
   assert.doesNotMatch(migration, /\b(?:DROP|TRUNCATE|DELETE\s+FROM)\b/i);
 });
 
-test("the Phase 5A UI identifies internal QA rates and keeps carrier integration absent", async () => {
+test("the logistics UI distinguishes internal QA from the inactive commercial candidate without carrier network", async () => {
   const [admin, fixture, packageJson] = await Promise.all([
     readFile(new URL("../../app/admin/boutique/logistique/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../data/shop-shipping.ts", import.meta.url), "utf8"),
     readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ]);
-  assert.match(admin, /fixtures internes de QA/);
-  assert.match(admin, /aucun tarif La Poste/);
+  assert.match(admin, /QA interne non contractuelle/);
+  assert.match(admin, /Candidate France · activation Admin requise/);
+  assert.match(admin, /Aucun achat d’étiquette, appel transporteur/);
   assert.match(fixture, /not[\s\S]*contractual tariffs/i);
-  assert.doesNotMatch(`${admin}\n${fixture}\n${packageJson}`, /api\.laposte|colissimo/i);
+  assert.doesNotMatch(`${admin}\n${fixture}\n${packageJson}`, /api\.laposte|fetch\([^)]*(?:colissimo|laposte)/i);
 });
 
 test("the PostgreSQL runtime isolates its intentional trigger rejection", async () => {

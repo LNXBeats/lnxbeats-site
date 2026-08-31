@@ -7,6 +7,7 @@ import {
   assertShippingAddress,
   checkedMoney,
   getAvailableProductQuantity,
+  getPublicAvailabilityState,
   shopOrderIntentFingerprint,
   type ShopOrderIntent,
 } from "@/lib/shop/order-domain";
@@ -152,6 +153,7 @@ const shopOrderDetailInclude = {
       createdAt: true,
     },
   },
+  customerRequests: { orderBy: [{ requestedAt: "desc" as const }, { id: "desc" as const }] },
 } satisfies Prisma.ShopOrderInclude;
 
 type PublicProductRecord = Prisma.ProductGetPayload<{ select: typeof publicProductSelect }>;
@@ -207,6 +209,11 @@ function presentProduct(product: PublicProductRecord, activeReserved: number) {
     currency: "EUR" as const,
     trackInventory: product.trackInventory,
     availableQuantity,
+    availabilityState: getPublicAvailabilityState({
+      trackInventory: product.trackInventory,
+      stock: product.stock,
+      activeReserved,
+    }),
     soldOut: availableQuantity === 0,
     shippingRequired: product.shippingRequired,
     shippingPriceCents: product.shippingPriceCents,
@@ -446,7 +453,9 @@ export async function quoteShopOrderShipping(
       shippingQuoteVersion: shipping.quote?.version ?? null,
       shippingMethod: shipping.quote?.service ?? null,
       shippingWeightGrams: shipping.quote?.productWeightGrams ?? null,
+      shippingPhysicalGrams: shipping.quote?.physicalWeightGrams ?? null,
       shippingBillableGrams: shipping.quote?.billableWeightGrams ?? null,
+      shippingTierMaxGrams: shipping.quote?.tierMaximumWeightGrams ?? null,
     });
   });
 }
@@ -531,7 +540,12 @@ export async function createShopOrder(
         shippingMethod: quote?.service ?? null,
         shippingWeightGrams: quote?.productWeightGrams ?? null,
         shippingPackagingGrams: quote?.packagingWeightGrams ?? null,
+        shippingPhysicalGrams: quote?.physicalWeightGrams ?? null,
         shippingBillableGrams: quote?.billableWeightGrams ?? null,
+        shippingTierMaxGrams: quote?.tierMaximumWeightGrams ?? null,
+        packagingProfileId: quote?.packagingProfileId ?? null,
+        packagingProfileVersion: quote?.packagingProfileVersion ?? null,
+        shippingWeightPolicy: quote?.billableWeightPolicy ?? null,
         reservationExpiresAt,
       },
     });
@@ -546,7 +560,11 @@ export async function createShopOrder(
           shippingRequired,
           shippingQuoteVersion: quote?.version ?? null,
           shippingWeightGrams: quote?.productWeightGrams ?? null,
+          shippingPhysicalGrams: quote?.physicalWeightGrams ?? null,
           shippingBillableGrams: quote?.billableWeightGrams ?? null,
+          shippingTierMaxGrams: quote?.tierMaximumWeightGrams ?? null,
+          packagingProfileVersion: quote?.packagingProfileVersion ?? null,
+          shippingWeightPolicy: quote?.billableWeightPolicy ?? null,
           shippingCents,
         },
       },

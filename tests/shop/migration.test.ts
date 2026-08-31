@@ -15,6 +15,7 @@ const SHIPPING_MIGRATION = "20260828220000_shop_shipping_quotes";
 const AFTER_SALES_MIGRATION = "20260830120000_shop_after_sales_foundation";
 const SHIPPING_OPERATIONS_MIGRATION = "20260830220000_shop_shipping_operations";
 const SHIPPING_PROVIDER_MIGRATION = "20260831200000_shop_shipping_provider_foundation";
+const PRODUCTION_READINESS_MIGRATION = "20260831230000_shop_production_readiness_contract";
 
 async function directories() {
   return (await readdir(MIGRATIONS_DIRECTORY, { withFileTypes: true }))
@@ -25,6 +26,14 @@ async function directories() {
 
 async function apply(database: PGlite, directory: string) {
   const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, directory, "migration.sql"), "utf8");
+  if (directory === PRODUCTION_READINESS_MIGRATION) {
+    const marker = 'CREATE TYPE "ShippingBillableWeightPolicy"';
+    const offset = sql.indexOf(marker);
+    assert.notEqual(offset, -1);
+    for (const statement of sql.slice(0, offset).match(/ALTER TYPE[\s\S]*?;/g) ?? []) await database.exec(statement);
+    await database.exec(sql.slice(offset));
+    return;
+  }
   if (directory !== NOTIFICATION_ENUM_MIGRATION) {
     await database.exec(sql);
     return;
@@ -73,6 +82,13 @@ test("Shop payments and its dependent additive migrations preserve their orderin
   assert.match(sql, /CONSTRAINT "order_notifications_parent_xor"/);
   assert.match(sql, /payments_one_succeeded_per_shop_order_idx/);
   assert.match(sql, /CREATE TABLE "shop_order_lifecycle_events"/);
+});
+
+test("Phase 5E preserves paidAt when a paid ShopOrder is cancelled after refund", async () => {
+  const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, PRODUCTION_READINESS_MIGRATION, "migration.sql"), "utf8");
+  assert.match(sql, /DROP CONSTRAINT "shop_orders_payment_timestamp"/);
+  assert.match(sql, /OR "paymentStatus" = 'CANCELLED'/);
+  assert.doesNotMatch(sql, /"paymentStatus" = 'CANCELLED'\s+AND "paidAt" IS NULL/);
 });
 
 test("Phase 5A shipping migration is additive, preserves legacy nulls and freezes used rate definitions", async () => {
@@ -186,7 +202,7 @@ test("Phase 5C shipping operations migration is additive and preserves legacy sh
 
 test("Phase 5D shipping provider migration is additive and preserves the physical shipment boundary", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.at(-1), SHIPPING_PROVIDER_MIGRATION);
+  assert.ok(migrationDirectories.indexOf(SHIPPING_PROVIDER_MIGRATION) < migrationDirectories.indexOf(PRODUCTION_READINESS_MIGRATION));
   const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, SHIPPING_PROVIDER_MIGRATION, "migration.sql"), "utf8");
   assert.doesNotMatch(sql, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE|DELETE\s+FROM|UPDATE\s+"|INSERT\s+INTO)\b/i);
   assert.match(sql, /CREATE TABLE "shop_shipping_provider_attempts"/);
@@ -194,6 +210,23 @@ test("Phase 5D shipping provider migration is additive and preserves the physica
   assert.match(sql, /REQUIRES_REVIEW/);
   assert.match(sql, /idempotencyKey/);
   assert.doesNotMatch(sql, /ALTER TABLE "shop_orders"/);
+});
+
+test("Phase 5E readiness migration is last, additive and preserves historical ledgers", async () => {
+  const migrationDirectories = await directories();
+  assert.equal(migrationDirectories.at(-1), PRODUCTION_READINESS_MIGRATION);
+  const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, PRODUCTION_READINESS_MIGRATION, "migration.sql"), "utf8");
+  assert.doesNotMatch(sql, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE|DELETE\s+FROM|UPDATE\s+"|INSERT\s+INTO)\b/i);
+  for (const table of ["packaging_profiles", "shop_return_evidence", "shop_order_customer_requests", "shop_readiness_alerts", "shop_maintenance_runs"]) {
+    assert.match(sql, new RegExp(`CREATE TABLE "${table}"`));
+  }
+  assert.match(sql, /customerBillableWeightIncluded/);
+  assert.match(sql, /shop_return_evidence_storage_key/);
+  assert.match(sql, /shop_order_customer_requests_one_open_kind_idx/);
+  assert.match(sql, /DROP CONSTRAINT "shipping_rate_versions_status_timestamps"/);
+  assert.match(sql, /"status" = 'ARCHIVED'[\s\S]*"archivedAt" >= "activatedAt"/);
+  assert.match(sql, /DROP CONSTRAINT "shop_orders_shipping_quote_snapshot"/);
+  assert.match(sql, /"shippingWeightPolicy" = 'PRODUCTS_ONLY'[\s\S]*"shippingBillableGrams" = "shippingWeightGrams"/);
 });
 
 test("the 20 to 21 migration preserves Phase 2 Product, ShopOrder and NotificationEvent rows", async () => {

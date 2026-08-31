@@ -1,10 +1,11 @@
 import "server-only";
 
 export const SHOP_SHIPPING_QA_CONFIRMATION = "enable-internal-shop-shipping-qa";
+export const SHOP_PRODUCTION_READINESS_QA_CONFIRMATION = "enable-phase5e-production-readiness-qa";
 
 export type ShopShippingConfiguration = Readonly<{
   enabled: boolean;
-  scope: "INTERNAL_QA";
+  scope: "INTERNAL_QA" | "COMMERCIAL_CANDIDATE";
 }>;
 
 export class ShopShippingConfigurationError extends Error {
@@ -35,15 +36,22 @@ export function parseShopShippingConfiguration(
 ): ShopShippingConfiguration {
   const enabled = exactBoolean(environment.SHOP_SHIPPING_ENABLED);
   if (!enabled) return Object.freeze({ enabled: false, scope: "INTERNAL_QA" });
+  const productionReadiness = environment.SHOP_SHIPPING_RATE_SCOPE === "COMMERCIAL_CANDIDATE";
+  const expectedConfirmation = productionReadiness
+    ? SHOP_PRODUCTION_READINESS_QA_CONFIRMATION
+    : SHOP_SHIPPING_QA_CONFIRMATION;
   if (
     environment.NODE_ENV === "production"
     || environment.RAILWAY_ENVIRONMENT
     || environment.RAILWAY_ENVIRONMENT_NAME
     || environment.SHOP_ENABLED !== "true"
-    || environment.SHOP_SHIPPING_QA_CONFIRM !== SHOP_SHIPPING_QA_CONFIRMATION
+    || environment.SHOP_SHIPPING_QA_CONFIRM !== expectedConfirmation
     || (!isLoopback(environment.AUTH_URL) && !isLoopback(environment.SITE_URL))
   ) {
     throw new ShopShippingConfigurationError("QA_CONTEXT_REQUIRED");
   }
-  return Object.freeze({ enabled: true, scope: "INTERNAL_QA" });
+  if (environment.SHOP_SHIPPING_RATE_SCOPE && !productionReadiness && environment.SHOP_SHIPPING_RATE_SCOPE !== "INTERNAL_QA") {
+    throw new ShopShippingConfigurationError("QA_CONTEXT_REQUIRED");
+  }
+  return Object.freeze({ enabled: true, scope: productionReadiness ? "COMMERCIAL_CANDIDATE" : "INTERNAL_QA" });
 }
