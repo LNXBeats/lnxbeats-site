@@ -18,7 +18,7 @@ export function orderErrorResponse(error: unknown) {
     return orderJson({ error: error.message, code: error.code }, error.status);
   }
   if (error instanceof OrderUploadError) {
-    return orderJson({ error: error.message, code: error.code }, 400);
+    return orderJson({ error: error.message, code: error.code }, error.status);
   }
   if (error instanceof OrderDeliveryError) {
     return orderJson({ error: error.message, code: error.code }, error.status);

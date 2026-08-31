@@ -1,4 +1,5 @@
 import { orderOffer } from "@/data/order-offer";
+import { withMemoryDiagnosticOperation } from "@/lib/memory-diagnostics";
 import { orderErrorResponse, orderJson } from "@/lib/orders/http";
 import { isAllowedOrderMutation, orderActorFromHeaders } from "@/lib/orders/request";
 import { addOrderPhotos, enforceOrderRateLimit } from "@/lib/orders/service";
@@ -21,26 +22,29 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    await enforceOrderRateLimit(actor.id, "upload");
-    const formData = await request.formData();
-    if (formData.get("rightsConfirmed") !== "true") {
-      return orderJson({ error: "Confirmez que vous pouvez communiquer ces photos." }, 400);
-    }
-    const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
-    if (!files.length || files.length > orderOffer.maxPhotos) {
-      return orderJson({ error: "Sélectionnez entre une et dix photos." }, 400);
-    }
-    if (files.some((file) => file.size > orderOffer.maxPhotoBytes)) {
-      return orderJson({ error: "Chaque photo doit peser au maximum 10 Mo." }, 413);
-    }
+    return await withMemoryDiagnosticOperation("upload", async () => {
+      await enforceOrderRateLimit(actor.id, "upload");
+      const formData = await request.formData();
+      if (formData.get("rightsConfirmed") !== "true") {
+        return orderJson({ error: "Confirmez que vous pouvez communiquer ces photos." }, 400);
+      }
+      const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
+      if (!files.length || files.length > orderOffer.maxPhotos) {
+        return orderJson({ error: "Sélectionnez entre une et dix photos." }, 400);
+      }
+      if (files.some((file) => file.size > orderOffer.maxPhotoBytes)) {
+        return orderJson({ error: "Chaque photo doit peser au maximum 10 Mo." }, 413);
+      }
 
-    const { orderNumber } = await context.params;
-    const order = await addOrderPhotos(actor, orderNumber, await Promise.all(files.map(async (file) => ({
-      buffer: Buffer.from(await file.arrayBuffer()),
-      originalFilename: file.name,
-      declaredMimeType: file.type,
-    }))));
-    return orderJson({ order }, 201);
+      const { orderNumber } = await context.params;
+      const order = await addOrderPhotos(actor, orderNumber, files.map((file) => ({
+        buffer: async () => Buffer.from(await file.arrayBuffer()),
+        originalFilename: file.name,
+        declaredMimeType: file.type,
+        signal: request.signal,
+      })));
+      return orderJson({ order }, 201);
+    });
   } catch (error) {
     return orderErrorResponse(error);
   }

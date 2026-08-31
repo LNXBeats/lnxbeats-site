@@ -22,7 +22,12 @@ import {
   writePrivateOrderFile,
 } from "@/lib/orders/storage";
 import type { SerializedOrder } from "@/lib/orders/types";
-import { normalizeOrderImage, type NormalizedOrderImage } from "@/lib/orders/upload";
+import {
+  cleanupPersistedOrderImages,
+  processOrderImageBatch,
+  type OrderImageSource,
+  type PersistedOrderImage,
+} from "@/lib/orders/upload";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { canReadOrderMedia } from "@/lib/media/authorization";
 import { personalUseTermsSnapshot } from "@/lib/rights/domain";
@@ -499,14 +504,14 @@ export async function deleteDraftOrder(actor: OrderActor, orderNumber: string) {
   await Promise.all(storageKeys.map((asset) => deletePrivateOrderFile(asset)));
 }
 
-type RawOrderPhoto = { buffer: Buffer; originalFilename: string; declaredMimeType: string };
+type RawOrderPhoto = OrderImageSource;
 
-type PendingPhoto = NormalizedOrderImage & {
+type PendingPhoto = PersistedOrderImage<{
   storageKey: string;
   storageBackend: "LOCAL" | "OBJECT";
   storageProvider: string;
   visibility: "PRIVATE";
-};
+}>;
 
 export async function addOrderPhotos(actor: OrderActor, orderNumber: string, files: RawOrderPhoto[]) {
   assertDatabaseConfigured();
@@ -532,20 +537,21 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
     throw new OrderServiceError("Une commande peut contenir au maximum dix photos.", 400, "PHOTO_LIMIT_REACHED");
   }
 
-  const pending: PendingPhoto[] = [];
+  let pending: PendingPhoto[] = [];
   try {
-    for (const file of files) {
-      const normalized = await normalizeOrderImage(file);
-      const storageKey = `orders/${order.id}/${randomUUID()}.webp`;
-      const stored = await writePrivateOrderFile(storageKey, normalized.buffer, normalized.checksum);
-      pending.push({
-        ...normalized,
-        storageKey,
-        storageBackend: stored.storageBackend,
-        storageProvider: stored.storageProvider,
-        visibility: stored.visibility,
-      });
-    }
+    pending = await processOrderImageBatch(files, {
+      persist: async (normalized) => {
+        const storageKey = `orders/${order.id}/${randomUUID()}.webp`;
+        const stored = await writePrivateOrderFile(storageKey, normalized.buffer, normalized.checksum);
+        return {
+          storageKey,
+          storageBackend: stored.storageBackend,
+          storageProvider: stored.storageProvider,
+          visibility: stored.visibility,
+        };
+      },
+      cleanup: (photo) => deletePrivateOrderFile(photo),
+    });
 
     await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
       const current = await transaction.order.findFirst({
@@ -585,7 +591,10 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
       }
     });
   } catch (error) {
-    await Promise.all(pending.map((photo) => deletePrivateOrderFile(photo)));
+    await cleanupPersistedOrderImages(
+      pending,
+      (photo) => deletePrivateOrderFile(photo),
+    );
     throw error;
   }
 

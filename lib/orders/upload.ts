@@ -3,16 +3,113 @@ import { createHash } from "node:crypto";
 import sharp from "sharp";
 
 import { orderOffer } from "@/data/order-offer";
+import { withMemoryDiagnosticCounter } from "@/lib/memory-diagnostics";
 import { sanitizeOriginalFilename } from "@/lib/orders/domain";
 
 export type DetectedImageType = "JPEG" | "PNG" | "WEBP";
 export type DetectedOrderAudioType = "MP3" | "WAV" | "FLAC";
 
 export class OrderUploadError extends Error {
-  constructor(message: string, readonly code: string) {
+  constructor(message: string, readonly code: string, readonly status = 400) {
     super(message);
     this.name = "OrderUploadError";
   }
+}
+
+export const ORDER_PHOTO_TRANSFORM_CONCURRENCY = 1;
+export const ORDER_PHOTO_TRANSFORM_QUEUE_LIMIT = 1;
+
+type TransformWaiter = {
+  resolve: () => void;
+  reject: (error: OrderUploadError) => void;
+  signal?: AbortSignal;
+  abort?: () => void;
+};
+
+class OrderPhotoTransformLimiter {
+  private active = 0;
+  private readonly waiters: TransformWaiter[] = [];
+
+  snapshot() {
+    return {
+      active: this.active,
+      queued: this.waiters.length,
+      concurrency: ORDER_PHOTO_TRANSFORM_CONCURRENCY,
+      queueLimit: ORDER_PHOTO_TRANSFORM_QUEUE_LIMIT,
+    } as const;
+  }
+
+  private acquire(signal?: AbortSignal) {
+    if (signal?.aborted) {
+      return Promise.reject(new OrderUploadError("Le traitement des photos a été interrompu.", "UPLOAD_ABORTED"));
+    }
+    if (this.active < ORDER_PHOTO_TRANSFORM_CONCURRENCY) {
+      this.active += 1;
+      return Promise.resolve();
+    }
+    if (this.waiters.length >= ORDER_PHOTO_TRANSFORM_QUEUE_LIMIT) {
+      return Promise.reject(new OrderUploadError(
+        "Le traitement des photos est momentanément saturé. Réessayez dans un instant.",
+        "IMAGE_PROCESSING_BUSY",
+        503,
+      ));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const waiter: TransformWaiter = { resolve, reject, ...(signal ? { signal } : {}) };
+      if (signal) {
+        waiter.abort = () => {
+          const index = this.waiters.indexOf(waiter);
+          if (index >= 0) this.waiters.splice(index, 1);
+          reject(new OrderUploadError("Le traitement des photos a été interrompu.", "UPLOAD_ABORTED"));
+        };
+        signal.addEventListener("abort", waiter.abort, { once: true });
+      }
+      this.waiters.push(waiter);
+    });
+  }
+
+  private release() {
+    const waiter = this.waiters.shift();
+    if (waiter) {
+      if (waiter.signal && waiter.abort) waiter.signal.removeEventListener("abort", waiter.abort);
+      waiter.resolve();
+      return;
+    }
+    this.active -= 1;
+  }
+
+  async run<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    await this.acquire(signal);
+    try {
+      return await operation();
+    } finally {
+      this.release();
+    }
+  }
+}
+
+const orderPhotoTransformLimiterSymbol = Symbol.for(
+  "lnx-studio.orders.photo-transform-limiter.v1",
+);
+type OrderPhotoTransformGlobal = typeof globalThis & {
+  [orderPhotoTransformLimiterSymbol]?: OrderPhotoTransformLimiter;
+};
+
+function processOrderPhotoTransformLimiter() {
+  // Keep one limiter across Next server entrypoint bundles and development
+  // reloads. Each Node process remains independent by design.
+  const processGlobal = globalThis as OrderPhotoTransformGlobal;
+  processGlobal[orderPhotoTransformLimiterSymbol] ??= new OrderPhotoTransformLimiter();
+  return processGlobal[orderPhotoTransformLimiterSymbol];
+}
+
+export function getOrderPhotoTransformState() {
+  return processOrderPhotoTransformLimiter().snapshot();
+}
+
+export function withOrderPhotoTransformSlot<T>(operation: () => Promise<T>, signal?: AbortSignal) {
+  return processOrderPhotoTransformLimiter().run(operation, signal);
 }
 export type NormalizedOrderImage = {
   buffer: Buffer;
@@ -25,6 +122,67 @@ export type NormalizedOrderImage = {
   sizeBytes: number;
   checksum: string;
 };
+
+export type OrderImageSource = {
+  buffer: Buffer | (() => Promise<Buffer>);
+  originalFilename: string;
+  declaredMimeType: string;
+  signal?: AbortSignal;
+};
+
+export type PersistedOrderImage<TStored extends object> = Omit<NormalizedOrderImage, "buffer"> & TStored;
+
+type OrderImageBatchDependencies<TStored extends object> = {
+  persist(normalized: NormalizedOrderImage, index: number): Promise<TStored>;
+  cleanup(persisted: PersistedOrderImage<TStored>, index: number): Promise<void>;
+  reportCleanupFailure?(diagnostic: OrderPhotoCleanupDiagnostic): void;
+};
+
+export type OrderPhotoCleanupDiagnostic = Readonly<{
+  event: "order.photo.cleanup.failed";
+  cleanupOutcome: "failed";
+  attemptedObjectCount: number;
+  failedObjectCount: number;
+}>;
+
+export function orderPhotoCleanupDiagnostic(
+  attemptedObjectCount: number,
+  failedObjectCount: number,
+): OrderPhotoCleanupDiagnostic {
+  return {
+    event: "order.photo.cleanup.failed",
+    cleanupOutcome: "failed",
+    attemptedObjectCount,
+    failedObjectCount,
+  };
+}
+
+function logOrderPhotoCleanupFailure(diagnostic: OrderPhotoCleanupDiagnostic) {
+  console.error(JSON.stringify(diagnostic));
+}
+
+export async function cleanupPersistedOrderImages<TStored extends object>(
+  persisted: readonly PersistedOrderImage<TStored>[],
+  cleanup: (item: PersistedOrderImage<TStored>, index: number) => Promise<void>,
+  reportCleanupFailure?: (diagnostic: OrderPhotoCleanupDiagnostic) => void,
+) {
+  const outcomes = await Promise.allSettled(
+    persisted.map((item, index) => cleanup(item, index)),
+  );
+  const failedObjectCount = outcomes.filter(({ status }) => status === "rejected").length;
+  if (failedObjectCount > 0) {
+    // Keep the primary upload/DB error authoritative. The fixed diagnostic is
+    // deliberately free of object keys, filenames, users and order identity.
+    try {
+      (reportCleanupFailure ?? logOrderPhotoCleanupFailure)(
+        orderPhotoCleanupDiagnostic(persisted.length, failedObjectCount),
+      );
+    } catch {
+      // Auxiliary observability must never mask the business failure.
+    }
+  }
+  return { attemptedObjectCount: persisted.length, failedObjectCount } as const;
+}
 
 export type ValidatedOrderAudioIdentity = {
   originalFilename: string;
@@ -123,7 +281,7 @@ export function validateOrderAudioIdentity(input: {
   };
 }
 
-export async function normalizeOrderImage(input: {
+async function normalizeOrderImageWithoutConcurrencyLimit(input: {
   buffer: Buffer;
   originalFilename: string;
   declaredMimeType: string;
@@ -187,5 +345,67 @@ export async function normalizeOrderImage(input: {
   } catch (error) {
     if (error instanceof OrderUploadError) throw error;
     throw new OrderUploadError("L’image ne peut pas être décodée de façon sûre.", "DECODE_FAILED");
+  }
+}
+
+export function normalizeOrderImage(input: {
+  buffer: Buffer;
+  originalFilename: string;
+  declaredMimeType: string;
+  signal?: AbortSignal;
+}): Promise<NormalizedOrderImage> {
+  // Decoded image memory can greatly exceed the compressed input size.
+  return withOrderPhotoTransformSlot(
+    () => withMemoryDiagnosticCounter(
+      "imageTransform",
+      () => normalizeOrderImageWithoutConcurrencyLimit(input),
+    ),
+    input.signal,
+  );
+}
+
+async function normalizeOrderImageSource(input: OrderImageSource): Promise<NormalizedOrderImage> {
+  // Acquire before materializing a lazy File buffer and before Sharp decodes it.
+  return withOrderPhotoTransformSlot(async () => {
+    return withMemoryDiagnosticCounter("imageTransform", async () => {
+      const buffer = typeof input.buffer === "function" ? await input.buffer() : input.buffer;
+      return normalizeOrderImageWithoutConcurrencyLimit({
+        buffer,
+        originalFilename: input.originalFilename,
+        declaredMimeType: input.declaredMimeType,
+      });
+    });
+  }, input.signal);
+}
+
+export async function processOrderImageBatch<TStored extends object>(
+  inputs: readonly OrderImageSource[],
+  dependencies: OrderImageBatchDependencies<TStored>,
+): Promise<Array<PersistedOrderImage<TStored>>> {
+  const persisted: Array<PersistedOrderImage<TStored>> = [];
+  try {
+    for (const [index, input] of inputs.entries()) {
+      const normalized = await normalizeOrderImageSource(input);
+      const stored = await dependencies.persist(normalized, index);
+      const metadata: Omit<NormalizedOrderImage, "buffer"> = {
+        originalFilename: normalized.originalFilename,
+        detectedType: normalized.detectedType,
+        mimeType: normalized.mimeType,
+        extension: normalized.extension,
+        width: normalized.width,
+        height: normalized.height,
+        sizeBytes: normalized.sizeBytes,
+        checksum: normalized.checksum,
+      };
+      persisted.push({ ...metadata, ...stored });
+    }
+    return persisted;
+  } catch (error) {
+    await cleanupPersistedOrderImages(
+      persisted,
+      dependencies.cleanup,
+      dependencies.reportCleanupFailure,
+    );
+    throw error;
   }
 }
