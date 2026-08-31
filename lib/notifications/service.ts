@@ -209,6 +209,13 @@ type ShopNotificationKind = Extract<
   | "CUSTOMER_SHOP_RETURN_REJECTED"
   | "CUSTOMER_SHOP_RETURN_RECEIVED"
   | "CUSTOMER_SHOP_REFUND_CONFIRMED"
+  | "OWNER_SHOP_SAV_EVIDENCE_ADDED"
+  | "OWNER_SHOP_CANCELLATION_REQUESTED"
+  | "CUSTOMER_SHOP_CANCELLATION_APPROVED"
+  | "CUSTOMER_SHOP_CANCELLATION_REJECTED"
+  | "OWNER_SHOP_ADDRESS_CORRECTION_REQUESTED"
+  | "CUSTOMER_SHOP_ADDRESS_CORRECTION_APPROVED"
+  | "CUSTOMER_SHOP_ADDRESS_CORRECTION_REJECTED"
 >;
 
 type ShopPaymentProvider = "STRIPE" | "PAYPAL";
@@ -235,6 +242,7 @@ export async function enqueueShopOrderNotification(
     termsVersion?: string | null;
     shopReturnRequestId?: string;
     returnRequestNumber?: string;
+    customerRequestNumber?: string;
     refundAmountCents?: number;
     creditNoteNumber?: string;
   }>,
@@ -321,6 +329,7 @@ export async function enqueueShopOrderNotification(
     } : null,
     ...(shopOrder.invoices?.[0]?.invoiceNumber ? { invoiceNumber: shopOrder.invoices[0].invoiceNumber } : {}),
     ...(input.returnRequestNumber ? { returnRequestNumber: input.returnRequestNumber } : {}),
+    ...(input.customerRequestNumber ? { customerRequestNumber: input.customerRequestNumber } : {}),
     ...(input.refundAmountCents ? { refundAmountCents: input.refundAmountCents } : {}),
     ...(input.creditNoteNumber ? { creditNoteNumber: input.creditNoteNumber } : {}),
   } satisfies Prisma.InputJsonObject;
@@ -375,6 +384,7 @@ export function enqueueShopAfterSalesNotification(
       | "CUSTOMER_SHOP_RETURN_REJECTED"
       | "CUSTOMER_SHOP_RETURN_RECEIVED"
       | "CUSTOMER_SHOP_REFUND_CONFIRMED"
+      | "OWNER_SHOP_SAV_EVIDENCE_ADDED"
     >;
     refundAmountCents?: number;
     creditNoteNumber?: string;
@@ -388,6 +398,31 @@ export function enqueueShopAfterSalesNotification(
     returnRequestNumber: input.requestNumber,
     refundAmountCents: input.refundAmountCents,
     creditNoteNumber: input.creditNoteNumber,
+  });
+}
+
+export function enqueueShopCustomerRequestNotification(
+  transaction: Transaction,
+  input: Readonly<{
+    shopOrderId: string;
+    requestId: string;
+    requestNumber: string;
+    kind: Extract<
+      ShopNotificationKind,
+      | "OWNER_SHOP_CANCELLATION_REQUESTED"
+      | "CUSTOMER_SHOP_CANCELLATION_APPROVED"
+      | "CUSTOMER_SHOP_CANCELLATION_REJECTED"
+      | "OWNER_SHOP_ADDRESS_CORRECTION_REQUESTED"
+      | "CUSTOMER_SHOP_ADDRESS_CORRECTION_APPROVED"
+      | "CUSTOMER_SHOP_ADDRESS_CORRECTION_REJECTED"
+    >;
+  }>,
+) {
+  return enqueueShopOrderNotification(transaction, {
+    shopOrderId: input.shopOrderId,
+    kind: input.kind,
+    idempotencyKey: `shop-customer-request:${input.requestId}:${input.kind.toLowerCase()}:email`,
+    customerRequestNumber: input.requestNumber,
   });
 }
 

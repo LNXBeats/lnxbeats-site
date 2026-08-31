@@ -107,7 +107,7 @@ export function parseMemberShopReturnForm(formData: FormData) {
   return Object.freeze({
     orderNumber,
     type: type as ShopReturnType,
-    comment: text(formData.get("comment") ?? "", 1000, false),
+    comment: text(formData.get("comment"), 1000, true),
     quantities,
   });
 }

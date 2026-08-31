@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { cancelShopOrderAction } from "@/app/compte/achats/actions";
+import { cancelShopOrderAction, createShopCustomerRequestAction } from "@/app/compte/achats/actions";
 import { Container } from "@/components/container";
 import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { PaymentReturnNotice } from "@/components/payment-return-notice";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/shop/order-presentation";
 import { shopPaymentProvidersAvailable } from "@/lib/shop/payment-config";
 import { getMemberShopOrder } from "@/lib/shop/order-service";
+import { SHOP_CUSTOMER_REQUEST_CONFIRMATION } from "@/lib/shop/customer-request-domain";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,8 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
 
         {state === "commande-annulee" ? <p className="auth-form__success" role="status">Commande annulée et stock libéré.</p> : null}
         {state === "annulation-refusee" ? <p className="auth-form__error" role="alert">Cette commande ne peut plus être annulée.</p> : null}
+        {state === "demande-transmise" ? <p className="auth-form__success" role="status">Votre demande a été transmise à l’Administration sans modifier la commande.</p> : null}
+        {state === "demande-refusee" ? <p className="auth-form__error" role="alert">Cette demande n’est pas recevable dans l’état actuel de la commande.</p> : null}
 
         {paymentReturn === "retour" || paymentReturn === "annule" || paymentReturn === "paypal-retour" || paymentReturn === "paypal-annule" ? (
           <PaymentReturnNotice
@@ -225,6 +228,8 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
               </address>
             </section>
           ) : null}
+
+          {order.paymentStatus === "PAID" && order.fulfillmentStatus !== "SHIPPED" ? <section className="member-orders"><div className="member-orders__heading"><div><p className="auth-panel__label">Demandes avant expédition</p><h2>Une décision Admin reste requise.</h2></div></div>{order.customerRequests.length ? <ul className="member-order-list">{order.customerRequests.map((request) => <li key={request.id}><strong>{request.type === "PAID_ORDER_CANCELLATION" ? "Annulation" : "Correction d’adresse"}</strong><p>{request.requestNumber} · {request.status}</p></li>)}</ul> : null}<details className="auth-panel account-disclosure"><summary>Demander l’annulation <span aria-hidden="true">＋</span></summary><form className="auth-form" action={createShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="type" value="PAID_ORDER_CANCELLATION" /><input type="hidden" name="confirmation" value={SHOP_CUSTOMER_REQUEST_CONFIRMATION} /><label><span>Motif</span><textarea name="reason" minLength={10} maxLength={1000} required /></label><button className="button button--quiet" type="submit">TRANSMETTRE LA DEMANDE</button></form></details>{order.shippingRequired ? <details className="auth-panel account-disclosure"><summary>Demander une correction d’adresse <span aria-hidden="true">＋</span></summary><form className="auth-form" action={createShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="type" value="SHIPPING_ADDRESS_CORRECTION" /><input type="hidden" name="confirmation" value={SHOP_CUSTOMER_REQUEST_CONFIRMATION} /><label>Prénom<input name="firstName" defaultValue={order.shippingFirstName ?? ""} maxLength={100} required /></label><label>Nom<input name="lastName" defaultValue={order.shippingLastName ?? ""} maxLength={100} required /></label><label>Adresse<input name="addressLine1" defaultValue={order.shippingAddressLine1 ?? ""} maxLength={240} required /></label><label>Complément<input name="addressLine2" defaultValue={order.shippingAddressLine2 ?? ""} maxLength={240} /></label><label>Code postal<input name="postalCode" defaultValue={order.shippingPostalCode ?? ""} inputMode="numeric" pattern="[0-9]{5}" required /></label><label>Ville<input name="city" defaultValue={order.shippingCity ?? ""} maxLength={120} required /></label><input type="hidden" name="countryCode" value="FR" /><label>Motif<input name="reason" minLength={10} maxLength={1000} required /></label><button className="button button--quiet" type="submit">TRANSMETTRE LA CORRECTION</button></form></details> : null}</section> : null}
 
           {canCancel ? (
             <details className="auth-panel account-disclosure">

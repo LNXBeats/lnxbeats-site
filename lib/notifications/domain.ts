@@ -52,6 +52,13 @@ const definitions: Record<OrderNotificationKind, Readonly<{
   CUSTOMER_SHOP_RETURN_REJECTED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-return-rejected" },
   CUSTOMER_SHOP_RETURN_RECEIVED: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-return-received" },
   CUSTOMER_SHOP_REFUND_CONFIRMED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-refund-confirmed" },
+  OWNER_SHOP_SAV_EVIDENCE_ADDED: { audience: "OWNER", priority: "INFORMATIONAL", templateKey: "owner-shop-sav-evidence-added" },
+  OWNER_SHOP_CANCELLATION_REQUESTED: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-shop-cancellation-requested" },
+  CUSTOMER_SHOP_CANCELLATION_APPROVED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-shop-cancellation-approved" },
+  CUSTOMER_SHOP_CANCELLATION_REJECTED: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-cancellation-rejected" },
+  OWNER_SHOP_ADDRESS_CORRECTION_REQUESTED: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-shop-address-correction-requested" },
+  CUSTOMER_SHOP_ADDRESS_CORRECTION_APPROVED: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-address-correction-approved" },
+  CUSTOMER_SHOP_ADDRESS_CORRECTION_REJECTED: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-shop-address-correction-rejected" },
 };
 
 const shopNotificationKinds = new Set<OrderNotificationKind>([
@@ -64,6 +71,13 @@ const shopNotificationKinds = new Set<OrderNotificationKind>([
   "CUSTOMER_SHOP_RETURN_REJECTED",
   "CUSTOMER_SHOP_RETURN_RECEIVED",
   "CUSTOMER_SHOP_REFUND_CONFIRMED",
+  "OWNER_SHOP_SAV_EVIDENCE_ADDED",
+  "OWNER_SHOP_CANCELLATION_REQUESTED",
+  "CUSTOMER_SHOP_CANCELLATION_APPROVED",
+  "CUSTOMER_SHOP_CANCELLATION_REJECTED",
+  "OWNER_SHOP_ADDRESS_CORRECTION_REQUESTED",
+  "CUSTOMER_SHOP_ADDRESS_CORRECTION_APPROVED",
+  "CUSTOMER_SHOP_ADDRESS_CORRECTION_REJECTED",
 ]);
 
 export function isShopNotificationKind(kind: OrderNotificationKind) {
@@ -132,7 +146,7 @@ const orderPayloadKeys = new Set([
 const shopPayloadKeys = new Set([
   "orderNumber", "customerName", "customerEmail", "subtotalCents", "shippingCents", "totalCents", "currency",
   "createdAt", "items", "paymentProvider", "termsVersion", "shippingAddress", "invoiceNumber",
-  "returnRequestNumber", "refundAmountCents", "creditNoteNumber",
+  "returnRequestNumber", "customerRequestNumber", "refundAmountCents", "creditNoteNumber",
 ]);
 
 const shopItemKeys = new Set(["productTitle", "quantity", "unitPriceCents", "lineTotalCents"]);
@@ -155,6 +169,7 @@ function parseShopNotificationPayload(payload: Record<string, unknown>): ShopNot
     || !(payload.termsVersion === null || (typeof payload.termsVersion === "string" && payload.termsVersion.length > 0 && payload.termsVersion.length <= 80))
     || !(payload.invoiceNumber === undefined || (typeof payload.invoiceNumber === "string" && /^LNX-[0-9]{8}-[0-9]{4,}$/.test(payload.invoiceNumber)))
     || !(payload.returnRequestNumber === undefined || (typeof payload.returnRequestNumber === "string" && /^LNX-SAV-[0-9]{4}-[A-F0-9]{12}$/.test(payload.returnRequestNumber)))
+    || !(payload.customerRequestNumber === undefined || (typeof payload.customerRequestNumber === "string" && /^LNX-REQ-[0-9]{4}-[A-F0-9]{12}$/.test(payload.customerRequestNumber)))
     || !(payload.refundAmountCents === undefined || (Number.isSafeInteger(payload.refundAmountCents) && Number(payload.refundAmountCents) > 0))
     || !(payload.creditNoteNumber === undefined || (typeof payload.creditNoteNumber === "string" && payload.creditNoteNumber.length > 0 && payload.creditNoteNumber.length <= 52))
   ) throw new Error("Notification payload is invalid.");

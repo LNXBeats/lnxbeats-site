@@ -48,6 +48,9 @@ import {
   createShopShippingProviderAttempt,
   reconcileShopShippingProviderAttempt,
 } from "@/lib/shop/shipping-provider-service";
+import { SHOP_CUSTOMER_REQUEST_APPROVAL, SHOP_CUSTOMER_REQUEST_REJECTION } from "@/lib/shop/customer-request-domain";
+import { decideShopCustomerRequest } from "@/lib/shop/customer-request-service";
+import { createFakeShopRefundGateway } from "@/lib/shop/after-sales-service";
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -276,4 +279,30 @@ export async function reconcileShopShippingProviderAttemptAction(formData: FormD
   }
   refreshShopOrder(orderNumber);
   redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=provider-qa-reconcilie`);
+}
+
+export async function decideShopCustomerRequestAction(formData: FormData) {
+  const session = await authorize();
+  const requestNumber = String(formData.get("requestNumber") ?? "");
+  const orderNumber = String(formData.get("orderNumber") ?? "");
+  const decision = formData.get("decision") === "APPROVE" ? "APPROVE" : "REJECT";
+  const confirmation = formData.get("confirmation");
+  const expected = decision === "APPROVE" ? SHOP_CUSTOMER_REQUEST_APPROVAL : SHOP_CUSTOMER_REQUEST_REJECTION;
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (!requestNumber || !orderNumber || confirmation !== expected || !comment || comment.length > 1000) {
+    redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=confirmation-requise`);
+  }
+  try {
+    await decideShopCustomerRequest(
+      { id: session.user.id, role: "ADMIN", status: session.user.status, emailVerified: session.user.emailVerified },
+      requestNumber,
+      decision,
+      comment,
+      createFakeShopRefundGateway("SUCCEEDED"),
+    );
+  } catch {
+    redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=demande-client-refusee`);
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=demande-client-traitee`);
 }

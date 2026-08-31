@@ -12,6 +12,7 @@ const QA_ARCHIVED_TECHNICAL_FINGERPRINT_SOURCE =
   "lnx-studio:shop-terms:technical-qa-placeholder:shop-cgv-phase3-qa-v0";
 const QA_TECHNICAL_FINGERPRINT_SOURCE =
   "lnx-studio:shop-terms:technical-qa-placeholder:shop-cgv-phase3-qa-v1";
+export const SHOP_LEGAL_QA_TERMS_HASH = createHash("sha256").update(QA_TECHNICAL_FINGERPRINT_SOURCE).digest("hex");
 
 type ShopTermsRegistryEntry = Readonly<{
   version: string;
@@ -27,7 +28,7 @@ const SHOP_TERMS_REGISTRY: Readonly<Record<string, ShopTermsRegistryEntry>> = Ob
   }),
   [SHOP_LEGAL_QA_TERMS_VERSION]: Object.freeze({
     version: SHOP_LEGAL_QA_TERMS_VERSION,
-    hashSha256: createHash("sha256").update(QA_TECHNICAL_FINGERPRINT_SOURCE).digest("hex"),
+    hashSha256: SHOP_LEGAL_QA_TERMS_HASH,
     approval: "QA_ONLY",
   }),
 });

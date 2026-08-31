@@ -179,6 +179,34 @@ function copy(message: OrderNotificationMessage) {
       "Remboursement Boutique confirmé — LNX Studio", "Boutique · SAV", "Votre remboursement est confirmé",
       "Le remboursement a été confirmé par le prestataire de paiement. L’avoir correspondant est disponible depuis votre Compte.", "Voir mon dossier SAV",
     ],
+    OWNER_SHOP_SAV_EVIDENCE_ADDED: [
+      `Nouvelle preuve SAV — ${message.payload.orderNumber}`, "Boutique · SAV", "Une preuve privée a été ajoutée",
+      "Une pièce image privée a été jointe au dossier SAV. Elle reste accessible uniquement au client propriétaire et à l’Administration.", "Ouvrir la demande",
+    ],
+    OWNER_SHOP_CANCELLATION_REQUESTED: [
+      `Demande d’annulation — ${message.payload.orderNumber}`, "Boutique", "Une annulation après paiement attend votre décision",
+      "Le client a demandé une annulation. La commande, le paiement, le stock et la facture n’ont pas été modifiés automatiquement.", "Ouvrir la commande Boutique",
+    ],
+    CUSTOMER_SHOP_CANCELLATION_APPROVED: [
+      "Annulation acceptée — LNX Studio", "Boutique", "Votre demande d’annulation est acceptée",
+      "La décision Admin et le remboursement confirmé sont consignés dans votre Compte. L’avoir est généré séparément de la facture d’origine.", "Voir mon achat",
+    ],
+    CUSTOMER_SHOP_CANCELLATION_REJECTED: [
+      "Décision sur votre annulation — LNX Studio", "Boutique", "Votre demande d’annulation a été examinée",
+      "La commande reste inchangée. Consultez votre Compte pour retrouver la décision enregistrée.", "Voir mon achat",
+    ],
+    OWNER_SHOP_ADDRESS_CORRECTION_REQUESTED: [
+      `Correction d’adresse demandée — ${message.payload.orderNumber}`, "Boutique", "Une correction d’adresse attend votre décision",
+      "Le client a proposé une nouvelle adresse de livraison. Aucune donnée de commande n’a été modifiée automatiquement.", "Ouvrir la commande Boutique",
+    ],
+    CUSTOMER_SHOP_ADDRESS_CORRECTION_APPROVED: [
+      "Adresse de livraison corrigée — LNX Studio", "Boutique", "Votre nouvelle adresse est enregistrée",
+      "L’Administration a validé la correction avant expédition. La facture d’origine reste immuable.", "Voir mon achat",
+    ],
+    CUSTOMER_SHOP_ADDRESS_CORRECTION_REJECTED: [
+      "Décision sur votre adresse — LNX Studio", "Boutique", "Votre demande de correction a été examinée",
+      "L’adresse de la commande n’a pas été modifiée. Consultez votre Compte pour retrouver la décision.", "Voir mon achat",
+    ],
   } as const;
   const [subject, eyebrow, title, body, cta] = values[message.kind];
   return { subject, eyebrow, title, body, cta };
@@ -225,6 +253,7 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
     details = [
       `Commande : ${payload.orderNumber}`,
       ...(payload.returnRequestNumber ? [`Dossier SAV : ${payload.returnRequestNumber}`] : []),
+      ...(payload.customerRequestNumber ? [`Demande : ${payload.customerRequestNumber}`] : []),
       ...(owner ? [`Client : ${payload.customerName || "Non renseigné"}`] : []),
       ...items,
       `Sous-total : ${formatEuro(payload.subtotalCents, payload.currency)}`,

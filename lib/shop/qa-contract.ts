@@ -59,3 +59,19 @@ export const SHOP_PHASE5D_QA_NOTIFICATION_CAPTURE_PATH = "/private/tmp/lnx-studi
 export const SHOP_PHASE5D_QA_MEDIA_ROOT = "/private/tmp/lnx-studio-v110-phase5d-media";
 export const SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE5D_QA_MEDIA_ROOT}/public`;
 export const SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE5D_QA_MEDIA_ROOT}/private`;
+
+export const SHOP_PHASE5E_RUNTIME_QA_TARGET = "lnx-studio-v110-production-readiness-runtime-test";
+export const SHOP_PHASE5E_QA_TARGET = "lnx-studio-v110-production-readiness-preview-test";
+export const SHOP_PHASE5E_QA_HTTP_PORT = "31780";
+export const SHOP_PHASE5E_QA_ORIGIN = `http://127.0.0.1:${SHOP_PHASE5E_QA_HTTP_PORT}`;
+export const SHOP_PHASE5E_QA_CONFIRMATION = "enable-phase5e-production-readiness-qa";
+export const SHOP_PHASE5E_QA_TERMS_VERSION = SHOP_LEGAL_QA_TERMS_VERSION;
+export const SHOP_PHASE5E_QA_ORDER_SNAPSHOT_VERSION = SHOP_PAYMENT_PRICING_VERSION;
+export const SHOP_PHASE5E_QA_AUTH_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase5e-auth-mailbox.jsonl";
+export const SHOP_PHASE5E_QA_NOTIFICATION_CAPTURE_PATH = "/private/tmp/lnx-studio-v110-phase5e-notifications.jsonl";
+export const SHOP_PHASE5E_QA_MEDIA_ROOT = "/private/tmp/lnxbeats-v110-phase5e-media";
+export const SHOP_PHASE5E_QA_PUBLIC_MEDIA_ROOT = `${SHOP_PHASE5E_QA_MEDIA_ROOT}/public`;
+export const SHOP_PHASE5E_QA_PRIVATE_MEDIA_ROOT = `${SHOP_PHASE5E_QA_MEDIA_ROOT}/private`;
+export const SHOP_PHASE5E_QA_SAV_ROOT = "/private/tmp/lnxbeats-v110-phase5e-sav-private";
+import { SHOP_LEGAL_QA_TERMS_VERSION } from "@/lib/shop/legal";
+import { SHOP_PAYMENT_PRICING_VERSION } from "@/lib/shop/payment-types";

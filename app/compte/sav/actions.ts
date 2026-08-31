@@ -12,6 +12,7 @@ import {
   SHOP_RETURN_CANCEL_CONFIRMATION,
 } from "@/lib/shop/after-sales-domain";
 import { cancelMemberShopReturn, createMemberShopReturn } from "@/lib/shop/after-sales-service";
+import { addShopReturnEvidence } from "@/lib/shop/evidence-service";
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -57,5 +58,25 @@ export async function cancelShopReturnAction(formData: FormData) {
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
     redirect(requestNumber ? `/compte/sav/${encodeURIComponent(requestNumber)}?etat=operation-refusee` : "/compte");
+  }
+}
+
+export async function addShopReturnEvidenceAction(formData: FormData) {
+  const actor = await authorize();
+  let requestNumber = "";
+  try {
+    requestNumber = parseShopReturnRequestNumber(formData.get("requestNumber"));
+    const files = formData.getAll("evidence").filter((value): value is File => value instanceof File && value.size > 0);
+    if (files.length < 1 || files.length > 5) throw new Error("Fichiers invalides.");
+    await addShopReturnEvidence(actor, requestNumber, await Promise.all(files.map(async (file) => ({
+      name: file.name,
+      type: file.type,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    }))));
+    revalidatePath(`/compte/sav/${requestNumber}`);
+    redirect(`/compte/sav/${encodeURIComponent(requestNumber)}?etat=preuves-ajoutees`);
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    redirect(requestNumber ? `/compte/sav/${encodeURIComponent(requestNumber)}?etat=preuve-refusee` : "/compte");
   }
 }

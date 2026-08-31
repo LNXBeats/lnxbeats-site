@@ -186,6 +186,17 @@ test("le mapping métier définit audience, priorité et template", () => {
 test("le payload Boutique est fermé, cohérent et conserve les snapshots financiers", () => {
   const payload = shopMessage.payload as ShopNotificationPayload;
   assert.deepEqual(parseNotificationPayload(payload, shopMessage.kind), payload);
+  assert.deepEqual(parseNotificationPayload({
+    ...payload,
+    customerRequestNumber: "LNX-REQ-2026-ABCDEF123456",
+  }, "OWNER_SHOP_CANCELLATION_REQUESTED"), {
+    ...payload,
+    customerRequestNumber: "LNX-REQ-2026-ABCDEF123456",
+  });
+  assert.throws(() => parseNotificationPayload({
+    ...payload,
+    customerRequestNumber: "LNX-SAV-2026-ABCDEF123456",
+  }, "OWNER_SHOP_CANCELLATION_REQUESTED"), /invalid/i);
   assert.throws(() => parseNotificationPayload({ ...payload, unexpected: true }, shopMessage.kind), /unknown field/i);
   assert.throws(() => parseNotificationPayload({ ...payload, totalCents: 3_001 }, shopMessage.kind), /invalid/i);
   assert.throws(() => parseNotificationPayload({
@@ -484,6 +495,16 @@ test("les templates Boutique sont humains, minimisés et liés à la bonne resso
   assert.match(owner.text, /\/admin\/boutique\/commandes\/LNX-SHOP-2026-000001/);
   assert.match(owner.text, /Client : Client ‹Boutique›/);
   assert.doesNotMatch(owner.text, /1 rue du Test|shop-client@example.invalid/);
+
+  const customerRequest = orderNotificationTemplate({
+    ...ownerMessage,
+    kind: "OWNER_SHOP_CANCELLATION_REQUESTED",
+    templateKey: "owner-shop-cancellation-requested",
+    payload: { ...payload, shippingAddress: null, customerRequestNumber: "LNX-REQ-2026-ABCDEF123456" },
+  }, captureConfiguration);
+  assert.match(customerRequest.text, /Demande : LNX-REQ-2026-ABCDEF123456/);
+  assert.match(customerRequest.text, /\/admin\/boutique\/commandes\/LNX-SHOP-2026-000001/);
+  assert.doesNotMatch(customerRequest.text, /\/admin\/boutique\/retours\//);
 });
 
 test("le transport Resend vérifie le destinataire client contre le parent Shop autoritatif", async () => {

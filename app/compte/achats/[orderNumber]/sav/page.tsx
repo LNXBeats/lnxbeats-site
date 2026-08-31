@@ -56,7 +56,7 @@ export default async function MemberShopReturnCreatePage({
               <span>Quantité<input name={`quantity:${item.productId}`} type="number" inputMode="numeric" min="0" max={item.quantity} defaultValue="0" required /></span>
             </label>)}
           </fieldset>
-          <label><span>Précisions (facultatif)</span><textarea name="comment" maxLength={1000} rows={5} /></label>
+          <label><span>Message détaillé</span><textarea name="comment" maxLength={1000} minLength={10} rows={5} required /></label>
           <label className="auth-check"><input type="checkbox" name="confirmation" value={SHOP_RETURN_REQUEST_CONFIRMATION} required /><span>Je confirme l’exactitude de cette demande et comprends qu’elle sera examinée avant toute décision.</span></label>
           <button className="button button--primary" type="submit">ENREGISTRER LA DEMANDE</button>
         </form>

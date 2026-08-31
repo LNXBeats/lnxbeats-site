@@ -2,12 +2,18 @@ import "server-only";
 
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import { SHOP_PHASE5B_QA_ORIGIN, SHOP_PHASE5B_QA_TARGET } from "@/lib/shop/qa-contract";
+import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
 
 export const SHOP_AFTER_SALES_QA_CONFIRMATION = "enable-local-shop-after-sales-qa";
 export const SHOP_AFTER_SALES_QA_TARGET = SHOP_PHASE5B_QA_TARGET;
 export const SHOP_AFTER_SALES_QA_ORIGIN = SHOP_PHASE5B_QA_ORIGIN;
 
 export function shopAfterSalesQaEnabled(environment: NodeJS.ProcessEnv = process.env) {
+  if (shopProductionReadinessQaEnabled(environment)) {
+    return environment.SHOP_AFTER_SALES_ENABLED === "true"
+      && environment.SHOP_AFTER_SALES_QA_CONFIRM === SHOP_AFTER_SALES_QA_CONFIRMATION
+      && environment.SHOP_AFTER_SALES_REFUND_PROVIDER === "fake";
+  }
   if (environment.SHOP_AFTER_SALES_ENABLED !== "true") return false;
   if (environment.SHOP_AFTER_SALES_QA_CONFIRM !== SHOP_AFTER_SALES_QA_CONFIRMATION) return false;
   if (environment.SHOP_AFTER_SALES_REFUND_PROVIDER !== "fake") return false;

@@ -89,6 +89,9 @@ export async function decideShopReturnAction(formData: FormData) {
       returnCostDecision,
       instructions: value(formData, "instructions", 2000, false),
       comment: value(formData, "comment", 1000, false),
+    }, new Date(), {
+      immediateRefund: decision === "APPROVE" && formData.get("physicalReturnRequired") !== "true",
+      refundGateway: createFakeShopRefundGateway("SUCCEEDED"),
     });
   }, decision === "APPROVE" ? "demande-acceptee" : "demande-refusee");
 }

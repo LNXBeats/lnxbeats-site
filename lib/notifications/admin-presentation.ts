@@ -28,6 +28,13 @@ export const notificationKindPresentation: Record<OrderNotificationKind, string>
   CUSTOMER_SHOP_RETURN_REJECTED: "Demande SAV refusée — client",
   CUSTOMER_SHOP_RETURN_RECEIVED: "Retour Boutique reçu — client",
   CUSTOMER_SHOP_REFUND_CONFIRMED: "Remboursement Boutique confirmé — client",
+  OWNER_SHOP_SAV_EVIDENCE_ADDED: "Preuve SAV ajoutée — propriétaire",
+  OWNER_SHOP_CANCELLATION_REQUESTED: "Annulation Boutique demandée — propriétaire",
+  CUSTOMER_SHOP_CANCELLATION_APPROVED: "Annulation Boutique acceptée — client",
+  CUSTOMER_SHOP_CANCELLATION_REJECTED: "Annulation Boutique refusée — client",
+  OWNER_SHOP_ADDRESS_CORRECTION_REQUESTED: "Correction d’adresse demandée — propriétaire",
+  CUSTOMER_SHOP_ADDRESS_CORRECTION_APPROVED: "Correction d’adresse acceptée — client",
+  CUSTOMER_SHOP_ADDRESS_CORRECTION_REJECTED: "Correction d’adresse refusée — client",
 };
 
 export function isAdminNotificationRetryConfirmed(value: unknown) {

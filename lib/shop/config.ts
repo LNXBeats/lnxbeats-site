@@ -1,6 +1,11 @@
+import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
+
 const COUNTRY_CODE = /^[A-Z]{2}$/;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const LOCAL_QA_CONFIRMATION = "enable-local-shop-commerce-qa";
+export const SHOP_LAUNCH_CUSTOMER_SCOPE = "INDIVIDUALS_ONLY" as const;
+export const SHOP_LAUNCH_COUNTRIES = Object.freeze(["FR"] as const);
+export const SHOP_RESERVATION_TTL_MINUTES = 30;
 export type ShopConfiguration = Readonly<{
   enabled: boolean;
   pricingSource: "legacy";
@@ -41,7 +46,10 @@ function parseReservationTtl(value: string | undefined) {
 }
 
 function assertLocalQaArmament(environment: Readonly<Record<string, string | undefined>>) {
-  if (environment.NODE_ENV === "production") {
+  if (
+    environment.NODE_ENV === "production"
+    && !shopProductionReadinessQaEnabled(environment as NodeJS.ProcessEnv)
+  ) {
     throw new Error("SHOP_ENABLED=true is forbidden in a production runtime during Phase 2.");
   }
   if (environment.SHOP_LOCAL_QA_CONFIRM !== LOCAL_QA_CONFIRMATION) {
@@ -71,6 +79,9 @@ export function parseShopConfiguration(
   }
 
   const enabled = exactBoolean(environment.SHOP_ENABLED, "SHOP_ENABLED");
+  if ((environment.SHOP_CUSTOMER_SCOPE ?? SHOP_LAUNCH_CUSTOMER_SCOPE) !== SHOP_LAUNCH_CUSTOMER_SCOPE) {
+    throw new Error("SHOP_CUSTOMER_SCOPE must remain INDIVIDUALS_ONLY for the V1.1 launch.");
+  }
   const allowedCountries = parseAllowedCountries(environment.SHOP_ALLOWED_COUNTRIES);
   const reservationTtlMinutes = parseReservationTtl(environment.SHOP_RESERVATION_TTL_MINUTES);
   const commerceConfigured = allowedCountries.length > 0 && reservationTtlMinutes >= 5;
@@ -81,6 +92,11 @@ export function parseShopConfiguration(
         "SHOP_ALLOWED_COUNTRIES and SHOP_RESERVATION_TTL_MINUTES are required before enabling the Shop.",
       );
     }
+    if (
+      allowedCountries.length !== 1
+      || allowedCountries[0] !== SHOP_LAUNCH_COUNTRIES[0]
+      || reservationTtlMinutes !== SHOP_RESERVATION_TTL_MINUTES
+    ) throw new Error("Enabled Shop launch QA requires France only and a 30 minute reservation TTL.");
   }
 
   return {

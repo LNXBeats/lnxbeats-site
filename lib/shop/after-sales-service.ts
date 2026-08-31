@@ -15,6 +15,8 @@ import {
   type ShopReturnType,
 } from "@/lib/shop/after-sales-domain";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
+import { savEvidencePurgeDueAt } from "@/lib/shop/readiness-domain";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -28,6 +30,9 @@ export type ShopAfterSalesActor = Readonly<{
 type ServiceDependencies = Readonly<{
   client?: PrismaClient;
   assertEnabled?: () => void;
+  immediateRefund?: boolean;
+  immediateShippingDecision?: "NONE" | "FULL";
+  refundGateway?: ShopRefundGateway;
 }>;
 
 const activeRefundStatuses = ["PROCESSING", "PENDING", "REQUIRES_REVIEW"] as const;
@@ -92,6 +97,7 @@ const detailInclude = {
   },
   items: { orderBy: { productTitle: "asc" as const } },
   auditEvents: { orderBy: [{ occurredAt: "asc" as const }, { id: "asc" as const }] },
+  evidence: { orderBy: [{ uploadedAt: "asc" as const }, { id: "asc" as const }] },
   refundAttempt: true,
   creditNote: { include: { invoice: { select: { invoiceNumber: true } } } },
   stockAdjustments: { orderBy: { createdAt: "asc" as const } },
@@ -272,7 +278,7 @@ export async function decideShopReturn(
   assertAdmin(actor);
   const { client, assertEnabled } = dependencies(options);
   assertEnabled();
-  return transaction(client, async (tx) => {
+  const result = await transaction(client, async (tx) => {
     await lock(tx, `shop-after-sales:${input.requestNumber}`);
     const request = await tx.shopReturnRequest.findUnique({
       where: { requestNumber: input.requestNumber },
@@ -341,6 +347,26 @@ export async function decideShopReturn(
     });
     return updated;
   });
+  const immediateRefund = options.immediateRefund ?? shopProductionReadinessQaEnabled();
+  if (input.decision === "APPROVE" && !input.physicalReturnRequired && immediateRefund) {
+    const policy = await client.shopReturnRequest.findUnique({
+      where: { requestNumber: input.requestNumber },
+      select: { type: true, shopOrder: { select: { items: { select: { quantity: true } } } } },
+    });
+    const automaticShippingDecision = policy?.type === "DEFECTIVE"
+      && policy.shopOrder.items.reduce((sum, item) => sum + item.quantity, 0) === 1
+      ? "FULL" as const
+      : "NONE" as const;
+    await requestShopReturnRefund(
+      actor,
+      input.requestNumber,
+      options.immediateShippingDecision ?? automaticShippingDecision,
+      options.refundGateway ?? createFakeShopRefundGateway("SUCCEEDED"),
+      now,
+      { client, assertEnabled },
+    );
+  }
+  return result;
 }
 
 export async function markShopReturnReceived(
@@ -518,7 +544,7 @@ async function reserveShopRefund(
   await lock(tx, `shop-after-sales:${requestNumberValue}`);
   const request = await tx.shopReturnRequest.findUnique({
     where: { requestNumber: requestNumberValue },
-    include: { items: true, refundAttempt: true, shopOrder: { include: { invoices: { take: 1, orderBy: { issuedAt: "desc" } } } } },
+    include: { items: true, refundAttempt: true, shopOrder: { include: { invoices: { take: 1, orderBy: { issuedAt: "desc" } }, items: { select: { quantity: true } } } } },
   });
   if (!request) throw new ShopAfterSalesError(404, "RETURN_NOT_FOUND");
   if (request.refundAttempt) {
@@ -543,6 +569,10 @@ async function reserveShopRefund(
   if (request.physicalReturnRequired === true && request.status !== "INSPECTED") {
     throw new ShopAfterSalesError(409, "INVALID_TRANSITION");
   }
+  if (shippingDecision === "FULL" && (
+    request.type !== "DEFECTIVE"
+    || request.shopOrder.items.reduce((sum, item) => sum + item.quantity, 0) !== 1
+  )) throw new ShopAfterSalesError(409, "REFUND_REQUIRES_REVIEW");
   const lines = request.items.map((item) => ({
     unitPriceCents: item.unitPriceCents,
     refundableQuantity: item.refundableQuantity,
@@ -862,6 +892,10 @@ export async function closeShopReturn(
     if (request.status === "CLOSED") return request;
     assertTransition(request.status, "CLOSED");
     const updated = await tx.shopReturnRequest.update({ where: { id: request.id }, data: { status: "CLOSED", closedAt: now } });
+    await tx.shopReturnEvidence.updateMany({
+      where: { shopReturnRequestId: request.id, status: "ACTIVE", purgeDueAt: null },
+      data: { purgeDueAt: savEvidencePurgeDueAt(now) },
+    });
     await tx.shopReturnAuditEvent.create({ data: {
       shopReturnRequestId: request.id, actorUserId: actor.id, action: "REQUEST_CLOSED",
       idempotencyKey: `shop-return:${request.id}:closed:v1`,
