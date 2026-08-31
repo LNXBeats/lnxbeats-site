@@ -36,8 +36,11 @@ import {
   SHOP_PHASE5D_QA_NOTIFICATION_CAPTURE_PATH,
   SHOP_PHASE5D_QA_ORIGIN,
   SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE5D_QA_PRISMA_PROOF,
+  SHOP_PHASE5D_QA_PRISMA_PROOF_NAME,
   SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
   SHOP_PHASE5D_QA_TARGET,
+  SHOP_PHASE5D_QA_TERMS_VERSION,
 } from "@/lib/shop/qa-contract";
 import { SHOP_AFTER_SALES_QA_CONFIRMATION } from "@/lib/shop/after-sales-config";
 import {
@@ -105,11 +108,15 @@ const SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS = [
   "MEDIA_S3_SECRET_ACCESS_KEY",
   "COLISSIMO_API_KEY",
   "LA_POSTE_API_KEY",
+  "COLISSIMO_CLIENT_ID",
   "COLISSIMO_CLIENT_SECRET",
   "COLISSIMO_CONTRACT_NUMBER",
   "COLISSIMO_PASSWORD",
+  "LA_POSTE_CLIENT_ID",
   "LA_POSTE_CLIENT_SECRET",
 ] as const;
+
+const SHOP_PHASE5D_CARRIER_CREDENTIAL_NAME = /(?:COLISSIMO|LA_POSTE|LAPOSTE|CARRIER).*(?:KEY|SECRET|TOKEN|PASSWORD|CONTRACT|CREDENTIAL|CLIENT_ID|USERNAME)/i;
 
 const SHOP_PHASE3B_STRIPE_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
   ...SHOP_PHASE2_AUTH_COOKIE_ENVIRONMENT,
@@ -244,6 +251,8 @@ const SHOP_PHASE5D_AUTH_COOKIE_ENVIRONMENT = Object.freeze({
   MEDIA_LOCAL_PRIVATE_ROOT: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
   MEDIA_STORAGE_ROOT: SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
   ORDER_UPLOAD_DIR: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_TERMS_VERSION: SHOP_PHASE5D_QA_TERMS_VERSION,
+  [SHOP_PHASE5D_QA_PRISMA_PROOF_NAME]: SHOP_PHASE5D_QA_PRISMA_PROOF,
   SHOP_SHIPPING_PROVIDER_ENABLED: "true",
   SHOP_SHIPPING_PROVIDER: "FAKE_LOCAL",
   SHOP_SHIPPING_PROVIDER_QA_CONFIRM: SHOP_SHIPPING_PROVIDER_QA_CONFIRMATION,
@@ -397,6 +406,7 @@ export function isSafeLocalShopPhase5DShippingProviderQaHttpRuntime(environment:
   if (environment.NODE_ENV !== "test" && environment.NODE_ENV !== "production") return false;
   if (Object.entries(SHOP_PHASE5D_AUTH_COOKIE_ENVIRONMENT).some(([name, expected]) => environment[name] !== expected)) return false;
   if (SHOP_PHASE2_FORBIDDEN_EXTERNAL_SECRETS.some((name) => environment[name]?.trim())) return false;
+  if (Object.entries(environment).some(([name, value]) => SHOP_PHASE5D_CARRIER_CREDENTIAL_NAME.test(name) && Boolean(value?.trim()))) return false;
   return hasSafeLocalShopPhase5DIdentity(environment);
 }
 
@@ -405,6 +415,9 @@ export function shouldUseSecureAuthCookies(
   environment: AuthEnvironment = process.env,
 ) {
   if (!productionBuild) return false;
+  if (Object.entries(environment).some(
+    ([name, value]) => name.startsWith("RAILWAY_") && Boolean(value?.trim()),
+  )) return true;
   if (isPersistentLocalPreview(environment)) return false;
   return !isSafeLocalShopPhase2QaHttpRuntime(environment)
     && !isSafeLocalShopPhase3BStripeQaHttpRuntime(environment)

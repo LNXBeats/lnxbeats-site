@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import {
+  SHOP_PHASE5D_QA_PRISMA_PROOF,
+  SHOP_PHASE5D_QA_PRISMA_PROOF_NAME,
+} from "@/lib/shop/qa-contract";
+import {
   assertShopShippingProviderQaEnabled,
   SHOP_SHIPPING_PROVIDER_QA_ORIGIN,
   SHOP_SHIPPING_PROVIDER_QA_TARGET,
@@ -36,8 +40,9 @@ async function guard() {
   assert.notEqual(url.port, "5432");
   const proofPath = process.env.LNX_PRISMA_DEV_SERVER_FILE;
   assert.ok(proofPath);
-  const proof = JSON.parse(await readFile(proofPath, "utf8")) as { name?: string; pid?: number };
+  const proof = JSON.parse(await readFile(proofPath, "utf8")) as { name?: string; pid?: number; databasePort?: number };
   assert.equal(proof.name, SHOP_SHIPPING_PROVIDER_QA_TARGET);
+  assert.equal(Number(proof.databasePort), Number(url.port));
   process.kill(Number(proof.pid), 0);
 }
 
@@ -50,6 +55,7 @@ async function run() {
   const env = {
     ...Object.fromEntries(ALLOWED_ENV.flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]!]])),
     NODE_ENV: process.env.NODE_ENV ?? "test",
+    [SHOP_PHASE5D_QA_PRISMA_PROOF_NAME]: SHOP_PHASE5D_QA_PRISMA_PROOF,
   } as NodeJS.ProcessEnv;
   console.info(operation === "build" ? "Building guarded Phase 5D preview." : `Starting guarded Phase 5D preview at ${SHOP_SHIPPING_PROVIDER_QA_ORIGIN}.`);
   const child = spawn(process.execPath, args, { cwd: process.cwd(), env, stdio: "inherit" });

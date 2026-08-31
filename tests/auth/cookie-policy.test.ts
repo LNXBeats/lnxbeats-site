@@ -46,8 +46,11 @@ import {
   SHOP_PHASE5D_QA_NOTIFICATION_CAPTURE_PATH,
   SHOP_PHASE5D_QA_ORIGIN,
   SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+  SHOP_PHASE5D_QA_PRISMA_PROOF,
+  SHOP_PHASE5D_QA_PRISMA_PROOF_NAME,
   SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
   SHOP_PHASE5D_QA_TARGET,
+  SHOP_PHASE5D_QA_TERMS_VERSION,
 } from "@/lib/shop/qa-contract";
 import { SHOP_AFTER_SALES_QA_CONFIRMATION } from "@/lib/shop/after-sales-config";
 import {
@@ -375,6 +378,8 @@ function shopPhase5DShippingProviderEnvironment() {
     MEDIA_LOCAL_PRIVATE_ROOT: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
     MEDIA_STORAGE_ROOT: SHOP_PHASE5D_QA_PUBLIC_MEDIA_ROOT,
     ORDER_UPLOAD_DIR: SHOP_PHASE5D_QA_PRIVATE_MEDIA_ROOT,
+    SHOP_TERMS_VERSION: SHOP_PHASE5D_QA_TERMS_VERSION,
+    [SHOP_PHASE5D_QA_PRISMA_PROOF_NAME]: SHOP_PHASE5D_QA_PRISMA_PROOF,
     SHOP_SHIPPING_PROVIDER_ENABLED: "true",
     SHOP_SHIPPING_PROVIDER: "FAKE_LOCAL",
     SHOP_SHIPPING_PROVIDER_QA_CONFIRM: SHOP_SHIPPING_PROVIDER_QA_CONFIRMATION,
@@ -388,13 +393,29 @@ test("the exact guarded Phase 5D fake provider runtime alone permits an HTTP QA 
   for (const mutation of [
     { SHOP_SHIPPING_PROVIDER_QA_CONFIRM: "wrong" },
     { SHOP_SHIPPING_PROVIDER: "COLISSIMO" },
+    { SITE_URL: "http://127.0.0.1:31778" },
+    { APP_CANONICAL_URL: "http://127.0.0.1:31778" },
     { AUTH_URL: "https://www.lnxbeats.fr" },
     { DATABASE_URL: "postgresql://db.example.invalid:51279/template1" },
     { DATABASE_URL: "postgresql://127.0.0.1:5432/template1" },
+    { DATABASE_URL: "postgresql://127.0.0.1:51279/another_database" },
     { LNX_DATABASE_TARGET: "lnx-studio-production" },
+    { LNX_PRISMA_DEV_SERVER_FILE: "/private/tmp/prisma-dev-nodejs/another-target/server.json" },
+    { [SHOP_PHASE5D_QA_PRISMA_PROOF_NAME]: "" },
     { RAILWAY_ENVIRONMENT_NAME: "production" },
     { COLISSIMO_API_KEY: "forbidden" },
+    { COLISSIMO_CLIENT_ID: "forbidden" },
+    { CARRIER_API_TOKEN: "forbidden" },
+    { CARRIER_CLIENT_ID: "forbidden" },
     { STRIPE_SECRET_KEY: "forbidden" },
+    { PAYMENTS_ENABLED: "true" },
+    { SHOP_PAYMENTS_ENABLED: "true" },
+    { STRIPE_PAYMENTS_ENABLED: "true" },
+    { PAYPAL_PAYMENTS_ENABLED: "true" },
+    { NOTIFICATION_EMAIL_TRANSPORT: "resend" },
+    { MEDIA_STORAGE_DRIVER: "s3" },
+    { AUTH_SECRET: "too-short" },
+    { SHOP_TERMS_VERSION: SHOP_LEGAL_QA_TERMS_VERSION },
   ]) {
     const invalid = { ...environment, ...mutation };
     assert.equal(isSafeLocalShopPhase5DShippingProviderQaHttpRuntime(invalid), false);
@@ -424,12 +445,17 @@ test("incomplete, remote or ambiguous Shop Phase 2 environments fail closed", ()
 });
 
 test("the existing persistent local preview cookie exception is preserved", () => {
-  assert.equal(shouldUseSecureAuthCookies(true, {
+  const environment = {
     NODE_ENV: "production",
     LNX_PREVIEW_MODE: "persistent-local",
     LNX_DATABASE_TARGET: "lnx-studio-local-preview",
     AUTH_URL: "http://127.0.0.1:31740",
-  }), false);
+  };
+  assert.equal(shouldUseSecureAuthCookies(true, environment), false);
+  assert.equal(shouldUseSecureAuthCookies(true, {
+    ...environment,
+    RAILWAY_ENVIRONMENT_NAME: "production",
+  }), true);
 });
 
 test("development builds remain non-secure while ambiguous production builds fail closed", () => {
