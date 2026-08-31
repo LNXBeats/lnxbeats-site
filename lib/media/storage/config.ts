@@ -1,7 +1,10 @@
+import "server-only";
+
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 import { LocalMediaStorage } from "@/lib/media/storage/local";
-import { S3MediaStorage } from "@/lib/media/storage/s3";
+import { S3MediaStorage, type S3MediaStorageOptions } from "@/lib/media/storage/s3";
 import { MediaStorageError, type MediaStorage, type MediaStorageBackend, type MediaStorageReference } from "@/lib/media/storage/types";
 
 type DriverName = "local" | "s3";
@@ -14,7 +17,23 @@ type ObjectStorageConfiguration = {
   publicBucket: string;
   privateBucket: string;
   forcePathStyle: boolean;
+  accessKeyId: string;
+  secretAccessKey: string;
 };
+
+const objectStorageCacheSymbol = Symbol.for("lnx-studio.media.object-storage-cache.v1");
+type ObjectStorageGlobal = typeof globalThis & {
+  [objectStorageCacheSymbol]?: Map<string, MediaStorage>;
+};
+
+function objectStorageCache() {
+  // Next can package server entrypoints as distinct module graphs inside the
+  // same Node process. A versioned global symbol makes the cache genuinely
+  // process-scoped instead of relying on one specific bundle's module cache.
+  const processGlobal = globalThis as ObjectStorageGlobal;
+  processGlobal[objectStorageCacheSymbol] ??= new Map<string, MediaStorage>();
+  return processGlobal[objectStorageCacheSymbol];
+}
 
 function configuredDeploymentEnvironment(): DeploymentEnvironment {
   const value = process.env.MEDIA_DEPLOYMENT_ENV?.trim() || "local-preview";
@@ -136,8 +155,9 @@ function validateR2Configuration(configuration: ObjectStorageConfiguration, depl
   assertEnvironmentBucket("private", configuration.privateBucket, deploymentEnvironment);
 }
 
-function objectStorage() {
-  const deploymentEnvironment = configuredDeploymentEnvironment();
+function objectStorageConfiguration(
+  deploymentEnvironment = configuredDeploymentEnvironment(),
+): ObjectStorageConfiguration {
   const configuration: ObjectStorageConfiguration = {
     provider: process.env.MEDIA_STORAGE_PROVIDER?.trim() || "r2",
     endpoint: required("MEDIA_S3_ENDPOINT"),
@@ -145,13 +165,48 @@ function objectStorage() {
     publicBucket: required("MEDIA_PUBLIC_BUCKET"),
     privateBucket: required("MEDIA_PRIVATE_BUCKET"),
     forcePathStyle: configuredBoolean("MEDIA_S3_FORCE_PATH_STYLE"),
-  };
-  validateR2Configuration(configuration, deploymentEnvironment);
-  return new S3MediaStorage({
-    ...configuration,
     accessKeyId: required("MEDIA_S3_ACCESS_KEY_ID"),
     secretAccessKey: required("MEDIA_S3_SECRET_ACCESS_KEY"),
-  });
+  };
+  if (configuration.publicBucket === configuration.privateBucket) {
+    throw new MediaStorageError(
+      "CONFIGURATION",
+      "Public and private object storage buckets must be distinct.",
+    );
+  }
+  validateR2Configuration(configuration, deploymentEnvironment);
+  return configuration;
+}
+
+function objectStorageCacheKey(configuration: ObjectStorageConfiguration) {
+  return createHash("sha256")
+    .update(JSON.stringify([
+      configuration.provider,
+      configuration.endpoint,
+      configuration.region,
+      configuration.publicBucket,
+      configuration.privateBucket,
+      configuration.forcePathStyle,
+      configuration.accessKeyId,
+      configuration.secretAccessKey,
+    ]))
+    .digest("hex");
+}
+
+function objectStorage(
+  configuration: ObjectStorageConfiguration = objectStorageConfiguration(),
+) {
+  const cache = objectStorageCache();
+  const cacheKey = objectStorageCacheKey(configuration);
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  // Environment-backed object-storage configuration is immutable for the
+  // lifetime of a deployed process. Cache only after construction succeeds so
+  // an initialization failure never poisons subsequent attempts.
+  const storage = new S3MediaStorage(configuration satisfies S3MediaStorageOptions);
+  cache.set(cacheKey, storage);
+  return storage;
 }
 
 export function activeMediaStorage(): MediaStorage {
@@ -160,7 +215,12 @@ export function activeMediaStorage(): MediaStorage {
 }
 
 export function validateMediaStorageConfiguration() {
-  const storage = activeMediaStorage();
+  const deploymentEnvironment = configuredDeploymentEnvironment();
+  if (configuredDriver(deploymentEnvironment) === "s3") {
+    const configuration = objectStorageConfiguration(deploymentEnvironment);
+    return { backend: "OBJECT", provider: configuration.provider } as const;
+  }
+  const storage = localStorage();
   return { backend: storage.backend, provider: storage.provider } as const;
 }
 
@@ -175,6 +235,14 @@ export function mediaStorageForReference(reference: Pick<MediaStorageReference, 
 }
 
 export function activeStorageMetadata() {
-  const storage = activeMediaStorage();
-  return { storageBackend: storage.backend, storageProvider: storage.provider } as const;
+  const configuration = validateMediaStorageConfiguration();
+  return { storageBackend: configuration.backend, storageProvider: configuration.provider } as const;
+}
+
+/** @internal Clears only the process-local storage cache for deterministic tests. */
+export function resetMediaStorageCacheForTests() {
+  if (process.env.NODE_ENV !== "test") {
+    throw new MediaStorageError("CONFIGURATION", "The media storage cache can only be reset in tests.");
+  }
+  objectStorageCache().clear();
 }

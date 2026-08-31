@@ -17,6 +17,10 @@ import {
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
 
+import {
+  createMemoryDiagnostics,
+  type MemoryDiagnosticSnapshot,
+} from "@/lib/memory-diagnostics";
 import { canReadOrderMedia } from "@/lib/media/authorization";
 import { LocalMediaStorage } from "@/lib/media/storage/local";
 import { assertMediaStorageKey, safeContentDisposition } from "@/lib/media/storage/policy";
@@ -24,9 +28,15 @@ import {
   S3MediaStorage,
   S3_MULTIPART_PART_SIZE_BYTES,
   S3_MULTIPART_QUEUE_SIZE,
+  setS3ClientFactoryForTests,
 } from "@/lib/media/storage/s3";
 import { MediaStorageError } from "@/lib/media/storage/types";
-import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
+import {
+  activeMediaStorage,
+  mediaStorageForReference,
+  resetMediaStorageCacheForTests,
+  validateMediaStorageConfiguration,
+} from "@/lib/media/storage/config";
 
 function checksum(bytes: Uint8Array) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -73,6 +83,16 @@ function multipartProviderFailure(code: string, statusCode: number) {
     code,
     $metadata: { httpStatusCode: statusCode },
   });
+}
+
+function fixedMemoryUsage() {
+  return {
+    rss: 128 * 1024 * 1024,
+    heapTotal: 64 * 1024 * 1024,
+    heapUsed: 32 * 1024 * 1024,
+    external: 8 * 1024 * 1024,
+    arrayBuffers: 4 * 1024 * 1024,
+  };
 }
 
 test("production media migration is additive and classifies catalogue assets as public", async () => {
@@ -217,6 +237,158 @@ test("generic S3-compatible providers retain custom endpoint and path-style supp
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];
       else process.env[name] = previous[name];
+    }
+  }
+});
+
+test("object media storage reuses one client per compatible process configuration and isolates bucket changes", async () => {
+  const names = [
+    "NODE_ENV",
+    "MEDIA_STORAGE_DRIVER",
+    "MEDIA_DEPLOYMENT_ENV",
+    "MEDIA_STORAGE_PROVIDER",
+    "MEDIA_S3_ENDPOINT",
+    "MEDIA_S3_REGION",
+    "MEDIA_S3_ACCESS_KEY_ID",
+    "MEDIA_S3_SECRET_ACCESS_KEY",
+    "MEDIA_PUBLIC_BUCKET",
+    "MEDIA_PRIVATE_BUCKET",
+    "MEDIA_S3_FORCE_PATH_STYLE",
+  ] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const commands: HeadObjectCommand[] = [];
+  let clientCreations = 0;
+  const fakeClient = {
+    config: {},
+    async send(command: unknown) {
+      assert.ok(command instanceof HeadObjectCommand);
+      commands.push(command);
+      return { ContentLength: 0 };
+    },
+  };
+
+  try {
+    Object.assign(process.env, {
+      NODE_ENV: "test",
+      MEDIA_STORAGE_DRIVER: "s3",
+      MEDIA_DEPLOYMENT_ENV: "test",
+      MEDIA_STORAGE_PROVIDER: "minio",
+      MEDIA_S3_ENDPOINT: "http://127.0.0.1:9000/storage",
+      MEDIA_S3_REGION: "us-east-1",
+      MEDIA_S3_ACCESS_KEY_ID: "singleton-test-access",
+      MEDIA_S3_SECRET_ACCESS_KEY: "singleton-test-secret",
+      MEDIA_PUBLIC_BUCKET: "singleton-public-test",
+      MEDIA_PRIVATE_BUCKET: "singleton-private-test",
+      MEDIA_S3_FORCE_PATH_STYLE: "true",
+    });
+    resetMediaStorageCacheForTests();
+    setS3ClientFactoryForTests(() => {
+      clientCreations += 1;
+      return fakeClient as never;
+    });
+
+    const sequential = Array.from({ length: 100 }, () => activeMediaStorage());
+    const concurrent = await Promise.all(
+      Array.from({ length: 100 }, async () => activeMediaStorage()),
+    );
+    const storage = sequential[0]!;
+    assert.ok([...sequential, ...concurrent].every((candidate) => candidate === storage));
+    assert.equal(clientCreations, 1);
+    const processCache = Reflect.get(
+      globalThis,
+      Symbol.for("lnx-studio.media.object-storage-cache.v1"),
+    );
+    assert.ok(processCache instanceof Map);
+    assert.equal(processCache.size, 1);
+    assert.equal(mediaStorageForReference({ storageBackend: "OBJECT", storageProvider: "minio" }), storage);
+
+    await storage.head({
+      scope: "public",
+      key: "catalog/images/00000000-0000-4000-8000-000000000001.webp",
+    });
+    await storage.head({
+      scope: "private",
+      key: "orders/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002.webp",
+    });
+    assert.deepEqual(commands.map((command) => command.input.Bucket), [
+      "singleton-public-test",
+      "singleton-private-test",
+    ]);
+
+    process.env.MEDIA_PUBLIC_BUCKET = "isolated-public-test";
+    process.env.MEDIA_PRIVATE_BUCKET = "isolated-private-test";
+    const isolatedStorage = activeMediaStorage();
+    assert.notEqual(isolatedStorage, storage);
+    assert.equal(clientCreations, 2);
+    assert.equal(processCache.size, 2);
+    await isolatedStorage.head({
+      scope: "public",
+      key: "catalog/images/00000000-0000-4000-8000-000000000003.webp",
+    });
+    assert.equal(commands.at(-1)?.input.Bucket, "isolated-public-test");
+  } finally {
+    resetMediaStorageCacheForTests();
+    setS3ClientFactoryForTests(null);
+    for (const name of names) {
+      if (previous[name] === undefined) Reflect.deleteProperty(process.env, name);
+      else Reflect.set(process.env, name, previous[name]);
+    }
+  }
+});
+
+test("object media storage does not cache failed initialization and exposes a test-only reset", () => {
+  const names = [
+    "NODE_ENV",
+    "MEDIA_STORAGE_DRIVER",
+    "MEDIA_DEPLOYMENT_ENV",
+    "MEDIA_STORAGE_PROVIDER",
+    "MEDIA_S3_ENDPOINT",
+    "MEDIA_S3_REGION",
+    "MEDIA_S3_ACCESS_KEY_ID",
+    "MEDIA_S3_SECRET_ACCESS_KEY",
+    "MEDIA_PUBLIC_BUCKET",
+    "MEDIA_PRIVATE_BUCKET",
+    "MEDIA_S3_FORCE_PATH_STYLE",
+  ] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  let clientCreations = 0;
+  const fakeClient = { config: {}, send: async () => ({ ContentLength: 0 }) };
+  try {
+    Object.assign(process.env, {
+      NODE_ENV: "test",
+      MEDIA_STORAGE_DRIVER: "s3",
+      MEDIA_DEPLOYMENT_ENV: "test",
+      MEDIA_STORAGE_PROVIDER: "minio",
+      MEDIA_S3_ENDPOINT: "http://127.0.0.1:9000/storage",
+      MEDIA_S3_REGION: "us-east-1",
+      MEDIA_S3_ACCESS_KEY_ID: "failure-test-access",
+      MEDIA_S3_SECRET_ACCESS_KEY: "failure-test-secret",
+      MEDIA_PUBLIC_BUCKET: "failure-public-test",
+      MEDIA_PRIVATE_BUCKET: "failure-private-test",
+      MEDIA_S3_FORCE_PATH_STYLE: "true",
+    });
+    resetMediaStorageCacheForTests();
+    setS3ClientFactoryForTests(() => {
+      clientCreations += 1;
+      if (clientCreations === 1) throw new Error("simulated client initialization failure");
+      return fakeClient as never;
+    });
+
+    assert.throws(() => activeMediaStorage(), /simulated client initialization failure/);
+    const recovered = activeMediaStorage();
+    assert.equal(clientCreations, 2);
+    assert.equal(activeMediaStorage(), recovered);
+    assert.equal(clientCreations, 2);
+
+    resetMediaStorageCacheForTests();
+    assert.notEqual(activeMediaStorage(), recovered);
+    assert.equal(clientCreations, 3);
+  } finally {
+    resetMediaStorageCacheForTests();
+    setS3ClientFactoryForTests(null);
+    for (const name of names) {
+      if (previous[name] === undefined) Reflect.deleteProperty(process.env, name);
+      else Reflect.set(process.env, name, previous[name]);
     }
   }
 });
@@ -426,6 +598,124 @@ test("S3 adapter uploads a fragmented 60 MiB Readable with bounded managed multi
   assert.equal(partSizes.length, Math.ceil(size / S3_MULTIPART_PART_SIZE_BYTES));
   assert.ok(partSizes.every((partSize) => partSize > 0 && partSize <= S3_MULTIPART_PART_SIZE_BYTES));
   assert.equal(partSizes.reduce((total, partSize) => total + partSize, 0), size);
+});
+
+test("multipart S3 diagnostics emit one public event pair while SDK parts remain counter-only", { timeout: 30_000 }, async () => {
+  const size = 18 * 1024 * 1024;
+  const digest = repeatedBytesChecksum(size);
+  const snapshots: MemoryDiagnosticSnapshot[] = [];
+  const diagnostics = createMemoryDiagnostics({
+    environment: { MEMORY_DIAGNOSTICS_ENABLED: "true" },
+    readMemoryUsage: fixedMemoryUsage,
+    logger(snapshot) { snapshots.push(snapshot); },
+  });
+  let maximumActiveS3Operations = 0;
+  const fakeClient = multipartClient(async (command) => {
+    maximumActiveS3Operations = Math.max(
+      maximumActiveS3Operations,
+      diagnostics.counters().activeS3Operations,
+    );
+    if (command instanceof CreateMultipartUploadCommand) return { UploadId: "diagnostic-upload-id" };
+    if (command instanceof UploadPartCommand) return { ETag: `\"part-${command.input.PartNumber}\"` };
+    if (command instanceof CompleteMultipartUploadCommand) return { ETag: "\"diagnostic-etag\"" };
+    if (command instanceof HeadObjectCommand) return {
+      ContentLength: size,
+      ContentType: "audio/wav",
+      Metadata: { sha256: digest },
+    };
+    if (command instanceof GetObjectCommand) return {
+      Body: repeatedBytes(size),
+      ContentLength: size,
+      ContentType: "audio/wav",
+      Metadata: { sha256: digest },
+    };
+    if (command instanceof AbortMultipartUploadCommand || command instanceof DeleteObjectCommand) return {};
+    throw new Error("Unexpected command");
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2",
+    region: "auto",
+    endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "diagnostic-test-access",
+    secretAccessKey: "diagnostic-test-secret",
+    publicBucket: "diagnostic-public-test",
+    privateBucket: "diagnostic-private-test",
+    client: fakeClient as never,
+    memoryDiagnostics: diagnostics,
+  });
+
+  await storage.put({
+    scope: "private",
+    key: "orders/00000000-0000-4000-8000-000000000001/deliveries/00000000-0000-4000-8000-000000000099.wav",
+    body: repeatedBytes(size),
+    contentLength: size,
+    contentType: "audio/wav",
+    checksumSha256: digest,
+  });
+
+  assert.deepEqual(snapshots.map(({ event }) => event), [
+    "memory.storage.before",
+    "memory.storage.after",
+  ]);
+  assert.equal(snapshots[0]?.activeS3Operations, 1);
+  assert.equal(snapshots[1]?.activeS3Operations, 0);
+  assert.equal(snapshots[1]?.outcome, "completed");
+  assert.ok(maximumActiveS3Operations >= 2);
+  assert.ok(maximumActiveS3Operations <= S3_MULTIPART_QUEUE_SIZE + 1);
+  assert.equal(diagnostics.counters().activeS3Operations, 0);
+  const serialized = JSON.stringify(snapshots);
+  assert.doesNotMatch(serialized, /diagnostic-(?:public|private)-test|00000000-0000-4000-8000-000000000099/);
+});
+
+test("failed S3 storage diagnostics emit one failed pair and restore all counters", async () => {
+  const snapshots: MemoryDiagnosticSnapshot[] = [];
+  const diagnostics = createMemoryDiagnostics({
+    environment: { MEMORY_DIAGNOSTICS_ENABLED: "true" },
+    readMemoryUsage: fixedMemoryUsage,
+    logger(snapshot) { snapshots.push(snapshot); },
+  });
+  const fakeClient = {
+    config: {},
+    async send(command: unknown) {
+      if (command instanceof PutObjectCommand) return { ETag: "\"put-etag\"" };
+      if (command instanceof HeadObjectCommand) throw new Error("synthetic provider failure");
+      if (command instanceof DeleteObjectCommand) return {};
+      throw new Error("Unexpected command");
+    },
+  };
+  const storage = new S3MediaStorage({
+    provider: "r2",
+    region: "auto",
+    endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "failure-diagnostic-test-access",
+    secretAccessKey: "failure-diagnostic-test-secret",
+    publicBucket: "failure-diagnostic-public-test",
+    privateBucket: "failure-diagnostic-private-test",
+    client: fakeClient as never,
+    memoryDiagnostics: diagnostics,
+  });
+  const body = Buffer.from("diagnostic failure fixture");
+
+  await assert.rejects(storage.put({
+    scope: "public",
+    key: "catalog/audio-previews/00000000-0000-4000-8000-000000000098.mp3",
+    body,
+    contentLength: body.length,
+    contentType: "audio/mpeg",
+    checksumSha256: checksum(body),
+  }), MediaStorageError);
+
+  assert.deepEqual(snapshots.map(({ event }) => event), [
+    "memory.storage.before",
+    "memory.storage.after",
+  ]);
+  assert.equal(snapshots[1]?.outcome, "failed");
+  assert.equal(snapshots[1]?.activeS3Operations, 0);
+  assert.deepEqual(diagnostics.counters(), {
+    activeUploads: 0,
+    activeImageTransforms: 0,
+    activeS3Operations: 0,
+  });
 });
 
 test("R2 multipart requests omit Expect 100-continue and unsupported S3 headers on the actual SDK wire request", { timeout: 30_000 }, async () => {

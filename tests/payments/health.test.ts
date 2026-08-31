@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { healthResponse } from "@/lib/health";
+import { resetMediaStorageCacheForTests } from "@/lib/media/storage/config";
+import { setS3ClientFactoryForTests } from "@/lib/media/storage/s3";
 
 const names: readonly string[] = [
   "PAYMENTS_ENABLED",
@@ -21,6 +23,14 @@ const names: readonly string[] = [
   "LIVE_REFUNDS_ENABLED",
   "MEDIA_STORAGE_DRIVER",
   "MEDIA_DEPLOYMENT_ENV",
+  "MEDIA_STORAGE_PROVIDER",
+  "MEDIA_S3_ENDPOINT",
+  "MEDIA_S3_REGION",
+  "MEDIA_S3_ACCESS_KEY_ID",
+  "MEDIA_S3_SECRET_ACCESS_KEY",
+  "MEDIA_PUBLIC_BUCKET",
+  "MEDIA_PRIVATE_BUCKET",
+  "MEDIA_S3_FORCE_PATH_STYLE",
   "RAILWAY_ENVIRONMENT",
   "RAILWAY_ENVIRONMENT_NAME",
   "APP_CANONICAL_URL",
@@ -56,6 +66,75 @@ async function withEnvironment(
 }
 
 const healthyRuntime = { assertPaymentRuntime: async () => {} };
+
+test("500 health validations remain configuration-only and create no S3 client", async () => {
+  await withEnvironment({
+    NODE_ENV: "test",
+    MEDIA_STORAGE_DRIVER: "s3",
+    MEDIA_DEPLOYMENT_ENV: "test",
+    MEDIA_STORAGE_PROVIDER: "minio",
+    MEDIA_S3_ENDPOINT: "http://127.0.0.1:9000/storage",
+    MEDIA_S3_REGION: "us-east-1",
+    MEDIA_S3_ACCESS_KEY_ID: "health-test-access",
+    MEDIA_S3_SECRET_ACCESS_KEY: "health-test-secret",
+    MEDIA_PUBLIC_BUCKET: "health-public-test",
+    MEDIA_PRIVATE_BUCKET: "health-private-test",
+    MEDIA_S3_FORCE_PATH_STYLE: "true",
+  }, async () => {
+    let clientCreations = 0;
+    resetMediaStorageCacheForTests();
+    setS3ClientFactoryForTests(() => {
+      clientCreations += 1;
+      throw new Error("health must not create an S3 client");
+    });
+    try {
+      const responses = await Promise.all(
+        Array.from({ length: 500 }, () => healthResponse(healthyRuntime)),
+      );
+      assert.ok(responses.every((response) => response.status === 200));
+      assert.equal(clientCreations, 0);
+    } finally {
+      resetMediaStorageCacheForTests();
+      setS3ClientFactoryForTests(null);
+    }
+  });
+});
+
+test("health fails closed on a shared public/private bucket without creating an S3 client", async () => {
+  await withEnvironment({
+    NODE_ENV: "test",
+    MEDIA_STORAGE_DRIVER: "s3",
+    MEDIA_DEPLOYMENT_ENV: "test",
+    MEDIA_STORAGE_PROVIDER: "minio",
+    MEDIA_S3_ENDPOINT: "http://127.0.0.1:9000/storage",
+    MEDIA_S3_REGION: "us-east-1",
+    MEDIA_S3_ACCESS_KEY_ID: "health-shared-bucket-access",
+    MEDIA_S3_SECRET_ACCESS_KEY: "health-shared-bucket-secret",
+    MEDIA_PUBLIC_BUCKET: "health-shared-test",
+    MEDIA_PRIVATE_BUCKET: "health-shared-test",
+    MEDIA_S3_FORCE_PATH_STYLE: "true",
+  }, async () => {
+    let clientCreations = 0;
+    resetMediaStorageCacheForTests();
+    setS3ClientFactoryForTests(() => {
+      clientCreations += 1;
+      throw new Error("invalid health configuration must not create a client");
+    });
+    try {
+      const response = await healthResponse(healthyRuntime);
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), {
+        ok: false,
+        service: "lnx-studio",
+        check: "media-storage",
+      });
+      assert.equal(clientCreations, 0);
+    } finally {
+      resetMediaStorageCacheForTests();
+      setS3ClientFactoryForTests(null);
+    }
+  });
+});
 
 test("health reports disabled payments without exposing configuration values", async () => {
   await withEnvironment({}, async () => {
