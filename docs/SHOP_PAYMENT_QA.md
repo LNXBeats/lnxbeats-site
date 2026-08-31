@@ -93,12 +93,12 @@ ledger lifecycle. Tout runtime PostgreSQL complémentaire doit créer puis
 détruire sa propre base locale jetable ; il ne doit jamais réutiliser staging
 ou Production.
 
-## QA sandbox future — non exécutée
+## QA sandbox historique — non rejouée par Phase 5E
 
-Une QA Stripe Test ou PayPal Sandbox réelle est hors Phase 3A. Elle exigera une
-autorisation humaine séparée, une base/environnement dédiés, des webhooks de
-test, tous les gates explicitement armés, des destinataires de capture et un
-cleanup vérifié. Elle ne doit pas commencer à partir de ce document seul.
+Les Phases 3B et 3C ont ensuite validé séparément Stripe Test et PayPal Sandbox
+dans leurs environnements autorisés. Phase 5E n'établit aucun appel provider et
+ne rejoue aucun paiement réseau. Toute nouvelle QA réseau ou activation Live
+exige toujours une autorisation humaine séparée et ses propres gardes.
 
 Voir [paiements Boutique](SHOP_PAYMENTS.md) et
 [fondation Boutique](SHOP_FOUNDATION.md).

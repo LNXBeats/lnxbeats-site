@@ -30,7 +30,7 @@ La dérivée validée est écrite sous une clé opaque `catalog/audio-previews/*
 
 `/media/catalog/audio/[assetId]` ne sert que les assets `AUDIO_PREVIEW`, droits `CLEARED`, liés à un projet `PUBLISHED`. Un projet `IN_DEVELOPMENT`, un brouillon ou une archive reçoit `404`. L’administration dispose d’une route protégée séparée.
 
-La réponse utilise `audio/mpeg`, `Accept-Ranges: bytes`, `X-Content-Type-Options: nosniff`, une identité ETag et les codes `200`, `206` ou `416`. Le fichier est streamé depuis le stockage. Le lecteur public n’a ni autoplay ni téléchargement proposé, fonctionne au clavier et arrête les autres lecteurs. La discographie reste sans lecteur afin d’éviter 25 éléments audio et de réserver le jukebox à une version ultérieure.
+La réponse utilise `audio/mpeg`, `Accept-Ranges: bytes`, `X-Content-Type-Options: nosniff`, une identité ETag et les codes `200`, `206` ou `416`. Le fichier est streamé depuis le stockage. Les lecteurs publics et le Jukebox consolidé n'ont ni autoplay initial ni téléchargement proposé, fonctionnent au clavier, conservent la continuité audio validée et empêchent deux lectures simultanées. Phase 5E ne modifie aucun composant Jukebox/audio ni ses cadrages responsive.
 
 ## QA et performance
 

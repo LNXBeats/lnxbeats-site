@@ -165,13 +165,19 @@
   acceptation CGV technique et fulfillment audité ;
 - validation Phase 3A uniquement locale/mock/capture : aucun provider externe,
   aucune CGV finale, aucun remboursement automatique et aucun armement Live ;
-- phase 3B différée : QA Stripe Test/PayPal Sandbox explicitement autorisée,
-  revue juridique/comptable, runbook et décision humaine d'ouverture ;
+- phases 3B/3C validées dans des environnements réseau de test explicitement
+  autorisés ; aucun résultat Sandbox n'arme le Live ;
 - ouverture Production différée après QA, revue juridique/comptable et nouveau
   gate dédié : le gate actuel refuse explicitement `SHOP_ENABLED=true` en
   Production.
 - phase 4A : textes candidats versionnés et rétractation en ligne fail-closed ;
 - phase 4B : fondation commune factures/avoirs, PDF et accès Compte/Admin en QA,
   décisions TVA/logistique consolidées et nouveaux drafts 2026-02 ;
-- restant avant activation : conseil juridique, professionnel comptable,
-  facturation électronique, moteur Colissimo, CGV actives et checklist humaine.
+- phases 5A à 5D : devis versionnés, SAV, opérations d'expédition et adaptateur
+  transport `FAKE_LOCAL`, sans provider réel ;
+- phase 5E : contrat local France/particuliers, grille Colissimo 2026 DRAFT,
+  packaging offert, réservations 30 minutes, scheduler readiness, preuves SAV
+  privées, canonical www et rollback applicatif ;
+- restant avant activation : revue/activation humaine de la grille, conseil
+  juridique et comptable, backup/PITR, provider transport réel, QA visuelle
+  globale et checklist de déploiement.

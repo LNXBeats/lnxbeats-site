@@ -23,17 +23,22 @@ Avant une future ouverture : maintenir le contrôle de l’override Prisma ; rev
 
 ## V1.1.0 — gates Boutique et tarifs
 
-- `SHOP_ENABLED=false` reste obligatoire pendant la phase 1 ; aucun panier,
-  Checkout produit ou `ShopOrder` n'est présent.
+- `SHOP_ENABLED=false` reste la valeur Production sûre. Panier, `ShopOrder`,
+  paiements, facturation, SAV et logistique existent désormais comme fondations
+  locales fail-closed ; leur présence ne constitue aucune activation.
 - `MUSIC_PRICING_SOURCE=legacy` maintient la grille V1 validée pendant la revue
   de l'Admin Tarifs. Le cutover vers PostgreSQL exige un sprint financier dédié
   prouvant la compatibilité Stripe et PayPal avec toute nouvelle version.
 - Aucun produit n'est créé ou publié automatiquement par la migration.
-- Avant la 19e migration : backup PostgreSQL/PITR vérifié, inventaire des
+- Avant la migration du candidat V1.1.0 : backup PostgreSQL/PITR vérifié, inventaire des
   compteurs V1 et procédure de restauration humaine obligatoires. Le rollback
   applicatif conserve les tables additives ; aucune down migration destructive.
-- L'upload R2 produit, les pays de livraison, frais, rétractation, TVA,
-  facturation, réservations et remboursements Boutique restent des gates
-  distincts avant toute ouverture publique.
+- La Phase 5E porte le total à 28 migrations, cible les particuliers en France,
+  prépare une grille Colissimo 2026 `DRAFT`, un packaging offert, les réservations
+  30 minutes, le SAV privé et un runner one-shot local. Activation tarifaire,
+  Railway Cron, provider transport réel, R2 Production, textes juridiques actifs
+  et ouverture publique restent des décisions humaines distinctes.
 - Le rollback est applicatif : flags fermés et tables additives conservées ;
   aucune down migration destructive.
+
+Voir [SHOP_PRODUCTION_READINESS_PHASE5E.md](SHOP_PRODUCTION_READINESS_PHASE5E.md).
