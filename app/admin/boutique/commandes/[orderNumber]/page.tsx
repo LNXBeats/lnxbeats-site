@@ -399,13 +399,13 @@ export default async function AdminShopOrderPage({
               <p>Provider déterministe fictif. Aucun réseau, achat, bordereau postal réel ou remise physique au transporteur.</p>
               {latestProviderAttempt ? (
                 <div className="admin-payment-attempt-card">
-                  <dl className="admin-detail-facts">
+                  <dl className="admin-detail-facts admin-shipping-provider-facts">
                     <div><dt>Statut QA</dt><dd>{SHIPPING_PROVIDER_STATUS_LABELS[latestProviderAttempt.status]}</dd></div>
                     <div><dt>Scénario</dt><dd>{SHIPPING_PROVIDER_SCENARIO_LABELS[latestProviderAttempt.scenario]}</dd></div>
                     <div><dt>Tentative logique</dt><dd>#{latestProviderAttempt.attemptNumber}</dd></div>
                     <div><dt>Réconciliations</dt><dd>{latestProviderAttempt.reconciliationCount}</dd></div>
-                    {latestProviderAttempt.providerShipmentId ? <div className="admin-detail-facts__wide"><dt>Identifiant fictif interne</dt><dd>{latestProviderAttempt.providerShipmentId}</dd></div> : null}
-                    {latestProviderAttempt.trackingNumber ? <div className="admin-detail-facts__wide"><dt>Suivi fictif reçu</dt><dd>{latestProviderAttempt.trackingNumber}</dd></div> : null}
+                    {latestProviderAttempt.providerShipmentId ? <div className="admin-detail-facts__wide admin-shipping-provider-facts__identifier"><dt>Identifiant fictif interne</dt><dd>{latestProviderAttempt.providerShipmentId}</dd></div> : null}
+                    {latestProviderAttempt.trackingNumber ? <div className="admin-detail-facts__wide admin-shipping-provider-facts__identifier"><dt>Suivi fictif reçu</dt><dd>{latestProviderAttempt.trackingNumber}</dd></div> : null}
                     {latestProviderAttempt.errorCode ? <div className="admin-detail-facts__wide"><dt>Décision sûre</dt><dd>{SHIPPING_PROVIDER_ERROR_LABELS[latestProviderAttempt.errorCode] ?? "Résultat technique à examiner."}</dd></div> : null}
                   </dl>
                   <small>La clé d’idempotence reste persistée côté serveur. Aucun secret ni payload provider brut n’est conservé.</small>

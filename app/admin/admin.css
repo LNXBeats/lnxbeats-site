@@ -359,6 +359,29 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   overflow-wrap: break-word;
 }
 .admin-payment-attempt-facts__compact dd { white-space: nowrap; }
+.admin-side-window .admin-shipping-provider-facts { grid-template-columns: minmax(0, 1fr); }
+.admin-side-window .admin-shipping-provider-facts > div,
+.admin-side-window .admin-shipping-provider-facts > div:nth-child(even) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.75rem 0;
+  border-left: 0;
+}
+.admin-shipping-provider-facts :is(dt, dd) { min-width: 0; }
+.admin-shipping-provider-facts dd {
+  margin-top: 0;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+  line-height: 1.45;
+}
+.admin-shipping-provider-facts__identifier dd {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
 .admin-shipping-tracking-form { min-width: 0; gap: 1rem; }
 .admin-shipping-tracking-form > label:not(.admin-check) { min-width: 0; }
 .admin-shipping-tracking-form > label:not(.admin-check) > input {

@@ -145,3 +145,19 @@ test("Phase 5D remains provider-network-free and non-authoritative for money, st
   assert.match(adminPage, /metadata\?\.source === "PROVIDER"/);
   assert.doesNotMatch(adminPage, /Acheter une étiquette Colissimo|Générer une vraie étiquette|Envoyer via La Poste/);
 });
+
+test("Provider QA facts stack human labels and reserve aggressive wrapping for identifiers", async () => {
+  const [adminPage, adminCss] = await Promise.all([
+    readFile(new URL("../../app/admin/boutique/commandes/[orderNumber]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/admin/admin.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(
+    adminPage,
+    /admin-shipping-provider-qa[\s\S]*?<dl className="admin-detail-facts admin-shipping-provider-facts">/,
+  );
+  assert.equal(adminPage.match(/admin-shipping-provider-facts__identifier/g)?.length, 2);
+  assert.match(adminCss, /\.admin-side-window \.admin-shipping-provider-facts \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.match(adminCss, /\.admin-shipping-provider-facts dd \{[\s\S]*?word-break: normal;[\s\S]*?overflow-wrap: normal;/);
+  assert.match(adminCss, /\.admin-shipping-provider-facts__identifier dd \{[\s\S]*?overflow-wrap: anywhere;/);
+  assert.doesNotMatch(adminCss, /\.admin-shipping-provider-facts dd \{[^}]*word-break:\s*(?:break-all|break-word)/);
+});
