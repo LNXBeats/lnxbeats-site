@@ -31,7 +31,7 @@ export default async function ShopCartPage() {
         <header className="shop-cart-page__heading">
           <p className="eyebrow">Boutique LNX Beats</p>
           <h1>Votre panier.</h1>
-          <p>Préparez votre commande et réservez le stock. Le paiement Boutique n’est pas activé dans cette phase.</p>
+          <p>Vérifiez votre sélection, votre livraison et le total avant de préparer la commande.</p>
         </header>
         <ShopCart
           allowedCountries={configuration.allowedCountries}

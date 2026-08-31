@@ -57,6 +57,7 @@ export default async function MemberShopReturnCreatePage({
             </label>)}
           </fieldset>
           <label><span>Message détaillé</span><textarea name="comment" maxLength={1000} minLength={10} rows={5} required /></label>
+          <p className="auth-form__notice">Après l’enregistrement de votre demande, vous pourrez ajouter jusqu’à 5 photos pour illustrer le problème. Les photos restent facultatives.</p>
           <label className="auth-check"><input type="checkbox" name="confirmation" value={SHOP_RETURN_REQUEST_CONFIRMATION} required /><span>Je confirme l’exactitude de cette demande et comprends qu’elle sera examinée avant toute décision.</span></label>
           <button className="button button--primary" type="submit">ENREGISTRER LA DEMANDE</button>
         </form>

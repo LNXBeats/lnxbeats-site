@@ -50,7 +50,7 @@ export default async function AdminShopLogisticsPage() {
         </dl>
         <div className="admin-list-window">
           <div className="admin-list-window__heading"><h3>Paliers</h3><span>{version.tiers.length}</span></div>
-          <ol className="admin-rights-timeline">
+          <ol className="admin-rights-timeline admin-logistics-tier-list">
             {version.tiers.map((tier) => <li key={tier.id}>
               <div className="admin-rights-timeline__content">
                 <strong>Jusqu’à {tier.maxWeightGrams} g</strong>

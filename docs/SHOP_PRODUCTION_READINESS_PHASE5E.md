@@ -42,6 +42,12 @@ La branche locale historique `feature/v1.1.1-seo-canonical-origin` au commit `77
 
 Phase 5E réutilise la version juridique technique QA inscrite dans `lib/shop/legal.ts` et `SHOP_PAYMENT_PRICING_VERSION` (`shop-order-v1`). Aucune candidate juridique n'est activée. Les anciennes valeurs rencontrées dans des preuves historiques restent historiques et ne doivent pas être copiées dans une nouvelle fixture.
 
+## Finition UX locale
+
+Les détails Admin Boutique passent en une colonne avant que leurs formulaires d'action ne deviennent trop étroits ; les grands écrans conservent une composition à deux zones. Le formulaire SAV annonce avant enregistrement que cinq photos facultatives pourront être ajoutées au dossier. Sur les surfaces MEMBER, la destination France est fixe, les versions techniques restent réservées à l'Admin/audit et le mode commercial est présenté comme « Colissimo domicile ».
+
+La disponibilité publique conserve trois états indépendants : disponible, temporairement indisponible lorsque le stock physique est entièrement réservé, et épuisé lorsque le stock physique est nul. « Maximum au panier » reste un quatrième message contextuel lié uniquement au panier du MEMBER. La réservation longue utilisée pour la démonstration visuelle est une fixture locale Phase 5E gardée ; elle ne modifie pas le TTL commercial de 30 minutes.
+
 ## Préflight migration, backup et rollback
 
 Le candidat contient 28 migrations additives. Avant une future migration réelle : fermer les nouvelles commandes et paiements Boutique, vérifier le SHA applicatif, l'inventaire des 28 migrations, les files de revue et les versions actives ; réaliser et vérifier un backup/PITR couvrant Users, Products, ShopOrders, réservations, Payments, Invoices, CreditNotes, SAV et preuves privées, Shipping, audits, grilles tarifaires et versions juridiques ; puis exécuter uniquement `prisma migrate deploy` et valider schéma, health, compteurs et invariants.

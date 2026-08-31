@@ -128,6 +128,8 @@ test("Phase 5B member UI aligns confirmations and never renders an empty trackin
     readFile(new URL("../../app/compte/achats/[orderNumber]/page.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(createPage, /className="auth-check"[\s\S]*SHOP_RETURN_REQUEST_CONFIRMATION/);
+  assert.match(createPage, /Après l’enregistrement de votre demande, vous pourrez ajouter jusqu’à 5 photos pour illustrer le problème\./);
+  assert.match(createPage, /Les photos restent facultatives\./);
   assert.match(detailPage, /className="auth-check"[\s\S]*SHOP_RETURN_CANCEL_CONFIRMATION/);
   assert.match(detailPage, /<form className="shop-return-form" action=\{cancelShopReturnAction\}>/);
   assert.match(detailPage, /<dl className="auth-profile shop-return-summary">/);

@@ -60,7 +60,7 @@ export default async function ShopProductPage({ params }: Context) {
             </p>
             {product.shippingRequired ? (
               <p className="shop-product-detail__shipping">
-                Expédition calculée par le serveur selon le poids du panier et la grille QA active. Le montant exact est affiché avant la création de la commande.
+                Livraison calculée automatiquement selon le poids du panier. Le montant exact est affiché avant la création de la commande.
               </p>
             ) : <p className="shop-product-detail__shipping">Aucun envoi postal requis.</p>}
             <ShopAddButton
@@ -68,6 +68,7 @@ export default async function ShopProductPage({ params }: Context) {
               maxQuantity={product.availableQuantity}
               productId={product.id}
               showQuantity
+              unavailableLabel={product.availabilityState === "TEMPORARILY_UNAVAILABLE" ? "Temporairement indisponible" : "Épuisé"}
             />
             <p className="shop-product-detail__notice">Votre panier ne déclenche aucun paiement. Prix, poids, livraison et stock seront revérifiés par le serveur lors de la préparation de la commande.</p>
           </div>

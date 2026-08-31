@@ -36,12 +36,28 @@ test("product detail exposes a bounded accessible quantity selector without chan
   assert.match(button, /const \{ add, lines, ready \} = useShopCart\(\)/);
   assert.match(button, /const existingQuantity = ready[\s\S]*: 0;/);
   assert.match(button, /const limitReached = remainingQuantity === 0/);
+  assert.match(button, /disabled \? unavailableLabel : limitReached \? "Maximum au panier"/);
   assert.match(button, /add\(productId, showQuantity \? selectedQuantity : 1\)/);
   assert.match(button, /if \(!showQuantity\) return button/);
   assert.match(provider, /add\(productId: string, quantity\?: number\): void/);
   assert.match(provider, /line\.quantity \+ quantity/);
   assert.match(css, /\.shop-product-purchase \{[\s\S]*grid-template-columns: 7rem minmax\(0, 1fr\)/);
   assert.match(css, /@media \(max-width: 360px\)[\s\S]*\.shop-product-purchase \{[\s\S]*grid-template-columns: 1fr/);
+});
+
+test("public shop presentation distinguishes unavailable reservations from sold stock", async () => {
+  const [cataloguePage, productPage, cart] = await Promise.all([
+    readFile(new URL("../../app/boutique/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/boutique/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/shop-cart.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(cataloguePage, /availabilityState === "SOLD_OUT"[\s\S]*"Épuisé"[\s\S]*availabilityState === "TEMPORARILY_UNAVAILABLE"[\s\S]*"Temporairement indisponible"/);
+  assert.match(cataloguePage, /unavailableLabel=\{product\.availabilityState === "TEMPORARILY_UNAVAILABLE"/);
+  assert.match(productPage, /Indisponible temporairement : les derniers exemplaires sont réservés/);
+  assert.match(productPage, /unavailableLabel=\{product\.availabilityState === "TEMPORARILY_UNAVAILABLE"/);
+  assert.match(cart, /product\.availabilityState !== "AVAILABLE"/);
+  assert.match(cart, /availabilityState === "SOLD_OUT" \? <em>Épuisé<\/em>/);
+  assert.match(cart, /availabilityState === "TEMPORARILY_UNAVAILABLE" \? <em>Temporairement indisponible<\/em>/);
 });
 
 test("shop page distinguishes a closed gate from an enabled empty catalogue", async () => {
@@ -82,6 +98,24 @@ test("cart shipping quote is automatic, race-safe and keeps visible failure feed
   assert.doesNotMatch(cart, /reportValidity\(\)/);
 });
 
+test("France-only checkout remains server-backed while member logistics copy hides internal QA identifiers", async () => {
+  const [cart, orderPage, productPage] = await Promise.all([
+    readFile(new URL("../../components/shop-cart.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/compte/achats/[orderNumber]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/boutique/[slug]/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(cart, /franceOnly = allowedCountries\.length === 1 && allowedCountries\[0\] === "FR"/);
+  assert.match(cart, /<strong>France<\/strong>[\s\S]*<input name="countryCode" type="hidden" value="FR"/);
+  assert.match(cart, /Mode de livraison[\s\S]*shopShippingMethodLabel\(quote\.shippingMethod\)/);
+  assert.doesNotMatch(cart, /Devis serveur \{quote\.shippingQuoteVersion\}/);
+  assert.doesNotMatch(cart, /Fixture QA interne, non contractuelle/);
+  assert.match(orderPage, /shopCountryLabel\(order\.shippingCountryCode\)/);
+  assert.match(orderPage, /shopCustomerRequestStatusLabel\(request\.status\)/);
+  assert.doesNotMatch(orderPage, /<dt>Devis logistique<\/dt>/);
+  assert.doesNotMatch(orderPage, /<dt>Poids facturable<\/dt>/);
+  assert.doesNotMatch(productPage, /grille QA active/);
+});
+
 test("floating cart is present only for a hydrated non-empty cart outside the cart page", async () => {
   const [link, layout, css] = await Promise.all([
     readFile(new URL("../../components/shop-cart-link.tsx", import.meta.url), "utf8"),
@@ -115,4 +149,32 @@ test("admin product detail distinguishes physical, reserved and available stock"
   assert.match(page, /activeReservedQuantity/);
   assert.match(page, /availableQuantity/);
   assert.match(service, /status: "ACTIVE", expiresAt: \{ gt: new Date\(\) \}/);
+});
+
+test("Phase 5E admin details reflow before action panels become narrow", async () => {
+  const [css, logistics] = await Promise.all([
+    readFile(new URL("../../app/admin/admin.css", import.meta.url), "utf8"),
+    readFile(new URL("../../app/admin/boutique/logistique/page.tsx", import.meta.url), "utf8"),
+  ]);
+  const intermediateStart = css.indexOf("@media (max-width: 1120px)");
+  const compactStart = css.indexOf("@media (max-width: 900px)", intermediateStart);
+  const mobileStart = css.indexOf("@media (max-width: 760px)", compactStart);
+  const intermediate = css.slice(intermediateStart, compactStart);
+  const compact = css.slice(compactStart, mobileStart);
+  assert.match(intermediate, /\.admin-order-detail__grid \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.match(intermediate, /\.admin-order-detail__aside \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.match(compact, /\.admin-order-detail__grid,[\s\S]*\.admin-order-detail__aside \{ grid-template-columns: 1fr; \}/);
+  assert.match(css, /\.admin-order-detail__grid > \*,[\s\S]*\.admin-side-window label,[\s\S]*min-width: 0/);
+  assert.match(css, /\.admin-logistics-tier-list li \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.match(logistics, /className="admin-rights-timeline admin-logistics-tier-list"/);
+});
+
+test("Phase 5E visual stock fixture belongs to another QA member and remains local-only", async () => {
+  const fixture = await readFile(new URL("../../scripts/shop-phase5e-fixture.ts", import.meta.url), "utf8");
+  assert.match(fixture, /RESERVATION_OWNER_EMAIL/);
+  assert.match(fixture, /VISUAL_RESERVATION_WINDOW_MS/);
+  assert.match(fixture, /memberId: reservationOwner\.id/);
+  assert.match(fixture, /orderNumber: "LNX-SHOP-2026-550005"/);
+  assert.match(fixture, /activeBadgeReservation\._sum\.quantity, 1/);
+  assert.doesNotMatch(fixture, /fetch\s*\(/);
 });

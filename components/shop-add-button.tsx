@@ -9,11 +9,13 @@ const MAX_QUANTITY = 20;
 export function ShopAddButton({
   productId,
   disabled = false,
+  unavailableLabel = "Épuisé",
   showQuantity = false,
   maxQuantity = null,
 }: {
   productId: string;
   disabled?: boolean;
+  unavailableLabel?: string;
   showQuantity?: boolean;
   maxQuantity?: number | null;
 }) {
@@ -43,7 +45,7 @@ export function ShopAddButton({
         }}
         type="button"
       >
-        {disabled ? "Épuisé" : limitReached ? "Maximum au panier" : "Ajouter au panier"}
+        {disabled ? unavailableLabel : limitReached ? "Maximum au panier" : "Ajouter au panier"}
       </button>
       <span className="sr-only" aria-live="polite">{announcement}</span>
     </>

@@ -127,7 +127,13 @@ export default async function ShopPage() {
                   ) : null}
                 </Link>
                 <div className="shop-product-card__body">
-                  <p className="shop-product-card__status">{product.soldOut ? "Épuisé" : "Disponible"}</p>
+                  <p className="shop-product-card__status">
+                    {product.availabilityState === "SOLD_OUT"
+                      ? "Épuisé"
+                      : product.availabilityState === "TEMPORARILY_UNAVAILABLE"
+                        ? "Temporairement indisponible"
+                        : "Disponible"}
+                  </p>
                   <h3><Link href={`/boutique/${encodeURIComponent(product.slug)}`}>{product.title}</Link></h3>
                   <p>{product.description}</p>
                   <div className="shop-product-card__footer">
@@ -138,6 +144,7 @@ export default async function ShopPage() {
                         disabled={product.soldOut}
                         maxQuantity={product.availableQuantity}
                         productId={product.id}
+                        unavailableLabel={product.availabilityState === "TEMPORARILY_UNAVAILABLE" ? "Temporairement indisponible" : "Épuisé"}
                       />
                     </div>
                   </div>

@@ -121,8 +121,22 @@ export function shopFulfillmentLabel(status: "PENDING" | "PREPARING" | "READY_TO
 }
 
 export function shopShippingMethodLabel(method: string | null) {
+  if (method === "COLISSIMO_HOME_FRANCE") return "Colissimo domicile";
   if (method === "STANDARD_TRACKED_SIGNATURE") return "Expédition suivie avec remise contre signature";
   return method ? "Mode d’expédition snapshoté" : "Mode d’expédition non renseigné";
+}
+
+export function shopCountryLabel(countryCode: string | null) {
+  return countryCode === "FR" ? "France" : "Destination non renseignée";
+}
+
+export function shopCustomerRequestStatusLabel(status: string) {
+  return ({
+    REQUESTED: "En attente de décision",
+    APPROVED: "Acceptée",
+    REJECTED: "Refusée",
+    COMPLETED: "Traitée",
+  } as const)[status as "REQUESTED" | "APPROVED" | "REJECTED" | "COMPLETED"] ?? "À examiner";
 }
 
 export function shopTrackingSourceLabel(source: "MANUAL" | "PROVIDER" | null) {

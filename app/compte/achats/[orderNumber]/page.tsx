@@ -16,6 +16,8 @@ import {
   canResumeShopPaypalCapture,
   effectiveShopOrderStatus,
   formatShopMoney,
+  shopCountryLabel,
+  shopCustomerRequestStatusLabel,
   shopFulfillmentLabel,
   shopOrderPaymentState,
   shopReservationIsActive,
@@ -163,14 +165,14 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
             <dl className="auth-profile">
               <div><dt>Sous-total</dt><dd>{formatShopMoney(order.subtotalCents)}</dd></div>
               <div><dt>Expédition</dt><dd>{formatShopMoney(order.shippingCents)}</dd></div>
-              {order.shippingQuoteVersion ? <div><dt>Devis logistique</dt><dd>{order.shippingQuoteVersion}</dd></div> : null}
-              {order.shippingBillableGrams ? <div><dt>Poids facturable</dt><dd>{order.shippingBillableGrams} g</dd></div> : null}
+              {order.shippingMethod ? <div><dt>Mode de livraison</dt><dd>{shopShippingMethodLabel(order.shippingMethod)}</dd></div> : null}
+              {order.shippingCountryCode ? <div><dt>Destination</dt><dd>{shopCountryLabel(order.shippingCountryCode)}</dd></div> : null}
               <div><dt>Total</dt><dd><strong>{formatShopMoney(order.totalCents)}</strong></dd></div>
               <div><dt>Paiement</dt><dd>{order.paymentReviewAt ? "À vérifier" : order.paymentStatus === "PAID" ? "Confirmé" : order.paymentStatus === "CANCELLED" ? "Annulé" : "En attente"}</dd></div>
               {paymentProvider ? <div><dt>Moyen</dt><dd>{paymentProvider}</dd></div> : null}
               <div><dt>Préparation</dt><dd>{shopFulfillmentLabel(order.fulfillmentStatus)}</dd></div>
               <div><dt>Réservation jusqu’au</dt><dd>{new Date(order.reservationExpiresAt).toLocaleString("fr-FR")}</dd></div>
-              {order.termsVersion ? <div><dt>Conditions acceptées</dt><dd>{order.termsVersion}</dd></div> : null}
+              {order.termsVersion ? <div><dt>Conditions acceptées</dt><dd>Conditions générales de vente</dd></div> : null}
               {order.preparingAt ? <div><dt>Préparation démarrée</dt><dd>{order.preparingAt.toLocaleString("fr-FR")}</dd></div> : null}
               {order.readyToShipAt ? <div><dt>Prête à expédier</dt><dd>{order.readyToShipAt.toLocaleString("fr-FR")}</dd></div> : null}
               {order.shippedAt ? <div><dt>Expédiée</dt><dd>{order.shippedAt.toLocaleString("fr-FR")}</dd></div> : null}
@@ -224,12 +226,12 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
                 {order.shippingAddressLine1}<br />
                 {order.shippingAddressLine2 ? <>{order.shippingAddressLine2}<br /></> : null}
                 {order.shippingPostalCode} {order.shippingCity}<br />
-                {order.shippingCountryCode}
+                {shopCountryLabel(order.shippingCountryCode)}
               </address>
             </section>
           ) : null}
 
-          {order.paymentStatus === "PAID" && order.fulfillmentStatus !== "SHIPPED" ? <section className="member-orders"><div className="member-orders__heading"><div><p className="auth-panel__label">Demandes avant expédition</p><h2>Une décision Admin reste requise.</h2></div></div>{order.customerRequests.length ? <ul className="member-order-list">{order.customerRequests.map((request) => <li key={request.id}><strong>{request.type === "PAID_ORDER_CANCELLATION" ? "Annulation" : "Correction d’adresse"}</strong><p>{request.requestNumber} · {request.status}</p></li>)}</ul> : null}<details className="auth-panel account-disclosure"><summary>Demander l’annulation <span aria-hidden="true">＋</span></summary><form className="auth-form" action={createShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="type" value="PAID_ORDER_CANCELLATION" /><input type="hidden" name="confirmation" value={SHOP_CUSTOMER_REQUEST_CONFIRMATION} /><label><span>Motif</span><textarea name="reason" minLength={10} maxLength={1000} required /></label><button className="button button--quiet" type="submit">TRANSMETTRE LA DEMANDE</button></form></details>{order.shippingRequired ? <details className="auth-panel account-disclosure"><summary>Demander une correction d’adresse <span aria-hidden="true">＋</span></summary><form className="auth-form" action={createShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="type" value="SHIPPING_ADDRESS_CORRECTION" /><input type="hidden" name="confirmation" value={SHOP_CUSTOMER_REQUEST_CONFIRMATION} /><label>Prénom<input name="firstName" defaultValue={order.shippingFirstName ?? ""} maxLength={100} required /></label><label>Nom<input name="lastName" defaultValue={order.shippingLastName ?? ""} maxLength={100} required /></label><label>Adresse<input name="addressLine1" defaultValue={order.shippingAddressLine1 ?? ""} maxLength={240} required /></label><label>Complément<input name="addressLine2" defaultValue={order.shippingAddressLine2 ?? ""} maxLength={240} /></label><label>Code postal<input name="postalCode" defaultValue={order.shippingPostalCode ?? ""} inputMode="numeric" pattern="[0-9]{5}" required /></label><label>Ville<input name="city" defaultValue={order.shippingCity ?? ""} maxLength={120} required /></label><input type="hidden" name="countryCode" value="FR" /><label>Motif<input name="reason" minLength={10} maxLength={1000} required /></label><button className="button button--quiet" type="submit">TRANSMETTRE LA CORRECTION</button></form></details> : null}</section> : null}
+          {order.paymentStatus === "PAID" && order.fulfillmentStatus !== "SHIPPED" ? <section className="member-orders"><div className="member-orders__heading"><div><p className="auth-panel__label">Demandes avant expédition</p><h2>Une décision Admin reste requise.</h2></div></div>{order.customerRequests.length ? <ul className="member-order-list">{order.customerRequests.map((request) => <li key={request.id}><strong>{request.type === "PAID_ORDER_CANCELLATION" ? "Annulation" : "Correction d’adresse"}</strong><p>{request.requestNumber} · {shopCustomerRequestStatusLabel(request.status)}</p></li>)}</ul> : null}<details className="auth-panel account-disclosure"><summary>Demander l’annulation <span aria-hidden="true">＋</span></summary><form className="auth-form" action={createShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="type" value="PAID_ORDER_CANCELLATION" /><input type="hidden" name="confirmation" value={SHOP_CUSTOMER_REQUEST_CONFIRMATION} /><label><span>Motif</span><textarea name="reason" minLength={10} maxLength={1000} required /></label><button className="button button--quiet" type="submit">TRANSMETTRE LA DEMANDE</button></form></details>{order.shippingRequired ? <details className="auth-panel account-disclosure"><summary>Demander une correction d’adresse <span aria-hidden="true">＋</span></summary><form className="auth-form" action={createShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="type" value="SHIPPING_ADDRESS_CORRECTION" /><input type="hidden" name="confirmation" value={SHOP_CUSTOMER_REQUEST_CONFIRMATION} /><label>Prénom<input name="firstName" defaultValue={order.shippingFirstName ?? ""} maxLength={100} required /></label><label>Nom<input name="lastName" defaultValue={order.shippingLastName ?? ""} maxLength={100} required /></label><label>Adresse<input name="addressLine1" defaultValue={order.shippingAddressLine1 ?? ""} maxLength={240} required /></label><label>Complément<input name="addressLine2" defaultValue={order.shippingAddressLine2 ?? ""} maxLength={240} /></label><label>Code postal<input name="postalCode" defaultValue={order.shippingPostalCode ?? ""} inputMode="numeric" pattern="[0-9]{5}" required /></label><label>Ville<input name="city" defaultValue={order.shippingCity ?? ""} maxLength={120} required /></label><input type="hidden" name="countryCode" value="FR" /><label>Motif<input name="reason" minLength={10} maxLength={1000} required /></label><button className="button button--quiet" type="submit">TRANSMETTRE LA CORRECTION</button></form></details> : null}</section> : null}
 
           {canCancel ? (
             <details className="auth-panel account-disclosure">

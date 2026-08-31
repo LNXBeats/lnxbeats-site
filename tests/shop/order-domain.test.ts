@@ -5,12 +5,18 @@ import {
   assertShippingAddress,
   checkedMoney,
   getAvailableProductQuantity,
+  getPublicAvailabilityState,
   parseShopIdempotencyKey,
   parseShopOrderCancellationFormData,
   parseShopOrderIntent,
   shopOrderIntentFingerprint,
 } from "@/lib/shop/order-domain";
-import { effectiveShopOrderStatus } from "@/lib/shop/order-presentation";
+import {
+  effectiveShopOrderStatus,
+  shopCountryLabel,
+  shopCustomerRequestStatusLabel,
+  shopShippingMethodLabel,
+} from "@/lib/shop/order-presentation";
 
 const firstProduct = "11111111-1111-4111-8111-111111111111";
 const secondProduct = "22222222-2222-4222-8222-222222222222";
@@ -93,6 +99,15 @@ test("shipping country, money and stock helpers fail closed", () => {
   assert.equal(getAvailableProductQuantity({ trackInventory: true, stock: 3, activeReserved: 2 }), 1);
   assert.equal(getAvailableProductQuantity({ trackInventory: true, stock: 1, activeReserved: 2 }), 0);
   assert.equal(getAvailableProductQuantity({ trackInventory: false, stock: null, activeReserved: 0 }), null);
+  assert.equal(getPublicAvailabilityState({ trackInventory: true, stock: 4, activeReserved: 1 }), "AVAILABLE");
+  assert.equal(getPublicAvailabilityState({ trackInventory: true, stock: 1, activeReserved: 1 }), "TEMPORARILY_UNAVAILABLE");
+  assert.equal(getPublicAvailabilityState({ trackInventory: true, stock: 0, activeReserved: 0 }), "SOLD_OUT");
+});
+
+test("member-facing logistics and request labels stay human-readable", () => {
+  assert.equal(shopShippingMethodLabel("COLISSIMO_HOME_FRANCE"), "Colissimo domicile");
+  assert.equal(shopCountryLabel("FR"), "France");
+  assert.equal(shopCustomerRequestStatusLabel("REQUESTED"), "En attente de décision");
 });
 
 test("member cancellation form ignores only React action metadata and stays closed", () => {

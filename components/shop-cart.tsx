@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useShopCart } from "@/components/shop-cart-provider";
-import { formatShopMoney } from "@/lib/shop/order-presentation";
+import { formatShopMoney, shopShippingMethodLabel } from "@/lib/shop/order-presentation";
 
 type CartProduct = Readonly<{
   id: string;
@@ -16,6 +16,7 @@ type CartProduct = Readonly<{
   shippingRequired: boolean;
   lockVersion: number;
   availableQuantity: number | null;
+  availabilityState: "AVAILABLE" | "TEMPORARILY_UNAVAILABLE" | "SOLD_OUT";
   soldOut: boolean;
   image: Readonly<{
     id: string;
@@ -71,7 +72,7 @@ export function ShopCart({
   const shippingRequired = knownLines.some(({ product }) => product.shippingRequired);
   const invalid = cartLines.some(({ product, quantity }) => (
     !product
-    || product.soldOut
+    || product.availabilityState !== "AVAILABLE"
     || (product.availableQuantity !== null && quantity > product.availableQuantity)
   ));
   const subtotalCents = knownLines.reduce((sum, { product, quantity }) => sum + product.priceCents * quantity, 0);
@@ -95,6 +96,7 @@ export function ShopCart({
       ? "Vérifiez les produits et quantités du panier avant le calcul automatique de la livraison."
       : "";
   const displayedError = validationError || error;
+  const franceOnly = allowedCountries.length === 1 && allowedCountries[0] === "FR";
 
   function resetOrderPreparation() {
     window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
@@ -264,7 +266,8 @@ export function ShopCart({
                   <div>
                     <strong>{product?.title ?? "Produit indisponible"}</strong>
                     <small>{product ? formatShopMoney(product.priceCents) : "Retirez cette ligne pour continuer."}</small>
-                    {product?.soldOut ? <em>Épuisé</em> : null}
+                    {product?.availabilityState === "SOLD_OUT" ? <em>Épuisé</em> : null}
+                    {product?.availabilityState === "TEMPORARILY_UNAVAILABLE" ? <em>Temporairement indisponible</em> : null}
                     {product?.availableQuantity !== null && product && quantity > product.availableQuantity
                       ? <em>Quantité disponible : {product.availableQuantity}</em>
                       : null}
@@ -303,7 +306,15 @@ export function ShopCart({
               <label className="shop-cart__field-wide"><span>Complément <small>(facultatif)</small></span><input autoComplete="address-line2" maxLength={240} name="addressLine2" /></label>
               <label><span>Code postal</span><input autoComplete="postal-code" maxLength={32} name="postalCode" required /></label>
               <label><span>Ville</span><input autoComplete="address-level2" maxLength={120} name="city" required /></label>
-              <label className="shop-cart__field-wide"><span>Pays</span><select autoComplete="country" name="countryCode" required>{allowedCountries.map((country) => <option key={country} value={country}>{country}</option>)}</select></label>
+              {franceOnly ? (
+                <div className="shop-cart__field-wide shop-cart__fixed-field">
+                  <span>Pays</span>
+                  <strong>France</strong>
+                  <input name="countryCode" type="hidden" value="FR" />
+                </div>
+              ) : (
+                <label className="shop-cart__field-wide"><span>Pays</span><select autoComplete="country" name="countryCode" required>{allowedCountries.map((country) => <option key={country} value={country}>{country}</option>)}</select></label>
+              )}
             </div>
           </fieldset>
         ) : null}
@@ -316,8 +327,8 @@ export function ShopCart({
           <div><dt>Sous-total</dt><dd>{formatShopMoney(quote?.subtotalCents ?? subtotalCents)}</dd></div>
           <div><dt>Expédition</dt><dd>{quote ? formatShopMoney(quote.shippingCents) : quoting ? "Calcul…" : memberProfileRequired ? "Compte membre requis" : "Indisponible"}</dd></div>
           <div className="shop-cart__total"><dt>Total</dt><dd>{quote ? formatShopMoney(quote.totalCents) : quoting ? "Calcul…" : "—"}</dd></div>
+          {quote?.shippingRequired ? <><div><dt>Mode de livraison</dt><dd>{shopShippingMethodLabel(quote.shippingMethod)}</dd></div><div><dt>Destination</dt><dd>France</dd></div></> : null}
         </dl>
-        {quote?.shippingRequired ? <p className="shop-cart__shipping-proof">Devis serveur {quote.shippingQuoteVersion} · {quote.shippingBillableGrams} g facturables. Fixture QA interne, non contractuelle.</p> : null}
         {quoting ? <p className="shop-cart__pending" role="status">Calcul automatique de la livraison en cours…</p> : null}
         <p>Aucun paiement n’est déclenché par le devis. Le serveur revérifie prix, disponibilité, poids et livraison avant de réserver le stock.</p>
         {displayedError ? (
