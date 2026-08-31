@@ -5,7 +5,6 @@
   bottom: calc(1rem + env(safe-area-inset-bottom));
   max-width: calc(100vw - 2rem);
   pointer-events: none;
-  transform: translateZ(0);
 }
 
 .shop-cart-link {

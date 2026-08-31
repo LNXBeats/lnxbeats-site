@@ -88,9 +88,12 @@ export function ShopCart({
     && quoteItems.length > 0
     && quotingKey === quoteKey;
   const quote = authenticated && memberAllowed && quoted?.key === quoteKey ? quoted.value : null;
-  const validationError = invalid
-    ? "Vérifiez les produits et quantités du panier avant le calcul automatique de la livraison."
-    : "";
+  const memberProfileRequired = authenticated && !memberAllowed;
+  const validationError = memberProfileRequired
+    ? "Compte membre requis : déconnectez le profil Admin puis connectez-vous avec votre compte membre pour calculer la livraison et préparer la commande."
+    : invalid
+      ? "Vérifiez les produits et quantités du panier avant le calcul automatique de la livraison."
+      : "";
   const displayedError = validationError || error;
 
   function resetOrderPreparation() {
@@ -311,7 +314,7 @@ export function ShopCart({
         <h2 id="shop-cart-summary-title">Commande Boutique</h2>
         <dl>
           <div><dt>Sous-total</dt><dd>{formatShopMoney(quote?.subtotalCents ?? subtotalCents)}</dd></div>
-          <div><dt>Expédition</dt><dd>{quote ? formatShopMoney(quote.shippingCents) : quoting ? "Calcul…" : "Indisponible"}</dd></div>
+          <div><dt>Expédition</dt><dd>{quote ? formatShopMoney(quote.shippingCents) : quoting ? "Calcul…" : memberProfileRequired ? "Compte membre requis" : "Indisponible"}</dd></div>
           <div className="shop-cart__total"><dt>Total</dt><dd>{quote ? formatShopMoney(quote.totalCents) : quoting ? "Calcul…" : "—"}</dd></div>
         </dl>
         {quote?.shippingRequired ? <p className="shop-cart__shipping-proof">Devis serveur {quote.shippingQuoteVersion} · {quote.shippingBillableGrams} g facturables. Fixture QA interne, non contractuelle.</p> : null}
@@ -331,7 +334,7 @@ export function ShopCart({
           <div className="shop-cart__actions">
             <button
               className="button button--primary"
-              disabled={busy || quoting || invalid || !quote}
+              disabled={busy || quoting || invalid || !memberAllowed || !quote}
               formNoValidate={!memberAllowed}
               type="submit"
             >

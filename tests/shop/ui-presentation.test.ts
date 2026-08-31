@@ -12,6 +12,9 @@ test("guest cart login remains a navigation and does not expose required address
   );
   assert.match(cart, /Se connecter pour continuer/);
   assert.match(cart, /formNoValidate=\{!memberAllowed\}/);
+  assert.match(cart, /memberProfileRequired = authenticated && !memberAllowed/);
+  assert.match(cart, /Compte membre requis/);
+  assert.match(cart, /disabled=\{busy \|\| quoting \|\| invalid \|\| !memberAllowed \|\| !quote\}/);
   assert.doesNotMatch(cart, /authenticated \? "Préparer ma commande" : "Se connecter pour continuer"/);
 });
 
@@ -87,14 +90,17 @@ test("floating cart is present only for a hydrated non-empty cart outside the ca
   ]);
 
   assert.match(link, /usePathname\(\)/);
-  assert.match(link, /!ready \|\| itemCount === 0 \|\| pathname\.startsWith\("\/boutique\/panier"\)/);
+  assert.match(link, /!portalReady \|\| !ready \|\| itemCount === 0 \|\| pathname\.startsWith\("\/boutique\/panier"\)/);
   assert.match(link, /className="shop-commerce-nav"/);
+  assert.match(link, /createPortal\(/);
+  assert.match(link, /document\.body/);
   assert.match(layout, /<ShopCartLink \/>/);
   assert.doesNotMatch(layout, /<div className="shop-commerce-nav"/);
   assert.match(css, /\.shop-commerce-nav \{[\s\S]*position: fixed/);
   assert.match(css, /safe-area-inset-bottom/);
   assert.match(css, /safe-area-inset-right/);
   assert.match(css, /max-width: calc\(100vw -/);
+  assert.doesNotMatch(css, /\.shop-commerce-nav \{[\s\S]*?transform: translateZ\(0\)/);
 });
 
 test("admin product detail distinguishes physical, reserved and available stock", async () => {
