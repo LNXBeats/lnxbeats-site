@@ -60,7 +60,7 @@ Ne jamais créer le service Cron avant que B1 Web soit healthy. `/api/health` We
 
 ## Juridique et confidentialité
 
-Les versions `shop-cgv-2026-04-candidate` et `privacy-2026-03-candidate` sont immuables et `AWAITING_LEGAL_REVIEW`. Elles ne sont pas `APPROVED`. Aucune migration ne seed une approbation. Toute modification après approbation devra créer une nouvelle version.
+Les versions finales `shop-cgv-2026-05-candidate` et `privacy-2026-04-candidate` sont immuables et `AWAITING_LEGAL_REVIEW`. Elles ne sont pas `APPROVED`. Aucune migration ne seed une approbation. Toute modification après approbation devra créer une nouvelle version.
 
 Checklist humaine :
 

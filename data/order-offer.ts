@@ -26,7 +26,7 @@ export const orderOffer = {
   ...orderPricingVersions[currentOrderPricingVersion],
   revisionAllowance: 1,
   deliveryFormat: "WAV",
-  indicativeDelay: "7 à 14 jours",
+  indicativeDelay: "14 jours",
   priorityDelay: "Délai prioritaire confirmé lors de la prise en charge.",
   maxActiveDrafts: 10,
   maxPhotos: 10,

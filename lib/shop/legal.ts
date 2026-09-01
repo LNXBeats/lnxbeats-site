@@ -1,14 +1,14 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { releaseBShopTermsCandidate } from "@/data/legal";
+import { finalShopTermsCandidate } from "@/data/legal";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 export const SHOP_LEGAL_QA_TERMS_VERSION = "shop-cgv-phase3-qa-v1";
 export const SHOP_LEGAL_QA_ARCHIVED_TERMS_VERSION = "shop-cgv-phase3-qa-v0";
 export const SHOP_LEGAL_QA_CONFIRMATION = "enable-local-shop-legal-qa";
-export const SHOP_LEGAL_RELEASE_B_CANDIDATE_VERSION = releaseBShopTermsCandidate.version;
+export const SHOP_LEGAL_RELEASE_B_CANDIDATE_VERSION = finalShopTermsCandidate.version;
 
 const QA_ARCHIVED_TECHNICAL_FINGERPRINT_SOURCE =
   "lnx-studio:shop-terms:technical-qa-placeholder:shop-cgv-phase3-qa-v0";
@@ -35,7 +35,7 @@ const SHOP_TERMS_REGISTRY: Readonly<Record<string, ShopTermsRegistryEntry>> = Ob
   }),
   [SHOP_LEGAL_RELEASE_B_CANDIDATE_VERSION]: Object.freeze({
     version: SHOP_LEGAL_RELEASE_B_CANDIDATE_VERSION,
-    hashSha256: releaseBShopTermsCandidate.hashSha256,
+    hashSha256: finalShopTermsCandidate.hashSha256,
     approval: "CANDIDATE",
   }),
 });

@@ -18,6 +18,22 @@ const STATUS_LABELS = {
   RETIRED: "Retirée",
 } as const;
 
+const READINESS_REASON_LABELS: Readonly<Record<string, string>> = {
+  COMMERCIAL_RATE_NOT_ACTIVE: "Aucune grille de livraison commerciale n’est active",
+  PACKAGING_NOT_ACTIVE: "Aucun profil d’emballage n’est actif",
+  REAL_PRODUCT_NOT_PUBLISHED: "Aucun produit réel n’est publié",
+  LEGAL_NOT_APPROVED: "Les conditions de vente attendent leur approbation juridique",
+  SAV_PRIVATE_STORAGE_NOT_READY: "Le stockage privé du SAV n’est pas prêt",
+  SHOP_MAINTENANCE_NOT_READY: "La maintenance Boutique n’est pas prête",
+} as const;
+
+const READINESS_ALERT_LABELS: Readonly<Record<string, string>> = {
+  SAV_FIRST_ANALYSIS_OVERDUE: "Première analyse SAV en retard",
+  PAYMENT_REVIEW_REQUIRED: "Paiement à examiner",
+  REFUND_REVIEW_REQUIRED: "Remboursement à examiner",
+  SHIPPING_REVIEW_REQUIRED: "Expédition à examiner",
+} as const;
+
 export default async function AdminShopLogisticsPage() {
   await requireAdmin();
   const versions = await listAdminShippingRateVersions();
@@ -30,7 +46,7 @@ export default async function AdminShopLogisticsPage() {
       <p>La grille 2026 reste candidate tant qu’un Admin ne l’active pas explicitement. Aucun achat d’étiquette, appel transporteur ou changement Production n’est exécuté ici.</p>
     </header>
 
-    <section className="admin-panel"><div className="admin-panel__heading"><div><p className="admin-section-label">Readiness</p><h2>Indicateurs fail-closed.</h2></div></div><dl className="admin-definition-grid"><div><dt>Grilles candidates</dt><dd>{readiness.draftRates}</dd></div><div><dt>Grilles commerciales actives</dt><dd>{readiness.activeRates}</dd></div><div><dt>Emballages actifs</dt><dd>{readiness.activePackaging}</dd></div><div><dt>Produits publiés</dt><dd>{readiness.publishedProducts}</dd></div><div><dt>Juridique approuvé</dt><dd>{readiness.legalApproved ? "Oui" : "Non"}</dd></div><div><dt>Stockage SAV privé prêt</dt><dd>{readiness.savPrivateStorageReady ? "Oui" : "Non"}</dd></div><div><dt>Maintenance prête</dt><dd>{readiness.maintenanceReady ? "Oui" : "Non"}</dd></div><div><dt>Demandes client ouvertes</dt><dd>{readiness.openCustomerRequests}</dd></div><div><dt>Alertes opérateur</dt><dd>{readiness.alerts.length}</dd></div></dl>{readiness.reasonCodes.length ? <div className="admin-callout admin-callout--warning"><strong>Ouverture bloquée</strong><p>{readiness.reasonCodes.join(" · ")}</p></div> : null}{readiness.alerts.length ? <ul className="admin-rights-timeline">{readiness.alerts.map((alert) => <li key={alert.id}><strong>{alert.kind}</strong><p>{alert.summary}</p></li>)}</ul> : <p>Aucune alerte ouverte.</p>}</section>
+    <section className="admin-panel"><div className="admin-panel__heading"><div><p className="admin-section-label">Readiness</p><h2>Indicateurs fail-closed.</h2></div></div><dl className="admin-definition-grid"><div><dt>Grilles candidates</dt><dd>{readiness.draftRates}</dd></div><div><dt>Grilles commerciales actives</dt><dd>{readiness.activeRates}</dd></div><div><dt>Emballages actifs</dt><dd>{readiness.activePackaging}</dd></div><div><dt>Produits publiés</dt><dd>{readiness.publishedProducts}</dd></div><div><dt>Juridique approuvé</dt><dd>{readiness.legalApproved ? "Oui" : "Non"}</dd></div><div><dt>Stockage SAV privé prêt</dt><dd>{readiness.savPrivateStorageReady ? "Oui" : "Non"}</dd></div><div><dt>Maintenance prête</dt><dd>{readiness.maintenanceReady ? "Oui" : "Non"}</dd></div><div><dt>Demandes client ouvertes</dt><dd>{readiness.openCustomerRequests}</dd></div><div><dt>Alertes opérateur</dt><dd>{readiness.alerts.length}</dd></div></dl>{readiness.reasonCodes.length ? <div className="admin-callout admin-callout--warning"><strong>Ouverture bloquée</strong><ul>{readiness.reasonCodes.map((code) => <li key={code}>{READINESS_REASON_LABELS[code] ?? "Contrôle de préparation à vérifier"}</li>)}</ul></div> : null}{readiness.alerts.length ? <ul className="admin-rights-timeline">{readiness.alerts.map((alert) => <li key={alert.id}><strong>{READINESS_ALERT_LABELS[alert.kind] ?? "Alerte à examiner"}</strong><p>{alert.summary}</p></li>)}</ul> : <p>Aucune alerte ouverte.</p>}</section>
 
     <section className="admin-panel"><div className="admin-panel__heading"><div><p className="admin-section-label">Emballages</p><h2>Profils versionnés.</h2></div></div>{packagingProfiles.map((profile) => <dl className="admin-definition-grid" key={profile.id}><div><dt>Profil</dt><dd>{profile.name} · {profile.version}</dd></div><div><dt>Statut</dt><dd>{profile.status}</dd></div><div><dt>Poids physique</dt><dd>{profile.physicalWeightGrams} g</dd></div><div><dt>Capacité</dt><dd>{profile.maximumItemQuantity} articles</dd></div><div><dt>Facturé dans le poids client</dt><dd>{profile.customerBillableWeightIncluded ? "Oui" : "Non"}</dd></div></dl>)}</section>
 

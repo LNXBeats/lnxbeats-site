@@ -609,30 +609,222 @@ export const phase4cWithdrawalNoticeCandidate = revision(
   ],
 );
 
-export const legalCandidates = Object.freeze([
+export const finalLegalNoticesCandidate = revision(
   phase4b1LegalNoticesCandidate,
+  "legal-notices-2026-04-candidate",
+  phase4b1LegalNoticesCandidate.sections.map((section) => {
+    if (section.title === "Hébergement") return {
+      title: section.title,
+      paragraphs: [
+        "L’application et sa base de données PostgreSQL sont hébergées sur l’infrastructure Railway.",
+        "Les médias sont conservés sur Cloudflare R2. Le nom de domaine et sa zone DNS sont administrés via OVHcloud.",
+      ],
+      decisions: section.decisions,
+    };
+    if (section.title === "Réclamation et médiation") return {
+      title: section.title,
+      paragraphs: [
+        "Toute réclamation préalable peut être adressée à lnx.beats.pro@gmail.com ou au 06 71 66 70 32.",
+        consumerMediatorParagraph(),
+      ],
+    };
+    return section;
+  }),
+);
+
+export const finalMusicTermsCandidate = revision(
   phase4cMusicTermsCandidate,
+  "music-cgv-2026-04-candidate",
+  phase4cMusicTermsCandidate.sections.map((section) => {
+    if (section.title === "1. Professionnel, objet et périmètre") return {
+      title: section.title,
+      paragraphs: [
+        "Les présentes conditions encadrent les créations musicales personnalisées proposées par Ludovic Mickaël Mathon, entrepreneur individuel, sous le nom LNX Beats, via le service LNX STUDIO.",
+        "La création musicale personnalisée est une prestation de services créatifs réalisée sur commande et donnant lieu à la livraison d’un contenu numérique. Elle n’emporte aucun transfert automatique de droits d’auteur ou d’exploitation.",
+      ],
+      decisions: section.decisions,
+    };
+    if (section.title === "2. Commande, brief et contenu fourni") return {
+      title: section.title,
+      paragraphs: [
+        "Le client fournit un brief loyal, suffisamment précis et exploitable. Il garantit disposer des droits nécessaires sur les textes, images, sons et autres références transmis et s’interdit tout contenu illicite ou portant atteinte aux tiers.",
+        "LNX Beats peut refuser ou suspendre une demande manifestement illicite, inexploitable ou contraire aux droits de tiers. Les fichiers de référence restent privés et sont conservés selon les durées indiquées dans la politique de confidentialité.",
+      ],
+    };
+    if (section.title === "4. Formation, commencement et délai") return {
+      title: section.title,
+      paragraphs: [
+        "La réalisation commence après confirmation du paiement et réception d’un brief exploitable. LNX Beats finalise la commande dans un délai de quatorze jours, sauf délai différent annoncé et accepté avant le commencement de la prestation.",
+        "Si le client demande un commencement avant la fin du délai légal de rétractation, cette demande expresse est recueillie séparément, sans case précochée, avec la reconnaissance qu’il perdra son droit de rétractation après l’exécution complète de la prestation.",
+        "Si le client exerce son droit de rétractation après le début de l’exécution mais avant son achèvement, le montant correspondant au service déjà fourni peut rester dû proportionnellement au prix convenu, lorsque les conditions légales sont réunies.",
+      ],
+    };
+    if (section.title === "6. Rétractation et annulation") return {
+      title: section.title,
+      paragraphs: [
+        "Le commencement de la prestation ne provoque pas une renonciation immédiate au droit de rétractation. La perte de ce droit ne peut intervenir qu’après exécution complète et lorsque la demande expresse et la reconnaissance requises ont été recueillies.",
+        "En dehors des droits légaux applicables, d’une inexécution ou d’un défaut relevant de LNX Beats, aucun remboursement de convenance n’est prévu après le commencement de la création. Le consommateur peut utiliser la fonctionnalité en ligne de rétractation ; sa demande est instruite et ne déclenche aucun remboursement automatique.",
+      ],
+    };
+    if (section.title === "7. Propriété intellectuelle et usages") return {
+      title: section.title,
+      paragraphs: [
+        "Aucun transfert automatique de propriété, qualité d’auteur, quote-part, copropriété, droit SACEM ou licence commerciale n’est consenti par la commande personnelle.",
+        "Toute publication, distribution, monétisation ou exploitation professionnelle nécessite un accord distinct conclu dans le cadre du parcours Droits & contrats.",
+      ],
+    };
+    if (section.title === "8. Responsabilité, données et force majeure") return {
+      title: section.title,
+      paragraphs: [
+        "Chaque partie répond de ses obligations dans les limites permises par la loi. Aucune clause ne prive le consommateur d’une garantie impérative. Les cas de force majeure sont appréciés conformément au droit applicable.",
+        "Les données sont traitées conformément à la politique de confidentialité. Les données de carte et mots de passe PayPal ne sont jamais stockés par LNX STUDIO.",
+      ],
+    };
+    if (section.title === "9. Réclamation, médiation, archivage et version") return {
+      title: section.title,
+      paragraphs: [
+        "Une réclamation préalable peut être adressée à LNX Beats. En cas de désaccord persistant, le consommateur peut saisir gratuitement le CM2C selon les coordonnées indiquées dans les mentions légales.",
+        "La commande conserve le numéro, le prix, la version et l’empreinte des conditions acceptées. Les factures, avoirs et pièces comptables sont conservés dix ans.",
+      ],
+    };
+    return section;
+  }),
+);
+
+export const finalShopTermsCandidate = revision(
   releaseBShopTermsCandidate,
+  "shop-cgv-2026-05-candidate",
+  releaseBShopTermsCandidate.sections.map((section) => {
+    if (section.title === "2. Panier, stock et formation du contrat") return {
+      title: section.title,
+      paragraphs: section.paragraphs,
+    };
+    if (section.title === "3. Prix, TVA, livraison et total") return {
+      title: section.title,
+      paragraphs: [
+        "Le prix applicable est celui affiché et accepté lors de la commande. Les quantités, le sous-total, les frais de livraison et le total sont calculés côté serveur et figés avant paiement.",
+        "Le régime actuel est la franchise en base de TVA : aucune TVA n’est ajoutée et la facture porte la mention « TVA non applicable, article 293 B du CGI ». La facture est émise uniquement après confirmation effective du paiement.",
+        "Au lancement, la livraison est limitée à la France métropolitaine. La préparation prend normalement deux à trois jours ouvrés après paiement confirmé, sauf délai particulier clairement annoncé sur la fiche produit.",
+      ],
+    };
+    if (section.title === "5. Livraison, suivi et transfert des risques") return {
+      title: section.title,
+      paragraphs: [
+        "La livraison est limitée à la France métropolitaine, Corse comprise, par Colissimo à domicile, avec signature privilégiée. La préparation LNX Beats de deux à trois jours ouvrés est distincte du délai indicatif du transporteur.",
+        "Le transfert des risques intervient lors de la prise de possession physique, sous réserve des règles impératives. Le numéro de suivi est communiqué au client lorsqu’il est disponible.",
+        "Les frais de livraison sont calculés d’après le poids des produits, avec un minimum facturable de 250 g. Le poids de l’emballage et de la protection n’est pas facturé. Le tarif applicable est indiqué et figé avant le paiement.",
+      ],
+      decisions: section.decisions,
+    };
+    if (section.title === "6. Réception, rétractation et retours") return {
+      title: section.title,
+      paragraphs: [
+        "Le consommateur dispose en principe de quatorze jours à compter de la réception pour exercer son droit de rétractation. Pour une rétractation de convenance légalement possible, les frais directs de retour sont à sa charge lorsque cette information a été fournie avant la commande.",
+        "Les CD audio sont expédiés scellés. Le droit de rétractation ne peut être exercé pour un enregistrement audio descellé par le consommateur après sa livraison. Tant que le produit demeure scellé, ce droit reste applicable dans les conditions légales.",
+        "Cette exception ne limite jamais la garantie légale de conformité, la garantie des vices cachés ni les recours applicables à un produit défectueux, non conforme, erroné ou endommagé.",
+        "Adresse de retour : LNX Beats, 35 Impasse des Orties, 07370 Ozon, France.",
+      ],
+    };
+    if (section.title === "7. Garanties et service après-vente") return {
+      title: section.title,
+      paragraphs: [
+        "Les biens bénéficient de la garantie légale de conformité et de la garantie des vices cachés dans les conditions prévues par la loi. Elles ne sont pas remplacées par une garantie commerciale.",
+        "Le SAV, la non-conformité, l’erreur vendeur et le colis endommagé sont traités séparément d’une rétractation de convenance. Le client peut déposer un message SAV sans photographie ; toute photographie jointe reste facultative.",
+      ],
+    };
+    if (section.title === "8. Réclamation, médiation, données et archivage") return {
+      title: section.title,
+      paragraphs: [
+        "Après une réclamation préalable auprès de LNX Beats, le consommateur peut saisir gratuitement le CM2C selon les coordonnées indiquées dans les mentions légales.",
+        "La Boutique est destinée aux particuliers au lancement. La commande et son snapshot contractuel sont archivés ; les factures, avoirs et pièces comptables sont conservés dix ans.",
+      ],
+    };
+    return section;
+  }),
+);
+
+export const finalPrivacyCandidate = revision(
   releaseBPrivacyCandidate,
+  "privacy-2026-04-candidate",
+  releaseBPrivacyCandidate.sections.map((section) => {
+    if (section.title === "Données et finalités") return {
+      title: section.title,
+      paragraphs: [
+        "Les traitements couvrent les comptes, sessions, commandes, briefs, références privées, livrables, produits, adresses de livraison et de facturation, paiements, factures, avoirs, notifications, contrats, rétractations, retours, réclamations et journaux de sécurité.",
+        "Une demande SAV peut, au choix du client, comporter jusqu’à cinq photographies destinées à documenter un défaut, une non-conformité, une erreur ou un dommage. Elles ne sont pas requises pour déposer un message SAV.",
+        "Les finalités sont les mesures précontractuelles, l’exécution, la preuve, la facturation, la livraison, le support, la sécurité et le respect des obligations légales. Un numéro de suivi est traité uniquement pour une commande expédiée.",
+      ],
+    };
+    if (section.title === "Paiements et destinataires") return {
+      title: section.title,
+      paragraphs: [
+        "LNX STUDIO ne stocke pas de numéro de carte complet, CVC ou mot de passe PayPal. Les données financières et de facturation sont limitées aux références, statuts, montants, devises, événements, factures, avoirs et remboursements nécessaires.",
+        "Railway intervient pour l’hébergement, Cloudflare R2 pour le stockage des médias privés et publics, Resend pour les e-mails transactionnels, Stripe et PayPal pour les paiements, et OVHcloud pour le domaine et le DNS. Les informations nécessaires à la livraison sont transmises à La Poste/Colissimo lorsqu’une commande physique est expédiée.",
+        "Les photographies SAV sont facultatives, stockées dans un espace privé Cloudflare R2 et accessibles uniquement au client concerné et aux administrateurs autorisés.",
+      ],
+    };
+    if (section.title === "Transferts hors EEE") return {
+      title: section.title,
+      paragraphs: [
+        "Certains prestataires internationaux sont susceptibles de traiter des données en dehors de l’Espace économique européen. Les lieux de traitement et garanties applicables dépendent du service concerné et de sa documentation contractuelle. Des informations complémentaires peuvent être demandées à LNX Beats à l’adresse indiquée dans la présente politique.",
+      ],
+      decisions: section.decisions,
+    };
+    return section;
+  }),
+);
+
+export const finalWithdrawalNoticeCandidate = revision(
   phase4cWithdrawalNoticeCandidate,
+  "withdrawal-2026-03-candidate",
+  phase4cWithdrawalNoticeCandidate.sections.map((section) => {
+    if (section.title === "Commencement anticipé d’une prestation") return {
+      title: section.title,
+      paragraphs: section.paragraphs,
+    };
+    if (section.title === "CD et autres enregistrements audio scellés") return {
+      title: section.title,
+      paragraphs: section.paragraphs,
+    };
+    if (section.title === "Accusé et sécurité") return {
+      title: "Réception et traitement de la demande",
+      paragraphs: [
+        "La demande reçoit une référence et un accusé de réception consultable de manière sécurisée. Son éligibilité, les éventuelles exceptions, le retour et le remboursement sont examinés séparément.",
+      ],
+    };
+    return section;
+  }),
+);
+
+export const legalCandidates = Object.freeze([
+  finalLegalNoticesCandidate,
+  finalMusicTermsCandidate,
+  finalShopTermsCandidate,
+  finalPrivacyCandidate,
+  finalWithdrawalNoticeCandidate,
 ]);
 
 export const legalCandidateHistory = Object.freeze([
   legalNoticesCandidate,
   phase4bLegalNoticesCandidate,
   phase4b1LegalNoticesCandidate,
+  finalLegalNoticesCandidate,
   musicTermsCandidate,
   phase4bMusicTermsCandidate,
   phase4cMusicTermsCandidate,
+  finalMusicTermsCandidate,
   shopTermsCandidate,
   phase4bShopTermsCandidate,
   phase4cShopTermsCandidate,
   releaseBShopTermsCandidate,
+  finalShopTermsCandidate,
   privacyCandidate,
   phase4bPrivacyCandidate,
   releaseBPrivacyCandidate,
+  finalPrivacyCandidate,
   withdrawalNoticeCandidate,
   phase4cWithdrawalNoticeCandidate,
+  finalWithdrawalNoticeCandidate,
 ]);
 
 export function assertCandidateLegalRegistry() {

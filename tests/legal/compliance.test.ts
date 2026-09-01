@@ -5,6 +5,11 @@ import test from "node:test";
 import {
   assertCandidateLegalRegistry,
   consumerMediatorInformation,
+  finalLegalNoticesCandidate,
+  finalMusicTermsCandidate,
+  finalPrivacyCandidate,
+  finalShopTermsCandidate,
+  finalWithdrawalNoticeCandidate,
   legalCandidateHistory,
   legalCandidates,
   legalNoticesCandidate,
@@ -23,6 +28,7 @@ import {
   shopTermsCandidate,
   withdrawalNoticeCandidate,
 } from "../../data/legal";
+import { PUBLIC_LEGAL_MARKER_PATTERN, publicLegalDocument } from "../../lib/legal/public-document";
 import { professionalInformation } from "../../data/professional";
 import { checkoutPaymentCtaLabel } from "../../lib/payments/presentation";
 import { formatEuro } from "../../lib/orders/domain";
@@ -60,13 +66,19 @@ test("all legal documents are immutable-looking, hashed, non-approved candidates
   assert.notEqual(privacyCandidate.hashSha256, legalNoticesCandidate.hashSha256);
 });
 
-test("the mandatory human decisions are visible in the candidate corpus", () => {
+test("resolved owner decisions leave the final candidates while true review gates remain internal", () => {
   const body = JSON.stringify(legalCandidates);
   for (const code of [
-    "MUSIC_CONTRACT_CLASSIFICATION", "EARLY_PERFORMANCE_WITHDRAWAL_WORDING",
-    "SHOP_CONTRACT_FORMATION_TIME", "SEALED_AUDIO_WITHDRAWAL_EXACT_WORDING",
+    "MUSIC_CONTRACT_CLASSIFICATION", "SHOP_TERMS_RELEASE_B_HUMAN_APPROVAL",
+    "RAILWAY_LEGAL_ENTITY_AND_ADDRESS", "CLOUDFLARE_LEGAL_ENTITY_AND_ADDRESS",
+    "OVHCLOUD_LEGAL_ENTITY_AND_ADDRESS", "PROCESSOR_TRANSFER_MECHANISMS",
   ]) assert.match(body, new RegExp(code));
-  for (const resolvedCode of ["VAT_AND_INVOICING_STATUS", "MUSIC_DELIVERY_DELAY", "MUSIC_REVISION_POLICY", "B2B_TERMS_SCOPE"]) {
+  for (const resolvedCode of [
+    "VAT_AND_INVOICING_STATUS", "MUSIC_DELIVERY_DELAY", "MUSIC_REVISION_POLICY", "B2B_TERMS_SCOPE",
+    "MUSIC_REFERENCE_FILE_RETENTION", "EARLY_PERFORMANCE_WITHDRAWAL_WORDING",
+    "SHOP_CONTRACT_FORMATION_TIME", "SEALED_AUDIO_WITHDRAWAL_EXACT_WORDING",
+    "CM2C_CONTACT_DETAILS_BEFORE_PUBLICATION",
+  ]) {
     assert.doesNotMatch(body, new RegExp(resolvedCode), `${resolvedCode} must not remain a candidate blocker.`);
   }
 });
@@ -103,7 +115,7 @@ test("Phase 4B.1 publishes complete CM2C candidate metadata through a new immuta
   assert.match(candidate, /https:\/\/www\.cm2c\.net\//);
   assert.notEqual(professionalInformation.phone, consumerMediatorInformation.phone);
   const page = source("app/mentions-legales/page.tsx");
-  assert.match(page, /phase4b1LegalNoticesCandidate/);
+  assert.match(page, /finalLegalNoticesCandidate/);
   const component = source("components/legal-candidate-document.tsx");
   assert.match(component, /consumerMediatorInformation\.phone/);
   assert.match(component, /consumerMediatorInformation\.website/);
@@ -142,6 +154,50 @@ test("Release B creates new Shop and privacy candidates without approving or rew
   assert.ok(legalCandidateHistory.includes(phase4bPrivacyCandidate));
   assert.notEqual(releaseBShopTermsCandidate.hashSha256, phase4cShopTermsCandidate.hashSha256);
   assert.notEqual(releaseBPrivacyCandidate.hashSha256, phase4bPrivacyCandidate.hashSha256);
+});
+
+test("legal finalization creates five immutable non-approved candidates and preserves history", () => {
+  assert.deepEqual(legalCandidates.map(({ version }) => version), [
+    "legal-notices-2026-04-candidate",
+    "music-cgv-2026-04-candidate",
+    "shop-cgv-2026-05-candidate",
+    "privacy-2026-04-candidate",
+    "withdrawal-2026-03-candidate",
+  ]);
+  for (const document of legalCandidates) {
+    assert.equal(document.status, "AWAITING_LEGAL_REVIEW");
+    assert.equal(document.effectiveAt, null);
+    assert.equal(document.approvedAt, null);
+    assert.equal(document.approvedBy, null);
+    assert.ok(legalCandidateHistory.includes(document));
+  }
+  assert.ok(legalCandidateHistory.includes(phase4b1LegalNoticesCandidate));
+  assert.ok(legalCandidateHistory.includes(phase4cMusicTermsCandidate));
+  assert.ok(legalCandidateHistory.includes(releaseBShopTermsCandidate));
+  assert.ok(legalCandidateHistory.includes(releaseBPrivacyCandidate));
+  assert.ok(legalCandidateHistory.includes(phase4cWithdrawalNoticeCandidate));
+});
+
+test("final wording reflects owner decisions without changing approval state", () => {
+  const music = JSON.stringify(finalMusicTermsCandidate);
+  const shop = JSON.stringify(finalShopTermsCandidate);
+  const privacy = JSON.stringify(finalPrivacyCandidate);
+  const notices = JSON.stringify(finalLegalNoticesCandidate);
+  const withdrawal = JSON.stringify(finalWithdrawalNoticeCandidate);
+  assert.match(music, /finalise la commande dans un délai de quatorze jours/);
+  assert.doesNotMatch(music, /sept à quatorze jours|7\s*(?:à|–|-)\s*14 jours/i);
+  assert.match(music, /demande expresse est recueillie séparément, sans case précochée/);
+  assert.match(shop, /validation du paiement et confirmation de la commande par LNX Beats/);
+  assert.match(shop, /minimum facturable de 250 g/);
+  assert.match(shop, /poids de l’emballage et de la protection n’est pas facturé/);
+  assert.match(shop, /enregistrement audio descellé par le consommateur après sa livraison/);
+  assert.match(shop, /particuliers au lancement/);
+  assert.match(privacy, /photographies facultatives d’un dossier SAV sont supprimées quatre-vingt-dix jours après la clôture/);
+  assert.match(privacy, /espace privé Cloudflare R2/);
+  assert.match(notices, /49 rue de Ponthieu/);
+  assert.match(notices, /01 89 47 00 14/);
+  assert.match(withdrawal, /prestation entièrement exécutée/);
+  assert.match(withdrawal, /enregistrements audio descellés par le consommateur après leur livraison/);
 });
 
 test("Phase 4C music wording treats the order as a creative service and preserves withdrawal rights", () => {
@@ -185,16 +241,16 @@ test("the CM2C convention review dates are internal reminders and not candidate 
   assert.equal(phase4b1LegalNoticesCandidate.approvedAt, null);
 });
 
-test("Phase 4C preserves CM2C and every unresolved source recheck marker", () => {
+test("final candidates preserve only unresolved source rechecks and complete CM2C", () => {
   const body = JSON.stringify(legalCandidates);
   assert.match(body, /Centre de la Médiation de la Consommation de Conciliateurs de Justice — CM2C/);
   for (const code of [
     "RAILWAY_LEGAL_ENTITY_AND_ADDRESS",
     "CLOUDFLARE_LEGAL_ENTITY_AND_ADDRESS",
     "OVHCLOUD_LEGAL_ENTITY_AND_ADDRESS",
-    "CM2C_CONTACT_DETAILS_BEFORE_PUBLICATION",
     "PROCESSOR_TRANSFER_MECHANISMS",
   ]) assert.match(body, new RegExp(code));
+  assert.doesNotMatch(body, /CM2C_CONTACT_DETAILS_BEFORE_PUBLICATION/);
 });
 
 test("Shop payment labels visibly state payment obligation while music labels stay stable", () => {
@@ -217,10 +273,33 @@ test("public legal surfaces expose distinct terms, withdrawal, CM2C and no obsol
   assert.match(files, /CM2C/);
   assert.doesNotMatch(files, /ec\.europa\.eu\/consumers\/odr/i);
   assert.doesNotMatch(files, /date de naissance|sécurité sociale|pièce d’identité/i);
-  assert.match(source("app/cgv/creation-musicale/page.tsx"), /phase4cMusicTermsCandidate/);
-  assert.match(source("app/cgv/boutique/page.tsx"), /releaseBShopTermsCandidate/);
-  assert.match(source("app/confidentialite/page.tsx"), /releaseBPrivacyCandidate/);
-  assert.match(source("app/retractation/page.tsx"), /phase4cWithdrawalNoticeCandidate/);
+  assert.match(source("app/cgv/creation-musicale/page.tsx"), /finalMusicTermsCandidate/);
+  assert.match(source("app/cgv/boutique/page.tsx"), /finalShopTermsCandidate/);
+  assert.match(source("app/confidentialite/page.tsx"), /finalPrivacyCandidate/);
+  assert.match(source("app/retractation/page.tsx"), /finalWithdrawalNoticeCandidate/);
+});
+
+test("public legal rendering excludes every internal review marker and technical status", () => {
+  const publicCorpus = JSON.stringify(legalCandidates.map(publicLegalDocument));
+  assert.doesNotMatch(publicCorpus, PUBLIC_LEGAL_MARKER_PATTERN);
+  assert.doesNotMatch(publicCorpus, /(?:draft|candidate|review|approval|QA_ONLY)/i);
+  const publicSources = [
+    "components/legal-candidate-document.tsx", "app/cgv/page.tsx", "app/cgv/creation-musicale/page.tsx",
+    "app/cgv/boutique/page.tsx", "app/mentions-legales/page.tsx", "app/confidentialite/page.tsx",
+    "app/retractation/page.tsx", "app/documents-juridiques/[version]/page.tsx",
+  ].map(source).join("\n");
+  assert.doesNotMatch(publicSources, /document\.status|document\.hashSha256|section\.decisions|decision\.code|decision\.category/);
+  assert.doesNotMatch(publicSources, /Version candidate|revue humaine obligatoire|Archive technique QA|VERSION QA UNIQUEMENT/i);
+  assert.match(source("app/documents-juridiques/[version]/page.tsx"), /legalCandidates\.find/);
+  assert.doesNotMatch(source("app/documents-juridiques/[version]/page.tsx"), /SHOP_LEGAL_QA_/);
+});
+
+test("Admin readiness translates internal reason codes into human labels", () => {
+  const page = source("app/admin/boutique/logistique/page.tsx");
+  assert.match(page, /LEGAL_NOT_APPROVED: "Les conditions de vente attendent leur approbation juridique"/);
+  assert.match(page, /READINESS_REASON_LABELS\[code\]/);
+  assert.match(page, /READINESS_ALERT_LABELS\[alert\.kind\]/);
+  assert.doesNotMatch(page, /reasonCodes\.join/);
 });
 
 test("QA terms remain forbidden in production and candidates are not registered as approved", () => {

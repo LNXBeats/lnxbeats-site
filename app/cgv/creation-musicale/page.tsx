@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 
 import { LegalCandidateDocument } from "@/components/legal-candidate-document";
-import { phase4cMusicTermsCandidate } from "@/data/legal";
+import { finalMusicTermsCandidate } from "@/data/legal";
 
 export const metadata: Metadata = {
   title: "CGV créations musicales",
-  description: "Conditions générales candidates pour les créations musicales personnalisées LNX Beats.",
+  description: "Conditions générales pour les créations musicales personnalisées LNX Beats.",
   robots: { index: false, follow: true },
   alternates: { canonical: "/cgv/creation-musicale" },
 };
 
 export default function MusicTermsPage() {
-  return <LegalCandidateDocument document={phase4cMusicTermsCandidate} introduction="Cadre candidat des créations musicales personnalisées, sans activation juridique ni transfert automatique de droits." />;
+  return <LegalCandidateDocument document={finalMusicTermsCandidate} introduction="Conditions applicables aux créations musicales personnalisées, à leur réalisation, à leur livraison et aux droits associés." />;
 }

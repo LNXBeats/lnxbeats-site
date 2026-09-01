@@ -1,5 +1,15 @@
 # Checklist de revue humaine
 
+Candidates finales à examiner sans modifier leurs empreintes :
+
+- `legal-notices-2026-04-candidate` ;
+- `music-cgv-2026-04-candidate` ;
+- `shop-cgv-2026-05-candidate` ;
+- `privacy-2026-04-candidate` ;
+- `withdrawal-2026-03-candidate`.
+
+Le rendu public masque les statuts et reason codes internes. L’approbation reste interdite tant que la revue professionnelle, sa référence, l’Admin approbateur et l’horodatage ne sont pas enregistrés. L’activation constitue une étape séparée.
+
 ## Juriste
 
 - [ ] identité EI et usage des noms LNX Beats/LNX STUDIO ;
@@ -12,6 +22,9 @@
 - [ ] droits de propriété intellectuelle et B2B ;
 - [ ] libellé « commande avec obligation de paiement » ;
 - [ ] durées probatoires et accusé durable.
+- [ ] entités/adresses contractuelles Railway, Cloudflare et OVHcloud relues sur les contrats applicables ;
+- [ ] mécanismes et lieux de transfert hors EEE vérifiés dans les DPA applicables ;
+- [ ] preuve distincte du commencement anticipé implémentée avant activation des créations musicales.
 
 ## Expert-comptable
 
