@@ -22,6 +22,11 @@ const nextConfig: NextConfig = {
   agentRules: false,
   poweredByHeader: false,
   reactStrictMode: true,
+  experimental: {
+    // Sharp's operation cache retains decoded/intermediate image data between
+    // requests. The filesystem result cache remains enabled by Next.js.
+    imgOptOperationCache: false,
+  },
   // FFmpeg is spawned as a real executable and PDFKit reads its bundled AFM
   // font data at runtime. Keeping both packages external prevents the server
   // bundlers from rewriting those filesystem paths.

@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 
-import sharp from "sharp";
-
 import { orderOffer } from "@/data/order-offer";
+import sharp from "@/lib/media/sharp";
 import { withMemoryDiagnosticCounter } from "@/lib/memory-diagnostics";
 import { sanitizeOriginalFilename } from "@/lib/orders/domain";
 

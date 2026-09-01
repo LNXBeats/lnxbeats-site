@@ -9,10 +9,10 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import Busboy from "busboy";
-import sharp from "sharp";
 
 import { orderOffer } from "@/data/order-offer";
 import { validateCompleteAudioSource } from "@/lib/catalog/ffmpeg";
+import sharp from "@/lib/media/sharp";
 import { sanitizeOriginalFilename } from "@/lib/orders/domain";
 import { detectImageType, detectOrderAudioType, OrderUploadError, validateOrderAudioIdentity } from "@/lib/orders/upload";
 

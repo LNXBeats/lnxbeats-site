@@ -39,6 +39,7 @@ export default async function ShopProductPage({ params }: Context) {
                 alt={product.image.alt}
                 height={product.image.height ?? 1200}
                 priority
+                sizes="(max-width: 900px) min(calc(100vw - 40px), 600px), (max-width: 1440px) 45vw, 640px"
                 src={`/media/boutique/${product.image.id}`}
                 width={product.image.width ?? 1200}
               />

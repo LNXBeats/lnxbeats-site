@@ -257,9 +257,9 @@ export function ShopCart({
                     <Link aria-label={`Voir ${product.title}`} href={`/boutique/${encodeURIComponent(product.slug)}`}>
                       <Image
                         alt={product.image.alt}
-                        height={product.image.height ?? 160}
+                        height={64}
                         src={`/media/boutique/${product.image.id}`}
-                        width={product.image.width ?? 160}
+                        width={64}
                       />
                     </Link>
                   ) : null}

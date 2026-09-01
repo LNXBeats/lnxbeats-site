@@ -1,7 +1,8 @@
 import "server-only";
 
 import path from "node:path";
-import sharp from "sharp";
+
+import sharp from "@/lib/media/sharp";
 
 export const ADMIN_IMAGE_MAXIMUM_BYTES = 10 * 1024 * 1024;
 export const ADMIN_IMAGE_MAXIMUM_PIXELS = 40_000_000;

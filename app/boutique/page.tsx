@@ -121,6 +121,7 @@ export default async function ShopPage() {
                     <Image
                       alt={product.image.alt}
                       height={product.image.height ?? 1200}
+                      sizes="(max-width: 620px) calc(100vw - 40px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 430px"
                       src={`/media/boutique/${product.image.id}`}
                       width={product.image.width ?? 1200}
                     />
