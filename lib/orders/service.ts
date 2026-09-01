@@ -513,6 +513,28 @@ type PendingPhoto = PersistedOrderImage<{
   visibility: "PRIVATE";
 }>;
 
+export async function preflightOrderPhotoUpload(actor: OrderActor, orderNumber: string) {
+  assertDatabaseConfigured();
+  await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+    const current = await transaction.order.findFirst({
+      where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
+      select: { id: true, status: true },
+    });
+    if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
+    await assertOrderEditableForPayment(transaction, current);
+    const existingCount = await transaction.orderAsset.count({
+      where: { orderId: current.id, role: "REFERENCE", asset: { type: "IMAGE" } },
+    });
+    if (!assertPhotoCapacity(existingCount, 1)) {
+      throw new OrderServiceError(
+        "Une commande peut contenir au maximum dix photos.",
+        400,
+        "PHOTO_LIMIT_REACHED",
+      );
+    }
+  });
+}
+
 export async function addOrderPhotos(actor: OrderActor, orderNumber: string, files: RawOrderPhoto[]) {
   assertDatabaseConfigured();
   if (!files.length || files.length > orderOffer.maxPhotos) {

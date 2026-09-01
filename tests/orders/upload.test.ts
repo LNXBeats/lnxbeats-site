@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 
 import sharp from "sharp";
 
 import { orderOffer } from "@/data/order-offer";
 import { getMemoryDiagnosticCounters } from "@/lib/memory-diagnostics";
+import {
+  getOrderPhotoMultipartAdmissionState,
+  ORDER_PHOTO_MULTIPART_CONCURRENCY,
+  ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
+  withOrderPhotoMultipartAdmission,
+} from "@/lib/orders/photo-upload-admission";
+import {
+  assertOrderPhotoMultipartHeaders,
+  readOrderPhotoMultipartFormData,
+} from "@/lib/orders/photo-upload-request";
 import {
   detectImageType,
   detectOrderAudioType,
@@ -198,6 +210,227 @@ test("retire immédiatement de la file une transformation annulée", async () =>
   releaseFirst.resolve();
   await first;
   assert.equal(getOrderPhotoTransformState().active, 0);
+});
+
+test("refuse une troisième admission multipart avant toute lecture formData", async () => {
+  const firstEntered = deferred<void>();
+  const releaseFirst = deferred<void>();
+  const secondEntered = deferred<void>();
+  const releaseSecond = deferred<void>();
+  let firstFormDataCalls = 0;
+  let secondFormDataCalls = 0;
+  let thirdFormDataCalls = 0;
+
+  const first = withOrderPhotoMultipartAdmission(async () => {
+    firstFormDataCalls += 1;
+    firstEntered.resolve();
+    await releaseFirst.promise;
+  });
+  await firstEntered.promise;
+
+  const second = withOrderPhotoMultipartAdmission(async () => {
+    secondFormDataCalls += 1;
+    secondEntered.resolve();
+    await releaseSecond.promise;
+  });
+  assert.deepEqual(getOrderPhotoMultipartAdmissionState(), {
+    active: 1,
+    queued: 1,
+    concurrency: ORDER_PHOTO_MULTIPART_CONCURRENCY,
+    queueLimit: ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
+  });
+
+  await assert.rejects(
+    withOrderPhotoMultipartAdmission(async () => {
+      thirdFormDataCalls += 1;
+    }),
+    (error: unknown) => error instanceof OrderUploadError
+      && error.code === "IMAGE_PROCESSING_BUSY"
+      && error.status === 503,
+  );
+  assert.equal(firstFormDataCalls, 1);
+  assert.equal(secondFormDataCalls, 0);
+  assert.equal(thirdFormDataCalls, 0);
+
+  releaseFirst.resolve();
+  await secondEntered.promise;
+  assert.equal(secondFormDataCalls, 1);
+  releaseSecond.resolve();
+  await Promise.all([first, second]);
+  assert.deepEqual(getOrderPhotoMultipartAdmissionState(), {
+    active: 0,
+    queued: 0,
+    concurrency: ORDER_PHOTO_MULTIPART_CONCURRENCY,
+    queueLimit: ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
+  });
+});
+
+test("retire une admission multipart annulée sans lire son corps", async () => {
+  const firstEntered = deferred<void>();
+  const releaseFirst = deferred<void>();
+  const controller = new AbortController();
+  let queuedFormDataCalls = 0;
+
+  const first = withOrderPhotoMultipartAdmission(async () => {
+    firstEntered.resolve();
+    await releaseFirst.promise;
+  });
+  await firstEntered.promise;
+
+  const queued = withOrderPhotoMultipartAdmission(async () => {
+    queuedFormDataCalls += 1;
+  }, controller.signal);
+  assert.equal(getOrderPhotoMultipartAdmissionState().queued, 1);
+  controller.abort();
+  await assert.rejects(
+    queued,
+    (error: unknown) => error instanceof OrderUploadError && error.code === "UPLOAD_ABORTED",
+  );
+  assert.equal(queuedFormDataCalls, 0);
+  assert.equal(getOrderPhotoMultipartAdmissionState().queued, 0);
+
+  releaseFirst.resolve();
+  await first;
+  assert.deepEqual(getOrderPhotoMultipartAdmissionState(), {
+    active: 0,
+    queued: 0,
+    concurrency: ORDER_PHOTO_MULTIPART_CONCURRENCY,
+    queueLimit: ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
+  });
+});
+
+test("expire une admission multipart en attente sans lire son corps", async () => {
+  const firstEntered = deferred<void>();
+  const releaseFirst = deferred<void>();
+  let queuedFormDataCalls = 0;
+
+  const first = withOrderPhotoMultipartAdmission(async () => {
+    firstEntered.resolve();
+    await releaseFirst.promise;
+  });
+  await firstEntered.promise;
+
+  const queued = withOrderPhotoMultipartAdmission(async () => {
+    queuedFormDataCalls += 1;
+  }, undefined, 25);
+  assert.equal(getOrderPhotoMultipartAdmissionState().queued, 1);
+  await assert.rejects(
+    queued,
+    (error: unknown) => error instanceof OrderUploadError
+      && error.code === "IMAGE_PROCESSING_BUSY"
+      && error.status === 503,
+  );
+  assert.equal(queuedFormDataCalls, 0);
+  assert.deepEqual(getOrderPhotoMultipartAdmissionState(), {
+    active: 1,
+    queued: 0,
+    concurrency: ORDER_PHOTO_MULTIPART_CONCURRENCY,
+    queueLimit: ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
+  });
+
+  releaseFirst.resolve();
+  await first;
+  assert.deepEqual(getOrderPhotoMultipartAdmissionState(), {
+    active: 0,
+    queued: 0,
+    concurrency: ORDER_PHOTO_MULTIPART_CONCURRENCY,
+    queueLimit: ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
+  });
+});
+
+test("contrôle un multipart invalide et libère toujours l’admission", async () => {
+  const request = new Request("http://127.0.0.1/api/orders/test/photos", {
+    method: "POST",
+    headers: {
+      "content-length": "16",
+      "content-type": "multipart/form-data; boundary=phase2-test",
+    },
+    body: "multipart-invalide",
+  });
+  assertOrderPhotoMultipartHeaders(request);
+
+  await assert.rejects(
+    withOrderPhotoMultipartAdmission(() => readOrderPhotoMultipartFormData(request)),
+    (error: unknown) => error instanceof OrderUploadError
+      && error.code === "INVALID_MULTIPART"
+      && error.status === 400,
+  );
+  assert.deepEqual(getOrderPhotoMultipartAdmissionState(), {
+    active: 0,
+    queued: 0,
+    concurrency: ORDER_PHOTO_MULTIPART_CONCURRENCY,
+    queueLimit: ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
+  });
+});
+
+test("refuse les headers multipart absents, mal formés ou trop volumineux avant admission", () => {
+  const requestWith = (headers: HeadersInit) => new Request(
+    "http://127.0.0.1/api/orders/test/photos",
+    { method: "POST", headers },
+  );
+  const expectHeaderError = (headers: HeadersInit, code: string, status: number) => {
+    assert.throws(
+      () => assertOrderPhotoMultipartHeaders(requestWith(headers)),
+      (error: unknown) => error instanceof OrderUploadError
+        && error.code === code
+        && error.status === status,
+    );
+  };
+
+  expectHeaderError({}, "INVALID_MULTIPART", 400);
+  expectHeaderError({ "content-type": "multipart/form-data", "content-length": "16" }, "INVALID_MULTIPART", 400);
+  expectHeaderError({ "content-type": "multipart/form-data; boundary=phase2-test" }, "CONTENT_LENGTH_REQUIRED", 411);
+  expectHeaderError({
+    "content-type": "multipart/form-data; boundary=phase2-test",
+    "content-length": "16.5",
+  }, "INVALID_MULTIPART", 400);
+  expectHeaderError({
+    "content-type": "multipart/form-data; boundary=phase2-test",
+    "content-length": String((orderOffer.maxPhotoBytes * orderOffer.maxPhotos) + (1024 * 1024) + 1),
+  }, "TRANSPORT_TOO_LARGE", 413);
+
+  assert.doesNotThrow(() => assertOrderPhotoMultipartHeaders(requestWith({
+    "content-type": "multipart/form-data; boundary=phase2-test",
+    "content-length": String((orderOffer.maxPhotoBytes * orderOffer.maxPhotos) + (1024 * 1024)),
+  })));
+});
+
+test("place ownership et éditabilité avant admission, puis revalide avant écriture", async () => {
+  const routeSource = await readFile(path.join(
+    process.cwd(),
+    "app/api/orders/[orderNumber]/photos/route.ts",
+  ), "utf8");
+  const serviceSource = await readFile(path.join(process.cwd(), "lib/orders/service.ts"), "utf8");
+
+  const originCheck = routeSource.indexOf("isAllowedOrderMutation(request)");
+  const authentication = routeSource.indexOf("orderActorFromHeaders(request.headers)");
+  const headerChecks = routeSource.indexOf("assertOrderPhotoMultipartHeaders(request)");
+  const rateLimit = routeSource.indexOf("enforceOrderRateLimit(actor.id, \"upload\")");
+  const ownershipPreflight = routeSource.indexOf("preflightOrderPhotoUpload(actor, orderNumber)");
+  const admission = routeSource.indexOf("withOrderPhotoMultipartAdmission(async () =>");
+  const formDataRead = routeSource.indexOf("readOrderPhotoMultipartFormData(request)");
+  assert.ok(originCheck >= 0 && originCheck < authentication);
+  assert.ok(authentication < headerChecks);
+  assert.ok(headerChecks < rateLimit);
+  assert.ok(rateLimit < ownershipPreflight);
+  assert.ok(ownershipPreflight < admission);
+  assert.ok(admission < formDataRead);
+  assert.doesNotMatch(routeSource, /request\.formData\s*\(/);
+
+  const preflightStart = serviceSource.indexOf("export async function preflightOrderPhotoUpload");
+  const addStart = serviceSource.indexOf("export async function addOrderPhotos");
+  const preflightSource = serviceSource.slice(preflightStart, addStart);
+  assert.match(preflightSource, /userId: actor\.id/);
+  assert.match(preflightSource, /assertOrderEditableForPayment\(transaction, current\)/);
+  assert.match(preflightSource, /assertPhotoCapacity\(existingCount, 1\)/);
+
+  const addEnd = serviceSource.indexOf("export async function getOrderPhotoForActor", addStart);
+  const addSource = serviceSource.slice(addStart, addEnd);
+  const transformStart = addSource.indexOf("processOrderImageBatch(files");
+  assert.ok(transformStart >= 0);
+  assert.ok(addSource.lastIndexOf("userId: actor.id") > transformStart);
+  assert.ok(addSource.lastIndexOf("assertOrderEditableForPayment(transaction, current)") > transformStart);
+  assert.ok(addSource.lastIndexOf("assertPhotoCapacity(count, pending.length)") > transformStart);
 });
 
 test("nettoie les fichiers déjà persistés et remet les compteurs à zéro après échec", async () => {
