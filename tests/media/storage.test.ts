@@ -491,6 +491,172 @@ test("S3 adapter keeps buckets separate, verifies metadata, supports range, dele
   await assert.rejects(storage.createSignedUrl({ scope: "private", key: privateKey, operation: "get", expiresInSeconds: 3 }), MediaStorageError);
 });
 
+test("S3 GET streams close normally without destroying the shared client", async () => {
+  const data = Buffer.from("stream-normal-completion");
+  const sources: Readable[] = [];
+  let sends = 0;
+  const fakeClient = {
+    config: {},
+    async send(command: unknown) {
+      assert.ok(command instanceof GetObjectCommand);
+      sends += 1;
+      const source = Readable.from([data]);
+      sources.push(source);
+      return {
+        Body: source,
+        ContentLength: data.length,
+        ContentType: "application/octet-stream",
+      };
+    },
+  };
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "stream-test-access", secretAccessKey: "stream-test-secret",
+    publicBucket: "stream-public-test", privateBucket: "stream-private-test",
+    client: fakeClient as never,
+  });
+
+  const first = await storage.get({
+    scope: "public",
+    key: "catalog/audio-previews/00000000-0000-4000-8000-000000000071.mp3",
+  });
+  assert.equal(await new Response(first.body).text(), data.toString());
+  assert.equal(sources.at(-1)?.destroyed, true);
+
+  const second = await storage.get({
+    scope: "public",
+    key: "catalog/audio-previews/00000000-0000-4000-8000-000000000072.mp3",
+  });
+  assert.equal(await new Response(second.body).text(), data.toString());
+  assert.equal(sends, 2);
+  assert.equal(sources.length, 2);
+  assert.ok(sources.every(({ destroyed }) => destroyed));
+});
+
+test("S3 GET stream cancellation destroys its source and leaves diagnostics idle", async () => {
+  let sourceDestroyed = false;
+  const source = new Readable({
+    read() {
+      this.push(Buffer.alloc(1024, 0x6c));
+    },
+    destroy(error, callback) {
+      sourceDestroyed = true;
+      callback(error);
+    },
+  });
+  const diagnostics = createMemoryDiagnostics({
+    environment: { MEMORY_DIAGNOSTICS_ENABLED: "true" },
+    readMemoryUsage: fixedMemoryUsage,
+    logger() {},
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "stream-abort-access", secretAccessKey: "stream-abort-secret",
+    publicBucket: "stream-abort-public-test", privateBucket: "stream-abort-private-test",
+    client: {
+      config: {},
+      async send(command: unknown) {
+        assert.ok(command instanceof GetObjectCommand);
+        return { Body: source, ContentLength: 16 * 1024 };
+      },
+    } as never,
+    memoryDiagnostics: diagnostics,
+  });
+
+  const object = await storage.get({
+    scope: "public",
+    key: "catalog/audio-previews/00000000-0000-4000-8000-000000000073.mp3",
+  });
+  const reader = object.body.getReader();
+  const first = await reader.read();
+  assert.equal(first.done, false);
+  await reader.cancel("synthetic client disconnect");
+  assert.equal(sourceDestroyed, true);
+  assert.deepEqual(diagnostics.counters(), {
+    activeUploads: 0,
+    activeImageTransforms: 0,
+    activeS3Operations: 0,
+  });
+});
+
+test("S3 GET stream source errors propagate and destroy the per-request source", async () => {
+  const source = new Readable({
+    read() {
+      this.destroy(new Error("synthetic stream failure"));
+    },
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "stream-error-access", secretAccessKey: "stream-error-secret",
+    publicBucket: "stream-error-public-test", privateBucket: "stream-error-private-test",
+    client: {
+      config: {},
+      async send(command: unknown) {
+        assert.ok(command instanceof GetObjectCommand);
+        return { Body: source, ContentLength: 1024 };
+      },
+    } as never,
+  });
+
+  const object = await storage.get({
+    scope: "public",
+    key: "catalog/audio-previews/00000000-0000-4000-8000-000000000074.mp3",
+  });
+  await assert.rejects(new Response(object.body).arrayBuffer(), /synthetic stream failure/);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(source.destroyed, true);
+  // Node's Readable.toWeb adapter keeps one data/error listener on the now
+  // destroyed per-request source. The storage and shared client retain no
+  // reference to this source, so listeners cannot accumulate on a long-lived
+  // object.
+  assert.equal(source.listenerCount("end"), 0);
+  assert.equal(source.listenerCount("close"), 0);
+});
+
+test("100 repeated S3 GET streams finish with stable diagnostics and one storage client", async () => {
+  const data = Buffer.alloc(64 * 1024, 0x6c);
+  const snapshots: MemoryDiagnosticSnapshot[] = [];
+  const diagnostics = createMemoryDiagnostics({
+    environment: { MEMORY_DIAGNOSTICS_ENABLED: "true" },
+    readMemoryUsage: fixedMemoryUsage,
+    logger(snapshot) { snapshots.push(snapshot); },
+  });
+  let sends = 0;
+  const fakeClient = {
+    config: {},
+    async send(command: unknown) {
+      assert.ok(command instanceof GetObjectCommand);
+      sends += 1;
+      return { Body: Readable.from([data]), ContentLength: data.length };
+    },
+  };
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "stream-cycle-access", secretAccessKey: "stream-cycle-secret",
+    publicBucket: "stream-cycle-public-test", privateBucket: "stream-cycle-private-test",
+    client: fakeClient as never,
+    memoryDiagnostics: diagnostics,
+  });
+
+  for (let index = 0; index < 100; index += 1) {
+    const object = await storage.get({
+      scope: "public",
+      key: `catalog/audio-previews/00000000-0000-4000-8000-${String(index).padStart(12, "0")}.mp3`,
+    });
+    assert.equal((await new Response(object.body).arrayBuffer()).byteLength, data.length);
+  }
+
+  assert.equal(sends, 100);
+  assert.equal(snapshots.filter(({ event }) => event === "memory.storage.before").length, 100);
+  assert.equal(snapshots.filter(({ event }) => event === "memory.storage.after").length, 100);
+  assert.equal(snapshots.at(-1)?.activeS3Operations, 0);
+  assert.deepEqual(diagnostics.counters(), {
+    activeUploads: 0,
+    activeImageTransforms: 0,
+    activeS3Operations: 0,
+  });
+});
+
 test("S3 adapter removes a newly uploaded object when provider verification fails", async () => {
   const calls: unknown[] = [];
   const data = Buffer.from("object-body");

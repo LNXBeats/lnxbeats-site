@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:smoke": "node scripts/smoke-test.mjs",
+    "test:memory:hardening:phase2": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-memory-hardening-phase2.ts",
     "test:auth": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/auth/*.test.ts",
     "test:auth:qa": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/auth/qa-access.test.ts",
     "test:auth:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-auth-runtime.ts",
