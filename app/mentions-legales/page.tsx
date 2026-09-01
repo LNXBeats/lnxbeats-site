@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { LegalCandidateDocument } from "@/components/legal-candidate-document";
-import { finalLegalNoticesCandidate } from "@/data/legal";
+import { approvedLegalNotices } from "@/data/legal";
 
 export const metadata: Metadata = {
   title: "Mentions légales",
@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function LegalNoticePage() {
-  return <LegalCandidateDocument document={finalLegalNoticesCandidate} introduction="Identité de l’éditeur, activité, hébergement, propriété intellectuelle, réclamation et médiation." />;
+  return <LegalCandidateDocument document={approvedLegalNotices} introduction="Identité de l’éditeur, activité, hébergement, propriété intellectuelle, réclamation et médiation." />;
 }

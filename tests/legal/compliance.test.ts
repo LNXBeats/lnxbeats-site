@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  approvedLegalDocuments,
+  approvedShopTerms,
+  assertApprovedLegalRegistry,
   assertCandidateLegalRegistry,
   consumerMediatorInformation,
   finalLegalNoticesCandidate,
@@ -66,6 +69,25 @@ test("all legal documents are immutable-looking, hashed, non-approved candidates
   assert.notEqual(privacyCandidate.hashSha256, legalNoticesCandidate.hashSha256);
 });
 
+test("final human approval creates five immutable approved but non-active revisions", () => {
+  assert.equal(assertApprovedLegalRegistry(), approvedLegalDocuments);
+  assert.deepEqual(approvedLegalDocuments.map(({ version }) => version), [
+    "legal-notices-2026-04-approved",
+    "music-cgv-2026-04-approved",
+    "shop-cgv-2026-05-approved",
+    "privacy-2026-04-approved",
+    "withdrawal-2026-03-approved",
+  ]);
+  for (const document of approvedLegalDocuments) {
+    assert.equal(document.status, "APPROVED");
+    assert.equal(document.approvedBy, "Ludovic Mickaël Mathon");
+    assert.match(document.approvedAt ?? "", /^2026-09-01T/);
+    assert.match(document.legalReviewReference ?? "", /Validation humaine finale par l’éditeur et exploitant/);
+    assert.equal(document.effectiveAt, null);
+    assert.ok(legalCandidateHistory.includes(document));
+  }
+});
+
 test("resolved owner decisions leave the final candidates while true review gates remain internal", () => {
   const body = JSON.stringify(legalCandidates);
   for (const code of [
@@ -115,7 +137,7 @@ test("Phase 4B.1 publishes complete CM2C candidate metadata through a new immuta
   assert.match(candidate, /https:\/\/www\.cm2c\.net\//);
   assert.notEqual(professionalInformation.phone, consumerMediatorInformation.phone);
   const page = source("app/mentions-legales/page.tsx");
-  assert.match(page, /finalLegalNoticesCandidate/);
+  assert.match(page, /approvedLegalNotices/);
   const component = source("components/legal-candidate-document.tsx");
   assert.match(component, /consumerMediatorInformation\.phone/);
   assert.match(component, /consumerMediatorInformation\.website/);
@@ -200,6 +222,12 @@ test("final wording reflects owner decisions without changing approval state", (
   assert.match(withdrawal, /enregistrements audio descellés par le consommateur après leur livraison/);
 });
 
+test("approved Shop terms use the final Colissimo-with-signature wording without contradictions", () => {
+  const shop = JSON.stringify(approvedShopTerms);
+  assert.match(shop, /La livraison est effectuée par Colissimo à domicile avec signature\./);
+  assert.doesNotMatch(shop, /signature privilégiée|signature prioritaire|sans signature par défaut/i);
+});
+
 test("Phase 4C music wording treats the order as a creative service and preserves withdrawal rights", () => {
   const body = JSON.stringify(phase4cMusicTermsCandidate);
   assert.match(body, /prestation de services créatifs réalisée sur commande, donnant lieu à la livraison d’un contenu numérique/);
@@ -275,14 +303,14 @@ test("public legal surfaces expose distinct terms, withdrawal, CM2C and no obsol
   assert.match(files, /CM2C/);
   assert.doesNotMatch(files, /ec\.europa\.eu\/consumers\/odr/i);
   assert.doesNotMatch(files, /date de naissance|sécurité sociale|pièce d’identité/i);
-  assert.match(source("app/cgv/creation-musicale/page.tsx"), /finalMusicTermsCandidate/);
-  assert.match(source("app/cgv/boutique/page.tsx"), /finalShopTermsCandidate/);
-  assert.match(source("app/confidentialite/page.tsx"), /finalPrivacyCandidate/);
-  assert.match(source("app/retractation/page.tsx"), /finalWithdrawalNoticeCandidate/);
+  assert.match(source("app/cgv/creation-musicale/page.tsx"), /approvedMusicTerms/);
+  assert.match(source("app/cgv/boutique/page.tsx"), /approvedShopTerms/);
+  assert.match(source("app/confidentialite/page.tsx"), /approvedPrivacyNotice/);
+  assert.match(source("app/retractation/page.tsx"), /approvedWithdrawalNotice/);
 });
 
 test("public legal rendering excludes every internal review marker and technical status", () => {
-  const publicCorpus = JSON.stringify(legalCandidates.map(publicLegalDocument));
+  const publicCorpus = JSON.stringify(approvedLegalDocuments.map(publicLegalDocument));
   assert.doesNotMatch(publicCorpus, PUBLIC_LEGAL_MARKER_PATTERN);
   assert.doesNotMatch(publicCorpus, /(?:draft|candidate|review|approval|QA_ONLY)/i);
   const publicSources = [
@@ -292,7 +320,7 @@ test("public legal rendering excludes every internal review marker and technical
   ].map(source).join("\n");
   assert.doesNotMatch(publicSources, /document\.status|document\.hashSha256|section\.decisions|decision\.code|decision\.category/);
   assert.doesNotMatch(publicSources, /Version candidate|revue humaine obligatoire|Archive technique QA|VERSION QA UNIQUEMENT/i);
-  assert.match(source("app/documents-juridiques/[version]/page.tsx"), /legalCandidates\.find/);
+  assert.match(source("app/documents-juridiques/[version]/page.tsx"), /publicLegalDocuments\.find/);
   assert.doesNotMatch(source("app/documents-juridiques/[version]/page.tsx"), /SHOP_LEGAL_QA_/);
 });
 

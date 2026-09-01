@@ -4,7 +4,11 @@ import test from "node:test";
 import { assertMediaStorageKey } from "@/lib/media/storage/policy";
 import { shopAfterSalesQaEnabled } from "@/lib/shop/after-sales-config";
 import { parseShopConfiguration } from "@/lib/shop/config";
-import { parseShopLegalConfiguration, SHOP_LEGAL_RELEASE_B_CANDIDATE_VERSION } from "@/lib/shop/legal";
+import {
+  parseShopLegalConfiguration,
+  SHOP_LEGAL_APPROVED_TERMS_VERSION,
+  SHOP_LEGAL_RELEASE_B_CANDIDATE_VERSION,
+} from "@/lib/shop/legal";
 import { shopMaintenanceEnabled, SHOP_MAINTENANCE_PRODUCTION_CONFIRMATION } from "@/lib/shop/maintenance-config";
 import {
   isMetropolitanFranceDestination,
@@ -106,6 +110,19 @@ test("the public Shop cannot be opened by booleans while Release B legal text re
   };
   assert.throws(() => parseShopLegalConfiguration(exact), /human approval/);
   assert.throws(() => parseShopConfiguration(exact), /human approval/);
+});
+
+test("the approved Shop terms pass the legal gate without activating the Shop by themselves", () => {
+  const exact = {
+    ...productionEnvironment(),
+    SHOP_ENABLED: "false",
+    SHOP_LEGAL_READY: "true",
+    SHOP_TERMS_VERSION: SHOP_LEGAL_APPROVED_TERMS_VERSION,
+  };
+  const legal = parseShopLegalConfiguration(exact);
+  assert.equal(legal.ready, true);
+  assert.equal(legal.activeTerms?.approval, "APPROVED");
+  assert.equal(parseShopConfiguration(exact).enabled, false);
 });
 
 test("metropolitan France normalization includes Corsica and excludes overseas or ambiguous codes", () => {

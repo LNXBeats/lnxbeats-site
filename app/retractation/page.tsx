@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { Container } from "@/components/container";
 import { WithdrawalForm } from "@/components/withdrawal-form";
-import { finalWithdrawalNoticeCandidate } from "@/data/legal";
+import { approvedWithdrawalNotice } from "@/data/legal";
 import { publicLegalDocument } from "@/lib/legal/public-document";
 
 export const metadata: Metadata = {
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default function WithdrawalPage() {
-  const notice = publicLegalDocument(finalWithdrawalNoticeCandidate);
+  const notice = publicLegalDocument(approvedWithdrawalNotice);
   return (
     <section className="withdrawal-page">
       <Container className="withdrawal-page__container">

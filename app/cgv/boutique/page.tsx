@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { LegalCandidateDocument } from "@/components/legal-candidate-document";
-import { finalShopTermsCandidate } from "@/data/legal";
+import { approvedShopTerms } from "@/data/legal";
 
 export const metadata: Metadata = {
   title: "CGV Boutique",
@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function ShopTermsPage() {
-  return <LegalCandidateDocument document={finalShopTermsCandidate} introduction="Conditions applicables à la vente, au paiement, à la livraison, aux retours et aux garanties des produits physiques." />;
+  return <LegalCandidateDocument document={approvedShopTerms} introduction="Conditions applicables à la vente, au paiement, à la livraison, aux retours et aux garanties des produits physiques." />;
 }

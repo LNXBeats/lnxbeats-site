@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export type LegalCandidateStatus = "DRAFT" | "AWAITING_LEGAL_REVIEW";
+export type LegalDocumentStatus = "DRAFT" | "AWAITING_LEGAL_REVIEW" | "APPROVED";
 
 export type LegalDecision = Readonly<{
   category: "LEGAL_DECISION_REQUIRED" | "ACCOUNTING_DECISION_REQUIRED" | "LOGISTICS_DECISION_REQUIRED" | "SOURCE_RECHECK_REQUIRED";
@@ -13,22 +13,28 @@ export type LegalSection = Readonly<{
   decisions?: readonly LegalDecision[];
 }>;
 
-export type LegalCandidate = Readonly<{
+export type LegalDocument = Readonly<{
   type: "LEGAL_NOTICES" | "MUSIC_TERMS" | "SHOP_TERMS" | "PRIVACY_NOTICE" | "WITHDRAWAL_NOTICE";
   version: string;
   title: string;
-  status: LegalCandidateStatus;
+  status: LegalDocumentStatus;
   createdAt: string;
   effectiveAt: null;
-  approvedBy: null;
-  approvedAt: null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  legalReviewReference: string | null;
   sections: readonly LegalSection[];
   hashSha256: string;
 }>;
 
-function candidate(input: Omit<LegalCandidate, "hashSha256">): LegalCandidate {
+export type LegalCandidate = LegalDocument;
+
+function candidate(
+  input: Omit<LegalDocument, "hashSha256" | "legalReviewReference"> & { legalReviewReference?: string | null },
+): LegalDocument {
   return Object.freeze({
     ...input,
+    legalReviewReference: input.legalReviewReference ?? null,
     hashSha256: createHash("sha256").update(JSON.stringify(input), "utf8").digest("hex"),
   });
 }
@@ -43,11 +49,34 @@ function revision(base: LegalCandidate, version: string, sections: readonly Lega
     effectiveAt: null,
     approvedBy: null,
     approvedAt: null,
+    legalReviewReference: null,
     sections,
   });
 }
 
 const createdAt = "2026-08-28T00:00:00.000Z";
+const finalHumanApprovalAt = "2026-09-01T18:32:54.000Z";
+const finalHumanApprover = "Ludovic Mickaël Mathon";
+const finalHumanReviewReference = "Validation humaine finale par l’éditeur et exploitant — V1.1.0 — 2026-09-01";
+
+function approvedRevision(
+  base: LegalDocument,
+  version: string,
+  sections: readonly LegalSection[] = base.sections,
+) {
+  return candidate({
+    type: base.type,
+    version,
+    title: base.title,
+    status: "APPROVED",
+    createdAt: finalHumanApprovalAt,
+    effectiveAt: null,
+    approvedBy: finalHumanApprover,
+    approvedAt: finalHumanApprovalAt,
+    legalReviewReference: finalHumanReviewReference,
+    sections,
+  });
+}
 
 export const consumerMediatorInformation = Object.freeze({
   name: "Centre de la Médiation de la Consommation de Conciliateurs de Justice — CM2C",
@@ -796,6 +825,39 @@ export const finalWithdrawalNoticeCandidate = revision(
   }),
 );
 
+export const approvedLegalNotices = approvedRevision(
+  finalLegalNoticesCandidate,
+  "legal-notices-2026-04-approved",
+);
+
+export const approvedMusicTerms = approvedRevision(
+  finalMusicTermsCandidate,
+  "music-cgv-2026-04-approved",
+);
+
+export const approvedShopTerms = approvedRevision(
+  finalShopTermsCandidate,
+  "shop-cgv-2026-05-approved",
+  finalShopTermsCandidate.sections.map((section) => section.title === "5. Livraison, suivi et transfert des risques" ? {
+    title: section.title,
+    paragraphs: [
+      "La livraison est effectuée par Colissimo à domicile avec signature. Elle est limitée à la France métropolitaine, Corse comprise. La préparation LNX Beats de deux à trois jours ouvrés est distincte du délai indicatif du transporteur.",
+      ...section.paragraphs.slice(1),
+    ],
+    decisions: section.decisions,
+  } : section),
+);
+
+export const approvedPrivacyNotice = approvedRevision(
+  finalPrivacyCandidate,
+  "privacy-2026-04-approved",
+);
+
+export const approvedWithdrawalNotice = approvedRevision(
+  finalWithdrawalNoticeCandidate,
+  "withdrawal-2026-03-approved",
+);
+
 export const legalCandidates = Object.freeze([
   finalLegalNoticesCandidate,
   finalMusicTermsCandidate,
@@ -803,6 +865,16 @@ export const legalCandidates = Object.freeze([
   finalPrivacyCandidate,
   finalWithdrawalNoticeCandidate,
 ]);
+
+export const approvedLegalDocuments = Object.freeze([
+  approvedLegalNotices,
+  approvedMusicTerms,
+  approvedShopTerms,
+  approvedPrivacyNotice,
+  approvedWithdrawalNotice,
+]);
+
+export const publicLegalDocuments = approvedLegalDocuments;
 
 export const legalCandidateHistory = Object.freeze([
   legalNoticesCandidate,
@@ -825,6 +897,11 @@ export const legalCandidateHistory = Object.freeze([
   withdrawalNoticeCandidate,
   phase4cWithdrawalNoticeCandidate,
   finalWithdrawalNoticeCandidate,
+  approvedLegalNotices,
+  approvedMusicTerms,
+  approvedShopTerms,
+  approvedPrivacyNotice,
+  approvedWithdrawalNotice,
 ]);
 
 export function assertCandidateLegalRegistry() {
@@ -837,4 +914,19 @@ export function assertCandidateLegalRegistry() {
     }
   }
   return legalCandidates;
+}
+
+export function assertApprovedLegalRegistry() {
+  for (const document of approvedLegalDocuments) {
+    if (document.status !== "APPROVED") {
+      throw new Error("Final legal documents must be approved.");
+    }
+    if (!document.approvedAt || !document.approvedBy || !document.legalReviewReference) {
+      throw new Error("Approved legal documents require complete human approval evidence.");
+    }
+    if (document.effectiveAt !== null) {
+      throw new Error("Approved legal documents cannot become active without a separate activation step.");
+    }
+  }
+  return approvedLegalDocuments;
 }

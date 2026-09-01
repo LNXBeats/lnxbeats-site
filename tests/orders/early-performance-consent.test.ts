@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { finalMusicTermsCandidate, legalCandidates } from "../../data/legal";
+import { approvedMusicTerms, legalCandidates } from "../../data/legal";
 import { earlyPerformanceConsentWording } from "../../data/order-offer";
 import {
   earlyPerformanceConsentSnapshot,
@@ -16,14 +16,14 @@ const absentProof = {
   earlyPerformanceConsentAcceptedAt: null,
 };
 
-test("early performance consent is distinct, explicit and tied to the current music candidate", () => {
+test("early performance consent is distinct, explicit and tied to the approved music terms", () => {
   const snapshot = earlyPerformanceConsentSnapshot();
-  assert.equal(snapshot.version, finalMusicTermsCandidate.version);
+  assert.equal(snapshot.version, approvedMusicTerms.version);
   assert.match(snapshot.hashSha256, /^[0-9a-f]{64}$/);
   assert.match(earlyPerformanceConsentWording, /Je demande expressément/);
   assert.match(earlyPerformanceConsentWording, /avant la fin du délai légal de rétractation de 14 jours/);
   assert.match(earlyPerformanceConsentWording, /une fois la prestation entièrement exécutée/);
-  assert.equal(finalMusicTermsCandidate.status, "AWAITING_LEGAL_REVIEW");
+  assert.equal(approvedMusicTerms.status, "APPROVED");
   assert.equal(legalCandidates.length, 5);
 });
 
@@ -49,7 +49,7 @@ test("an explicit true creates a server-versioned auditable proof", () => {
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.created, true);
-  assert.equal(result.proof.earlyPerformanceConsentVersion, finalMusicTermsCandidate.version);
+  assert.equal(result.proof.earlyPerformanceConsentVersion, approvedMusicTerms.version);
   assert.match(result.proof.earlyPerformanceConsentHashSha256 ?? "", /^[0-9a-f]{64}$/);
   assert.equal(result.proof.earlyPerformanceConsentAcceptedAt?.toISOString(), now.toISOString());
   assert.equal(hasCurrentEarlyPerformanceConsent(result.proof), true);

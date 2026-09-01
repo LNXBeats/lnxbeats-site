@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { LegalCandidateDocument } from "@/components/legal-candidate-document";
-import { finalMusicTermsCandidate } from "@/data/legal";
+import { approvedMusicTerms } from "@/data/legal";
 
 export const metadata: Metadata = {
   title: "CGV créations musicales",
@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function MusicTermsPage() {
-  return <LegalCandidateDocument document={finalMusicTermsCandidate} introduction="Conditions applicables aux créations musicales personnalisées, à leur réalisation, à leur livraison et aux droits associés." />;
+  return <LegalCandidateDocument document={approvedMusicTerms} introduction="Conditions applicables aux créations musicales personnalisées, à leur réalisation, à leur livraison et aux droits associés." />;
 }

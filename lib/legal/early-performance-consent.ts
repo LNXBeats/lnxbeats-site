@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { finalMusicTermsCandidate } from "@/data/legal";
+import { approvedMusicTerms } from "@/data/legal";
 import { earlyPerformanceConsentWording } from "@/data/order-offer";
 
 export type EarlyPerformanceConsentProof = Readonly<{
@@ -13,7 +13,7 @@ export type EarlyPerformanceConsentProof = Readonly<{
 
 export function earlyPerformanceConsentSnapshot() {
   return Object.freeze({
-    version: finalMusicTermsCandidate.version,
+    version: approvedMusicTerms.version,
     hashSha256: createHash("sha256").update(earlyPerformanceConsentWording, "utf8").digest("hex"),
   });
 }
