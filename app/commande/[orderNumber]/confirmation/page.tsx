@@ -13,6 +13,7 @@ import { clientPaymentState } from "@/lib/orders/checkout";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
+import { hasCurrentEarlyPerformanceConsent } from "@/lib/legal/early-performance-consent";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Confirmation de paiement", robots: { index: false, follow: false } };
@@ -32,8 +33,15 @@ export default async function OrderConfirmationPage({ params, searchParams }: Co
   const returnState = query.paiement === "annule" || query.paiement === "paypal-annule" ? "cancel" : "return";
   const paymentState = clientPaymentState(order);
   const paymentProviders = await paymentProvidersAvailable();
-  const canRetry = ["ready", "failed", "expired"].includes(paymentState)
-    || (returnState === "cancel" && paymentState === "confirming");
+  const hasEarlyPerformanceConsent = hasCurrentEarlyPerformanceConsent({
+    earlyPerformanceConsentVersion: order.earlyPerformanceConsentVersion,
+    earlyPerformanceConsentHashSha256: order.earlyPerformanceConsentHashSha256,
+    earlyPerformanceConsentAcceptedAt: order.earlyPerformanceConsentAcceptedAt
+      ? new Date(order.earlyPerformanceConsentAcceptedAt)
+      : null,
+  });
+  const canRetry = hasEarlyPerformanceConsent && (["ready", "failed", "expired"].includes(paymentState)
+    || (returnState === "cancel" && paymentState === "confirming"));
   const illustrationOption = order.coverIncluded
     ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)}${order.illustrationFormat === "CUSTOM" && order.illustrationFormatCustom ? ` · ${order.illustrationFormatCustom}` : ""})`
     : null;
@@ -53,6 +61,7 @@ export default async function OrderConfirmationPage({ params, searchParams }: Co
           <div><dt>Options</dt><dd>{[illustrationOption, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
         </dl>
         {(paymentProviders.stripe || paymentProviders.paypal) && canRetry ? <PaymentCheckoutActions orderNumber={order.orderNumber} amountCents={order.totalCents} providers={paymentProviders} /> : null}
+        {!hasEarlyPerformanceConsent ? <p><strong>Paiement bloqué.</strong> Confirmez d’abord votre demande de commencement anticipé depuis Commander.</p> : null}
         {paymentProviders.stripe && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
         <div className="form-navigation">
           <Link className="form-button" href={`/compte/commandes/${encodeURIComponent(order.orderNumber)}`}>Voir ma commande</Link>

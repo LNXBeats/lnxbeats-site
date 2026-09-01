@@ -309,7 +309,10 @@ async function createFixtures(password: string) {
     emailVerified: true,
   } satisfies OrderActor;
   for (const scenario of scenarios) {
-    await finalizeOrder(actor, scenario.orderNumber, inputForScenario(scenario), true);
+    await finalizeOrder(actor, scenario.orderNumber, inputForScenario(scenario), {
+      personalUseTermsAccepted: true,
+      earlyPerformanceConsentAccepted: true,
+    });
   }
 
   const stored = await prisma.order.findMany({

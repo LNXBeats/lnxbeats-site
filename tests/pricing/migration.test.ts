@@ -19,6 +19,7 @@ const AFTER_SALES_MIGRATION = "20260830120000_shop_after_sales_foundation";
 const SHIPPING_OPERATIONS_MIGRATION = "20260830220000_shop_shipping_operations";
 const SHIPPING_PROVIDER_MIGRATION = "20260831200000_shop_shipping_provider_foundation";
 const PRODUCTION_READINESS_MIGRATION = "20260831230000_shop_production_readiness_contract";
+const EARLY_PERFORMANCE_CONSENT_MIGRATION = "20260901190000_order_early_performance_consent";
 
 test("Phase 5E keeps historical paid timestamps on refunded cancellations", async () => {
   const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, PRODUCTION_READINESS_MIGRATION, "migration.sql"), "utf8");
@@ -252,7 +253,8 @@ test("all migrations apply and seed the immutable V1 pricing parity", async () =
     assert.ok(migrations.indexOf(AFTER_SALES_MIGRATION) < migrations.indexOf(SHIPPING_OPERATIONS_MIGRATION));
     assert.ok(migrations.indexOf(SHIPPING_OPERATIONS_MIGRATION) < migrations.indexOf(SHIPPING_PROVIDER_MIGRATION));
     assert.ok(migrations.indexOf(SHIPPING_PROVIDER_MIGRATION) < migrations.indexOf(PRODUCTION_READINESS_MIGRATION));
-    assert.equal(migrations.at(-1), PRODUCTION_READINESS_MIGRATION);
+    assert.ok(migrations.indexOf(PRODUCTION_READINESS_MIGRATION) < migrations.indexOf(EARLY_PERFORMANCE_CONSENT_MIGRATION));
+    assert.equal(migrations.at(-1), EARLY_PERFORMANCE_CONSENT_MIGRATION);
 
     const pricing = await database.query<{
       version: string;

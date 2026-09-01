@@ -23,6 +23,7 @@ import type { OrderPaymentSnapshot, PaymentProvider, PersistedPaymentMode } from
 import { logPaymentEvent } from "@/lib/payments/observability";
 import { assertPaymentsRuntimeEnvironment } from "@/lib/payments/runtime";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { hasCurrentEarlyPerformanceConsent } from "@/lib/legal/early-performance-consent";
 
 const checkoutRateLimit = { max: 10, windowMs: 10 * 60_000 } as const;
 const payableOrderNumber = /^LNX-[0-9]{4}-[0-9]{6}$/;
@@ -225,6 +226,9 @@ export async function reserveProviderPaymentAttempt(
         currency: true,
         pricingVersion: true,
         status: true,
+        earlyPerformanceConsentVersion: true,
+        earlyPerformanceConsentHashSha256: true,
+        earlyPerformanceConsentAcceptedAt: true,
       },
     });
     if (!order) {
@@ -243,6 +247,13 @@ export async function reserveProviderPaymentAttempt(
     }
     if (order.status !== "AWAITING_PAYMENT") {
       throw new PaymentServiceError(409, "ORDER_NOT_PAYABLE");
+    }
+    if (!hasCurrentEarlyPerformanceConsent(order)) {
+      throw new PaymentServiceError(
+        409,
+        "ORDER_NOT_PAYABLE",
+        "Confirmez votre demande de commencement anticipé dans Commander avant le paiement.",
+      );
     }
 
     const snapshot = paymentSnapshot(order);

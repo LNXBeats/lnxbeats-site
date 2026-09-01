@@ -77,7 +77,8 @@ test("Commander carries the illustration choice through draft, recap and finaliz
   assert.match(form, /orderIllustrationFormatOptions\.map/);
   assert.match(form, /orderIllustrationFormatLabel\(form\.illustrationFormat\)/);
   assert.match(form, /body: JSON\.stringify\(form\)/);
-  assert.match(form, /body: JSON\.stringify\(\{ \.\.\.form, personalUseTermsAccepted: true \}\)/);
+  assert.match(form, /personalUseTermsAccepted: true/);
+  assert.match(form, /earlyPerformanceConsentAccepted: true/);
   assert.match(form, /setForm\(draftFromOrder\(payload\.order\)\)/);
   assert.match(form, /illustrationFormatCustom: value === "CUSTOM" \? current\.illustrationFormatCustom : ""/);
   assert.doesNotMatch(form, /Cover personnalisée|\bCover \+10/);

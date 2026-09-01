@@ -24,7 +24,7 @@ Le rendu public masque les statuts et reason codes internes. L’approbation res
 - [ ] durées probatoires et accusé durable.
 - [ ] entités/adresses contractuelles Railway, Cloudflare et OVHcloud relues sur les contrats applicables ;
 - [ ] mécanismes et lieux de transfert hors EEE vérifiés dans les DPA applicables ;
-- [ ] preuve distincte du commencement anticipé implémentée avant activation des créations musicales.
+- [x] preuve distincte du commencement anticipé implémentée localement ; migration additive, case non précochée, snapshot serveur et gate paiement couverts par tests. Son déploiement reste soumis à cette revue.
 
 ## Expert-comptable
 

@@ -18,8 +18,13 @@ export async function POST(request: Request, context: RouteContext) {
     const body = await readOrderJson(request);
     const parsed = parseOrderDraftInput(body);
     if (!parsed.ok) return orderJson({ error: parsed.message, field: parsed.field }, 400);
-    const personalUseTermsAccepted = Boolean(body && typeof body === "object" && !Array.isArray(body) && (body as Record<string, unknown>).personalUseTermsAccepted === true);
-    return orderJson({ order: await finalizeOrder(actor, orderNumber, parsed.value, personalUseTermsAccepted) });
+    const consents = body && typeof body === "object" && !Array.isArray(body)
+      ? {
+          personalUseTermsAccepted: (body as Record<string, unknown>).personalUseTermsAccepted,
+          earlyPerformanceConsentAccepted: (body as Record<string, unknown>).earlyPerformanceConsentAccepted,
+        }
+      : { personalUseTermsAccepted: undefined, earlyPerformanceConsentAccepted: undefined };
+    return orderJson({ order: await finalizeOrder(actor, orderNumber, parsed.value, consents) });
   } catch (error) {
     return orderErrorResponse(error);
   }

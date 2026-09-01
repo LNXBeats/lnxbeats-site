@@ -46,6 +46,11 @@ const baseInput: OrderDraftInput = {
   priorityProcessing: false,
 };
 
+const acceptedConsents = {
+  personalUseTermsAccepted: true,
+  earlyPerformanceConsentAccepted: true,
+} as const;
+
 async function validateSafetyGuards() {
   assert.equal(process.env.NODE_ENV, "test");
   assert.equal(process.env.LNX_DATABASE_TARGET, EXPECTED_TARGET);
@@ -158,7 +163,7 @@ async function run() {
       member,
       legacyIllustrationOrderNumber,
       legacyIllustrationInput,
-      true,
+      acceptedConsents,
     );
     assert.equal(finalizedLegacyIllustration.status, "AWAITING_PAYMENT");
     assert.equal(finalizedLegacyIllustration.illustrationFormat, null);
@@ -205,7 +210,7 @@ async function run() {
       illustrationFormat: "SQUARE",
       coverIncluded: true,
       priorityProcessing: false,
-    }, true);
+    }, acceptedConsents);
     assert.equal(finalizedHistorical.status, "AWAITING_PAYMENT");
     assert.equal(finalizedHistorical.pricingVersion, "2026-08-v1");
     assert.equal(finalizedHistorical.basePriceCents, 5_000);
@@ -245,7 +250,7 @@ async function run() {
         ...baseInput,
         coverIncluded: true,
         illustrationFormat: null,
-      }, true),
+      }, acceptedConsents),
       (error: unknown) => error instanceof Error
         && "code" in error
         && error.code === "INVALID_BRIEF",
@@ -296,7 +301,7 @@ async function run() {
     passed.push("photo normalized and protected against IDOR");
 
     const invalid = await createDraftOrder(other, { ...baseInput, brief: "" });
-    await assert.rejects(finalizeOrder(other, invalid.orderNumber, { ...baseInput, brief: "court" }, true));
+    await assert.rejects(finalizeOrder(other, invalid.orderNumber, { ...baseInput, brief: "court" }, acceptedConsents));
     const invalidPersisted = await prisma.order.findUniqueOrThrow({ where: { orderNumber: invalid.orderNumber } });
     assert.equal(invalidPersisted.status, "DRAFT");
     assert.equal(await prisma.orderEvent.count({ where: { orderId: invalidPersisted.id } }), 1);
@@ -308,7 +313,7 @@ async function run() {
       illustrationFormatCustom: "valeur personnalisée obsolète",
       coverIncluded: true,
       priorityProcessing: true,
-    }, true);
+    }, acceptedConsents);
     assert.equal(finalized.status, "AWAITING_PAYMENT");
     assert.equal(finalized.events.length, 2);
     assert.ok(finalized.submittedAt);

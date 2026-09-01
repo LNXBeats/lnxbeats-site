@@ -37,4 +37,7 @@ export const orderOffer = {
   maxImagePixels: 40_000_000,
 } as const;
 
+export const earlyPerformanceConsentWording =
+  "Je demande expressément que LNX Beats commence l’exécution de ma commande dès la confirmation du paiement, avant la fin du délai légal de rétractation de 14 jours. Je reconnais qu’une fois la prestation entièrement exécutée, je ne pourrai plus exercer mon droit de rétractation.";
+
 export type OrderUsage = "PERSONAL" | "COMMERCIAL_EXTENDED";

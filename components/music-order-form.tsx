@@ -10,7 +10,7 @@ import {
   orderIllustrationFormatLabel,
   orderIllustrationFormatOptions,
 } from "@/data/order-illustration";
-import { orderOffer, orderPricingForVersion } from "@/data/order-offer";
+import { earlyPerformanceConsentWording, orderOffer, orderPricingForVersion } from "@/data/order-offer";
 import { personalUseTerms } from "@/data/rights-offer";
 import {
   calculateOrderPrice,
@@ -143,6 +143,7 @@ export function MusicOrderForm({
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
   const [contentConfirmed, setContentConfirmed] = useState(false);
   const [personalUseTermsConfirmed, setPersonalUseTermsConfirmed] = useState(false);
+  const [earlyPerformanceConsentConfirmed, setEarlyPerformanceConsentConfirmed] = useState(false);
   const [finalizedOrder, setFinalizedOrder] = useState<SerializedOrder | null>(null);
   const [activePricingVersion, setActivePricingVersion] = useState(
     persistedDraft?.pricingVersion ?? orderOffer.pricingVersion,
@@ -427,14 +428,16 @@ export function MusicOrderForm({
       if (targetStep !== undefined && targetStep !== step) moveToStep(targetStep);
       return;
     }
-    if (!summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed) {
-      setError("Confirmez le récapitulatif, l’usage personnel et les règles de contenu avant de continuer.");
+    if (!summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed || !earlyPerformanceConsentConfirmed) {
+      setError("Confirmez le récapitulatif, l’usage personnel, les règles de contenu et votre demande de commencement anticipé avant de continuer.");
       setErrorField("confirmations");
       const firstMissing = !summaryConfirmed
         ? "order-summary-confirmed"
         : !contentConfirmed
           ? "order-content-confirmed"
-          : "order-personal-use-confirmed";
+          : !personalUseTermsConfirmed
+            ? "order-personal-use-confirmed"
+            : "order-early-performance-consent";
       document.getElementById(firstMissing)?.focus();
       return;
     }
@@ -455,7 +458,11 @@ export function MusicOrderForm({
       const response = await fetch(`/api/orders/${encodeURIComponent(current.orderNumber)}/finalize`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, personalUseTermsAccepted: true }),
+        body: JSON.stringify({
+          ...form,
+          personalUseTermsAccepted: true,
+          earlyPerformanceConsentAccepted: true,
+        }),
       });
       const payload = await responsePayload(response);
       if (!response.ok || !payload.order) throw new Error(payload.error ?? "La commande n’a pas pu être préparée.");
@@ -882,6 +889,10 @@ export function MusicOrderForm({
                   <label className="choice choice--full">
                     <input id="order-personal-use-confirmed" type="checkbox" aria-invalid={errorField === "confirmations" && !personalUseTermsConfirmed} checked={personalUseTermsConfirmed} onChange={(event) => { setPersonalUseTermsConfirmed(event.target.checked); setError(""); setErrorField(null); }} />
                     <span><strong>Usage personnel.</strong> {personalUseTerms.text}</span>
+                  </label>
+                  <label className="choice choice--full">
+                    <input id="order-early-performance-consent" type="checkbox" aria-invalid={errorField === "confirmations" && !earlyPerformanceConsentConfirmed} checked={earlyPerformanceConsentConfirmed} onChange={(event) => { setEarlyPerformanceConsentConfirmed(event.target.checked); setError(""); setErrorField(null); }} />
+                    <span><strong>Commencement avant 14 jours.</strong> {earlyPerformanceConsentWording}</span>
                   </label>
                   {errorField === "confirmations" ? <span className="field__error" id="order-confirmations-error" role="alert">{error}</span> : null}
                 </fieldset>

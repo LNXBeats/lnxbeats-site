@@ -16,6 +16,7 @@ import { getOrderForActor } from "@/lib/orders/service";
 import { orderStatusPresentation } from "@/lib/orders/status";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
 import { listRightsRequestsForOrderActor } from "@/lib/rights/service";
+import { hasCurrentEarlyPerformanceConsent } from "@/lib/legal/early-performance-consent";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,14 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   const paymentState = clientPaymentState(order);
   const paymentProviders = await paymentProvidersAvailable();
   const rightsRequests = order.status === "DELIVERED" ? await listRightsRequestsForOrderActor(actor, order.orderNumber) : [];
-  const canStartPayment = ["ready", "confirming", "failed", "expired"].includes(paymentState);
+  const hasEarlyPerformanceConsent = hasCurrentEarlyPerformanceConsent({
+    earlyPerformanceConsentVersion: order.earlyPerformanceConsentVersion,
+    earlyPerformanceConsentHashSha256: order.earlyPerformanceConsentHashSha256,
+    earlyPerformanceConsentAcceptedAt: order.earlyPerformanceConsentAcceptedAt
+      ? new Date(order.earlyPerformanceConsentAcceptedAt)
+      : null,
+  });
+  const canStartPayment = hasEarlyPerformanceConsent && ["ready", "confirming", "failed", "expired"].includes(paymentState);
   const activeFulfillmentStep = fulfillmentStep(order.status);
   const confirmedPayment = order.payments.find((payment) => payment.status === "SUCCEEDED");
 
@@ -107,6 +115,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             <h2 id="order-payment-title">{paymentState === "confirmed" ? "Paiement confirmé" : paymentState === "confirming" ? "Confirmation en cours" : paymentState === "review" ? "Vérification en cours" : "Commande prête à payer"}</h2>
             <p>Le montant enregistré pour cette commande est vérifié par LNX Studio. Il ne peut pas être modifié depuis cette page.</p>
             {(paymentProviders.stripe || paymentProviders.paypal) && canStartPayment ? <PaymentCheckoutActions orderNumber={order.orderNumber} amountCents={order.totalCents} providers={paymentProviders} /> : null}
+            {!hasEarlyPerformanceConsent ? <p><strong>Une confirmation distincte est nécessaire avant le paiement.</strong> Revenez dans Commander pour demander expressément le commencement de la création avant la fin du délai de rétractation.</p> : null}
             {orderCanStillBeEdited(order) ? <Link className="form-button" href={`/commander?brouillon=${encodeURIComponent(order.orderNumber)}&etape=recap`}>Modifier avant paiement</Link> : null}
             {paymentProviders.stripe && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
           </section>
@@ -177,6 +186,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             {order.coverIncluded && order.illustrationFormat === "CUSTOM" ? <div><dt>Précision</dt><dd>{order.illustrationFormatCustom}</dd></div> : null}
             <div><dt>Priorité</dt><dd>{order.priorityProcessing ? "Demandée (+30 €), délai à confirmer" : "Non"}</dd></div>
             <div><dt>Retour inclus</dt><dd>{order.revisionAllowance - order.revisionUsed} sur {order.revisionAllowance} restant</dd></div>
+            <div><dt>Commencement avant 14 jours</dt><dd>{order.earlyPerformanceConsentAcceptedAt ? `Demande enregistrée le ${new Date(order.earlyPerformanceConsentAcceptedAt).toLocaleString("fr-FR")}` : "À confirmer avant paiement"}</dd></div>
           </dl>
         </section>
 

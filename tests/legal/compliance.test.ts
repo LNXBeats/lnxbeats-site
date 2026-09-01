@@ -222,14 +222,16 @@ test("Phase 4C Shop wording ties formation to server-confirmed payment and keeps
   assert.doesNotMatch(body, /CD non repris ni échangé/i);
 });
 
-test("Phase 4C keeps early-performance consent out of runtime until separate evidence exists", () => {
+test("legal finalization keeps early-performance consent distinct and server-auditable", () => {
   const commander = source("components/music-order-form.tsx");
   const versioning = source("docs/LEGAL_VERSIONING.md");
-  assert.doesNotMatch(commander, /Je demande expressément que LNX Beats commence l’exécution/);
+  assert.match(commander, /order-early-performance-consent/);
+  assert.match(commander, /earlyPerformanceConsentWording/);
+  assert.match(commander, /earlyPerformanceConsentAccepted: true/);
   assert.match(versioning, /case distincte, non précochée/);
-  assert.match(versioning, /choix, la version, l’empreinte SHA-256 et l’horodatage côté serveur/);
-  assert.match(versioning, /Les champs `personalUseTerms\*` existants ne constituent pas une preuve distincte adaptée/);
-  assert.match(versioning, /Aucune migration ni collecte runtime n’est introduite en Phase 4C/);
+  assert.match(versioning, /version, une empreinte SHA-256 et un horodatage serveur/);
+  assert.match(versioning, /Les champs `personalUseTerms\*` existants ne sont pas détournés/);
+  assert.match(versioning, /checkout Stripe\/PayPal refuse une preuve absente ou qui ne correspond plus/);
 });
 
 test("the CM2C convention review dates are internal reminders and not candidate effective dates", () => {

@@ -56,6 +56,11 @@ const input: OrderDraftInput = {
   coverIncluded: true, priorityProcessing: false,
 };
 
+const acceptedConsents = {
+  personalUseTermsAccepted: true,
+  earlyPerformanceConsentAccepted: true,
+} as const;
+
 async function run() {
   await guards();
   const operation = process.argv[2];
@@ -72,11 +77,11 @@ async function run() {
   const member = actor(memberUser);
   const draft = await createDraftOrder(member, { ...input, title: "Brouillon à reprendre" });
   const submitted = await createDraftOrder(member, { ...input, title: "Commande non livrée" });
-  await finalizeOrder(member, submitted.orderNumber, input, true);
+  await finalizeOrder(member, submitted.orderNumber, input, acceptedConsents);
   const delivered = await createDraftOrder(member, { ...input, title: "Création livrée" });
-  await finalizeOrder(member, delivered.orderNumber, input, true);
+  await finalizeOrder(member, delivered.orderNumber, input, acceptedConsents);
   const requested = await createDraftOrder(member, { ...input, title: "Droits demandés" });
-  await finalizeOrder(member, requested.orderNumber, input, true);
+  await finalizeOrder(member, requested.orderNumber, input, acceptedConsents);
 
   async function markDelivered(orderNumber: string) {
     await prisma.$transaction(async (transaction) => {

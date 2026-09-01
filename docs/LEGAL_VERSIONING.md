@@ -10,13 +10,13 @@ La Phase 4 autorise uniquement `DRAFT` et `AWAITING_LEGAL_REVIEW`. Le registre a
 
 `LegalDocumentVersion` conserve type, version, SHA-256, création, effet, statut, approbateur, date, référence de revue et version remplacée. La base impose une seule version `ACTIVE` par type et la cohérence des dates/approbations.
 
-`ShopOrder` conserve déjà `termsVersion`, `termsHashSha256`, `termsAcceptedAt` et `userId`. `Order` conserve le snapshot d’usage personnel. Ces snapshots deviennent immuables pour la commande et ne sont jamais remplacés lors d’une nouvelle publication.
+`ShopOrder` conserve déjà `termsVersion`, `termsHashSha256`, `termsAcceptedAt` et `userId`. `Order` conserve séparément le snapshot d’usage personnel et la preuve de demande de commencement anticipé. Chaque preuve associe une version, une empreinte SHA-256 et un horodatage serveur.
 
-## Commencement anticipé — décision candidate Phase 4C
+## Commencement anticipé — implémentation finale locale
 
-La formulation candidate n’est pas activée dans Commander. Avant une activation future, l’étape finale devra présenter une case distincte, non précochée, séparée de l’usage personnel. La preuve devra conserver au minimum le choix, la version, l’empreinte SHA-256 et l’horodatage côté serveur.
+Commander présente une case distincte, non précochée, séparée de l’usage personnel. Le serveur ignore toute version fournie par le navigateur, relit la candidate musicale courante et conserve `earlyPerformanceConsentVersion`, `earlyPerformanceConsentHashSha256` et `earlyPerformanceConsentAcceptedAt`.
 
-Les champs `personalUseTerms*` existants ne constituent pas une preuve distincte adaptée et ne doivent pas être détournés. Une extension additive du modèle `Order`, accompagnée d’un gate empêchant le passage en création avant quatorze jours lorsque la demande n’a pas été formulée, devra être auditée séparément après validation juridique professionnelle. Aucune migration ni collecte runtime n’est introduite en Phase 4C.
+Les champs `personalUseTerms*` existants ne sont pas détournés. Une contrainte PostgreSQL impose une preuve entièrement nulle ou entièrement renseignée et une empreinte SHA-256 valide. Le premier enregistrement et tout renouvellement de version s’effectuent sous le verrou transactionnel de la commande. Le checkout Stripe/PayPal refuse une preuve absente ou qui ne correspond plus à la candidate musicale courante.
 
 ## QA historique
 

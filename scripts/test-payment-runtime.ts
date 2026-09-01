@@ -677,7 +677,10 @@ async function run() {
       priorityProcessing: false,
     } satisfies OrderDraftInput;
     await saveDraftOrder(actor, QA_ORDER_NUMBERS[3], changedInput);
-    await finalizeOrder(actor, QA_ORDER_NUMBERS[3], changedInput, true);
+    await finalizeOrder(actor, QA_ORDER_NUMBERS[3], changedInput, {
+      personalUseTermsAccepted: true,
+      earlyPerformanceConsentAccepted: true,
+    });
     await createStripeCheckoutForOrder(actor, QA_ORDER_NUMBERS[3], dependencies);
     const repricedAttempts = await prisma.payment.findMany({
       where: { orderId: pendingMaximumOrderId },

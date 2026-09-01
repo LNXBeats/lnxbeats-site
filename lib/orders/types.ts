@@ -62,6 +62,9 @@ export type SerializedOrder = OrderDraftInput & {
   personalUseTermsVersion: string | null;
   personalUseTermsHashSha256: string | null;
   personalUseTermsAcceptedAt: string | null;
+  earlyPerformanceConsentVersion: string | null;
+  earlyPerformanceConsentHashSha256: string | null;
+  earlyPerformanceConsentAcceptedAt: string | null;
   contractRequired: boolean;
   revisionAllowance: number;
   revisionUsed: number;

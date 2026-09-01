@@ -19,7 +19,7 @@
     "auth:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/auth-qa-fixtures.ts",
     "auth:admin:bootstrap": "NODE_OPTIONS=--conditions=react-server tsx scripts/bootstrap-admin.ts",
     "admin:bootstrap:production": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/bootstrap-production-admin.ts",
-    "test:order": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/domain.test.ts tests/orders/request.test.ts",
+    "test:order": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/domain.test.ts tests/orders/request.test.ts tests/orders/early-performance-consent.test.ts",
     "test:rights": "NODE_OPTIONS=--conditions=react-server tsx --test tests/orders/rights.test.ts",
     "test:contracts": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/rights/*.test.ts",
     "test:contracts:pdf-render": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/generate-contract-pdf-sample.ts",

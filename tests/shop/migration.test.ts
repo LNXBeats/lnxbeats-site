@@ -16,6 +16,7 @@ const AFTER_SALES_MIGRATION = "20260830120000_shop_after_sales_foundation";
 const SHIPPING_OPERATIONS_MIGRATION = "20260830220000_shop_shipping_operations";
 const SHIPPING_PROVIDER_MIGRATION = "20260831200000_shop_shipping_provider_foundation";
 const PRODUCTION_READINESS_MIGRATION = "20260831230000_shop_production_readiness_contract";
+const EARLY_PERFORMANCE_CONSENT_MIGRATION = "20260901190000_order_early_performance_consent";
 
 async function directories() {
   return (await readdir(MIGRATIONS_DIRECTORY, { withFileTypes: true }))
@@ -212,9 +213,10 @@ test("Phase 5D shipping provider migration is additive and preserves the physica
   assert.doesNotMatch(sql, /ALTER TABLE "shop_orders"/);
 });
 
-test("Phase 5E readiness migration is last, additive and preserves historical ledgers", async () => {
+test("Phase 5E readiness migration precedes the additive legal consent migration and preserves historical ledgers", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.at(-1), PRODUCTION_READINESS_MIGRATION);
+  assert.equal(migrationDirectories.at(-2), PRODUCTION_READINESS_MIGRATION);
+  assert.equal(migrationDirectories.at(-1), EARLY_PERFORMANCE_CONSENT_MIGRATION);
   const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, PRODUCTION_READINESS_MIGRATION, "migration.sql"), "utf8");
   assert.doesNotMatch(sql, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE|DELETE\s+FROM|UPDATE\s+"|INSERT\s+INTO)\b/i);
   for (const table of ["packaging_profiles", "shop_return_evidence", "shop_order_customer_requests", "shop_readiness_alerts", "shop_maintenance_runs"]) {

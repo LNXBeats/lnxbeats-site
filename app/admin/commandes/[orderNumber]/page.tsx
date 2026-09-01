@@ -187,6 +187,18 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
             <small>Tarif {order.pricingVersion}. Le montant du navigateur n’est jamais utilisé comme source de vérité.</small>
           </section>
 
+          <section className="admin-side-window" aria-labelledby="admin-early-performance-title">
+            <p className="admin-section-label">Preuve contractuelle</p><h2 id="admin-early-performance-title">Commencement anticipé</h2>
+            {order.earlyPerformanceConsentVersion && order.earlyPerformanceConsentHashSha256 && order.earlyPerformanceConsentAcceptedAt ? (
+              <dl>
+                <div><dt>Consentement explicite</dt><dd>Enregistré</dd></div>
+                <div><dt>Version</dt><dd>{order.earlyPerformanceConsentVersion}</dd></div>
+                <div><dt>Accepté le</dt><dd>{order.earlyPerformanceConsentAcceptedAt.toLocaleString("fr-FR")}</dd></div>
+                <div><dt>Empreinte</dt><dd><code>{order.earlyPerformanceConsentHashSha256}</code></dd></div>
+              </dl>
+            ) : <p><strong>Preuve absente.</strong> Aucun nouveau paiement ne doit être préparé avant une confirmation distincte dans Commander.</p>}
+          </section>
+
           <section className="admin-side-window" aria-labelledby="admin-payments-title">
             <p className="admin-section-label">Paiements</p><h2 id="admin-payments-title">{order.payments.length ? `${order.payments.length} tentative${order.payments.length > 1 ? "s" : ""}` : "Aucune tentative"}</h2>
             {order.payments.map((payment) => (

@@ -33,6 +33,7 @@ import { canReadOrderMedia } from "@/lib/media/authorization";
 import { personalUseTermsSnapshot } from "@/lib/rights/domain";
 import { ORDER_DELIVERY_MIME_TYPES } from "@/lib/orders/audio-request";
 import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
+import { resolveEarlyPerformanceConsent } from "@/lib/legal/early-performance-consent";
 
 export class OrderServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -223,6 +224,9 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
     personalUseTermsVersion: order.personalUseTermsVersion,
     personalUseTermsHashSha256: order.personalUseTermsHashSha256,
     personalUseTermsAcceptedAt: order.personalUseTermsAcceptedAt?.toISOString() ?? null,
+    earlyPerformanceConsentVersion: order.earlyPerformanceConsentVersion,
+    earlyPerformanceConsentHashSha256: order.earlyPerformanceConsentHashSha256,
+    earlyPerformanceConsentAcceptedAt: order.earlyPerformanceConsentAcceptedAt?.toISOString() ?? null,
     contractRequired: order.contractRequired,
     revisionAllowance: order.revisionAllowance,
     revisionUsed: order.revisionUsed,
@@ -394,7 +398,12 @@ export async function saveDraftOrder(actor: OrderActor, orderNumber: string, inp
   });
 }
 
-export async function finalizeOrder(actor: OrderActor, orderNumber: string, input: OrderDraftInput, personalUseTermsAccepted: boolean) {
+export async function finalizeOrder(
+  actor: OrderActor,
+  orderNumber: string,
+  input: OrderDraftInput,
+  consents: Readonly<{ personalUseTermsAccepted: unknown; earlyPerformanceConsentAccepted: unknown }>,
+) {
   assertDatabaseConfigured();
   return withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
     const draft = await transaction.order.findFirst({ where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } } });
@@ -406,11 +415,23 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
       && input.illustrationFormat === null;
     const validation = validateOrderForSubmission(input, { allowLegacyMissingIllustrationFormat });
     if (!validation.ok) throw new OrderServiceError(validation.message, 400, "INVALID_BRIEF");
-    if (draft.status === "DRAFT" && !personalUseTermsAccepted) {
+    if (draft.status === "DRAFT" && consents.personalUseTermsAccepted !== true) {
       throw new OrderServiceError("Confirmez les conditions d’usage personnel avant le paiement.", 400, "PERSONAL_USE_TERMS_REQUIRED");
     }
     const submittedAt = new Date();
     const terms = personalUseTermsSnapshot();
+    const earlyPerformanceConsent = resolveEarlyPerformanceConsent(
+      draft,
+      consents.earlyPerformanceConsentAccepted,
+      submittedAt,
+    );
+    if (!earlyPerformanceConsent.ok) {
+      throw new OrderServiceError(
+        "Confirmez votre demande de commencement anticipé avant le paiement.",
+        400,
+        "EARLY_PERFORMANCE_CONSENT_REQUIRED",
+      );
+    }
     const order = await transaction.order.update({
       where: { id: draft.id },
       data: {
@@ -422,6 +443,7 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
           personalUseTermsHashSha256: terms.hashSha256,
           personalUseTermsAcceptedAt: submittedAt,
         } : {}),
+        ...(earlyPerformanceConsent.created ? earlyPerformanceConsent.proof : {}),
       },
     });
     if (draft.status === "DRAFT") {
@@ -432,6 +454,17 @@ export async function finalizeOrder(actor: OrderActor, orderNumber: string, inpu
           toStatus: "AWAITING_PAYMENT",
           note: "Demande enregistrée. Le paiement reste à finaliser.",
           visibility: "CLIENT",
+          actorUserId: actor.id,
+        },
+      });
+    } else if (earlyPerformanceConsent.created) {
+      await transaction.orderEvent.create({
+        data: {
+          orderId: draft.id,
+          fromStatus: "AWAITING_PAYMENT",
+          toStatus: "AWAITING_PAYMENT",
+          note: `Consentement au commencement anticipé renouvelé pour ${earlyPerformanceConsent.proof.earlyPerformanceConsentVersion}.`,
+          visibility: "INTERNAL",
           actorUserId: actor.id,
         },
       });
