@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Container } from "@/components/container";
-import { phase4cMusicTermsCandidate, phase4cShopTermsCandidate } from "@/data/legal";
+import { phase4cMusicTermsCandidate, releaseBShopTermsCandidate } from "@/data/legal";
 
 export const metadata: Metadata = {
   title: "Conditions générales",
@@ -30,7 +30,7 @@ export default function TermsIndexPage() {
             <p className="eyebrow">Boutique physique</p>
             <h2>Produits, livraison et garanties</h2>
             <p>Stock, paiement, livraison, transfert des risques, rétractation, retours et garanties légales.</p>
-            <dl><div><dt>Version</dt><dd>{phase4cShopTermsCandidate.version}</dd></div><div><dt>Statut</dt><dd>{phase4cShopTermsCandidate.status}</dd></div></dl>
+            <dl><div><dt>Version</dt><dd>{releaseBShopTermsCandidate.version}</dd></div><div><dt>Statut</dt><dd>{releaseBShopTermsCandidate.status}</dd></div></dl>
             <Link className="button button--secondary" href="/cgv/boutique">Lire la version candidate</Link>
           </article>
         </div>

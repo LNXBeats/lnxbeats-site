@@ -42,3 +42,9 @@ Avant une future ouverture : maintenir le contrôle de l’override Prisma ; rev
   aucune down migration destructive.
 
 Voir [SHOP_PRODUCTION_READINESS_PHASE5E.md](SHOP_PRODUCTION_READINESS_PHASE5E.md).
+
+## V1.1.0 — Release B
+
+Release B sépare désormais trois gates : **B1 infrastructure avec tous les flags commerciaux OFF**, **B2 ouverture commerciale après validations humaines**, puis **B3 paiements Boutique Live**. Le code ne vaut ni approbation juridique, ni activation tarifaire, ni création de produit, ni configuration Railway.
+
+Le paiement Boutique OFF est un vrai verrou transactionnel : le catalogue et le panier peuvent rester consultables, mais aucune `ShopOrder`, réservation, acceptation contractuelle ou tentative provider n'est créée. Le SAV Production est prévu sur R2 privé, la maintenance sur un Cron séparé `npm run shop:maintenance:run`, et le suivi de lancement reste manuel sans API La Poste. Voir [SHOP_OPEN_READINESS_V1.1.0.md](SHOP_OPEN_READINESS_V1.1.0.md).

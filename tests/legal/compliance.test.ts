@@ -18,6 +18,8 @@ import {
   phase4cShopTermsCandidate,
   phase4cWithdrawalNoticeCandidate,
   privacyCandidate,
+  releaseBPrivacyCandidate,
+  releaseBShopTermsCandidate,
   shopTermsCandidate,
   withdrawalNoticeCandidate,
 } from "../../data/legal";
@@ -43,11 +45,11 @@ test("professional identity is exact, complete and never presents LNX STUDIO as 
   assert.doesNotMatch(JSON.stringify(legalCandidates), /LNX STUDIO (?:SAS|SARL|SASU|est une société)/i);
 });
 
-test("all Phase 4 legal documents are immutable-looking, hashed, non-approved candidates", () => {
+test("all legal documents are immutable-looking, hashed, non-approved candidates", () => {
   assert.equal(assertCandidateLegalRegistry(), legalCandidates);
   assert.equal(legalCandidates.length, 5);
   for (const document of legalCandidates) {
-    assert.match(document.version, /-draft$/);
+    assert.match(document.version, /-(?:draft|candidate)$/);
     assert.match(document.hashSha256, /^[0-9a-f]{64}$/);
     assert.equal(document.status, "AWAITING_LEGAL_REVIEW");
     assert.equal(document.effectiveAt, null);
@@ -127,6 +129,21 @@ test("Phase 4C creates explicit candidate revisions without rewriting legal hist
   assert.notEqual(phase4cWithdrawalNoticeCandidate.hashSha256, withdrawalNoticeCandidate.hashSha256);
 });
 
+test("Release B creates new Shop and privacy candidates without approving or rewriting Phase 4C", () => {
+  assert.equal(releaseBShopTermsCandidate.version, "shop-cgv-2026-04-candidate");
+  assert.equal(releaseBPrivacyCandidate.version, "privacy-2026-03-candidate");
+  for (const candidate of [releaseBShopTermsCandidate, releaseBPrivacyCandidate]) {
+    assert.equal(candidate.status, "AWAITING_LEGAL_REVIEW");
+    assert.equal(candidate.effectiveAt, null);
+    assert.equal(candidate.approvedAt, null);
+    assert.equal(candidate.approvedBy, null);
+  }
+  assert.ok(legalCandidateHistory.includes(phase4cShopTermsCandidate));
+  assert.ok(legalCandidateHistory.includes(phase4bPrivacyCandidate));
+  assert.notEqual(releaseBShopTermsCandidate.hashSha256, phase4cShopTermsCandidate.hashSha256);
+  assert.notEqual(releaseBPrivacyCandidate.hashSha256, phase4bPrivacyCandidate.hashSha256);
+});
+
 test("Phase 4C music wording treats the order as a creative service and preserves withdrawal rights", () => {
   const body = JSON.stringify(phase4cMusicTermsCandidate);
   assert.match(body, /prestation de services créatifs réalisée sur commande, donnant lieu à la livraison d’un contenu numérique/);
@@ -201,7 +218,8 @@ test("public legal surfaces expose distinct terms, withdrawal, CM2C and no obsol
   assert.doesNotMatch(files, /ec\.europa\.eu\/consumers\/odr/i);
   assert.doesNotMatch(files, /date de naissance|sécurité sociale|pièce d’identité/i);
   assert.match(source("app/cgv/creation-musicale/page.tsx"), /phase4cMusicTermsCandidate/);
-  assert.match(source("app/cgv/boutique/page.tsx"), /phase4cShopTermsCandidate/);
+  assert.match(source("app/cgv/boutique/page.tsx"), /releaseBShopTermsCandidate/);
+  assert.match(source("app/confidentialite/page.tsx"), /releaseBPrivacyCandidate/);
   assert.match(source("app/retractation/page.tsx"), /phase4cWithdrawalNoticeCandidate/);
 });
 

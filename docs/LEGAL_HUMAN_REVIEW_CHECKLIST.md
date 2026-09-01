@@ -23,10 +23,10 @@
 ## Logistique
 
 - [ ] pays, préparation, livraison et retour ;
-- [ ] poids produit/emballage/protection ;
-- [ ] minimum 150 g ;
+- [ ] poids facturable produits seuls ; emballage/protection physiques non facturés ;
+- [ ] minimum commercial 250 g ; carton CD 60 g ; maximum 16 articles ;
 - [ ] grille Colissimo versionnée ;
-- [ ] suivi/signature et fallback manuel.
+- [ ] suivi Colissimo manuel au lancement ; aucun statut transporteur simulé.
 
 ## Technique/QA
 

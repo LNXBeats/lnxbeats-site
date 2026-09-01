@@ -55,6 +55,8 @@ export const consumerMediatorInformation = Object.freeze({
   phone: "01 89 47 00 14",
   phoneE164: "+33189470014",
   website: "https://www.cm2c.net/",
+  conventionReviewFrom: "2029-05-27",
+  conventionExpiresAt: "2029-08-27",
 });
 
 function consumerMediatorParagraph() {
@@ -489,6 +491,23 @@ export const phase4bPrivacyCandidate = revision(
   ] } : section),
 );
 
+export const releaseBPrivacyCandidate = revision(
+  phase4bPrivacyCandidate,
+  "privacy-2026-03-candidate",
+  phase4bPrivacyCandidate.sections.map((section) => section.title === "Données et finalités" ? { title: section.title, paragraphs: [
+    "Les traitements couvrent les comptes, sessions, commandes, briefs, références privées, livrables, produits, adresses de livraison et de facturation, choix B2C/B2B, paiements, factures, avoirs, notifications, contrats, rétractations, retours, réclamations et journaux de sécurité.",
+    "Une demande SAV peut, au choix du client, comporter jusqu’à cinq photographies destinées à documenter un défaut, une non-conformité, une erreur ou un dommage. Elles ne sont pas requises pour déposer un message SAV.",
+    "Les finalités sont les mesures précontractuelles, l’exécution, la preuve, la facturation, la livraison, le support, la sécurité et le respect des obligations légales. Un numéro de suivi manuel est traité uniquement pour une commande expédiée.",
+  ] } : section.title === "Paiements et destinataires" ? { title: section.title, paragraphs: [
+    "LNX STUDIO ne stocke pas de numéro de carte complet, CVC ou mot de passe PayPal. Les données financières et de facturation sont limitées aux références, statuts, montants, devises, événements, factures, avoirs et remboursements nécessaires.",
+    "Railway, Cloudflare R2, Resend, Stripe, PayPal et OVHcloud interviennent selon leurs rôles techniques. Les photographies SAV sont conservées dans un stockage objet privé Cloudflare R2 et ne sont accessibles qu’au client concerné et aux administrateurs autorisés. La Poste/Colissimo n’est pas présenté comme destinataire API actif.",
+  ] } : section.title === "Durées de conservation" ? { title: section.title, paragraphs: [
+    "Les factures, avoirs et pièces comptables sont conservés dix ans. Les fichiers de référence musicale sont conservés jusqu’à quatre-vingt-dix jours après livraison, sauf obligation légale, litige ou demande justifiée imposant une durée différente.",
+    "Les photographies facultatives d’un dossier SAV sont supprimées quatre-vingt-dix jours après la clôture du dossier. L’état de purge reste auditable sans conserver le contenu de la photographie.",
+    "La suppression d’un compte ne supprime pas les données soumises à conservation légale ; leur accès est restreint. Les autres durées restent proportionnées à la finalité, au contrat, à la sécurité et aux délais de recours.",
+  ] } : section),
+);
+
 export const phase4cMusicTermsCandidate = revision(
   phase4bMusicTermsCandidate,
   "music-cgv-2026-03-draft",
@@ -551,6 +570,20 @@ export const phase4cShopTermsCandidate = revision(
   }),
 );
 
+export const releaseBShopTermsCandidate = revision(
+  phase4cShopTermsCandidate,
+  "shop-cgv-2026-04-candidate",
+  phase4cShopTermsCandidate.sections.map((section) => section.title === "5. Livraison, suivi et transfert des risques" ? {
+    title: section.title,
+    paragraphs: [
+      "La livraison de lancement est limitée à la France métropolitaine, Corse comprise, par Colissimo à domicile. La préparation LNX Beats de deux à trois jours ouvrés est distincte du délai indicatif du transporteur. Une fiche produit peut annoncer explicitement une précommande ou un délai particulier.",
+      "Le transfert des risques intervient lors de la prise de possession physique, sous réserve des règles impératives. Au lancement, le numéro de suivi est saisi manuellement par un administrateur et communiqué au client ; aucun statut détaillé du transporteur n’est simulé.",
+      "Les poids produit, emballage et protection sont administrables. Le poids facturable est celui des produits seuls, avec un minimum de 250 g. Le carton CD de 60 g est offert, non facturé et limité à seize articles tant que le multi-colis n’est pas disponible. Les grilles sont versionnées et snapshotées dans la commande.",
+    ],
+    decisions: [{ category: "LEGAL_DECISION_REQUIRED" as const, code: "SHOP_TERMS_RELEASE_B_HUMAN_APPROVAL" }],
+  } : section),
+);
+
 export const phase4cWithdrawalNoticeCandidate = revision(
   withdrawalNoticeCandidate,
   "withdrawal-2026-02-draft",
@@ -579,8 +612,8 @@ export const phase4cWithdrawalNoticeCandidate = revision(
 export const legalCandidates = Object.freeze([
   phase4b1LegalNoticesCandidate,
   phase4cMusicTermsCandidate,
-  phase4cShopTermsCandidate,
-  phase4bPrivacyCandidate,
+  releaseBShopTermsCandidate,
+  releaseBPrivacyCandidate,
   phase4cWithdrawalNoticeCandidate,
 ]);
 
@@ -594,8 +627,10 @@ export const legalCandidateHistory = Object.freeze([
   shopTermsCandidate,
   phase4bShopTermsCandidate,
   phase4cShopTermsCandidate,
+  releaseBShopTermsCandidate,
   privacyCandidate,
   phase4bPrivacyCandidate,
+  releaseBPrivacyCandidate,
   withdrawalNoticeCandidate,
   phase4cWithdrawalNoticeCandidate,
 ]);
