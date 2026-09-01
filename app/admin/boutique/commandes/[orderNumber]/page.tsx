@@ -461,7 +461,7 @@ export default async function AdminShopOrderPage({
               <h2 id="admin-shop-tracking-title">{order.trackingNumber ? "Corriger le suivi avant départ." : "Enregistrer le suivi."}</h2>
               <form className="admin-form admin-shipping-tracking-form" action={recordShopOrderTrackingAction}>
                 <input type="hidden" name="orderNumber" value={order.orderNumber} />
-                <label>Transporteur ou mode<input name="carrier" maxLength={120} defaultValue={order.shippingCarrier ?? "Transporteur QA"} required /></label>
+                <label>Transporteur ou mode<input name="carrier" maxLength={120} defaultValue={order.shippingCarrier ?? "Colissimo"} required /></label>
                 <label>Numéro de suivi<input name="trackingNumber" maxLength={160} defaultValue={order.trackingNumber ?? ""} required /></label>
                 <label>URL de suivi HTTPS (facultative)<input name="trackingUrl" type="url" maxLength={1000} defaultValue={order.trackingUrl ?? ""} /></label>
                 <label className="admin-check">

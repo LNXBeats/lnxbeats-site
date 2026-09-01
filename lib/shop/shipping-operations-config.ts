@@ -9,6 +9,7 @@ import {
   SHOP_PHASE5D_QA_TARGET,
   SHOP_PHASE5D_RUNTIME_QA_TARGET,
 } from "@/lib/shop/qa-contract";
+import { isStrictShopProductionEnvironment } from "@/lib/shop/production-environment";
 
 export const SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION = "enable-local-shop-shipping-operations-qa";
 export const SHOP_SHIPPING_OPERATIONS_QA_TARGET = SHOP_PHASE5C_QA_TARGET;
@@ -31,6 +32,11 @@ const FORBIDDEN_EXTERNAL_SECRETS = [
 
 export function shopShippingOperationsQaEnabled(environment: NodeJS.ProcessEnv = process.env) {
   if (environment.SHOP_SHIPPING_OPERATIONS_ENABLED !== "true") return false;
+  if (isStrictShopProductionEnvironment(environment)) {
+    return environment.SHOP_SHIPPING_OPERATIONS_PROVIDER === "manual"
+      && environment.SHOP_SHIPPING_PROVIDER_ENABLED === "false"
+      && environment.LIVE_REFUNDS_ENABLED === "false";
+  }
   if (environment.SHOP_SHIPPING_OPERATIONS_QA_CONFIRM !== SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION) return false;
   if (environment.SHOP_SHIPPING_OPERATIONS_PROVIDER !== "manual") return false;
   const phase5c = environment.AUTH_URL === SHOP_PHASE5C_QA_ORIGIN

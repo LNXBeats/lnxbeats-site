@@ -68,8 +68,8 @@ function carrier(value: string | undefined) {
 }
 
 function trackingNumber(value: string | undefined) {
-  const normalized = requiredText(value, 160, "Le numéro de suivi est requis.");
-  if (!/^[A-Za-z0-9][A-Za-z0-9 ._+:/-]*$/.test(normalized)) {
+  const normalized = requiredText(value, 40, "Le numéro de suivi est requis.").replace(/\s+/g, "").toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9._+/-]{5,39}$/.test(normalized)) {
     throw new ShopFulfillmentInputError("Le numéro de suivi contient des caractères invalides.");
   }
   return normalized;
@@ -86,6 +86,9 @@ function optionalHttpsUrl(value: string | undefined) {
   }
   if (url.protocol !== "https:" || url.username || url.password) {
     throw new ShopFulfillmentInputError("L’URL de suivi doit utiliser HTTPS.");
+  }
+  if (url.hostname.toLowerCase() !== "www.laposte.fr") {
+    throw new ShopFulfillmentInputError("Le lien de suivi n’appartient pas au domaine public La Poste autorisé.");
   }
   const serialized = url.toString();
   if (serialized.length > 1000) throw new ShopFulfillmentInputError("L’URL de suivi est trop longue.");

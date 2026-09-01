@@ -46,7 +46,7 @@ function trackingForm(overrides: Record<string, string> = {}) {
     confirmation: SHOP_FULFILLMENT_CONFIRMATIONS.tracking,
     carrier: "Transporteur QA",
     trackingNumber: "QA-0001/FR",
-    trackingUrl: "https://tracking.example.invalid/QA-0001",
+    trackingUrl: "https://www.laposte.fr/outils/suivre-vos-envois?code=QA0001",
     ...overrides,
   };
   for (const [name, value] of Object.entries(values)) form.set(name, value);
@@ -59,7 +59,7 @@ test("manual tracking is normalized, bounded and independent from any carrier-sp
     tracking: {
       carrier: "Transporteur QA",
       trackingNumber: "QA-0001/FR",
-      trackingUrl: "https://tracking.example.invalid/QA-0001",
+      trackingUrl: "https://www.laposte.fr/outils/suivre-vos-envois?code=QA0001",
     },
   });
 

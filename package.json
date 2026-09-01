@@ -96,6 +96,7 @@
     "shop:phase5d:preview:build": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase5d-qa.local --import tsx scripts/shop-phase5d-preview.ts build",
     "shop:phase5d:preview:start": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase5d-qa.local --import tsx scripts/shop-phase5d-preview.ts start",
     "shop:phase5e:maintenance": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase5e-qa.local --import tsx scripts/shop-phase5e-maintenance.ts",
+    "shop:maintenance:run": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/shop-maintenance.ts",
     "test:shop-production-readiness:runtime": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase5e-runtime.local --import tsx scripts/test-shop-production-readiness-runtime.ts",
     "test:shop-production-readiness:rollback": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase5e-runtime.local --import tsx scripts/test-shop-production-readiness-rollback.ts",
     "shop:phase5e:fixtures:setup": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.phase5e-qa.local --import tsx scripts/shop-phase5e-fixture.ts",

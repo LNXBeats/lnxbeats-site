@@ -1,12 +1,11 @@
 import "server-only";
 
-import { unlink } from "node:fs/promises";
-import path from "node:path";
-
 import type { Prisma, PrismaClient, ShopReadinessAlertKind } from "@/generated/prisma/client";
+import { validateMediaStorageConfiguration } from "@/lib/media/storage/config";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
-import { shopSavPrivateRoot } from "@/lib/shop/evidence-service";
-import { assertShopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
+import { deleteShopReturnEvidenceObject } from "@/lib/shop/evidence-service";
+import { parseShopLegalConfiguration } from "@/lib/shop/legal";
+import { assertShopMaintenanceEnabled, shopMaintenanceEnabled } from "@/lib/shop/maintenance-config";
 import { savEvidencePurgeDueAt, savFirstAnalysisIsOverdue } from "@/lib/shop/readiness-domain";
 
 type Transaction = Prisma.TransactionClient;
@@ -62,7 +61,7 @@ async function expireReservations(transaction: Transaction, now: Date) {
   return expired;
 }
 
-async function purgeEvidence(transaction: Transaction, now: Date, root: string) {
+async function purgeEvidence(transaction: Transaction, now: Date, privateRoot?: string) {
   const candidates = await transaction.shopReturnEvidence.findMany({
     where: { status: "ACTIVE", request: { closedAt: { not: null } } },
     include: { request: { select: { id: true, closedAt: true } } },
@@ -72,12 +71,14 @@ async function purgeEvidence(transaction: Transaction, now: Date, root: string) 
   let purged = 0;
   for (const evidence of candidates) {
     if (!evidence.request.closedAt || savEvidencePurgeDueAt(evidence.request.closedAt) > now) continue;
-    const absolute = path.resolve(root, evidence.storageKey);
-    if (!absolute.startsWith(`${root}${path.sep}`)) throw new Error("Evidence storage path escaped its private root.");
-    await unlink(absolute).catch((error: unknown) => {
-      if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
+    await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`shop-return-evidence:${evidence.request.id}`})) IS NULL AS locked`;
+    const current = await transaction.shopReturnEvidence.findFirst({
+      where: { id: evidence.id, status: "ACTIVE", request: { closedAt: { not: null } } },
+      include: { request: { select: { id: true, closedAt: true } } },
     });
-    const changed = await transaction.shopReturnEvidence.updateMany({ where: { id: evidence.id, status: "ACTIVE" }, data: { status: "PURGED", purgeDueAt: savEvidencePurgeDueAt(evidence.request.closedAt), purgedAt: now } });
+    if (!current?.request.closedAt || savEvidencePurgeDueAt(current.request.closedAt) > now) continue;
+    await deleteShopReturnEvidenceObject(evidence.storageKey, privateRoot ? { root: privateRoot } : {});
+    const changed = await transaction.shopReturnEvidence.updateMany({ where: { id: evidence.id, status: "ACTIVE" }, data: { status: "PURGED", purgeDueAt: savEvidencePurgeDueAt(current.request.closedAt), purgedAt: now } });
     if (changed.count) {
       purged += 1;
       await transaction.shopReturnAuditEvent.create({ data: { shopReturnRequestId: evidence.request.id, action: "EVIDENCE_PURGED", idempotencyKey: `shop-return-evidence:${evidence.id}:purged:v1`, metadata: { retentionDays: 90 } } });
@@ -103,9 +104,8 @@ export async function runShopReadinessMaintenance(
   options: Readonly<{ client?: PrismaClient; privateRoot?: string; skipEnvironmentGuard?: boolean }> = {},
 ) {
   if (!options.client) assertDatabaseConfigured();
-  if (!options.skipEnvironmentGuard) assertShopProductionReadinessQaEnabled();
+  if (!options.skipEnvironmentGuard) assertShopMaintenanceEnabled();
   const client = options.client ?? prisma;
-  const root = path.resolve(options.privateRoot ?? shopSavPrivateRoot());
   return client.$transaction(async (transaction) => {
     const [lock] = await transaction.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(hashtext('shop-phase5e-readiness-maintenance')) AS locked`;
     if (!lock?.locked) return { outcome: "SKIPPED_OVERLAP" as const };
@@ -125,7 +125,7 @@ export async function runShopReadinessMaintenance(
     }
     const run = await transaction.shopMaintenanceRun.create({ data: { idempotencyKey, outcome: "COMPLETED", startedAt: now } });
     const reservationsExpired = await expireReservations(transaction, now);
-    const evidencePurged = await purgeEvidence(transaction, now, root);
+    const evidencePurged = await purgeEvidence(transaction, now, options.privateRoot);
     const candidates = await readinessCandidates(transaction, now);
     const savAlerts = await synchronizeAlerts(transaction, "SAV_FIRST_ANALYSIS_OVERDUE", candidates.sav, now);
     const paymentAlerts = await synchronizeAlerts(transaction, "PAYMENT_REVIEW_REQUIRED", candidates.payment, now);
@@ -138,11 +138,42 @@ export async function runShopReadinessMaintenance(
 }
 
 export async function shopReadinessDashboard(client: PrismaClient = prisma) {
-  const [alerts, openCustomerRequests, draftRates, activeRates] = await Promise.all([
+  const [alerts, openCustomerRequests, draftRates, activeRates, activePackaging, publishedProducts] = await Promise.all([
     client.shopReadinessAlert.findMany({ where: { status: "OPEN" }, orderBy: [{ firstDetectedAt: "asc" }, { id: "asc" }] }),
     client.shopOrderCustomerRequest.count({ where: { status: { in: ["REQUESTED", "APPROVED"] } } }),
     client.shippingRateVersion.count({ where: { scope: "COMMERCIAL_CANDIDATE", status: "DRAFT" } }),
     client.shippingRateVersion.count({ where: { scope: "COMMERCIAL_CANDIDATE", status: "ACTIVE" } }),
+    client.packagingProfile.count({ where: { status: "ACTIVE" } }),
+    client.product.count({ where: { status: "PUBLISHED" } }),
   ]);
-  return { alerts, openCustomerRequests, draftRates, activeRates } as const;
+  let legalApproved = false;
+  try {
+    legalApproved = parseShopLegalConfiguration().activeTerms?.approval === "APPROVED";
+  } catch {}
+  let savPrivateStorageReady = false;
+  try {
+    const storage = validateMediaStorageConfiguration();
+    savPrivateStorageReady = storage.backend === "OBJECT" && storage.provider === "r2";
+  } catch {}
+  const maintenanceReady = shopMaintenanceEnabled();
+  const reasonCodes = [
+    ...(activeRates === 1 ? [] : ["COMMERCIAL_RATE_NOT_ACTIVE"]),
+    ...(activePackaging === 1 ? [] : ["PACKAGING_NOT_ACTIVE"]),
+    ...(publishedProducts > 0 ? [] : ["REAL_PRODUCT_NOT_PUBLISHED"]),
+    ...(legalApproved ? [] : ["LEGAL_NOT_APPROVED"]),
+    ...(savPrivateStorageReady ? [] : ["SAV_PRIVATE_STORAGE_NOT_READY"]),
+    ...(maintenanceReady ? [] : ["SHOP_MAINTENANCE_NOT_READY"]),
+  ] as const;
+  return {
+    alerts,
+    openCustomerRequests,
+    draftRates,
+    activeRates,
+    activePackaging,
+    publishedProducts,
+    legalApproved,
+    savPrivateStorageReady,
+    maintenanceReady,
+    reasonCodes,
+  } as const;
 }
