@@ -1,6 +1,7 @@
 import {
   SHOP_SHIPPING_COUNTRY,
   SHOP_SHIPPING_CURRENCY,
+  SHOP_COMMERCIAL_MINIMUM_BILLABLE_GRAMS,
   SHOP_SHIPPING_MINIMUM_BILLABLE_GRAMS,
   SHOP_SHIPPING_SCOPE,
   SHOP_SHIPPING_SERVICE,
@@ -41,7 +42,7 @@ export const PHASE5E_COLISSIMO_FRANCE_2026_RATE = Object.freeze({
   service: "COLISSIMO_HOME_FRANCE" as const,
   currency: "EUR" as const,
   countryCode: "FR" as const,
-  minimumBillableWeightGrams: 1,
+  minimumBillableWeightGrams: SHOP_COMMERCIAL_MINIMUM_BILLABLE_GRAMS,
   packagingWeightGrams: 60,
   billableWeightPolicy: "PRODUCTS_ONLY" as const,
   sourceLabel: "Colissimo Domicile France · tarif candidat 2026",

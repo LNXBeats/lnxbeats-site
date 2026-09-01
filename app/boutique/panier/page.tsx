@@ -37,6 +37,7 @@ export default async function ShopCartPage() {
           allowedCountries={configuration.allowedCountries}
           authenticated={Boolean(session)}
           memberAllowed={session?.user.role === "MEMBER" || session?.user.role === "CUSTOMER"}
+          purchasesEnabled={process.env.SHOP_PAYMENTS_ENABLED === "true"}
           products={products}
         />
       </Container>

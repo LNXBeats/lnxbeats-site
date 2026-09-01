@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import {
+  isMetropolitanFranceDestination,
+  normalizeMetropolitanFrancePostalCode,
+} from "@/lib/shop/metropolitan-france";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
@@ -247,7 +251,14 @@ export function assertShippingAddress(
       "SHIPPING_COUNTRY_UNAVAILABLE",
     );
   }
-  return address;
+  const postalCode = normalizeMetropolitanFrancePostalCode(address.postalCode);
+  if (!isMetropolitanFranceDestination(address.countryCode, postalCode)) {
+    throw new ShopDomainError(
+      "La livraison est disponible uniquement en France métropolitaine.",
+      "SHIPPING_COUNTRY_UNAVAILABLE",
+    );
+  }
+  return Object.freeze({ ...address, postalCode });
 }
 
 export function checkedMoney(...values: number[]) {

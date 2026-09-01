@@ -10,6 +10,7 @@ export const SHOP_COMMERCIAL_SHIPPING_SCOPE = "COMMERCIAL_CANDIDATE" as const;
 export const SHOP_SHIPPING_CURRENCY = "EUR" as const;
 export const SHOP_SHIPPING_COUNTRY = "FR" as const;
 export const SHOP_SHIPPING_MINIMUM_BILLABLE_GRAMS = 150;
+export const SHOP_COMMERCIAL_MINIMUM_BILLABLE_GRAMS = 250;
 export const SHOP_SHIPPING_MAX_PRODUCT_GRAMS = MAX_PRODUCT_WEIGHT_GRAMS;
 
 export type ShippingRateTierDefinition = Readonly<{

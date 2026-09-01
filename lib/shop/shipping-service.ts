@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { PHASE5A_QA_SHIPPING_RATE, PHASE5E_COLISSIMO_FRANCE_2026_RATE } from "@/data/shop-shipping";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
+import { isStrictShopProductionEnvironment } from "@/lib/shop/production-environment";
 import { parseShopShippingConfiguration } from "@/lib/shop/shipping-config";
 import {
   quoteShipping,
@@ -36,6 +37,7 @@ const rateInclude = {
 } satisfies Prisma.ShippingRateVersionInclude;
 
 export const SHOP_COMMERCIAL_RATE_ACTIVATION_CONFIRMATION = "ACTIVATE_COLISSIMO_FRANCE_2026_CANDIDATE";
+export const SHOP_COMMERCIAL_RATE_PRODUCTION_PREPARATION_CONFIRMATION = "enable-production-shipping-admin-preparation";
 
 function requireEnabledConfiguration(environment: NodeJS.ProcessEnv = process.env) {
   try {
@@ -56,6 +58,30 @@ function requireEnabledConfiguration(environment: NodeJS.ProcessEnv = process.en
   }
 }
 
+export function shopCommercialAdminPreparationEnabled(environment: NodeJS.ProcessEnv = process.env) {
+  return isStrictShopProductionEnvironment(environment)
+    && environment.SHOP_ENABLED === "false"
+    && environment.SHOP_SHIPPING_ENABLED === "false"
+    && environment.SHOP_SHIPPING_RATE_SCOPE === "COMMERCIAL_CANDIDATE"
+    && environment.SHOP_SHIPPING_ADMIN_PREPARATION_ENABLED === "true"
+    && environment.SHOP_SHIPPING_ADMIN_PREPARATION_CONFIRM === SHOP_COMMERCIAL_RATE_PRODUCTION_PREPARATION_CONFIRMATION;
+}
+
+function requireAdminPreparationConfiguration(environment: NodeJS.ProcessEnv = process.env) {
+  try {
+    return requireEnabledConfiguration(environment);
+  } catch (error) {
+    const productionPreparation = shopCommercialAdminPreparationEnabled(environment);
+    if (!productionPreparation) throw error;
+    return Object.freeze({
+      enabled: false,
+      scope: "COMMERCIAL_CANDIDATE" as const,
+      allowDraft: false,
+      runtime: "PRODUCTION" as const,
+    });
+  }
+}
+
 export async function quoteVersionedShopShipping(
   database: Database,
   input: Readonly<{
@@ -65,7 +91,8 @@ export async function quoteVersionedShopShipping(
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<ShippingQuote> {
   const configuration = requireEnabledConfiguration(environment);
-  const exactProductionReadinessQa = configuration.scope === "COMMERCIAL_CANDIDATE"
+  const exactProductionReadinessQa = configuration.allowDraft
+    && configuration.scope === "COMMERCIAL_CANDIDATE"
     && shopProductionReadinessQaEnabled(environment);
   const rate = await database.shippingRateVersion.findFirst({
     where: exactProductionReadinessQa
@@ -165,7 +192,7 @@ export async function ensurePhase5AQaShippingRate(database: Database = prisma) {
 }
 
 export async function ensurePhase5ECommercialCandidate(database: Database = prisma) {
-  const configuration = requireEnabledConfiguration();
+  const configuration = requireAdminPreparationConfiguration();
   if (configuration.scope !== "COMMERCIAL_CANDIDATE") {
     throw new ShopShippingServiceError("Le contexte Phase 5E commercial est requis.", "SHIPPING_CONFIGURATION_INVALID");
   }
@@ -211,7 +238,7 @@ export async function activatePhase5ECommercialRate(
   now = new Date(),
 ) {
   assertDatabaseConfigured();
-  const configuration = requireEnabledConfiguration();
+  const configuration = requireAdminPreparationConfiguration();
   if (
     configuration.scope !== "COMMERCIAL_CANDIDATE"
     || confirmation !== SHOP_COMMERCIAL_RATE_ACTIVATION_CONFIRMATION
@@ -223,8 +250,24 @@ export async function activatePhase5ECommercialRate(
     if (!target || target.scope !== "COMMERCIAL_CANDIDATE" || target.status !== "DRAFT" || !target.packagingProfile) {
       throw new ShopShippingServiceError("La grille candidate n’est pas activable.", "SHIPPING_RATE_MISSING");
     }
+    if (!target.validFrom || Number.isNaN(target.validFrom.getTime()) || target.validFrom > now) {
+      throw new ShopShippingServiceError("La date d’effet de la grille n’est pas encore valide.", "SHIPPING_FIXTURE_CONFLICT");
+    }
     if (target.packagingProfile.customerBillableWeightIncluded) {
       throw new ShopShippingServiceError("L’emballage ne peut pas être facturé au client.", "SHIPPING_FIXTURE_CONFLICT");
+    }
+    try {
+      quoteShipping({
+        rate: target,
+        destinationCountryCode: "FR",
+        lines: [{ productId: "activation-proof", shippingRequired: true, shippingWeightGrams: 1, quantity: 1 }],
+        allowCommercialDraft: true,
+      });
+    } catch (error) {
+      if (error instanceof ShippingQuoteError) {
+        throw new ShopShippingServiceError("La grille candidate est incohérente.", "SHIPPING_FIXTURE_CONFLICT");
+      }
+      throw error;
     }
     await transaction.shippingRateVersion.updateMany({
       where: { scope: "COMMERCIAL_CANDIDATE", status: "ACTIVE", id: { not: target.id } },

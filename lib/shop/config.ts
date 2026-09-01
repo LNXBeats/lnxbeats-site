@@ -1,4 +1,7 @@
 import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
+import { isStrictShopProductionEnvironment } from "@/lib/shop/production-environment";
+import { parseShopLegalConfiguration } from "@/lib/shop/legal";
+import { parseShopShippingConfiguration } from "@/lib/shop/shipping-config";
 
 const COUNTRY_CODE = /^[A-Z]{2}$/;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -46,11 +49,19 @@ function parseReservationTtl(value: string | undefined) {
 }
 
 function assertLocalQaArmament(environment: Readonly<Record<string, string | undefined>>) {
+  if (isStrictShopProductionEnvironment(environment as NodeJS.ProcessEnv)) {
+    const legal = parseShopLegalConfiguration(environment);
+    const shipping = parseShopShippingConfiguration(environment as NodeJS.ProcessEnv);
+    if (!legal.ready || !legal.activeTerms || !shipping.enabled || shipping.runtime !== "PRODUCTION") {
+      throw new Error("Production Shop requires legal readiness and commercial shipping.");
+    }
+    return;
+  }
   if (
     environment.NODE_ENV === "production"
     && !shopProductionReadinessQaEnabled(environment as NodeJS.ProcessEnv)
   ) {
-    throw new Error("SHOP_ENABLED=true is forbidden in a production runtime during Phase 2.");
+    throw new Error("SHOP_ENABLED=true is forbidden outside a confirmed Shop Production runtime.");
   }
   if (environment.SHOP_LOCAL_QA_CONFIRM !== LOCAL_QA_CONFIRMATION) {
     throw new Error(`SHOP_LOCAL_QA_CONFIRM must equal ${LOCAL_QA_CONFIRMATION}.`);

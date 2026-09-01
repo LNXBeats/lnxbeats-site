@@ -75,7 +75,7 @@ test("exact Phase 5E cart path quotes the DRAFT candidate without activating it"
     }, phase5eEnvironment());
     assert.equal(quote.productWeightGrams, expectedWeight);
     assert.equal(quote.packagingWeightGrams, 60);
-    assert.equal(quote.billableWeightGrams, expectedWeight);
+    assert.equal(quote.billableWeightGrams, Math.max(expectedWeight, 250));
     assert.equal(quote.amountCents, expectedShipping);
     assert.equal(quote.version, PHASE5E_COLISSIMO_FRANCE_2026_RATE.version);
   }

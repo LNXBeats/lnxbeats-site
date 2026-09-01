@@ -73,7 +73,7 @@ test("shop accepts only exact server-side flag values", () => {
       SHOP_LOCAL_QA_CONFIRM: "enable-local-shop-commerce-qa",
       SITE_URL: "http://127.0.0.1:31760",
     }),
-    /forbidden in a production runtime/,
+    /forbidden outside a confirmed Shop Production runtime/,
   );
   assert.equal(parseShopConfiguration({
     NODE_ENV: "test",
@@ -86,7 +86,7 @@ test("shop accepts only exact server-side flag values", () => {
   assert.equal(parseShopConfiguration(phase5ePreviewEnvironment()).enabled, true);
   assert.throws(
     () => parseShopConfiguration({ ...phase5ePreviewEnvironment(), RAILWAY_ENVIRONMENT: "production" }),
-    /forbidden in a production runtime/,
+    /forbidden outside a confirmed Shop Production runtime/,
   );
   assert.throws(() => parseShopConfiguration({ SHOP_ENABLED: "TRUE" }), /SHOP_ENABLED/);
   assert.throws(() => parseShopConfiguration({ SHOP_ENABLED: "1" }), /SHOP_ENABLED/);

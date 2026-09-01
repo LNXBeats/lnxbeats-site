@@ -53,11 +53,13 @@ export function ShopCart({
   allowedCountries,
   authenticated,
   memberAllowed,
+  purchasesEnabled,
 }: {
   products: readonly CartProduct[];
   allowedCountries: readonly string[];
   authenticated: boolean;
   memberAllowed: boolean;
+  purchasesEnabled: boolean;
 }) {
   const router = useRouter();
   const { lines, ready, setQuantity, remove, clear } = useShopCart();
@@ -175,6 +177,10 @@ export function ShopCart({
     event.preventDefault();
     if (!authenticated) {
       router.push("/connexion?retour=%2Fboutique%2Fpanier");
+      return;
+    }
+    if (!purchasesEnabled) {
+      setError("La Boutique est ouverte à la découverte, mais les achats sont temporairement indisponibles.");
       return;
     }
     if (!memberAllowed) {
@@ -331,6 +337,7 @@ export function ShopCart({
         </dl>
         {quoting ? <p className="shop-cart__pending" role="status">Calcul automatique de la livraison en cours…</p> : null}
         <p>Aucun paiement n’est déclenché par le devis. Le serveur revérifie prix, disponibilité, poids et livraison avant de réserver le stock.</p>
+        {!purchasesEnabled ? <p className="shop-cart__pending" role="status"><strong>Achats temporairement indisponibles.</strong> Vous pouvez consulter le catalogue et conserver votre panier ; aucune réservation de stock ni tentative de paiement ne sera créée.</p> : null}
         {displayedError ? (
           <div className="shop-cart__error" role="alert">
             <p>{displayedError}</p>
@@ -345,11 +352,11 @@ export function ShopCart({
           <div className="shop-cart__actions">
             <button
               className="button button--primary"
-              disabled={busy || quoting || invalid || !memberAllowed || !quote}
+              disabled={!purchasesEnabled || busy || quoting || invalid || !memberAllowed || !quote}
               formNoValidate={!memberAllowed}
               type="submit"
             >
-              {busy ? "Préparation…" : "Préparer ma commande"}
+              {busy ? "Préparation…" : purchasesEnabled ? "Préparer ma commande" : "Achats temporairement indisponibles"}
             </button>
           </div>
         ) : (

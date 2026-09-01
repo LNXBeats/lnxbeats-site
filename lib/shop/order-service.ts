@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { parseShopConfiguration } from "@/lib/shop/config";
+import { parseShopPaymentConfiguration } from "@/lib/shop/payment-config";
 import {
   assertShippingAddress,
   checkedMoney,
@@ -27,6 +28,7 @@ export type ShopOrderActor = Readonly<{
 export type ShopServiceErrorCode =
   | "SHOP_DISABLED"
   | "SHOP_CONFIGURATION_INVALID"
+  | "SHOP_PAYMENTS_DISABLED"
   | "ROLE_NOT_ALLOWED"
   | "PRODUCT_UNAVAILABLE"
   | "PRODUCT_CHANGED"
@@ -497,6 +499,23 @@ export async function createShopOrder(
   creationToken: string,
   now = new Date(),
 ) {
+  let paymentConfiguration;
+  try {
+    paymentConfiguration = parseShopPaymentConfiguration();
+  } catch {
+    throw new ShopServiceError(
+      "Les achats Boutique sont temporairement indisponibles.",
+      "SHOP_PAYMENTS_DISABLED",
+      503,
+    );
+  }
+  if (!paymentConfiguration.enabled) {
+    throw new ShopServiceError(
+      "Les achats Boutique sont temporairement indisponibles.",
+      "SHOP_PAYMENTS_DISABLED",
+      503,
+    );
+  }
   assertDatabaseConfigured();
   assertMember(actor);
   const configuration = configurationForCreation();

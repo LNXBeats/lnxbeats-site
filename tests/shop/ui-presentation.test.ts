@@ -14,7 +14,7 @@ test("guest cart login remains a navigation and does not expose required address
   assert.match(cart, /formNoValidate=\{!memberAllowed\}/);
   assert.match(cart, /memberProfileRequired = authenticated && !memberAllowed/);
   assert.match(cart, /Compte membre requis/);
-  assert.match(cart, /disabled=\{busy \|\| quoting \|\| invalid \|\| !memberAllowed \|\| !quote\}/);
+  assert.match(cart, /disabled=\{!purchasesEnabled \|\| busy \|\| quoting \|\| invalid \|\| !memberAllowed \|\| !quote\}/);
   assert.doesNotMatch(cart, /authenticated \? "Préparer ma commande" : "Se connecter pour continuer"/);
 });
 

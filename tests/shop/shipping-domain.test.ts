@@ -38,7 +38,7 @@ function quote(weight: number, quantity = 1, override: Partial<ShippingRateDefin
   });
 }
 
-test("shipping quotes use integer grams, the documented 150 g minimum and deterministic tiers", () => {
+test("shipping quotes use integer grams, the historical QA 150 g minimum and deterministic tiers", () => {
   assert.deepEqual(quote(100), {
     required: true,
     rateVersionId: rate.id,
@@ -119,7 +119,12 @@ test("shipping quote inputs fail closed for unsafe weights, destinations and gri
 });
 
 test("the internal QA shipping gate is disabled by default and impossible in production or Railway", () => {
-  assert.deepEqual(parseShopShippingConfiguration({} as NodeJS.ProcessEnv), { enabled: false, scope: "INTERNAL_QA" });
+  assert.deepEqual(parseShopShippingConfiguration({} as NodeJS.ProcessEnv), {
+    enabled: false,
+    scope: "INTERNAL_QA",
+    allowDraft: false,
+    runtime: "DISABLED",
+  });
   const enabled = {
     NODE_ENV: "test",
     SHOP_ENABLED: "true",
@@ -172,6 +177,8 @@ test("the internal QA shipping gate is disabled by default and impossible in pro
   assert.deepEqual(parseShopShippingConfiguration(exactPhase5E), {
     enabled: true,
     scope: "COMMERCIAL_CANDIDATE",
+    allowDraft: true,
+    runtime: "LOCAL_QA",
   });
   for (const environment of [
     { ...exactPhase5E, RAILWAY_ENVIRONMENT: "production" },

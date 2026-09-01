@@ -70,9 +70,17 @@ test("Phase 5E QA reuses the canonical legal and Shop payment identifiers", () =
 test("commercial 2026 Colissimo tiers use product weight only and free 60 g packaging", () => {
   const rate = { ...PHASE5E_COLISSIMO_FRANCE_2026_RATE, id: "rate", status: "ACTIVE" as const, packagingProfile: { ...PHASE5E_COLISSIMO_FRANCE_2026_RATE.packaging, id: "package" } };
   const quote = (quantity: number) => quoteShipping({ rate, destinationCountryCode: "FR", lines: [{ productId: "cd", shippingRequired: true, shippingWeightGrams: 25, quantity }] });
-  assert.deepEqual([quote(1).billableWeightGrams, quote(1).physicalWeightGrams, quote(1).amountCents], [25, 85, 549]);
+  const quoteWeight = (shippingWeightGrams: number) => quoteShipping({ rate, destinationCountryCode: "FR", lines: [{ productId: "physical", shippingRequired: true, shippingWeightGrams, quantity: 1 }] });
+  assert.deepEqual([quote(1).billableWeightGrams, quote(1).physicalWeightGrams, quote(1).amountCents], [250, 85, 549]);
   assert.deepEqual([quote(10).billableWeightGrams, quote(10).physicalWeightGrams, quote(10).amountCents], [250, 310, 549]);
   assert.deepEqual([quote(11).billableWeightGrams, quote(11).physicalWeightGrams, quote(11).amountCents], [275, 335, 759]);
+  assert.equal(quoteWeight(249).amountCents, 549);
+  assert.equal(quoteWeight(250).amountCents, 549);
+  assert.equal(quoteWeight(251).amountCents, 759);
+  assert.equal(quoteWeight(500).amountCents, 759);
+  assert.equal(quoteWeight(501).amountCents, 929);
+  assert.equal(quoteWeight(30_000).amountCents, 3_959);
+  assert.throws(() => quoteWeight(30_001), (error: unknown) => error instanceof ShippingQuoteError && error.code === "PRODUCT_WEIGHT_REQUIRED");
   assert.equal(quote(16).amountCents, 759);
   assert.throws(() => quote(17), (error: unknown) => error instanceof ShippingQuoteError && error.code === "RATE_LIMIT_EXCEEDED");
   assert.equal(PHASE5E_COLISSIMO_FRANCE_2026_RATE.status, "DRAFT");
