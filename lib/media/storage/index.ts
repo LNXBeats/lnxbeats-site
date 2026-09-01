@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import type { Readable } from "node:stream";
 
 import { activeMediaStorage, mediaStorageForReference } from "@/lib/media/storage/config";
+export { activeStorageMetadata } from "@/lib/media/storage/config";
 import { mediaScopeForVisibility } from "@/lib/media/storage/policy";
 import type {
   MediaObject,

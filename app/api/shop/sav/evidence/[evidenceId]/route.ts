@@ -11,17 +11,17 @@ export async function GET(_request: Request, context: { params: Promise<{ eviden
   const session = await getAuthSession();
   if (!session?.user) return new NextResponse("Accès refusé", { status: 403 });
   try {
-    const { evidence, absolute } = await getAuthorizedShopReturnEvidence({
+    const result = await getAuthorizedShopReturnEvidence({
       id: session.user.id,
       role: session.user.role,
       status: session.user.status,
       emailVerified: session.user.emailVerified,
     }, (await context.params).evidenceId);
-    const body = await readFile(absolute);
+    const body = result.source === "LOCAL" ? await readFile(result.absolute) : result.body;
     return new NextResponse(body, {
       headers: {
-        "Content-Type": evidence.mimeType,
-        "Content-Disposition": `inline; filename="evidence-${evidence.id}"`,
+        "Content-Type": result.evidence.mimeType,
+        "Content-Disposition": `inline; filename="evidence-${result.evidence.id}"`,
         "Cache-Control": "private, no-store, max-age=0",
         "X-Content-Type-Options": "nosniff",
         "X-Robots-Tag": "noindex, nofollow, noarchive",

@@ -3,7 +3,7 @@ import path from "node:path";
 import { MediaStorageError, type MediaScope } from "@/lib/media/storage/types";
 
 const publicKey = /^catalog\/(?:covers\/[0-9a-f-]{36}\.webp|audio-previews\/[0-9a-f-]{36}\.mp3|images\/[0-9a-f-]{36}\.(?:webp|avif))$/i;
-const privateKey = /^orders\/[0-9a-f-]{36}\/(?:[0-9a-f-]{36}\.webp|deliveries\/[0-9a-f-]{36}\.(?:mp3|wav|flac|zip|pdf|jpg|png)|documents\/[0-9a-f-]{36}\.(?:zip|pdf))$/i;
+const privateKey = /^(?:orders\/[0-9a-f-]{36}\/(?:[0-9a-f-]{36}\.webp|deliveries\/[0-9a-f-]{36}\.(?:mp3|wav|flac|zip|pdf|jpg|png)|documents\/[0-9a-f-]{36}\.(?:zip|pdf))|shop-returns\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:jpg|png|webp))$/i;
 
 export function assertMediaStorageKey(scope: MediaScope, key: string) {
   if (key.length > 500 || key.includes("\\") || path.posix.normalize(key) !== key) {
