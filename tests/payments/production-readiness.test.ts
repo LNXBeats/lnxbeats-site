@@ -9,6 +9,7 @@ import {
   PaymentConfigurationError,
   parsePaymentsConfiguration,
 } from "@/lib/payments/config";
+import { LIVE_REFUNDS_PRODUCTION_CONFIRMATION } from "@/lib/payments/live-refund-policy";
 import { runProductionPaymentPreflight } from "@/lib/payments/production-preflight";
 
 const liveSecretKey = ["sk", "live", "production-readiness-fixture"].join("_");
@@ -134,7 +135,8 @@ test("production remains safely disabled even when live credentials are preloade
   const result = await runProductionPaymentPreflight(environment, databaseFixture());
   assert.equal(result.passed, true);
   assert.equal(result.status, "SAFE_DISABLED");
-  assert.equal(result.rules.find(({ name }) => name === "refunds.live.disabled")?.passed, true);
+  assert.equal(result.liveRefunds.state, "OFF");
+  assert.equal(result.rules.find(({ name }) => name === "refunds.live.policy")?.passed, true);
   assert.doesNotMatch(JSON.stringify(result), /production-readiness-fixture|paypal-live-/);
 });
 
@@ -152,7 +154,8 @@ test("production arming is explicit and supports one provider at a time", async 
     PAYPAL_PAYMENTS_ENABLED: "false",
   }, databaseFixture());
   assert.equal(stripe.status, "READY_FOR_STRIPE_LIVE_QA");
-  assert.equal(stripe.rules.find(({ name }) => name === "refunds.live.disabled")?.passed, true);
+  assert.equal(stripe.liveRefunds.state, "READY_NOT_ARMED");
+  assert.equal(stripe.rules.find(({ name }) => name === "refunds.live.policy")?.passed, true);
 
   const stripeWithLiveRefunds = await runProductionPaymentPreflight({
     ...common,
@@ -163,9 +166,20 @@ test("production arming is explicit and supports one provider at a time", async 
   assert.equal(stripeWithLiveRefunds.status, "BLOCKED");
   assert.equal(stripeWithLiveRefunds.passed, false);
   assert.equal(
-    stripeWithLiveRefunds.rules.find(({ name }) => name === "refunds.live.disabled")?.passed,
+    stripeWithLiveRefunds.rules.find(({ name }) => name === "refunds.live.policy")?.passed,
     false,
   );
+
+  const stripeWithArmedLiveRefunds = await runProductionPaymentPreflight({
+    ...common,
+    STRIPE_PAYMENTS_ENABLED: "true",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    LIVE_REFUNDS_ENABLED: "true",
+    LIVE_REFUNDS_PRODUCTION_CONFIRM: LIVE_REFUNDS_PRODUCTION_CONFIRMATION,
+  }, databaseFixture());
+  assert.equal(stripeWithArmedLiveRefunds.status, "READY_FOR_STRIPE_LIVE_QA");
+  assert.equal(stripeWithArmedLiveRefunds.liveRefunds.state, "ARMED");
+  assert.equal(stripeWithArmedLiveRefunds.rules.find(({ name }) => name === "refunds.live.confirmation")?.passed, true);
 
   const paypal = await runProductionPaymentPreflight({
     ...common,

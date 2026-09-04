@@ -8,6 +8,8 @@ import {
   type PaymentDatabaseDiagnostic,
   type PaymentDiagnosticRepository,
 } from "@/lib/payments/production-diagnostic";
+import { LIVE_REFUNDS_PRODUCTION_CONFIRMATION } from "@/lib/payments/live-refund-policy";
+import { PAYMENT_PRODUCTION_CONFIRMATION } from "@/lib/payments/config";
 
 const liveSecretKey = ["rk", "live", "diagnostic-secret-fixture"].join("_");
 const webhookSecret = ["whsec", "diagnostic-webhook-fixture"].join("_");
@@ -63,6 +65,7 @@ test("production is SAFE_DISABLED with configured Stripe Live and no enabled pro
   assert.equal(result.status, "SAFE_DISABLED");
   assert.equal(result.production, true);
   assert.equal(result.paymentsEnabled, false);
+  assert.equal(result.shopPaymentsEnabled, false);
   assert.equal(result.liveRefundsEnabled, false);
   assert.deepEqual(
     [result.stripe.flag, result.stripe.enabled, result.stripe.mode, result.stripe.configured],
@@ -166,6 +169,24 @@ test("configured disabled flags remain visible without enabling payments", async
   assert.equal(result.stripe.enabled, false);
 });
 
+test("diagnostic reports Shop Payments without letting an invalid flag pass", async () => {
+  const enabled = await runPaymentDiagnostic({
+    ...productionBase,
+    ...stripeLive,
+    SHOP_PAYMENTS_ENABLED: "true",
+  }, repository());
+  assert.equal(enabled.shopPaymentsEnabled, true);
+
+  const invalid = await runPaymentDiagnostic({
+    ...productionBase,
+    ...stripeLive,
+    SHOP_PAYMENTS_ENABLED: "yes",
+  }, repository());
+  assert.equal(invalid.status, "INVALID");
+  assert.equal(invalid.shopPaymentsEnabled, "invalid");
+  assert.equal(invalid.checks.find(({ name }) => name === "shop.payments.flag.valid")?.passed, false);
+});
+
 test("database anomalies and operator review fail closed", async () => {
   const result = await runPaymentDiagnostic(
     { ...productionBase, ...stripeLive },
@@ -208,21 +229,45 @@ test("diagnostic output contains no credentials or confirmation value", async ()
   assert.match(output, /stripe\.secretConfigured=true/);
   assert.match(output, /paypal\.webhookConfigured=true/);
   assert.match(output, /liveRefundsEnabled=false/);
-  assert.match(output, /PASS refunds\.live\.disabled/);
+  assert.match(output, /liveRefundsStatus=OFF/);
+  assert.match(output, /shopPaymentsEnabled=false/);
+  assert.match(output, /PASS refunds\.live\.policy/);
 });
 
-test("diagnostic reports the explicit Live refund opt-in without exposing its variable name", async () => {
+test("diagnostic blocks an incomplete Live refund opt-in without exposing its variable name", async () => {
   const result = await runPaymentDiagnostic({
     ...productionBase,
     ...stripeLive,
     LIVE_REFUNDS_ENABLED: "true",
   }, repository());
   const output = formatPaymentDiagnostic(result);
-  assert.equal(result.status, "CONFIGURED_DISABLED");
+  assert.equal(result.status, "INVALID");
   assert.equal(result.liveRefundsEnabled, true);
+  assert.equal(result.liveRefundsStatus, "BLOCKED");
   assert.match(output, /liveRefundsEnabled=true/);
-  assert.match(output, /PASS refunds\.live\.explicitly-enabled/);
+  assert.match(output, /INVALID refunds\.live\.policy/);
   assert.doesNotMatch(output, /LIVE_REFUNDS_ENABLED/);
+});
+
+test("diagnostic reports a fully armed Live refund policy without exposing confirmations", async () => {
+  const environment = {
+    ...productionBase,
+    ...stripeLive,
+    PAYMENTS_ENABLED: "true",
+    STRIPE_PAYMENTS_ENABLED: "true",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    PAYMENT_PRODUCTION_CONFIRM: PAYMENT_PRODUCTION_CONFIRMATION,
+    LIVE_REFUNDS_ENABLED: "true",
+    LIVE_REFUNDS_PRODUCTION_CONFIRM: LIVE_REFUNDS_PRODUCTION_CONFIRMATION,
+  };
+  const result = await runPaymentDiagnostic(environment, repository());
+  const output = formatPaymentDiagnostic(result);
+  assert.equal(result.status, "CONFIGURED_ENABLED");
+  assert.equal(result.liveRefundsStatus, "ARMED");
+  assert.equal(result.liveRefundsProductionConfirmationValid, true);
+  assert.match(output, /liveRefundsStatus=ARMED/);
+  assert.match(output, /PASS refunds\.live\.policy/);
+  assert.doesNotMatch(output, new RegExp(environment.LIVE_REFUNDS_PRODUCTION_CONFIRM));
 });
 
 test("diagnostic repository is read exactly once and implementation has no mutation/provider call", async () => {

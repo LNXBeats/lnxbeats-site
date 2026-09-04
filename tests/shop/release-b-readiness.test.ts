@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { assertMediaStorageKey } from "@/lib/media/storage/policy";
-import { shopAfterSalesQaEnabled } from "@/lib/shop/after-sales-config";
+import { shopAfterSalesQaEnabled, shopAfterSalesRefundProvider } from "@/lib/shop/after-sales-config";
+import { PAYMENT_PRODUCTION_CONFIRMATION } from "@/lib/payments/config";
+import { LIVE_REFUNDS_PRODUCTION_CONFIRMATION } from "@/lib/payments/live-refund-policy";
 import { parseShopConfiguration } from "@/lib/shop/config";
 import {
   parseShopLegalConfiguration,
@@ -82,6 +85,48 @@ test("Production shipping, SAV, manual tracking and maintenance require their ow
   assert.equal(shopMaintenanceEnabled({ ...exact, SHOP_MAINTENANCE_CONFIRM: "wrong" }), false);
   assert.equal(shopAfterSalesQaEnabled({ ...exact, LIVE_REFUNDS_ENABLED: "true" }), false);
   assert.equal(shopShippingOperationsQaEnabled({ ...exact, SHOP_SHIPPING_PROVIDER_ENABLED: "true" }), false);
+});
+
+test("Production SAV reaches real providers only through the doubly confirmed Live refund gate", () => {
+  const stripeSecret = ["sk", "live", "shop-refund-fixture"].join("_");
+  const environment = {
+    ...productionEnvironment(),
+    SHOP_AFTER_SALES_REFUND_PROVIDER: "payments",
+    PAYMENT_DEPLOYMENT_ENV: "production",
+    PAYMENTS_ENABLED: "true",
+    SHOP_PAYMENTS_ENABLED: "true",
+    STRIPE_PAYMENTS_ENABLED: "true",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    STRIPE_MODE: "live",
+    STRIPE_SECRET_KEY: stripeSecret,
+    STRIPE_WEBHOOK_SECRET: ["whsec", "shop-refund-fixture"].join("_"),
+    PAYMENT_PRODUCTION_CONFIRM: PAYMENT_PRODUCTION_CONFIRMATION,
+    LIVE_REFUNDS_ENABLED: "true",
+  };
+  assert.equal(shopAfterSalesRefundProvider(environment), "blocked");
+  assert.equal(shopAfterSalesQaEnabled(environment), false);
+
+  const armed = {
+    ...environment,
+    LIVE_REFUNDS_PRODUCTION_CONFIRM: LIVE_REFUNDS_PRODUCTION_CONFIRMATION,
+  };
+  assert.equal(shopAfterSalesRefundProvider(armed), "payments");
+  assert.equal(shopAfterSalesQaEnabled(armed), true);
+  assert.equal(shopMaintenanceEnabled(armed), true);
+  assert.equal(shopShippingOperationsQaEnabled(armed), true);
+  assert.equal(shopMaintenanceEnabled(environment), false);
+  assert.equal(shopShippingOperationsQaEnabled(environment), false);
+});
+
+test("the Admin cockpit distinguishes code readiness from financial armament with human labels", async () => {
+  const page = await readFile(new URL("../../app/admin/boutique/logistique/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /evaluateLiveRefundProductionPolicy/);
+  assert.match(page, /Code prêt · fonctionnalité désarmée/);
+  assert.match(page, /Prêt à armer · fonctionnalité désarmée/);
+  assert.match(page, /Armé pour les remboursements Live/);
+  assert.match(page, /Bloqué · configuration à corriger/);
+  assert.match(page, /Paiements Boutique/);
+  assert.doesNotMatch(page, /INVALID_LIVE_REFUNDS_FLAG|LIVE_PROVIDER_REQUIRED|LIVE_REFUNDS_PRODUCTION_CONFIRMATION_REQUIRED/);
 });
 
 test("Production Admin shipping preparation is separately armed while public Shop and shipping stay off", () => {

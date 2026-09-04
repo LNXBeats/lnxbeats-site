@@ -220,20 +220,24 @@ async function run() {
     passed.push("double click reuses one logical RefundAttempt without a provider replay");
 
     fixture.failOnce();
+    const callsBeforeAmbiguous = fixture.calls.length;
     await assert.rejects(requestRefundForOrder(actor, { orderNumber: inProgress.orderNumber, kind: "PARTIAL", amountCents: 1_000, requestToken: "10000000-0000-4000-8000-000000000002" }, fixture.dependencies));
     const timedOut = await prisma.refundAttempt.findUniqueOrThrow({ where: { localIdempotencyKey: "refund-request:10000000-0000-4000-8000-000000000002" } });
     assert.equal(timedOut.status, "REQUIRES_REVIEW");
-    await prisma.refundAttempt.update({ where: { id: timedOut.id }, data: { lastAttemptAt: new Date(Date.now() - 120_000) } });
-    await reconcileRefundAttemptForAdmin(actor, timedOut.id, fixture.dependencies);
-    const retried = await prisma.refundAttempt.findUniqueOrThrow({ where: { id: timedOut.id } });
-    assert.equal(retried.status, "SUCCEEDED");
-    assert.equal(fixture.calls.at(-1)?.idempotencyKey, timedOut.providerIdempotencyKey);
+    const duplicate = await requestRefundForOrder(actor, { orderNumber: inProgress.orderNumber, kind: "PARTIAL", amountCents: 1_000, requestToken: "10000000-0000-4000-8000-000000000002" }, fixture.dependencies);
+    assert.equal(duplicate.status, "REQUIRES_REVIEW");
+    assert.equal(fixture.calls.length, callsBeforeAmbiguous + 1);
+    const reconciliation = await reconcileRefundAttemptForAdmin(actor, timedOut.id, fixture.dependencies);
+    assert.equal(reconciliation.status, "REQUIRES_REVIEW");
+    const preserved = await prisma.refundAttempt.findUniqueOrThrow({ where: { id: timedOut.id } });
+    assert.equal(preserved.status, "REQUIRES_REVIEW");
+    assert.equal(fixture.calls.length, callsBeforeAmbiguous + 1);
     const reconciliationAudit = await prisma.paymentAuditEvent.findFirstOrThrow({
       where: { refundAttemptId: timedOut.id, action: "RECONCILIATION_CHECKED" },
     });
     assert.equal(reconciliationAudit.actorUserId, admin.id);
     assert.equal(reconciliationAudit.actorRole, "ADMIN");
-    passed.push("timeout retry reuses provider idempotency and reconciles the same attempt");
+    passed.push("timeout without provider id remains in review without a blind provider retry");
 
     await assert.rejects(requestRefundForOrder(actor, { orderNumber: inProgress.orderNumber, kind: "PARTIAL", amountCents: 7_000, requestToken: "10000000-0000-4000-8000-000000000003" }, fixture.dependencies));
     await assert.rejects(requestRefundForOrder(memberActor, { orderNumber: inProgress.orderNumber, kind: "FULL", requestToken: "10000000-0000-4000-8000-000000000004" }, fixture.dependencies));
