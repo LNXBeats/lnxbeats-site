@@ -7,9 +7,15 @@ import { issueCreditNoteForRefund } from "@/lib/billing/service";
 import { enqueueShopCustomerRequestNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { ShopCustomerRequestError, shippingAddressFingerprint } from "@/lib/shop/customer-request-domain";
-import { createFakeShopRefundGateway, ShopRefundGatewayError, type ShopRefundEvidence, type ShopRefundGateway } from "@/lib/shop/after-sales-service";
+import {
+  createConfiguredShopRefundGateway,
+  ShopRefundGatewayError,
+  shopRefundPaymentMode,
+  type ShopRefundEvidence,
+  type ShopRefundGateway,
+} from "@/lib/shop/after-sales-service";
+import { assertShopAfterSalesEnabled } from "@/lib/shop/after-sales-config";
 import type { ShopShippingAddress } from "@/lib/shop/order-domain";
-import { assertShopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
 
 type Transaction = Prisma.TransactionClient;
 type Actor = Readonly<{ id: string; role: "MEMBER" | "CUSTOMER" | "ADMIN"; status: string; emailVerified: boolean }>;
@@ -42,7 +48,7 @@ export async function createShopCustomerRequest(
   assertMember(actor);
   if (client === prisma) {
     assertDatabaseConfigured();
-    assertShopProductionReadinessQaEnabled();
+    assertShopAfterSalesEnabled();
   }
   return locked(client, `shop-customer-request:${actor.id}:${input.orderNumber}:${input.type}`, async (transaction) => {
     const order = await transaction.shopOrder.findFirst({
@@ -145,13 +151,13 @@ type ReservedCancellation = Readonly<{
   providerPaymentId: string; attemptId: string; amountCents: number; idempotencyKey: string;
 }>;
 
-async function reserveCancellationRefund(transaction: Transaction, actor: Actor, requestNumberValue: string, comment: string, now: Date): Promise<ReservedCancellation> {
+async function reserveCancellationRefund(transaction: Transaction, actor: Actor, requestNumberValue: string, comment: string, now: Date, expectedMode: "TEST" | "LIVE"): Promise<ReservedCancellation> {
   const request = await transaction.shopOrderCustomerRequest.findUnique({ where: { requestNumber: requestNumberValue }, include: { shopOrder: { include: { items: { include: { reservation: true } }, payments: true } }, refundAttempt: true } });
   if (!request) throw new ShopCustomerRequestError("REQUEST_NOT_FOUND");
   if (request.type !== "PAID_ORDER_CANCELLATION" || !["REQUESTED", "APPROVED"].includes(request.status) || request.shopOrder.fulfillmentStatus === "SHIPPED") {
     throw new ShopCustomerRequestError("ORDER_NOT_ELIGIBLE");
   }
-  const payment = request.shopOrder.payments.filter((row) => row.mode === "TEST" && row.status === "SUCCEEDED");
+  const payment = request.shopOrder.payments.filter((row) => row.mode === expectedMode && row.status === "SUCCEEDED");
   if (payment.length !== 1 || !payment[0]!.providerPaymentId || payment[0]!.refundedAmountCents !== 0 || request.refundAttempt) {
     throw new ShopCustomerRequestError("REFUND_REQUIRES_REVIEW");
   }
@@ -229,14 +235,14 @@ export async function decideShopCustomerRequest(
   requestNumberValue: string,
   decision: "APPROVE" | "REJECT",
   comment: string,
-  gateway: ShopRefundGateway = createFakeShopRefundGateway("SUCCEEDED"),
+  gateway?: ShopRefundGateway,
   now = new Date(),
   client: PrismaClient = prisma,
 ) {
   assertAdmin(actor);
   if (client === prisma) {
     assertDatabaseConfigured();
-    assertShopProductionReadinessQaEnabled();
+    assertShopAfterSalesEnabled();
   }
   if (decision === "REJECT") return locked(client, `shop-customer-request:${requestNumberValue}`, (transaction) => rejectRequest(transaction, actor, requestNumberValue, comment, now));
   const kind = await client.shopOrderCustomerRequest.findUnique({
@@ -249,14 +255,26 @@ export async function decideShopCustomerRequest(
   if (kind.refundAttempt) {
     return kind.refundAttempt.status === "FAILED" ? "FAILED" as const : "REQUIRES_REVIEW" as const;
   }
-  const reserved = await locked(client, `shop-customer-request:${requestNumberValue}`, (transaction) => reserveCancellationRefund(transaction, actor, requestNumberValue, comment, now));
+  const expectedMode = gateway ? "TEST" as const : shopRefundPaymentMode();
+  const activeGateway = gateway ?? createConfiguredShopRefundGateway();
+  const reserved = await locked(client, `shop-customer-request:${requestNumberValue}`, (transaction) => reserveCancellationRefund(transaction, actor, requestNumberValue, comment, now, expectedMode));
   try {
-    const evidence = await gateway.request({ attemptId: reserved.attemptId, paymentId: reserved.paymentId, provider: reserved.provider, providerPaymentId: reserved.providerPaymentId, amountCents: reserved.amountCents, idempotencyKey: reserved.idempotencyKey });
+    const evidence = await activeGateway.request({ attemptId: reserved.attemptId, paymentId: reserved.paymentId, provider: reserved.provider, providerPaymentId: reserved.providerPaymentId, amountCents: reserved.amountCents, idempotencyKey: reserved.idempotencyKey });
     return applyCancellationEvidence(client, reserved, evidence);
   } catch (error) {
     if (error instanceof ShopRefundGatewayError && error.code === "AMBIGUOUS") {
       await client.refundAttempt.update({ where: { id: reserved.attemptId }, data: { status: "REQUIRES_REVIEW", failureCode: "AMBIGUOUS_PROVIDER_ACCEPTANCE" } });
       return "REQUIRES_REVIEW" as const;
+    }
+    if (error instanceof ShopRefundGatewayError && error.code === "FAILED") {
+      await locked(client, `shop-customer-request-refund:${reserved.requestId}`, async (transaction) => {
+        await transaction.refundAttempt.update({
+          where: { id: reserved.attemptId },
+          data: { status: "FAILED", failureCode: "REFUND_PROVIDER_REJECTED" },
+        });
+        await transaction.payment.update({ where: { id: reserved.paymentId }, data: { status: "SUCCEEDED" } });
+      });
+      return "FAILED" as const;
     }
     throw error;
   }

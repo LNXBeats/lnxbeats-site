@@ -30,6 +30,7 @@ import {
   restockShopReturn,
   startShopReturnReview,
 } from "@/lib/shop/after-sales-service";
+import { shopAfterSalesRefundProvider } from "@/lib/shop/after-sales-config";
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -90,8 +91,7 @@ export async function decideShopReturnAction(formData: FormData) {
       instructions: value(formData, "instructions", 2000, false),
       comment: value(formData, "comment", 1000, false),
     }, new Date(), {
-      immediateRefund: decision === "APPROVE" && formData.get("physicalReturnRequired") !== "true",
-      refundGateway: createFakeShopRefundGateway("SUCCEEDED"),
+      immediateRefund: false,
     });
   }, decision === "APPROVE" ? "demande-acceptee" : "demande-refusee");
 }
@@ -122,18 +122,25 @@ export async function inspectShopReturnAction(formData: FormData) {
 
 export async function refundShopReturnAction(formData: FormData) {
   if (formData.get("confirmation") !== SHOP_RETURN_REFUND_CONFIRMATION) redirect("/admin/boutique/retours?etat=confirmation-requise");
-  const behavior = formData.get("behavior");
-  if (!["SUCCEEDED", "PENDING", "FAILED", "AMBIGUOUS"].includes(String(behavior))) redirect("/admin/boutique/retours?etat=operation-refusee");
+  const mode = shopAfterSalesRefundProvider();
+  const behavior = String(formData.get("behavior") ?? "SUCCEEDED");
+  if (mode === "fake" && !["SUCCEEDED", "PENDING", "FAILED", "AMBIGUOUS"].includes(behavior)) redirect("/admin/boutique/retours?etat=operation-refusee");
+  const gateway = mode === "fake"
+    ? createFakeShopRefundGateway(behavior as "SUCCEEDED" | "PENDING" | "FAILED" | "AMBIGUOUS")
+    : undefined;
   return run(formData, (actor, requestNumber) => requestShopReturnRefund(
     actor,
     requestNumber,
     formData.get("shippingDecision") === "FULL" ? "FULL" : "NONE",
-    createFakeShopRefundGateway(behavior as "SUCCEEDED" | "PENDING" | "FAILED" | "AMBIGUOUS"),
+    gateway,
   ), "remboursement-traite");
 }
 
 export async function reconcileShopReturnAction(formData: FormData) {
-  return run(formData, (actor, requestNumber) => reconcileShopReturnRefund(actor, requestNumber, createFakeShopRefundGateway("SUCCEEDED")), "remboursement-reconcilie");
+  const gateway = shopAfterSalesRefundProvider() === "fake"
+    ? createFakeShopRefundGateway("SUCCEEDED")
+    : undefined;
+  return run(formData, (actor, requestNumber) => reconcileShopReturnRefund(actor, requestNumber, gateway), "remboursement-reconcilie");
 }
 
 export async function restockShopReturnAction(formData: FormData) {

@@ -5,7 +5,13 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { issueCreditNoteForRefund } from "@/lib/billing/service";
 import { enqueueShopAfterSalesNotification } from "@/lib/notifications/service";
-import { assertShopAfterSalesQaEnabled } from "@/lib/shop/after-sales-config";
+import { createRefundProviderGateway } from "@/lib/payments/refund";
+import { PaypalClientError } from "@/lib/payments/paypal-client";
+import { StripeRefundClientError } from "@/lib/payments/stripe-client";
+import {
+  assertShopAfterSalesEnabled,
+  assertShopRefundExecutionEnabled,
+} from "@/lib/shop/after-sales-config";
 import {
   assertTransition,
   calculateShopReturnRefund,
@@ -42,7 +48,7 @@ function dependencies(input: ServiceDependencies = {}) {
   if (!input.client) assertDatabaseConfigured();
   return {
     client: input.client ?? prisma,
-    assertEnabled: input.assertEnabled ?? assertShopAfterSalesQaEnabled,
+    assertEnabled: input.assertEnabled ?? assertShopAfterSalesEnabled,
   };
 }
 
@@ -522,6 +528,44 @@ export function createFakeShopRefundGateway(
   };
 }
 
+export function shopRefundPaymentMode(environment: NodeJS.ProcessEnv = process.env) {
+  return assertShopRefundExecutionEnabled(environment) === "payments" ? "LIVE" as const : "TEST" as const;
+}
+
+export function createConfiguredShopRefundGateway(
+  environment: NodeJS.ProcessEnv = process.env,
+): ShopRefundGateway {
+  const mode = assertShopRefundExecutionEnabled(environment);
+  if (mode === "fake") return createFakeShopRefundGateway();
+  return {
+    async request(input) {
+      try {
+        return await createRefundProviderGateway(input.provider).request({
+          paymentId: input.paymentId,
+          attemptId: input.attemptId,
+          providerPaymentId: input.providerPaymentId,
+          amountCents: input.amountCents,
+          idempotencyKey: input.idempotencyKey,
+        });
+      } catch (error) {
+        if (
+          (error instanceof StripeRefundClientError && error.code === "INVALID_REQUEST")
+          || (error instanceof PaypalClientError && ["INVALID_REQUEST", "NOT_APPROVED"].includes(error.code))
+        ) throw new ShopRefundGatewayError("FAILED");
+        throw new ShopRefundGatewayError("AMBIGUOUS");
+      }
+    },
+    async retrieve(input) {
+      if (!input.providerRefundId) throw new ShopRefundGatewayError("AMBIGUOUS");
+      try {
+        return await createRefundProviderGateway(input.provider).retrieve(input.providerRefundId);
+      } catch {
+        throw new ShopRefundGatewayError("AMBIGUOUS");
+      }
+    },
+  };
+}
+
 type ReservedShopRefund = Readonly<{
   attemptId: string;
   paymentId: string;
@@ -540,6 +584,7 @@ async function reserveShopRefund(
   requestNumberValue: string,
   shippingDecision: "NONE" | "FULL",
   now: Date,
+  expectedMode: "TEST" | "LIVE",
 ): Promise<ReservedShopRefund> {
   await lock(tx, `shop-after-sales:${requestNumberValue}`);
   const request = await tx.shopReturnRequest.findUnique({
@@ -549,7 +594,11 @@ async function reserveShopRefund(
   if (!request) throw new ShopAfterSalesError(404, "RETURN_NOT_FOUND");
   if (request.refundAttempt) {
     const payment = await tx.payment.findUnique({ where: { id: request.refundAttempt.paymentId } });
-    if (!payment?.providerPaymentId) throw new ShopAfterSalesError(409, "REFUND_REQUIRES_REVIEW");
+    if (
+      !payment?.providerPaymentId
+      || payment.mode !== expectedMode
+      || payment.provider !== request.refundAttempt.provider
+    ) throw new ShopAfterSalesError(409, "REFUND_REQUIRES_REVIEW");
     return {
       attemptId: request.refundAttempt.id,
       paymentId: payment.id,
@@ -579,7 +628,7 @@ async function reserveShopRefund(
   }));
   const amounts = calculateShopReturnRefund({ lines, shippingCents: request.shopOrder.shippingCents, shippingDecision });
   const paymentRows = await tx.payment.findMany({
-    where: { shopOrderId: request.shopOrderId, status: { in: [...winningPaymentStatuses] }, mode: "TEST" },
+    where: { shopOrderId: request.shopOrderId, status: { in: [...winningPaymentStatuses] }, mode: expectedMode },
     orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
   });
   if (paymentRows.length !== 1 || !paymentRows[0]!.providerPaymentId || paymentRows[0]!.currency !== "EUR") {
@@ -679,7 +728,7 @@ async function applyShopRefundEvidence(
     await tx.refundAttempt.update({ where: { id: attempt.id }, data: {
       providerRefundId: evidence.providerRefundId,
       status: evidence.status,
-      failureCode: evidence.status === "FAILED" ? "FAKE_PROVIDER_REFUND_FAILED" : null,
+      failureCode: evidence.status === "FAILED" ? "PROVIDER_REFUND_FAILED" : null,
       confirmedAt: evidence.status === "SUCCEEDED" ? evidence.occurredAt : null,
     } });
     const confirmed = await tx.refundAttempt.aggregate({
@@ -759,26 +808,61 @@ async function markAmbiguousRefund(client: PrismaClient, attemptId: string) {
   });
 }
 
+async function markFailedRefund(client: PrismaClient, attemptId: string) {
+  return transaction(client, async (tx) => {
+    await lock(tx, `shop-after-sales:refund:${attemptId}`);
+    const attempt = await tx.refundAttempt.findUnique({ where: { id: attemptId }, include: { payment: true } });
+    if (!attempt?.shopReturnRequestId || attempt.status === "SUCCEEDED") return;
+    await tx.refundAttempt.update({ where: { id: attempt.id }, data: { status: "FAILED", failureCode: "REFUND_PROVIDER_REJECTED" } });
+    const confirmed = await tx.refundAttempt.aggregate({
+      where: { paymentId: attempt.paymentId, status: "SUCCEEDED" },
+      _sum: { amountCents: true },
+    });
+    const confirmedCents = confirmed._sum.amountCents ?? 0;
+    await tx.payment.update({
+      where: { id: attempt.paymentId },
+      data: {
+        status: confirmedCents === 0 ? "SUCCEEDED" : confirmedCents === attempt.payment.amountCents ? "REFUNDED" : "PARTIALLY_REFUNDED",
+      },
+    });
+    await tx.shopReturnRequest.update({ where: { id: attempt.shopReturnRequestId }, data: { refundStatus: "FAILED" } });
+    await tx.shopReturnAuditEvent.upsert({
+      where: { idempotencyKey: `shop-return:${attempt.shopReturnRequestId}:refund-failed:v1` },
+      update: {},
+      create: {
+        shopReturnRequestId: attempt.shopReturnRequestId,
+        action: "REFUND_FAILED",
+        idempotencyKey: `shop-return:${attempt.shopReturnRequestId}:refund-failed:v1`,
+      },
+    });
+  });
+}
+
 export async function requestShopReturnRefund(
   actor: ShopAfterSalesActor,
   requestNumberValue: string,
   shippingDecision: "NONE" | "FULL",
-  gateway: ShopRefundGateway = createFakeShopRefundGateway(),
+  gateway?: ShopRefundGateway,
   now = new Date(),
   options: ServiceDependencies = {},
 ) {
   assertAdmin(actor);
   const { client, assertEnabled } = dependencies(options);
   assertEnabled();
-  const reserved = await transaction(client, (tx) => reserveShopRefund(tx, actor, requestNumberValue, shippingDecision, now));
+  const expectedMode = gateway ? "TEST" as const : shopRefundPaymentMode();
+  const activeGateway = gateway ?? createConfiguredShopRefundGateway();
+  const reserved = await transaction(client, (tx) => reserveShopRefund(tx, actor, requestNumberValue, shippingDecision, now, expectedMode));
   if (reserved.status === "SUCCEEDED" || reserved.status === "FAILED") return { attemptId: reserved.attemptId, status: reserved.status } as const;
+  if (reserved.reused && !reserved.providerRefundId) {
+    return { attemptId: reserved.attemptId, status: reserved.status === "REQUIRES_REVIEW" ? "REQUIRES_REVIEW" as const : "PENDING" as const };
+  }
   try {
     const evidence = reserved.providerRefundId
-      ? await gateway.retrieve({
+      ? await activeGateway.retrieve({
           attemptId: reserved.attemptId, provider: reserved.provider, providerPaymentId: reserved.providerPaymentId,
           providerRefundId: reserved.providerRefundId, amountCents: reserved.amountCents, idempotencyKey: reserved.providerIdempotencyKey,
         })
-      : await gateway.request({
+      : await activeGateway.request({
           attemptId: reserved.attemptId, paymentId: reserved.paymentId, provider: reserved.provider,
           providerPaymentId: reserved.providerPaymentId, amountCents: reserved.amountCents, idempotencyKey: reserved.providerIdempotencyKey,
         });
@@ -789,6 +873,10 @@ export async function requestShopReturnRefund(
       await markAmbiguousRefund(client, reserved.attemptId);
       return { attemptId: reserved.attemptId, status: "REQUIRES_REVIEW" as const };
     }
+    if (error instanceof ShopRefundGatewayError && error.code === "FAILED") {
+      await markFailedRefund(client, reserved.attemptId);
+      return { attemptId: reserved.attemptId, status: "FAILED" as const };
+    }
     throw error;
   }
 }
@@ -796,19 +884,25 @@ export async function requestShopReturnRefund(
 export async function reconcileShopReturnRefund(
   actor: ShopAfterSalesActor,
   requestNumberValue: string,
-  gateway: ShopRefundGateway,
+  gateway?: ShopRefundGateway,
   options: ServiceDependencies = {},
 ) {
   assertAdmin(actor);
   const { client, assertEnabled } = dependencies(options);
   assertEnabled();
+  const expectedMode = gateway ? "TEST" as const : shopRefundPaymentMode();
+  const activeGateway = gateway ?? createConfiguredShopRefundGateway();
   const request = await client.shopReturnRequest.findUnique({
     where: { requestNumber: requestNumberValue },
     include: { refundAttempt: { include: { payment: true } } },
   });
   const attempt = request?.refundAttempt;
   if (!request || !attempt?.payment.providerPaymentId) throw new ShopAfterSalesError(404, "RETURN_NOT_FOUND");
-  const evidence = await gateway.retrieve({
+  if (attempt.payment.mode !== expectedMode || !attempt.providerRefundId) {
+    await markAmbiguousRefund(client, attempt.id);
+    return { status: "REQUIRES_REVIEW" as const, confirmed: false };
+  }
+  const evidence = await activeGateway.retrieve({
     attemptId: attempt.id,
     provider: attempt.provider,
     providerPaymentId: attempt.payment.providerPaymentId,

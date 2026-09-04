@@ -10,6 +10,10 @@ import {
   parsePaymentsConfiguration,
 } from "@/lib/payments/config";
 import type { PaymentsConfiguration } from "@/lib/payments/types";
+import {
+  evaluateLiveRefundProductionPolicy,
+  type LiveRefundProductionPolicy,
+} from "@/lib/payments/live-refund-policy";
 import { prisma } from "@/lib/prisma";
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -30,6 +34,7 @@ export type PaymentPreflightStatus =
 export type PaymentProductionPreflightResult = Readonly<{
   passed: boolean;
   status: PaymentPreflightStatus;
+  liveRefunds: LiveRefundProductionPolicy;
   rules: readonly PaymentPreflightRule[];
 }>;
 
@@ -164,8 +169,11 @@ export async function runProductionPaymentPreflight(
     configuration = parsePaymentsConfiguration(environment);
     rules.push(rule("configuration.valid", true));
   } catch {
-    return { passed: false, status: "BLOCKED", rules: [rule("configuration.valid", false)] };
+    const liveRefunds = evaluateLiveRefundProductionPolicy(environment);
+    return { passed: false, status: "BLOCKED", liveRefunds, rules: [rule("configuration.valid", false)] };
   }
+
+  const liveRefunds = evaluateLiveRefundProductionPolicy(environment, configuration);
 
   rules.push(
     rule("deployment.production", configuration.deploymentEnvironment === "production"),
@@ -173,7 +181,10 @@ export async function runProductionPaymentPreflight(
     rule("runtime.railway.production", environment.RAILWAY_ENVIRONMENT_NAME === "production"),
     rule("canonical.production.https", canonicalProductionOrigin(environment)),
     rule("currency.policy.eur", true),
-    rule("refunds.live.disabled", !configuration.liveRefundsEnabled),
+    rule("refunds.live.policy", liveRefunds.state !== "BLOCKED", liveRefunds.state),
+    rule("refunds.live.confirmation", !liveRefunds.requested || liveRefunds.confirmationValid),
+    rule("refunds.live.stripe.compatible", !liveRefunds.requested || !configuration.stripe.enabled || liveRefunds.stripeReady),
+    rule("refunds.live.paypal.compatible", !liveRefunds.requested || !configuration.paypal.enabled || liveRefunds.paypalReady),
   );
 
   if (configuration.enabled) {
@@ -202,6 +213,7 @@ export async function runProductionPaymentPreflight(
   return {
     passed,
     status: passed ? configuredStatus(configuration) : "BLOCKED",
+    liveRefunds,
     rules,
   };
 }

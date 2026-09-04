@@ -3,8 +3,8 @@ import "server-only";
 import {
   assertPaypalReconciliationServerEnvironment,
   assertPaypalServerEnvironment,
-  parsePaymentsConfiguration,
 } from "@/lib/payments/config";
+import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-policy";
 import type { PaypalPaymentConfiguration } from "@/lib/payments/types";
 
 const PAYPAL_API_ORIGINS = {
@@ -492,14 +492,15 @@ export function createPaypalGateway(
   fetchImplementation: Fetch = fetch,
 ): PaypalGateway & PaypalRefundGateway {
   let configuration: EnabledPaypalConfiguration;
-  let liveRefundsEnabled = false;
+  let liveRefundsArmed = false;
   try {
     configuration = assertPaypalServerEnvironment();
-    liveRefundsEnabled = parsePaymentsConfiguration().liveRefundsEnabled;
+    liveRefundsArmed = configuration.environment !== "live"
+      || evaluateLiveRefundProductionPolicy().armed;
   } catch {
     throw new PaypalClientError("UNAVAILABLE");
   }
-  return createPaypalGatewayWithConfiguration(configuration, fetchImplementation, liveRefundsEnabled);
+  return createPaypalGatewayWithConfiguration(configuration, fetchImplementation, liveRefundsArmed);
 }
 
 /** Provider verification/reconciliation remains available for historical
@@ -518,6 +519,7 @@ export function createPaypalReconciliationGateway(
 export function createTestPaypalGateway(
   configuration: EnabledPaypalConfiguration,
   fetchImplementation: Fetch,
+  liveRefundsArmed = false,
 ) {
-  return createPaypalGatewayWithConfiguration(configuration, fetchImplementation);
+  return createPaypalGatewayWithConfiguration(configuration, fetchImplementation, liveRefundsArmed);
 }

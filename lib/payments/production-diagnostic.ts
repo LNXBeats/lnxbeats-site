@@ -15,10 +15,14 @@ import type {
   PersistedPaymentMode,
 } from "@/lib/payments/types";
 import { prisma } from "@/lib/prisma";
+import {
+  evaluateLiveRefundProductionPolicy,
+  type LiveRefundReadiness,
+} from "@/lib/payments/live-refund-policy";
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
-export type PaymentDiagnosticStatus = "SAFE_DISABLED" | "CONFIGURED_DISABLED" | "INVALID";
+export type PaymentDiagnosticStatus = "SAFE_DISABLED" | "CONFIGURED_DISABLED" | "CONFIGURED_ENABLED" | "INVALID";
 
 export type PaymentDatabaseDiagnostic = Readonly<{
   reachable: boolean;
@@ -40,7 +44,11 @@ export type PaymentDiagnosticResult = Readonly<{
   environment: PaymentDeploymentEnvironment | "invalid";
   production: boolean;
   paymentsEnabled: boolean | "invalid";
+  shopPaymentsEnabled: boolean | "invalid";
   liveRefundsEnabled: boolean;
+  liveRefundsStatus: LiveRefundReadiness;
+  liveRefundsProductionConfirmationPresent: boolean;
+  liveRefundsProductionConfirmationValid: boolean;
   stripe: Readonly<{
     flag: boolean | "invalid";
     enabled: boolean | "invalid";
@@ -289,12 +297,14 @@ export async function runPaymentDiagnostic(
 ): Promise<PaymentDiagnosticResult> {
   const deploymentEnvironment = knownDeploymentEnvironment(environment);
   const paymentsEnabled = knownFlag(environment, "PAYMENTS_ENABLED");
+  const shopPaymentsEnabled = knownFlag(environment, "SHOP_PAYMENTS_ENABLED");
   const stripeRequested = knownFlag(environment, "STRIPE_PAYMENTS_ENABLED");
   const paypalRequested = knownFlag(environment, "PAYPAL_PAYMENTS_ENABLED");
   const stripeMode = knownStripeMode(environment);
   const paypalEnvironment = knownPaypalEnvironment(environment);
   const configurationResult = diagnosticConfiguration(environment);
   const configuration = configurationResult.configuration;
+  const liveRefunds = evaluateLiveRefundProductionPolicy(environment, configuration);
   const origins = inspectOrigins(environment, deploymentEnvironment);
   const confirmationPresent = present(environment, "PAYMENT_PRODUCTION_CONFIRM");
   const confirmationValid = environment.PAYMENT_PRODUCTION_CONFIRM?.trim() === PAYMENT_PRODUCTION_CONFIRMATION;
@@ -312,12 +322,11 @@ export async function runPaymentDiagnostic(
     { name: "deployment.known", passed: deploymentEnvironment !== "invalid" },
     { name: "runtime.matchesDeployment", passed: runtimeMatchesDeployment(environment, deploymentEnvironment) },
     { name: "origins.https.consistent", passed: origins.consistent },
-    { name: "payments.disabled", passed: configuration?.enabled === false },
+    { name: "payments.configuration.coherent", passed: configurationResult.valid },
+    { name: "shop.payments.flag.valid", passed: shopPaymentsEnabled !== "invalid" },
     {
-      name: configuration?.liveRefundsEnabled === true
-        ? "refunds.live.explicitly-enabled"
-        : "refunds.live.disabled",
-      passed: true,
+      name: "refunds.live.policy",
+      passed: liveRefunds.state !== "BLOCKED",
     },
     {
       name: "stripe.mode.matchesDeployment",
@@ -359,10 +368,13 @@ export async function runPaymentDiagnostic(
   const configuredButDisabled = confirmationPresent
     || stripeRequested === true
     || paypalRequested === true
+    || shopPaymentsEnabled === true
     || configuration?.liveRefundsEnabled === true;
   const status: PaymentDiagnosticStatus = !valid
     ? "INVALID"
-    : configuredButDisabled
+    : configuration?.enabled === true
+      ? "CONFIGURED_ENABLED"
+      : configuredButDisabled
       ? "CONFIGURED_DISABLED"
       : "SAFE_DISABLED";
 
@@ -371,7 +383,11 @@ export async function runPaymentDiagnostic(
     environment: deploymentEnvironment,
     production: deploymentEnvironment === "production",
     paymentsEnabled,
+    shopPaymentsEnabled,
     liveRefundsEnabled: configuration?.liveRefundsEnabled ?? false,
+    liveRefundsStatus: liveRefunds.state,
+    liveRefundsProductionConfirmationPresent: liveRefunds.confirmationPresent,
+    liveRefundsProductionConfirmationValid: liveRefunds.confirmationValid,
     stripe: {
       flag: stripeRequested,
       enabled: configuration?.stripe.enabled ?? "invalid",
@@ -404,7 +420,11 @@ export function formatPaymentDiagnostic(result: PaymentDiagnosticResult) {
     `environment=${result.environment}`,
     `production=${result.production}`,
     `paymentsEnabled=${result.paymentsEnabled}`,
+    `shopPaymentsEnabled=${result.shopPaymentsEnabled}`,
     `liveRefundsEnabled=${result.liveRefundsEnabled}`,
+    `liveRefundsStatus=${result.liveRefundsStatus}`,
+    `liveRefundsProductionConfirmationPresent=${result.liveRefundsProductionConfirmationPresent}`,
+    `liveRefundsProductionConfirmationValid=${result.liveRefundsProductionConfirmationValid}`,
     `stripeFlag=${result.stripe.flag}`,
     `stripe.enabled=${result.stripe.enabled}`,
     `stripe.mode=${result.stripe.mode}`,

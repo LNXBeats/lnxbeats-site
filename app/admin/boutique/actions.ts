@@ -50,7 +50,6 @@ import {
 } from "@/lib/shop/shipping-provider-service";
 import { SHOP_CUSTOMER_REQUEST_APPROVAL, SHOP_CUSTOMER_REQUEST_REJECTION } from "@/lib/shop/customer-request-domain";
 import { decideShopCustomerRequest } from "@/lib/shop/customer-request-service";
-import { createFakeShopRefundGateway } from "@/lib/shop/after-sales-service";
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -298,7 +297,6 @@ export async function decideShopCustomerRequestAction(formData: FormData) {
       requestNumber,
       decision,
       comment,
-      createFakeShopRefundGateway("SUCCEEDED"),
     );
   } catch {
     redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=demande-client-refusee`);

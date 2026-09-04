@@ -4,16 +4,30 @@ import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import { SHOP_PHASE5B_QA_ORIGIN, SHOP_PHASE5B_QA_TARGET } from "@/lib/shop/qa-contract";
 import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
 import { isStrictShopProductionEnvironment } from "@/lib/shop/production-environment";
+import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-policy";
 
 export const SHOP_AFTER_SALES_QA_CONFIRMATION = "enable-local-shop-after-sales-qa";
 export const SHOP_AFTER_SALES_QA_TARGET = SHOP_PHASE5B_QA_TARGET;
 export const SHOP_AFTER_SALES_QA_ORIGIN = SHOP_PHASE5B_QA_ORIGIN;
 
+export type ShopAfterSalesRefundProvider = "disabled" | "fake" | "payments";
+
+export function shopAfterSalesRefundProvider(environment: NodeJS.ProcessEnv = process.env): ShopAfterSalesRefundProvider | "blocked" {
+  if (isStrictShopProductionEnvironment(environment)) {
+    const configured = environment.SHOP_AFTER_SALES_REFUND_PROVIDER ?? "disabled";
+    const liveRefunds = evaluateLiveRefundProductionPolicy(environment);
+    if (configured === "disabled" && liveRefunds.state !== "BLOCKED") return "disabled";
+    if (configured === "payments" && liveRefunds.armed) return "payments";
+    return "blocked";
+  }
+  if (environment.SHOP_AFTER_SALES_REFUND_PROVIDER === "fake") return "fake";
+  return "blocked";
+}
+
 export function shopAfterSalesQaEnabled(environment: NodeJS.ProcessEnv = process.env) {
   if (isStrictShopProductionEnvironment(environment)) {
     return environment.SHOP_AFTER_SALES_ENABLED === "true"
-      && environment.SHOP_AFTER_SALES_REFUND_PROVIDER === "disabled"
-      && environment.LIVE_REFUNDS_ENABLED === "false";
+      && shopAfterSalesRefundProvider(environment) !== "blocked";
   }
   if (shopProductionReadinessQaEnabled(environment)) {
     return environment.SHOP_AFTER_SALES_ENABLED === "true"
@@ -51,8 +65,19 @@ export function shopAfterSalesQaEnabled(environment: NodeJS.ProcessEnv = process
   }
 }
 
+export const shopAfterSalesEnabled = shopAfterSalesQaEnabled;
+
 export function assertShopAfterSalesQaEnabled(environment: NodeJS.ProcessEnv = process.env) {
   if (!shopAfterSalesQaEnabled(environment)) {
     throw new Error("SHOP_AFTER_SALES_QA_DISABLED");
   }
+}
+
+export const assertShopAfterSalesEnabled = assertShopAfterSalesQaEnabled;
+
+export function assertShopRefundExecutionEnabled(environment: NodeJS.ProcessEnv = process.env) {
+  if (!shopAfterSalesQaEnabled(environment)) throw new Error("SHOP_AFTER_SALES_DISABLED");
+  const provider = shopAfterSalesRefundProvider(environment);
+  if (provider === "disabled" || provider === "blocked") throw new Error("SHOP_REFUNDS_DISABLED");
+  return provider;
 }

@@ -16,6 +16,7 @@ import { formatEuro } from "@/lib/orders/domain";
 import { orderAcceptsDeliveryUpload } from "@/lib/orders/delivery";
 import { assertPaymentServerEnvironment, parsePaymentsConfiguration } from "@/lib/payments/config";
 import { paymentMethodPresentation, paymentStatusPresentation } from "@/lib/payments/presentation";
+import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-policy";
 import {
   LIVE_REFUND_CONFIRMATION,
   LIVE_REFUND_RECONCILIATION_CONFIRMATION,
@@ -98,9 +99,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
   let liveRefundsEnabled = false;
   try {
     const paymentsConfiguration = parsePaymentsConfiguration();
-    liveRefundsEnabled = paymentsConfiguration.enabled
-      && paymentsConfiguration.deploymentEnvironment === "production"
-      && paymentsConfiguration.liveRefundsEnabled === true;
+    liveRefundsEnabled = evaluateLiveRefundProductionPolicy(process.env, paymentsConfiguration).armed;
   } catch {
     liveRefundsEnabled = false;
   }

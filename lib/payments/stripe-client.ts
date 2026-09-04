@@ -4,9 +4,9 @@ import Stripe from "stripe";
 
 import {
   assertPaymentServerEnvironment,
-  parsePaymentsConfiguration,
   STRIPE_API_VERSION,
 } from "@/lib/payments/config";
+import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-policy";
 import type { ServerCheckoutLineItem } from "@/lib/payments/types";
 
 type HostedCheckoutSource =
@@ -69,6 +69,16 @@ export interface StripeRefundGateway {
   ): Promise<StripeRefundEvidence>;
   retrieveRefund(providerRefundId: string): Promise<StripeRefundEvidence>;
 }
+
+type StripeRefundsClient = Readonly<{
+  refunds: Readonly<{
+    create(
+      params: Stripe.RefundCreateParams,
+      options: Stripe.RequestOptions,
+    ): Promise<Stripe.Refund>;
+    retrieve(providerRefundId: string): Promise<Stripe.Refund>;
+  }>;
+}>;
 
 export class StripeCheckoutClientError extends Error {
   constructor(readonly code: "UNAVAILABLE" | "INVALID_RESPONSE") {
@@ -286,10 +296,11 @@ export function createStripeCheckoutLifecycleGateway(): StripeCheckoutLifecycleG
 
 export function createStripeRefundGateway(): StripeRefundGateway {
   let configuration;
-  let liveRefundsEnabled = false;
+  let liveRefundsArmed = false;
   try {
     configuration = assertPaymentServerEnvironment();
-    liveRefundsEnabled = parsePaymentsConfiguration().liveRefundsEnabled;
+    liveRefundsArmed = configuration.mode !== "live"
+      || evaluateLiveRefundProductionPolicy().armed;
   } catch {
     throw new StripeRefundClientError("UNAVAILABLE");
   }
@@ -299,9 +310,17 @@ export function createStripeRefundGateway(): StripeRefundGateway {
     timeout: 20_000,
     telemetry: false,
   });
+  return createTestStripeRefundGateway(stripe, configuration.mode, liveRefundsArmed);
+}
+
+export function createTestStripeRefundGateway(
+  stripe: StripeRefundsClient,
+  mode: "test" | "live",
+  liveRefundsArmed = false,
+): StripeRefundGateway {
   return {
     async refundPaymentIntent(paymentIntentId, amountCents, idempotencyKey, metadata) {
-      if (configuration.mode === "live" && !liveRefundsEnabled) {
+      if (mode === "live" && !liveRefundsArmed) {
         throw new StripeRefundClientError("UNAVAILABLE");
       }
       try {

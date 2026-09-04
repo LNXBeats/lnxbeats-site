@@ -10,6 +10,7 @@ import {
   SHOP_PHASE5D_RUNTIME_QA_TARGET,
 } from "@/lib/shop/qa-contract";
 import { isStrictShopProductionEnvironment } from "@/lib/shop/production-environment";
+import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-policy";
 
 export const SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION = "enable-local-shop-shipping-operations-qa";
 export const SHOP_SHIPPING_OPERATIONS_QA_TARGET = SHOP_PHASE5C_QA_TARGET;
@@ -35,7 +36,7 @@ export function shopShippingOperationsQaEnabled(environment: NodeJS.ProcessEnv =
   if (isStrictShopProductionEnvironment(environment)) {
     return environment.SHOP_SHIPPING_OPERATIONS_PROVIDER === "manual"
       && environment.SHOP_SHIPPING_PROVIDER_ENABLED === "false"
-      && environment.LIVE_REFUNDS_ENABLED === "false";
+      && evaluateLiveRefundProductionPolicy(environment).state !== "BLOCKED";
   }
   if (environment.SHOP_SHIPPING_OPERATIONS_QA_CONFIRM !== SHOP_SHIPPING_OPERATIONS_QA_CONFIRMATION) return false;
   if (environment.SHOP_SHIPPING_OPERATIONS_PROVIDER !== "manual") return false;
