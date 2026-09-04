@@ -15,6 +15,10 @@ Les séquences PostgreSQL ne réutilisent pas une valeur consommée par une tran
 Une correction passe par un avoir. Plusieurs avoirs partiels sont possibles tant que leur somme ne dépasse jamais le total d’origine. Chaque remboursement fournisseur confirmé possède au plus un avoir via `refundAttemptId` et une clé d’idempotence stable.
 Une rétractation acceptée peut être reliée explicitement à l’avoir ; le lien est vérifié contre le même parent métier et n’autorise jamais un remboursement fournisseur.
 
+Pour Commander, la facture source est une précondition dure de remboursement. Le repository financier la relit sous verrou avant de créer un `RefundAttempt`; son absence produit `REFUND_SOURCE_INVOICE_REQUIRED` et zéro mutation provider. Après preuve de succès provider, la création d'avoir est stricte et transactionnelle : elle ne peut plus retourner silencieusement sans document. Les événements provider signalant une opération externe sur un paiement sans facture deviennent `REQUIRES_REVIEW` sans déclarer localement un succès fictif.
+
+Les ventes historiques antérieures à cette fondation ne sont jamais régularisées automatiquement. Leur date de document, séquence, preuve financière, snapshot client et rapprochement comptable nécessitent une procédure humaine validée ; aucune commande de backfill Production n'est fournie ici.
+
 ## Snapshots et montants
 
 La facture conserve l’identité vendeur, l’identité client B2C/B2B, lignes, adresse de facturation lorsqu’elle existe, commande, paiement, prix, devise, frais de livraison, TVA, conditions acceptées et empreinte SHA-256. La Boutique reprend `shippingCents` de la `ShopOrder`; aucune grille courante n’est recalculée.

@@ -19,6 +19,8 @@ Le serveur relit l’unique `Payment` gagnant. `Payment.provider`, `Payment.mode
 
 Les remboursements totaux et partiels utilisent des centimes entiers. Le solde remboursable déduit les remboursements confirmés et les tentatives actives. Les verrous PostgreSQL, contraintes uniques, clés locales et clés provider persistantes empêchent une seconde opération logique concurrente.
 
+Pour Commander, une facture source liée au paiement est désormais exigée avant toute réservation et tout appel provider. Le code B3 ne doit pas être réarmé tant que les ventes historiques sans facture n'ont pas une politique de régularisation validée et que la politique d'information client après remboursement n'est pas tranchée. Le SAV Boutique conserve son garde facture dédié et n'est pas couplé au choix de notification Commander.
+
 ## Ambiguïté et réconciliation
 
 Après timeout ou acceptation provider potentielle sans preuve persistée, la tentative passe en `REQUIRES_REVIEW`. Une répétition de la demande ou une réconciliation sans `providerRefundId` ne réémet jamais un ordre financier. Avec un identifiant provider connu, la réconciliation effectue uniquement une lecture `retrieve` et applique une preuve cohérente. Toute divergence de provider, identifiant, mode, montant ou devise reste en revue.
@@ -37,8 +39,9 @@ La maintenance Shop accepte les états `OFF`, `READY_NOT_ARMED` et `ARMED`, mais
 2. Revalider health, migrations, quiet window, files financières, maintenance et notifications en lecture seule.
 3. Préparer Stripe Live et PayPal Live sans ouvrir la Boutique.
 4. Exécuter le preflight B3 ; toute valeur `BLOCKED` impose l’arrêt.
-5. Armer séparément Refund Live avec les deux confirmations exactes et le mode SAV `payments`.
-6. Ouvrir ensuite Shop, shipping et Shop Payments uniquement après une autorisation humaine distincte.
+5. Vérifier qu'aucun paiement Commander remboursable n'est sans facture, qu'aucune tentative financière n'est ambiguë et que le canal client ou la procédure opérateur décidée est réellement prêt.
+6. Armer séparément Refund Live avec les deux confirmations exactes et le mode SAV `payments`.
+7. Ouvrir ensuite Shop, shipping et Shop Payments uniquement après une autorisation humaine distincte.
 
 ## Rollback
 

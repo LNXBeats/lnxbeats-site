@@ -31,12 +31,14 @@ Une décision sur la prestation reste une action Admin distincte, limitée par l
 - une tentative logique possède une clé locale unique et une clé provider persistante unique ;
 - un événement provider est dédupliqué par `(provider, providerEventId)` ;
 - un payload provider complet n'est jamais conservé.
+- un remboursement Commander exige une facture source liée au `Payment` ; l'absence de facture produit `REFUND_SOURCE_INVOICE_REQUIRED` avant la création du `RefundAttempt` et avant tout appel Stripe ou PayPal ;
+- un remboursement confirmé crée obligatoirement son avoir ; l'absence de facture n'est plus un cas silencieux.
 
 ## Procédure Admin commune
 
 1. Ouvrir la fiche Admin de l'Order.
 2. Vérifier le paiement gagnant, le provider, le mode `TEST`, le montant payé, le montant remboursé, le solde disponible et les tentatives actives.
-3. Vérifier que la prestation affichée correspond à l'Order concernée.
+3. Vérifier que la prestation affichée correspond à l'Order concernée et que l'Admin affiche une facture source. Si elle est absente, arrêter : ne pas contourner le garde dans un Dashboard provider.
 4. Choisir un remboursement total ou saisir le montant partiel exact.
 5. Lire l'avertissement : le remboursement change l'état financier, pas le statut métier de l'Order.
 6. Cocher la confirmation explicite puis soumettre une seule fois.
@@ -141,6 +143,12 @@ Références officielles : [PayPal disputes overview](https://developer.paypal.c
 - les flags notification, suppressions et contrôles de destination existants restent applicables.
 
 Une panne de transport n'a aucun effet sur `Payment`, `Order`, `RefundAttempt` ou `PaymentIncident`.
+
+Le service web et le worker doivent néanmoins être évalués ensemble avant un remboursement réel. Une notification client persistée alors que le worker a `CLIENT_EMAIL_NOTIFICATIONS_ENABLED=false` devient `FAILED_FINAL` avec `CLIENT_EMAIL_DISABLED`, sans appel Resend et sans incrément de tentative. Cet état reste visible dans l'Admin Notifications, mais il ne relance jamais le provider financier. La politique de lancement doit être décidée humainement entre blocage préventif du remboursement, information manuelle avec alerte opérateur, ou activation contrôlée du canal client sur le worker. Le code ne choisit pas silencieusement entre ces politiques.
+
+## Commandes historiques sans facture
+
+Les paiements antérieurs à l'introduction de la facturation automatique ne doivent pas être backfillés à l'aveugle. Avant toute régularisation, rapprocher la preuve provider, la date comptable retenue, le montant et la devise, le snapshot client disponible à la vente, la prestation, les pièces éventuellement déjà remises et les écritures externes. La séquence courante ne doit être ni réécrite ni antidatée arbitrairement. Deux voies restent soumises à décision humaine : un backfill contrôlé et audité utilisant la séquence courante, ou une émission manuelle rapprochée ensuite au `Payment`. Dans les deux cas, le document devient immutable et l'avoir n'est émis qu'après existence de la facture source.
 
 ## Commande livrée ou annulée
 
