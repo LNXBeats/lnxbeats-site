@@ -7,15 +7,25 @@ function json<T>(path: string) {
   return JSON.parse(readFileSync(join(process.cwd(), path), "utf8")) as T;
 }
 
-test("the Prisma transitive mysql2 dependency resolves to the first patched release", () => {
+test("the Prisma and Better Auth transitive mysql2 dependency resolves to the current first patched release", () => {
   const manifest = json<{ overrides?: Record<string, string> }>("package.json");
   const lock = json<{ packages?: Record<string, { version?: string; dependencies?: Record<string, string> }> }>("package-lock.json");
   const installed = json<{ version?: string }>("node_modules/mysql2/package.json");
 
-  assert.equal(manifest.overrides?.mysql2, "3.22.0");
-  assert.equal(lock.packages?.["node_modules/mysql2"]?.version, "3.22.0");
-  assert.equal(installed.version, "3.22.0");
+  assert.equal(manifest.overrides?.mysql2, "3.23.1");
+  assert.equal(lock.packages?.["node_modules/mysql2"]?.version, "3.23.1");
+  assert.equal(installed.version, "3.23.1");
   assert.equal(lock.packages?.["node_modules/prisma"]?.dependencies?.mysql2, "3.15.3");
+});
+
+test("the Prisma CLI fast-uri dependency resolves to the patched compatible release", () => {
+  const manifest = json<{ overrides?: Record<string, string> }>("package.json");
+  const lock = json<{ packages?: Record<string, { version?: string }> }>("package-lock.json");
+  const installed = json<{ version?: string }>("node_modules/fast-uri/package.json");
+
+  assert.equal(manifest.overrides?.["fast-uri"], "3.1.6");
+  assert.equal(lock.packages?.["node_modules/fast-uri"]?.version, "3.1.6");
+  assert.equal(installed.version, "3.1.6");
 });
 
 test("the application remains PostgreSQL-only and has no direct mysql2 dependency", () => {
