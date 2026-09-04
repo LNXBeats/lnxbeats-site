@@ -6,7 +6,7 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 import type { OrderActor } from "@/lib/orders/domain";
 import { enqueueOrderNotification } from "@/lib/notifications/service";
-import { issueCreditNoteForRefundIfInvoiceExists } from "@/lib/billing/service";
+import { issueCreditNoteForRefund } from "@/lib/billing/service";
 import {
   createPaypalGateway,
   PaypalClientError,
@@ -63,12 +63,17 @@ export class RefundServiceError extends Error {
       | "REFUND_AMOUNT_EXCEEDS_AVAILABLE"
       | "REFUND_ALREADY_PROCESSING"
       | "REFUND_REQUIRES_REVIEW"
+      | "REFUND_SOURCE_INVOICE_REQUIRED"
       | "LIVE_REFUNDS_DISABLED"
       | "REFUND_PROVIDER_UNAVAILABLE",
   ) {
     super("Le remboursement ne peut pas être traité.");
     this.name = "RefundServiceError";
   }
+}
+
+export function assertRefundSourceInvoice(invoice: { id: string } | null | undefined) {
+  if (!invoice) throw new RefundServiceError(409, "REFUND_SOURCE_INVOICE_REQUIRED");
 }
 
 export type RefundRuntimePolicy = Readonly<{
@@ -232,6 +237,7 @@ export function createRefundDatabaseRepository(
                 shopOrderId: true,
                 providerPaymentId: true,
                 mode: true,
+                invoice: { select: { id: true } },
                 order: { select: { orderNumber: true } },
               },
             },
@@ -251,6 +257,7 @@ export function createRefundDatabaseRepository(
           if (existing.payment.mode === "LIVE" && input.liveConfirmation !== LIVE_REFUND_CONFIRMATION) {
             throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");
           }
+          assertRefundSourceInvoice(existing.payment.invoice);
           return reservedRefund(existing, true);
         }
         const order = await transaction.order.findUnique({
@@ -263,6 +270,7 @@ export function createRefundDatabaseRepository(
               select: {
                 id: true, provider: true, status: true, amountCents: true, currency: true,
                 refundedAmountCents: true, providerPaymentId: true, mode: true,
+                invoice: { select: { id: true } },
               },
             },
           },
@@ -277,6 +285,10 @@ export function createRefundDatabaseRepository(
         if (payment.mode === "LIVE" && input.liveConfirmation !== LIVE_REFUND_CONFIRMATION) {
           throw new RefundServiceError(400, "INVALID_REFUND_REQUEST");
         }
+        // A Commander refund must be capable of producing its immutable credit
+        // note. Check this deterministic accounting precondition before a
+        // RefundAttempt is reserved and before any provider can be reached.
+        assertRefundSourceInvoice(payment.invoice);
         await lock(transaction, `payments:attempt:${payment.id}`);
         const reserved = await transaction.refundAttempt.aggregate({
           where: { paymentId: payment.id, status: { in: [...activeRefundStatuses] } },
@@ -454,7 +466,7 @@ export function createRefundDatabaseRepository(
           },
         });
         if (nextStatus === "SUCCEEDED") {
-          await issueCreditNoteForRefundIfInvoiceExists(transaction, attempt.id);
+          await issueCreditNoteForRefund(transaction, { refundAttemptId: attempt.id });
           const total = confirmedCents === attempt.payment.amountCents;
           await transaction.orderEvent.create({
             data: {

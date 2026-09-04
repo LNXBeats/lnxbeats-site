@@ -4,6 +4,7 @@ import test from "node:test";
 
 import type { OrderActor } from "@/lib/orders/domain";
 import {
+  assertRefundSourceInvoice,
   createRefundProviderGateway,
   parseRefundAmountToCents,
   paymentStatusAfterRefund,
@@ -98,6 +99,16 @@ test("refund amounts use exact integer cents and reject floats or non-positive i
   for (const value of ["0", "-1", "1.999", "NaN", "1e2", 10]) {
     assert.throws(() => parseRefundAmountToCents(value), RefundServiceError);
   }
+});
+
+test("a missing source invoice is an explicit fail-closed business error", () => {
+  assert.doesNotThrow(() => assertRefundSourceInvoice({ id: "invoice-fixture" }));
+  assert.throws(
+    () => assertRefundSourceInvoice(null),
+    (error: unknown) => error instanceof RefundServiceError
+      && error.code === "REFUND_SOURCE_INVOICE_REQUIRED"
+      && error.status === 409,
+  );
 });
 
 test("remaining amount and Payment refund status are deterministic", () => {
@@ -475,6 +486,51 @@ test("the Live gate refuses a new refund before repository or provider activity"
   assert.equal(gatewayCalls, 0);
 });
 
+test("Stripe and PayPal are never reached when the repository rejects a missing source invoice", async () => {
+  for (const provider of ["STRIPE", "PAYPAL"] as const) {
+    const base = dependencies();
+    let providerCalls = 0;
+    const fixture = dependencies({
+      repository: {
+        ...base.value.repository,
+        async reserve() {
+          throw new RefundServiceError(409, "REFUND_SOURCE_INVOICE_REQUIRED");
+        },
+      },
+      gateway: () => ({
+        async request() {
+          providerCalls += 1;
+          throw new Error(`${provider} must remain unreachable`);
+        },
+        async retrieve() {
+          providerCalls += 1;
+          throw new Error(`${provider} must remain unreachable`);
+        },
+      }),
+    });
+    await assert.rejects(
+      requestRefundForOrder(admin, {
+        orderNumber: "LNX-2026-000001",
+        kind: "FULL",
+        requestToken: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      }, fixture.value),
+      (error: unknown) => error instanceof RefundServiceError
+        && error.code === "REFUND_SOURCE_INVOICE_REQUIRED",
+    );
+    assert.equal(providerCalls, 0, `${provider} received an unexpected call`);
+  }
+});
+
+test("the invoice guard is inside the repository and precedes RefundAttempt creation", async () => {
+  const source = await readFile(new URL("../../lib/payments/refund.ts", import.meta.url), "utf8");
+  const repository = source.slice(source.indexOf("export function createRefundDatabaseRepository"), source.indexOf("export function createRefundProviderGateway"));
+  const guard = repository.indexOf("assertRefundSourceInvoice(payment.invoice)");
+  const attempt = repository.indexOf("transaction.refundAttempt.create");
+  assert.ok(guard > 0);
+  assert.ok(attempt > guard);
+  assert.match(repository, /invoice: \{ select: \{ id: true \} \}/);
+});
+
 test("an explicit Live opt-in preserves the existing refund path", async () => {
   const base = dependencies();
   let repositoryCalls = 0;
@@ -670,6 +726,10 @@ test("Admin refund mutations reuse origin, session and closed confirmation guard
   assert.match(actions, /await reconcileRefundAttemptForAdmin\(/);
   assert.match(actions, /LIVE_REFUND_CONFIRMATION/);
   assert.match(actions, /LIVE_REFUND_RECONCILIATION_CONFIRMATION/);
+  assert.match(actions, /REFUND_SOURCE_INVOICE_REQUIRED[\s\S]*remboursement-facture-requise/);
+  const page = await readFile(new URL("../../app/admin/commandes/[orderNumber]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /Facture source[\s\S]*Absente — remboursement interdit/);
+  assert.match(page, /remboursement-facture-requise/);
 });
 
 test("the Admin UI hides Live refund mutations behind the server configuration while preserving TEST", async () => {

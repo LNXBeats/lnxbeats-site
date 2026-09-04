@@ -466,6 +466,38 @@ test("les templates ont HTML, texte, deep link et garde DRAFT", () => {
   assert.match(rights.text, /\/compte\/droits\/LNX-LIC-2026-000001/);
 });
 
+test("un échec de notification de remboursement reste séparé de la mutation financière", async () => {
+  const disabled = parseNotificationConfiguration({
+    NODE_ENV: "development",
+    NOTIFICATION_DEPLOYMENT_ENV: "development",
+    NOTIFICATION_EMAIL_TRANSPORT: "capture",
+    EMAIL_NOTIFICATIONS_ENABLED: "true",
+    CLIENT_EMAIL_NOTIFICATIONS_ENABLED: "false",
+    APP_CANONICAL_URL: "http://localhost:31730",
+  });
+  const refundMessage: OrderNotificationMessage = {
+    ...message,
+    kind: "CUSTOMER_PARTIAL_REFUND",
+    priority: "CRITICAL",
+    recipient: "client@example.invalid",
+    idempotencyKey: "payment:payment-fixture:refund:refund-fixture:confirmed",
+    templateKey: "customer-partial-refund",
+    payload: { ...message.payload, refundAmountCents: 1_500 },
+  };
+  let financialProviderCalls = 0;
+  const recordConfirmedProviderRefund = () => {
+    financialProviderCalls += 1;
+  };
+  recordConfirmedProviderRefund();
+  await assert.rejects(
+    () => createNotificationTransport(disabled).send(refundMessage, orderNotificationTemplate(refundMessage, disabled)),
+    (error: unknown) => error instanceof NotificationTransportError && error.failure.code === "CLIENT_EMAIL_DISABLED",
+  );
+  assert.equal(financialProviderCalls, 1);
+  const notificationService = await readFile(new URL("../../lib/notifications/service.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(notificationService, /requestRefundForOrder|createRefundProviderGateway|refundPaymentIntent|refundCapture/);
+});
+
 test("les templates Boutique sont humains, minimisés et liés à la bonne ressource", () => {
   const customer = orderNotificationTemplate(shopMessage, captureConfiguration);
   assert.match(customer.subject, /^\[TEST\] Commande Boutique confirmée/);

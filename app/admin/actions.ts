@@ -122,6 +122,9 @@ export async function requestPaymentRefundAction(formData: FormData) {
     redirect(adminOrderPath(orderNumber, result.status === "SUCCEEDED" ? "remboursement-confirme" : "remboursement-en-cours"));
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
+    if (error && typeof error === "object" && "code" in error && error.code === "REFUND_SOURCE_INVOICE_REQUIRED") {
+      redirect(adminOrderPath(orderNumber, "remboursement-facture-requise"));
+    }
     redirect(adminOrderPath(orderNumber, "remboursement-a-verifier"));
   }
 }

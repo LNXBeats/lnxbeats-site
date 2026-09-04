@@ -136,7 +136,11 @@ test("payment success paths issue the invoice before durable customer notificati
     assert.ok(notification > invoice, `${path} must snapshot the invoice link before notification enqueue.`);
   }
   const refund = await read("lib/payments/refund.ts");
-  assert.match(refund, /nextStatus === "SUCCEEDED"[\s\S]*issueCreditNoteForRefundIfInvoiceExists/);
+  const financialEvents = await read("lib/payments/provider-financial-events.ts");
+  assert.match(refund, /nextStatus === "SUCCEEDED"[\s\S]*issueCreditNoteForRefund\(transaction, \{ refundAttemptId: attempt\.id \}\)/);
+  assert.match(financialEvents, /!payment\.invoice[\s\S]*outcome: "REQUIRES_REVIEW"/);
+  assert.match(financialEvents, /issueCreditNoteForRefund\(transaction, \{ refundAttemptId: attempt\.id \}\)/);
+  assert.doesNotMatch(`${refund}\n${financialEvents}\n${await read("lib/billing/service.ts")}`, /issueCreditNoteForRefundIfInvoiceExists/);
 });
 
 test("private invoice and credit-note routes enforce session ownership and safe response headers", async () => {

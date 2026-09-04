@@ -44,6 +44,7 @@ const stateMessages: Record<string, string> = {
   "remboursement-confirme": "Le prestataire a confirmé le remboursement. Le statut métier de la commande est inchangé.",
   "remboursement-en-cours": "Le remboursement est en cours. Aucun nouvel ordre de remboursement ne doit être créé.",
   "remboursement-a-verifier": "Le remboursement nécessite une réconciliation opérateur avant toute nouvelle tentative.",
+  "remboursement-facture-requise": "Remboursement bloqué avant tout appel au prestataire : la facture source doit d’abord être régularisée selon la procédure comptable validée.",
   "remboursement-refuse": "La demande de remboursement a été refusée par les garde-fous serveur.",
 };
 
@@ -206,6 +207,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
                 <div><dt>Statut</dt><dd>{paymentStatusPresentation[payment.status]}</dd></div>
                 <div><dt>Montant</dt><dd>{formatEuro(payment.amountCents)} · {payment.currency}</dd></div>
                 <div><dt>Remboursé</dt><dd>{formatEuro(payment.refundedAmountCents)}</dd></div>
+                <div><dt>Facture source</dt><dd>{payment.invoice?.invoiceNumber ?? "Absente — remboursement interdit"}</dd></div>
                 <div><dt>Solde remboursable</dt><dd>{formatEuro(Math.max(0, payment.amountCents - payment.refundedAmountCents - payment.refundAttempts.filter((attempt) => ["PROCESSING", "PENDING", "REQUIRES_REVIEW"].includes(attempt.status)).reduce((sum, attempt) => sum + attempt.amountCents, 0)))}</dd></div>
                 <div><dt>Prestataire</dt><dd>{payment.provider === "STRIPE" ? "Stripe" : "PayPal"}</dd></div>
                 <div><dt>Environnement</dt><dd>{payment.mode === "TEST" ? "MODE TEST" : "LIVE"}</dd></div>

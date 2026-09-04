@@ -184,6 +184,7 @@ export async function getAdminOrder(orderNumber: string) {
           failureCode: true,
           refundedAmountCents: true,
           refundedAt: true,
+          invoice: { select: { id: true, invoiceNumber: true } },
           events: {
             where: { outcome: "REQUIRES_REVIEW" },
             select: { id: true },

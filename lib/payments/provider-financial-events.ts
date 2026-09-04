@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 
 import { enqueueOrderNotification } from "@/lib/notifications/service";
-import { issueCreditNoteForRefundIfInvoiceExists } from "@/lib/billing/service";
+import { issueCreditNoteForRefund } from "@/lib/billing/service";
 import { paypalCentsFromAmount, paypalRefundEvidence } from "@/lib/payments/paypal-client";
 import { paymentStatusAfterRefund, refundableAmount, type RefundProviderEvidence } from "@/lib/payments/refund";
 import type { VerifiedPaypalWebhookEvent } from "@/lib/payments/paypal-webhook";
@@ -277,7 +277,7 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
         provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId },
         mode: input.livemode ? "LIVE" : "TEST",
       },
-      include: { order: true },
+      include: { order: true, invoice: { select: { id: true } } },
     });
     if (payment?.shopOrderId && !payment.orderId) {
       return recordShopFinancialReview(transaction, {
@@ -305,6 +305,13 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
       });
     }
     await lock(transaction, `payments:order:${payment.order.orderNumber}`);
+    if (!payment.invoice && input.status !== "FAILED") {
+      return createReceipt(transaction, {
+        provider: input.provider, eventId: input.eventId, type: input.eventType,
+        objectId: input.providerRefundId, outcome: "REQUIRES_REVIEW",
+        paymentId: payment.id, occurredAt: input.occurredAt, livemode: input.livemode,
+      });
+    }
     let attempt = await transaction.refundAttempt.findUnique({
       where: { provider_providerRefundId: { provider: input.provider, providerRefundId: input.providerRefundId } },
     });
@@ -413,7 +420,7 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
       });
     }
     if (input.status === "SUCCEEDED" && !wasSucceeded) {
-      await issueCreditNoteForRefundIfInvoiceExists(transaction, attempt.id);
+      await issueCreditNoteForRefund(transaction, { refundAttemptId: attempt.id });
       const total = confirmedCents === payment.amountCents;
       await transaction.orderEvent.create({
         data: {

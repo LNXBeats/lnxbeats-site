@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import type { OrderActor } from "@/lib/orders/domain";
 import { assertSafeLocalPostgresUrl } from "@/lib/database/local-postgres-url";
 import { PaypalClientError } from "@/lib/payments/paypal-client";
+import { issueInvoiceForPayment } from "@/lib/billing/service";
 import {
   createRefundDatabaseRepository,
   reconcileRefundAttemptForAdmin,
@@ -26,6 +27,8 @@ const QA_ORDERS = [
   "LNX-2099-076003",
   "LNX-2099-076004",
   "LNX-2099-076005",
+  "LNX-2099-076006",
+  "LNX-2099-076007",
 ] as const;
 const EVENT_PREFIX = "evt_v076_refund_";
 
@@ -65,6 +68,13 @@ async function cleanup() {
     if (paymentIds.length) {
       await transaction.providerEvent.deleteMany({ where: { OR: [{ paymentId: { in: paymentIds } }, { providerEventId: { startsWith: EVENT_PREFIX } }] } });
       await transaction.paymentAuditEvent.deleteMany({ where: { paymentId: { in: paymentIds } } });
+      const invoices = await transaction.invoice.findMany({ where: { paymentId: { in: paymentIds } }, select: { id: true } });
+      const invoiceIds = invoices.map(({ id }) => id);
+      if (invoiceIds.length) {
+        await transaction.billingAuditEvent.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+        await transaction.creditNote.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+        await transaction.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
+      }
       await transaction.refundAttempt.deleteMany({ where: { paymentId: { in: paymentIds } } });
       await transaction.paymentIncident.deleteMany({ where: { paymentId: { in: paymentIds } } });
       await transaction.payment.deleteMany({ where: { id: { in: paymentIds } } });
@@ -97,8 +107,9 @@ async function createOrderPayment(input: {
   provider?: "STRIPE" | "PAYPAL";
   amountCents?: number;
   providerPaymentId?: string;
+  issueInvoice?: boolean;
 }) {
-  return prisma.order.create({
+  const order = await prisma.order.create({
     data: {
       orderNumber: input.orderNumber,
       userId: input.userId,
@@ -132,6 +143,10 @@ async function createOrderPayment(input: {
     },
     include: { payments: true },
   });
+  if (input.provider && input.issueInvoice !== false) {
+    await prisma.$transaction((transaction) => issueInvoiceForPayment(transaction, order.payments[0]!.id));
+  }
+  return order;
 }
 
 function fakeDependencies() {
@@ -186,6 +201,26 @@ async function run() {
     const actor = { id: admin.id, email: admin.email, name: admin.displayName, role: "ADMIN", status: "ACTIVE", emailVerified: true } satisfies OrderActor;
     const memberActor = { id: member.id, email: member.email, name: member.displayName, role: "MEMBER", status: "ACTIVE", emailVerified: true } satisfies OrderActor;
     const fixture = fakeDependencies();
+
+    for (const [index, provider] of (["STRIPE", "PAYPAL"] as const).entries()) {
+      const withoutInvoice = await createOrderPayment({
+        orderNumber: QA_ORDERS[5 + index]!, userId: member.id, customerEmail: member.email,
+        orderStatus: "IN_PROGRESS", provider, issueInvoice: false,
+        providerPaymentId: provider === "STRIPE" ? "pi_v076_without_invoice" : "PAYPAL-CAPTURE-V076-WITHOUT-INVOICE",
+      });
+      const callsBefore = fixture.calls.length;
+      await assert.rejects(
+        requestRefundForOrder(actor, {
+          orderNumber: withoutInvoice.orderNumber,
+          kind: "FULL",
+          requestToken: `${index + 6}0000000-0000-4000-8000-000000000001`,
+        }, fixture.dependencies),
+        (error: unknown) => error instanceof Error && "code" in error && error.code === "REFUND_SOURCE_INVOICE_REQUIRED",
+      );
+      assert.equal(fixture.calls.length, callsBefore);
+      assert.equal(await prisma.refundAttempt.count({ where: { paymentId: withoutInvoice.payments[0]!.id } }), 0);
+    }
+    passed.push("missing Commander invoice blocks Stripe and PayPal before RefundAttempt and provider mutation");
 
     const inProgress = await createOrderPayment({ orderNumber: QA_ORDERS[0], userId: member.id, customerEmail: member.email, orderStatus: "IN_PROGRESS", provider: "STRIPE", providerPaymentId: "pi_v076_in_progress" });
     const payment = inProgress.payments[0]!;

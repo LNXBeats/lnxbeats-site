@@ -330,15 +330,6 @@ export async function issueCreditNoteForRefund(
   return { creditNote, created: true } as const;
 }
 
-export async function issueCreditNoteForRefundIfInvoiceExists(transaction: Transaction, refundAttemptId: string) {
-  const linked = await transaction.refundAttempt.findUnique({
-    where: { id: refundAttemptId },
-    select: { payment: { select: { invoice: { select: { id: true } } } } },
-  });
-  if (!linked?.payment.invoice) return null;
-  return issueCreditNoteForRefund(transaction, { refundAttemptId });
-}
-
 export async function listMemberInvoices(userId: string, client: PrismaClient = prisma) {
   assertDatabaseConfigured();
   return client.invoice.findMany({
