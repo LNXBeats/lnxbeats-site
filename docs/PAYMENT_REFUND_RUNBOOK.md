@@ -6,9 +6,9 @@ Ce runbook couvre uniquement Stripe Test et PayPal Sandbox. Il ne constitue pas 
 
 ## Production Live — fermée par défaut
 
-Le Checkout Stripe Live peut être activé séparément, mais les remboursements Live restent désactivés lorsque `LIVE_REFUNDS_ENABLED` est absente, vide, invalide ou égale à `false`. Seule la valeur exacte `true` ouvre le chemin serveur. Lorsque le gate est fermé, l’Admin conserve la lecture des paiements, tentatives, incidents et audits, tandis que les demandes et réconciliations Live sont indisponibles. Les webhooks signés décrivant un remboursement ou un litige externe continuent d’être reçus et rapprochés ; ils ne constituent pas une autorisation d’émettre une nouvelle mutation financière.
+Le Checkout Live peut être activé séparément. Un remboursement Live exige simultanément `LIVE_REFUNDS_ENABLED=true`, `LIVE_REFUNDS_PRODUCTION_CONFIRM=enable-production-live-refunds`, un runtime Railway Production strict, l’armement Payments Production et le provider Live du paiement réellement gagnant. Le flag seul ne suffit jamais. Lorsque ce gate composé est fermé, l’Admin conserve la lecture des paiements, tentatives, incidents et audits, tandis que les demandes et réconciliations Live sont indisponibles. Les webhooks signés décrivant un remboursement ou un litige externe continuent d’être reçus et rapprochés ; ils ne constituent pas une autorisation d’émettre une nouvelle mutation financière.
 
-Le parcours TEST/Sandbox décrit ci-dessous reste disponible. L’activation future du Refund Live nécessite un sprint distinct : corriger le retry ambigu sans `providerRefundId`, ajouter un plafond d’essais et un cutoff temporel, puis valider une réconciliation provider qui ne peut pas réémettre indéfiniment une demande.
+Le parcours TEST/Sandbox décrit ci-dessous reste disponible. Le code B3 interdit désormais toute réémission aveugle : une tentative ambiguë sans `providerRefundId` passe en revue et sa réconciliation n’émet pas un second ordre financier. L’activation Production demeure une opération humaine future, séparée du déploiement du code.
 
 `Payment` décrit l'état financier. `Order` décrit la prestation, la création et la livraison. Un remboursement, un litige, un chargeback ou un reversal ne modifie donc jamais automatiquement `Order.status`. Toute trace liée à ces opérations est une annotation `OrderEvent` avec `fromStatus = null` et `toStatus = statut courant réel`.
 
@@ -40,7 +40,7 @@ Une décision sur la prestation reste une action Admin distincte, limitée par l
 4. Choisir un remboursement total ou saisir le montant partiel exact.
 5. Lire l'avertissement : le remboursement change l'état financier, pas le statut métier de l'Order.
 6. Cocher la confirmation explicite puis soumettre une seule fois.
-7. Si le résultat est en cours ou incertain, ne jamais créer une nouvelle demande : réconcilier la tentative existante.
+7. Si le résultat est en cours ou incertain, ne jamais créer une nouvelle demande : réconcilier uniquement la tentative existante. Sans identifiant de remboursement provider, contrôler le Dashboard provider et conserver `REQUIRES_REVIEW`; l’application ne réémet pas l’ordre.
 8. Vérifier ensuite `RefundAttempt`, `Payment`, l'annotation `OrderEvent`, le reçu `ProviderEvent` éventuel et l'outbox.
 
 Le provider est déduit du paiement gagnant. L'interface ne transmet ni provider, ni devise, ni identifiant de paiement arbitraire.
@@ -94,7 +94,7 @@ Après timeout ou réponse ambiguë en TEST/Sandbox :
 - le paiement reste dans l'historique gagnant et généralement `REFUND_PENDING` ;
 - aucune nouvelle tentative logique ne doit être créée ;
 - l'Admin utilise **Réconcilier cette tentative** ; cette action reste indisponible en Live tant que le gate Refund Live est fermé ;
-- si aucun `providerRefundId` n'existe, le retry réutilise la même clé provider ;
+- si aucun `providerRefundId` n'existe, aucune nouvelle mutation provider n'est émise automatiquement ou depuis la réconciliation Admin ;
 - si l'identifiant existe, le provider est relu avant mutation locale.
 
 Un échec PostgreSQL après l'appel provider ne justifie jamais un deuxième remboursement. Il faut reprendre la tentative existante, contrôler le provider puis appliquer une preuve cohérente.

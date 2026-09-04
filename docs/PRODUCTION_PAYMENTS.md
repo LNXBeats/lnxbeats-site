@@ -10,7 +10,7 @@ Le montant est reconstruit depuis le snapshot serveur de l’Order, en centimes 
 
 ## Isolation et armement
 
-L’ordre des gardes Checkout est : `PAYMENTS_ENABLED` → flag provider → configuration complète → environnement de déploiement → mode provider → runtime Railway/origine canonique. Le domaine Refund Live possède en plus son propre gate serveur `LIVE_REFUNDS_ENABLED`, indépendant du Checkout.
+L’ordre des gardes Checkout est : `PAYMENTS_ENABLED` → flag provider → configuration complète → environnement de déploiement → mode provider → runtime Railway/origine canonique. Le domaine Refund Live possède en plus une politique composée indépendante du Checkout : flag exact, confirmation Production dédiée, runtime Production strict et provider Live réellement associé au paiement.
 
 - `development` et `staging` acceptent uniquement Stripe `test` et PayPal `sandbox` ;
 - `production` accepte uniquement Stripe `live` et PayPal `live` ;
@@ -26,6 +26,7 @@ L’ordre des gardes Checkout est : `PAYMENTS_ENABLED` → flag provider → con
 PAYMENT_DEPLOYMENT_ENV=production
 PAYMENTS_ENABLED=false
 LIVE_REFUNDS_ENABLED=false
+# LIVE_REFUNDS_PRODUCTION_CONFIRM absent
 STRIPE_PAYMENTS_ENABLED=false
 PAYPAL_PAYMENTS_ENABLED=false
 STRIPE_MODE=live
@@ -43,6 +44,7 @@ Callbacks dérivés uniquement de l’origine canonique : Stripe réussit vers `
 | `PAYMENT_DEPLOYMENT_ENV` | configuration serveur | environnement attendu | `staging` | `production` | `production` |
 | `PAYMENTS_ENABLED` | configuration serveur | kill switch global | booléen | booléen | `false` |
 | `LIVE_REFUNDS_ENABLED` | configuration serveur | initiation et réconciliation des remboursements Live | `false` recommandé | opt-in exact `true`, toute autre valeur désactive | `false` |
+| `LIVE_REFUNDS_PRODUCTION_CONFIRM` | confirmation serveur non secrète | second verrou Production des remboursements Live | absent | phrase exacte contrôlée | absent |
 | `PAYMENT_STAGING_CONFIRM` | configuration serveur | armement sandbox | phrase suivie | absent | absent |
 | `PAYMENT_PRODUCTION_CONFIRM` | configuration serveur | armement Live explicite | absent | phrase suivie | absent |
 | `STRIPE_PAYMENTS_ENABLED` | configuration serveur | provider Stripe | booléen | booléen | `false` |
@@ -115,7 +117,7 @@ Plan Dashboard humain futur : créer/sélectionner l’application PayPal Live, 
 
 La première phase Stripe Live active le Checkout tout en conservant `LIVE_REFUNDS_ENABLED=false` (ou la variable absente). L’Admin peut lire le paiement, les tentatives, les incidents et l’audit, mais ne peut ni demander ni réconcilier un remboursement Live depuis LNX Studio. Cette désactivation n’empêche pas la réception et le rapprochement des webhooks signés décrivant un remboursement ou un litige créé chez le prestataire.
 
-Seule la valeur exacte `LIVE_REFUNDS_ENABLED=true` ouvre le chemin Refund Live ; absence, chaîne vide, `false` ou valeur invalide restent fail-closed. Les paiements TEST/Sandbox conservent leur parcours actuel. Une activation future des remboursements Live exige un sprint distinct corrigeant le retry ambigu sans `providerRefundId`, ajoutant un plafond d’essais et un cutoff temporel, puis démontrant une réconciliation provider sûre avant tout nouvel ordre financier.
+`LIVE_REFUNDS_ENABLED=true` ne suffit pas. Le chemin Refund Live ne s’ouvre que si `LIVE_REFUNDS_PRODUCTION_CONFIRM=enable-production-live-refunds`, l’armement Payments Production, le runtime Railway Production strict et le provider Live correspondant sont également valides. Toute combinaison partielle est `BLOCKED`. Les paiements TEST/Sandbox conservent leur parcours actuel. Une tentative ambiguë sans `providerRefundId` n’est jamais renvoyée aveuglément : elle reste en revue jusqu’à obtention d’une preuve provider exploitable.
 
 Les disputes, chargebacks et reversals créent ou mettent à jour un `PaymentIncident`, une piste `PaymentAuditEvent` et une alerte opérateur. Ils ne créent ni nouveau paiement, ni remboursement automatique, ni transition de l’Order. Ne jamais provoquer un litige bancaire réel pour la QA.
 
@@ -129,9 +131,10 @@ Résultats possibles :
 
 - `SAFE_DISABLED` : le kill switch global et les flags providers sont inertes, même si des credentials Live complets ont été préchargés ;
 - `CONFIGURED_DISABLED` : le global reste désactivé, mais un flag provider ou la confirmation production est déjà présent et doit être revu avant la suite ;
+- `CONFIGURED_ENABLED` : Payments est activé dans la configuration observée ; l’état Refund reste séparément `READY_NOT_ARMED`, `ARMED` ou `BLOCKED` ;
 - `INVALID` : incohérence de configuration, runtime/origine, migration ou donnée nécessitant correction/revue.
 
-Un provider désactivé peut être totalement absent. Le diagnostic exige `PAYMENTS_ENABLED=false`; il inspecte la préparation, il ne constitue pas une autorisation d’ouverture.
+Un provider désactivé peut être totalement absent. Le diagnostic accepte une configuration désarmée ou armée cohérente et rend son état explicitement ; il ne constitue jamais une autorisation d’ouverture ni une mutation provider.
 
 `npm run payments:preflight` ne contacte aucun provider et ne modifie aucune donnée. Il contrôle la configuration, l’environnement Railway, l’origine HTTPS, les flags, modes, présences de credentials, migrations, colonnes d’isolation, invariant gagnant et devise. Résultats possibles : `SAFE_DISABLED`, `READY_FOR_STRIPE_LIVE_QA`, `READY_FOR_PAYPAL_LIVE_QA`, `READY_FOR_DUAL_LIVE_QA`, `BLOCKED`.
 
@@ -155,7 +158,7 @@ La différence est intentionnelle : `payments:diagnostic` photographie l’état
 
 - aucun compte Live, webhook Dashboard ou variable Railway n’est configuré par V0.8.0 ;
 - aucun paiement ou remboursement Live n’est exécuté ;
-- l’activation des remboursements Live reste un sprint séparé tant que retry ambigu, plafond, cutoff et réconciliation sûre ne sont pas corrigés et validés ;
+- le code B3 est compatible avec un dark deploy désarmé ; l’armement des remboursements Live reste une décision Production séparée et exige son preflight dédié ;
 - facturation/comptabilité et traitement fiscal restent un chantier séparé ;
 - les modèles droits/contrats restent bloqués par la revue juridique ;
 - les notifications production, le scheduler, les domaines et la QA production gardent leurs gates humains ;

@@ -20,7 +20,7 @@ Le diagnostic est une inspection read-only de l’état courant désactivé. Le 
 
 ### Stripe seul
 
-Laisser PayPal désactivé et imposer `LIVE_REFUNDS_ENABLED=false`. Valider les credentials et le secret du webhook Live, puis définir le mode Live et l’environnement production. Ajouter la confirmation production seulement dans la fenêtre d’activation, activer le flag Stripe, puis le global. Exécuter le preflight : seul `READY_FOR_STRIPE_LIVE_QA` avec `liveRefundsEnabled=false` est acceptable. Vérifier le healthcheck avant d’autoriser le smoke propriétaire/internal approuvé.
+Laisser PayPal désactivé et imposer `LIVE_REFUNDS_ENABLED=false` pour le dark deploy. Valider les credentials et le secret du webhook Live, puis définir le mode Live et l’environnement production. Ajouter la confirmation Payments seulement dans la fenêtre d’activation, activer le flag Stripe, puis le global. Exécuter le preflight : `READY_FOR_STRIPE_LIVE_QA` avec Refund `READY_NOT_ARMED` est l’état attendu tant qu’aucun remboursement réel n’est autorisé. L’armement Refund ultérieur exige en plus `LIVE_REFUNDS_PRODUCTION_CONFIRM=enable-production-live-refunds` et une autorisation humaine séparée.
 
 ### PayPal seul
 
@@ -64,4 +64,4 @@ Surveiller les statuts `REQUIRES_REVIEW`, ProviderEvents non traités/revus, rem
 
 ## Arrêt et retour fail-closed
 
-L’action immédiate et réversible est `PAYMENTS_ENABLED=false`. Le gate indépendant `LIVE_REFUNDS_ENABLED` reste `false` avant, pendant et après cette fermeture. Ensuite seulement lancer `npm run payments:diagnostic`, puis le preflight lorsque la configuration est corrigée. Ne jamais supprimer un Payment, ProviderEvent, RefundAttempt, PaymentIncident ou audit pour « nettoyer » un incident financier.
+L’action immédiate et réversible est `LIVE_REFUNDS_ENABLED=false`, puis suppression de sa confirmation dédiée. Si le risque concerne tout le paiement, fermer également `PAYMENTS_ENABLED=false`. Ensuite seulement lancer `npm run payments:diagnostic`, puis le preflight lorsque la configuration est corrigée. Ne jamais supprimer un Payment, ProviderEvent, RefundAttempt, PaymentIncident ou audit pour « nettoyer » un incident financier.

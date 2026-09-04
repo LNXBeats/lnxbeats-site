@@ -18,10 +18,10 @@ L'ouverture catalogue-only est techniquement sûre, mais reste une décision hum
 | `SHOP_PAYMENTS_ENABLED` | initiation de paiements Boutique si le stack global/provider est aussi armé | OFF bloque côté UI et serveur toute création de `ShopOrder`, réservation et tentative provider ; le devis reste consultatif |
 | `SHOP_SHIPPING_ENABLED` | devis public à partir d'une grille commerciale `ACTIVE` | OFF n'empêche pas la consultation Admin |
 | `SHOP_LEGAL_READY` | version immuable explicitement `APPROVED` | une candidate ne peut jamais ouvrir la Boutique transactionnelle |
-| `SHOP_AFTER_SALES_ENABLED` | parcours SAV existants | n'active aucun remboursement provider ; `LIVE_REFUNDS_ENABLED=false` demeure obligatoire |
+| `SHOP_AFTER_SALES_ENABLED` | parcours SAV existants | n'active aucun remboursement provider ; le mode `payments` exige la politique Refund Live entièrement armée |
 | `SHOP_SHIPPING_OPERATIONS_ENABLED` | préparation, suivi manuel et expédition Admin | n'active aucune API transporteur |
 | `SHOP_SHIPPING_PROVIDER_ENABLED` | futur adapter transporteur | reste `false` au lancement manuel |
-| `LIVE_REFUNDS_ENABLED` | futur remboursement réel après sprint dédié | reste `false` pour B1/B2 |
+| `LIVE_REFUNDS_ENABLED` | première demande d’armement Refund Live | reste `false` au dark deploy et ne suffit jamais sans confirmation dédiée |
 | `MEMORY_DIAGNOSTICS_ENABLED` | diagnostics mémoire explicitement autorisés | reste `false`; la limite Railway de 2 GB est temporaire et doit continuer d'être observée |
 
 Tous les chemins Production exigent l'identité Railway `production`, la cible DB allowlistée, l'origine canonique `https://www.lnxbeats.fr` et `SHOP_PRODUCTION_CONFIRM`. La préparation Admin de la grille, Shop et shipping publics OFF, exige en plus `SHOP_SHIPPING_ADMIN_PREPARATION_ENABLED` et sa confirmation exacte. Aucun flag UI ne remplace les contrôles serveur.

@@ -81,7 +81,8 @@ Variables prévues :
 | `PAYMENTS_ENABLED` | `false` | serveur uniquement ; garde fonctionnelle |
 | `PAYMENT_DEPLOYMENT_ENV` | `development` | `development`, `staging` ou `production`, avec mode provider strictement lié |
 | `PAYMENT_STAGING_CONFIRM` | vide | confirmation non secrète exigée en staging |
-| `LIVE_REFUNDS_ENABLED` | `false` | serveur uniquement ; seul `true` autorise les remboursements Live, sans effet sur Checkout |
+| `LIVE_REFUNDS_ENABLED` | `false` | premier gate serveur Refund Live ; `true` ne suffit pas sans confirmation Production dédiée et stack Live cohérent |
+| `LIVE_REFUNDS_PRODUCTION_CONFIRM` | absent | second gate non secret ; valeur exacte `enable-production-live-refunds`, uniquement pendant un armement contrôlé |
 | `STRIPE_PAYMENTS_ENABLED` | `false` | activation explicite du seul adapter Stripe |
 | `PAYMENT_PRODUCTION_CONFIRM` | vide | confirmation non secrète exigée avant activation Live |
 | `STRIPE_MODE` | `test` | `test` hors production ; `live` uniquement en production |
@@ -225,7 +226,7 @@ checkout-session:<payment-id-interne>
 
 La clé est persistée avant l’appel. Un retry réseau de la même opération réutilise exactement la même clé et les mêmes paramètres. Une tentative volontairement nouvelle ou une requête corrigée utilise une nouvelle clé.
 
-Stripe conserve le premier résultat associé à une clé, y compris certains échecs, puis peut supprimer la clé après au moins 24 heures. Réutiliser une clé avec d’autres paramètres est une erreur. La base locale reste donc également responsable des contraintes uniques et d’une transition transactionnelle concurrent-safe. Cette limite justifie de maintenir `LIVE_REFUNDS_ENABLED=false` lors de la première phase Checkout Live : un sprint séparé doit borner le retry ambigu, son cutoff et sa réconciliation avant activation des remboursements Live.
+Stripe conserve le premier résultat associé à une clé, y compris certains échecs, puis peut supprimer la clé après au moins 24 heures. Réutiliser une clé avec d’autres paramètres est une erreur. La base locale reste donc également responsable des contraintes uniques et d’une transition transactionnelle concurrent-safe. B3 conserve `LIVE_REFUNDS_ENABLED=false` au dark deploy et interdit toute réémission aveugle lorsqu’une tentative ambiguë ne possède pas encore d’identifiant provider.
 
 Pour les webhooks :
 
