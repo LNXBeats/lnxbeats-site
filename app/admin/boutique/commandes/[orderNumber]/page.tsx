@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import {
   createShopShippingProviderAttemptAction,
   decideShopCustomerRequestAction,
+  reconcileShopCustomerRequestRefundAction,
   markShopOrderPreparingAction,
   markShopOrderReadyAction,
   markShopOrderShippedAction,
@@ -21,7 +22,11 @@ import {
 } from "@/lib/shop/order-presentation";
 import { getAdminShopOrder } from "@/lib/shop/order-service";
 import { shopShippingProviderQaEnabled } from "@/lib/shop/shipping-provider-config";
-import { SHOP_CUSTOMER_REQUEST_APPROVAL, SHOP_CUSTOMER_REQUEST_REJECTION } from "@/lib/shop/customer-request-domain";
+import {
+  SHOP_CUSTOMER_REQUEST_APPROVAL,
+  SHOP_CUSTOMER_REQUEST_REFUND_RECONCILIATION,
+  SHOP_CUSTOMER_REQUEST_REJECTION,
+} from "@/lib/shop/customer-request-domain";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Détail commande Boutique" };
@@ -489,7 +494,7 @@ export default async function AdminShopOrderPage({
             </section>
           ) : null}
 
-          {order.customerRequests.length ? <section className="admin-side-window"><p className="admin-section-label">Demandes client</p><h2>Décision humaine obligatoire.</h2>{order.customerRequests.map((request) => <div className="admin-panel-stack" key={request.id}><p><strong>{request.type === "PAID_ORDER_CANCELLATION" ? "Annulation après paiement" : "Correction d’adresse"}</strong><br />{request.requestNumber} · {request.status}</p><p>{request.reason}</p>{request.status === "REQUESTED" ? <form className="admin-form" action={decideShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="requestNumber" value={request.requestNumber} /><label>Décision motivée<textarea name="comment" minLength={5} maxLength={1000} required /></label><label>Confirmation<select name="confirmation" defaultValue="" required><option value="" disabled>Choisir</option><option value={SHOP_CUSTOMER_REQUEST_APPROVAL}>Confirmer l’acceptation</option><option value={SHOP_CUSTOMER_REQUEST_REJECTION}>Confirmer le refus</option></select></label><div className="admin-action-row"><button className="admin-button" name="decision" value="APPROVE" type="submit">ACCEPTER</button><button className="admin-button admin-button--quiet" name="decision" value="REJECT" type="submit">REFUSER</button></div></form> : <p>{request.decisionComment}</p>}</div>)}</section> : null}
+          {order.customerRequests.length ? <section className="admin-side-window"><p className="admin-section-label">Demandes client</p><h2>Décision humaine obligatoire.</h2>{order.customerRequests.map((request) => <div className="admin-panel-stack" key={request.id}><p><strong>{request.type === "PAID_ORDER_CANCELLATION" ? "Annulation après paiement" : "Correction d’adresse"}</strong><br />{request.requestNumber} · {request.status}</p><p>{request.reason}</p>{request.status === "REQUESTED" ? <form className="admin-form" action={decideShopCustomerRequestAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="requestNumber" value={request.requestNumber} /><label>Décision motivée<textarea name="comment" minLength={5} maxLength={1000} required /></label><label>Confirmation<select name="confirmation" defaultValue="" required><option value="" disabled>Choisir</option><option value={SHOP_CUSTOMER_REQUEST_APPROVAL}>Confirmer l’acceptation</option><option value={SHOP_CUSTOMER_REQUEST_REJECTION}>Confirmer le refus</option></select></label><div className="admin-action-row"><button className="admin-button" name="decision" value="APPROVE" type="submit">ACCEPTER</button><button className="admin-button admin-button--quiet" name="decision" value="REJECT" type="submit">REFUSER</button></div></form> : <p>{request.decisionComment}</p>}{request.refundAttempt && ["PENDING", "PROCESSING", "REQUIRES_REVIEW"].includes(request.refundAttempt.status) ? request.refundAttempt.providerRefundId ? <form className="admin-form" action={reconcileShopCustomerRequestRefundAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><input type="hidden" name="requestNumber" value={request.requestNumber} /><label className="admin-check"><input type="checkbox" name="confirmation" value={SHOP_CUSTOMER_REQUEST_REFUND_RECONCILIATION} required />Je confirme la vérification de cette tentative existante auprès du prestataire.</label><button className="admin-button" type="submit">RÉCONCILIER LA TENTATIVE</button></form> : <p><strong>Réconciliation manuelle requise :</strong> aucune référence provider fiable n’est encore disponible.</p> : null}</div>)}</section> : null}
 
           <section className="admin-side-window" aria-labelledby="admin-shop-customer-title">
             <p className="admin-section-label">Client</p>

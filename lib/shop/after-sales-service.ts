@@ -23,6 +23,10 @@ import {
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { shopProductionReadinessQaEnabled } from "@/lib/shop/production-readiness-config";
 import { savEvidencePurgeDueAt } from "@/lib/shop/readiness-domain";
+import {
+  hasCompatibleShopRefundSourceInvoice,
+  persistShopRefundFinalizationReview,
+} from "@/lib/shop/refund-accounting-safety";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -589,15 +593,19 @@ async function reserveShopRefund(
   await lock(tx, `shop-after-sales:${requestNumberValue}`);
   const request = await tx.shopReturnRequest.findUnique({
     where: { requestNumber: requestNumberValue },
-    include: { items: true, refundAttempt: true, shopOrder: { include: { invoices: { take: 1, orderBy: { issuedAt: "desc" } }, items: { select: { quantity: true } } } } },
+    include: { items: true, refundAttempt: true, shopOrder: { include: { items: { select: { quantity: true } } } } },
   });
   if (!request) throw new ShopAfterSalesError(404, "RETURN_NOT_FOUND");
   if (request.refundAttempt) {
-    const payment = await tx.payment.findUnique({ where: { id: request.refundAttempt.paymentId } });
+    const payment = await tx.payment.findUnique({
+      where: { id: request.refundAttempt.paymentId },
+      include: { invoice: true },
+    });
     if (
       !payment?.providerPaymentId
       || payment.mode !== expectedMode
       || payment.provider !== request.refundAttempt.provider
+      || !hasCompatibleShopRefundSourceInvoice(payment, request.shopOrderId)
     ) throw new ShopAfterSalesError(409, "REFUND_REQUIRES_REVIEW");
     return {
       attemptId: request.refundAttempt.id,
@@ -611,7 +619,6 @@ async function reserveShopRefund(
       reused: true,
     };
   }
-  if (!request.shopOrder.invoices[0]) throw new ShopAfterSalesError(409, "REFUND_REQUIRES_REVIEW");
   if (request.status !== "APPROVED" && request.status !== "INSPECTED") {
     throw new ShopAfterSalesError(409, "INVALID_TRANSITION");
   }
@@ -630,11 +637,15 @@ async function reserveShopRefund(
   const paymentRows = await tx.payment.findMany({
     where: { shopOrderId: request.shopOrderId, status: { in: [...winningPaymentStatuses] }, mode: expectedMode },
     orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+    include: { invoice: true },
   });
   if (paymentRows.length !== 1 || !paymentRows[0]!.providerPaymentId || paymentRows[0]!.currency !== "EUR") {
     throw new ShopAfterSalesError(409, "REFUND_REQUIRES_REVIEW");
   }
   const payment = paymentRows[0]!;
+  if (!hasCompatibleShopRefundSourceInvoice(payment, request.shopOrderId)) {
+    throw new ShopAfterSalesError(409, "REFUND_REQUIRES_REVIEW");
+  }
   await lock(tx, `shop-after-sales:payment:${payment.id}`);
   const active = await tx.refundAttempt.aggregate({
     where: { paymentId: payment.id, status: { in: [...activeRefundStatuses] } },
@@ -856,8 +867,9 @@ export async function requestShopReturnRefund(
   if (reserved.reused && !reserved.providerRefundId) {
     return { attemptId: reserved.attemptId, status: reserved.status === "REQUIRES_REVIEW" ? "REQUIRES_REVIEW" as const : "PENDING" as const };
   }
+  let evidence: ShopRefundEvidence | undefined;
   try {
-    const evidence = reserved.providerRefundId
+    evidence = reserved.providerRefundId
       ? await activeGateway.retrieve({
           attemptId: reserved.attemptId, provider: reserved.provider, providerPaymentId: reserved.providerPaymentId,
           providerRefundId: reserved.providerRefundId, amountCents: reserved.amountCents, idempotencyKey: reserved.providerIdempotencyKey,
@@ -876,6 +888,10 @@ export async function requestShopReturnRefund(
     if (error instanceof ShopRefundGatewayError && error.code === "FAILED") {
       await markFailedRefund(client, reserved.attemptId);
       return { attemptId: reserved.attemptId, status: "FAILED" as const };
+    }
+    if (evidence && evidence.status !== "FAILED") {
+      const status = await persistShopRefundFinalizationReview(client, reserved.attemptId, evidence);
+      return { attemptId: reserved.attemptId, status } as const;
     }
     throw error;
   }
@@ -902,15 +918,32 @@ export async function reconcileShopReturnRefund(
     await markAmbiguousRefund(client, attempt.id);
     return { status: "REQUIRES_REVIEW" as const, confirmed: false };
   }
-  const evidence = await activeGateway.retrieve({
-    attemptId: attempt.id,
-    provider: attempt.provider,
-    providerPaymentId: attempt.payment.providerPaymentId,
-    providerRefundId: attempt.providerRefundId,
-    amountCents: attempt.amountCents,
-    idempotencyKey: attempt.providerIdempotencyKey,
-  });
-  return applyShopRefundEvidence(client, attempt.id, evidence);
+  let evidence: ShopRefundEvidence | undefined;
+  try {
+    evidence = await activeGateway.retrieve({
+      attemptId: attempt.id,
+      provider: attempt.provider,
+      providerPaymentId: attempt.payment.providerPaymentId,
+      providerRefundId: attempt.providerRefundId,
+      amountCents: attempt.amountCents,
+      idempotencyKey: attempt.providerIdempotencyKey,
+    });
+    return await applyShopRefundEvidence(client, attempt.id, evidence);
+  } catch (error) {
+    if (error instanceof ShopRefundGatewayError && error.code === "AMBIGUOUS") {
+      await markAmbiguousRefund(client, attempt.id);
+      return { status: "REQUIRES_REVIEW" as const, confirmed: false };
+    }
+    if (error instanceof ShopRefundGatewayError && error.code === "FAILED") {
+      await markFailedRefund(client, attempt.id);
+      return { status: "FAILED" as const, confirmed: false };
+    }
+    if (evidence && evidence.status !== "FAILED") {
+      await persistShopRefundFinalizationReview(client, attempt.id, evidence);
+      return { status: "REQUIRES_REVIEW" as const, confirmed: false };
+    }
+    throw error;
+  }
 }
 
 export async function restockShopReturn(

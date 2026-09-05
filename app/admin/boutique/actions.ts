@@ -48,8 +48,12 @@ import {
   createShopShippingProviderAttempt,
   reconcileShopShippingProviderAttempt,
 } from "@/lib/shop/shipping-provider-service";
-import { SHOP_CUSTOMER_REQUEST_APPROVAL, SHOP_CUSTOMER_REQUEST_REJECTION } from "@/lib/shop/customer-request-domain";
-import { decideShopCustomerRequest } from "@/lib/shop/customer-request-service";
+import {
+  SHOP_CUSTOMER_REQUEST_APPROVAL,
+  SHOP_CUSTOMER_REQUEST_REFUND_RECONCILIATION,
+  SHOP_CUSTOMER_REQUEST_REJECTION,
+} from "@/lib/shop/customer-request-domain";
+import { decideShopCustomerRequest, reconcileShopCustomerRequestRefund } from "@/lib/shop/customer-request-service";
 
 async function authorize() {
   const requestHeaders = await headers();
@@ -303,4 +307,25 @@ export async function decideShopCustomerRequestAction(formData: FormData) {
   }
   refreshShopOrder(orderNumber);
   redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=demande-client-traitee`);
+}
+
+export async function reconcileShopCustomerRequestRefundAction(formData: FormData) {
+  const session = await authorize();
+  const requestNumber = String(formData.get("requestNumber") ?? "");
+  const orderNumber = String(formData.get("orderNumber") ?? "");
+  if (
+    !requestNumber
+    || !orderNumber
+    || formData.get("confirmation") !== SHOP_CUSTOMER_REQUEST_REFUND_RECONCILIATION
+  ) redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=confirmation-requise`);
+  try {
+    await reconcileShopCustomerRequestRefund(
+      { id: session.user.id, role: "ADMIN", status: session.user.status, emailVerified: session.user.emailVerified },
+      requestNumber,
+    );
+  } catch {
+    redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=demande-client-refusee`);
+  }
+  refreshShopOrder(orderNumber);
+  redirect(`/admin/boutique/commandes/${encodeURIComponent(orderNumber)}?etat=remboursement-reconcilie`);
 }

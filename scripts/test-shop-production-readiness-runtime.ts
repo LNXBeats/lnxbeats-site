@@ -13,10 +13,17 @@ import {
   createFakeShopRefundGateway,
   createMemberShopReturn,
   decideShopReturn,
+  reconcileShopReturnRefund,
+  requestShopReturnRefund,
   startShopReturnReview,
   type ShopRefundGateway,
 } from "@/lib/shop/after-sales-service";
-import { createShopCustomerRequest, decideShopCustomerRequest } from "@/lib/shop/customer-request-service";
+import { ShopCustomerRequestError } from "@/lib/shop/customer-request-domain";
+import {
+  createShopCustomerRequest,
+  decideShopCustomerRequest,
+  reconcileShopCustomerRequestRefund,
+} from "@/lib/shop/customer-request-service";
 import {
   assertShopProductionReadinessQaEnabled,
   SHOP_PHASE5E_RUNTIME_TARGET,
@@ -39,6 +46,27 @@ const ROOT = "/private/tmp/lnxbeats-v110-phase5e-runtime-evidence";
 const NOW = new Date("2026-08-31T12:00:00.000Z");
 const noGuard = () => undefined;
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+
+async function installCreditNoteFailureTrigger() {
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE FUNCTION lnx_test_reject_credit_note() RETURNS trigger AS $$
+    BEGIN
+      RAISE EXCEPTION 'LNX_TEST_CREDIT_NOTE_FAILURE';
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS lnx_test_reject_credit_note ON credit_notes`);
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER lnx_test_reject_credit_note
+    BEFORE INSERT ON credit_notes
+    FOR EACH ROW EXECUTE FUNCTION lnx_test_reject_credit_note()
+  `);
+}
+
+async function removeCreditNoteFailureTrigger() {
+  await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS lnx_test_reject_credit_note ON credit_notes`);
+  await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS lnx_test_reject_credit_note()`);
+}
 
 function isolatedClient() {
   const connectionString = process.env.DATABASE_URL;
@@ -108,7 +136,14 @@ async function createOrder(
   actors: RuntimeActors,
   products: readonly Readonly<{ product: ProductFixture; quantity: number }>[],
   sequence: number,
-  input: Readonly<{ paid: boolean; fulfillment?: "PENDING" | "SHIPPED"; expiresAt?: Date; paymentStatus?: "SUCCEEDED" | "PENDING" }>,
+  input: Readonly<{
+    paid: boolean;
+    fulfillment?: "PENDING" | "SHIPPED";
+    expiresAt?: Date;
+    paymentStatus?: "SUCCEEDED" | "PENDING";
+    provider?: "STRIPE" | "PAYPAL";
+    issueInvoice?: boolean;
+  }>,
 ): Promise<OrderFixture> {
   const rate = await prisma.shippingRateVersion.findFirstOrThrow({ where: { status: "ACTIVE", scope: "COMMERCIAL_CANDIDATE" }, include: { tiers: { orderBy: { position: "asc" } }, packagingProfile: true } });
   const quote = quoteShipping({ rate, destinationCountryCode: "FR", lines: products.map(({ product, quantity }) => ({ productId: product.id, shippingRequired: true, shippingWeightGrams: product.shippingWeightGrams, quantity })) });
@@ -125,7 +160,8 @@ async function createOrder(
     shippingFirstName: "Membre", shippingLastName: "Phase 5E", shippingAddressLine1: "5 rue du Test local", shippingPostalCode: "75005", shippingCity: "Paris", shippingCountryCode: "FR",
     shippingRateVersionId: quote.rateVersionId, shippingQuoteVersion: quote.version, shippingMethod: quote.service,
     shippingWeightGrams: quote.productWeightGrams, shippingPackagingGrams: quote.packagingWeightGrams,
-    shippingPhysicalGrams: quote.physicalWeightGrams, shippingBillableGrams: quote.billableWeightGrams,
+    shippingPhysicalGrams: quote.physicalWeightGrams,
+    shippingBillableGrams: quote.billableWeightPolicy === "PRODUCTS_ONLY" ? quote.productWeightGrams : quote.billableWeightGrams,
     shippingTierMaxGrams: quote.tierMaximumWeightGrams, packagingProfileId: quote.packagingProfileId,
     packagingProfileVersion: quote.packagingProfileVersion, shippingWeightPolicy: quote.billableWeightPolicy,
     termsVersion: SHOP_PHASE5E_QA_TERMS_VERSION, termsHashSha256: SHOP_LEGAL_QA_TERMS_HASH, termsAcceptedAt: createdAt,
@@ -144,13 +180,16 @@ async function createOrder(
     } });
   }
   if (!input.paid && input.paymentStatus !== "PENDING") return { id: order.id, orderNumber, paymentId: null, invoiceId: null };
+  const provider = input.provider ?? "STRIPE";
   const payment = await prisma.payment.create({ data: {
-    shopOrderId: order.id, provider: "STRIPE", mode: "TEST", status: input.paymentStatus ?? "SUCCEEDED", amountCents: totalCents,
+    shopOrderId: order.id, provider, mode: "TEST", status: input.paymentStatus ?? "SUCCEEDED", amountCents: totalCents,
     currency: "EUR", pricingVersion: SHOP_PHASE5E_QA_ORDER_SNAPSHOT_VERSION, idempotencyKey: `phase5e-runtime-payment:${sequence}`,
-    providerCheckoutId: `cs_test_phase5e_runtime_${sequence}`, providerPaymentId: `pi_phase5e_runtime_${sequence}`,
-    paymentMethod: "CARD", paidAt: input.paid ? NOW : null,
+    providerCheckoutId: `${provider === "STRIPE" ? "cs_test" : "paypal_order"}_phase5e_runtime_${sequence}`,
+    providerPaymentId: `${provider === "STRIPE" ? "pi" : "paypal_capture"}_phase5e_runtime_${sequence}`,
+    paymentMethod: provider === "STRIPE" ? "CARD" : "PAYPAL", paidAt: input.paid ? NOW : null,
   } });
   if (!input.paid) return { id: order.id, orderNumber, paymentId: payment.id, invoiceId: null };
+  if (input.issueInvoice === false) return { id: order.id, orderNumber, paymentId: payment.id, invoiceId: null };
   const invoice = await prisma.invoice.create({ data: {
     invoiceNumber: `LNX-20260831-${sequence}`, sequenceNumber: BigInt(sequence), issuedAt: NOW, documentType: "SHOP", operationCategory: "GOODS",
     shopOrderId: order.id, paymentId: payment.id, orderNumberSnapshot: orderNumber, customerType: "INDIVIDUAL",
@@ -158,7 +197,7 @@ async function createOrder(
     sellerSnapshot: { name: "LNX Beats QA" }, customerSnapshot: { firstName: "Membre", lastName: "Phase 5E", addressLine1: "5 rue du Test local", postalCode: "75005", city: "Paris", countryCode: "FR" },
     lineItemsSnapshot: products.map(({ product, quantity }) => ({ title: product.title, unitPriceCents: product.priceCents, quantity })),
     currency: "EUR", subtotalCents, shippingCents: quote.amountCents, totalCents, vatRegime: "FRANCHISE_EN_BASE_TVA", vatAmountCents: 0,
-    vatLegalNotice: "TVA non applicable — fixture QA", paymentMethodLabel: "Carte test", paidAt: NOW,
+    vatLegalNotice: "TVA non applicable — fixture QA", paymentMethodLabel: provider === "STRIPE" ? "Carte test" : "PayPal test", paidAt: NOW,
     termsVersion: SHOP_PHASE5E_QA_TERMS_VERSION, termsHashSha256: SHOP_LEGAL_QA_TERMS_HASH, snapshotHashSha256: sha256(`invoice:${sequence}`),
   } });
   return { id: order.id, orderNumber, paymentId: payment.id, invoiceId: invoice.id };
@@ -183,13 +222,37 @@ async function shippingScenario(actors: RuntimeActors, cd: ProductFixture, badge
   const eleven = quote([{ product: cd, quantity: 11 }]);
   const sixteen = quote([{ product: cd, quantity: 16 }]);
   const mixed = quote([{ product: cd, quantity: 2 }, { product: badge, quantity: 3 }, { product: goodie, quantity: 1 }]);
-  assert.deepEqual([one.productWeightGrams, one.packagingWeightGrams, one.physicalWeightGrams, one.billableWeightGrams, one.tierMaximumWeightGrams, one.amountCents], [25, 60, 85, 25, 250, 549]);
+  assert.deepEqual([one.productWeightGrams, one.packagingWeightGrams, one.physicalWeightGrams, one.billableWeightGrams, one.tierMaximumWeightGrams, one.amountCents], [25, 60, 85, 250, 250, 549]);
   assert.deepEqual([ten.productWeightGrams, ten.packagingWeightGrams, ten.physicalWeightGrams, ten.billableWeightGrams, ten.tierMaximumWeightGrams, ten.amountCents], [250, 60, 310, 250, 250, 549]);
   assert.deepEqual([eleven.productWeightGrams, eleven.packagingWeightGrams, eleven.physicalWeightGrams, eleven.billableWeightGrams, eleven.tierMaximumWeightGrams, eleven.amountCents], [275, 60, 335, 275, 500, 759]);
   assert.deepEqual([sixteen.productWeightGrams, sixteen.packagingWeightGrams, sixteen.physicalWeightGrams, sixteen.billableWeightGrams, sixteen.tierMaximumWeightGrams, sixteen.amountCents], [400, 60, 460, 400, 500, 759]);
-  assert.deepEqual([mixed.productWeightGrams, mixed.packagingWeightGrams, mixed.physicalWeightGrams, mixed.billableWeightGrams, mixed.tierMaximumWeightGrams, mixed.amountCents], [195, 60, 255, 195, 250, 549]);
+  assert.deepEqual([mixed.productWeightGrams, mixed.packagingWeightGrams, mixed.physicalWeightGrams, mixed.billableWeightGrams, mixed.tierMaximumWeightGrams, mixed.amountCents], [195, 60, 255, 250, 250, 549]);
   assert.throws(() => quote([{ product: cd, quantity: 17 }]));
   return { candidate: candidate.version, one, ten, eleven, sixteen, mixed };
+}
+
+async function prepareNoPhysicalReturn(
+  actors: RuntimeActors,
+  fixture: OrderFixture,
+  productId: string,
+) {
+  const created = await createMemberShopReturn(actors.member, {
+    orderNumber: fixture.orderNumber,
+    type: "NON_CONFORMING",
+    comment: `Scénario provider ${fixture.orderNumber}`,
+    quantities: new Map([[productId, 1]]),
+  }, NOW, { client: prisma, assertEnabled: noGuard });
+  await startShopReturnReview(actors.admin, created.requestNumber, NOW, { client: prisma, assertEnabled: noGuard });
+  await decideShopReturn(actors.admin, {
+    requestNumber: created.requestNumber,
+    decision: "APPROVE",
+    authorizedQuantities: new Map([[productId, 1]]),
+    physicalReturnRequired: false,
+    returnCostDecision: "MERCHANT",
+    instructions: null,
+    comment: "Remboursement QA sans retour physique.",
+  }, NOW, { client: prisma, assertEnabled: noGuard, immediateRefund: false });
+  return created;
 }
 
 async function savScenario(actors: RuntimeActors, cd: ProductFixture, badge: ProductFixture) {
@@ -241,7 +304,34 @@ async function savScenario(actors: RuntimeActors, cd: ProductFixture, badge: Pro
   await decideShopReturn(actors.admin, { requestNumber: ambiguous.requestNumber, decision: "APPROVE", authorizedQuantities: new Map([[badge.id, 1]]), physicalReturnRequired: false, returnCostDecision: "MERCHANT", instructions: null, comment: "Ambigu local." }, NOW, { client: prisma, assertEnabled: noGuard, immediateRefund: true, refundGateway: createFakeShopRefundGateway("AMBIGUOUS") });
   assert.equal((await prisma.shopReturnRequest.findUniqueOrThrow({ where: { id: ambiguous.id }, include: { refundAttempt: true } })).refundAttempt?.status, "REQUIRES_REVIEW");
 
-  return { single: created.requestNumber, multi: multiReturn.requestNumber, evidence: evidenceReturn, evidenceIds: first.map(({ id }) => id), overdue: overdue.requestNumber, ambiguous: ambiguous.requestNumber };
+  const finalizationOrder = await createOrder(actors, [{ product: badge, quantity: 1 }], 560006, { paid: true, fulfillment: "SHIPPED" });
+  const finalization = await prepareNoPhysicalReturn(actors, finalizationOrder, badge.id);
+  await installCreditNoteFailureTrigger();
+  try {
+    assert.equal(
+      (await requestShopReturnRefund(actors.admin, finalization.requestNumber, "NONE", createFakeShopRefundGateway("SUCCEEDED"))).status,
+      "REQUIRES_REVIEW",
+      "SAV provider success followed by credit-note failure must require review",
+    );
+  } finally {
+    await removeCreditNoteFailureTrigger();
+  }
+  const finalizationReview = await prisma.shopReturnRequest.findUniqueOrThrow({
+    where: { id: finalization.id },
+    include: { refundAttempt: { include: { payment: true } } },
+  });
+  assert.equal(finalizationReview.refundStatus, "REQUIRES_REVIEW", "SAV request must remain in review");
+  assert.equal(finalizationReview.refundAttempt?.status, "REQUIRES_REVIEW", "SAV attempt must remain in review");
+  assert.equal(finalizationReview.refundAttempt?.failureCode, "PROVIDER_ACCEPTED_LOCAL_FINALIZATION_FAILED");
+  assert.ok(finalizationReview.refundAttempt?.providerRefundId);
+  assert.equal(finalizationReview.refundAttempt?.payment.refundedAmountCents, 0);
+  assert.equal(await prisma.creditNote.count({ where: { shopReturnRequestId: finalization.id } }), 0);
+  assert.equal((await reconcileShopReturnRefund(actors.admin, finalization.requestNumber, createFakeShopRefundGateway("SUCCEEDED"))).status, "SUCCEEDED");
+  assert.equal((await reconcileShopReturnRefund(actors.admin, finalization.requestNumber, createFakeShopRefundGateway("SUCCEEDED"))).status, "SUCCEEDED");
+  assert.equal(await prisma.creditNote.count({ where: { shopReturnRequestId: finalization.id } }), 1);
+  assert.equal(await prisma.paymentAuditEvent.count({ where: { refundAttemptId: finalizationReview.refundAttempt!.id, action: "REFUND_RECONCILIATION_REQUIRED" } }), 1);
+
+  return { single: created.requestNumber, multi: multiReturn.requestNumber, evidence: evidenceReturn, evidenceIds: first.map(({ id }) => id), overdue: overdue.requestNumber, ambiguous: ambiguous.requestNumber, finalizationReview: finalization.requestNumber };
 }
 
 async function customerRequestsScenario(actors: RuntimeActors, cd: ProductFixture) {
@@ -272,10 +362,81 @@ async function customerRequestsScenario(actors: RuntimeActors, cd: ProductFixtur
   assert.deepEqual([addressState.shippingAddressLine1, addressState.shippingPostalCode, addressState.shippingCountryCode], ["6 rue du Test local", "75006", "FR"]);
   assert.deepEqual(invoiceAfter.customerSnapshot, invoiceBefore.customerSnapshot, "invoice snapshot must remain immutable");
 
+  const missingInvoiceResults: Array<{ provider: "STRIPE" | "PAYPAL"; orderNumber: string }> = [];
+  for (const [offset, provider] of (["STRIPE", "PAYPAL"] as const).entries()) {
+    const missingInvoiceOrder = await createOrder(actors, [{ product: cd, quantity: 1 }], 560013 + offset, { paid: true, provider, issueInvoice: false });
+    const missingInvoiceRequest = await createShopCustomerRequest(actors.member, {
+      orderNumber: missingInvoiceOrder.orderNumber,
+      type: "PAID_ORDER_CANCELLATION",
+      reason: `Facture ${provider} volontairement absente dans ce test local.`,
+      address: null,
+    }, NOW, prisma);
+    let providerCalls = 0;
+    const fake = createFakeShopRefundGateway("SUCCEEDED");
+    const guardedGateway: ShopRefundGateway = {
+      request(input) { providerCalls += 1; return fake.request(input); },
+      retrieve(input) { providerCalls += 1; return fake.retrieve(input); },
+    };
+    await assert.rejects(
+      () => decideShopCustomerRequest(actors.admin, missingInvoiceRequest.requestNumber, "APPROVE", "Refus attendu.", guardedGateway, NOW, prisma),
+      (error: unknown) => error instanceof ShopCustomerRequestError && error.code === "REFUND_REQUIRES_REVIEW",
+    );
+    assert.equal(providerCalls, 0);
+    assert.equal(await prisma.refundAttempt.count({ where: { shopCustomerRequestId: missingInvoiceRequest.id } }), 0);
+    assert.equal(await prisma.creditNote.count({ where: { invoice: { shopOrderId: missingInvoiceOrder.id } } }), 0);
+    assert.equal(await prisma.productStockAdjustment.count({ where: { shopCustomerRequestId: missingInvoiceRequest.id } }), 0);
+    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: missingInvoiceOrder.paymentId! } })).status, "SUCCEEDED");
+    missingInvoiceResults.push({ provider, orderNumber: missingInvoiceOrder.orderNumber });
+  }
+
+  const finalizationOrder = await createOrder(actors, [{ product: cd, quantity: 1 }], 560015, { paid: true });
+  const finalizationRequest = await createShopCustomerRequest(actors.member, {
+    orderNumber: finalizationOrder.orderNumber,
+    type: "PAID_ORDER_CANCELLATION",
+    reason: "Échec comptable injecté après succès provider fictif.",
+    address: null,
+  }, NOW, prisma);
+  let requestCalls = 0;
+  let retrieveCalls = 0;
+  const successfulGateway = createFakeShopRefundGateway("SUCCEEDED");
+  const countedGateway: ShopRefundGateway = {
+    request(input) { requestCalls += 1; return successfulGateway.request(input); },
+    retrieve(input) { retrieveCalls += 1; return successfulGateway.retrieve(input); },
+  };
+  await installCreditNoteFailureTrigger();
+  try {
+    assert.equal(
+      await decideShopCustomerRequest(actors.admin, finalizationRequest.requestNumber, "APPROVE", "Annulation testée.", countedGateway, NOW, prisma),
+      "REQUIRES_REVIEW",
+      "cancellation provider success followed by credit-note failure must require review",
+    );
+  } finally {
+    await removeCreditNoteFailureTrigger();
+  }
+  const reviewAttempt = await prisma.refundAttempt.findUniqueOrThrow({
+    where: { shopCustomerRequestId: finalizationRequest.id },
+    include: { payment: true },
+  });
+  assert.equal(reviewAttempt.status, "REQUIRES_REVIEW", "cancellation attempt must remain in review");
+  assert.equal(reviewAttempt.failureCode, "PROVIDER_ACCEPTED_LOCAL_FINALIZATION_FAILED");
+  assert.ok(reviewAttempt.providerRefundId);
+  assert.equal(reviewAttempt.payment.refundedAmountCents, 0);
+  assert.equal(requestCalls, 1);
+  assert.equal(retrieveCalls, 0);
+  assert.equal(await prisma.creditNote.count({ where: { refundAttemptId: reviewAttempt.id } }), 0);
+  assert.equal(await prisma.productStockAdjustment.count({ where: { shopCustomerRequestId: finalizationRequest.id } }), 0);
+  assert.equal(await prisma.paymentAuditEvent.count({ where: { refundAttemptId: reviewAttempt.id, action: "REFUND_RECONCILIATION_REQUIRED" } }), 1);
+  assert.equal(await reconcileShopCustomerRequestRefund(actors.admin, finalizationRequest.requestNumber, countedGateway, prisma), "SUCCEEDED");
+  assert.equal(await reconcileShopCustomerRequestRefund(actors.admin, finalizationRequest.requestNumber, countedGateway, prisma), "SUCCEEDED");
+  assert.equal(requestCalls, 1, "reconciliation must retrieve the existing provider refund, never request another one");
+  assert.equal(retrieveCalls, 2);
+  assert.equal(await prisma.creditNote.count({ where: { refundAttemptId: reviewAttempt.id } }), 1);
+  assert.equal(await prisma.productStockAdjustment.count({ where: { shopCustomerRequestId: finalizationRequest.id } }), 1);
+
   const shipped = await createOrder(actors, [{ product: cd, quantity: 1 }], 560012, { paid: true, fulfillment: "SHIPPED" });
   await assert.rejects(() => createShopCustomerRequest(actors.member, { orderNumber: shipped.orderNumber, type: "PAID_ORDER_CANCELLATION", reason: "Doit être refusée après expédition.", address: null }, NOW, prisma));
   await assert.rejects(() => createShopCustomerRequest(actors.member, { orderNumber: shipped.orderNumber, type: "SHIPPING_ADDRESS_CORRECTION", reason: "Doit être refusée après expédition.", address: { firstName: "Jean", lastName: "Test", addressLine1: "7 rue du Test", addressLine2: null, postalCode: "75007", city: "Paris", countryCode: "FR" } }, NOW, prisma));
-  return { cancellation: request.requestNumber, address: address.requestNumber, gatewayCalls, notifications: notifications.map(({ kind }) => kind) };
+  return { cancellation: request.requestNumber, address: address.requestNumber, gatewayCalls, missingInvoiceResults, finalizationReview: finalizationRequest.requestNumber, notifications: notifications.map(({ kind }) => kind) };
 }
 
 async function confirmRaceOrder(client: PrismaClient, orderId: string, productId: string, now: Date) {
@@ -349,7 +510,7 @@ async function concurrencyAndSchedulerScenario(actors: RuntimeActors, cd: Produc
 async function run() {
   await mkdir(ROOT, { recursive: true, mode: 0o700 });
   const migrationCount = await guard();
-  assert.equal(migrationCount, 28);
+  assert.equal(migrationCount, 29);
   assert.equal(await prisma.user.count(), 0);
   const actors = await createActors();
   const cd = await createProduct(actors.admin.id, "cd-25g", { priceCents: 2_500, stock: 40, weight: 25 });

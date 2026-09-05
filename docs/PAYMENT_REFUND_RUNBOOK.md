@@ -32,7 +32,9 @@ Une décision sur la prestation reste une action Admin distincte, limitée par l
 - un événement provider est dédupliqué par `(provider, providerEventId)` ;
 - un payload provider complet n'est jamais conservé.
 - un remboursement Commander exige une facture source liée au `Payment` ; l'absence de facture produit `REFUND_SOURCE_INVOICE_REQUIRED` avant la création du `RefundAttempt` et avant tout appel Stripe ou PayPal ;
+- une annulation payée ou un remboursement SAV Boutique exige la facture immuable liée à la même `ShopOrder` et au même `Payment`, avec devise et total cohérents ; le refus intervient avant toute nouvelle tentative, tout appel provider, avoir, notification ou restock ;
 - un remboursement confirmé crée obligatoirement son avoir ; l'absence de facture n'est plus un cas silencieux.
+- après preuve provider positive, un échec de finalisation locale conserve la tentative, l'identifiant provider connu et la capacité réservée en `REQUIRES_REVIEW` dans une transaction distincte ; la réconciliation relit cette tentative au lieu de renvoyer une mutation financière.
 
 ## Procédure Admin commune
 

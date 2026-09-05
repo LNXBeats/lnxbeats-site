@@ -156,7 +156,10 @@ const shopOrderDetailInclude = {
       createdAt: true,
     },
   },
-  customerRequests: { orderBy: [{ requestedAt: "desc" as const }, { id: "desc" as const }] },
+  customerRequests: {
+    orderBy: [{ requestedAt: "desc" as const }, { id: "desc" as const }],
+    include: { refundAttempt: { select: { status: true, providerRefundId: true, failureCode: true } } },
+  },
 } satisfies Prisma.ShopOrderInclude;
 
 type PublicProductRecord = Prisma.ProductGetPayload<{ select: typeof publicProductSelect }>;
@@ -567,6 +570,11 @@ export async function createShopOrder(
     const totalCents = checkedMoney(subtotalCents, shippingCents);
     const reservationExpiresAt = new Date(now.getTime() + configuration.reservationTtlMinutes * 60_000);
     const orderNumber = await nextShopOrderNumber(transaction, now);
+    // The rate floor selects the tariff tier, while the persisted PRODUCTS_ONLY
+    // snapshot intentionally excludes free packaging and follows the DB contract.
+    const persistedBillableGrams = quote
+      ? quote.billableWeightPolicy === "PRODUCTS_ONLY" ? quote.productWeightGrams : quote.billableWeightGrams
+      : null;
     const created = await transaction.shopOrder.create({
       data: {
         orderNumber,
@@ -591,7 +599,7 @@ export async function createShopOrder(
         shippingWeightGrams: quote?.productWeightGrams ?? null,
         shippingPackagingGrams: quote?.packagingWeightGrams ?? null,
         shippingPhysicalGrams: quote?.physicalWeightGrams ?? null,
-        shippingBillableGrams: quote?.billableWeightGrams ?? null,
+        shippingBillableGrams: persistedBillableGrams,
         shippingTierMaxGrams: quote?.tierMaximumWeightGrams ?? null,
         packagingProfileId: quote?.packagingProfileId ?? null,
         packagingProfileVersion: quote?.packagingProfileVersion ?? null,
@@ -611,7 +619,7 @@ export async function createShopOrder(
           shippingQuoteVersion: quote?.version ?? null,
           shippingWeightGrams: quote?.productWeightGrams ?? null,
           shippingPhysicalGrams: quote?.physicalWeightGrams ?? null,
-          shippingBillableGrams: quote?.billableWeightGrams ?? null,
+          shippingBillableGrams: persistedBillableGrams,
           shippingTierMaxGrams: quote?.tierMaximumWeightGrams ?? null,
           packagingProfileVersion: quote?.packagingProfileVersion ?? null,
           shippingWeightPolicy: quote?.billableWeightPolicy ?? null,

@@ -15,6 +15,7 @@ import {
   SHOP_AFTER_SALES_QA_ORIGIN,
   SHOP_AFTER_SALES_QA_TARGET,
 } from "@/lib/shop/after-sales-config";
+import { hasCompatibleShopRefundSourceInvoice } from "@/lib/shop/refund-accounting-safety";
 import {
   shopReturnAuditActionLabel,
   shopReturnCostDecisionLabel,
@@ -100,6 +101,28 @@ test("refund amount is derived exclusively from immutable unit snapshots and exp
   assert.throws(() => calculateShopReturnRefund({ lines: [], shippingCents: 800, shippingDecision: "NONE" }), ShopAfterSalesError);
 });
 
+test("Shop refunds accept only the immutable invoice linked to the winning payment and order", () => {
+  const payment = {
+    id: "11111111-1111-4111-8111-111111111112",
+    shopOrderId: "11111111-1111-4111-8111-111111111113",
+    currency: "EUR",
+    amountCents: 7_549,
+    invoice: {
+      id: "11111111-1111-4111-8111-111111111114",
+      paymentId: "11111111-1111-4111-8111-111111111112",
+      shopOrderId: "11111111-1111-4111-8111-111111111113",
+      currency: "EUR",
+      totalCents: 7_549,
+    },
+  };
+  assert.equal(hasCompatibleShopRefundSourceInvoice(payment, payment.shopOrderId), true);
+  assert.equal(hasCompatibleShopRefundSourceInvoice({ ...payment, invoice: null }, payment.shopOrderId), false);
+  assert.equal(hasCompatibleShopRefundSourceInvoice({ ...payment, invoice: { ...payment.invoice, paymentId: "11111111-1111-4111-8111-111111111199" } }, payment.shopOrderId), false);
+  assert.equal(hasCompatibleShopRefundSourceInvoice({ ...payment, invoice: { ...payment.invoice, shopOrderId: "11111111-1111-4111-8111-111111111198" } }, payment.shopOrderId), false);
+  assert.equal(hasCompatibleShopRefundSourceInvoice({ ...payment, invoice: { ...payment.invoice, currency: "USD" } }, payment.shopOrderId), false);
+  assert.equal(hasCompatibleShopRefundSourceInvoice({ ...payment, invoice: { ...payment.invoice, totalCents: 1 } }, payment.shopOrderId), false);
+});
+
 test("the state machine keeps physical receipt, inspection, refund and closure explicit", () => {
   assert.doesNotThrow(() => assertTransition("AWAITING_RETURN", "RETURN_RECEIVED"));
   assert.doesNotThrow(() => assertTransition("RETURN_RECEIVED", "INSPECTED"));
@@ -149,6 +172,7 @@ test("service source uses PostgreSQL locks, DB ownership, stable idempotency and
   assert.match(source, /shop-return:\$\{request\.id\}:provider-refund:v1/);
   assert.match(source, /AMBIGUOUS_PROVIDER_ACCEPTANCE/);
   assert.match(source, /issueCreditNoteForRefund/);
+  assert.match(source, /persistShopRefundFinalizationReview/);
   assert.match(source, /productStockAdjustment\.findUnique\(\{ where: \{ idempotencyKey: key \} \}\)/);
   const refundFunction = source.slice(source.indexOf("async function applyShopRefundEvidence"), source.indexOf("async function markAmbiguousRefund"));
   assert.doesNotMatch(refundFunction, /product\.update|productStockAdjustment\.create/);
