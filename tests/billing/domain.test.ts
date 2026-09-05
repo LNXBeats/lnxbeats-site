@@ -226,6 +226,7 @@ test("reviewed after-sales credit notes keep their internal code but expose a Fr
   assert.equal(creditNoteReasonLabel("OTHER_REVIEWED"), "Remboursement après traitement SAV");
   const memberPage = await read("app/compte/avoirs/[creditNoteNumber]/page.tsx");
   assert.match(memberPage, /creditNoteReasonLabel\(creditNote\.reasonCode\)/);
+  assert.match(memberPage, /creditNote\.reasonText \? <small>\{creditNote\.reasonText\}<\/small>/);
   assert.doesNotMatch(memberPage, /<dd>\{creditNote\.reasonCode\}<\/dd>/);
   const invoice = invoiceFixture({
     invoiceNumber: "LNX-20990101-5002",
@@ -251,6 +252,62 @@ test("reviewed after-sales credit notes keep their internal code but expose a Fr
   assert.doesNotMatch(rendered, /OTHER_REVIEWED/);
   assert.match(rendered, /Montant de l’avoir : 25,00[ \u00a0]€/);
   assert.match(rendered, /Solde documentaire restant : 58,00[ \u00a0]€/);
+});
+
+test("credit-note HTML and PDF expose the persisted precise reason without replacing its semantic code", async () => {
+  const [memberPage, adminPage] = await Promise.all([
+    read("app/compte/avoirs/[creditNoteNumber]/page.tsx"),
+    read("app/admin/facturation/avoirs/[creditNoteNumber]/page.tsx"),
+  ]);
+  for (const page of [memberPage, adminPage]) {
+    assert.match(page, /parseBillingCustomerSnapshot\(creditNote\.invoice\.customerSnapshot\)/);
+    assert.match(page, /customer\.companyName \|\| customer\.name/);
+    assert.match(page, /creditNoteReasonLabel\(creditNote\.reasonCode\)/);
+    assert.match(page, /creditNote\.reasonText \? <small>\{creditNote\.reasonText\}<\/small>/);
+  }
+  const invoice = invoiceFixture({
+    invoiceNumber: "LNX-20990101-5003",
+    orderNumberSnapshot: "LNX-SHOP-2099-500003",
+    subtotalCents: 700,
+    shippingCents: 549,
+    totalCents: 1249,
+    customerSnapshot: {
+      type: "INDIVIDUAL",
+      name: "Camille Exemple",
+      email: "camille.credit-note@example.invalid",
+      companyName: null,
+      billingAddress: {
+        line1: "12 rue des Tests Fictifs",
+        line2: "Bâtiment Exemple — étage de validation documentaire",
+        postalCode: "75000",
+        city: "Paris",
+        countryCode: "FR",
+      },
+      businessIdentifier: null,
+      vatId: null,
+    },
+  });
+  const reasonText = "Annulation demandée par le client avant expédition — LNX-REQ-2099-EXEMPLE";
+  const result = await generateCreditNotePdf({
+    creditNoteNumber: "AV-LNX-20990101-0006",
+    issuedAt: invoice.issuedAt,
+    amountCents: 1249,
+    cumulativeCreditedCents: 1249,
+    remainingBalanceCents: 0,
+    currency: "EUR",
+    reasonCode: "WITHDRAWAL",
+    reasonText,
+    snapshotHashSha256: "d".repeat(64),
+    invoice,
+  });
+  const rendered = decodedPdfPageText(result.bytes).join("\n");
+  assert.match(rendered, /CLIENT/i);
+  assert.match(rendered, /Camille Exemple/);
+  assert.match(rendered, /12 rue des Tests Fictifs/);
+  assert.match(rendered, /Bâtiment Exemple/);
+  assert.match(rendered, /camille\.credit-note@example\.invalid/);
+  assert.match(rendered, /Rétractation/);
+  assert.match(rendered, /Annulation demandée par le client avant expédition/);
 });
 
 test("four short billing QA fixtures render on exactly one page with complete snapshot text", async () => {

@@ -18,6 +18,7 @@ import {
 import {
   PaypalClientError,
   createTestPaypalGateway,
+  paypalRefundApplicationReference,
   paypalRefundEvidence,
   type PaypalGateway,
   type PaypalRefundGateway,
@@ -137,12 +138,22 @@ test("PayPal refund evidence requires EUR, a refund id and the capture up-link",
     id: "PAYPAL-REFUND-01",
     status: "COMPLETED",
     amount: { currency_code: "EUR", value: "15.00" },
+    invoice_id: "shop-refund:attempt-01",
     update_time: "2026-08-22T12:00:00Z",
     links: [{ rel: "up", method: "GET", href: "https://api-m.sandbox.paypal.com/v2/payments/captures/PAYPAL-CAPTURE-01" }],
   });
   assert.equal(evidence.amountCents, 1_500);
   assert.equal(evidence.status, "SUCCEEDED");
   assert.equal(evidence.captureId, "PAYPAL-CAPTURE-01");
+  assert.equal(evidence.applicationReferencePresent, true);
+  assert.equal(evidence.applicationReference, "shop-refund:attempt-01");
+  assert.equal(paypalRefundEvidence({
+    id: "PAYPAL-REFUND-02",
+    status: "PENDING",
+    amount: { currency_code: "EUR", value: "15.00" },
+    update_time: "2026-08-22T12:00:00Z",
+    links: [{ rel: "up", method: "GET", href: "https://api-m.sandbox.paypal.com/v2/payments/captures/PAYPAL-CAPTURE-01" }],
+  }).applicationReferencePresent, false);
   assert.throws(() => paypalRefundEvidence({
     id: "PAYPAL-REFUND-01", status: "COMPLETED", amount: { currency_code: "USD", value: "15.00" },
     update_time: "2026-08-22T12:00:00Z", links: [],
@@ -160,13 +171,26 @@ test("the PayPal adapter passes exact cents and the persistent provider idempote
       request = { captureId, amountCents, idempotencyKey };
       return {
         providerRefundId: "PAYPAL-REFUND-01", captureId, status: "SUCCEEDED" as const,
+        applicationReferencePresent: true,
+        applicationReference: paypalRefundApplicationReference(idempotencyKey),
         amountCents, currency: "EUR" as const, occurredAt: new Date("2026-08-22T12:00:00Z"),
       };
     },
-    async retrieveRefund() { throw new Error("not expected"); },
+    async retrieveRefund(providerRefundId: string) {
+      return {
+        providerRefundId,
+        captureId: reserved.providerPaymentId,
+        applicationReferencePresent: true,
+        applicationReference: paypalRefundApplicationReference(reserved.providerIdempotencyKey),
+        status: "SUCCEEDED" as const,
+        amountCents: reserved.amountCents,
+        currency: "EUR" as const,
+        occurredAt: new Date("2026-08-22T12:00:00Z"),
+      };
+    },
   } satisfies PaypalGateway & PaypalRefundGateway;
   const gateway = createRefundProviderGateway("PAYPAL", { paypal });
-  await gateway.request({
+  const evidence = await gateway.request({
     paymentId: reserved.paymentId, attemptId: reserved.id, providerPaymentId: reserved.providerPaymentId,
     amountCents: reserved.amountCents, idempotencyKey: reserved.providerIdempotencyKey,
   });
@@ -174,6 +198,16 @@ test("the PayPal adapter passes exact cents and the persistent provider idempote
     captureId: reserved.providerPaymentId,
     amountCents: 1_500,
     idempotencyKey: reserved.providerIdempotencyKey,
+  });
+  assert.deepEqual(evidence.applicationEvidence, {
+    kind: "PAYPAL_INVOICE_REFERENCE",
+    present: true,
+    value: paypalRefundApplicationReference(reserved.providerIdempotencyKey),
+  });
+  assert.deepEqual((await gateway.retrieve("PAYPAL-REFUND-01")).applicationEvidence, {
+    kind: "PAYPAL_INVOICE_REFERENCE",
+    present: true,
+    value: paypalRefundApplicationReference(reserved.providerIdempotencyKey),
   });
 });
 
@@ -197,7 +231,38 @@ test("PayPal Sandbox refund API uses exact EUR and the persistent Request ID", a
   assert.equal(evidence.status, "PENDING");
   assert.equal(calls[1]?.url, "https://api-m.sandbox.paypal.com/v2/payments/captures/PAYPAL-CAPTURE-01/refund");
   assert.equal(new Headers(calls[1]?.init.headers).get("PayPal-Request-Id"), "refund:paypal:persistent-01");
-  assert.deepEqual(JSON.parse(String(calls[1]?.init.body)), { amount: { currency_code: "EUR", value: "15.00" } });
+  assert.deepEqual(JSON.parse(String(calls[1]?.init.body)), {
+    amount: { currency_code: "EUR", value: "15.00" },
+    invoice_id: paypalRefundApplicationReference("refund:paypal:persistent-01"),
+  });
+});
+
+test("PayPal derives a stable opaque bounded refund reference without exposing the local key", () => {
+  const key = "shop-customer-request:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:provider-refund:v1";
+  const reference = paypalRefundApplicationReference(key);
+  assert.equal(reference, paypalRefundApplicationReference(key));
+  assert.match(reference, /^LNX-REFUND-[0-9A-F]{64}$/);
+  assert.ok(reference.length <= 127);
+  assert.ok(!reference.includes(key));
+  assert.ok(!reference.includes("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"));
+  assert.throws(() => paypalRefundApplicationReference(""), PaypalClientError);
+  assert.throws(() => paypalRefundApplicationReference("x".repeat(256)), PaypalClientError);
+});
+
+test("PayPal rejects an oversized local refund key before network", async () => {
+  let fetchCalls = 0;
+  const gateway = createTestPaypalGateway({
+    provider: "paypal", enabled: true, configured: true, environment: "sandbox",
+    clientId: "paypal-client-fixture", clientSecret: "paypal-secret-fixture", webhookId: "paypal-webhook-fixture",
+  }, async () => {
+    fetchCalls += 1;
+    throw new Error("network must remain unreachable");
+  });
+  await assert.rejects(
+    gateway.refundCapture("PAYPAL-CAPTURE-01", 1_500, "x".repeat(256)),
+    (error: unknown) => error instanceof PaypalClientError && error.code === "INVALID_REQUEST",
+  );
+  assert.equal(fetchCalls, 0);
 });
 
 test("the PayPal Live adapter refuses a refund before OAuth when the Live gate is closed", async () => {
@@ -285,19 +350,50 @@ test("the Stripe adapter passes exact cents, metadata and the persistent idempot
       request = { paymentIntentId, amountCents, idempotencyKey, metadata };
       return {
         providerRefundId: "re_test_01", paymentIntentId, status: "SUCCEEDED" as const,
+        applicationMetadata: {
+          present: true,
+          paymentId: metadata.paymentId,
+          refundAttemptId: metadata.refundAttemptId,
+        },
         amountCents, currency: "EUR" as const, occurredAt: new Date("2026-08-22T12:00:00Z"),
       };
     },
-    async retrieveRefund() { throw new Error("not expected"); },
+    async retrieveRefund(providerRefundId: string) {
+      return {
+        providerRefundId,
+        paymentIntentId: "pi_test_01",
+        applicationMetadata: {
+          present: true,
+          paymentId: reserved.paymentId,
+          refundAttemptId: reserved.id,
+        },
+        status: "SUCCEEDED" as const,
+        amountCents: 1_500,
+        currency: "EUR" as const,
+        occurredAt: new Date("2026-08-22T12:00:00Z"),
+      };
+    },
   } satisfies StripeRefundGateway;
   const gateway = createRefundProviderGateway("STRIPE", { stripe });
-  await gateway.request({
+  const evidence = await gateway.request({
     paymentId: reserved.paymentId, attemptId: reserved.id, providerPaymentId: "pi_test_01",
     amountCents: 1_500, idempotencyKey: "refund:stripe:persistent-01",
   });
   assert.deepEqual(request, {
     paymentIntentId: "pi_test_01", amountCents: 1_500, idempotencyKey: "refund:stripe:persistent-01",
     metadata: { paymentId: reserved.paymentId, refundAttemptId: reserved.id },
+  });
+  assert.deepEqual(evidence.applicationEvidence, {
+    kind: "STRIPE_METADATA",
+    present: true,
+    paymentId: reserved.paymentId,
+    refundAttemptId: reserved.id,
+  });
+  assert.deepEqual((await gateway.retrieve("re_test_01")).applicationEvidence, {
+    kind: "STRIPE_METADATA",
+    present: true,
+    paymentId: reserved.paymentId,
+    refundAttemptId: reserved.id,
   });
 });
 
@@ -371,12 +467,34 @@ test("only documented PayPal and Stripe financial webhook names are routed", () 
 test("financial webhook normalizers reject wrong currency and amount while preserving signed live mode", () => {
   const stripe = {
     id: "evt_refund_01", type: "refund.updated", livemode: false, created: 1_787_398_400,
-    data: { object: { id: "re_test_01", object: "refund", payment_intent: "pi_test_01", amount: 1_500, currency: "eur", status: "succeeded" } },
+    data: { object: {
+      id: "re_test_01", object: "refund", payment_intent: "pi_test_01", amount: 1_500,
+      currency: "eur", status: "succeeded",
+      metadata: {
+        paymentId: "11111111-1111-4111-8111-111111111111",
+        refundAttemptId: "22222222-2222-4222-8222-222222222222",
+      },
+    } },
   } as const;
-  assert.equal(normalizeStripeRefundEvent(stripe)?.status, "SUCCEEDED");
+  const normalizedStripe = normalizeStripeRefundEvent(stripe);
+  assert.equal(normalizedStripe?.status, "SUCCEEDED");
+  assert.deepEqual(normalizedStripe?.stripeApplicationMetadata, {
+    present: true,
+    paymentId: "11111111-1111-4111-8111-111111111111",
+    refundAttemptId: "22222222-2222-4222-8222-222222222222",
+  });
+  assert.deepEqual(normalizeStripeRefundEvent({
+    ...stripe,
+    data: { object: { ...stripe.data.object, metadata: { refundAttemptId: "invalid" } } },
+  })?.stripeApplicationMetadata, {
+    present: true,
+    paymentId: null,
+    refundAttemptId: "invalid",
+  });
   assert.equal(normalizeStripeRefundEvent({ ...stripe, livemode: true })?.eventId, stripe.id);
   assert.equal(normalizeStripeRefundEvent({ ...stripe, data: { object: { ...stripe.data.object, currency: "usd" } } }), null);
   assert.equal(normalizeStripeRefundEvent({ ...stripe, data: { object: { ...stripe.data.object, amount: 1.5 } } }), null);
+  assert.equal(normalizeStripeRefundEvent({ ...stripe, type: "refund.failed" }), null);
   assert.equal(stripeFinancialProviderPaymentId({
     ...stripe,
     data: { object: { ...stripe.data.object, currency: "usd", amount: "invalid" } },
@@ -385,12 +503,32 @@ test("financial webhook normalizers reject wrong currency and amount while prese
     id: "WH-REFUND-01", event_type: "PAYMENT.REFUND.PENDING", create_time: "2026-08-22T12:00:00Z",
     resource: {
       id: "PAYPAL-REFUND-01", status: "PENDING", amount: { currency_code: "EUR", value: "15.00" },
+      invoice_id: paypalRefundApplicationReference("refund:paypal:persistent-01"),
       update_time: "2026-08-22T12:00:00Z",
       links: [{ rel: "up", method: "GET", href: "https://api-m.sandbox.paypal.com/v2/payments/captures/PAYPAL-CAPTURE-01" }],
     },
   } as const;
   assert.equal(normalizePaypalRefundEvent(paypal)?.amountCents, 1_500);
+  assert.deepEqual(normalizePaypalRefundEvent(paypal)?.paypalApplicationReference, {
+    present: true,
+    value: paypalRefundApplicationReference("refund:paypal:persistent-01"),
+  });
   assert.equal(normalizePaypalRefundEvent({ ...paypal, resource: { ...paypal.resource, amount: { currency_code: "USD", value: "15.00" } } }), null);
+  const completedPaypal = {
+    ...paypal,
+    event_type: "PAYMENT.CAPTURE.REFUNDED",
+    resource: { ...paypal.resource, status: "COMPLETED" },
+  } as const;
+  assert.equal(normalizePaypalRefundEvent(completedPaypal)?.status, "SUCCEEDED");
+  assert.equal(normalizePaypalRefundEvent({
+    ...completedPaypal,
+    resource: { ...completedPaypal.resource, status: "PENDING" },
+  }), null, "The signed event type and resource status must agree.");
+  assert.equal(normalizePaypalRefundEvent({
+    ...paypal,
+    event_type: "PAYMENT.REFUND.FAILED",
+    resource: { ...paypal.resource, status: "FAILED" },
+  })?.status, "FAILED");
   const malformedPaypal = {
     ...paypal,
     event_type: "PAYMENT.CAPTURE.REFUNDED",
@@ -770,19 +908,45 @@ test("provider adapters enforce the Live mutation gate while inbound financial w
   assert.doesNotMatch(inbound, /LIVE_REFUNDS_ENABLED|liveRefundsEnabled/);
 });
 
-test("Shop financial events arm review behind the same fulfillment lock without automatic refund", async () => {
-  const [financialEvents, fulfillment] = await Promise.all([
+test("Shop refund events only finalize a strictly correlated authorized operation", async () => {
+  const [financialEvents, fulfillment, coordination] = await Promise.all([
     readFile(new URL("../../lib/payments/provider-financial-events.ts", import.meta.url), "utf8"),
     readFile(new URL("../../lib/shop/fulfillment-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/shop/order-coordination.ts", import.meta.url), "utf8"),
   ]);
   assert.match(financialEvents, /SHOP_PROVIDER_FINANCIAL_EVENT_REVIEW/);
-  assert.match(financialEvents, /shop-payments:order:\$\{input\.shopOrderId\}/);
-  assert.match(financialEvents, /FROM "shop_orders"[\s\S]*FOR UPDATE/);
+  assert.match(financialEvents, /lockShopOrderForMutation\(transaction, input\.shopOrderId\)/);
   assert.match(financialEvents, /paymentReviewAt: order\.paymentReviewAt \?\? input\.occurredAt/);
   assert.match(financialEvents, /outcome: "REQUIRES_REVIEW"[\s\S]*paymentId: input\.paymentId/);
   assert.match(financialEvents, /category: "PROVIDER_FINANCIAL_EVENT"/);
-  assert.match(fulfillment, /shop-payments:order:\$\{shopOrderId\}/);
+  assert.match(financialEvents, /source === "ADMIN"/);
+  assert.match(financialEvents, /cancellation\.type === "PAID_ORDER_CANCELLATION"/);
+  assert.match(financialEvents, /applyShopReturnRefundEvidenceInTransaction/);
+  assert.match(financialEvents, /PROVIDER_EVENT_CORRELATION_DEFERRED/);
+  assert.match(financialEvents, /metadata\.paymentId === paymentId && metadata\.refundAttemptId === attemptId/);
+  assert.match(financialEvents, /referenced\.length === 1/);
+  assert.match(financialEvents, /if \(!reference\.value\) return \{ outcome: "REVIEW" \}/);
+  assert.match(financialEvents, /applyShopCustomerCancellationEvidenceInTransaction/);
+  assert.match(financialEvents, /persistShopRefundFinalizationReview/);
+  const accountingEvidenceHelper = financialEvents.slice(
+    financialEvents.indexOf("async function recordCorrelatedShopRefundEvidence"),
+    financialEvents.indexOf("type ShopRefundAttemptCandidate"),
+  );
+  assert.match(accountingEvidenceHelper, /refundAttemptId/);
+  assert.match(accountingEvidenceHelper, /outcome: "PROCESSED"/);
+  assert.doesNotMatch(accountingEvidenceHelper, /paymentReviewAt|recordShopFinancialReview/);
+  const refundHelper = financialEvents.slice(
+    financialEvents.indexOf("async function processRefundEvent"),
+    financialEvents.indexOf("async function processIncident"),
+  );
+  assert.doesNotMatch(
+    refundHelper,
+    /if \(payment\?\.shopOrderId && !payment\.orderId\) \{\s*return recordShopFinancialReview/,
+  );
+  assert.match(fulfillment, /lockShopOrderForMutation|shop-payments:order/);
   assert.match(fulfillment, /paymentReviewAt: null/);
+  assert.match(coordination, /SHOP_ORDER_MUTATION_LOCK_PREFIX = "shop-payments:order"/);
+  assert.match(coordination, /FROM "shop_orders"[\s\S]*FOR UPDATE/);
   const reviewHelper = financialEvents.match(/async function recordShopFinancialReview[\s\S]*?\n\}/)?.[0] ?? "";
   assert.doesNotMatch(reviewHelper, /refundAttempt\.create|enqueueOrderNotification/);
 });

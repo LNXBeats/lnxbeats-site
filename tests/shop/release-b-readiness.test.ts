@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { assertMediaStorageKey } from "@/lib/media/storage/policy";
-import { shopAfterSalesQaEnabled, shopAfterSalesRefundProvider } from "@/lib/shop/after-sales-config";
+import {
+  assertShopRefundExecutionEnabled,
+  shopAfterSalesQaEnabled,
+  shopAfterSalesRefundProvider,
+} from "@/lib/shop/after-sales-config";
+import { createConfiguredShopRefundGateway } from "@/lib/shop/after-sales-service";
 import { PAYMENT_PRODUCTION_CONFIRMATION } from "@/lib/payments/config";
 import { LIVE_REFUNDS_PRODUCTION_CONFIRMATION } from "@/lib/payments/live-refund-policy";
 import { parseShopConfiguration } from "@/lib/shop/config";
@@ -25,6 +30,7 @@ import {
   isStrictShopProductionEnvironment,
 } from "@/lib/shop/production-environment";
 import { parseShopShippingConfiguration } from "@/lib/shop/shipping-config";
+import { parseShopPaymentConfiguration } from "@/lib/shop/payment-config";
 import {
   SHOP_COMMERCIAL_RATE_PRODUCTION_PREPARATION_CONFIRMATION,
   shopCommercialAdminPreparationEnabled,
@@ -116,6 +122,40 @@ test("Production SAV reaches real providers only through the doubly confirmed Li
   assert.equal(shopShippingOperationsQaEnabled(armed), true);
   assert.equal(shopMaintenanceEnabled(environment), false);
   assert.equal(shopShippingOperationsQaEnabled(environment), false);
+});
+
+test("the dedicated after-sales disabled gate blocks provider mutations without closing Shop Checkout", async () => {
+  const stripeSecret = ["sk", "live", "shop-refund-disabled-fixture"].join("_");
+  const environment = {
+    ...productionEnvironment(),
+    PAYMENT_DEPLOYMENT_ENV: "production",
+    PAYMENTS_ENABLED: "true",
+    SHOP_PAYMENTS_ENABLED: "true",
+    STRIPE_PAYMENTS_ENABLED: "true",
+    PAYPAL_PAYMENTS_ENABLED: "false",
+    STRIPE_MODE: "live",
+    STRIPE_SECRET_KEY: stripeSecret,
+    STRIPE_WEBHOOK_SECRET: ["whsec", "shop-refund-disabled-fixture"].join("_"),
+    PAYMENT_PRODUCTION_CONFIRM: PAYMENT_PRODUCTION_CONFIRMATION,
+    LIVE_REFUNDS_ENABLED: "true",
+    LIVE_REFUNDS_PRODUCTION_CONFIRM: LIVE_REFUNDS_PRODUCTION_CONFIRMATION,
+    SHOP_AFTER_SALES_REFUND_PROVIDER: "disabled",
+    SHOP_TERMS_VERSION: SHOP_LEGAL_APPROVED_TERMS_VERSION,
+  } satisfies NodeJS.ProcessEnv;
+
+  assert.equal(shopAfterSalesRefundProvider(environment), "disabled");
+  assert.throws(() => assertShopRefundExecutionEnabled(environment), /SHOP_REFUNDS_DISABLED/);
+  assert.throws(() => createConfiguredShopRefundGateway(environment), /SHOP_REFUNDS_DISABLED/);
+  assert.equal(parseShopPaymentConfiguration(environment).enabled, true);
+
+  const [cancellation, afterSales, inbound] = await Promise.all([
+    readFile(new URL("../../lib/shop/customer-request-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/shop/after-sales-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/payments/provider-financial-events.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(cancellation, /gateway \?\? createConfiguredShopRefundGateway\(\)/);
+  assert.match(afterSales, /gateway \?\? createConfiguredShopRefundGateway\(\)/);
+  assert.doesNotMatch(inbound, /createConfiguredShopRefundGateway|SHOP_AFTER_SALES_REFUND_PROVIDER/);
 });
 
 test("the Admin cockpit distinguishes code readiness from financial armament with human labels", async () => {

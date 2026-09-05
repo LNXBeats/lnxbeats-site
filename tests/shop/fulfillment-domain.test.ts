@@ -86,7 +86,10 @@ test("tracking URLs accept HTTPS only and reject active schemes or embedded cred
 });
 
 test("fulfillment service keeps paid-state guards and transaction-bound notifications", async () => {
-  const source = await readFile(new URL("../../lib/shop/fulfillment-service.ts", import.meta.url), "utf8");
+  const [source, coordination] = await Promise.all([
+    readFile(new URL("../../lib/shop/fulfillment-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/shop/order-coordination.ts", import.meta.url), "utf8"),
+  ]);
   assert.match(source, /paymentStatus !== "PAID"/);
   assert.match(source, /paymentReviewAt !== null/);
   assert.match(source, /role: "ADMIN", status: "ACTIVE"/);
@@ -99,9 +102,11 @@ test("fulfillment service keeps paid-state guards and transaction-bound notifica
   assert.match(source, /TRACKING_REQUIRED/);
   assert.match(source, /enqueueShopPreparingNotification\(transaction, order\.id\)/);
   assert.match(source, /enqueueShopShippedNotification\(transaction, order\.id\)/);
-  assert.match(source, /pg_advisory_xact_lock/);
-  assert.match(source, /shop-payments:order:\$\{shopOrderId\}/);
-  assert.match(source, /FROM "shop_orders"[\s\S]*FOR UPDATE/);
+  assert.match(source, /lockShopOrderForMutation/);
+  assert.match(source, /findShopCancellationBarrier/);
+  assert.match(coordination, /pg_advisory_xact_lock/);
+  assert.match(coordination, /SHOP_ORDER_MUTATION_LOCK_PREFIX = "shop-payments:order"/);
+  assert.match(coordination, /FROM "shop_orders"[\s\S]*FOR UPDATE/);
   assert.match(source, /updateMany\([\s\S]*paymentReviewAt: null/);
   assert.match(source, /shopOrderLifecycleEvent\.create/);
 });
