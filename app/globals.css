@@ -2399,6 +2399,7 @@ a {
 .auth-profile > div:last-child { padding-bottom: 0; border-bottom: 0; }
 .auth-profile dt { color: var(--text-soft); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 .auth-profile dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.billing-customer-address { display: grid; gap: 0.12rem; margin: 0; font-style: normal; }
 .billing-document-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin-top: 1.4rem; }
 .billing-document-actions .button { width: auto; }
 .billing-document-download { min-width: min(100%, 17rem); box-shadow: 0 14px 34px rgba(198, 161, 91, 0.16); }

@@ -2,6 +2,7 @@ import "server-only";
 
 import PDFDocument from "pdfkit";
 
+import { billingAddressLines } from "@/lib/billing/address-presentation";
 import { formatBillingMoney } from "@/lib/billing/domain";
 import { creditNoteReasonLabel, type BillingDocumentRenderMode } from "@/lib/billing/presentation";
 
@@ -197,7 +198,7 @@ export async function generateInvoicePdf(record: InvoicePdfRecord, mode: Billing
     const partyY = document.y;
     party(document, "Émetteur", [seller.legalName, `${seller.legalForm} · ${seller.tradeName}`, seller.address.line1, `${seller.address.postalCode} ${seller.address.city}`, `SIREN ${seller.siren} · SIRET ${seller.siret}`, `APE ${seller.ape}`, seller.email], margin);
     document.y = partyY;
-    const customerLines = [customer.companyName || customer.name, ...(customer.companyName ? [customer.name] : []), ...(customer.billingAddress ? [customer.billingAddress.line1, customer.billingAddress.line2 || "", `${customer.billingAddress.postalCode} ${customer.billingAddress.city}`] : []), customer.email, ...(customer.businessIdentifier ? [`SIREN/SIRET ${customer.businessIdentifier}`] : []), ...(customer.vatId ? [`TVA ${customer.vatId}`] : [])].filter(Boolean);
+    const customerLines = [customer.companyName || customer.name, ...(customer.companyName ? [customer.name] : []), ...(customer.billingAddress ? billingAddressLines(customer.billingAddress) : []), customer.email, ...(customer.businessIdentifier ? [`SIREN/SIRET ${customer.businessIdentifier}`] : []), ...(customer.vatId ? [`TVA ${customer.vatId}`] : [])].filter(Boolean);
     party(document, "Client", customerLines, 318);
     document.y = Math.max(document.y, partyY + 105);
     document.moveDown(.8);
