@@ -335,7 +335,7 @@ export async function listMemberInvoices(userId: string, client: PrismaClient = 
   return client.invoice.findMany({
     where: { OR: [{ order: { userId } }, { shopOrder: { userId } }] },
     orderBy: [{ issuedAt: "desc" }, { sequenceNumber: "desc" }],
-    include: { creditNotes: { orderBy: { issuedAt: "asc" } } },
+    include: { payment: { select: { mode: true } }, creditNotes: { orderBy: { issuedAt: "asc" } } },
   });
 }
 
@@ -343,7 +343,7 @@ export async function getInvoiceForMember(invoiceNumberValue: string, userId: st
   assertDatabaseConfigured();
   return client.invoice.findFirst({
     where: { invoiceNumber: invoiceNumberValue, OR: [{ order: { userId } }, { shopOrder: { userId } }] },
-    include: { creditNotes: { orderBy: { issuedAt: "asc" } } },
+    include: { payment: { select: { mode: true } }, creditNotes: { orderBy: { issuedAt: "asc" } } },
   });
 }
 
@@ -351,7 +351,7 @@ export async function getCreditNoteForMember(number: string, userId: string, cli
   assertDatabaseConfigured();
   return client.creditNote.findFirst({
     where: { creditNoteNumber: number, invoice: { OR: [{ order: { userId } }, { shopOrder: { userId } }] } },
-    include: { invoice: true },
+    include: { invoice: { include: { payment: { select: { mode: true } } } } },
   });
 }
 
@@ -380,7 +380,7 @@ export async function listAdminInvoices(search: string | undefined, client: Pris
     ] } : undefined,
     orderBy: [{ issuedAt: "desc" }, { sequenceNumber: "desc" }],
     take: 200,
-    include: { creditNotes: { orderBy: { issuedAt: "asc" } } },
+    include: { payment: { select: { mode: true } }, creditNotes: { orderBy: { issuedAt: "asc" } } },
   });
 }
 
@@ -388,11 +388,11 @@ export async function getInvoiceForAdmin(invoiceNumberValue: string, client: Pri
   assertDatabaseConfigured();
   return client.invoice.findUnique({
     where: { invoiceNumber: invoiceNumberValue },
-    include: { creditNotes: { orderBy: { issuedAt: "asc" } }, auditEvents: { orderBy: { createdAt: "asc" } } },
+    include: { payment: { select: { mode: true } }, creditNotes: { orderBy: { issuedAt: "asc" } }, auditEvents: { orderBy: { createdAt: "asc" } } },
   });
 }
 
 export async function getCreditNoteForAdmin(number: string, client: PrismaClient = prisma) {
   assertDatabaseConfigured();
-  return client.creditNote.findUnique({ where: { creditNoteNumber: number }, include: { invoice: true } });
+  return client.creditNote.findUnique({ where: { creditNoteNumber: number }, include: { invoice: { include: { payment: { select: { mode: true } } } } } });
 }

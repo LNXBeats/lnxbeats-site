@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { parseBillingCustomerSnapshot } from "@/lib/billing/domain";
-import { creditNoteReasonLabel } from "@/lib/billing/presentation";
+import { billingDocumentPresentation, creditNoteReasonLabel } from "@/lib/billing/presentation";
 import { getInvoiceForAdmin } from "@/lib/billing/service";
 import { formatEuro } from "@/lib/orders/domain";
 
@@ -18,11 +18,12 @@ export default async function AdminInvoicePage({ params }: { params: Promise<{ i
   const invoice = await getInvoiceForAdmin(invoiceNumber);
   if (!invoice) notFound();
   const customer = parseBillingCustomerSnapshot(invoice.customerSnapshot);
+  const presentation = billingDocumentPresentation("INVOICE", invoice.payment.mode);
   return <main className="admin-main">
     <AdminBackLink href="/admin/facturation">Retour à la facturation</AdminBackLink>
-    <header className="admin-page-heading"><div><p className="admin-section-label">Facture · document QA</p><h1>{invoice.invoiceNumber}</h1></div><p>Snapshot immuable lié à {invoice.orderNumberSnapshot}. Les données carte, secrets fournisseur et payloads bruts ne sont jamais exposés.</p></header>
+    <header className="admin-page-heading"><div><p className="admin-section-label">{presentation.label}</p><h1>{invoice.invoiceNumber}</h1></div><p>Snapshot immuable lié à {invoice.orderNumberSnapshot}. Les données carte, secrets fournisseur et payloads bruts ne sont jamais exposés.</p></header>
     <section className="admin-panel"><dl className="admin-definition-grid"><div><dt>Émission</dt><dd>{invoice.issuedAt.toLocaleString("fr-FR")}</dd></div><div><dt>Client</dt><dd>{customer.companyName || customer.name}<small>{customer.type === "PROFESSIONAL" ? `Professionnel · ${customer.name}` : "Particulier"}</small></dd></div>{customer.billingAddress ? <div><dt>Facturation</dt><dd>{customer.billingAddress.line1}<small>{customer.billingAddress.postalCode} {customer.billingAddress.city} · France</small></dd></div> : null}{customer.businessIdentifier ? <div><dt>SIREN / SIRET client</dt><dd>{customer.businessIdentifier}</dd></div> : null}{customer.vatId ? <div><dt>TVA client</dt><dd>{customer.vatId}</dd></div> : null}<div><dt>Total</dt><dd>{formatEuro(invoice.totalCents)}</dd></div><div><dt>Paiement</dt><dd>{invoice.paymentMethodLabel}<small>{invoice.paidAt.toLocaleString("fr-FR")}</small></dd></div><div><dt>TVA vendeur</dt><dd>{invoice.vatLegalNotice}</dd></div><div><dt>Empreinte</dt><dd><code>{invoice.snapshotHashSha256}</code></dd></div></dl>
-      <p className="admin-alert">DOCUMENT QA — SANS VALEUR COMPTABLE. Activation juridique et comptable non autorisée.</p>
+      {presentation.warning ? <p className="admin-alert">{presentation.warning}</p> : null}
       <div className="admin-action-row" role="group" aria-label="Actions du document"><a className="admin-button admin-button--primary" href={`/api/billing/invoices/${encodeURIComponent(invoice.invoiceNumber)}/pdf`}>TÉLÉCHARGER LE PDF</a>{invoice.documentType === "SHOP" ? <Link className="admin-button admin-button--quiet" href={`/admin/boutique/commandes/${encodeURIComponent(invoice.orderNumberSnapshot)}`}>VOIR LA COMMANDE</Link> : <Link className="admin-button admin-button--quiet" href={`/admin/commandes/${encodeURIComponent(invoice.orderNumberSnapshot)}`}>VOIR LA COMMANDE</Link>}</div>
     </section>
     <section className="admin-panel"><div className="admin-panel__heading"><p className="admin-section-label">Corrections</p><h2>Avoirs</h2></div>{invoice.creditNotes.length ? <ul className="admin-card-list">{invoice.creditNotes.map((note) => <li key={note.id}><strong>{note.creditNoteNumber} · {formatEuro(note.amountCents)}</strong><small>{note.issuedAt.toLocaleString("fr-FR")} · {creditNoteReasonLabel(note.reasonCode)}</small><Link href={`/admin/facturation/avoirs/${encodeURIComponent(note.creditNoteNumber)}`}>Consulter l’avoir</Link></li>)}</ul> : <p>Aucun avoir lié.</p>}</section>

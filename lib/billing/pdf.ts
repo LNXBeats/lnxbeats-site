@@ -3,7 +3,7 @@ import "server-only";
 import PDFDocument from "pdfkit";
 
 import { formatBillingMoney } from "@/lib/billing/domain";
-import { creditNoteReasonLabel } from "@/lib/billing/presentation";
+import { creditNoteReasonLabel, type BillingDocumentRenderMode } from "@/lib/billing/presentation";
 
 type Address = { line1: string; line2?: string | null; postalCode: string; city: string; countryCode: string };
 type Seller = { legalName: string; legalForm: string; tradeName: string; serviceName: string; address: Address; siren: string; siret: string; ape: string; email: string; phone: string };
@@ -116,7 +116,7 @@ function frenchDate(value: Date) {
   return new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long" }).format(value);
 }
 
-async function render(title: string, number: string, issuedAt: Date, hash: string, qa: boolean, body: (document: PDFKit.PDFDocument) => void) {
+async function render(title: string, number: string, issuedAt: Date, hash: string, mode: BillingDocumentRenderMode, body: (document: PDFKit.PDFDocument) => void) {
   const document = new PDFDocument({
     size: "A4",
     bufferPages: true,
@@ -150,7 +150,7 @@ async function render(title: string, number: string, issuedAt: Date, hash: strin
     billingPdfLayout.metadataY,
     { width: PAGE.width - margin * 2, lineBreak: false },
   );
-  if (qa) {
+  if (mode === "TEST") {
     document.roundedRect(margin, billingPdfLayout.qaBannerY, PAGE.width - margin * 2, billingPdfLayout.qaBannerHeight, 6).fill("#fff1d6");
     document.fillColor("#704708").font("Helvetica-Bold").fontSize(10).text(
       qaWatermark,
@@ -189,11 +189,11 @@ function party(document: PDFKit.PDFDocument, title: string, lines: readonly stri
   document.fillColor(dark).font("Helvetica").fontSize(8.5).text(lines.join("\n"), x, y, { width: 230, lineGap: 2 });
 }
 
-export async function generateInvoicePdf(record: InvoicePdfRecord, qa = true) {
+export async function generateInvoicePdf(record: InvoicePdfRecord, mode: BillingDocumentRenderMode = "TEST") {
   const seller = parseSeller(record.sellerSnapshot);
   const customer = parseCustomer(record.customerSnapshot);
   const lines = parseLines(record.lineItemsSnapshot);
-  return render("FACTURE", record.invoiceNumber, record.issuedAt, record.snapshotHashSha256, qa, (document) => {
+  return render("FACTURE", record.invoiceNumber, record.issuedAt, record.snapshotHashSha256, mode, (document) => {
     const partyY = document.y;
     party(document, "Émetteur", [seller.legalName, `${seller.legalForm} · ${seller.tradeName}`, seller.address.line1, `${seller.address.postalCode} ${seller.address.city}`, `SIREN ${seller.siren} · SIRET ${seller.siret}`, `APE ${seller.ape}`, seller.email], margin);
     document.y = partyY;
@@ -205,8 +205,14 @@ export async function generateInvoicePdf(record: InvoicePdfRecord, qa = true) {
     document.moveDown(.6);
     for (const line of lines) {
       const y = document.y;
-      document.fillColor(dark).font("Helvetica").fontSize(9).text(`${line.description} × ${line.quantity}`, margin, y, { width: 310 });
-      document.text(formatBillingMoney(line.lineTotalCents), 400, y, { width: 100, align: "right" });
+      const description = `${line.description} × ${line.quantity}`;
+      document.fillColor(dark).font("Helvetica").fontSize(9);
+      const descriptionHeight = document.heightOfString(description, { width: 310 });
+      const amount = formatBillingMoney(line.lineTotalCents);
+      const amountHeight = document.heightOfString(amount, { width: 100 });
+      document.text(description, margin, y, { width: 310 });
+      document.text(amount, 400, y, { width: 100, align: "right" });
+      document.y = y + Math.max(descriptionHeight, amountHeight);
       document.moveDown(.55).strokeColor("#dedede").moveTo(margin, document.y).lineTo(PAGE.width - margin, document.y).stroke();
       document.moveDown(.55);
     }
@@ -220,8 +226,8 @@ export async function generateInvoicePdf(record: InvoicePdfRecord, qa = true) {
   });
 }
 
-export async function generateCreditNotePdf(record: CreditNotePdfRecord, qa = true) {
-  return render("AVOIR", record.creditNoteNumber, record.issuedAt, record.snapshotHashSha256, qa, (document) => {
+export async function generateCreditNotePdf(record: CreditNotePdfRecord, mode: BillingDocumentRenderMode = "TEST") {
+  return render("AVOIR", record.creditNoteNumber, record.issuedAt, record.snapshotHashSha256, mode, (document) => {
     document.fillColor(dark).font("Helvetica-Bold").fontSize(11).text(`Facture d’origine : ${record.invoice.invoiceNumber}`);
     document.font("Helvetica").fontSize(9.5).text(`Commande : ${record.invoice.orderNumberSnapshot}`);
     document.text(`Motif : ${creditNoteReasonLabel(record.reasonCode)}${record.reasonText ? ` — ${record.reasonText}` : ""}`);

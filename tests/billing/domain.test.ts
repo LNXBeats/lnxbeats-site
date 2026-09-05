@@ -15,7 +15,11 @@ import {
   validateBillingCustomerIdentity,
 } from "@/lib/billing/domain";
 import { billingPdfLayout, generateCreditNotePdf, generateInvoicePdf, type InvoicePdfRecord } from "@/lib/billing/pdf";
-import { creditNoteReasonLabel } from "@/lib/billing/presentation";
+import {
+  billingDocumentPresentation,
+  billingDocumentRenderMode,
+  creditNoteReasonLabel,
+} from "@/lib/billing/presentation";
 
 const root = process.cwd();
 const read = (path: string) => readFile(`${root}/${path}`, "utf8");
@@ -152,8 +156,21 @@ test("private invoice and credit-note routes enforce session ownership and safe 
     assert.match(source, /get(?:Invoice|CreditNote)ForMember/);
     assert.match(source, /private, no-store/);
     assert.match(source, /noindex, nofollow/);
+    assert.match(source, /billingDocumentRenderMode/);
+    assert.match(source, /payment\.mode/);
     assert.doesNotMatch(source, /paymentIntent|accessToken|providerEvent/);
   }
+});
+
+test("billing presentation derives final versus test rendering only from persisted payment mode", () => {
+  assert.equal(billingDocumentRenderMode("LIVE"), "FINAL");
+  for (const mode of ["TEST", "", "forged", null, undefined]) {
+    assert.equal(billingDocumentRenderMode(mode), "TEST");
+  }
+  assert.deepEqual(billingDocumentPresentation("INVOICE", "LIVE"), {
+    renderMode: "FINAL", label: "Facture · document comptable", warning: null,
+  });
+  assert.equal(billingDocumentPresentation("CREDIT_NOTE", "TEST").warning, "DOCUMENT DE TEST — SANS VALEUR COMPTABLE.");
 });
 
 test("Admin billing supports invoice, credit-note, order, customer and date lookup without mutation controls", async () => {
@@ -277,10 +294,25 @@ test("four short billing QA fixtures render on exactly one page with complete sn
   assert.doesNotMatch(Buffer.concat(results.map((result) => result.bytes)).toString("latin1"), /sk_live_|sk_test_|whsec_|DATABASE_URL|AUTH_SECRET/);
 });
 
-test("non-QA billing output omits the QA watermark", async () => {
-  const result = await generateInvoicePdf(invoiceFixture(), false);
-  assert.equal(result.pageCount, 1);
-  assert.doesNotMatch(decodedPdfPageText(result.bytes).join("\n"), /DOCUMENT QA|SANS VALEUR COMPTABLE/);
+test("final LIVE invoice and credit-note PDFs omit every test watermark", async () => {
+  const invoice = invoiceFixture();
+  const invoiceResult = await generateInvoicePdf(invoice, "FINAL");
+  const creditResult = await generateCreditNotePdf({
+    creditNoteNumber: "AV-LNX-20990101-0009",
+    issuedAt: invoice.issuedAt,
+    amountCents: 1000,
+    cumulativeCreditedCents: 1000,
+    remainingBalanceCents: 2000,
+    currency: "EUR",
+    reasonCode: "NON_CONFORMITY",
+    reasonText: "Cas final fictif",
+    snapshotHashSha256: "f".repeat(64),
+    invoice,
+  }, "FINAL");
+  for (const result of [invoiceResult, creditResult]) {
+    assert.equal(result.pageCount, 1);
+    assert.doesNotMatch(decodedPdfPageText(result.bytes).join("\n"), /DOCUMENT QA|DOCUMENT DE TEST|SANS VALEUR COMPTABLE/);
+  }
 });
 
 test("long invoices paginate naturally and repeat the safe footer on every real page", async () => {

@@ -1,6 +1,6 @@
 # Facturation LNX STUDIO — fondation Phase 4B
 
-> Fondation locale/QA. Les PDFs portent « DOCUMENT QA — SANS VALEUR COMPTABLE ». Aucun document Phase 4B n’est activé en Production.
+Les documents émis depuis un `Payment.mode=LIVE` sont présentés comme factures ou avoirs comptables finaux, avec le même statut en HTML et PDF. Les documents issus d'un paiement `TEST`, les fixtures et les previews conservent « DOCUMENT DE TEST — SANS VALEUR COMPTABLE ». Le renderer décide exclusivement depuis le mode persistant du paiement : ni `NODE_ENV` ni un paramètre public ne peuvent promouvoir un document de test.
 
 ## Déclencheur et atomicité
 
@@ -49,4 +49,4 @@ Factures, avoirs et pièces comptables : dix ans. Les purges de compte doivent l
 7. Tester un avoir partiel puis total, idempotence et borne cumulée.
 8. Vérifier sauvegarde/restauration et conservation dix ans.
 9. Vérifier les obligations de facturation électronique avant ouverture.
-10. N’activer les documents sans watermark qu’après décision humaine explicite.
+10. Vérifier qu’un document LIVE n’a aucun watermark et qu’un document TEST conserve son marquage, en HTML comme en PDF.

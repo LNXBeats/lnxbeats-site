@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAuthSession } from "@/lib/auth/session";
 import { isActiveStatus } from "@/lib/auth/roles";
 import { generateInvoicePdf } from "@/lib/billing/pdf";
+import { billingDocumentRenderMode } from "@/lib/billing/presentation";
 import { getInvoiceForAdmin, getInvoiceForMember } from "@/lib/billing/service";
 import { prisma } from "@/lib/prisma";
 
@@ -20,7 +21,7 @@ export async function GET(_request: Request, context: { params: Promise<{ invoic
     ? await getInvoiceForAdmin(invoiceNumber)
     : await getInvoiceForMember(invoiceNumber, session.user.id);
   if (!invoice) return NextResponse.json({ ok: false }, { status: 404 });
-  const pdf = await generateInvoicePdf(invoice, true);
+  const pdf = await generateInvoicePdf(invoice, billingDocumentRenderMode(invoice.payment.mode));
   await prisma.billingAuditEvent.create({ data: { invoiceId: invoice.id, actorUserId: session.user.id, action: "INVOICE_PDF_GENERATED" } });
   return new NextResponse(new Uint8Array(pdf.bytes), {
     status: 200,
