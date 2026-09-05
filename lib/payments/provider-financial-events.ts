@@ -6,14 +6,52 @@ import type { Prisma } from "@/generated/prisma/client";
 
 import { enqueueOrderNotification } from "@/lib/notifications/service";
 import { issueCreditNoteForRefund } from "@/lib/billing/service";
-import { paypalCentsFromAmount, paypalRefundEvidence } from "@/lib/payments/paypal-client";
+import {
+  paypalCentsFromAmount,
+  paypalRefundApplicationReference,
+  paypalRefundEvidence,
+} from "@/lib/payments/paypal-client";
+import {
+  deferredShopRefundLifecycleKey,
+} from "@/lib/payments/provider-refund-receipt";
 import { paymentStatusAfterRefund, refundableAmount, type RefundProviderEvidence } from "@/lib/payments/refund";
 import type { VerifiedPaypalWebhookEvent } from "@/lib/payments/paypal-webhook";
 import type { StripeWebhookProcessingResult, VerifiedStripeWebhookEvent } from "@/lib/payments/webhook";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import {
+  applyShopReturnRefundEvidenceInTransaction,
+  type ShopRefundEvidence,
+} from "@/lib/shop/after-sales-service";
+import {
+  applyShopCustomerCancellationEvidenceInTransaction,
+  type ShopCustomerCancellationEvidence,
+} from "@/lib/shop/refund-finalization-service";
+import { lockShopOrderForMutation, lockShopRefundCapacity } from "@/lib/shop/order-coordination";
+import { persistShopRefundFinalizationReview } from "@/lib/shop/refund-accounting-safety";
+import { lockShopRefundAttemptForMutation } from "@/lib/shop/refund-coordination";
 
 type Transaction = Prisma.TransactionClient;
 type Provider = "STRIPE" | "PAYPAL";
+type RefundEventEvidence = RefundProviderEvidence & Readonly<{
+  eventId: string;
+  eventType: string;
+  stripeApplicationMetadata?: Readonly<{
+    present: boolean;
+    paymentId: string | null;
+    refundAttemptId: string | null;
+  }>;
+  paypalApplicationReference?: Readonly<{
+    present: boolean;
+    value: string | null;
+  }>;
+}>;
+
+function prevalidatedShopRefundEvidence(input: RefundEventEvidence): ShopRefundEvidence {
+  // Only call this after correlateExpectedShopRefund has validated the signed
+  // provider event against the exact authorized attempt (or after a durable
+  // API/retrieve binding under the shared mutation lock).
+  return { ...input, applicationCorrelation: "MATCH" };
+}
 type IncidentInput = Readonly<{
   provider: Provider;
   eventId: string;
@@ -49,6 +87,7 @@ const stripeIncidentEvents = new Set([
   "charge.dispute.funds_reinstated",
 ]);
 const SHOP_FINANCIAL_REVIEW_CODE = "SHOP_PROVIDER_FINANCIAL_EVENT_REVIEW" as const;
+const internalId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -71,6 +110,24 @@ function eventDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+class CorrelatedShopRefundFinalizationError extends Error {
+  override readonly name = "CorrelatedShopRefundFinalizationError";
+
+  constructor(
+    readonly attemptId: string,
+    override readonly cause: unknown,
+  ) {
+    super("Correlated Shop refund finalization failed.", { cause });
+  }
+}
+
+function transactionFailureCode(error: unknown) {
+  const cause = error instanceof CorrelatedShopRefundFinalizationError
+    ? error.cause
+    : error;
+  return cause && typeof cause === "object" && "code" in cause ? cause.code : null;
+}
+
 async function withEventTransaction<T>(operation: (transaction: Transaction) => Promise<T>) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -78,7 +135,8 @@ async function withEventTransaction<T>(operation: (transaction: Transaction) => 
       return await prisma.$transaction(operation, { isolationLevel: "ReadCommitted" });
     } catch (error) {
       lastError = error;
-      if (!error || typeof error !== "object" || !("code" in error) || (error.code !== "P2034" && error.code !== "P2002")) throw error;
+      const code = transactionFailureCode(error);
+      if (code !== "P2034" && code !== "P2002") throw error;
     }
   }
   throw lastError;
@@ -134,10 +192,9 @@ function shopFinancialLifecycleKey(paymentId: string, provider: Provider, eventI
 }
 
 /**
- * Refunds, reversals and disputes are intentionally not automated for Shop
- * payments in Phase 3. A signed provider event still becomes durable evidence
- * and atomically closes fulfillment behind the same order lock used by the
- * Admin PREPARING/SHIPPED transitions.
+ * Unmatched, incoherent or non-refund Shop financial events remain durable
+ * review evidence and close fulfillment behind the shared order lock. Expected
+ * customer-cancellation refunds take the correlated finalization path below.
  */
 async function recordShopFinancialReview(
   transaction: Transaction,
@@ -148,23 +205,12 @@ async function recordShopFinancialReview(
     objectId?: string;
     paymentId: string;
     shopOrderId: string;
+    refundAttemptId?: string;
     occurredAt: Date;
     livemode: boolean;
   }>,
 ) {
-  await lock(transaction, `shop-payments:order:${input.shopOrderId}`);
-  const rows = await transaction.$queryRaw<Array<{
-    id: string;
-    paymentReviewAt: Date | null;
-    paymentReviewCode: string | null;
-  }>>`
-    SELECT "id", "paymentReviewAt", "paymentReviewCode"
-    FROM "shop_orders"
-    WHERE "id" = ${input.shopOrderId}::uuid
-    FOR UPDATE
-  `;
-  const order = rows[0];
-  if (!order) {
+  if (!await lockShopOrderForMutation(transaction, input.shopOrderId)) {
     return createReceipt(transaction, {
       provider: input.provider,
       eventId: input.eventId,
@@ -172,10 +218,15 @@ async function recordShopFinancialReview(
       objectId: input.objectId,
       outcome: "REQUIRES_REVIEW",
       paymentId: input.paymentId,
+      refundAttemptId: input.refundAttemptId,
       occurredAt: input.occurredAt,
       livemode: input.livemode,
     });
   }
+  const order = await transaction.shopOrder.findUniqueOrThrow({
+    where: { id: input.shopOrderId },
+    select: { paymentReviewAt: true, paymentReviewCode: true },
+  });
   // Persist the signed receipt before the review mutation. Both writes remain
   // atomic; a later failure rolls the receipt back with the transaction.
   const receipt = await createReceipt(transaction, {
@@ -185,6 +236,7 @@ async function recordShopFinancialReview(
     objectId: input.objectId,
     outcome: "REQUIRES_REVIEW",
     paymentId: input.paymentId,
+    refundAttemptId: input.refundAttemptId,
     occurredAt: input.occurredAt,
     livemode: input.livemode,
   });
@@ -209,6 +261,7 @@ async function recordShopFinancialReview(
         provider: input.provider,
         reviewCode: SHOP_FINANCIAL_REVIEW_CODE,
         category: "PROVIDER_FINANCIAL_EVENT",
+        ...(input.refundAttemptId ? { refundAttemptId: input.refundAttemptId } : {}),
       },
       occurredAt: input.occurredAt,
     },
@@ -224,6 +277,7 @@ async function recordReview(input: Readonly<{
   type: string;
   providerPaymentId?: string;
   objectId?: string;
+  refundAttemptId?: string;
   occurredAt: Date;
   livemode: boolean;
 }>) {
@@ -249,6 +303,7 @@ async function recordReview(input: Readonly<{
         objectId: input.objectId,
         paymentId: payment.id,
         shopOrderId: payment.shopOrderId,
+        refundAttemptId: input.refundAttemptId,
         occurredAt: input.occurredAt,
         livemode: input.livemode,
       });
@@ -260,37 +315,701 @@ async function recordReview(input: Readonly<{
       objectId: input.objectId,
       outcome: "REQUIRES_REVIEW",
       paymentId: payment?.id,
+      refundAttemptId: input.refundAttemptId,
       occurredAt: input.occurredAt,
       livemode: input.livemode,
     });
   });
 }
 
-async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eventId: string; eventType: string; livemode: boolean }>) {
-  assertDatabaseConfigured();
+/**
+ * A correlated provider success whose local finalization rolled back already
+ * has a durable RefundAttempt barrier. Record the signed evidence without
+ * setting the unrelated Shop payment-review gate, so explicit reconciliation
+ * can retry accounting while fulfillment remains blocked by that attempt.
+ */
+async function recordCorrelatedShopRefundEvidence(
+  input: RefundEventEvidence & Readonly<{ livemode: boolean }>,
+  refundAttemptId: string,
+  outcome: "PROCESSED" | "REQUIRES_REVIEW",
+) {
   return withEventTransaction(async (transaction) => {
     await lock(transaction, `payments:webhook:event:${input.provider}:${input.eventId}`);
     const seen = await duplicate(transaction, input.provider, input.eventId);
     if (seen) return result(seen.outcome, true);
     const payment = await transaction.payment.findUnique({
       where: {
-        provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId },
+        provider_providerPaymentId: {
+          provider: input.provider,
+          providerPaymentId: input.providerPaymentId,
+        },
         mode: input.livemode ? "LIVE" : "TEST",
       },
-      include: { order: true, invoice: { select: { id: true } } },
+      select: { id: true },
     });
-    if (payment?.shopOrderId && !payment.orderId) {
-      return recordShopFinancialReview(transaction, {
+    return createReceipt(transaction, {
+      provider: input.provider,
+      eventId: input.eventId,
+      type: input.eventType,
+      objectId: input.providerRefundId,
+      outcome,
+      paymentId: payment?.id,
+      refundAttemptId,
+      occurredAt: input.occurredAt,
+      livemode: input.livemode,
+    });
+  });
+}
+
+type ShopRefundAttemptCandidate = Readonly<{
+  id: string;
+  paymentId: string;
+  provider: Provider;
+  source: "ADMIN" | "PROVIDER";
+  amountCents: number;
+  currency: string;
+  requestedByUserId: string | null;
+  shopCustomerRequestId: string | null;
+  shopReturnRequestId: string | null;
+  providerRefundId: string | null;
+  providerIdempotencyKey: string;
+  failureCode: string | null;
+  status: "PROCESSING" | "PENDING" | "SUCCEEDED" | "FAILED" | "REQUIRES_REVIEW";
+  shopCustomerRequest: Readonly<{
+    shopOrderId: string;
+    type: string;
+    status: string;
+    decidedByUserId: string | null;
+    decidedAt: Date | null;
+  }> | null;
+  shopReturnRequest: Readonly<{
+    shopOrderId: string;
+    status: string;
+    refundStatus: string;
+    totalRefundCents: number;
+    reviewedByUserId: string | null;
+    authorizedAt: Date | null;
+    refundRequestedAt: Date | null;
+  }> | null;
+}>;
+
+type ShopRefundCorrelation =
+  | Readonly<{ outcome: "MATCH"; attemptId: string; operation: "CANCELLATION" | "RETURN" }>
+  | Readonly<{ outcome: "DEFER"; attemptId: string; operation: "CANCELLATION" | "RETURN" }>
+  | Readonly<{ outcome: "REVIEW"; refundAttemptId?: string }>;
+
+const shopRefundAttemptInclude = {
+  shopCustomerRequest: {
+    select: {
+      shopOrderId: true,
+      type: true,
+      status: true,
+      decidedByUserId: true,
+      decidedAt: true,
+    },
+  },
+  shopReturnRequest: {
+    select: {
+      shopOrderId: true,
+      status: true,
+      refundStatus: true,
+      totalRefundCents: true,
+      reviewedByUserId: true,
+      authorizedAt: true,
+      refundRequestedAt: true,
+    },
+  },
+} as const;
+
+function authorizedShopRefundBase(
+  attempt: ShopRefundAttemptCandidate,
+  payment: Readonly<{
+    id: string;
+    shopOrderId: string | null;
+    provider: Provider;
+    providerPaymentId: string | null;
+    amountCents: number;
+    currency: string;
+  }>,
+  evidence: RefundEventEvidence,
+) {
+  return attempt.paymentId === payment.id
+    && attempt.provider === evidence.provider
+    && attempt.provider === payment.provider
+    && attempt.source === "ADMIN"
+    && attempt.requestedByUserId !== null
+    && attempt.currency === evidence.currency
+    && attempt.currency === payment.currency
+    && attempt.amountCents === evidence.amountCents
+    && attempt.amountCents > 0
+    && attempt.amountCents <= payment.amountCents
+    && evidence.providerPaymentId === payment.providerPaymentId
+    && (attempt.providerRefundId === null || attempt.providerRefundId === evidence.providerRefundId);
+}
+
+function authorizedShopRefundOperation(
+  attempt: ShopRefundAttemptCandidate,
+  payment: Parameters<typeof authorizedShopRefundBase>[1],
+  evidence: RefundEventEvidence,
+) {
+  if (!authorizedShopRefundBase(attempt, payment, evidence)) return null;
+  const cancellation = attempt.shopCustomerRequest;
+  if (
+    attempt.shopCustomerRequestId !== null
+    && attempt.shopReturnRequestId === null
+    && cancellation !== null
+    && attempt.amountCents === payment.amountCents
+    && cancellation.shopOrderId === payment.shopOrderId
+    && cancellation.type === "PAID_ORDER_CANCELLATION"
+    && (cancellation.status === "APPROVED" || cancellation.status === "COMPLETED")
+    && cancellation.decidedByUserId !== null
+    && cancellation.decidedByUserId === attempt.requestedByUserId
+    && cancellation.decidedAt !== null
+  ) return "CANCELLATION" as const;
+
+  const shopReturn = attempt.shopReturnRequest;
+  if (
+    attempt.shopReturnRequestId !== null
+    && attempt.shopCustomerRequestId === null
+    && shopReturn !== null
+    && shopReturn.shopOrderId === payment.shopOrderId
+    && ["REFUND_PENDING", "REFUNDED", "CLOSED"].includes(shopReturn.status)
+    && ["PENDING", "REQUIRES_REVIEW", "SUCCEEDED", "FAILED"].includes(shopReturn.refundStatus)
+    && shopReturn.totalRefundCents === attempt.amountCents
+    && shopReturn.reviewedByUserId !== null
+    && shopReturn.authorizedAt !== null
+    && shopReturn.refundRequestedAt !== null
+  ) return "RETURN" as const;
+  return null;
+}
+
+function stripeMetadataMatches(
+  evidence: RefundEventEvidence,
+  paymentId: string,
+  attemptId: string,
+) {
+  const metadata = evidence.stripeApplicationMetadata;
+  return !metadata?.present
+    || metadata.paymentId === paymentId && metadata.refundAttemptId === attemptId;
+}
+
+function paypalReferenceMatches(
+  evidence: RefundEventEvidence,
+  providerIdempotencyKey: string,
+) {
+  const reference = evidence.paypalApplicationReference;
+  return !reference?.present
+    || reference.value === paypalRefundApplicationReference(providerIdempotencyKey);
+}
+
+async function correlateExpectedShopRefund(
+  transaction: Transaction,
+  payment: Readonly<{
+    id: string;
+    shopOrderId: string | null;
+    provider: Provider;
+    providerPaymentId: string | null;
+    amountCents: number;
+    currency: string;
+  }>,
+  evidence: RefundEventEvidence,
+): Promise<ShopRefundCorrelation> {
+  if (!payment.shopOrderId) return { outcome: "REVIEW" };
+  const exact = await transaction.refundAttempt.findUnique({
+    where: {
+      provider_providerRefundId: {
+        provider: evidence.provider,
+        providerRefundId: evidence.providerRefundId,
+      },
+    },
+    include: shopRefundAttemptInclude,
+  });
+  if (exact) {
+    const linkedAttemptId = exact.paymentId === payment.id ? exact.id : undefined;
+    const operation = authorizedShopRefundOperation(exact, payment, evidence);
+    const applicationProofPresent = evidence.provider === "STRIPE"
+      ? evidence.stripeApplicationMetadata?.present === true
+      : evidence.paypalApplicationReference?.present === true;
+    if (operation && !applicationProofPresent) {
+      const trustedBinding = await transaction.paymentAuditEvent.findFirst({
+        where: {
+          refundAttemptId: exact.id,
+          action: { in: ["REFUND_PROVIDER_ACCEPTED", "REFUND_CONFIRMED", "REFUND_FAILED"] },
+        },
+        select: { id: true },
+      });
+      if (!trustedBinding && activeRefundStatuses.includes(
+        exact.status as typeof activeRefundStatuses[number],
+      )) {
+        return { outcome: "DEFER", attemptId: exact.id, operation };
+      }
+      if (!trustedBinding) {
+        return { outcome: "REVIEW", ...(linkedAttemptId ? { refundAttemptId: linkedAttemptId } : {}) };
+      }
+    }
+    return operation
+      && stripeMetadataMatches(evidence, payment.id, exact.id)
+      && paypalReferenceMatches(evidence, exact.providerIdempotencyKey)
+      ? { outcome: "MATCH", attemptId: exact.id, operation }
+      : { outcome: "REVIEW", ...(linkedAttemptId ? { refundAttemptId: linkedAttemptId } : {}) };
+  }
+
+  const findActiveCandidates = () => transaction.refundAttempt.findMany({
+    where: {
+      paymentId: payment.id,
+      provider: evidence.provider,
+      source: "ADMIN",
+      providerRefundId: null,
+      status: { in: [...activeRefundStatuses] },
+      requestedByUserId: { not: null },
+    },
+    include: shopRefundAttemptInclude,
+    orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+  });
+
+  if (evidence.provider === "STRIPE") {
+    const metadata = evidence.stripeApplicationMetadata;
+    if (!metadata?.present) {
+      const candidates = await findActiveCandidates();
+      const eligible = candidates.flatMap((candidate) => {
+        const operation = authorizedShopRefundOperation(candidate, payment, evidence);
+        return operation ? [{ candidate, operation }] : [];
+      });
+      return eligible.length === 1
+        ? {
+            outcome: "DEFER",
+            attemptId: eligible[0]!.candidate.id,
+            operation: eligible[0]!.operation,
+          }
+        : { outcome: "REVIEW" };
+    }
+    if (
+      !metadata.paymentId
+      || !metadata.refundAttemptId
+      || !internalId.test(metadata.paymentId)
+      || !internalId.test(metadata.refundAttemptId)
+      || metadata.paymentId !== payment.id
+    ) return { outcome: "REVIEW" };
+    const candidate = await transaction.refundAttempt.findUnique({
+      where: { id: metadata.refundAttemptId },
+      include: shopRefundAttemptInclude,
+    });
+    const operation = candidate
+      ? authorizedShopRefundOperation(candidate, payment, evidence)
+      : null;
+    if (!candidate || !operation) {
+      return {
+        outcome: "REVIEW",
+        ...(candidate?.paymentId === payment.id ? { refundAttemptId: candidate.id } : {}),
+      };
+    }
+    return { outcome: "MATCH", attemptId: candidate.id, operation };
+  }
+
+  const reference = evidence.paypalApplicationReference;
+  const candidates = reference?.present
+    ? await transaction.refundAttempt.findMany({
+        where: {
+          paymentId: payment.id,
+          provider: evidence.provider,
+          source: "ADMIN",
+          providerRefundId: null,
+          requestedByUserId: { not: null },
+        },
+        include: shopRefundAttemptInclude,
+        orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }],
+      })
+    : await findActiveCandidates();
+  const eligible = candidates.flatMap((candidate) => {
+    const operation = authorizedShopRefundOperation(candidate, payment, evidence);
+    return operation ? [{ candidate, operation }] : [];
+  });
+  if (!reference?.present) {
+    return eligible.length === 1
+      ? {
+          outcome: "DEFER",
+          attemptId: eligible[0]!.candidate.id,
+          operation: eligible[0]!.operation,
+        }
+      : { outcome: "REVIEW" };
+  }
+  if (!reference.value) return { outcome: "REVIEW" };
+  const referenced = eligible.filter(({ candidate }) =>
+    paypalRefundApplicationReference(candidate.providerIdempotencyKey) === reference.value);
+  return referenced.length === 1
+    ? {
+        outcome: "MATCH",
+        attemptId: referenced[0]!.candidate.id,
+        operation: referenced[0]!.operation,
+      }
+    : { outcome: "REVIEW" };
+}
+
+async function recordDeferredShopRefundEvidence(
+  transaction: Transaction,
+  input: RefundEventEvidence & Readonly<{ livemode: boolean }>,
+  payment: Readonly<{ id: string; shopOrderId: string }>,
+  refundAttemptId: string,
+  operation: "CANCELLATION" | "RETURN",
+) {
+  await lockShopOrderForMutation(transaction, payment.shopOrderId);
+  if (operation === "RETURN") {
+    await lockShopRefundAttemptForMutation(transaction, refundAttemptId);
+  }
+  await lockShopRefundCapacity(transaction, payment.id);
+  const currentPayment = await transaction.payment.findUniqueOrThrow({
+    where: { id: payment.id },
+    select: {
+      id: true,
+      shopOrderId: true,
+      provider: true,
+      providerPaymentId: true,
+      amountCents: true,
+      currency: true,
+    },
+  });
+  const attempt = await transaction.refundAttempt.findUniqueOrThrow({
+    where: { id: refundAttemptId },
+    include: shopRefundAttemptInclude,
+  });
+  if (attempt.status === "SUCCEEDED" || attempt.status === "FAILED") {
+    const terminalEvidenceMatches = attempt.providerRefundId === input.providerRefundId
+      && (
+        attempt.status === "SUCCEEDED" && input.status !== "FAILED"
+        || attempt.status === "FAILED" && input.status === "FAILED"
+      );
+    if (terminalEvidenceMatches) {
+      return createReceipt(transaction, {
         provider: input.provider,
         eventId: input.eventId,
         type: input.eventType,
         objectId: input.providerRefundId,
+        outcome: "PROCESSED",
         paymentId: payment.id,
-        shopOrderId: payment.shopOrderId,
+        refundAttemptId,
         occurredAt: input.occurredAt,
         livemode: input.livemode,
       });
     }
+
+    // Correlation was computed before this lock. If the provider/API path made
+    // the attempt terminal while the webhook waited, contradictory signed
+    // evidence must restore a durable shipping/refund barrier rather than
+    // leaving a certainly-failed attempt expeditable.
+    await transaction.refundAttempt.update({
+      where: { id: refundAttemptId },
+      data: attempt.status === "FAILED"
+        ? {
+            status: "REQUIRES_REVIEW",
+            failureCode: "REFUND_STATUS_CONFLICT",
+            ...(attempt.providerRefundId === input.providerRefundId && input.status === "SUCCEEDED"
+              ? { confirmedAt: input.occurredAt }
+              : {}),
+          }
+        : { failureCode: "REFUND_STATUS_CONFLICT" },
+    });
+    await transaction.payment.update({
+      where: { id: payment.id },
+      data: { status: "REFUND_PENDING" },
+    });
+    const audited = await transaction.paymentAuditEvent.findFirst({
+      where: { refundAttemptId, action: "REFUND_RECONCILIATION_REQUIRED" },
+      select: { id: true },
+    });
+    if (!audited) await transaction.paymentAuditEvent.create({ data: {
+      paymentId: payment.id,
+      refundAttemptId,
+      provider: attempt.provider,
+      action: "REFUND_RECONCILIATION_REQUIRED",
+      amountCents: attempt.amountCents,
+      result: "REQUIRES_REVIEW",
+    } });
+    if (operation === "RETURN" && attempt.shopReturnRequestId) {
+      await transaction.shopReturnRequest.update({
+        where: { id: attempt.shopReturnRequestId },
+        data: { refundStatus: "REQUIRES_REVIEW" },
+      });
+      await transaction.shopReturnAuditEvent.upsert({
+        where: { idempotencyKey: `shop-return:${attempt.shopReturnRequestId}:refund-review:status-conflict:v1` },
+        update: {},
+        create: {
+          shopReturnRequestId: attempt.shopReturnRequestId,
+          action: "REFUND_REQUIRES_REVIEW",
+          idempotencyKey: `shop-return:${attempt.shopReturnRequestId}:refund-review:status-conflict:v1`,
+        },
+      });
+    }
+    return recordShopFinancialReview(transaction, {
+      provider: input.provider,
+      eventId: input.eventId,
+      type: input.eventType,
+      objectId: input.providerRefundId,
+      paymentId: payment.id,
+      shopOrderId: payment.shopOrderId,
+      refundAttemptId,
+      occurredAt: input.occurredAt,
+      livemode: input.livemode,
+    });
+  }
+  if (attempt.providerRefundId && attempt.providerRefundId !== input.providerRefundId) {
+    return recordShopFinancialReview(transaction, {
+      provider: input.provider,
+      eventId: input.eventId,
+      type: input.eventType,
+      objectId: input.providerRefundId,
+      paymentId: payment.id,
+      shopOrderId: payment.shopOrderId,
+      refundAttemptId,
+      occurredAt: input.occurredAt,
+      livemode: input.livemode,
+    });
+  }
+  const candidates = await transaction.refundAttempt.findMany({
+    where: {
+      paymentId: currentPayment.id,
+      provider: input.provider,
+      source: "ADMIN",
+      requestedByUserId: { not: null },
+      status: { in: [...activeRefundStatuses] },
+      OR: [
+        { providerRefundId: null },
+        { providerRefundId: input.providerRefundId },
+      ],
+    },
+    include: shopRefundAttemptInclude,
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  const authorized = candidates.flatMap((candidate) => {
+    const currentOperation = authorizedShopRefundOperation(candidate, currentPayment, input);
+    return currentOperation ? [{ candidate, operation: currentOperation }] : [];
+  });
+  if (
+    authorized.length !== 1
+    || authorized[0]!.candidate.id !== refundAttemptId
+    || authorized[0]!.operation !== operation
+  ) {
+    return recordShopFinancialReview(transaction, {
+      provider: input.provider,
+      eventId: input.eventId,
+      type: input.eventType,
+      objectId: input.providerRefundId,
+      paymentId: payment.id,
+      shopOrderId: payment.shopOrderId,
+      occurredAt: input.occurredAt,
+      livemode: input.livemode,
+    });
+  }
+  const trustedProviderBinding = attempt.status === "PENDING"
+    && attempt.failureCode === null
+    && attempt.providerRefundId === input.providerRefundId
+    && await transaction.paymentAuditEvent.findFirst({
+      where: { refundAttemptId, action: "REFUND_PROVIDER_ACCEPTED" },
+      select: { id: true },
+    });
+  if (trustedProviderBinding) {
+    try {
+      const evidence = prevalidatedShopRefundEvidence(input);
+      const finalization = operation === "CANCELLATION"
+        ? await applyShopCustomerCancellationEvidenceInTransaction(
+            transaction,
+            refundAttemptId,
+            evidence satisfies ShopCustomerCancellationEvidence,
+          )
+        : (await applyShopReturnRefundEvidenceInTransaction(
+            transaction,
+            refundAttemptId,
+            evidence,
+          )).status;
+      return await createReceipt(transaction, {
+        provider: input.provider,
+        eventId: input.eventId,
+        type: input.eventType,
+        objectId: input.providerRefundId,
+        outcome: finalization === "REQUIRES_REVIEW" ? "REQUIRES_REVIEW" : "PROCESSED",
+        paymentId: payment.id,
+        refundAttemptId,
+        occurredAt: input.occurredAt,
+        livemode: input.livemode,
+      });
+    } catch (error) {
+      throw new CorrelatedShopRefundFinalizationError(refundAttemptId, error);
+    }
+  }
+  if (
+    attempt.status !== "REQUIRES_REVIEW"
+    || attempt.failureCode === null
+  ) {
+    await transaction.refundAttempt.update({
+      where: { id: refundAttemptId },
+      data: {
+        status: "REQUIRES_REVIEW",
+        failureCode: attempt.failureCode ?? "PROVIDER_EVENT_CORRELATION_DEFERRED",
+      },
+    });
+  }
+  await transaction.payment.update({
+    where: { id: payment.id },
+    data: { status: "REFUND_PENDING" },
+  });
+  const audited = await transaction.paymentAuditEvent.findFirst({
+    where: { refundAttemptId, action: "REFUND_RECONCILIATION_REQUIRED" },
+    select: { id: true },
+  });
+  if (!audited) await transaction.paymentAuditEvent.create({ data: {
+    paymentId: payment.id,
+    refundAttemptId,
+    provider: attempt.provider,
+    action: "REFUND_RECONCILIATION_REQUIRED",
+    amountCents: attempt.amountCents,
+    result: "REQUIRES_REVIEW",
+  } });
+  if (operation === "RETURN" && attempt.shopReturnRequestId) {
+    await transaction.shopReturnRequest.update({
+      where: { id: attempt.shopReturnRequestId },
+      data: { refundStatus: "REQUIRES_REVIEW" },
+    });
+    await transaction.shopReturnAuditEvent.upsert({
+      where: { idempotencyKey: `shop-return:${attempt.shopReturnRequestId}:refund-review:deferred-event:v1` },
+      update: {},
+      create: {
+        shopReturnRequestId: attempt.shopReturnRequestId,
+        action: "REFUND_REQUIRES_REVIEW",
+        idempotencyKey: `shop-return:${attempt.shopReturnRequestId}:refund-review:deferred-event:v1`,
+      },
+    });
+  }
+  await transaction.shopOrderLifecycleEvent.upsert({
+    where: {
+      idempotencyKey: deferredShopRefundLifecycleKey(
+        payment.id,
+        input.provider,
+        input.eventId,
+      ),
+    },
+    update: {},
+    create: {
+      shopOrderId: payment.shopOrderId,
+      paymentId: payment.id,
+      type: "SHOP_PAYMENT_REQUIRES_REVIEW",
+      idempotencyKey: deferredShopRefundLifecycleKey(
+        payment.id,
+        input.provider,
+        input.eventId,
+      ),
+      metadata: {
+        category: "DEFERRED_PROVIDER_REFUND_CORRELATION",
+        refundAttemptId,
+        provider: input.provider,
+        providerEventId: input.eventId,
+        providerRefundId: input.providerRefundId,
+        providerStatus: input.status,
+        amountCents: input.amountCents,
+        currency: input.currency,
+      },
+      occurredAt: input.occurredAt,
+    },
+  });
+  return createReceipt(transaction, {
+    provider: input.provider,
+    eventId: input.eventId,
+    type: input.eventType,
+    objectId: input.providerRefundId,
+    outcome: "REQUIRES_REVIEW",
+    paymentId: payment.id,
+    refundAttemptId,
+    occurredAt: input.occurredAt,
+    livemode: input.livemode,
+  });
+}
+
+async function processRefundEvent(input: RefundEventEvidence & Readonly<{ livemode: boolean }>) {
+  assertDatabaseConfigured();
+  try {
+    return await withEventTransaction(async (transaction) => {
+      await lock(transaction, `payments:webhook:event:${input.provider}:${input.eventId}`);
+      const seen = await duplicate(transaction, input.provider, input.eventId);
+      if (seen) return result(seen.outcome, true);
+      const payment = await transaction.payment.findUnique({
+        where: {
+          provider_providerPaymentId: { provider: input.provider, providerPaymentId: input.providerPaymentId },
+          mode: input.livemode ? "LIVE" : "TEST",
+        },
+        include: { order: true, invoice: { select: { id: true } } },
+      });
+      if (payment?.shopOrderId && !payment.orderId) {
+        const correlation = await correlateExpectedShopRefund(transaction, payment, input);
+        if (correlation.outcome === "REVIEW") {
+          return recordShopFinancialReview(transaction, {
+            provider: input.provider,
+            eventId: input.eventId,
+            type: input.eventType,
+            objectId: input.providerRefundId,
+            paymentId: payment.id,
+            shopOrderId: payment.shopOrderId,
+            refundAttemptId: correlation.refundAttemptId,
+            occurredAt: input.occurredAt,
+            livemode: input.livemode,
+          });
+        }
+        if (correlation.outcome === "DEFER") {
+          return recordDeferredShopRefundEvidence(
+            transaction,
+            input,
+            { id: payment.id, shopOrderId: payment.shopOrderId },
+            correlation.attemptId,
+            correlation.operation,
+          );
+        }
+        try {
+          const evidence = prevalidatedShopRefundEvidence(input);
+          const finalization = correlation.operation === "CANCELLATION"
+            ? await applyShopCustomerCancellationEvidenceInTransaction(
+                transaction,
+                correlation.attemptId,
+                evidence satisfies ShopCustomerCancellationEvidence,
+              )
+            : (await applyShopReturnRefundEvidenceInTransaction(
+                transaction,
+                correlation.attemptId,
+                evidence,
+              )).status;
+          if (finalization === "REQUIRES_REVIEW") {
+            const reviewedAttempt = await transaction.refundAttempt.findUniqueOrThrow({
+              where: { id: correlation.attemptId },
+              select: { failureCode: true },
+            });
+            const correlatedPendingEvidenceProcessed = input.status === "PENDING"
+              && (
+                reviewedAttempt.failureCode === "AMBIGUOUS_PROVIDER_ACCEPTANCE"
+                || reviewedAttempt.failureCode === "PROVIDER_ACCEPTED_LOCAL_FINALIZATION_FAILED"
+              );
+            return await createReceipt(transaction, {
+              provider: input.provider,
+              eventId: input.eventId,
+              type: input.eventType,
+              objectId: input.providerRefundId,
+              outcome: correlatedPendingEvidenceProcessed ? "PROCESSED" : "REQUIRES_REVIEW",
+              paymentId: payment.id,
+              refundAttemptId: correlation.attemptId,
+              occurredAt: input.occurredAt,
+              livemode: input.livemode,
+            });
+          }
+          return await createReceipt(transaction, {
+            provider: input.provider,
+            eventId: input.eventId,
+            type: input.eventType,
+            objectId: input.providerRefundId,
+            outcome: "PROCESSED",
+            paymentId: payment.id,
+            refundAttemptId: correlation.attemptId,
+            occurredAt: input.occurredAt,
+            livemode: input.livemode,
+          });
+        } catch (error) {
+          throw new CorrelatedShopRefundFinalizationError(correlation.attemptId, error);
+        }
+      }
     if (
       !payment
       || payment.shopOrderId
@@ -445,7 +1164,30 @@ async function processRefundEvent(input: RefundProviderEvidence & Readonly<{ eve
       objectId: input.providerRefundId, outcome: "PROCESSED",
       paymentId: payment.id, refundAttemptId: attempt.id, occurredAt: input.occurredAt, livemode: input.livemode,
     });
-  });
+    });
+  } catch (error) {
+    if (!(error instanceof CorrelatedShopRefundFinalizationError)) {
+      throw error;
+    }
+    const persistedStatus = await persistShopRefundFinalizationReview(
+      prisma,
+      error.attemptId,
+      prevalidatedShopRefundEvidence(input),
+    );
+    const persisted = await prisma.refundAttempt.findUnique({
+      where: { id: error.attemptId },
+      select: { failureCode: true },
+    });
+    const locallyPersistedEvidence = persistedStatus === "SUCCEEDED"
+      || persistedStatus === "FAILED"
+      || persisted?.failureCode === "PROVIDER_ACCEPTED_LOCAL_FINALIZATION_FAILED"
+      || persisted?.failureCode === "PROVIDER_FAILED_LOCAL_FINALIZATION_FAILED";
+    return recordCorrelatedShopRefundEvidence(
+      input,
+      error.attemptId,
+      locallyPersistedEvidence ? "PROCESSED" : "REQUIRES_REVIEW",
+    );
+  }
 }
 
 async function processIncident(input: IncidentInput) {
@@ -564,11 +1306,14 @@ async function processIncident(input: IncidentInput) {
   });
 }
 
-export function normalizeStripeRefundEvent(event: VerifiedStripeWebhookEvent): (RefundProviderEvidence & { eventId: string; eventType: string }) | null {
+export function normalizeStripeRefundEvent(event: VerifiedStripeWebhookEvent): RefundEventEvidence | null {
   if (!stripeRefundEvents.has(event.type)) return null;
   const refund = record(event.data.object);
   const paymentIntent = bounded(record(refund?.payment_intent)?.id) ?? bounded(refund?.payment_intent);
-  const status = event.type === "refund.failed" || refund?.status === "failed" || refund?.status === "canceled"
+  const metadata = record(refund?.metadata);
+  const metadataPresent = metadata !== null
+    && (Object.hasOwn(metadata, "paymentId") || Object.hasOwn(metadata, "refundAttemptId"));
+  const status = refund?.status === "failed" || refund?.status === "canceled"
     ? "FAILED"
     : refund?.status === "succeeded"
       ? "SUCCEEDED"
@@ -578,12 +1323,18 @@ export function normalizeStripeRefundEvent(event: VerifiedStripeWebhookEvent): (
   const occurredAt = eventDate(event.created);
   if (
     refund?.object !== "refund" || !bounded(refund.id) || !paymentIntent || !status || !occurredAt
+    || (event.type === "refund.failed" && status !== "FAILED")
     || !Number.isSafeInteger(refund.amount) || Number(refund.amount) <= 0 || refund.currency !== "eur"
   ) return null;
   return {
     provider: "STRIPE", providerRefundId: String(refund.id), providerPaymentId: paymentIntent,
     status, amountCents: Number(refund.amount), currency: "EUR", occurredAt,
     eventId: event.id, eventType: event.type,
+    stripeApplicationMetadata: {
+      present: metadataPresent,
+      paymentId: bounded(metadata?.paymentId),
+      refundAttemptId: bounded(metadata?.refundAttemptId),
+    },
   };
 }
 
@@ -646,16 +1397,31 @@ export function paypalFinancialProviderPaymentId(
 export function normalizePaypalRefundEvent(
   event: VerifiedPaypalWebhookEvent,
   environment: "sandbox" | "live" = "sandbox",
-): (RefundProviderEvidence & { eventId: string; eventType: string }) | null {
-  if (event.event_type !== "PAYMENT.REFUND.PENDING" && event.event_type !== "PAYMENT.REFUND.FAILED") return null;
+): RefundEventEvidence | null {
+  if (
+    event.event_type !== "PAYMENT.CAPTURE.REFUNDED"
+    && event.event_type !== "PAYMENT.REFUND.PENDING"
+    && event.event_type !== "PAYMENT.REFUND.FAILED"
+  ) return null;
   try {
+    const resource = record(event.resource);
     const evidence = paypalRefundEvidence(event.resource, environment);
+    const expectedStatus = event.event_type === "PAYMENT.CAPTURE.REFUNDED"
+      ? "SUCCEEDED"
+      : event.event_type === "PAYMENT.REFUND.FAILED"
+        ? "FAILED"
+        : "PENDING";
+    if (evidence.status !== expectedStatus) return null;
     return {
       provider: "PAYPAL", providerRefundId: evidence.providerRefundId,
       providerPaymentId: evidence.captureId,
-      status: event.event_type === "PAYMENT.REFUND.FAILED" ? "FAILED" : "PENDING",
+      status: expectedStatus,
       amountCents: evidence.amountCents, currency: "EUR", occurredAt: eventDate(event.create_time) ?? evidence.occurredAt,
       eventId: event.id, eventType: event.event_type,
+      paypalApplicationReference: {
+        present: resource ? Object.prototype.hasOwnProperty.call(resource, "invoice_id") : false,
+        value: evidence.applicationReference ?? null,
+      },
     };
   } catch {
     return null;

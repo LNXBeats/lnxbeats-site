@@ -1,6 +1,9 @@
 import "server-only";
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import type { ShopRefundApplicationCorrelation } from "@/lib/payments/provider-refund-receipt";
+import { lockShopOrderForMutation, lockShopRefundCapacity } from "@/lib/shop/order-coordination";
+import { lockShopRefundAttemptForMutation } from "@/lib/shop/refund-coordination";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -42,6 +45,8 @@ export type ShopRefundFinalizationEvidence = Readonly<{
   status: "PENDING" | "SUCCEEDED" | "FAILED";
   amountCents: number;
   currency: "EUR";
+  occurredAt?: Date;
+  applicationCorrelation: ShopRefundApplicationCorrelation;
 }>;
 
 async function inReviewTransaction<T>(
@@ -73,28 +78,86 @@ export async function persistShopRefundFinalizationReview(
   evidence: ShopRefundFinalizationEvidence,
 ) {
   return inReviewTransaction(client, async (transaction) => {
-    await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`shop-refund-finalization:${attemptId}`})) IS NULL AS locked`;
+    const identity = await transaction.refundAttempt.findUnique({
+      where: { id: attemptId },
+      select: {
+        shopCustomerRequestId: true,
+        paymentId: true,
+        payment: { select: { shopOrderId: true } },
+      },
+    });
+    if (!identity) throw new Error("SHOP_REFUND_ATTEMPT_NOT_FOUND");
+
+    // Customer cancellations share the same order boundary as every
+    // fulfillment transition. Other refund workflows keep their existing
+    // attempt-specific boundary.
+    if (identity.payment.shopOrderId) {
+      if (!await lockShopOrderForMutation(transaction, identity.payment.shopOrderId)) {
+        throw new Error("SHOP_ORDER_NOT_FOUND");
+      }
+    }
+    if (identity.shopCustomerRequestId) {
+      await lockShopRefundCapacity(transaction, identity.paymentId);
+    } else {
+      await lockShopRefundAttemptForMutation(transaction, attemptId);
+      await lockShopRefundCapacity(transaction, identity.paymentId);
+    }
+
     const attempt = await transaction.refundAttempt.findUnique({
       where: { id: attemptId },
       include: { payment: { select: { providerPaymentId: true } } },
     });
     if (!attempt) throw new Error("SHOP_REFUND_ATTEMPT_NOT_FOUND");
-    if (attempt.status === "SUCCEEDED") return "SUCCEEDED" as const;
-
-    const evidenceMatches = evidence.provider === attempt.provider
+    const providerEvidenceMatches = evidence.providerRefundId.trim().length > 0
+      && evidence.providerPaymentId.trim().length > 0
+      && Number.isSafeInteger(evidence.amountCents)
+      && evidence.amountCents > 0
+      && evidence.provider === attempt.provider
       && evidence.providerPaymentId === attempt.payment.providerPaymentId
       && evidence.amountCents === attempt.amountCents
       && evidence.currency === attempt.currency
       && (attempt.providerRefundId === null || attempt.providerRefundId === evidence.providerRefundId);
-    const failureCode = evidenceMatches
-      ? "PROVIDER_ACCEPTED_LOCAL_FINALIZATION_FAILED"
-      : "REFUND_EVIDENCE_MISMATCH";
+    const evidenceMatches = evidence.applicationCorrelation === "MATCH"
+      && providerEvidenceMatches;
+    if (
+      attempt.status === "SUCCEEDED"
+      && evidenceMatches
+      && attempt.providerRefundId === evidence.providerRefundId
+      && evidence.status !== "FAILED"
+    ) return "SUCCEEDED" as const;
+    if (
+      attempt.status === "FAILED"
+      && evidenceMatches
+      && evidence.status === "FAILED"
+    ) {
+      if (!attempt.providerRefundId) await transaction.refundAttempt.update({
+        where: { id: attempt.id },
+        data: { providerRefundId: evidence.providerRefundId },
+      });
+      return "FAILED" as const;
+    }
+
+    const terminalConflict = attempt.status === "SUCCEEDED" || attempt.status === "FAILED";
+    const failureCode = !providerEvidenceMatches
+      ? "REFUND_EVIDENCE_MISMATCH"
+      : evidence.applicationCorrelation !== "MATCH"
+        ? "REFUND_APPLICATION_CORRELATION_REQUIRED"
+        : terminalConflict
+          ? "REFUND_STATUS_CONFLICT"
+          : evidence.status === "FAILED"
+            ? "PROVIDER_FAILED_LOCAL_FINALIZATION_FAILED"
+            : "PROVIDER_ACCEPTED_LOCAL_FINALIZATION_FAILED";
 
     await transaction.refundAttempt.update({
       where: { id: attempt.id },
       data: {
-        ...(evidenceMatches ? { providerRefundId: evidence.providerRefundId } : {}),
-        status: "REQUIRES_REVIEW",
+        ...(providerEvidenceMatches ? {
+          providerRefundId: evidence.providerRefundId,
+          ...(evidence.status === "SUCCEEDED" && evidence.occurredAt
+            ? { confirmedAt: evidence.occurredAt }
+            : {}),
+        } : {}),
+        ...(attempt.status === "SUCCEEDED" ? {} : { status: "REQUIRES_REVIEW" as const }),
         failureCode,
       },
     });

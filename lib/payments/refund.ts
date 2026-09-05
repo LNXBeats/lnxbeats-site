@@ -40,6 +40,16 @@ export type RefundProviderEvidence = Readonly<{
   amountCents: number;
   currency: "EUR";
   occurredAt: Date;
+  applicationEvidence?: Readonly<{
+    kind: "STRIPE_METADATA";
+    present: boolean;
+    paymentId: string | null;
+    refundAttemptId: string | null;
+  }> | Readonly<{
+    kind: "PAYPAL_INVOICE_REFERENCE";
+    present: boolean;
+    value: string | null;
+  }>;
 }>;
 
 export interface RefundProviderGateway {
@@ -586,11 +596,31 @@ export function createRefundProviderGateway(
           input.idempotencyKey,
           { paymentId: input.paymentId, refundAttemptId: input.attemptId },
         );
-        return { provider, ...evidence, providerPaymentId: evidence.paymentIntentId };
+        return {
+          provider,
+          ...evidence,
+          providerPaymentId: evidence.paymentIntentId,
+          applicationEvidence: {
+            kind: "STRIPE_METADATA" as const,
+            present: evidence.applicationMetadata?.present === true,
+            paymentId: evidence.applicationMetadata?.paymentId ?? null,
+            refundAttemptId: evidence.applicationMetadata?.refundAttemptId ?? null,
+          },
+        };
       },
       async retrieve(providerRefundId) {
         const evidence = await gateway.retrieveRefund(providerRefundId);
-        return { provider, ...evidence, providerPaymentId: evidence.paymentIntentId };
+        return {
+          provider,
+          ...evidence,
+          providerPaymentId: evidence.paymentIntentId,
+          applicationEvidence: {
+            kind: "STRIPE_METADATA" as const,
+            present: evidence.applicationMetadata?.present === true,
+            paymentId: evidence.applicationMetadata?.paymentId ?? null,
+            refundAttemptId: evidence.applicationMetadata?.refundAttemptId ?? null,
+          },
+        };
       },
     };
   }
@@ -598,11 +628,31 @@ export function createRefundProviderGateway(
   return {
     async request(input) {
       const evidence = await gateway.refundCapture(input.providerPaymentId, input.amountCents, input.idempotencyKey);
-      return { provider, ...evidence, providerPaymentId: evidence.captureId };
+      return {
+        provider,
+        ...evidence,
+        providerPaymentId: evidence.captureId,
+        applicationEvidence: {
+          kind: "PAYPAL_INVOICE_REFERENCE" as const,
+          present: evidence.applicationReferencePresent === true
+            || typeof evidence.applicationReference === "string",
+          value: evidence.applicationReference ?? null,
+        },
+      };
     },
     async retrieve(providerRefundId) {
       const evidence = await gateway.retrieveRefund(providerRefundId);
-      return { provider, ...evidence, providerPaymentId: evidence.captureId };
+      return {
+        provider,
+        ...evidence,
+        providerPaymentId: evidence.captureId,
+        applicationEvidence: {
+          kind: "PAYPAL_INVOICE_REFERENCE" as const,
+          present: evidence.applicationReferencePresent === true
+            || typeof evidence.applicationReference === "string",
+          value: evidence.applicationReference ?? null,
+        },
+      };
     },
   };
 }

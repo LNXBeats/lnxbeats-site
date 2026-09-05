@@ -1,16 +1,36 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { fakeLocalShippingProvider } from "@/lib/shop/fake-local-shipping-provider";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import {
+  findShopCancellationBarrier,
+  lockShopOrderForMutation,
+} from "@/lib/shop/order-coordination";
 import { assertShopShippingProviderQaEnabled } from "@/lib/shop/shipping-provider-config";
 import type {
   ShippingProviderCreateInput,
+  ShippingProviderAdapter,
   ShippingProviderResult,
   ShippingProviderScenario,
 } from "@/lib/shop/shipping-provider";
 
 type Transaction = Prisma.TransactionClient;
+
+type ServiceDependencies = Readonly<{
+  client?: PrismaClient;
+  provider?: ShippingProviderAdapter;
+  assertEnabled?: () => void;
+}>;
+
+function dependencies(input: ServiceDependencies = {}) {
+  if (!input.client) assertDatabaseConfigured();
+  return {
+    client: input.client ?? prisma,
+    provider: input.provider ?? fakeLocalShippingProvider,
+    assertEnabled: input.assertEnabled ?? assertShopShippingProviderQaEnabled,
+  };
+}
 
 export class ShopShippingProviderError extends Error {
   constructor(
@@ -24,7 +44,8 @@ export class ShopShippingProviderError extends Error {
       | "SHIPPING_SNAPSHOT_INVALID"
       | "IDEMPOTENCY_CONFLICT"
       | "RECONCILIATION_NOT_ALLOWED"
-      | "TRACKING_CONFLICT",
+      | "TRACKING_CONFLICT"
+      | "CANCELLATION_IN_PROGRESS",
   ) {
     super(message);
     this.name = "ShopShippingProviderError";
@@ -39,11 +60,11 @@ async function assertActiveAdmin(transaction: Transaction, actorAdminId: string)
   if (!actor) throw new ShopShippingProviderError("Action réservée à un administrateur actif.", "ACTOR_NOT_ADMIN");
 }
 
-async function lockedTransaction<T>(operation: (transaction: Transaction) => Promise<T>) {
+async function lockedTransaction<T>(client: PrismaClient, operation: (transaction: Transaction) => Promise<T>) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await prisma.$transaction(operation, { isolationLevel: "ReadCommitted" });
+      return await client.$transaction(operation, { isolationLevel: "ReadCommitted" });
     } catch (error) {
       lastError = error;
       const code = error && typeof error === "object" && "code" in error ? error.code : null;
@@ -53,22 +74,12 @@ async function lockedTransaction<T>(operation: (transaction: Transaction) => Pro
   throw lastError;
 }
 
-async function lockOrder(transaction: Transaction, shopOrderId: string) {
-  const key = `shop-shipping-provider:order:${shopOrderId}`;
-  await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key})) IS NULL AS locked`;
-  const rows = await transaction.$queryRaw<Array<{ id: string }>>`
-    SELECT "id"
-    FROM "shop_orders"
-    WHERE "id" = ${shopOrderId}::uuid
-    FOR UPDATE
-  `;
-  if (rows.length !== 1) throw new ShopShippingProviderError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
-}
-
 async function loadLockedOrder(transaction: Transaction, orderNumber: string) {
   const identity = await transaction.shopOrder.findUnique({ where: { orderNumber }, select: { id: true } });
   if (!identity) throw new ShopShippingProviderError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
-  await lockOrder(transaction, identity.id);
+  if (!await lockShopOrderForMutation(transaction, identity.id)) {
+    throw new ShopShippingProviderError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
+  }
   const order = await transaction.shopOrder.findUnique({
     where: { id: identity.id },
     select: {
@@ -92,6 +103,17 @@ async function loadLockedOrder(transaction: Transaction, orderNumber: string) {
   });
   if (!order) throw new ShopShippingProviderError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
   return order;
+}
+
+async function cancellationBarrier(transaction: Transaction, shopOrderId: string) {
+  return findShopCancellationBarrier(transaction, shopOrderId);
+}
+
+function throwCancellationBarrier() {
+  throw new ShopShippingProviderError(
+    "Une annulation financière est réservée pour cette commande.",
+    "CANCELLATION_IN_PROGRESS",
+  );
 }
 
 function assertProviderContext(order: Awaited<ReturnType<typeof loadLockedOrder>>) {
@@ -150,6 +172,7 @@ async function applyProviderResult({
   result,
   reconciled,
   now,
+  client,
 }: {
   orderNumber: string;
   attemptId: string;
@@ -157,8 +180,9 @@ async function applyProviderResult({
   result: ShippingProviderResult;
   reconciled: boolean;
   now: Date;
+  client: PrismaClient;
 }) {
-  return lockedTransaction(async (transaction) => {
+  return lockedTransaction(client, async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
     const attempt = await transaction.shopShippingProviderAttempt.findFirst({
@@ -170,7 +194,8 @@ async function applyProviderResult({
     } else if (attempt.status !== "REQUESTED") {
       return attempt;
     }
-    assertAttemptResolvable(order);
+    const cancellation = await cancellationBarrier(transaction, order.id);
+    if (!cancellation) assertAttemptResolvable(order);
 
     let finalStatus = result.status;
     let errorCode = result.errorCode;
@@ -178,7 +203,10 @@ async function applyProviderResult({
     const hasDifferentProviderTracking = order.trackingSource === "PROVIDER"
       && Boolean(order.trackingNumber)
       && order.trackingNumber !== result.tracking?.number;
-    if (result.status === "SUCCEEDED" && order.fulfillmentStatus === "SHIPPED") {
+    if (cancellation) {
+      finalStatus = "REQUIRES_REVIEW";
+      errorCode = "ORDER_CANCELLATION_IN_PROGRESS";
+    } else if (result.status === "SUCCEEDED" && order.fulfillmentStatus === "SHIPPED") {
       finalStatus = "REQUIRES_REVIEW";
       errorCode = "ORDER_ALREADY_SHIPPED";
     } else if (result.status === "SUCCEEDED" && hasManualTracking) {
@@ -261,7 +289,7 @@ async function applyProviderResult({
           attemptNumber: attempt.attemptNumber,
           reconciliationCount,
           errorCode,
-          trackingAdopted: finalStatus === "SUCCEEDED" && Boolean(result.tracking),
+          trackingAdopted: !cancellation && finalStatus === "SUCCEEDED" && Boolean(result.tracking),
         },
       },
     });
@@ -282,12 +310,14 @@ export async function createShopShippingProviderAttempt(
   actorAdminId: string,
   scenario: ShippingProviderScenario,
   now = new Date(),
+  options: ServiceDependencies = {},
 ) {
-  assertShopShippingProviderQaEnabled();
-  assertDatabaseConfigured();
-  const prepared = await lockedTransaction(async (transaction) => {
+  const { client, provider, assertEnabled } = dependencies(options);
+  assertEnabled();
+  const prepared = await lockedTransaction(client, async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
+    if (await cancellationBarrier(transaction, order.id)) throwCancellationBarrier();
     const existing = await transaction.shopShippingProviderAttempt.findFirst({
       where: { shopOrderId: order.id },
       orderBy: [{ attemptNumber: "desc" }, { id: "desc" }],
@@ -330,7 +360,7 @@ export async function createShopShippingProviderAttempt(
   if (!prepared.created) return prepared.attempt;
   let result: ShippingProviderResult;
   try {
-    result = await fakeLocalShippingProvider.createShipment(prepared.input);
+    result = await provider.createShipment(prepared.input);
   } catch {
     result = Object.freeze({
       status: "REQUIRES_REVIEW",
@@ -346,6 +376,7 @@ export async function createShopShippingProviderAttempt(
     result,
     reconciled: false,
     now,
+    client,
   });
 }
 
@@ -354,12 +385,14 @@ export async function reconcileShopShippingProviderAttempt(
   attemptId: string,
   actorAdminId: string,
   now = new Date(),
+  options: ServiceDependencies = {},
 ) {
-  assertShopShippingProviderQaEnabled();
-  assertDatabaseConfigured();
-  const prepared = await lockedTransaction(async (transaction) => {
+  const { client, provider, assertEnabled } = dependencies(options);
+  assertEnabled();
+  const prepared = await lockedTransaction(client, async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
+    if (await cancellationBarrier(transaction, order.id)) throwCancellationBarrier();
     const attempt = await transaction.shopShippingProviderAttempt.findFirst({
       where: { id: attemptId, shopOrderId: order.id },
     });
@@ -378,14 +411,24 @@ export async function reconcileShopShippingProviderAttempt(
     };
   });
   if (!prepared.reconcile) return prepared.attempt;
-  const result = prepared.attempt.status === "REQUESTED"
-    ? await fakeLocalShippingProvider.createShipment(prepared.input)
-    : await fakeLocalShippingProvider.reconcileShipment({
-        orderNumber,
-        idempotencyKey: prepared.attempt.idempotencyKey,
-        providerShipmentId: prepared.attempt.providerShipmentId!,
-        scenario: prepared.attempt.scenario,
-      });
+  let result: ShippingProviderResult;
+  try {
+    result = prepared.attempt.status === "REQUESTED"
+      ? await provider.createShipment(prepared.input)
+      : await provider.reconcileShipment({
+          orderNumber,
+          idempotencyKey: prepared.attempt.idempotencyKey,
+          providerShipmentId: prepared.attempt.providerShipmentId!,
+          scenario: prepared.attempt.scenario,
+        });
+  } catch {
+    result = Object.freeze({
+      status: "REQUIRES_REVIEW",
+      providerShipmentId: prepared.attempt.providerShipmentId,
+      tracking: null,
+      errorCode: "PROVIDER_RESPONSE_UNCERTAIN",
+    });
+  }
   return applyProviderResult({
     orderNumber,
     attemptId,
@@ -393,5 +436,6 @@ export async function reconcileShopShippingProviderAttempt(
     result,
     reconciled: true,
     now,
+    client,
   });
 }

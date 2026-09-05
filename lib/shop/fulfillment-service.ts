@@ -1,20 +1,39 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import {
   enqueueShopPreparingNotification,
   enqueueShopShippedNotification,
 } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import type { ShopTrackingDetails } from "@/lib/shop/fulfillment-domain";
+import {
+  findShopCancellationBarrier,
+  lockShopOrderForMutation,
+} from "@/lib/shop/order-coordination";
 import { assertShopShippingOperationsQaEnabled } from "@/lib/shop/shipping-operations-config";
 
 type Transaction = Prisma.TransactionClient;
 
+type ServiceDependencies = Readonly<{
+  client?: PrismaClient;
+  assertEnabled?: () => void;
+  beforeCommitForTesting?: (transaction: Transaction) => Promise<void>;
+}>;
+
+function dependencies(input: ServiceDependencies = {}) {
+  if (!input.client) assertDatabaseConfigured();
+  return {
+    client: input.client ?? prisma,
+    assertEnabled: input.assertEnabled ?? assertShopShippingOperationsQaEnabled,
+    beforeCommitForTesting: input.beforeCommitForTesting,
+  };
+}
+
 export class ShopFulfillmentError extends Error {
   constructor(
     message: string,
-    readonly code: "ORDER_NOT_FOUND" | "PAYMENT_REQUIRED" | "INVALID_TRANSITION" | "ACTOR_NOT_ADMIN" | "TRACKING_REQUIRED",
+    readonly code: "ORDER_NOT_FOUND" | "PAYMENT_REQUIRED" | "INVALID_TRANSITION" | "ACTOR_NOT_ADMIN" | "TRACKING_REQUIRED" | "CANCELLATION_IN_PROGRESS",
   ) {
     super(message);
     this.name = "ShopFulfillmentError";
@@ -31,11 +50,18 @@ async function assertActiveAdmin(transaction: Transaction, actorAdminId: string)
   }
 }
 
-async function lockedTransaction<T>(operation: (transaction: Transaction) => Promise<T>) {
+async function lockedTransaction<T>(
+  client: PrismaClient,
+  operation: (transaction: Transaction) => Promise<T>,
+  timeoutForTesting?: number,
+) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await prisma.$transaction(operation, { isolationLevel: "ReadCommitted" });
+      return await client.$transaction(operation, {
+        isolationLevel: "ReadCommitted",
+        ...(timeoutForTesting ? { timeout: timeoutForTesting } : {}),
+      });
     } catch (error) {
       lastError = error;
       const code = error && typeof error === "object" && "code" in error ? error.code : null;
@@ -45,25 +71,15 @@ async function lockedTransaction<T>(operation: (transaction: Transaction) => Pro
   throw lastError;
 }
 
-async function lockOrder(transaction: Transaction, shopOrderId: string) {
-  const key = `shop-payments:order:${shopOrderId}`;
-  await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key})) IS NULL AS locked`;
-  const rows = await transaction.$queryRaw<Array<{ id: string }>>`
-    SELECT "id"
-    FROM "shop_orders"
-    WHERE "id" = ${shopOrderId}::uuid
-    FOR UPDATE
-  `;
-  if (rows.length !== 1) throw new ShopFulfillmentError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
-}
-
 async function loadLockedOrder(transaction: Transaction, orderNumber: string) {
   const identity = await transaction.shopOrder.findUnique({
     where: { orderNumber },
     select: { id: true },
   });
   if (!identity) throw new ShopFulfillmentError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
-  await lockOrder(transaction, identity.id);
+  if (!await lockShopOrderForMutation(transaction, identity.id)) {
+    throw new ShopFulfillmentError("Commande Boutique introuvable.", "ORDER_NOT_FOUND");
+  }
   const order = await transaction.shopOrder.findUnique({
     where: { id: identity.id },
     select: {
@@ -86,6 +102,15 @@ async function loadLockedOrder(transaction: Transaction, orderNumber: string) {
   return order;
 }
 
+async function assertNoCancellationBarrier(transaction: Transaction, shopOrderId: string) {
+  if (await findShopCancellationBarrier(transaction, shopOrderId)) {
+    throw new ShopFulfillmentError(
+      "Une annulation financière est réservée pour cette commande.",
+      "CANCELLATION_IN_PROGRESS",
+    );
+  }
+}
+
 function assertPaid(order: { status: string; paymentStatus: string; paymentReviewAt: Date | null }) {
   if (order.status !== "OPEN" || order.paymentStatus !== "PAID" || order.paymentReviewAt !== null) {
     throw new ShopFulfillmentError(
@@ -99,12 +124,14 @@ export async function markShopOrderPreparing(
   orderNumber: string,
   actorAdminId: string,
   now = new Date(),
+  options: ServiceDependencies = {},
 ) {
-  assertShopShippingOperationsQaEnabled();
-  assertDatabaseConfigured();
-  return lockedTransaction(async (transaction) => {
+  const { client, assertEnabled } = dependencies(options);
+  assertEnabled();
+  return lockedTransaction(client, async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
+    await assertNoCancellationBarrier(transaction, order.id);
     assertPaid(order);
     if (order.fulfillmentStatus === "PREPARING") return order;
     if (order.fulfillmentStatus !== "PENDING") {
@@ -143,12 +170,14 @@ export async function markShopOrderReadyToShip(
   orderNumber: string,
   actorAdminId: string,
   now = new Date(),
+  options: ServiceDependencies = {},
 ) {
-  assertShopShippingOperationsQaEnabled();
-  assertDatabaseConfigured();
-  return lockedTransaction(async (transaction) => {
+  const { client, assertEnabled } = dependencies(options);
+  assertEnabled();
+  return lockedTransaction(client, async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
+    await assertNoCancellationBarrier(transaction, order.id);
     assertPaid(order);
     if (order.fulfillmentStatus !== "PREPARING") {
       throw new ShopFulfillmentError("Seule une commande en préparation peut être déclarée prête.", "INVALID_TRANSITION");
@@ -193,12 +222,14 @@ export async function recordShopOrderTracking(
   actorAdminId: string,
   tracking: ShopTrackingDetails,
   now = new Date(),
+  options: ServiceDependencies = {},
 ) {
-  assertShopShippingOperationsQaEnabled();
-  assertDatabaseConfigured();
-  return lockedTransaction(async (transaction) => {
+  const { client, assertEnabled } = dependencies(options);
+  assertEnabled();
+  return lockedTransaction(client, async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
+    await assertNoCancellationBarrier(transaction, order.id);
     assertPaid(order);
     if (!order.shippingRequired || order.fulfillmentStatus !== "READY_TO_SHIP") {
       throw new ShopFulfillmentError("Le suivi ne peut être enregistré que pour une expédition prête.", "INVALID_TRANSITION");
@@ -253,12 +284,14 @@ export async function markShopOrderShipped(
   orderNumber: string,
   actorAdminId: string,
   now = new Date(),
+  options: ServiceDependencies = {},
 ) {
-  assertShopShippingOperationsQaEnabled();
-  assertDatabaseConfigured();
-  return lockedTransaction(async (transaction) => {
+  const { client, assertEnabled, beforeCommitForTesting } = dependencies(options);
+  assertEnabled();
+  return lockedTransaction(client, async (transaction) => {
     await assertActiveAdmin(transaction, actorAdminId);
     const order = await loadLockedOrder(transaction, orderNumber);
+    await assertNoCancellationBarrier(transaction, order.id);
     assertPaid(order);
     if (order.fulfillmentStatus === "SHIPPED") return order;
     if (order.fulfillmentStatus !== "READY_TO_SHIP") {
@@ -299,7 +332,8 @@ export async function markShopOrderShipped(
       },
     });
     await enqueueShopShippedNotification(transaction, order.id);
+    await beforeCommitForTesting?.(transaction);
     console.info(JSON.stringify({ event: "shop.shipment.confirmed", shopOrderId: order.id, trackingRevision: order.trackingRevision }));
     return transaction.shopOrder.findUniqueOrThrow({ where: { id: order.id } });
-  });
+  }, beforeCommitForTesting ? 30_000 : undefined);
 }

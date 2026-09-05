@@ -54,6 +54,11 @@ export interface StripeCheckoutLifecycleGateway {
 export type StripeRefundEvidence = Readonly<{
   providerRefundId: string;
   paymentIntentId: string;
+  applicationMetadata?: Readonly<{
+    present: boolean;
+    paymentId: string | null;
+    refundAttemptId: string | null;
+  }>;
   status: "PENDING" | "SUCCEEDED" | "FAILED";
   amountCents: number;
   currency: "EUR";
@@ -115,9 +120,20 @@ function stripeRefundEvidence(refund: Stripe.Refund): StripeRefundEvidence {
         ? "FAILED"
         : null;
   if (!normalizedStatus) throw new StripeRefundClientError("INVALID_RESPONSE");
+  const metadata = refund.metadata ?? {};
+  const metadataPresent = Object.hasOwn(metadata, "paymentId")
+    || Object.hasOwn(metadata, "refundAttemptId");
+  const metadataValue = (value: unknown) => typeof value === "string" && value.length <= 255
+    ? value
+    : null;
   return {
     providerRefundId: refund.id,
     paymentIntentId,
+    applicationMetadata: {
+      present: metadataPresent,
+      paymentId: metadataValue(metadata.paymentId),
+      refundAttemptId: metadataValue(metadata.refundAttemptId),
+    },
     status: normalizedStatus,
     amountCents: refund.amount,
     currency: "EUR",

@@ -228,7 +228,16 @@ export async function generateInvoicePdf(record: InvoicePdfRecord, mode: Billing
 }
 
 export async function generateCreditNotePdf(record: CreditNotePdfRecord, mode: BillingDocumentRenderMode = "TEST") {
+  const customer = parseCustomer(record.invoice.customerSnapshot);
   return render("AVOIR", record.creditNoteNumber, record.issuedAt, record.snapshotHashSha256, mode, (document) => {
+    const customerLines = [
+      customer.companyName || customer.name,
+      ...(customer.companyName ? [customer.name] : []),
+      ...(customer.billingAddress ? billingAddressLines(customer.billingAddress) : []),
+      customer.email,
+    ].filter(Boolean);
+    party(document, "Client", customerLines, margin);
+    document.moveDown(1);
     document.fillColor(dark).font("Helvetica-Bold").fontSize(11).text(`Facture d’origine : ${record.invoice.invoiceNumber}`);
     document.font("Helvetica").fontSize(9.5).text(`Commande : ${record.invoice.orderNumberSnapshot}`);
     document.text(`Motif : ${creditNoteReasonLabel(record.reasonCode)}${record.reasonText ? ` — ${record.reasonText}` : ""}`);

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import {
   assertPaypalReconciliationServerEnvironment,
   assertPaypalServerEnvironment,
@@ -12,6 +14,7 @@ const PAYPAL_API_ORIGINS = {
   live: "https://api-m.paypal.com",
 } as const;
 const PAYPAL_RESPONSE_MAX_BYTES = 1024 * 1024;
+const PAYPAL_REFUND_APPLICATION_REFERENCE = /^LNX-REFUND-[0-9A-F]{64}$/;
 
 type EnabledPaypalConfiguration = Extract<PaypalPaymentConfiguration, { enabled: true }>;
 type Fetch = typeof fetch;
@@ -76,6 +79,8 @@ export type PaypalCaptureResponseEvidence = Readonly<{
 export type PaypalRefundEvidence = Readonly<{
   providerRefundId: string;
   captureId: string;
+  applicationReferencePresent?: boolean;
+  applicationReference?: string;
   status: "PENDING" | "SUCCEEDED" | "FAILED";
   amountCents: number;
   currency: "EUR";
@@ -107,6 +112,22 @@ export class PaypalClientError extends Error {
     super("PayPal is unavailable.");
     this.name = "PaypalClientError";
   }
+}
+
+/**
+ * Opaque, stable correlation reference returned in PayPal refund resources.
+ * The underlying local idempotency key can contain internal UUIDs and must not
+ * be exposed in the payer-visible invoice_id field.
+ */
+export function paypalRefundApplicationReference(idempotencyKey: string) {
+  if (!idempotencyKey || idempotencyKey.length > 255) {
+    throw new PaypalClientError("INVALID_REQUEST");
+  }
+  const reference = `LNX-REFUND-${createHash("sha256").update(idempotencyKey).digest("hex").toUpperCase()}`;
+  if (reference.length > 127 || !PAYPAL_REFUND_APPLICATION_REFERENCE.test(reference)) {
+    throw new PaypalClientError("INVALID_REQUEST");
+  }
+  return reference;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -317,6 +338,7 @@ export function paypalRefundEvidence(
   const providerRefundId = nonEmptyString(body?.id);
   const amount = record(body?.amount);
   const status = body?.status;
+  const applicationReference = nonEmptyString(body?.invoice_id, 127);
   const captureId = paypalCaptureIdFromLinks(body?.links, environment);
   const updateTime = nonEmptyString(body?.update_time, 80) ?? nonEmptyString(body?.create_time, 80);
   if (
@@ -331,6 +353,8 @@ export function paypalRefundEvidence(
   return {
     providerRefundId,
     captureId,
+    applicationReferencePresent: Object.hasOwn(body ?? {}, "invoice_id"),
+    ...(applicationReference ? { applicationReference } : {}),
     status: status === "COMPLETED" ? "SUCCEEDED" : status === "PENDING" ? "PENDING" : "FAILED",
     amountCents: paypalCentsFromAmount(amount.value),
     currency: "EUR",
@@ -449,6 +473,7 @@ function createPaypalGatewayWithConfiguration(
       if (configuration.environment === "live" && !liveRefundsEnabled) {
         throw new PaypalClientError("UNAVAILABLE");
       }
+      const applicationReference = paypalRefundApplicationReference(idempotencyKey);
       return paypalRefundEvidence(await api(
         `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`,
         {
@@ -456,6 +481,12 @@ function createPaypalGatewayWithConfiguration(
           headers: { prefer: "return=representation" },
           body: JSON.stringify({
             amount: { currency_code: "EUR", value: paypalAmountFromCents(amountCents) },
+            // Unlike Stripe refund metadata, PayPal does not expose the
+            // request idempotency header in refund webhooks. Persist an opaque
+            // deterministic digest instead, so a webhook received before the
+            // API response can be correlated without exposing the local key
+            // or guessing from amount or timing.
+            invoice_id: applicationReference,
           }),
         },
         idempotencyKey,
