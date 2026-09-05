@@ -113,11 +113,23 @@ test("a missing source invoice is an explicit fail-closed business error", () =>
 
 test("remaining amount and Payment refund status are deterministic", () => {
   assert.equal(refundableAmount({ paidCents: 9_000, confirmedRefundedCents: 2_000, reservedRefundCents: 1_000 }), 6_000);
+  assert.equal(refundableAmount({ paidCents: 9_000, confirmedRefundedCents: 6_000, reservedRefundCents: 1_000 }), 2_000);
   assert.equal(paymentStatusAfterRefund({ amountCents: 9_000, confirmedRefundedCents: 0, hasUnresolvedRefund: false }), "SUCCEEDED");
   assert.equal(paymentStatusAfterRefund({ amountCents: 9_000, confirmedRefundedCents: 2_000, hasUnresolvedRefund: false }), "PARTIALLY_REFUNDED");
   assert.equal(paymentStatusAfterRefund({ amountCents: 9_000, confirmedRefundedCents: 9_000, hasUnresolvedRefund: false }), "REFUNDED");
   assert.equal(paymentStatusAfterRefund({ amountCents: 9_000, confirmedRefundedCents: 2_000, hasUnresolvedRefund: true }), "REFUND_PENDING");
   assert.throws(() => refundableAmount({ paidCents: 9_000, confirmedRefundedCents: 8_000, reservedRefundCents: 2_000 }), RefundServiceError);
+});
+
+test("the refund runtime keeps reviewed amounts reserved without counting them as confirmed and delegates teardown", async () => {
+  const source = await readFile(new URL("../../scripts/test-refund-runtime.ts", import.meta.url), "utf8");
+  assert.match(source, /afterConcurrent\.refundedAmountCents, 6_000/);
+  assert.match(source, /activeAfterConcurrent\._sum\.amountCents, 1_000/);
+  assert.match(source, /refundableAmount\([\s\S]*reservedRefundCents:[\s\S]*\), 2_000\)/);
+  assert.match(source, /issued credit notes remain immutable/);
+  assert.match(source, /await assertClean\("precondition"\)/);
+  assert.doesNotMatch(source, /async function cleanup|\.creditNote\.deleteMany|\.invoice\.deleteMany/);
+  assert.doesNotMatch(source, /finally\s*\{[\s\S]*cleanup\(/);
 });
 
 test("PayPal refund evidence requires EUR, a refund id and the capture up-link", () => {

@@ -7,6 +7,7 @@ import { PaypalClientError } from "@/lib/payments/paypal-client";
 import { issueInvoiceForPayment } from "@/lib/billing/service";
 import {
   createRefundDatabaseRepository,
+  refundableAmount,
   reconcileRefundAttemptForAdmin,
   requestRefundForOrder,
   type RefundDependencies,
@@ -56,47 +57,13 @@ async function assertRefundQaDatabase() {
   return REFUND_QA_TARGET;
 }
 
-async function cleanup() {
-  const orders = await prisma.order.findMany({ where: { orderNumber: { in: [...QA_ORDERS] } }, select: { id: true } });
-  const orderIds = orders.map(({ id }) => id);
-  const payments = orderIds.length ? await prisma.payment.findMany({ where: { orderId: { in: orderIds } }, select: { id: true } }) : [];
-  const paymentIds = payments.map(({ id }) => id);
-  const notifications = orderIds.length ? await prisma.orderNotification.findMany({ where: { orderId: { in: orderIds } }, select: { id: true } }) : [];
-  const notificationIds = notifications.map(({ id }) => id);
-  await prisma.$transaction(async (transaction) => {
-    if (notificationIds.length) await transaction.notificationEvent.deleteMany({ where: { notificationId: { in: notificationIds } } });
-    if (paymentIds.length) {
-      await transaction.providerEvent.deleteMany({ where: { OR: [{ paymentId: { in: paymentIds } }, { providerEventId: { startsWith: EVENT_PREFIX } }] } });
-      await transaction.paymentAuditEvent.deleteMany({ where: { paymentId: { in: paymentIds } } });
-      const invoices = await transaction.invoice.findMany({ where: { paymentId: { in: paymentIds } }, select: { id: true } });
-      const invoiceIds = invoices.map(({ id }) => id);
-      if (invoiceIds.length) {
-        await transaction.billingAuditEvent.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-        await transaction.creditNote.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
-        await transaction.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
-      }
-      await transaction.refundAttempt.deleteMany({ where: { paymentId: { in: paymentIds } } });
-      await transaction.paymentIncident.deleteMany({ where: { paymentId: { in: paymentIds } } });
-      await transaction.payment.deleteMany({ where: { id: { in: paymentIds } } });
-    } else {
-      await transaction.providerEvent.deleteMany({ where: { providerEventId: { startsWith: EVENT_PREFIX } } });
-    }
-    if (orderIds.length) {
-      await transaction.orderNotification.deleteMany({ where: { orderId: { in: orderIds } } });
-      await transaction.orderEvent.deleteMany({ where: { orderId: { in: orderIds } } });
-      await transaction.order.deleteMany({ where: { id: { in: orderIds } } });
-    }
-    await transaction.user.deleteMany({ where: { email: { in: [...QA_EMAILS] } } });
-  });
-}
-
 async function assertClean(stage: string) {
   const [users, orders, events] = await Promise.all([
     prisma.user.count({ where: { email: { in: [...QA_EMAILS] } } }),
     prisma.order.count({ where: { orderNumber: { in: [...QA_ORDERS] } } }),
     prisma.providerEvent.count({ where: { providerEventId: { startsWith: EVENT_PREFIX } } }),
   ]);
-  assert.deepEqual({ users, orders, events }, { users: 0, orders: 0, events: 0 }, `${stage} cleanup failed`);
+  assert.deepEqual({ users, orders, events }, { users: 0, orders: 0, events: 0 }, `${stage} fixture isolation failed`);
 }
 
 async function createOrderPayment(input: {
@@ -190,14 +157,12 @@ function fakeDependencies() {
 
 async function run() {
   assert.equal(await assertRefundQaDatabase(), REFUND_QA_TARGET);
-  await cleanup();
   await assertClean("precondition");
   const passed: string[] = [];
-  try {
-    const [admin, member] = await Promise.all([
-      prisma.user.create({ data: { email: QA_EMAILS[0], displayName: "Refund Admin QA", emailVerified: true, emailVerifiedAt: new Date(), role: "ADMIN", status: "ACTIVE" } }),
-      prisma.user.create({ data: { email: QA_EMAILS[1], displayName: "Refund Member QA", emailVerified: true, emailVerifiedAt: new Date(), role: "MEMBER", status: "ACTIVE" } }),
-    ]);
+  const [admin, member] = await Promise.all([
+    prisma.user.create({ data: { email: QA_EMAILS[0], displayName: "Refund Admin QA", emailVerified: true, emailVerifiedAt: new Date(), role: "ADMIN", status: "ACTIVE" } }),
+    prisma.user.create({ data: { email: QA_EMAILS[1], displayName: "Refund Member QA", emailVerified: true, emailVerifiedAt: new Date(), role: "MEMBER", status: "ACTIVE" } }),
+  ]);
     const actor = { id: admin.id, email: admin.email, name: admin.displayName, role: "ADMIN", status: "ACTIVE", emailVerified: true } satisfies OrderActor;
     const memberActor = { id: member.id, email: member.email, name: member.displayName, role: "MEMBER", status: "ACTIVE", emailVerified: true } satisfies OrderActor;
     const fixture = fakeDependencies();
@@ -284,19 +249,32 @@ async function run() {
     ]);
     assert.equal(concurrent.filter(({ status }) => status === "fulfilled").length, 1);
     assert.equal(concurrent.filter(({ status }) => status === "rejected").length, 1);
-    assert.equal((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).refundedAmountCents, 7_000);
-    passed.push("concurrent partial refunds serialize and cannot exceed the remaining balance");
+    const afterConcurrent = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+    const activeAfterConcurrent = await prisma.refundAttempt.aggregate({
+      where: { paymentId: payment.id, status: { in: ["PROCESSING", "PENDING", "REQUIRES_REVIEW"] } },
+      _sum: { amountCents: true },
+    });
+    assert.equal(afterConcurrent.refundedAmountCents, 6_000);
+    assert.equal(activeAfterConcurrent._sum.amountCents, 1_000);
+    assert.equal((await prisma.refundAttempt.findUniqueOrThrow({ where: { id: timedOut.id } })).status, "REQUIRES_REVIEW");
+    assert.equal(refundableAmount({
+      paidCents: afterConcurrent.amountCents,
+      confirmedRefundedCents: afterConcurrent.refundedAmountCents,
+      reservedRefundCents: activeAfterConcurrent._sum.amountCents ?? 0,
+    }), 2_000);
+    passed.push("concurrent partial refunds serialize while REQUIRES_REVIEW stays reserved but unconfirmed");
 
     await requestRefundForOrder(actor, { orderNumber: inProgress.orderNumber, kind: "FULL", requestToken: "10000000-0000-4000-8000-000000000005" }, fixture.dependencies);
-    const [fullyRefunded, stillInProgress] = await Promise.all([
+    const [partiallyRefundedWithReview, stillInProgress] = await Promise.all([
       prisma.payment.findUniqueOrThrow({ where: { id: payment.id } }),
       prisma.order.findUniqueOrThrow({ where: { id: inProgress.id } }),
     ]);
-    assert.equal(fullyRefunded.status, "REFUNDED");
-    assert.equal(fullyRefunded.refundedAmountCents, 9_000);
+    assert.equal(partiallyRefundedWithReview.status, "REFUND_PENDING");
+    assert.equal(partiallyRefundedWithReview.refundedAmountCents, 8_000);
     assert.equal(stillInProgress.status, "IN_PROGRESS");
-    assert.equal(await prisma.orderNotification.count({ where: { orderId: inProgress.id, kind: "CUSTOMER_REFUND_COMPLETED" } }), 1);
-    passed.push("multiple partial refunds reach exact total while Order remains IN_PROGRESS");
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: inProgress.id, kind: "CUSTOMER_REFUND_COMPLETED" } }), 0);
+    assert.equal(await prisma.orderNotification.count({ where: { orderId: inProgress.id, kind: "CUSTOMER_PARTIAL_REFUND" } }), 3);
+    passed.push("FULL refunds only unreserved capacity while an ambiguous amount remains protected");
 
     await assert.rejects(prisma.orderEvent.create({
       data: {
@@ -364,7 +342,7 @@ async function run() {
         providerCheckoutId: "PAYPAL-SECOND-CHECKOUT", providerPaymentId: "PAYPAL-SECOND-CAPTURE", paymentMethod: "PAYPAL", paidAt: new Date(),
       },
     }));
-    passed.push("REFUNDED winning Payment still prevents a second provider winner");
+    passed.push("the existing financial winner still prevents a second provider winner while refund review is open");
 
     const rollbackBefore = await prisma.refundAttempt.count({ where: { paymentId: delivered.payments[0]!.id } });
     await assert.rejects(prisma.$transaction(async (transaction) => {
@@ -378,14 +356,17 @@ async function run() {
       throw new Error("forced rollback");
     }));
     assert.equal(await prisma.refundAttempt.count({ where: { paymentId: delivered.payments[0]!.id } }), rollbackBefore);
-    passed.push("forced DB failure rolls back the refund attempt atomically");
+    const issuedCreditNote = await prisma.creditNote.findFirstOrThrow({
+      where: { invoice: { paymentId: payment.id } },
+      select: { id: true },
+    });
+    await assert.rejects(prisma.creditNote.delete({ where: { id: issuedCreditNote.id } }));
+    assert.equal(await prisma.creditNote.count({ where: { id: issuedCreditNote.id } }), 1);
+    passed.push("forced DB failure rolls back atomically and issued credit notes remain immutable");
 
-    console.info(`V0.7.6 refund runtime passed (${passed.length} groups):`);
-    for (const label of passed) console.info(`- ${label}`);
-  } finally {
-    await cleanup();
-    await assertClean("postcondition");
-  }
+  console.info(`V0.7.6 refund runtime passed (${passed.length} groups):`);
+  for (const label of passed) console.info(`- ${label}`);
+  console.info("Refund runtime fixtures are retained only inside the disposable Prisma Dev instance for instance-level teardown.");
 }
 
 run()
