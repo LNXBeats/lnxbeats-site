@@ -23,6 +23,8 @@ Les ventes historiques antérieures à cette fondation ne sont jamais régularis
 
 La facture conserve l’identité vendeur, l’identité client B2C/B2B, lignes, adresse de facturation lorsqu’elle existe, commande, paiement, prix, devise, frais de livraison, TVA, conditions acceptées et empreinte SHA-256. La Boutique reprend `shippingCents` de la `ShopOrder`; aucune grille courante n’est recalculée.
 
+Pour une facture B2C liée à une `ShopOrder`, `customer.name` provient exclusivement de `shippingFirstName + shippingLastName` figés sur la commande. Les champs mutables `User.firstName`, `User.lastName` et `User.displayName` ne sont ni une source ni un fallback. Les deux composantes du nom sont validées avant toute allocation par `invoice_sequence`; Stripe et PayPal suivent le même contrat. Commander conserve sa propre source client.
+
 Régime snapshoté actuel : `FRANCHISE_EN_BASE_TVA`, TVA collectée 0, mention centralisée : « TVA non applicable, article 293 B du CGI ». Un changement fiscal futur crée de nouveaux snapshots sans modifier l’historique. Le numéro de TVA communiqué n’est pas utilisé comme preuve automatique d’assujettissement.
 
 ## B2C et B2B
@@ -32,6 +34,8 @@ Le client particulier n’a aucun champ professionnel. Un client professionnel d
 ## Accès et PDF
 
 Les pages HTML essentielles sont disponibles dans le Compte et l’Admin. Les routes PDF exigent une session active et vérifiée ; un MEMBER ne peut accéder qu’aux parents qu’il possède, un ADMIN peut auditer le registre. Les réponses sont `private, no-store`, `nosniff`, `noindex`. Les numéros opaques par eux-mêmes ne contournent jamais l’autorisation. Chaque génération de PDF ajoute un événement d’audit, sans modifier le document.
+
+HTML et PDF rendent le même snapshot client immuable. Les champs d’adresse structurés restent des lignes distinctes : voie, complément éventuel, code postal et ville, puis pays. Aucun renderer ne concatène ces lignes ni ne relit le profil courant.
 
 ## Conservation et sécurité
 
@@ -50,3 +54,4 @@ Factures, avoirs et pièces comptables : dix ans. Les purges de compte doivent l
 8. Vérifier sauvegarde/restauration et conservation dix ans.
 9. Vérifier les obligations de facturation électronique avant ouverture.
 10. Vérifier qu’un document LIVE n’a aucun watermark et qu’un document TEST conserve son marquage, en HTML comme en PDF.
+11. Vérifier que le nom et les lignes d’adresse sont identiques en HTML et PDF, notamment avec accents, apostrophe, tiret et libellé long.

@@ -81,7 +81,8 @@ Pour une réussite authentifiée avant l'échéance, une seule transaction :
 5. passe les réservations `ACTIVE` à `CONFIRMED` et écrit `STOCK_CONFIRMED` ;
 6. passe `Payment` à `SUCCEEDED` et `ShopOrder.paymentStatus` à `PAID` ;
 7. écrit `SHOP_PAYMENT_CONFIRMED` ;
-8. enfile les notifications Boutique idempotentes.
+8. émet la facture depuis le snapshot `ShopOrder` validé ;
+9. enfile les notifications Boutique idempotentes.
 
 Une erreur annule toute la transaction. Un replay ne décrémente jamais le
 stock une seconde fois.
@@ -113,6 +114,13 @@ persistée avec le paiement puis reste non claimable tant que son audience est
 fermée; les notifications client ne sont créées que si l'audience client est
 explicitement activée. Le transport est encore un gate indépendant. Aucun de
 ces flags n'est ouvert implicitement par le paiement Boutique.
+
+Les messages owner/admin Boutique prennent le nom client depuis
+`ShopOrder.shippingFirstName + shippingLastName`, jamais depuis le profil
+mutable `User.displayName`. Stripe et PayPal suivent ce même contrat. Le rendu
+owner reste minimisé au nom attendu, sans ajouter l'adresse ni l'e-mail client,
+et un replay réutilise la même clé d'idempotence. Le mail client conserve son
+contrat existant.
 
 La préparation Admin exige `OPEN/PAID`, aucune revue et l'état `PENDING`.
 L'expédition exige ensuite `PREPARING`. Les transitions, l'acteur et les
