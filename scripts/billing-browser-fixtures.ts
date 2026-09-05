@@ -53,7 +53,7 @@ async function assertVisualQaRuntime() {
     SELECT count(*)::bigint AS count FROM "_prisma_migrations"
     WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL
   `;
-  assert.equal(Number(migrations[0]?.count), 23);
+  assert.equal(Number(migrations[0]?.count), 29);
 }
 
 async function createMusicPayment(userId: string, orderNumber: string, title: string, totalCents: number, paid: boolean) {
@@ -91,7 +91,7 @@ async function main() {
   assert.notEqual(memberPassword, adminPassword);
   assert.equal(await prisma.user.count(), 0, "Visual QA database must be empty before fixture setup.");
 
-  const member = await createInternalAuthUser({ email: MEMBER_EMAIL, password: memberPassword, displayName: "Jean Exemple — Facturation QA", role: "MEMBER" });
+  const member = await createInternalAuthUser({ email: MEMBER_EMAIL, password: memberPassword, displayName: "Membre LNX", role: "MEMBER" });
   const admin = await createInternalAuthUser({ email: ADMIN_EMAIL, password: adminPassword, displayName: "Admin Facturation QA", role: "ADMIN" });
 
   const individualPayment = await createMusicPayment(member.id, "LNX-2099-100001", "Création musicale — particulier QA", 3000, true);
@@ -120,8 +120,8 @@ async function main() {
     data: {
       orderNumber: "LNX-SHOP-2099-100001", userId: member.id, creationToken: randomUUID(), requestFingerprintSha256: "b".repeat(64),
       status: "OPEN", paymentStatus: "PAID", fulfillmentStatus: "PENDING", subtotalCents: 2500, shippingCents: 500, totalCents: 3000,
-      shippingRequired: true, shippingFirstName: "Jean", shippingLastName: "Exemple", shippingAddressLine1: "12 rue Exemple",
-      shippingPostalCode: "75000", shippingCity: "Paris", shippingCountryCode: "FR", termsVersion: "shop-cgv-2026-02-draft",
+      shippingRequired: true, shippingFirstName: "Élodie Anne-Marie", shippingLastName: "D’Arcy", shippingAddressLine1: "18 rue de l’Exemple",
+      shippingAddressLine2: "Bâtiment B", shippingPostalCode: "69001", shippingCity: "Lyon", shippingCountryCode: "FR", termsVersion: "shop-cgv-2026-02-draft",
       termsHashSha256: "c".repeat(64), termsAcceptedAt: shopNow, reservationExpiresAt: new Date(shopNow.getTime() + 86_400_000), paidAt: shopNow, createdAt: shopNow,
       items: {
         create: {

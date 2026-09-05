@@ -14,6 +14,7 @@ import {
   type BillingCustomerIdentity,
 } from "@/lib/billing/domain";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { shopOrderCustomerSnapshotName } from "@/lib/shop/customer-snapshot";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -95,7 +96,7 @@ export async function issueInvoiceForPayment(
   }) : null;
   const shopUser = shopOrderRow ? await transaction.user.findUnique({
     where: { id: shopOrderRow.userId },
-    select: { email: true, displayName: true, firstName: true, lastName: true },
+    select: { email: true },
   }) : null;
   const shopItems = shopOrderRow ? await transaction.shopOrderItem.findMany({
     where: { shopOrderId: shopOrderRow.id },
@@ -145,10 +146,11 @@ export async function issueInvoiceForPayment(
     if (!shopOrder.shippingAddressLine1 || !shopOrder.shippingPostalCode || !shopOrder.shippingCity || shopOrder.shippingCountryCode !== "FR") {
       throw new BillingServiceError("INVOICE_BILLING_ADDRESS_INVALID");
     }
-    const userName = [shopOrder.user.firstName, shopOrder.user.lastName].filter(Boolean).join(" ") || shopOrder.user.displayName;
-    customer = options.customer ? validateBillingCustomerIdentity(options.customer) : validateBillingCustomerIdentity({
+    const customerName = shopOrderCustomerSnapshotName(shopOrder);
+    if (!customerName) throw new BillingServiceError("INVOICE_CUSTOMER_SNAPSHOT_INVALID");
+    customer = validateBillingCustomerIdentity({
       type: "INDIVIDUAL",
-      name: userName || "Client LNX Beats",
+      name: customerName,
       email: shopOrder.user.email,
       billingAddress: {
         line1: shopOrder.shippingAddressLine1,

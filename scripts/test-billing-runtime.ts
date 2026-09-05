@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 
 import { issueCreditNoteForRefund, issueInvoiceForPayment, getInvoiceForMember } from "@/lib/billing/service";
 import { enqueuePaymentConfirmedNotifications, enqueueShopPaymentConfirmedNotifications } from "@/lib/notifications/service";
@@ -55,12 +56,60 @@ async function assertDisposableRuntime() {
   if (identity[0]?.port !== null) assert.equal(identity[0]?.port, Number(parsed.port));
 }
 
+async function assertMigrationState() {
+  const migrationRoot = path.join(process.cwd(), "prisma", "migrations");
+  const expected = await Promise.all((await readdir(migrationRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+    .map(async (name) => ({
+      name,
+      checksum: createHash("sha256")
+        .update(await readFile(path.join(migrationRoot, name, "migration.sql")))
+        .digest("hex"),
+    })));
+  const applied = await prisma.$queryRaw<Array<{
+    migrationName: string;
+    checksum: string;
+    finishedAt: Date | null;
+    rolledBackAt: Date | null;
+  }>>`
+    SELECT "migration_name" AS "migrationName", "checksum",
+      "finished_at" AS "finishedAt", "rolled_back_at" AS "rolledBackAt"
+    FROM "_prisma_migrations"
+    ORDER BY "migration_name" ASC, "started_at" ASC
+  `;
+  assert.equal(applied.length, expected.length, "Every migration in this checkout must be applied.");
+  assert.ok(applied.every((row) => row.finishedAt !== null && row.rolledBackAt === null));
+  assert.deepEqual(
+    applied.map((row) => ({ name: row.migrationName, checksum: row.checksum })),
+    expected,
+    "The disposable database migration history must exactly match the repository.",
+  );
+  return expected.length;
+}
+
 function numberSuffix(sequence: number) {
   return `${String(sequence).padStart(6, "0")}`;
 }
 
-async function createUser(email: string, displayName: string) {
-  return prisma.user.create({ data: { email, emailVerified: true, emailVerifiedAt: new Date(), displayName, role: "MEMBER", status: "ACTIVE" } });
+async function createUser(
+  email: string,
+  displayName: string,
+  profile: Readonly<{ firstName?: string | null; lastName?: string | null }> = {},
+) {
+  return prisma.user.create({
+    data: {
+      email,
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+      displayName,
+      firstName: profile.firstName ?? null,
+      lastName: profile.lastName ?? null,
+      role: "MEMBER",
+      status: "ACTIVE",
+    },
+  });
 }
 
 async function createAdmin(email: string, displayName: string) {
@@ -87,8 +136,17 @@ async function createMusicPayment(userId: string, sequence: number, status: "SUC
   return { order, payment };
 }
 
-async function createShopPayment(userId: string, sequence: number) {
+async function createShopPayment(
+  userId: string,
+  sequence: number,
+  input: Readonly<{
+    provider?: "STRIPE" | "PAYPAL";
+    shippingFirstName?: string | null;
+    shippingLastName?: string | null;
+  }> = {},
+) {
   const now = new Date();
+  const provider = input.provider ?? "STRIPE";
   const product = await prisma.product.create({
     data: { slug: `${FIXTURE}-product-${sequence}`, title: `CD fictif QA ${sequence}`, description: "Produit fictif.", status: "PUBLISHED", priceCents: 2500, currency: "EUR", trackInventory: true, stock: 8, shippingRequired: true, shippingPriceCents: 500, publishedAt: new Date() },
   });
@@ -96,15 +154,24 @@ async function createShopPayment(userId: string, sequence: number) {
     data: {
       orderNumber: `LNX-SHOP-2099-${numberSuffix(sequence)}`, userId, creationToken: randomUUID(), requestFingerprintSha256: `${sequence}`.padStart(64, "b").slice(0, 64),
       status: "OPEN", paymentStatus: "PAID", fulfillmentStatus: "PENDING", subtotalCents: 2500, shippingCents: 500, totalCents: 3000,
-      shippingRequired: true, shippingFirstName: "Jean", shippingLastName: "Exemple", shippingAddressLine1: "12 rue Exemple", shippingPostalCode: "75000", shippingCity: "Paris", shippingCountryCode: "FR",
+      shippingRequired: true, shippingFirstName: input.shippingFirstName ?? "Test", shippingLastName: input.shippingLastName ?? "Client", shippingAddressLine1: "12 rue Exemple", shippingPostalCode: "75000", shippingCity: "Paris", shippingCountryCode: "FR",
       termsVersion: "shop-cgv-phase4b-qa", termsHashSha256: "c".repeat(64), termsAcceptedAt: now, reservationExpiresAt: new Date(now.getTime() + 60_000), paidAt: now, createdAt: now,
       items: { create: { productId: product.id, position: 0, productTitle: product.title, inventoryTracked: true, unitPriceCents: 2500, quantity: 1, lineTotalCents: 2500, shippingRequired: true, unitShippingCents: 500, lineShippingCents: 500, currency: "EUR" } },
     },
   });
   const payment = await prisma.payment.create({
-    data: { shopOrderId: order.id, provider: "STRIPE", mode: "TEST", status: "SUCCEEDED", amountCents: 3000, currency: "EUR", pricingVersion: "shop-phase4b-qa", idempotencyKey: `${FIXTURE}:shop:${sequence}`, providerCheckoutId: `${FIXTURE}:shop-checkout:${sequence}`, paidAt: order.paidAt },
+    data: { shopOrderId: order.id, provider, mode: "TEST", status: "SUCCEEDED", amountCents: 3000, currency: "EUR", pricingVersion: "shop-phase4b-qa", idempotencyKey: `${FIXTURE}:shop:${sequence}`, providerCheckoutId: `${FIXTURE}:shop-checkout:${sequence}`, paidAt: order.paidAt },
   });
   return { order, payment, product };
+}
+
+async function invoiceSequenceState() {
+  const rows = await prisma.$queryRaw<Array<{ lastValue: bigint; isCalled: boolean }>>`
+    SELECT last_value::bigint AS "lastValue", is_called AS "isCalled"
+    FROM invoice_sequence
+  `;
+  assert.ok(rows[0]);
+  return rows[0];
 }
 
 function prismaSqlState(error: unknown) {
@@ -115,10 +182,9 @@ function prismaSqlState(error: unknown) {
 
 async function main() {
   await assertDisposableRuntime();
-  const applied = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT count(*)::bigint AS count FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`;
-  assert.equal(Number(applied[0]?.count), 23);
+  const migrationCount = await assertMigrationState();
 
-  const member = await createUser(MEMBER_EMAIL, "Jean Exemple");
+  const member = await createUser(MEMBER_EMAIL, "Membre LNX");
   const other = await createUser(OTHER_EMAIL, "Autre Exemple");
   const reviewer = await createAdmin(`${FIXTURE}-reviewer@example.invalid`, "Relecteur Facturation");
   const music = await createMusicPayment(member.id, 1);
@@ -163,13 +229,49 @@ async function main() {
   assert.equal(shopInvoice.invoice.subtotalCents, 2500);
   assert.equal(shopInvoice.invoice.shippingCents, 500);
   assert.equal(shopInvoice.invoice.totalCents, 3000);
+  assert.equal((shopInvoice.invoice.customerSnapshot as { name: string }).name, "Test Client");
+  assert.equal(shopInvoice.invoice.customerNameSearch, "Test Client");
   const shopSnapshot = structuredClone({ customer: shopInvoice.invoice.customerSnapshot, lines: shopInvoice.invoice.lineItemsSnapshot, total: shopInvoice.invoice.totalCents });
+  await prisma.user.update({ where: { id: member.id }, data: { displayName: "Autre Nom", firstName: "Autre", lastName: "Nom" } });
   await prisma.product.update({ where: { id: shop.product.id }, data: { title: "Titre courant modifié", priceCents: 9999 } });
   const unchangedShopInvoice = await prisma.invoice.findUniqueOrThrow({ where: { id: shopInvoice.invoice.id } });
   assert.deepEqual({ customer: unchangedShopInvoice.customerSnapshot, lines: unchangedShopInvoice.lineItemsSnapshot, total: unchangedShopInvoice.totalCents }, shopSnapshot);
   const shopNotifications = await prisma.orderNotification.findMany({ where: { shopOrderId: shop.order.id } });
   assert.equal(shopNotifications.length, 2);
   assert.ok(shopNotifications.every((notification) => (notification.payload as { invoiceNumber?: string }).invoiceNumber === shopInvoice.invoice.invoiceNumber));
+
+  const paypalShop = await createShopPayment(member.id, 11, {
+    provider: "PAYPAL",
+    shippingFirstName: "Élise-Marie",
+    shippingLastName: "D’Exemple",
+  });
+  const paypalShopInvoice = await prisma.$transaction((transaction) => issueInvoiceForPayment(
+    transaction,
+    paypalShop.payment.id,
+    { issuedAt: new Date("2099-01-01T12:03:00Z") },
+  ));
+  assert.equal((paypalShopInvoice.invoice.customerSnapshot as { name: string }).name, "Élise-Marie D’Exemple");
+  assert.equal(paypalShopInvoice.invoice.customerNameSearch, "Élise-Marie D’Exemple");
+  assert.equal(paypalShopInvoice.invoice.paymentMethodLabel, "PayPal");
+
+  const invalidShop = await createShopPayment(member.id, 12, { shippingFirstName: "\t", shippingLastName: "Client" });
+  const [sequenceBeforeInvalid, invoicesBeforeInvalid, auditsBeforeInvalid] = await Promise.all([
+    invoiceSequenceState(),
+    prisma.invoice.count(),
+    prisma.billingAuditEvent.count(),
+  ]);
+  await assert.rejects(
+    () => prisma.$transaction((transaction) => issueInvoiceForPayment(transaction, invalidShop.payment.id)),
+    (error: unknown) => error instanceof Error && error.message === "INVOICE_CUSTOMER_SNAPSHOT_INVALID",
+  );
+  const [sequenceAfterInvalid, invoicesAfterInvalid, auditsAfterInvalid] = await Promise.all([
+    invoiceSequenceState(),
+    prisma.invoice.count(),
+    prisma.billingAuditEvent.count(),
+  ]);
+  assert.deepEqual(sequenceAfterInvalid, sequenceBeforeInvalid, "An invalid Shop customer name must not consume an invoice number.");
+  assert.equal(invoicesAfterInvalid, invoicesBeforeInvalid);
+  assert.equal(auditsAfterInvalid, auditsBeforeInvalid);
 
   const concurrent = await createMusicPayment(member.id, 5);
   const duplicateResults = await Promise.all([
@@ -252,7 +354,7 @@ async function main() {
   assert.equal(await getInvoiceForMember(archivedInvoice.invoice.invoiceNumber, member.id), null);
 
   const counts = {
-    migrations: Number(applied[0]?.count),
+    migrations: migrationCount,
     invoices: await prisma.invoice.count(), creditNotes: await prisma.creditNote.count(),
     individual: await prisma.invoice.count({ where: { customerType: "INDIVIDUAL" } }), professional: await prisma.invoice.count({ where: { customerType: "PROFESSIONAL" } }),
     musicNotifications: musicNotifications.length, shopNotifications: shopNotifications.length,
