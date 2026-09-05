@@ -36,6 +36,10 @@ import { orderNotificationTemplate } from "@/lib/notifications/templates";
 import { createNotificationTransport } from "@/lib/notifications/transport";
 import type { NotificationTransportResult, OrderNotificationMessage, ShopNotificationPayload } from "@/lib/notifications/types";
 import { notificationWorkerAuthorized } from "@/lib/notifications/worker-auth";
+import {
+  SHOP_ORDER_CUSTOMER_SNAPSHOT_NAME_MAX_LENGTH,
+  shopOrderCustomerSnapshotName,
+} from "@/lib/shop/customer-snapshot";
 
 const message: OrderNotificationMessage = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -149,6 +153,23 @@ test("les clés persistantes séparent paiement, propriétaire et livraison", ()
   const id = message.resourceId!;
   assert.notEqual(ownerNewOrderNotificationKey(id), customerPaymentNotificationKey(id));
   assert.notEqual(customerPaymentNotificationKey(id), customerDeliveryNotificationKey(id));
+});
+
+test("le nom client Shop partagé conserve la borne maximale valide sans bloquer l’outbox owner", () => {
+  const customerName = shopOrderCustomerSnapshotName({
+    shippingFirstName: "A".repeat(100),
+    shippingLastName: "B".repeat(100),
+  });
+  assert.equal(customerName?.length, SHOP_ORDER_CUSTOMER_SNAPSHOT_NAME_MAX_LENGTH);
+  assert.equal(
+    shopOrderCustomerSnapshotName({ shippingFirstName: " Anne  Marie ", shippingLastName: " D’Exemple " }),
+    "Anne Marie D’Exemple",
+  );
+  assert.doesNotThrow(() => parseNotificationPayload({
+    ...shopMessage.payload,
+    customerName,
+    shippingAddress: null,
+  }, "OWNER_SHOP_ORDER_PAID"));
 });
 
 test("les clés Boutique sont stables et séparent chaque événement logique", () => {
@@ -286,6 +307,98 @@ test("l’enqueue Boutique utilise le parent Shop, le snapshot et la clé persis
   assert.equal(created.idempotencyKey, customerShopPaymentConfirmedNotificationKey(shopOrderId));
   assert.equal((created.payload as Record<string, unknown>).customerEmail, "shop-client@example.invalid");
   assert.equal(Array.isArray((created.payload as Record<string, unknown>).items), true);
+});
+
+test("les notifications owner Boutique utilisent le nom figé de la commande pour Stripe et PayPal", async () => {
+  const shopOrderId = shopMessage.resourceId!;
+  for (const paymentProvider of ["STRIPE", "PAYPAL"] as const) {
+    const persisted = new Map<string, Record<string, unknown>>();
+    const transaction = {
+      shopOrder: {
+        findUniqueOrThrow: async () => ({
+          id: shopOrderId,
+          userId: "00000000-0000-4000-8000-000000000222",
+          orderNumber: "LNX-SHOP-2026-000001",
+          subtotalCents: 2_800,
+          shippingCents: 200,
+          totalCents: 3_000,
+          currency: "EUR",
+          shippingRequired: true,
+          shippingFirstName: " Test ",
+          shippingLastName: " Client ",
+          shippingAddressLine1: "1 rue du Test",
+          shippingAddressLine2: null,
+          shippingPostalCode: "75001",
+          shippingCity: "Paris",
+          shippingCountryCode: "FR",
+          termsVersion: "shop-cgv-2026-08-v1",
+          createdAt: new Date("2026-08-27T10:00:00.000Z"),
+        }),
+      },
+      user: {
+        findUniqueOrThrow: async () => ({
+          email: "shop-client@example.invalid",
+          emailVerified: true,
+          displayName: "Membre LNX",
+          firstName: null,
+          lastName: null,
+        }),
+      },
+      shopOrderItem: {
+        findMany: async () => [
+          { productTitle: "Vinyle", quantity: 1, unitPriceCents: 2_800, lineTotalCents: 2_800 },
+        ],
+      },
+      payment: { findMany: async () => [{ provider: paymentProvider }] },
+      invoice: { findMany: async () => [{ invoiceNumber: "LNX-20260827-0001" }] },
+      orderNotification: {
+        upsert: async (input: {
+          where: { idempotencyKey: string };
+          create: Record<string, unknown>;
+        }) => {
+          const current = persisted.get(input.where.idempotencyKey);
+          if (!current) persisted.set(input.where.idempotencyKey, input.create);
+          const row = current ?? input.create;
+          return {
+            id: "00000000-0000-4000-8000-000000000111",
+            orderId: row.orderId,
+            shopOrderId: row.shopOrderId,
+            kind: row.kind,
+            channel: row.channel,
+            resourceType: row.resourceType,
+            resourceId: row.resourceId,
+          };
+        },
+      },
+    };
+    const input = {
+      shopOrderId,
+      kind: "OWNER_SHOP_ORDER_PAID" as const,
+      idempotencyKey: ownerShopOrderPaidNotificationKey(shopOrderId),
+      paymentProvider,
+      termsVersion: "shop-cgv-2026-08-v1",
+    };
+    await enqueueShopOrderNotification(transaction as never, input);
+    await enqueueShopOrderNotification(transaction as never, input);
+
+    assert.equal(persisted.size, 1, `${paymentProvider}: une seule notification logique`);
+    const created = persisted.get(ownerShopOrderPaidNotificationKey(shopOrderId))!;
+    const payload = created.payload as ShopNotificationPayload;
+    assert.equal(payload.customerName, "Test Client");
+    assert.equal(payload.paymentProvider, paymentProvider);
+    assert.equal(payload.shippingAddress, null, "l’email owner ne reçoit pas l’adresse de livraison");
+
+    const owner = orderNotificationTemplate({
+      ...shopMessage,
+      kind: "OWNER_SHOP_ORDER_PAID",
+      recipient: "owner@example.invalid",
+      idempotencyKey: ownerShopOrderPaidNotificationKey(shopOrderId),
+      templateKey: "owner-shop-order-paid",
+      payload,
+    }, captureConfiguration);
+    assert.match(owner.text, /Client : Test Client/);
+    assert.doesNotMatch(`${owner.text}\n${owner.html}`, /Membre LNX|1 rue du Test|shop-client@example\.invalid/);
+  }
 });
 
 test("les notifications fulfillment Boutique respectent le flag client avant toute écriture", async () => {

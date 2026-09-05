@@ -36,6 +36,7 @@ import type {
   OrderNotificationMessage,
 } from "@/lib/notifications/types";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { shopOrderCustomerSnapshotName } from "@/lib/shop/customer-snapshot";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -286,7 +287,9 @@ export async function enqueueShopOrderNotification(
     }),
   );
   const shopOrder = { ...shopOrderRow, user, items, payments, invoices };
-  const customerName = shopCustomerName(shopOrder.user);
+  const customerName = definition.audience === "OWNER"
+    ? shopOrderCustomerSnapshotName(shopOrder)
+    : shopCustomerName(shopOrder.user);
   const customerRecipient = shopOrder.user.emailVerified ? shopOrder.user.email : null;
   const recipient = notificationRecipientSnapshot(input.recipient === undefined
     ? definition.audience === "OWNER"

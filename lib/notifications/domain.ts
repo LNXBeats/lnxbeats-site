@@ -7,6 +7,7 @@ import type {
   OrderNotificationKind,
   ShopNotificationPayload,
 } from "@/lib/notifications/types";
+import { SHOP_ORDER_CUSTOMER_SNAPSHOT_NAME_MAX_LENGTH } from "@/lib/shop/customer-snapshot";
 
 export const MAXIMUM_NOTIFICATION_ATTEMPTS = 5;
 export const NOTIFICATION_LEASE_MS = 5 * 60_000;
@@ -156,7 +157,7 @@ function parseShopNotificationPayload(payload: Record<string, unknown>): ShopNot
   if (Object.keys(payload).some((key) => !shopPayloadKeys.has(key))) throw new Error("Notification payload contains an unknown field.");
   if (
     typeof payload.orderNumber !== "string" || !payload.orderNumber || payload.orderNumber.length > 80
-    || !(payload.customerName === null || (typeof payload.customerName === "string" && payload.customerName.length <= 200))
+    || !(payload.customerName === null || (typeof payload.customerName === "string" && payload.customerName.length <= SHOP_ORDER_CUSTOMER_SNAPSHOT_NAME_MAX_LENGTH))
     || typeof payload.customerEmail !== "string"
     || !Number.isSafeInteger(payload.subtotalCents) || Number(payload.subtotalCents) < 0
     || !Number.isSafeInteger(payload.shippingCents) || Number(payload.shippingCents) < 0
