@@ -33,6 +33,7 @@ Une décision sur la prestation reste une action Admin distincte, limitée par l
 - un payload provider complet n'est jamais conservé.
 - un remboursement Commander exige une facture source liée au `Payment` ; l'absence de facture produit `REFUND_SOURCE_INVOICE_REQUIRED` avant la création du `RefundAttempt` et avant tout appel Stripe ou PayPal ;
 - une annulation payée ou un remboursement SAV Boutique exige la facture immuable liée à la même `ShopOrder` et au même `Payment`, avec devise et total cohérents ; le refus intervient avant toute nouvelle tentative, tout appel provider, avoir, notification ou restock ;
+- une annulation payée réservée et toute transition logistique incompatible partagent le verrou de la `ShopOrder` ; le `RefundAttempt` persistant reste la barrière d'expédition pendant l'appel provider exécuté hors transaction longue ;
 - un remboursement confirmé crée obligatoirement son avoir ; l'absence de facture n'est plus un cas silencieux.
 - après preuve provider positive, un échec de finalisation locale conserve la tentative, l'identifiant provider connu et la capacité réservée en `REQUIRES_REVIEW` dans une transaction distincte ; la réconciliation relit cette tentative au lieu de renvoyer une mutation financière.
 
@@ -63,7 +64,7 @@ Les événements Stripe pris en charge par le moteur financier sont `refund.crea
 
 ## PayPal Sandbox — remboursement total ou partiel
 
-L'adapter appelle `POST /v2/payments/captures/{capture_id}/refund` avec un montant EUR exact et `PayPal-Request-Id` égal à la clé provider persistante. Une réconciliation lit `GET /v2/payments/refunds/{refund_id}` lorsqu'un identifiant est connu.
+L’adapter appelle `POST /v2/payments/captures/{capture_id}/refund` avec un montant EUR exact et `PayPal-Request-Id` égal à la clé provider persistante. Une référence applicative opaque et déterministe (`LNX-REFUND-` suivi du SHA-256 de cette clé) est envoyée dans le champ PayPal prévu par le refund : elle permet une corrélation anticipée sans exposer l'identifiant interne. Une réconciliation lit `GET /v2/payments/refunds/{refund_id}` lorsqu'un identifiant est connu.
 
 - `COMPLETED` confirme la part remboursée ;
 - `PENDING` conserve la tentative et le paiement en attente ;
@@ -105,11 +106,14 @@ Un échec PostgreSQL après l'appel provider ne justifie jamais un deuxième rem
 
 ## Webhook tardif ou anticipé
 
-- webhook avant la réponse API : il peut rattacher l'unique tentative active de même paiement, provider et montant ;
+- webhook avant la réponse API : il n'est rattaché que par une référence applicative exacte et authentifiée — identifiants `paymentId`/`refundAttemptId` dans les métadonnées Stripe, ou référence opaque PayPal attendue ; paiement, provider, montant, devise et opération autorisée doivent aussi correspondre ;
+- webhook sans référence applicative suffisante : la preuve est conservée pour rapprochement ciblé, sans choisir « la dernière tentative », sans finaliser sur le montant seul et sans empêcher la réponse API attendue de compléter sa tentative ;
 - webhook après la réponse API : il ajoute un reçu dédupliqué mais ne recrée ni notification ni remboursement ;
 - replay du même event ID : résultat idempotent ;
 - plusieurs événements distincts pour le même remboursement : le `providerRefundId` stable empêche une deuxième mutation logique ;
 - montant, devise, paiement ou identifiant contradictoire : `REQUIRES_REVIEW`.
+
+La réponse API, le retrieve et un webhook suffisamment corrélé convergent vers le même finaliseur transactionnel. Pour une annulation client confirmée, l'avoir conserve le code sémantique `WITHDRAWAL` et précise « Annulation demandée par le client avant expédition » ; une véritable erreur vendeur conserve `SELLER_ERROR`. Les rendus HTML et PDF de l'avoir reprennent l'identité immuable du client depuis le snapshot de la facture source, jamais depuis le profil courant. Un échec d'avoir, de stock ou de finalisation après succès provider laisse la tentative et la preuve en `REQUIRES_REVIEW` et ne déclenche jamais un second remboursement.
 
 ## Double provider
 
