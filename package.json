@@ -62,6 +62,8 @@
     "test:legal:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-legal-runtime.ts",
     "test:billing": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/billing/*.test.ts",
     "billing:historical-invoices:dry-run": "node --env-file-if-exists=.env.local scripts/historical-invoice-backfill-dry-run.mjs --dry-run",
+    "billing:historical-invoices:apply": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/historical-invoice-backfill-apply.ts",
+    "test:historical-invoice-backfill:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-historical-invoice-backfill-runtime.ts",
     "test:billing:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-billing-runtime.ts",
     "billing:qa:fixtures": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/billing-browser-fixtures.ts",
     "test:shop-pricing:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-shop-pricing-runtime.ts",

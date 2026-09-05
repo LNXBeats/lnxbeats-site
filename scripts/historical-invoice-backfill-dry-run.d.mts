@@ -20,9 +20,14 @@ export type HistoricalInvoiceRow = Readonly<{
   paymentAmountCents: number | null;
   paymentCurrency: string | null;
   paidAt: string | Date | null;
+  paymentRefundedAmountCents: number;
   providerPaymentProofPresent: boolean;
+  succeededPaymentCount: number;
   processedProviderEventCount: number;
+  refundAttemptCount: number;
+  openIncidentCount: number;
   invoiceCount: number;
+  creditNoteCount: number;
 }>;
 
 export type HistoricalInvoicePlan = Readonly<{
@@ -49,10 +54,11 @@ export type HistoricalInvoicePlan = Readonly<{
   }>;
   numberAllocated: false;
   datePolicyRequired: false;
-  applyImplemented: false;
+  applyImplemented: true;
 }>;
 
 export const HISTORICAL_INVOICE_ORDER_ALLOWLIST: readonly string[];
+export const HISTORICAL_INVOICE_EXPECTATIONS: Readonly<Record<string, Readonly<{ provider: string; amountCents: number; currency: string }>>>;
 export const APPROVED_HISTORICAL_INVOICE_DATE_POLICY: "CURRENT_ISSUANCE_WITH_HISTORICAL_PAID_AT_REFERENCE";
 export function assertHistoricalInvoiceDryRunArguments(argumentsProvided: readonly string[]): void;
 export function assertHistoricalInvoiceWhitelist(orderNumbers: readonly string[]): string[];
@@ -60,6 +66,7 @@ export function assessHistoricalInvoiceOrder(row: HistoricalInvoiceRow): Histori
 export function readHistoricalInvoiceBackfillPlan(
   client: { query(sql: string, values?: readonly unknown[]): Promise<{ rows: unknown[] }> },
   requestedOrderNumbers?: readonly string[],
+  options?: Readonly<{ manageReadOnlyTransaction: boolean }>,
 ): Promise<Readonly<{
   mode: "DRY_RUN_READ_ONLY";
   approvedDatePolicy: "CURRENT_ISSUANCE_WITH_HISTORICAL_PAID_AT_REFERENCE";
@@ -71,5 +78,5 @@ export function readHistoricalInvoiceBackfillPlan(
   numbersAllocated: 0;
   allOrdersValidatedBeforeNumberAllocation: boolean;
   datePolicyRequired: false;
-  applyImplemented: false;
+  applyImplemented: true;
 }>>;

@@ -6,6 +6,12 @@ export const HISTORICAL_INVOICE_ORDER_ALLOWLIST = Object.freeze([
   "LNX-2026-000011",
 ]);
 
+export const HISTORICAL_INVOICE_EXPECTATIONS = Object.freeze({
+  "LNX-2026-000003": Object.freeze({ provider: "STRIPE", amountCents: 5000, currency: "EUR" }),
+  "LNX-2026-000007": Object.freeze({ provider: "PAYPAL", amountCents: 2000, currency: "EUR" }),
+  "LNX-2026-000011": Object.freeze({ provider: "STRIPE", amountCents: 2000, currency: "EUR" }),
+});
+
 export const APPROVED_HISTORICAL_INVOICE_DATE_POLICY = "CURRENT_ISSUANCE_WITH_HISTORICAL_PAID_AT_REFERENCE";
 
 export function assertHistoricalInvoiceDryRunArguments(argumentsProvided) {
@@ -16,10 +22,13 @@ export function assertHistoricalInvoiceDryRunArguments(argumentsProvided) {
 
 export function assertHistoricalInvoiceWhitelist(orderNumbers) {
   const unique = [...new Set(orderNumbers)];
-  if (!unique.length || unique.some((value) => !HISTORICAL_INVOICE_ORDER_ALLOWLIST.includes(value))) {
+  if (
+    unique.length !== HISTORICAL_INVOICE_ORDER_ALLOWLIST.length
+    || unique.some((value) => !HISTORICAL_INVOICE_ORDER_ALLOWLIST.includes(value))
+  ) {
     throw new Error("Historical invoice order is not allowlisted.");
   }
-  return unique;
+  return [...HISTORICAL_INVOICE_ORDER_ALLOWLIST];
 }
 
 function proposedLines(row) {
@@ -42,13 +51,21 @@ function proposedLines(row) {
 export function assessHistoricalInvoiceOrder(row) {
   const lines = proposedLines(row);
   const missingData = [];
+  const expectation = HISTORICAL_INVOICE_EXPECTATIONS[row.orderNumber];
+  if (!expectation) missingData.push("ORDER_NOT_ALLOWLISTED");
   if (row.invoiceCount !== 0) missingData.push("INVOICE_ALREADY_EXISTS");
+  if (row.creditNoteCount !== 0) missingData.push("CREDIT_NOTE_ALREADY_EXISTS");
   if (!row.paymentPresent) missingData.push("PAYMENT_MISSING");
+  if (row.succeededPaymentCount !== 1) missingData.push("PAYMENT_WINNER_NOT_UNIQUE");
   if (row.paymentMode !== "LIVE") missingData.push("PAYMENT_NOT_LIVE");
   if (row.paymentStatus !== "SUCCEEDED" || !row.paidAt) missingData.push("PAYMENT_NOT_SUCCEEDED");
+  if (expectation && row.provider !== expectation.provider) missingData.push("PROVIDER_MISMATCH");
   if (!row.providerPaymentProofPresent || row.processedProviderEventCount < 1) missingData.push("PAYMENT_PROOF_INCOMPLETE");
   if (row.paymentAmountCents !== row.orderTotalCents || row.paymentCurrency !== row.orderCurrency) missingData.push("AMOUNT_OR_CURRENCY_MISMATCH");
+  if (expectation && (row.orderTotalCents !== expectation.amountCents || row.orderCurrency !== expectation.currency)) missingData.push("EXPECTED_FINANCIALS_MISMATCH");
   if (row.orderCurrency !== "EUR") missingData.push("CURRENCY_NOT_EUR");
+  if (row.refundAttemptCount !== 0 || row.paymentRefundedAmountCents !== 0) missingData.push("REFUND_STATE_PRESENT");
+  if (row.openIncidentCount !== 0) missingData.push("PAYMENT_INCIDENT_OPEN");
   if (!row.customerNamePresent || !row.customerEmailValid) missingData.push("CUSTOMER_SNAPSHOT_INCOMPLETE");
   if (row.termsVersionPresent !== row.termsHashPresent) missingData.push("TERMS_SNAPSHOT_INCONSISTENT");
   if (["DRAFT", "AWAITING_PAYMENT"].includes(row.orderStatus)) missingData.push("ORDER_NOT_INVOICEABLE");
@@ -60,7 +77,8 @@ export function assessHistoricalInvoiceOrder(row) {
     customerSnapshotComplete: row.customerNamePresent && row.customerEmailValid,
     orderSnapshotComplete: !["DRAFT", "AWAITING_PAYMENT"].includes(row.orderStatus) && lines.length > 0,
     paymentProofComplete: row.paymentPresent && row.paymentMode === "LIVE" && row.paymentStatus === "SUCCEEDED"
-      && Boolean(row.paidAt) && row.providerPaymentProofPresent && row.processedProviderEventCount > 0,
+      && row.succeededPaymentCount === 1 && Boolean(row.paidAt)
+      && row.providerPaymentProofPresent && row.processedProviderEventCount > 0,
     descriptionComplete: lines.length > 0,
     amountCurrencyVerified: row.paymentAmountCents === row.orderTotalCents
       && row.paymentCurrency === row.orderCurrency && row.orderCurrency === "EUR",
@@ -79,13 +97,17 @@ export function assessHistoricalInvoiceOrder(row) {
     },
     numberAllocated: false,
     datePolicyRequired: false,
-    applyImplemented: false,
+    applyImplemented: true,
   };
 }
 
-export async function readHistoricalInvoiceBackfillPlan(client, requestedOrderNumbers = HISTORICAL_INVOICE_ORDER_ALLOWLIST) {
+export async function readHistoricalInvoiceBackfillPlan(
+  client,
+  requestedOrderNumbers = HISTORICAL_INVOICE_ORDER_ALLOWLIST,
+  options = { manageReadOnlyTransaction: true },
+) {
   const orderNumbers = assertHistoricalInvoiceWhitelist(requestedOrderNumbers);
-  await client.query("BEGIN TRANSACTION READ ONLY");
+  if (options.manageReadOnlyTransaction) await client.query("BEGIN TRANSACTION READ ONLY");
   try {
     const result = await client.query(`
       SELECT o."orderNumber" AS "orderNumber", o.status::text AS "orderStatus",
@@ -100,16 +122,21 @@ export async function readHistoricalInvoiceBackfillPlan(client, requestedOrderNu
         p.id IS NOT NULL AS "paymentPresent", p.provider::text AS provider,
         p.mode::text AS "paymentMode", p.status::text AS "paymentStatus",
         p."amountCents" AS "paymentAmountCents", p.currency AS "paymentCurrency", p."paidAt",
+        p."refundedAmountCents" AS "paymentRefundedAmountCents",
         (p."providerPaymentId" IS NOT NULL) AS "providerPaymentProofPresent",
+        (SELECT count(*)::int FROM payments p1 WHERE p1."orderId" = o.id AND p1.status = 'SUCCEEDED') AS "succeededPaymentCount",
         (SELECT count(*)::int FROM provider_events pe WHERE pe."paymentId" = p.id AND pe.outcome = 'PROCESSED') AS "processedProviderEventCount",
-        (SELECT count(*)::int FROM invoices i WHERE i."orderId" = o.id) AS "invoiceCount"
+        (SELECT count(*)::int FROM refund_attempts ra WHERE ra."paymentId" = p.id) AS "refundAttemptCount",
+        (SELECT count(*)::int FROM payment_incidents pi WHERE pi."paymentId" = p.id AND pi.status IN ('OPEN', 'UNDER_REVIEW')) AS "openIncidentCount",
+        (SELECT count(*)::int FROM invoices i WHERE i."orderId" = o.id) AS "invoiceCount",
+        (SELECT count(*)::int FROM credit_notes cn JOIN invoices i ON i.id = cn."invoiceId" WHERE i."orderId" = o.id) AS "creditNoteCount"
       FROM orders o
       LEFT JOIN LATERAL (
         SELECT * FROM payments p0 WHERE p0."orderId" = o.id
         ORDER BY (p0.status = 'SUCCEEDED') DESC, p0."paidAt" DESC NULLS LAST, p0."createdAt" DESC LIMIT 1
       ) p ON true
       WHERE o."orderNumber" = ANY($1::text[])
-      ORDER BY o."orderNumber"
+      ORDER BY p."paidAt" NULLS LAST, o."orderNumber"
     `, [orderNumbers]);
     const sequence = await client.query(`
       SELECT last_value::text AS "lastValue", is_called AS "isCalled",
@@ -133,10 +160,10 @@ export async function readHistoricalInvoiceBackfillPlan(client, requestedOrderNu
         && result.rows.length === orderNumbers.length
         && plans.every((plan) => plan.readyForBackfill),
       datePolicyRequired: false,
-      applyImplemented: false,
+      applyImplemented: true,
     };
   } finally {
-    await client.query("ROLLBACK");
+    if (options.manageReadOnlyTransaction) await client.query("ROLLBACK");
   }
 }
 
