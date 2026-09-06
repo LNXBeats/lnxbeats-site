@@ -55,7 +55,7 @@ export default async function AccountPage() {
   const active = orders.filter((order) => !["DRAFT", "AWAITING_PAYMENT"].includes(order.status) && !completedOrderStatuses.has(order.status));
 
   return (
-    <section className="auth-shell account-shell">
+    <section className="auth-shell account-shell account-overview-page">
       <Container className="auth-shell__inner auth-shell__inner--account">
         <div className="auth-intro">
           <p className="eyebrow">Votre espace</p>
@@ -114,7 +114,7 @@ export default async function AccountPage() {
                     <Link href={`/compte/achats/${encodeURIComponent(order.orderNumber)}`}>
                       <span>
                         <strong>{order.items.map(({ productTitle }) => productTitle).join(" · ")}</strong>
-                        <small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small>
+                        <small><span className="technical-reference technical-reference--inline">{order.orderNumber}</span> · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small>
                       </span>
                       <span>
                         <em>{order.paymentReviewAt ? "Paiement à vérifier" : order.paymentStatus === "PAID" ? shopFulfillmentLabel(order.fulfillmentStatus) : effectiveStatus === "OPEN" ? "Prête pour paiement" : effectiveStatus === "EXPIRED" ? "Réservation expirée" : "Annulée"}</em>
@@ -133,7 +133,7 @@ export default async function AccountPage() {
             <div className="member-orders__heading"><div><p className="auth-panel__label">Factures et avoirs</p><h2 id="account-invoices-title">Vos documents.</h2></div></div>
             {!invoices.length ? <div className="member-orders__empty"><p><strong>Aucun document émis.</strong><br />Une facture apparaît après confirmation serveur d’un paiement.</p></div> : (
               <ul className="member-order-list">{invoices.map((invoice) => <li key={invoice.id}>
-                <Link href={`/compte/factures/${encodeURIComponent(invoice.invoiceNumber)}`}><span><strong>{invoice.invoiceNumber}</strong><small>{invoice.orderNumberSnapshot} · {new Date(invoice.issuedAt).toLocaleDateString("fr-FR")}</small></span><span><em>{invoice.documentType === "SHOP" ? "Boutique" : "Création musicale"}</em><small>{invoice.creditNotes.length ? `${invoice.creditNotes.length} avoir${invoice.creditNotes.length > 1 ? "s" : ""}` : "Aucun avoir"}</small><strong>{formatEuro(invoice.totalCents)}</strong></span></Link>
+                <Link href={`/compte/factures/${encodeURIComponent(invoice.invoiceNumber)}`}><span><strong className="technical-reference technical-reference--list">{invoice.invoiceNumber}</strong><small><span className="technical-reference technical-reference--inline">{invoice.orderNumberSnapshot}</span> · {new Date(invoice.issuedAt).toLocaleDateString("fr-FR")}</small></span><span><em>{invoice.documentType === "SHOP" ? "Boutique" : "Création musicale"}</em><small>{invoice.creditNotes.length ? `${invoice.creditNotes.length} avoir${invoice.creditNotes.length > 1 ? "s" : ""}` : "Aucun avoir"}</small><strong>{formatEuro(invoice.totalCents)}</strong></span></Link>
                 {invoice.creditNotes.map((creditNote) => <p key={creditNote.id}><Link className="text-link" href={`/compte/avoirs/${encodeURIComponent(creditNote.creditNoteNumber)}`}>Avoir {creditNote.creditNoteNumber} · {formatEuro(creditNote.amountCents)} <span aria-hidden="true">→</span></Link></p>)}
               </li>)}</ul>
             )}
@@ -217,7 +217,7 @@ function OrderGroup({ title, orders, draft = false }: { title: string; orders: A
           return (
             <li key={order.orderNumber}>
               <Link href={href}>
-                <span><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small></span>
+                <span><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><small><span className="technical-reference technical-reference--inline">{order.orderNumber}</span> · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small></span>
                 <span><em>{presentation.label}</em><small>{clientPaymentPresentation(order)}</small><strong>{formatEuro(order.totalCents)}</strong></span>
               </Link>
               <p><strong>Options :</strong> {[order.coverIncluded ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)})` : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}. <strong>Action attendue :</strong> {clientOrderAction(order)}. {presentation.next}</p>

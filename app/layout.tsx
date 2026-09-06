@@ -13,6 +13,8 @@ import "./v072-rights.css";
 import "./v085-mobile-polish.css";
 import "./v0854-audio-payment.css";
 import "./legal-compliance.css";
+import "./v110-chrome-polish.css";
+import "./v110-surface-polish.css";
 
 const siteUrl = CANONICAL_SITE_ORIGIN;
 const socialImage = new URL("/og.png", siteUrl).toString();

@@ -38,7 +38,7 @@ export default async function MemberShopReturnCreatePage({
     {state === "demande-refusee" ? <p className="auth-form__error" role="alert">La demande n’a pas été enregistrée. Vérifiez les quantités et la confirmation.</p> : null}
     <div className="auth-account-stack">
       <section className="member-orders">
-        <div className="member-orders__heading"><div><p className="auth-panel__label">Commande</p><h2>{order.orderNumber}</h2></div><strong>{formatShopMoney(order.totalCents)}</strong></div>
+        <div className="member-orders__heading"><div><p className="auth-panel__label">Commande</p><h2 className="technical-reference technical-reference--section">{order.orderNumber}</h2></div><strong>{formatShopMoney(order.totalCents)}</strong></div>
         <form className="auth-form shop-return-form" action={createShopReturnAction}>
           <input type="hidden" name="orderNumber" value={order.orderNumber} />
           <label><span>Motif principal</span><select name="type" required defaultValue="">

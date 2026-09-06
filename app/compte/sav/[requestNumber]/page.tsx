@@ -23,7 +23,7 @@ export default async function MemberShopReturnPage({ params, searchParams }: { p
   const state = (await searchParams).etat;
   return <div className="auth-shell account-shell"><Container className="auth-shell__inner auth-shell__inner--account">
     <Link className="text-link" href={`/compte/achats/${encodeURIComponent(request.shopOrder.orderNumber)}`}><span aria-hidden="true">←</span> Retour à l’achat</Link>
-    <header className="auth-intro"><p className="eyebrow">Boutique · SAV</p><h1>{request.requestNumber}</h1><div className="account-intro__summary"><p>{shopReturnStatusLabel(request.status)}. Les décisions de remboursement et de remise en stock restent séparées et auditées.</p></div></header>
+    <header className="auth-intro"><p className="eyebrow">Boutique · SAV</p><h1 className="technical-reference technical-reference--hero">{request.requestNumber}</h1><div className="account-intro__summary"><p>{shopReturnStatusLabel(request.status)}. Les décisions de remboursement et de remise en stock restent séparées et auditées.</p></div></header>
     {state === "demande-enregistree" ? <p className="auth-form__success" role="status">Votre demande a été enregistrée.</p> : null}
     {state === "demande-annulee" ? <p className="auth-form__success" role="status">Votre demande a été annulée.</p> : null}
     {state === "operation-refusee" ? <p className="auth-form__error" role="alert">L’opération a été refusée sans modifier le dossier.</p> : null}

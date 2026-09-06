@@ -1,0 +1,192 @@
+/*
+ * V1.1.0 — Global chrome polish.
+ * The header stays fixed, so its compact state never changes document flow or
+ * the shared --header-height offsets used by page content.
+ */
+
+@media (min-width: 821px) {
+  .site-header { transition: height 180ms var(--motion-ease-out); }
+  .site-header__inner { transition: padding-inline 180ms var(--motion-ease-out); }
+  .brand { transition: min-width 180ms var(--motion-ease-out); }
+  .brand__lnx {
+    transition:
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--motion-ease-out),
+      font-size 180ms var(--motion-ease-out);
+  }
+  .brand__beats {
+    transition:
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--motion-ease-out),
+      font-size 180ms var(--motion-ease-out),
+      letter-spacing 180ms var(--motion-ease-out);
+  }
+  .desktop-navigation__cta,
+  .desktop-navigation__account { transition-property: color, background-color, border-color, padding; }
+
+  .site-header.site-header--compact { height: 64px; }
+  .site-header--compact .site-header__inner { padding-inline: clamp(0.85rem, 1.5vw, 1.4rem); }
+  .site-header--compact .brand { min-width: 84px; }
+  .site-header--compact .brand__lnx { font-size: 1.5rem; }
+  .site-header--compact .brand__beats { font-size: 0.52rem; letter-spacing: 0.41em; }
+  .site-header--compact .desktop-navigation__cta { padding: 0.65rem 1rem; }
+  .site-header--compact .desktop-navigation__account { padding: 0.55rem 0.8rem; }
+}
+
+.desktop-navigation__link,
+.desktop-navigation__cta,
+.desktop-navigation__account,
+.menu-button {
+  min-height: 44px;
+}
+
+/* Compact footer ------------------------------------------------------- */
+
+.site-footer {
+  padding-top: clamp(2.5rem, 5vw, 4.5rem);
+}
+
+main:has(> .v064-discography-stage) + .site-footer {
+  padding-top: clamp(2.5rem, 5vw, 4.5rem);
+}
+
+.site-footer::before {
+  inset: 0 auto auto 0;
+  width: min(34vw, 28rem);
+  height: 100%;
+  background: radial-gradient(circle at 18% 24%, rgba(198, 161, 91, 0.1), transparent 68%);
+  opacity: 1;
+}
+
+.site-footer__signature {
+  gap: clamp(0.55rem, 1vw, 0.9rem);
+  margin-bottom: clamp(1.4rem, 3vw, 2.5rem);
+  padding-bottom: clamp(0.8rem, 1.6vw, 1.25rem);
+}
+
+.site-footer__signature span:first-child {
+  font-size: clamp(3.35rem, 7vw, 6.5rem);
+  line-height: 0.76;
+}
+
+.site-footer__signature span:last-child {
+  font-size: clamp(1.45rem, 3vw, 2.75rem);
+}
+
+.site-footer__top {
+  grid-template-columns: minmax(220px, 0.5fr) minmax(0, 1.5fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  padding-bottom: clamp(1.7rem, 3vw, 2.6rem);
+}
+
+.site-footer__statement > p:last-child {
+  font-size: clamp(1.45rem, 2.35vw, 2.35rem);
+}
+
+.site-footer__columns { gap: clamp(1.25rem, 2.2vw, 2rem); }
+.site-footer__columns h2 { margin-bottom: 0.55rem; }
+.site-footer__columns a { min-height: 40px; }
+
+.site-footer__shop-link {
+  gap: 0.45rem;
+  color: var(--gold-light);
+}
+
+.site-footer__external-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+  opacity: 0.72;
+  transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease-out);
+}
+
+.site-footer__shop-link:is(:hover, :focus-visible) .site-footer__external-icon {
+  opacity: 1;
+  transform: translate(1px, -1px);
+}
+
+.site-footer__bottom {
+  gap: 1.25rem;
+  padding-block: 1rem;
+}
+
+.site-footer__bottom nav { gap: 0.65rem 1rem; }
+
+@media (max-width: 820px) {
+  .site-footer {
+    padding-top: 1.15rem;
+  }
+
+  main:has(> .v064-discography-stage) + .site-footer {
+    padding-top: 1.15rem;
+  }
+
+  .site-footer__signature {
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .site-footer__signature span:first-child {
+    font-size: clamp(2.15rem, 10vw, 2.8rem);
+    line-height: 0.8;
+  }
+
+  .site-footer__signature span:last-child {
+    font-size: clamp(0.95rem, 4.5vw, 1.2rem);
+  }
+
+  .site-footer__top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .site-footer__statement > p:last-child {
+    font-size: 1.05rem;
+    line-height: 1.2;
+  }
+
+  .site-footer__group > summary,
+  .site-footer__columns a,
+  .site-footer__bottom a {
+    min-height: 44px;
+  }
+
+  .site-footer__group-links {
+    row-gap: 0;
+    padding-bottom: 0.35rem;
+  }
+
+  .site-footer__bottom {
+    gap: 0.15rem;
+    padding-block: 0.55rem max(0.55rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 380px) {
+  .site-footer__bottom nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.2rem 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header,
+  .site-header__inner,
+  .brand,
+  .brand__lnx,
+  .brand__beats,
+  .desktop-navigation__cta,
+  .desktop-navigation__account,
+  .site-footer__external-icon { transition: none; }
+
+  .site-footer__shop-link:is(:hover, :focus-visible) .site-footer__external-icon {
+    transform: none;
+  }
+}

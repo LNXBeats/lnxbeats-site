@@ -1,0 +1,439 @@
+/* V1.1.0 — restrained density, hierarchy and responsive polish for commerce/member surfaces. */
+
+:root {
+  --v110-space-xs: 0.5rem;
+  --v110-space-s: 0.85rem;
+  --v110-space-m: 1.25rem;
+  --v110-space-l: clamp(1.65rem, 3vw, 2.5rem);
+  --v110-space-xl: clamp(2.5rem, 5vw, 4.5rem);
+}
+
+/* Long operational references keep their identity without overwhelming small screens. */
+.technical-reference {
+  max-width: 100%;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  hyphens: none;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.account-shell .auth-intro h1.technical-reference--hero {
+  max-width: 22ch;
+  font-size: clamp(2rem, 5.25vw, 5.25rem);
+  font-weight: 570;
+  letter-spacing: -0.048em;
+  line-height: 0.96;
+}
+
+.technical-reference--section {
+  font-size: clamp(1.35rem, 2.65vw, 2.35rem) !important;
+  letter-spacing: -0.035em !important;
+  line-height: 1.05 !important;
+}
+
+.technical-reference--list {
+  font-size: clamp(0.82rem, 1.25vw, 1rem);
+  letter-spacing: -0.015em;
+}
+
+.technical-reference--inline {
+  display: inline;
+  font-size: max(1em, 0.75rem);
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  text-transform: none;
+}
+
+/* Member pages: less dashboard-like, with compact but still legible cards. */
+.account-overview-page .auth-shell__inner--account,
+.billing-document-page .auth-shell__inner--account,
+.shop-order-detail-page .auth-shell__inner--account {
+  gap: var(--v110-space-xl);
+}
+
+.account-overview-page .auth-account-stack,
+.shop-order-detail-page .auth-account-stack {
+  gap: var(--v110-space-m);
+}
+
+.account-overview-page .member-orders,
+.shop-order-detail-page .member-orders,
+.billing-document-page .member-orders {
+  padding: var(--v110-space-l);
+}
+
+.account-overview-page .member-orders__heading,
+.shop-order-detail-page .member-orders__heading {
+  padding-bottom: var(--v110-space-m);
+}
+
+.account-overview-page .member-order-groups {
+  gap: clamp(1.5rem, 2.7vw, 2rem);
+  padding-top: var(--v110-space-m);
+}
+
+.account-overview-page .member-order-list li > a {
+  min-height: 64px;
+}
+
+.account-overview-page .member-order-list li,
+.shop-order-detail-page .member-order-list li {
+  padding-block: var(--v110-space-s);
+}
+
+.shop-order-detail-page .auth-intro,
+.billing-document-page .auth-intro {
+  padding-bottom: clamp(1.5rem, 3vw, 2.75rem);
+}
+
+.shop-order-detail-page .auth-account-stack {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: start;
+}
+
+.shop-order-detail-page .auth-account-stack > * {
+  grid-column: 1 / -1;
+}
+
+.shop-order-detail-page .shop-order-panel--items {
+  grid-column: 1 / span 7;
+}
+
+.shop-order-detail-page .shop-order-panel--summary {
+  grid-column: 8 / -1;
+}
+
+.shop-order-detail-page .member-orders__heading h2 {
+  font-size: clamp(1.55rem, 2.8vw, 2.45rem);
+}
+
+.shop-order-detail-page .auth-profile > div {
+  gap: 0.8rem;
+  padding-block: 0.85rem;
+}
+
+.shop-order-detail-page .account-shop-address {
+  line-height: 1.6;
+}
+
+.shop-order-detail-page .account-disclosure > summary {
+  min-height: 50px;
+  padding-block: 0.85rem;
+}
+
+.billing-document-page .auth-panel {
+  padding: var(--v110-space-l);
+}
+
+.billing-document-page .auth-profile > div {
+  padding-block: 1rem;
+}
+
+/* Existing custom-order pages retain every fact while shortening the visual journey. */
+.order-detail-shell .order-detail {
+  gap: clamp(1.5rem, 3.4vw, 3rem);
+}
+
+.order-detail-shell .order-detail__header {
+  padding-bottom: clamp(1.25rem, 2.7vw, 2rem);
+}
+
+.order-detail-shell .order-detail__grid {
+  gap: clamp(1.5rem, 3.5vw, 3.5rem);
+}
+
+.order-detail-shell .order-detail__main,
+.order-detail-shell .order-detail__section,
+.order-detail-shell .order-detail__price {
+  padding: clamp(1.3rem, 3vw, 2.35rem);
+}
+
+.order-detail-shell .order-detail__main h2,
+.order-detail-shell .order-detail__section h2 {
+  margin-bottom: clamp(1.1rem, 2vw, 1.5rem);
+}
+
+.order-detail-shell .order-detail__facts > div {
+  padding: 0.85rem;
+}
+
+.order-detail-shell .order-timeline li,
+.order-detail-shell .order-timeline li > div {
+  padding-bottom: 1.1rem;
+}
+
+/* Commerce cards and calls to action share a quieter, clearer hierarchy. */
+.shop-commerce-shell .shop-commerce-hero {
+  padding-block: clamp(5rem, 10vw, 8rem) clamp(2.5rem, 5vw, 4rem);
+}
+
+.shop-commerce-shell .shop-commerce-heading {
+  margin-bottom: var(--v110-space-l);
+}
+
+.shop-commerce-shell .shop-product-card {
+  transition: border-color var(--motion-standard) ease, box-shadow var(--motion-standard) ease, transform var(--motion-standard) var(--motion-ease-out);
+}
+
+.shop-commerce-shell .shop-product-card:is(:hover, :focus-within) {
+  border-color: rgba(226, 196, 126, 0.34);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.34), 0 0 30px rgba(198, 161, 91, 0.045);
+  transform: translateY(-3px);
+}
+
+.shop-commerce-shell .shop-product-card__body {
+  padding: clamp(1rem, 2vw, 1.45rem);
+}
+
+.shop-commerce-shell .shop-product-card__body > p:not(.shop-product-card__status) {
+  min-height: 4.3em;
+  margin-block: 0.8rem;
+}
+
+.shop-commerce-shell .shop-product-card__footer {
+  padding-top: 0.85rem;
+}
+
+.shop-commerce-shell .shop-product-detail {
+  gap: clamp(1.75rem, 5vw, 5rem);
+}
+
+.shop-commerce-shell .shop-product-detail__copy {
+  max-width: 38rem;
+}
+
+.shop-commerce-shell .shop-product-detail__price {
+  font-size: clamp(1.65rem, 2.5vw, 2.25rem);
+}
+
+.shop-commerce-shell.shop-product-page,
+.shop-commerce-shell.shop-cart-page {
+  padding-block: clamp(2.5rem, 6vw, 5.5rem);
+}
+
+.shop-commerce-shell .shop-cart-page__heading {
+  margin-bottom: clamp(1.75rem, 4vw, 3rem);
+}
+
+.shop-commerce-shell .shop-cart__lines,
+.shop-commerce-shell .shop-cart__address,
+.shop-commerce-shell .shop-cart__summary,
+.shop-commerce-shell .shop-cart-empty {
+  padding: clamp(1.1rem, 2.5vw, 1.7rem);
+}
+
+.shop-commerce-shell .button,
+.account-shell .button,
+.order-detail-shell .button {
+  min-height: 44px;
+}
+
+.shop-commerce-shell .button--primary,
+.account-shell .button--primary,
+.order-detail-shell .button--primary {
+  box-shadow: 0 12px 30px rgba(198, 161, 91, 0.12);
+}
+
+.shop-commerce-shell .button--secondary,
+.account-shell .button--secondary,
+.order-detail-shell .button--secondary {
+  background: rgba(10, 10, 9, 0.66);
+}
+
+/* Discography: an editorial counter and a clearer active plane. */
+.v064-discography-stage .discography-jukebox .home-jukebox__heading output {
+  bottom: 0.2rem;
+}
+
+.v064-discography-stage .discography-jukebox .home-jukebox__counter {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.38rem;
+  color: rgba(244, 240, 232, 0.58);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.v064-discography-stage .discography-jukebox .home-jukebox__counter strong {
+  color: var(--gold-light);
+  font-size: 1.18em;
+  font-weight: 700;
+}
+
+.v064-discography-stage .discography-card[data-active="true"] {
+  border-color: rgba(226, 196, 126, 0.7);
+  box-shadow: 0 38px 100px rgba(0, 0, 0, 0.64), 0 0 48px rgba(198, 161, 91, 0.115);
+}
+
+.v064-discography-stage .discography-card[data-active="true"]::after {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border: 1px solid rgba(255, 229, 166, 0.11);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+
+.v064-discography-stage .discography-jukebox__filters button:focus-visible,
+.v064-discography-stage .discography-jukebox__sort select:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 1px;
+}
+
+@media (max-width: 900px) {
+  .shop-order-detail-page .shop-order-panel--items,
+  .shop-order-detail-page .shop-order-panel--summary {
+    grid-column: 1 / -1;
+  }
+
+  .account-overview-page .account-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .shop-commerce-shell .shop-product-card__body > p:not(.shop-product-card__status) {
+    min-height: auto;
+  }
+
+  .v064-discography-stage .discography-jukebox .home-jukebox__heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .account-shell .auth-intro h1.technical-reference--hero {
+    max-width: 100%;
+    font-size: clamp(1.55rem, 7.3vw, 2.15rem);
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+  }
+
+  .technical-reference--list {
+    font-size: 0.78rem;
+  }
+
+  .account-overview-page .auth-shell__inner--account,
+  .billing-document-page .auth-shell__inner--account,
+  .shop-order-detail-page .auth-shell__inner--account {
+    gap: 1.6rem;
+  }
+
+  .account-overview-page .member-orders,
+  .shop-order-detail-page .member-orders,
+  .billing-document-page .member-orders {
+    padding: 1.15rem;
+  }
+
+  .shop-order-detail-page .auth-account-stack {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
+  }
+
+  .shop-order-detail-page .auth-account-stack > * {
+    grid-column: 1;
+  }
+
+  .shop-order-detail-page .member-orders__heading h2 {
+    font-size: clamp(1.4rem, 7vw, 1.9rem);
+  }
+
+  .shop-order-detail-page .auth-profile > div {
+    padding-block: 0.75rem;
+  }
+
+  .order-detail-shell .order-detail {
+    gap: 1.15rem;
+  }
+
+  .order-detail-shell .order-detail__main,
+  .order-detail-shell .order-detail__section,
+  .order-detail-shell .order-detail__price {
+    padding: 1.15rem;
+  }
+
+  .shop-commerce-shell .shop-commerce-hero {
+    padding-block: 4rem 2.4rem;
+  }
+
+  .shop-commerce-shell .shop-product-card:is(:hover, :focus-within) {
+    transform: none;
+  }
+
+  .shop-commerce-shell .shop-product-card__footer,
+  .shop-commerce-shell .shop-product-card__actions {
+    align-items: flex-start;
+  }
+
+  .shop-commerce-shell .shop-product-detail__price {
+    font-size: 1.7rem;
+  }
+
+  .v064-discography-stage .discography-jukebox .home-jukebox__heading output {
+    position: static;
+    display: block;
+    margin-top: 0.7rem;
+    text-align: left;
+  }
+
+  .v064-discography-stage .discography-jukebox .home-jukebox__heading .home-jukebox__counter {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 620px) {
+  .shop-commerce-shell.shop-product-page,
+  .shop-commerce-shell.shop-cart-page {
+    padding-block: 2rem 5rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .account-overview-page .member-order-list li > a {
+    min-height: 44px;
+    padding-inline: 0.2rem;
+  }
+
+  .account-overview-page .member-order-list li > a > span:last-child {
+    row-gap: 0.35rem;
+  }
+
+  .shop-commerce-shell .shop-product-card__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .shop-commerce-shell .shop-product-card__actions {
+    align-items: stretch;
+    justify-content: space-between;
+  }
+
+  .shop-commerce-shell .shop-product-card__actions .shop-add-button {
+    padding-inline: 0.85rem;
+  }
+
+  .billing-document-actions {
+    gap: 0.6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-commerce-shell .shop-product-card,
+  .v064-discography-stage .discography-card,
+  .v064-discography-stage .discography-card[data-active="true"]::after {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .shop-commerce-shell .shop-product-card:is(:hover, :focus-within) {
+    transform: none;
+  }
+}

@@ -6,24 +6,51 @@ import { useEffect, useRef, useState } from "react";
 import { navigation } from "@/data/site";
 import { Container } from "@/components/container";
 
+const HEADER_COMPACT_SCROLL_THRESHOLD = 72;
+
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const lastLinkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
+    let animationFrame = 0;
+    const updateCompactState = () => {
+      animationFrame = 0;
+      setCompact(window.scrollY >= HEADER_COMPACT_SCROLL_THRESHOLD);
+    };
+    const handleScroll = () => {
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(updateCompactState);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const desktopMedia = window.matchMedia("(min-width: 821px)");
+    document.body.style.overflow = "hidden";
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && open) {
+      if (event.key === "Escape") {
         setOpen(false);
         menuButtonRef.current?.focus();
         return;
       }
 
-      if (event.key !== "Tab" || !open) return;
+      if (event.key !== "Tab") return;
 
       const button = menuButtonRef.current;
       const firstLink = firstLinkRef.current;
@@ -45,20 +72,36 @@ export function SiteHeader() {
         firstLink.focus();
       }
     };
+    const closeAfterHistoryNavigation = () => setOpen(false);
+    const closeAtDesktopWidth = (event: MediaQueryListEvent) => {
+      if (event.matches) setOpen(false);
+    };
+
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("popstate", closeAfterHistoryNavigation);
+    desktopMedia.addEventListener("change", closeAtDesktopWidth);
 
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("popstate", closeAfterHistoryNavigation);
+      desktopMedia.removeEventListener("change", closeAtDesktopWidth);
     };
   }, [open]);
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const toggleMenu = () => {
+    const nextOpen = !open;
+    setOpen(nextOpen);
+    if (nextOpen) {
+      window.requestAnimationFrame(() => firstLinkRef.current?.focus({ preventScroll: true }));
+    }
+  };
 
   if (pathname.startsWith("/admin")) return null;
 
   return (
-    <header className={`site-header ${pathname === "/" ? "site-header--home" : ""}`}>
+    <header className={`site-header ${pathname === "/" ? "site-header--home" : ""} ${compact && !open ? "site-header--compact" : ""}`}>
       <Container className="site-header__inner">
         <Link className="brand" href="/" aria-label="LNX Beats — accueil" onClick={() => setOpen(false)}>
           <span className="brand__lnx">LNX</span>
@@ -92,7 +135,7 @@ export function SiteHeader() {
           aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={open}
           aria-controls="mobile-navigation"
-          onClick={() => setOpen((current) => !current)}
+          onClick={toggleMenu}
         >
           <span className="menu-button__label">Menu</span>
           <span className={`menu-button__icon ${open ? "is-open" : ""}`} aria-hidden="true">
@@ -106,6 +149,7 @@ export function SiteHeader() {
         id="mobile-navigation"
         className={`mobile-navigation ${open ? "is-open" : ""}`}
         aria-hidden={!open}
+        inert={!open}
       >
         <Container className="mobile-navigation__inner">
           <nav aria-label="Navigation mobile">

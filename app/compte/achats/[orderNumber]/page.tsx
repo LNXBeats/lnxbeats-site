@@ -89,12 +89,12 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
   const hasTrackingDetails = Boolean(order.shippingCarrier || order.trackingNumber || order.trackingUrl);
 
   return (
-    <div className="auth-shell account-shell">
+    <div className="auth-shell account-shell shop-order-detail-page">
       <Container className="auth-shell__inner auth-shell__inner--account">
         <Link className="text-link" href="/compte"><span aria-hidden="true">←</span> Retour à mon espace</Link>
         <header className="auth-intro">
           <p className="eyebrow">Commande Boutique</p>
-          <h1>{order.orderNumber}</h1>
+          <h1 className="technical-reference technical-reference--hero">{order.orderNumber}</h1>
           <div className="account-intro__summary">
             <p>
               {order.paymentReviewAt
@@ -132,7 +132,7 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
         ) : null}
 
         <div className="auth-account-stack">
-          <section className="member-orders">
+          <section className="member-orders shop-order-panel shop-order-panel--items">
             <div className="member-orders__heading"><div><p className="auth-panel__label">Articles</p><h2>Votre sélection.</h2></div></div>
             <ul className="member-order-list">
               {order.items.map((item) => {
@@ -160,7 +160,7 @@ export default async function MemberShopOrderPage({ params, searchParams }: Cont
             </ul>
           </section>
 
-          <section className="member-orders">
+          <section className="member-orders shop-order-panel shop-order-panel--summary">
             <div className="member-orders__heading"><div><p className="auth-panel__label">Récapitulatif</p><h2>Montants figés.</h2></div></div>
             <dl className="auth-profile">
               <div><dt>Sous-total</dt><dd>{formatShopMoney(order.subtotalCents)}</dd></div>

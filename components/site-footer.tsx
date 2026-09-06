@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/container";
+import { ExternalLinkIcon } from "@/components/link-icons";
 import { navigation, siteConfig } from "@/data/site";
 
 export function SiteFooter() {
@@ -31,7 +32,17 @@ export function SiteFooter() {
               <div>
                 <h2>Prolonger l’histoire</h2>
                 {[...siteConfig.social, ...siteConfig.shops].map((item) => (
-                  <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} — nouvel onglet`}>{item.name}</a>
+                  <a
+                    key={item.name}
+                    className={siteConfig.shops.some((shop) => shop.url === item.url) ? "site-footer__shop-link" : undefined}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${item.name} — nouvel onglet`}
+                  >
+                    <span>{item.name}</span>
+                    {siteConfig.shops.some((shop) => shop.url === item.url) ? <ExternalLinkIcon className="site-footer__external-icon" /> : null}
+                  </a>
                 ))}
                 <a href={`mailto:${siteConfig.email}`}>E-mail</a>
               </div>
@@ -55,7 +66,17 @@ export function SiteFooter() {
                 <summary>Prolonger l’histoire</summary>
                 <div className="site-footer__group-links">
                   {[...siteConfig.social, ...siteConfig.shops].map((item) => (
-                    <a key={item.name} href={item.url} target="_blank" rel="noopener noreferrer" aria-label={`${item.name} — nouvel onglet`}>{item.name}</a>
+                    <a
+                      key={item.name}
+                      className={siteConfig.shops.some((shop) => shop.url === item.url) ? "site-footer__shop-link" : undefined}
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${item.name} — nouvel onglet`}
+                    >
+                      <span>{item.name}</span>
+                      {siteConfig.shops.some((shop) => shop.url === item.url) ? <ExternalLinkIcon className="site-footer__external-icon" /> : null}
+                    </a>
                   ))}
                   <a href={`mailto:${siteConfig.email}`}>E-mail</a>
                 </div>
