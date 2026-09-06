@@ -214,3 +214,12 @@ Les répétitions restantes correspondent à une même action réelle. Les libel
 8. décider si PayPal et le virement sont réellement proposés, puis fournir les règles de rapprochement ;
 9. confirmer les produits physiques, stocks, prix et modalités de livraison avant toute publication ;
 10. fournir les pochettes, dates, crédits, tracklists et liens directs de sortie manquants uniquement depuis des sources officielles.
+
+## Addendum V1.1.0 — polissage visuel final
+
+- Le chrome public conserve sa structure : le header fixe devient seulement plus compact après 72 px de défilement sur desktop, sans modifier `--header-height` ni le flux de page. Le menu mobile garde ses cibles de 44 px, son verrouillage de scroll, sa boucle de focus et sa fermeture au clavier.
+- Le footer conserve ses trois groupes, les liens juridiques et « Produits dérivés — DistroKid », mais réduit sa signature, sa décoration et ses espacements sur mobile comme sur desktop. Etsy demeure absent des surfaces publiques.
+- Les références de commande, facture, avoir et SAV disposent d’un traitement typographique responsive isolé. Les cartes Compte et Commande gagnent en densité sans masquer les informations de paiement, livraison, statut ou service après-vente.
+- L’accueil ajoute uniquement de la profondeur CSS à « LNX en trois regards » et aux transitions éditoriales. La page À propos réemploie son portrait existant et limite la mesure de lecture sans ajouter de biographie. La Discographie conserve son ordre et son lecteur, avec un état actif plus lisible et le compteur « Projet … sur … ».
+- Les niveaux de CTA existants restent `primary`, `secondary` et `quiet`/lien éditorial. Les libellés juridiques, les actions financières et les règles du checkout ne changent pas.
+- La recette responsive couvre 375, 390, 430, 768, 1024 et 1440 px, avec contrôle du débordement horizontal, du focus visible, des cibles tactiles et de `prefers-reduced-motion`. Les captures utilisent exclusivement des fixtures locales fictives et ne sont pas versionnées.
