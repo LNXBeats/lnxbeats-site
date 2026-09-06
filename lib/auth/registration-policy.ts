@@ -1,0 +1,1 @@
+export const REGISTRATION_CODE_TTL_MS = 10 * 60_000;

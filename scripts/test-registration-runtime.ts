@@ -8,6 +8,7 @@ import { POST as verifyCodeRoute } from "@/app/api/auth/registration/verify/rout
 import { promoteConfiguredAdmin } from "@/lib/auth/admin-bootstrap";
 import { handleAuthRequest } from "@/lib/auth/handler";
 import { createInternalAuthUser } from "@/lib/auth/internal-user";
+import { REGISTRATION_CODE_TTL_MS } from "@/lib/auth/registration-policy";
 import { canAccessAdmin } from "@/lib/auth/roles";
 import { prisma } from "@/lib/prisma";
 
@@ -32,6 +33,7 @@ type CapturedEmail = {
   to: string;
   subject: string;
   text: string;
+  html: string;
 };
 
 type RegistrationResponse = {
@@ -116,6 +118,10 @@ async function latestCode(email: string) {
   assert.equal(message.subject, "Votre code LNX Beats");
   const code = message.text.match(/(?:^|\n)(\d{6})(?:\n|$)/)?.[1];
   assert.ok(code, "The captured registration email must contain six digits.");
+  assert.equal(message.text.match(/(?:^|\n)\d{6}(?:\n|$)/g)?.length, 1);
+  assert.equal(message.html.match(new RegExp(code, "g"))?.length, 1);
+  assert.match(message.html, new RegExp(`>${code}</td>`));
+  assert.match(message.text, new RegExp(`Ce code expire dans ${REGISTRATION_CODE_TTL_MS / 60_000} minutes\\.`));
   return code;
 }
 
@@ -234,7 +240,7 @@ async function run() {
     const validAttempt = await prisma.registrationAttempt.findUniqueOrThrow({ where: { id: requested.body.attemptId } });
     assert.equal(validAttempt.email, EMAILS.valid);
     const codeLifetime = validAttempt.expiresAt.getTime() - validAttempt.createdAt.getTime();
-    assert.ok(codeLifetime <= 10 * 60_000 && codeLifetime >= 10 * 60_000 - 2_000);
+    assert.ok(codeLifetime <= REGISTRATION_CODE_TTL_MS && codeLifetime >= REGISTRATION_CODE_TTL_MS - 2_000);
     assert.equal(validAttempt.codeHash.includes(validCode), false);
     assert.equal(await prisma.user.count(), 0, "No account may exist before code verification and password choice.");
     passed.push("valid email normalized, code captured and raw code absent from PostgreSQL");

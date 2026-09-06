@@ -6,10 +6,11 @@ import type { Prisma } from "@/generated/prisma/client";
 import { sendRegistrationCodeEmail } from "@/lib/auth/email-delivery";
 import { isPersistentLocalPreview } from "@/lib/auth/environment";
 import { hashPassword } from "@/lib/auth/password";
+import { REGISTRATION_CODE_TTL_MS } from "@/lib/auth/registration-policy";
 import { createOpaqueToken, hashOpaqueToken, isOpaqueToken } from "@/lib/auth/tokens";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
-export const REGISTRATION_CODE_TTL_MS = 10 * 60_000;
+export { REGISTRATION_CODE_TTL_MS };
 export const REGISTRATION_PROOF_TTL_MS = 10 * 60_000;
 export const REGISTRATION_MAX_FAILED_ATTEMPTS = 5;
 
