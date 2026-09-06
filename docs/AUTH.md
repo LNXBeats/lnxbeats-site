@@ -77,7 +77,9 @@ Après un code correct seulement — donc après preuve de possession de la boî
 
 ## Email transactionnel
 
-Le sujet du nouveau message est `Votre code LNX Beats`. Le corps contient le code, sa validité de dix minutes et la consigne d’ignorer la demande si elle n’a pas été initiée par le destinataire. Il n’ajoute ni marketing, tracking, pixel, ressource distante ou lien externe.
+Le sujet du nouveau message est `Votre code LNX Beats`. La version HTML reprend le cadre sombre des emails transactionnels LNX Beats : carte centrale, accents dorés, titre sans serif et code dans un bloc dédié. Le code reste du texte exact, sélectionnable et copiable ; aucune image, police distante, ressource distante ou lien n’est nécessaire. La version texte brut conserve le même code, l’instruction, l’expiration, le rappel de sécurité et la consigne d’ignorer une demande non initiée.
+
+La durée affichée n’est pas recopiée dans le template : elle est dérivée de `REGISTRATION_CODE_TTL_MS`, la même constante entière en minutes que celle utilisée pour persister l’expiration de la tentative. Une durée invalide ou non exprimable en minutes entières est refusée. Le rendu ne modifie ni la génération, ni le hash, ni les tentatives, ni l’usage unique du code.
 
 L’Auth appelle une abstraction unique. Le transport `capture` écrit un fichier JSON Lines local en permissions `0600` et n’effectue aucun appel réseau. Il accepte :
 
@@ -86,6 +88,8 @@ L’Auth appelle une abstraction unique. Le transport `capture` écrit un fichie
 - cette même identité dans la base QA auth dédiée, pour tester le bootstrap.
 
 Le transport `resend` conserve les gardes strictes de la preview personnelle et peut être ouvert en production uniquement par le contrat V0.7.8. En production, `EMAIL_PROVIDER=resend` est obligatoire pour l'inscription, la vérification legacy et la récupération. Il partage les credentials et l'identité d'expéditeur Resend du système transactionnel, tout en restant un chemin direct afin qu'aucun OTP ou token ne soit persisté dans l'outbox métier.
+
+Ce template est construit par le Web dans le parcours `POST /api/auth/registration/code`, via l’adaptateur Auth direct. Le worker Notifications et le worker Maintenance ne l’envoient pas ; leur redéploiement n’est donc pas requis pour une évolution exclusivement visuelle de cet OTP.
 
 La production exige une origine `AUTH_URL` HTTPS, la confirmation notification exacte, les flags généraux cohérents, un domaine From et Reply-To contrôlé sous `lnxbeats.fr`, ainsi que des secrets présents dans le coffre. Elle refuse toute adresse `.invalid`, `.test`, `resend.dev`, tout expéditeur QA et toute combinaison incomplète. `NOTIFICATION_WORKER_ENABLED` ne pilote pas l'envoi Auth immédiat, mais le rollback doit désactiver explicitement les deux transports.
 
@@ -101,7 +105,7 @@ Le domaine `email.lnxbeats.fr` doit rester vérifié côté Resend. L’envoi OT
 
 Les liens de vérification legacy et de reset utilisent eux aussi une clé d'idempotence dérivée d'une empreinte non réversible du token. Le token brut n'entre jamais dans cette clé, un log, l'outbox ou un événement de diagnostic.
 
-Le sujet OTP est `Votre code LNX Beats`. Les versions HTML et texte contiennent seulement le code, son expiration de dix minutes et la consigne d’ignorer une demande non initiée, sans tracking, publicité, image distante ni lien externe.
+Le sujet OTP est `Votre code LNX Beats`. Les versions HTML et texte contiennent seulement le code, l’expiration dérivée du TTL d’inscription et la consigne d’ignorer une demande non initiée, sans tracking, publicité, image distante ni lien externe.
 
 ## Sessions, profil et récupération
 

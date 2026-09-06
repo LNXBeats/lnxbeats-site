@@ -70,6 +70,15 @@ Les montants ne viennent pas du navigateur : le serveur les a recalculés depuis
 les produits au moment de créer la commande. Les frais d'envoi sont unitaires,
 multipliés par la quantité de chaque ligne, puis additionnés au niveau commande.
 
+La phrase présentée pour un événement `SHOP_ORDER_CANCELLED` est une
+interprétation de lecture ; elle ne réécrit pas l’événement historique. « Commande
+non payée » exige l’absence de `paidAt` et de `Payment` financier. « Commande
+payée annulée après confirmation de son remboursement intégral » exige à la fois
+les trois états d’annulation persistés, une demande client corrélée à son
+`RefundAttempt`, un `Payment=REFUNDED` et un montant remboursé égal au montant
+payé. Une preuve incomplète, `PENDING` ou `REQUIRES_REVIEW` conserve un libellé
+de vérification et n’est jamais présentée comme un remboursement confirmé.
+
 ## Marquer une commande expédiée
 
 La Phase 3A prépare deux actions Admin explicitement confirmées :

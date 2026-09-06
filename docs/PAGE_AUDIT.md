@@ -8,6 +8,8 @@ Les ajustements restent éditoriaux ou de présentation. Aucun flux métier, pai
 
 > **Addendum V0.6 :** ce document conserve l’état observé lors de la V0.5.2.1. Commander enregistre désormais des brouillons et photos privés pour les membres vérifiés, puis finalise une demande `AWAITING_PAYMENT`. Le paiement, les emails de commande, la facture et la livraison restent inactifs. L’état technique courant est décrit dans [`ORDER_MODEL.md`](ORDER_MODEL.md).
 
+> **Addendum V1.1 :** les mentions Etsy et l’inventaire de CTA ci-dessous restent la trace de l’audit V0.5.2.1 ; ils ne décrivent plus la surface publique candidate. Etsy est retiré du rendu public. `/boutique` conserve la Boutique LNX pour les ventes directes et présente séparément la Boutique DistroKid de produits dérivés, à partir de l’URL officielle versionnée dans `data/site.ts`.
+
 ## Éléments transversaux
 
 ### Header

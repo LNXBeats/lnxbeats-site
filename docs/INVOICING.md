@@ -37,6 +37,10 @@ Les pages HTML essentielles sont disponibles dans le Compte et l’Admin. Les ro
 
 HTML et PDF rendent le même snapshot client immuable. Les champs d’adresse structurés restent des lignes distinctes : voie, complément éventuel, code postal et ville, puis pays. Aucun renderer ne concatène ces lignes ni ne relit le profil courant.
 
+L’avoir reprend l’identité de l’émetteur depuis `Invoice.sellerSnapshot`, le numéro de la facture source et son `Invoice.issuedAt` persisté. Il ne déduit jamais cette date du numéro du document. La nature sémantique du motif et sa précision sont deux lignes distinctes en HTML comme en PDF. Ces références suivent les exigences ciblées relatives aux mentions du vendeur et à l’identification de la facture rectifiée documentées par [Bercy](https://www.economie.gouv.fr/entreprises/gerer-son-entreprise-au-quotidien/gerer-sa-comptabilite-et-ses-demarches/mentions-obligatoires-dune-facture-tout-savoir) et le [BOFiP](https://bofip.impots.gouv.fr/bofip/142-PGP.html/identifiant=BOI-TVA-DECLA-30-20-20-20-20190925).
+
+Les empreintes persistées protègent les snapshots de données ; elles ne sont pas l’empreinte des octets PDF. `Invoice.snapshotHashSha256` couvre notamment son snapshot vendeur, tandis que `CreditNote.snapshotHashSha256` couvre le numéro, la date, la référence de facture, les liens de remboursement, les montants, la devise et le motif propres à l’avoir. Les routes Billing n’archivent pas un binaire PDF : elles régénèrent une présentation depuis ces lignes immuables et inscrivent l’audit de génération. Une évolution du renderer modifie donc les téléchargements futurs sans réémettre, renuméroter ni modifier la facture ou l’avoir persisté.
+
 ## Conservation et sécurité
 
 Factures, avoirs et pièces comptables : dix ans. Les purges de compte doivent les exclure. Ne jamais journaliser snapshot client, PDF, e-mail complet, adresse, identifiant fournisseur ou secret. Sauvegardes chiffrées, contrôles de restauration, restriction des accès et exports comptables restent des gates Production.
@@ -55,3 +59,4 @@ Factures, avoirs et pièces comptables : dix ans. Les purges de compte doivent l
 9. Vérifier les obligations de facturation électronique avant ouverture.
 10. Vérifier qu’un document LIVE n’a aucun watermark et qu’un document TEST conserve son marquage, en HTML comme en PDF.
 11. Vérifier que le nom et les lignes d’adresse sont identiques en HTML et PDF, notamment avec accents, apostrophe, tiret et libellé long.
+12. Vérifier que l’avoir affiche le bloc émetteur historique, le numéro et la date persistée de la facture source, puis sépare la nature du motif de sa précision sur écran étroit et dans le PDF.

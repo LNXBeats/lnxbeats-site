@@ -111,7 +111,7 @@ Le smoke test vérifie les routes publiques principales, une fiche publiée, une
 - `/discographie` — catalogue PostgreSQL et sélection éditoriale
 - `/album/[slug]` — fiche dynamique d’un projet, avec metadata issues du catalogue
 - `/commander` — parcours complet du brief au récapitulatif, photos privées, grille serveur courante de 20 à 60 € et Checkout hébergé selon les providers activés
-- `/boutique` — liens DistroKid Direct et Etsy
+- `/boutique` — catalogue Boutique LNX et accès distinct aux produits dérivés de la Boutique DistroKid ; aucune surface publique Etsy
 - `/a-propos` — biographie officielle et démarche artistique
 - `/contact` — contact professionnel
 - `/mentions-legales`, `/confidentialite`, `/cgv` — brouillons préparatoires listant les informations à fournir ou valider
