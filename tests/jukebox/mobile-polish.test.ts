@@ -31,7 +31,7 @@ test("mobile editorial cleanup uses one compact Commander progress indicator", a
   ]);
 
   assert.match(homepage, /number: "01"/);
-  assert.match(shop, /shop-card__index">01 · MUSIQUE/);
+  assert.match(shop, /shop-card__index">PRODUITS DÉRIVÉS/);
   assert.match(orderForm, /order-progress__number/);
   assert.match(orderForm, /<progress max=\{steps\.length\} value=\{step \+ 1\}/);
   assert.match(globalCss, /@media \(max-width: 700px\)[\s\S]*?\.home-perspective > span \{ display: none; \}[\s\S]*?\.home-perspective h3 \{ margin-top: 0; \}[\s\S]*?\.shop-card \{ justify-content: flex-end; \}[\s\S]*?\.shop-card__index \{ display: none; \}/);

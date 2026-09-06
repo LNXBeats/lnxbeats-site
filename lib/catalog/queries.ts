@@ -10,9 +10,14 @@ const publicProjectWhere = {
   status: { in: [...publicProjectStatuses] },
 } satisfies Prisma.ProjectWhereInput;
 
+const publicPlatformLinkWhere = {
+  scope: { in: ["RELEASE" as const, "STORE" as const] },
+  platform: { not: "ETSY" as const },
+} satisfies Prisma.PlatformLinkWhereInput;
+
 const detailInclude = {
   tracks: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
-  platformLinks: { where: { scope: { in: ["RELEASE" as const, "STORE" as const] } }, orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
+  platformLinks: { where: publicPlatformLinkWhere, orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
   credits: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }] },
   confidenceAnnotations: true,
   assets: {

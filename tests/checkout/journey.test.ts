@@ -153,8 +153,9 @@ test("Commander and Boutique retain their editorial identity with denser respons
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*?\.shop-card \{ min-height: 400px; \}/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.shop-card \{ min-height: 360px; padding: 1\.5rem; \}/);
   assert.doesNotMatch(css, /\.shop-card \{ min-height: 560px; overflow: hidden;/);
-  assert.match(shop, /Le lien mène vers l’espace musical officiel\. Les disponibilités et les éventuels achats y sont gérés hors de ce site\./);
-  assert.match(shop, /Le lien mène vers la page Etsy officielle de LNX Beats\. Son contenu et ses disponibilités peuvent évoluer indépendamment de ce site\./);
+  assert.match(shop, /Mugs, vêtements et autres produits dérivés LNX Beats sont proposés dans cette boutique externe, distincte de la Boutique LNX\./);
+  assert.match(shop, /Découvrir les produits dérivés — DistroKid/);
+  assert.doesNotMatch(shop, /Etsy/i);
 });
 
 test("Compte and Admin separate unpaid checkout from paid work", () => {

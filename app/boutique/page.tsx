@@ -18,6 +18,25 @@ export const metadata: Metadata = {
   alternates: { canonical: "/boutique" },
 };
 
+const distroKidMerchShop = siteConfig.shops[0];
+
+function DistroKidMerchSection({ soft = false }: { soft?: boolean }) {
+  return (
+    <section className={`section${soft ? " section--soft" : ""}`} aria-labelledby="distrokid-merch-title">
+      <Container className="shop-grid shop-grid--single motion-reveal motion-reveal--soft">
+        <article className="shop-card shop-card--merch">
+          <span className="shop-card__index">PRODUITS DÉRIVÉS</span>
+          <div className="shop-card__content">
+            <h2 id="distrokid-merch-title">Boutique DistroKid</h2>
+            <p>Mugs, vêtements et autres produits dérivés LNX Beats sont proposés dans cette boutique externe, distincte de la Boutique LNX.</p>
+            <ButtonLink href={distroKidMerchShop.url} external>Découvrir les produits dérivés — DistroKid</ButtonLink>
+          </div>
+        </article>
+      </Container>
+    </section>
+  );
+}
+
 function ShopTeaser() {
   return (
     <>
@@ -28,26 +47,7 @@ function ShopTeaser() {
           <div className="page-hero__visual page-hero__visual--shop" aria-hidden="true"><span>Hors scène</span></div>
         </Container>
       </header>
-      <section className="section">
-        <Container className="shop-grid motion-reveal motion-reveal--soft">
-          <article className="shop-card">
-            <span className="shop-card__index">01 · MUSIQUE</span>
-            <div className="shop-card__content">
-              <h2>DistroKid Direct</h2>
-              <p>Le lien mène vers l’espace musical officiel. Les disponibilités et les éventuels achats y sont gérés hors de ce site.</p>
-              <ButtonLink href={siteConfig.shops[0].url} external>Ouvrir DistroKid Direct</ButtonLink>
-            </div>
-          </article>
-          <article className="shop-card">
-            <span className="shop-card__index">02 · CRÉATIONS</span>
-            <div className="shop-card__content">
-              <h2>Etsy</h2>
-              <p>Le lien mène vers la page Etsy officielle de LNX Beats. Son contenu et ses disponibilités peuvent évoluer indépendamment de ce site.</p>
-              <ButtonLink href={siteConfig.shops[1].url} external>Ouvrir la page Etsy</ButtonLink>
-            </div>
-          </article>
-        </Container>
-      </section>
+      <DistroKidMerchSection />
       <section className="section section--soft">
         <Container className="content-columns motion-reveal">
           <p className="content-columns__label">Éditions futures</p>
@@ -79,6 +79,7 @@ function ShopEmptyState() {
           </div>
         </Container>
       </section>
+      <DistroKidMerchSection soft />
     </div>
   );
 }
@@ -155,6 +156,7 @@ export default async function ShopPage() {
           </div>
         </Container>
       </section>
+      <DistroKidMerchSection soft />
     </div>
   );
 }

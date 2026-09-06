@@ -2,6 +2,7 @@ import { officialLinks } from "@/data/site";
 import { deriveCatalogConfidence } from "@/lib/catalog/confidence";
 import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import { automaticPlatformLabel, resolvePlatformLabel } from "@/lib/catalog/platform-label";
+import { isPublicCatalogLink } from "@/lib/catalog/public-link-policy";
 import type {
   ArtworkTone,
   CreditRole,
@@ -101,7 +102,7 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
   const releaseDate = project.releaseDate?.toISOString().slice(0, 10) ?? null;
   const coverAsset = project.assets?.find(({ role }) => role === "COVER")?.asset;
   const audioAsset = project.assets?.find(({ role }) => role === "AUDIO_PREVIEW")?.asset;
-  const directPlatforms = (project.platformLinks ?? []).map((link) => {
+  const directPlatforms = (project.platformLinks ?? []).filter(isPublicCatalogLink).map((link) => {
     const platform = platformMap[link.platform] ?? "other";
     const scope = link.scope === "STORE" ? "store" as const : link.scope === "ARTIST" ? "artist" as const : "release" as const;
     return { id: link.id, platform, label: resolvePlatformLabel(link.label, platform, scope), url: link.url, scope };

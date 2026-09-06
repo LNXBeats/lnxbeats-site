@@ -8,7 +8,6 @@ export const officialLinks = {
   tiktok: "https://www.tiktok.com/@lnx.beats",
   instagram: "https://www.instagram.com/lnxbeats",
   distroKid: "https://direct.distrokid.com/lnxbeats2/",
-  etsy: "https://lnxbeats.etsy.com/listing/4528037390",
 } as const;
 
 export const quickAccessPlatforms = [
@@ -41,8 +40,7 @@ export const siteConfig = {
     { name: "Instagram", url: officialLinks.instagram },
   ],
   shops: [
-    { name: "DistroKid Direct", url: officialLinks.distroKid },
-    { name: "Etsy", url: officialLinks.etsy },
+    { name: "Produits dérivés — DistroKid", url: officialLinks.distroKid },
   ],
 } as const;
 

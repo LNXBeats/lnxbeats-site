@@ -17,6 +17,7 @@ import { deriveCatalogConfidence, projectCompletenessLabel } from "@/lib/catalog
 import { platformLabelOverride, platformName, resolvePlatformLabel } from "@/lib/catalog/platform-label";
 import { catalogSeoMode, effectiveCatalogSeoDescription, effectiveCatalogSeoTitle } from "@/lib/catalog/seo";
 import { getCatalogDeletionEligibility } from "@/lib/catalog/lifecycle";
+import { isEtsyCatalogLink } from "@/lib/catalog/public-link-policy";
 import { getAdminCatalogProject } from "@/lib/catalog/service";
 import type { DataConfidence, PlatformId, ProjectDataConfidence } from "@/lib/catalog/types";
 import {
@@ -60,6 +61,35 @@ function Identity({ project }: { project: { id: string; slug: string } }) {
 }
 function SectionFeedback({ state, accepted }: { state?: string; accepted: readonly string[] }) {
   return state && accepted.includes(state) && feedback[state] ? <p className="admin-feedback" role="status">{feedback[state]}</p> : null;
+}
+
+type AdminPlatformLink = {
+  id: string;
+  platform: string;
+  scope: string;
+  url: string;
+  label: string | null;
+};
+
+function PlatformLinkEditor({ project, link }: { project: { id: string; slug: string }; link: AdminPlatformLink }) {
+  const historicalEtsy = isEtsyCatalogLink(link);
+  const platform = platformFromDb[link.platform] ?? "other";
+  const scope = link.scope === "STORE" ? "store" as const : "release" as const;
+  const override = platformLabelOverride(link.label, platform, scope);
+
+  return <li>
+    <div className="admin-link-summary">
+      <strong>{historicalEtsy ? "Etsy — historique masqué" : platformName(platform)}</strong>
+      <span>{historicalEtsy ? "Entrée conservée pour l’historique et exclue du site public." : resolvePlatformLabel(link.label, platform, scope)}</span>
+      <small>{link.url}</small>
+    </div>
+    <div className="admin-inline-actions">
+      {historicalEtsy
+        ? <span className="admin-muted">Modification désactivée</span>
+        : <details><summary>Modifier</summary><form className="admin-catalogue-form" action={saveCatalogLinkAction}><Identity project={project} /><input type="hidden" name="linkId" value={link.id} /><CatalogPlatformLinkFields initialPlatform={platform} initialScope={scope} initialUrl={link.url} initialOverride={override ?? ""} /><CatalogSubmitButton>Enregistrer</CatalogSubmitButton></form></details>}
+      <details><summary>Supprimer</summary><form action={deleteCatalogLinkAction}><Identity project={project} /><input type="hidden" name="linkId" value={link.id} /><button>Confirmer la suppression</button></form></details>
+    </div>
+  </li>;
 }
 
 export default async function AdminCatalogueEditPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ etat?: string }> }) {
@@ -168,7 +198,7 @@ export default async function AdminCatalogueEditPage({ params, searchParams }: {
       <p className="admin-section-label">Liens de sortie</p>
       <SectionFeedback state={etat} accepted={["lien-ajoute", "lien-enregistre", "lien-supprime", "lien-refuse", "suppression-refusee"]} />
       <p className="admin-muted">Les profils artiste globaux restent gérés séparément et ne sont pas dupliqués ici.</p>
-      {project.platformLinks.length ? <ul className="admin-link-editor">{project.platformLinks.map((link) => { const platform = platformFromDb[link.platform] ?? "other"; const scope = link.scope === "STORE" ? "store" as const : "release" as const; const override = platformLabelOverride(link.label, platform, scope); return <li key={link.id}><div className="admin-link-summary"><strong>{platformName(platform)}</strong><span>{resolvePlatformLabel(link.label, platform, scope)}</span><small>{link.url}</small></div><div className="admin-inline-actions"><details><summary>Modifier</summary><form className="admin-catalogue-form" action={saveCatalogLinkAction}><Identity project={project} /><input type="hidden" name="linkId" value={link.id} /><CatalogPlatformLinkFields initialPlatform={platform} initialScope={scope} initialUrl={link.url} initialOverride={override ?? ""} /><CatalogSubmitButton>Enregistrer</CatalogSubmitButton></form></details><details><summary>Supprimer</summary><form action={deleteCatalogLinkAction}><Identity project={project} /><input type="hidden" name="linkId" value={link.id} /><button>Confirmer la suppression</button></form></details></div></li>; })}</ul> : <p className="admin-muted">Aucun lien de sortie documenté.</p>}
+      {project.platformLinks.length ? <ul className="admin-link-editor">{project.platformLinks.map((link) => <PlatformLinkEditor key={link.id} project={project} link={link} />)}</ul> : <p className="admin-muted">Aucun lien de sortie documenté.</p>}
       <details className="admin-add-panel"><summary>Ajouter un lien de sortie</summary><form className="admin-catalogue-form" action={addCatalogLinkAction}><Identity project={project} /><CatalogPlatformLinkFields /><CatalogSubmitButton>Ajouter le lien</CatalogSubmitButton></form></details>
     </section>
 

@@ -5,6 +5,7 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deleteMediaObject } from "@/lib/media/storage";
 import { getCatalogDeletionEligibility, parseCatalogSlug } from "@/lib/catalog/lifecycle";
 import { platformLabelOverride } from "@/lib/catalog/platform-label";
+import { isEtsyCatalogLink, isEtsyCatalogUrl } from "@/lib/catalog/public-link-policy";
 import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
 import {
   boundedInteger, optionalText, parseConfidence, parseDate, parseHttpsUrl, parsePlatform,
@@ -375,9 +376,11 @@ export async function addCatalogPlatformLink(projectId: string, input: Record<st
   const publicScope = input.scope === "store" ? "store" as const : "release" as const;
   const scope = publicScope === "store" ? "STORE" as const : "RELEASE" as const;
   const label = platformLabelOverride(optionalText(input.label, "Le libellé", 180), platform, publicScope);
+  const url = parseHttpsUrl(input.url, platform);
+  if (isEtsyCatalogUrl(url)) throw new Error("Les liens Etsy ne peuvent plus être publiés.");
   return withProjectLock(projectId, async (transaction) => {
     const aggregate = await transaction.platformLink.aggregate({ where: { projectId }, _max: { position: true } });
-    const link = await transaction.platformLink.create({ data: { projectId, platform: platformDb[platform], scope, url: parseHttpsUrl(input.url, platform), label, position: (aggregate._max.position ?? -1) + 1, confidence: "CONFIRMED" } });
+    const link = await transaction.platformLink.create({ data: { projectId, platform: platformDb[platform], scope, url, label, position: (aggregate._max.position ?? -1) + 1, confidence: "CONFIRMED" } });
     await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
     return link;
   });
@@ -388,9 +391,19 @@ export async function updateCatalogPlatformLink(projectId: string, linkId: strin
   const publicScope = input.scope === "store" ? "store" as const : "release" as const;
   const scope = publicScope === "store" ? "STORE" as const : "RELEASE" as const;
   const label = platformLabelOverride(optionalText(input.label, "Le libellé", 180), platform, publicScope);
-  const result = await prisma.platformLink.updateMany({ where: { id: linkId, projectId }, data: { platform: platformDb[platform], scope, url: parseHttpsUrl(input.url, platform), label, confidence: "CONFIRMED" } });
-  if (result.count !== 1) throw new Error("Lien introuvable.");
-  await prisma.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
+  const url = parseHttpsUrl(input.url, platform);
+  if (isEtsyCatalogUrl(url)) throw new Error("Les liens Etsy ne peuvent plus être publiés.");
+  return withProjectLock(projectId, async (transaction) => {
+    const current = await transaction.platformLink.findFirst({ where: { id: linkId, projectId }, select: { platform: true, url: true } });
+    if (!current) throw new Error("Lien introuvable.");
+    if (isEtsyCatalogLink(current)) throw new Error("Ce lien Etsy historique est en lecture seule.");
+    const result = await transaction.platformLink.updateMany({
+      where: { id: linkId, projectId, platform: { not: "ETSY" } },
+      data: { platform: platformDb[platform], scope, url, label, confidence: "CONFIRMED" },
+    });
+    if (result.count !== 1) throw new Error("Lien introuvable.");
+    await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
+  });
 }
 
 export async function deleteCatalogPlatformLink(projectId: string, linkId: string) {
