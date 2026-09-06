@@ -6,6 +6,7 @@ import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { Container } from "@/components/container";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { getHomepageProjects } from "@/lib/catalog/queries";
+import "./v110-editorial-polish.css";
 
 const homeDescription = "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux. Chaque histoire mérite sa musique.";
 
@@ -29,10 +30,10 @@ export default async function HomePage() {
   const { lead: leadProject } = await getHomepageProjects();
 
   return <>
-    <section className="home-hero" aria-labelledby="home-hero-title">
+    <section className="home-hero home-hero--editorial" aria-labelledby="home-hero-title">
       <div className="home-hero__media" aria-hidden="true"><Image src="/assets/hero-desktop.jpg" alt="" fill priority sizes="100vw" /></div>
       <Container className="home-hero__inner">
-        <div className="home-hero__copy">
+        <div className="home-hero__copy home-hero__copy--editorial">
           <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
           <p className="eyebrow home-hero__eyebrow">
             <span className="home-hero__eyebrow-story"><span className="home-hero__eyebrow-story-key">Les histoires</span> deviennent musique</span>
@@ -45,7 +46,7 @@ export default async function HomePage() {
       </Container>
     </section>
 
-    {leadProject ? <section className="section home-featured" aria-labelledby="featured-title">
+    {leadProject ? <section className="section home-featured home-featured--editorial" aria-labelledby="featured-title">
       <Container>
         <div className="home-featured__heading motion-reveal"><div><p className="section-index">À la une</p><h2 id="featured-title">Une histoire à écouter.</h2></div><ButtonLink href="/discographie" variant="quiet">Toute la discographie</ButtonLink></div>
         <article className="home-project-lead motion-reveal motion-reveal--soft">
@@ -55,10 +56,11 @@ export default async function HomePage() {
       </Container>
     </section> : null}
 
-    <section className="section home-perspectives" aria-labelledby="perspectives-title">
-      <Container><div className="home-perspectives__heading motion-reveal"><p className="section-index">LNX en trois regards</p><h2 id="perspectives-title">Une musique qui prend le réel au sérieux.</h2></div><div className="home-perspectives__grid motion-reveal motion-reveal--soft">{perspectives.map((perspective) => <article className="home-perspective" key={perspective.title}><span>{perspective.number}</span><h3>{perspective.title}</h3><p>{perspective.description}</p></article>)}</div></Container>
+    <section className="section home-perspectives home-perspectives--editorial" aria-labelledby="perspectives-title">
+      <div className="home-perspectives__texture" aria-hidden="true" />
+      <Container className="home-perspectives__inner"><div className="home-perspectives__heading motion-reveal"><p className="section-index">LNX en trois regards</p><h2 id="perspectives-title">Une musique qui prend le réel au sérieux.</h2></div><div className="home-perspectives__grid motion-reveal motion-reveal--soft">{perspectives.map((perspective) => <article className="home-perspective home-perspective--editorial" key={perspective.title}><span className="home-perspective__number">{perspective.number}</span><h3>{perspective.title}</h3><p>{perspective.description}</p></article>)}</div></Container>
     </section>
 
-    <section className="home-contact home-contact--compact" id="sur-mesure" aria-labelledby="home-contact-title"><Container className="home-contact__inner motion-reveal"><p className="section-index">Votre histoire</p><div><h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2><p>Quelques détails suffisent pour ouvrir la première scène.</p><div className="home-contact__actions"><ButtonLink href="/commander">Commander une création</ButtonLink><ButtonLink href="/contact" variant="quiet">Écrire à LNX Beats</ButtonLink></div></div></Container></section>
+    <section className="home-contact home-contact--compact home-contact--editorial" id="sur-mesure" aria-labelledby="home-contact-title"><Container className="home-contact__inner motion-reveal"><p className="section-index">Votre histoire</p><div><h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2><p>Quelques détails suffisent pour ouvrir la première scène.</p><div className="home-contact__actions"><ButtonLink href="/commander">Commander une création</ButtonLink><ButtonLink href="/contact" variant="quiet">Écrire à LNX Beats</ButtonLink></div></div></Container></section>
   </>;
 }

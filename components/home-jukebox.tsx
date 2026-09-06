@@ -359,7 +359,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       <div><p className="section-index">{eyebrow}</p><h1 id={regionId}>{heading}</h1></div>
       <output aria-live="polite" aria-atomic="true">
         <span className="visually-hidden">Projet actif : {active.title}. </span>
-        <span className="home-jukebox__counter">{currentVisibleIndex + 1} / {visibleProjects.length}</span>
+        <span className="home-jukebox__counter"><span>Projet</span> <strong>{currentVisibleIndex + 1}</strong> <span>sur</span> <strong>{visibleProjects.length}</strong></span>
       </output>
     </div>
 
