@@ -21,8 +21,28 @@ export type BillingCustomerIdentity = Readonly<{
   vatId?: string | null;
 }>;
 
+export type BillingSellerIdentity = Readonly<{
+  legalName: string;
+  legalForm: string;
+  tradeName: string;
+  serviceName: string;
+  address: Readonly<{
+    line1: string;
+    line2?: string | null;
+    postalCode: string;
+    city: string;
+    countryCode: "FR";
+  }>;
+  siren: string;
+  siret: string;
+  ape: string;
+  email: string;
+  phone: string;
+}>;
+
 const customerKeys = new Set(["type", "name", "email", "companyName", "billingAddress", "businessIdentifier", "vatId"]);
 const addressKeys = new Set(["line1", "line2", "postalCode", "city", "countryCode"]);
+const sellerKeys = new Set(["legalName", "legalForm", "tradeName", "serviceName", "address", "siren", "siret", "ape", "email", "phone"]);
 
 function closedRecord(value: unknown, keys: ReadonlySet<string>, label: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} is invalid.`);
@@ -72,6 +92,36 @@ export function validateBillingCustomerIdentity(input: BillingCustomerIdentity):
 
 export function parseBillingCustomerSnapshot(value: unknown) {
   return validateBillingCustomerIdentity(value as BillingCustomerIdentity);
+}
+
+export function parseBillingSellerSnapshot(value: unknown): BillingSellerIdentity {
+  const record = closedRecord(value, sellerKeys, "Billing seller");
+  const address = closedRecord(record.address, addressKeys, "Billing seller address");
+  const countryCode = boundedText(address.countryCode, 2, "Billing seller country").toUpperCase();
+  if (countryCode !== "FR") throw new TypeError("Billing seller country is invalid.");
+  const email = boundedText(record.email, 320, "Billing seller email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new TypeError("Billing seller email is invalid.");
+  const addressLine2 = address.line2 === null || address.line2 === undefined
+    ? null
+    : boundedText(address.line2, 240, "Billing seller address complement");
+  return {
+    legalName: boundedText(record.legalName, 240, "Billing seller legal name"),
+    legalForm: boundedText(record.legalForm, 120, "Billing seller legal form"),
+    tradeName: boundedText(record.tradeName, 240, "Billing seller trade name"),
+    serviceName: boundedText(record.serviceName, 240, "Billing seller service name"),
+    address: {
+      line1: boundedText(address.line1, 240, "Billing seller address"),
+      line2: addressLine2,
+      postalCode: boundedText(address.postalCode, 32, "Billing seller postal code"),
+      city: boundedText(address.city, 120, "Billing seller city"),
+      countryCode,
+    },
+    siren: boundedText(record.siren, 16, "Billing seller SIREN"),
+    siret: boundedText(record.siret, 20, "Billing seller SIRET"),
+    ape: boundedText(record.ape, 12, "Billing seller APE"),
+    email,
+    phone: boundedText(record.phone, 32, "Billing seller phone"),
+  };
 }
 
 export function canonicalJson(value: unknown): string {

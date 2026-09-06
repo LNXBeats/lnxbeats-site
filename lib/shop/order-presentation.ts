@@ -139,6 +139,50 @@ export function shopCustomerRequestStatusLabel(status: string) {
   } as const)[status as "REQUESTED" | "APPROVED" | "REJECTED" | "COMPLETED"] ?? "À examiner";
 }
 
+export function shopOrderCancellationEventDetail(input: Readonly<{
+  metadata: unknown;
+  orderStatus: string;
+  shopPaymentStatus: string;
+  fulfillmentStatus: string;
+  paidAt: Date | null;
+  financialPaymentStatus: string | null;
+  paymentAmountCents: number | null;
+  refundedAmountCents: number;
+}>) {
+  const metadata = input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
+    ? input.metadata as Record<string, unknown>
+    : null;
+  const cancellationPersisted = input.orderStatus === "CANCELLED"
+    && input.shopPaymentStatus === "CANCELLED"
+    && input.fulfillmentStatus === "CANCELLED";
+  const customerRequestEvidence = metadata?.source === "CUSTOMER_REQUEST"
+    && typeof metadata.requestNumber === "string"
+    && metadata.requestNumber.trim().length > 0
+    && typeof metadata.refundAttemptId === "string"
+    && metadata.refundAttemptId.trim().length > 0;
+  const fullRefundPersisted = input.paidAt instanceof Date
+    && !Number.isNaN(input.paidAt.getTime())
+    && input.financialPaymentStatus === "REFUNDED"
+    && typeof input.paymentAmountCents === "number"
+    && input.paymentAmountCents > 0
+    && input.refundedAmountCents === input.paymentAmountCents;
+  if (customerRequestEvidence && cancellationPersisted && fullRefundPersisted) {
+    return "La commande payée a été annulée après confirmation de son remboursement intégral.";
+  }
+  if (metadata?.source === "CUSTOMER_REQUEST") {
+    return "Une annulation demandée par le client a été enregistrée ; la cohérence financière reste à vérifier.";
+  }
+  const released = typeof metadata?.released === "number" && Number.isSafeInteger(metadata.released) && metadata.released >= 0
+    ? metadata.released
+    : null;
+  if (released !== null && cancellationPersisted && input.paidAt === null && input.financialPaymentStatus === null) {
+    return released
+      ? `La commande non payée a été annulée ; ${released} réservation${released === 1 ? "" : "s"} de stock active${released === 1 ? "" : "s"} libérée${released === 1 ? "" : "s"}.`
+      : "La commande non payée a été annulée sans réservation active à libérer.";
+  }
+  return "La commande a été annulée ; son contexte financier doit être vérifié.";
+}
+
 export function shopTrackingSourceLabel(source: "MANUAL" | "PROVIDER" | null) {
   return source === "MANUAL" ? "Saisie manuelle" : source === "PROVIDER" ? "Transporteur connecté" : "Non renseignée";
 }

@@ -3,11 +3,10 @@ import "server-only";
 import PDFDocument from "pdfkit";
 
 import { billingAddressLines } from "@/lib/billing/address-presentation";
-import { formatBillingMoney } from "@/lib/billing/domain";
+import { formatBillingMoney, parseBillingSellerSnapshot } from "@/lib/billing/domain";
 import { creditNoteReasonLabel, type BillingDocumentRenderMode } from "@/lib/billing/presentation";
 
 type Address = { line1: string; line2?: string | null; postalCode: string; city: string; countryCode: string };
-type Seller = { legalName: string; legalForm: string; tradeName: string; serviceName: string; address: Address; siren: string; siret: string; ape: string; email: string; phone: string };
 type Customer = { type: string; name: string; email: string; companyName?: string | null; billingAddress?: Address | null; businessIdentifier?: string | null; vatId?: string | null };
 type LineItem = { description: string; quantity: number; unitPriceCents: number; lineTotalCents: number };
 
@@ -49,6 +48,14 @@ const dark = "#151515";
 const gray = "#5d5d5d";
 const qaWatermark = "DOCUMENT QA — SANS VALEUR COMPTABLE";
 
+export const billingPdfPalette = Object.freeze({
+  decorativeAccent: gold,
+  creditNoteLabel: "#795c29",
+  bodyText: dark,
+  secondaryText: gray,
+  pageBackground: "#ffffff",
+});
+
 export const billingPdfLayout = Object.freeze({
   pageWidth: PAGE.width,
   pageHeight: PAGE.height,
@@ -79,15 +86,6 @@ function text(record: Record<string, unknown>, key: string, maximum = 500) {
 function parseAddress(value: unknown): Address {
   const record = object(value, "Address");
   return { line1: text(record, "line1"), line2: typeof record.line2 === "string" ? record.line2 : null, postalCode: text(record, "postalCode", 32), city: text(record, "city", 120), countryCode: text(record, "countryCode", 2) };
-}
-
-function parseSeller(value: unknown): Seller {
-  const record = object(value, "Seller snapshot");
-  return {
-    legalName: text(record, "legalName"), legalForm: text(record, "legalForm"), tradeName: text(record, "tradeName"),
-    serviceName: text(record, "serviceName"), address: parseAddress(record.address), siren: text(record, "siren", 16),
-    siret: text(record, "siret", 20), ape: text(record, "ape", 12), email: text(record, "email", 320), phone: text(record, "phone", 32),
-  };
 }
 
 function parseCustomer(value: unknown): Customer {
@@ -184,14 +182,14 @@ async function render(title: string, number: string, issuedAt: Date, hash: strin
   return { bytes: await completion, filename: `${number}.pdf`, pageCount: range.count };
 }
 
-function party(document: PDFKit.PDFDocument, title: string, lines: readonly string[], x: number) {
-  document.fillColor(gold).font("Helvetica-Bold").fontSize(8).text(title.toUpperCase(), x, document.y, { width: 230 });
+function party(document: PDFKit.PDFDocument, title: string, lines: readonly string[], x: number, titleColor = gold) {
+  document.fillColor(titleColor).font("Helvetica-Bold").fontSize(8).text(title.toUpperCase(), x, document.y, { width: 230 });
   const y = document.y + 5;
   document.fillColor(dark).font("Helvetica").fontSize(8.5).text(lines.join("\n"), x, y, { width: 230, lineGap: 2 });
 }
 
 export async function generateInvoicePdf(record: InvoicePdfRecord, mode: BillingDocumentRenderMode = "TEST") {
-  const seller = parseSeller(record.sellerSnapshot);
+  const seller = parseBillingSellerSnapshot(record.sellerSnapshot);
   const customer = parseCustomer(record.customerSnapshot);
   const lines = parseLines(record.lineItemsSnapshot);
   return render("FACTURE", record.invoiceNumber, record.issuedAt, record.snapshotHashSha256, mode, (document) => {
@@ -228,20 +226,38 @@ export async function generateInvoicePdf(record: InvoicePdfRecord, mode: Billing
 }
 
 export async function generateCreditNotePdf(record: CreditNotePdfRecord, mode: BillingDocumentRenderMode = "TEST") {
+  const seller = parseBillingSellerSnapshot(record.invoice.sellerSnapshot);
   const customer = parseCustomer(record.invoice.customerSnapshot);
   return render("AVOIR", record.creditNoteNumber, record.issuedAt, record.snapshotHashSha256, mode, (document) => {
+    const partyY = document.y;
+    party(document, "Émetteur", [
+      seller.legalName,
+      `${seller.legalForm} · ${seller.tradeName}`,
+      ...billingAddressLines(seller.address),
+      `SIREN ${seller.siren} · SIRET ${seller.siret}`,
+      `APE ${seller.ape}`,
+      seller.email,
+    ], margin, billingPdfPalette.creditNoteLabel);
+    document.y = partyY;
     const customerLines = [
       customer.companyName || customer.name,
       ...(customer.companyName ? [customer.name] : []),
       ...(customer.billingAddress ? billingAddressLines(customer.billingAddress) : []),
       customer.email,
     ].filter(Boolean);
-    party(document, "Client", customerLines, margin);
-    document.moveDown(1);
-    document.fillColor(dark).font("Helvetica-Bold").fontSize(11).text(`Facture d’origine : ${record.invoice.invoiceNumber}`);
-    document.font("Helvetica").fontSize(9.5).text(`Commande : ${record.invoice.orderNumberSnapshot}`);
-    document.text(`Motif : ${creditNoteReasonLabel(record.reasonCode)}${record.reasonText ? ` — ${record.reasonText}` : ""}`);
-    document.moveDown(1.5);
+    party(document, "Client", customerLines, 318, billingPdfPalette.creditNoteLabel);
+    document.y = Math.max(document.y, partyY + 116);
+    document.moveDown(.8);
+    document.fillColor(billingPdfPalette.creditNoteLabel).font("Helvetica-Bold").fontSize(8).text("RÉFÉRENCES DOCUMENTAIRES");
+    document.fillColor(dark).font("Helvetica-Bold").fontSize(9.5).text(`Facture source : ${record.invoice.invoiceNumber}`);
+    document.font("Helvetica").text(`Facture source émise le : ${frenchDate(record.invoice.issuedAt)}`);
+    document.text(`Avoir émis le : ${frenchDate(record.issuedAt)}`);
+    document.text(`Commande : ${record.invoice.orderNumberSnapshot}`);
+    document.moveDown(.8);
+    document.fillColor(billingPdfPalette.creditNoteLabel).font("Helvetica-Bold").fontSize(8).text("MOTIF DE L’AVOIR");
+    document.fillColor(dark).font("Helvetica-Bold").fontSize(9.5).text(`Nature : ${creditNoteReasonLabel(record.reasonCode)}`);
+    if (record.reasonText) document.font("Helvetica").text(`Précision : ${record.reasonText}`);
+    document.moveDown(1.2);
     document.font("Helvetica-Bold").fontSize(18).text(`Montant de l’avoir : ${formatBillingMoney(record.amountCents)}`, { align: "right" });
     document.font("Helvetica").fontSize(9.5).text(`Total cumulé des avoirs : ${formatBillingMoney(record.cumulativeCreditedCents)}`, { align: "right" });
     document.text(`Solde documentaire restant : ${formatBillingMoney(record.remainingBalanceCents)}`, { align: "right" });

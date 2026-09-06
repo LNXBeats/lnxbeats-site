@@ -149,6 +149,7 @@ const shopOrderDetailInclude = {
       mode: true,
       status: true,
       amountCents: true,
+      refundedAmountCents: true,
       currency: true,
       providerCheckoutId: true,
       paidAt: true,

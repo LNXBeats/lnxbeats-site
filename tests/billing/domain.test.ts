@@ -12,9 +12,10 @@ import {
   parisDateSegment,
   parisDayRange,
   parseBillingCustomerSnapshot,
+  parseBillingSellerSnapshot,
   validateBillingCustomerIdentity,
 } from "@/lib/billing/domain";
-import { billingPdfLayout, generateCreditNotePdf, generateInvoicePdf, type InvoicePdfRecord } from "@/lib/billing/pdf";
+import { billingPdfLayout, billingPdfPalette, generateCreditNotePdf, generateInvoicePdf, type InvoicePdfRecord } from "@/lib/billing/pdf";
 import {
   billingDocumentPresentation,
   billingDocumentRenderMode,
@@ -23,6 +24,22 @@ import {
 
 const root = process.cwd();
 const read = (path: string) => readFile(`${root}/${path}`, "utf8");
+
+function relativeLuminance(hex: string) {
+  const channels = hex.slice(1).match(/.{2}/g);
+  if (!channels || channels.length !== 3) throw new TypeError("Expected a six-digit hex color.");
+  const [red, green, blue] = channels.map((channel) => {
+    const value = Number.parseInt(channel, 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return red! * 0.2126 + green! * 0.7152 + blue! * 0.0722;
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const first = relativeLuminance(foreground);
+  const second = relativeLuminance(background);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
 
 function decodedPdfPageText(bytes: Buffer): string[] {
   const source = bytes.toString("latin1");
@@ -109,6 +126,38 @@ test("B2B billing requires a company and validates only bounded French snapshot 
     type: "PROFESSIONAL", name: "Marie", email: "marie@example.invalid", companyName: "Entreprise Exemple SAS",
     billingAddress: { line1: "12 rue Exemple", postalCode: "75000", city: "Paris", countryCode: "FR", redirect: "https://example.invalid" },
   }));
+});
+
+test("billing seller presentation is derived only from the immutable closed snapshot", () => {
+  assert.deepEqual(parseBillingSellerSnapshot(sellerSnapshot), {
+    ...sellerSnapshot,
+    address: { ...sellerSnapshot.address, line2: null },
+  });
+  assert.throws(() => parseBillingSellerSnapshot({ ...sellerSnapshot, legalName: "" }));
+  assert.throws(() => parseBillingSellerSnapshot({ ...sellerSnapshot, runtimeDisplayName: "LNX" }));
+  assert.throws(() => parseBillingSellerSnapshot({ ...sellerSnapshot, address: { ...sellerSnapshot.address, countryCode: "BE" } }));
+  assert.throws(() => parseBillingSellerSnapshot({ ...sellerSnapshot, address: { ...sellerSnapshot.address, line2: false } }));
+});
+
+test("credit-note PDF text colors meet WCAG AA contrast on the white page", () => {
+  assert.ok(contrastRatio(billingPdfPalette.creditNoteLabel, billingPdfPalette.pageBackground) >= 4.5);
+  assert.ok(contrastRatio(billingPdfPalette.bodyText, billingPdfPalette.pageBackground) >= 4.5);
+  assert.ok(contrastRatio(billingPdfPalette.secondaryText, billingPdfPalette.pageBackground) >= 4.5);
+});
+
+test("the member credit-note introduction owns a WCAG AA text surface on desktop and mobile", async () => {
+  const [memberPage, stylesheet] = await Promise.all([
+    read("app/compte/avoirs/[creditNoteNumber]/page.tsx"),
+    read("app/globals.css"),
+  ]);
+  assert.match(memberPage, /className="auth-intro billing-credit-note-intro"/);
+  const rule = stylesheet.match(/\.billing-credit-note-intro > p:last-child\s*\{([\s\S]*?)\}/)?.[1];
+  assert.ok(rule, "The credit-note introduction must own a dedicated color surface.");
+  const background = rule.match(/background:\s*(#[0-9a-f]{6})/i)?.[1];
+  const color = rule.match(/color:\s*(#[0-9a-f]{6})/i)?.[1];
+  assert.ok(background, "The credit-note introduction must own an explicit background color.");
+  assert.ok(color, "The credit-note introduction must own an explicit text color.");
+  assert.ok(contrastRatio(color, background) >= 4.5);
 });
 
 test("the current fiscal snapshot is centralized, deterministic and never represents charged VAT", () => {
@@ -226,7 +275,7 @@ test("reviewed after-sales credit notes keep their internal code but expose a Fr
   assert.equal(creditNoteReasonLabel("OTHER_REVIEWED"), "Remboursement après traitement SAV");
   const memberPage = await read("app/compte/avoirs/[creditNoteNumber]/page.tsx");
   assert.match(memberPage, /creditNoteReasonLabel\(creditNote\.reasonCode\)/);
-  assert.match(memberPage, /creditNote\.reasonText \? <small>\{creditNote\.reasonText\}<\/small>/);
+  assert.match(memberPage, /creditNote\.reasonText \? <div><dt>Précision du motif<\/dt><dd>\{creditNote\.reasonText\}<\/dd><\/div>/);
   assert.doesNotMatch(memberPage, /<dd>\{creditNote\.reasonCode\}<\/dd>/);
   const invoice = invoiceFixture({
     invoiceNumber: "LNX-20990101-5002",
@@ -261,12 +310,25 @@ test("credit-note HTML and PDF expose the persisted precise reason without repla
   ]);
   for (const page of [memberPage, adminPage]) {
     assert.match(page, /parseBillingCustomerSnapshot\(creditNote\.invoice\.customerSnapshot\)/);
+    assert.match(page, /parseBillingSellerSnapshot\(creditNote\.invoice\.sellerSnapshot\)/);
     assert.match(page, /customer\.companyName \|\| customer\.name/);
+    assert.match(page, /seller\.legalName/);
+    assert.match(page, /billingAddressLines\(seller\.address\)/);
+    assert.match(page, /customer\.billingAddress \? <div><dt>Adresse client<\/dt>/);
+    assert.match(page, /billingAddressLines\(customer\.billingAddress\)/);
     assert.match(page, /creditNoteReasonLabel\(creditNote\.reasonCode\)/);
-    assert.match(page, /creditNote\.reasonText \? <small>\{creditNote\.reasonText\}<\/small>/);
+    assert.match(page, /Nature du motif/);
+    assert.match(page, /creditNote\.reasonText \? <div><dt>Précision du motif<\/dt><dd>\{creditNote\.reasonText\}<\/dd><\/div>/);
+    assert.match(page, /Facture source émise le/);
+    assert.match(page, /creditNote\.invoice\.issuedAt\.toISOString\(\)/);
+    assert.match(page, /Empreinte de l’avoir/);
   }
+  const stylesheet = await read("app/globals.css");
+  assert.match(stylesheet, /\.billing-customer-address \{[^}]*overflow-wrap: anywhere/);
+  assert.match(stylesheet, /\.auth-profile dd > small \{[^}]*display: block/);
   const invoice = invoiceFixture({
     invoiceNumber: "LNX-20990101-5003",
+    issuedAt: new Date("2099-01-01T12:00:00.000Z"),
     orderNumberSnapshot: "LNX-SHOP-2099-500003",
     subtotalCents: 700,
     shippingCents: 549,
@@ -288,9 +350,10 @@ test("credit-note HTML and PDF expose the persisted precise reason without repla
     },
   });
   const reasonText = "Annulation demandée par le client avant expédition — LNX-REQ-2099-EXEMPLE";
+  const creditNoteIssuedAt = new Date("2099-01-03T12:00:00.000Z");
   const result = await generateCreditNotePdf({
     creditNoteNumber: "AV-LNX-20990101-0006",
-    issuedAt: invoice.issuedAt,
+    issuedAt: creditNoteIssuedAt,
     amountCents: 1249,
     cumulativeCreditedCents: 1249,
     remainingBalanceCents: 0,
@@ -301,13 +364,23 @@ test("credit-note HTML and PDF expose the persisted precise reason without repla
     invoice,
   });
   const rendered = decodedPdfPageText(result.bytes).join("\n");
+  const normalized = rendered.replace(/\s+/g, " ");
+  assert.match(rendered, /ÉMETTEUR/i);
+  assert.match(rendered, /Ludovic Mickaël Mathon/);
+  assert.match(rendered, /SIREN 106870850/);
   assert.match(rendered, /CLIENT/i);
   assert.match(rendered, /Camille Exemple/);
   assert.match(rendered, /12 rue des Tests Fictifs/);
   assert.match(rendered, /Bâtiment Exemple/);
   assert.match(rendered, /camille\.credit-note@example\.invalid/);
-  assert.match(rendered, /Rétractation/);
-  assert.match(rendered, /Annulation demandée par le client avant expédition/);
+  assert.match(normalized, /Facture source : LNX-20990101-5003/);
+  assert.match(normalized, /Facture source émise le : 1 janvier 2099/);
+  assert.match(normalized, /Avoir émis le : 3 janvier 2099/);
+  assert.match(normalized, /Nature : Rétractation/);
+  assert.match(normalized, /Précision : Annulation demandée par le client avant expédition/);
+  assert.match(rendered, /DDDDDDDDDDDDDDDD/);
+  assert.equal(invoice.issuedAt.toISOString(), "2099-01-01T12:00:00.000Z");
+  assert.equal(creditNoteIssuedAt.toISOString(), "2099-01-03T12:00:00.000Z");
 });
 
 test("four short billing QA fixtures render on exactly one page with complete snapshot text", async () => {
@@ -328,7 +401,7 @@ test("four short billing QA fixtures render on exactly one page with complete sn
     await generateInvoicePdf(shop),
     await generateCreditNotePdf({ creditNoteNumber: "AV-LNX-20990101-0001", issuedAt: creditInvoice.issuedAt, amountCents: 1000, cumulativeCreditedCents: 1000, remainingBalanceCents: 2000, currency: "EUR", reasonCode: "NON_CONFORMITY", reasonText: null, snapshotHashSha256: "b".repeat(64), invoice: creditInvoice }),
   ];
-  for (const [index, result] of results.entries()) {
+  for (const result of results) {
     const pages = decodedPdfPageText(result.bytes);
     const rendered = pages.join("\n");
     const normalized = rendered.replace(/\s+/g, " ");
@@ -338,7 +411,7 @@ test("four short billing QA fixtures render on exactly one page with complete sn
     assert.equal(pages.length, 1);
     assert.match(rendered, /DOCUMENT QA — SANS VALEUR COMPTABLE/);
     assert.match(normalized, /TVA non applicable, article 293 B du CGI/);
-    if (index < 3) assert.match(rendered, /Ludovic Mickaël Mathon/);
+    assert.match(rendered, /Ludovic Mickaël Mathon/);
     assert.match(rendered, /Conservation comptable : 10 ans\./);
     assert.match(rendered, /Page 1 \/ 1/);
   }

@@ -3,9 +3,20 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  shopOrderCancellationEventDetail,
   shopPaymentAttemptPresentation,
   shopPaymentIncidentLabel,
 } from "@/lib/shop/order-presentation";
+
+const cancellationContext = {
+  orderStatus: "CANCELLED",
+  shopPaymentStatus: "CANCELLED",
+  fulfillmentStatus: "CANCELLED",
+  paidAt: new Date("2099-01-02T12:00:00.000Z"),
+  financialPaymentStatus: "REFUNDED",
+  paymentAmountCents: 1249,
+  refundedAmountCents: 1249,
+} as const;
 
 test("Admin exposes ShopOrders and strictly guarded fulfillment actions", async () => {
   const [listPage, detailPage] = await Promise.all([
@@ -97,4 +108,49 @@ test("Admin Shop payment presentation lists a winner and a reviewed second captu
   assert.match(detailPage, /order\.payments\.map/);
   assert.match(detailPage, /shopPaymentAttemptPresentation/);
   assert.doesNotMatch(detailPage, /providerCheckoutId|providerPaymentId|rawPayload/);
+});
+
+test("Admin cancellation history distinguishes paid refunds, unpaid releases and unverified states", () => {
+  const paid = shopOrderCancellationEventDetail({
+    ...cancellationContext,
+    metadata: {
+      source: "CUSTOMER_REQUEST",
+      requestNumber: "LNX-REQ-2099-EXAMPLE",
+      refundAttemptId: "refund-attempt-example",
+    },
+  });
+  assert.equal(paid, "La commande payée a été annulée après confirmation de son remboursement intégral.");
+  assert.doesNotMatch(paid, /non payée/);
+
+  const unpaid = shopOrderCancellationEventDetail({
+    ...cancellationContext,
+    metadata: { released: 1 },
+    paidAt: null,
+    financialPaymentStatus: null,
+    paymentAmountCents: null,
+    refundedAmountCents: 0,
+  });
+  assert.equal(unpaid, "La commande non payée a été annulée ; 1 réservation de stock active libérée.");
+
+  const inconsistentPaid = shopOrderCancellationEventDetail({
+    ...cancellationContext,
+    metadata: {
+      source: "CUSTOMER_REQUEST",
+      requestNumber: "LNX-REQ-2099-EXAMPLE",
+      refundAttemptId: "refund-attempt-example",
+    },
+    financialPaymentStatus: "SUCCEEDED",
+    refundedAmountCents: 0,
+  });
+  assert.equal(
+    inconsistentPaid,
+    "Une annulation demandée par le client a été enregistrée ; la cohérence financière reste à vérifier.",
+  );
+  assert.doesNotMatch(inconsistentPaid, /remboursement intégral/);
+
+  const unknown = shopOrderCancellationEventDetail({
+    ...cancellationContext,
+    metadata: { source: "UNKNOWN" },
+  });
+  assert.equal(unknown, "La commande a été annulée ; son contexte financier doit être vérifié.");
 });

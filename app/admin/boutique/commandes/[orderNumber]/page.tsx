@@ -15,6 +15,7 @@ import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import {
   formatShopMoney,
+  shopOrderCancellationEventDetail,
   shopPaymentAttemptPresentation,
   shopPaymentIncidentLabel,
   shopShippingMethodLabel,
@@ -119,13 +120,23 @@ type ItemSummary = {
   productTitle: string;
 };
 
+type CancellationSummary = Readonly<{
+  orderStatus: string;
+  shopPaymentStatus: string;
+  fulfillmentStatus: string;
+  paidAt: Date | null;
+  financialPaymentStatus: string | null;
+  paymentAmountCents: number | null;
+  refundedAmountCents: number;
+}>;
+
 function metadataRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
 }
 
-function eventDetail(event: EventSummary, items: readonly ItemSummary[]) {
+function eventDetail(event: EventSummary, items: readonly ItemSummary[], cancellation: CancellationSummary) {
   const metadata = metadataRecord(event.metadata);
   const productId = typeof metadata?.productId === "string" ? metadata.productId : null;
   const productTitle = productId ? items.find((item) => item.productId === productId)?.productTitle : null;
@@ -144,7 +155,9 @@ function eventDetail(event: EventSummary, items: readonly ItemSummary[]) {
   if (event.type === "SHOP_ORDER_EXPIRED" || event.type === "STOCK_RESERVATION_EXPIRED") {
     return "La durée de réservation est arrivée à son terme.";
   }
-  if (event.type === "SHOP_ORDER_CANCELLED") return "La commande non payée a été annulée.";
+  if (event.type === "SHOP_ORDER_CANCELLED") {
+    return shopOrderCancellationEventDetail({ ...cancellation, metadata: event.metadata });
+  }
   if (event.type === "PREPARATION_STARTED") return "L’atelier a commencé la préparation de la commande.";
   if (event.type === "SHIPMENT_READY") return "Le colis est prêt pour sa remise au transporteur.";
   if (event.type === "TRACKING_RECORDED") {
@@ -298,7 +311,15 @@ export default async function AdminShopOrderPage({
                     <time className="admin-rights-timeline__when" dateTime={event.occurredAt.toISOString()}>{DATE_FORMAT.format(event.occurredAt)}</time>
                     <div className="admin-rights-timeline__content">
                       <strong>{EVENT_LABELS[event.type]}</strong>
-                      <p>{eventDetail(event, order.items)}</p>
+                      <p>{eventDetail(event, order.items, {
+                        orderStatus: order.status,
+                        shopPaymentStatus: order.paymentStatus,
+                        fulfillmentStatus: order.fulfillmentStatus,
+                        paidAt: order.paidAt,
+                        financialPaymentStatus: financialPayment?.status ?? null,
+                        paymentAmountCents: financialPayment?.amountCents ?? null,
+                        refundedAmountCents: financialPayment?.refundedAmountCents ?? 0,
+                      })}</p>
                     </div>
                     <small className="admin-rights-timeline__actor">{event.actorUserId === order.userId ? `Membre · ${customerName}` : event.actorUserId ? "Utilisateur authentifié" : "Système"}</small>
                   </li>
