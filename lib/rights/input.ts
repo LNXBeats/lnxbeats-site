@@ -214,46 +214,15 @@ function contributions(value: unknown): RightsContributionInput[] {
   });
 }
 
-function partnership(value: unknown, required: boolean): PartnershipInput | null {
-  if (!required && value === null) return null;
-  const input = record(value, "partnership");
-  exactKeys(input, ["lyricsAuthor", "lyricsProvided", "lyricRewrites", "lyricsClaimedPercentage", "melody", "harmony", "structure", "arrangement", "instrumental", "compositionClaimedPercentage", "artisticDirection", "voice", "mixMaster", "instruments", "production", "toolsUsed", "aiKnown", "humanCreativeContribution", "sacemMember", "sacemIdentifier", "otherCollective", "relatedWorks", "desiredSplit"], "partnership");
-  return {
-    lyricsAuthor: text(input.lyricsAuthor, "partnership.lyricsAuthor", 1_000, true),
-    lyricsProvided: text(input.lyricsProvided, "partnership.lyricsProvided", 4_000, true),
-    lyricRewrites: text(input.lyricRewrites, "partnership.lyricRewrites", 4_000),
-    lyricsClaimedPercentage: optionalPercent(input.lyricsClaimedPercentage, "partnership.lyricsClaimedPercentage"),
-    melody: text(input.melody, "partnership.melody", 4_000),
-    harmony: text(input.harmony, "partnership.harmony", 4_000),
-    structure: text(input.structure, "partnership.structure", 4_000),
-    arrangement: text(input.arrangement, "partnership.arrangement", 4_000),
-    instrumental: text(input.instrumental, "partnership.instrumental", 4_000),
-    compositionClaimedPercentage: optionalPercent(input.compositionClaimedPercentage, "partnership.compositionClaimedPercentage"),
-    artisticDirection: text(input.artisticDirection, "partnership.artisticDirection", 4_000),
-    voice: text(input.voice, "partnership.voice", 4_000),
-    mixMaster: text(input.mixMaster, "partnership.mixMaster", 4_000),
-    instruments: text(input.instruments, "partnership.instruments", 4_000),
-    production: text(input.production, "partnership.production", 4_000),
-    toolsUsed: text(input.toolsUsed, "partnership.toolsUsed", 2_000, true),
-    aiKnown: bool(input.aiKnown, "partnership.aiKnown"),
-    humanCreativeContribution: text(input.humanCreativeContribution, "partnership.humanCreativeContribution", 4_000, true),
-    sacemMember: bool(input.sacemMember, "partnership.sacemMember"),
-    sacemIdentifier: text(input.sacemIdentifier, "partnership.sacemIdentifier", 80),
-    otherCollective: text(input.otherCollective, "partnership.otherCollective", 180),
-    relatedWorks: text(input.relatedWorks, "partnership.relatedWorks", 2_000),
-    desiredSplit: text(input.desiredSplit, "partnership.desiredSplit", 1_000),
-  };
-}
-
 export function parseRightsDraftInput(value: unknown): RightsDraftInput {
   const input = record(value, "request");
   exactKeys(input, ["type", "party", "project", "contributions", "partnership"], "request");
-  const type = enumValue(input.type, ["PUBLICATION_LICENSE", "EXPLOITATION_PARTNERSHIP"] as const, "type");
+  const type = enumValue(input.type, ["PUBLICATION_LICENSE"] as const, "type");
   return {
     type,
     party: party(input.party),
     project: project(input.project),
     contributions: contributions(input.contributions),
-    partnership: partnership(input.partnership, type === "EXPLOITATION_PARTNERSHIP"),
+    partnership: null,
   };
 }

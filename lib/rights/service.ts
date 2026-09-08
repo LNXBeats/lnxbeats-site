@@ -11,7 +11,7 @@ import type { OrderActor } from "@/lib/orders/domain";
 import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/storage";
 import { enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
-import { activeRightsStatuses, canCreateRightsRequest, formatRightsNumber, rightsPriceSnapshot } from "@/lib/rights/domain";
+import { activeRightsStatuses, formatRightsNumber, publicationLicenseEligibility, rightsPriceSnapshot } from "@/lib/rights/domain";
 import { RIGHTS_NEW_REQUESTS_ENABLED } from "@/lib/rights/commerce";
 import { buildRightsDocumentSections, formatRightsCurrency, humanRightsContribution, humanRightsPlatform } from "@/lib/rights/document-presentation";
 import type { RightsDraftInput } from "@/lib/rights/input";
@@ -261,20 +261,44 @@ function formData(input: RightsDraftInput): Prisma.InputJsonValue {
 
 export async function createRightsDraft(actor: OrderActor, orderNumber: string, input: RightsDraftInput) {
   assertDatabaseConfigured();
+  if (input.type !== "PUBLICATION_LICENSE") {
+    throw new RightsServiceError("Cette offre n’est pas proposée en ligne.", 404, "RIGHTS_OFFER_NOT_COMMERCIAL");
+  }
   return withRightsLock(`order:${orderNumber}:${input.type}`, async (transaction) => {
     const order = await transaction.order.findFirst({ where: { orderNumber, userId: actor.id } });
     if (!order) throw new RightsServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     // Keep relation reads sequential on Prisma Dev's single PostgreSQL wire
     // connection. A nested include here can fan out during the transaction.
-    const successfulPayment = await transaction.payment.findFirst({ where: { orderId: order.id, status: "SUCCEEDED" }, select: { id: true } });
+    const successfulPayment = await transaction.payment.findFirst({
+      where: {
+        orderId: order.id,
+        status: "SUCCEEDED",
+        refundedAmountCents: 0,
+        amountCents: order.totalCents,
+        currency: order.currency,
+      },
+      select: { id: true, status: true, amountCents: true, currency: true, refundedAmountCents: true },
+    });
     if (!successfulPayment) throw new RightsServiceError("La commande doit être payée avant une demande de droits.", 409, "ORDER_NOT_PAID");
-    const publishedDelivery = await transaction.orderAsset.findFirst({ where: { orderId: order.id, role: "DELIVERY" }, select: { assetId: true } });
+    const publishedDelivery = await transaction.orderAsset.findFirst({ where: { orderId: order.id, role: "DELIVERY", asset: { type: "AUDIO" } }, select: { assetId: true, role: true, asset: { select: { type: true } } } });
     const existing = await transaction.rightsRequest.findFirst({
       where: { orderId: order.id, type: input.type, status: { in: [...activeRightsStatuses] } },
       orderBy: { createdAt: "desc" },
     });
-    if (!canCreateRightsRequest({ orderStatus: order.status, hasPublishedDelivery: Boolean(publishedDelivery), existingStatuses: existing ? [existing.status] : [] }) && existing?.status !== "DRAFT") {
-      throw new RightsServiceError("Une demande active existe déjà ou la livraison n’est pas publiée.", 409, "RIGHTS_REQUEST_NOT_ELIGIBLE");
+    const sourceWorkTitle = order.title?.trim() || order.recipient?.trim() || "";
+    const eligibility = publicationLicenseEligibility({
+      ownerMatches: order.userId === actor.id,
+      orderStatus: order.status,
+      deliveredAt: order.deliveredAt,
+      expectedAmountCents: order.totalCents,
+      expectedCurrency: order.currency,
+      payments: [successfulPayment],
+      deliveries: publishedDelivery ? [{ assetType: publishedDelivery.asset.type, role: publishedDelivery.role }] : [],
+      workTitle: sourceWorkTitle,
+      existingStatuses: existing?.status === "DRAFT" ? [] : existing ? [existing.status] : [],
+    });
+    if (!eligibility.eligible) {
+      throw new RightsServiceError(`Cette commande n’est pas éligible (${eligibility.reasons.join(",")}).`, 409, "RIGHTS_REQUEST_NOT_ELIGIBLE");
     }
 
     let requestId: string;
@@ -288,7 +312,7 @@ export async function createRightsDraft(actor: OrderActor, orderNumber: string, 
           requestedPriceCents: rightsPriceSnapshot(input.type).priceCents,
           currency: rightsPriceSnapshot(input.type).currency,
           pricingVersion: rightsPriceSnapshot(input.type).pricingVersion,
-          workTitle: input.project.workTitle,
+          workTitle: sourceWorkTitle,
           artistName: input.project.artistName,
           formVersion: rightsFormVersion,
           formData: formData(input),
@@ -310,7 +334,7 @@ export async function createRightsDraft(actor: OrderActor, orderNumber: string, 
           requestedPriceCents: pricing.priceCents,
           currency: pricing.currency,
           pricingVersion: pricing.pricingVersion,
-          workTitle: input.project.workTitle,
+          workTitle: sourceWorkTitle,
           artistName: input.project.artistName,
           formVersion: rightsFormVersion,
           formData: formData(input),

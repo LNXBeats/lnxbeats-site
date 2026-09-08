@@ -94,7 +94,7 @@
 
 - commande initiale strictement personnelle de 50 à 90 €, sans sélection commerciale
 - demande de droits séparée et disponible uniquement après livraison
-- prix serveur de 1 500 €, contrat spécifique requis et statut autonome
+- prototype historique à 1 500 € conservé comme trace interne ; offre publique abandonnée en V1.2
 - propriété, refus avant livraison, anti-doublon et migration additive validés
 - aucun paiement, contrat électronique, facture ou interface administrateur activé
 

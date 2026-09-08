@@ -14,6 +14,8 @@ import { clientOrderAction, clientPaymentState, orderCanStillBeEdited } from "@/
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { orderStatusPresentation } from "@/lib/orders/status";
+import { RIGHTS_NEW_REQUESTS_ENABLED } from "@/lib/rights/commerce";
+import { publicationLicenseEligibility } from "@/lib/rights/domain";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
 import { listRightsRequestsForOrderActor } from "@/lib/rights/service";
 import { hasCurrentEarlyPerformanceConsent } from "@/lib/legal/early-performance-consent";
@@ -67,6 +69,17 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   const paymentState = clientPaymentState(order);
   const paymentProviders = await paymentProvidersAvailable();
   const rightsRequests = order.status === "DELIVERED" ? await listRightsRequestsForOrderActor(actor, order.orderNumber) : [];
+  const publicationEligibility = publicationLicenseEligibility({
+    ownerMatches: true,
+    orderStatus: order.status,
+    deliveredAt: order.deliveredAt,
+    expectedAmountCents: order.totalCents,
+    expectedCurrency: order.currency,
+    payments: order.payments,
+    deliveries: order.deliveries,
+    workTitle: order.title || order.recipient,
+    existingStatuses: rightsRequests.filter((request) => request.type === "PUBLICATION_LICENSE").map((request) => request.status),
+  });
   const hasEarlyPerformanceConsent = hasCurrentEarlyPerformanceConsent({
     earlyPerformanceConsentVersion: order.earlyPerformanceConsentVersion,
     earlyPerformanceConsentHashSha256: order.earlyPerformanceConsentHashSha256,
@@ -169,7 +182,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           )}
         </section>
 
-        {order.status === "DELIVERED" && order.deliveries.length ? <RightsOptionsSection requests={rightsRequests} /> : null}
+        <RightsOptionsSection requests={rightsRequests} eligible={publicationEligibility.eligible} commerceOpen={RIGHTS_NEW_REQUESTS_ENABLED} orderNumber={order.orderNumber} workTitle={order.title || order.recipient || "Création LNX"} />
 
         <section className="order-detail__section" aria-labelledby="order-brief-title">
           <p className="auth-panel__label">Récapitulatif</p>

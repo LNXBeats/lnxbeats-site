@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -37,4 +38,20 @@ test("client content is escaped before deterministic rendering", () => {
   assert.match(rendered, /Une œuvre &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(rendered, /<script>/);
   assert.doesNotMatch(rendered, /\{\{/);
+});
+
+test("publication template carries the locked 150 euro contract decisions", () => {
+  const rendered = renderContractTemplate(publicationLicenseDraftTemplate, values);
+  for (const term of ["non exclusive", "monde entier", "cinq ans", "150,00 EUR", "distributeur numérique", "transférer ni revendre", "adaptation substantielle", "Content ID exclusif", "paiement confirmé", "reproduction", "communication au public", "délai légal de rétractation", "demande expresse distincte", "sans case précochée", "mise en demeure", "droit français", "médiateur", "VALIDATION JURIDIQUE EXTERNE REQUISE"]) {
+    assert.match(rendered, new RegExp(term, "i"));
+  }
+  assert.doesNotMatch(rendered, /1[ .]?500|partenariat d’exploitation|tarif SACEM/i);
+});
+
+test("the additive v2 migration seeds a draft without approving or rewriting history", async () => {
+  const migration = await readFile("prisma/migrations/20260909120000_publication_license_template_v2/migration.sql", "utf8");
+  assert.match(migration, /'PUBLICATION_LICENSE',[\s\S]*?\n\s*2,[\s\S]*?'DRAFT'/);
+  assert.match(migration, /WHERE NOT EXISTS/);
+  assert.doesNotMatch(migration, /\b(?:UPDATE|DELETE|APPROVED)\b/i);
+  assert.doesNotMatch(migration, /1[ .]?500|EXPLOITATION_PARTNERSHIP/i);
 });

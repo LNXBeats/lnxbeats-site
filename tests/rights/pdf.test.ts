@@ -162,8 +162,9 @@ test("the Safari C03 licence PDF uses final grants, client vocabulary, and balan
   const source = result.bytes.toString("latin1");
 
   assert.equal(result.pageCount, pages.length);
-  assert.equal(result.pageCount, 2);
-  assert.match(rendered, /Durée contractuelle : 2 ans\./);
+  assert.equal(result.pageCount, 3);
+  assert.match(rendered, /Durée contractuelle : cinq ans/);
+  assert.doesNotMatch(rendered, /Durée contractuelle : 2 ans\./);
   assert.doesNotMatch(rendered, /À définir avec LNX Beats/);
   assert.match(rendered, /Spotify, Apple Music, Deezer/);
   assert.doesNotMatch(rendered, /SPOTIFY|APPLE_MUSIC|DEEZER/);
@@ -171,12 +172,15 @@ test("the Safari C03 licence PDF uses final grants, client vocabulary, and balan
   assert.doesNotMatch(rendered, /STORY_BRIEF_ONLY/);
   assert.match(rendered, /Élégie d’été/);
   assert.match(rendered, /LNX Beats — création musicale/);
-  assert.match(rendered, /PROJET - NON ACTIF - VALIDATION JURIDIQUE REQUISE/);
+  assert.match(rendered, /PROJET - NON ACTIF - VALIDATION JURIDIQUE EXTERNE REQUISE/);
   assert.match(rendered, /Aucune répartition n’est promise/);
   assert.match(rendered, /Aucune déclaration SACEM n’est effectuée/);
-  assert.match(rendered, /Prix envisagé de la licence : 150 €\./);
+  assert.match(rendered, /Prix unique de la licence : 150 €\./);
   assert.doesNotMatch(rendered, /Montant cible futur/);
   assert.match(rendered, /L’acceptation du présent projet ne suffit pas à rendre la licence active/);
+  assert.match(rendered, /Aucun\s+commencement anticipé n’est automatique/);
+  assert.match(rendered, /mise en demeure écrite\s+restée sans effet pendant trente jours/);
+  assert.match(rendered, /médiateur indiqué dans les mentions légales/);
   assert.doesNotMatch(rendered, /acceptation QA|validation Admin/i);
   assert.match(result.sha256, /^[a-f0-9]{64}$/);
   const forbidden = [
@@ -193,7 +197,7 @@ test("the Safari C03 licence PDF uses final grants, client vocabulary, and balan
     const body = page.replace(/LNX STUDIO|LNX-LIC-2026-000001-C03|Page \d+ \/ \d+|Document privé - [A-F0-9]{12}/g, "").trim();
     assert.ok(body.length >= 500, `Page ${index + 1} must contain a substantial document body.`);
   }
-  assert.equal((source.match(/\/MediaBox \[0 0 595\.28 841\.89\]/g) ?? []).length, 2);
+  assert.equal((source.match(/\/MediaBox \[0 0 595\.28 841\.89\]/g) ?? []).length, 3);
   assert.doesNotMatch(source, /\/JavaScript\b|\/JS\b|\/URI\b|https?:\/\//i);
 });
 

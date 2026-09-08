@@ -95,7 +95,8 @@ const contractDraftGenerationStatuses = new Set<RightsStatus>([
 ]);
 
 export function rightsPriceSnapshot(type: RightsOfferType) {
-  return { ...rightsOffers[type] };
+  if (type !== "PUBLICATION_LICENSE") throw new Error("RIGHTS_OFFER_NOT_COMMERCIAL");
+  return { ...rightsOffers.PUBLICATION_LICENSE };
 }
 
 export function personalUseTermsSnapshot() {
@@ -104,6 +105,37 @@ export function personalUseTermsSnapshot() {
     text: personalUseTerms.text,
     hashSha256: createHash("sha256").update(personalUseTerms.text, "utf8").digest("hex"),
   };
+}
+
+export type PublicationLicenseEligibilityReason =
+  | "NOT_OWNER"
+  | "ORDER_NOT_DELIVERED"
+  | "DELIVERY_DATE_MISSING"
+  | "PAYMENT_NOT_CONFIRMED"
+  | "FINAL_AUDIO_MISSING"
+  | "WORK_NOT_IDENTIFIABLE"
+  | "LICENSE_ALREADY_EXISTS";
+
+export function publicationLicenseEligibility(input: {
+  ownerMatches: boolean;
+  orderStatus: string;
+  deliveredAt: Date | string | null;
+  expectedAmountCents: number;
+  expectedCurrency: string;
+  payments: readonly { status: string; amountCents: number; currency: string; refundedAmountCents: number }[];
+  deliveries: readonly { assetType: string; role?: string }[];
+  workTitle: string | null | undefined;
+  existingStatuses: readonly string[];
+}) {
+  const reasons: PublicationLicenseEligibilityReason[] = [];
+  if (!input.ownerMatches) reasons.push("NOT_OWNER");
+  if (input.orderStatus !== "DELIVERED") reasons.push("ORDER_NOT_DELIVERED");
+  if (!input.deliveredAt) reasons.push("DELIVERY_DATE_MISSING");
+  if (!input.payments.some((payment) => payment.status === "SUCCEEDED" && payment.refundedAmountCents === 0 && payment.amountCents === input.expectedAmountCents && payment.currency === input.expectedCurrency)) reasons.push("PAYMENT_NOT_CONFIRMED");
+  if (!input.deliveries.some((delivery) => delivery.assetType === "AUDIO" && (!delivery.role || delivery.role === "DELIVERY"))) reasons.push("FINAL_AUDIO_MISSING");
+  if (!input.workTitle?.trim()) reasons.push("WORK_NOT_IDENTIFIABLE");
+  if (input.existingStatuses.some((status) => (activeRightsStatuses as readonly string[]).includes(status))) reasons.push("LICENSE_ALREADY_EXISTS");
+  return { eligible: reasons.length === 0, reasons } as const;
 }
 
 export function canCreateRightsRequest(input: {

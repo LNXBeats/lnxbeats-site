@@ -69,11 +69,15 @@ test("contract presentation uses the Admin RightsGrant as its contractual source
     "11. Prix / rémunération",
     "12. Contributions déclarées",
     "13. SACEM / gestion collective",
-    "14. Entrée en vigueur",
-    "15. Rétractation / règles à valider",
-    "16. Statut DRAFT / validation juridique",
+    "14. Obligations des parties",
+    "15. Entrée en vigueur",
+    "16. Rétractation et commencement anticipé",
+    "17. Retrait et fin de la licence",
+    "18. Responsabilité, droit applicable et litiges",
+    "19. Statut DRAFT / validation juridique",
   ]);
-  assert.match(rendered, /Durée contractuelle : 2 ans\./);
+  assert.match(rendered, /Durée contractuelle : cinq ans/);
+  assert.doesNotMatch(rendered, /Durée contractuelle : 2 ans\./);
   assert.doesNotMatch(rendered, /À définir avec LNX Beats/);
   assert.match(rendered, /Spotify, Apple Music, Deezer/);
   assert.match(rendered, /Histoire \/ brief uniquement/);
@@ -87,13 +91,24 @@ test("contract presentation uses the Admin RightsGrant as its contractual source
   assert.match(rendered, /Content ID : non/);
   assert.match(rendered, /sous-licence : non/);
   assert.match(rendered, /Aucune répartition n’est promise\. Aucune déclaration SACEM n’est effectuée/);
-  assert.match(rendered, /Prix envisagé de la licence : 150 €\./);
+  assert.match(rendered, /Prix unique de la licence : 150 €\./);
   assert.match(rendered, /Aucun paiement au titre de cette licence n’est ouvert à ce stade/);
   assert.match(rendered, /L’acceptation du présent projet ne suffit pas à rendre la licence active/);
   assert.match(rendered, /validation de LNX Beats/);
+  assert.match(rendered, /monde entier/);
+  assert.match(rendered, /Aucun commencement anticipé n’est automatique/);
+  assert.match(rendered, /mise en demeure écrite restée sans effet pendant trente jours/);
+  assert.match(rendered, /VALIDATION JURIDIQUE EXTERNE REQUISE/);
   assert.doesNotMatch(rendered, /acceptation QA|validation Admin|Montant cible futur/i);
   assert.doesNotMatch(rendered, /STORY_BRIEF_ONLY|SPOTIFY|APPLE_MUSIC|DEEZER/);
   assert.doesNotMatch(rendered, /\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/);
+});
+
+test("publication contract rendering fails closed on a client-controlled price", () => {
+  assert.throws(
+    () => buildRightsDocumentSections({ ...safariLicensePresentationInput, requestedPriceCents: 14_999 }),
+    /PUBLICATION_LICENSE_PRICE_MISMATCH/,
+  );
 });
 
 test("the client contract contains no internal development vocabulary", () => {

@@ -10,7 +10,7 @@ Tant que le modèle n’est pas approuvé :
 
 - PDF filigrané « PROJET — NON ACTIF — VALIDATION JURIDIQUE REQUISE » ;
 - aucun droit actif ;
-- aucun paiement 150 €/1 500 € ;
+- aucun paiement de la licence publique à 150 € ; l’ancien périmètre à 1 500 € reste historique et non commercial ;
 - aucune déclaration SACEM définitive ;
 - aucune présentation comme contrat définitif.
 

@@ -142,7 +142,7 @@ Une séquence PostgreSQL indépendante produit les numéros `LNX-AAAA-NNNNNN` sa
 
 ### Droits et contrats post-livraison
 
-`RightsRequest` représente une licence de publication à 150 € ou une étude de partenariat à 1 500 €, sans modifier le snapshot de l’Order. Les prix et la devise sont calculés côté serveur. Les coordonnées, contributions, matrice de droits, proposition commerciale, messages et audit sont structurés. `ContractTemplate` est versionné et soumis au Legal Review Gate. `ContractDocument` référence un Asset PDF R2 PRIVATE, son hash et son snapshot immuable ; `ContractAcceptance` relie consentement, utilisateur, document, version et preuve de session. L’ancien `CommercialLicense` est conservé uniquement comme archive de migration et n’est plus une source de vérité runtime.
+`RightsRequest` porte l’unique offre commerciale retenue : la licence de publication via distributeur à 150 €, sans modifier le snapshot de l’Order. Les anciens dossiers `EXPLOITATION_PARTNERSHIP` restent lisibles comme historique, mais ne constituent plus une offre ou un tarif public. Le prix et la devise de la licence sont calculés côté serveur. Les coordonnées, contributions, matrice de droits, messages et audit sont structurés. `ContractTemplate` est versionné et soumis au Legal Review Gate. `ContractDocument` référence un Asset PDF R2 PRIVATE, son hash et son snapshot immuable ; `ContractAcceptance` relie consentement, utilisateur, document, version et preuve de session. L’ancien `CommercialLicense` est conservé uniquement comme archive de migration et n’est plus une source de vérité runtime.
 
 ### Historique
 

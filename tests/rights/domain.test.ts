@@ -13,13 +13,31 @@ import {
   retentionUntilForConcludedContract,
   rightsPaymentEnabled,
   rightsPriceSnapshot,
+  publicationLicenseEligibility,
 } from "@/lib/rights/domain";
 
 test("rights prices are server-owned and rights payments remain disabled", () => {
   assert.equal(rightsPriceSnapshot("PUBLICATION_LICENSE").priceCents, 15_000);
-  assert.equal(rightsPriceSnapshot("EXPLOITATION_PARTNERSHIP").priceCents, 150_000);
+  assert.throws(() => rightsPriceSnapshot("EXPLOITATION_PARTNERSHIP"), /RIGHTS_OFFER_NOT_COMMERCIAL/);
   assert.equal(rightsPriceSnapshot("PUBLICATION_LICENSE").currency, "EUR");
   assert.equal(rightsPaymentEnabled(), false);
+});
+
+test("publication licensing is server-eligible only after paid final audio delivery", () => {
+  const baseline = { ownerMatches: true, orderStatus: "DELIVERED", deliveredAt: new Date("2026-09-08T10:00:00Z"), expectedAmountCents: 5_000, expectedCurrency: "EUR", payments: [{ status: "SUCCEEDED", amountCents: 5_000, currency: "EUR", refundedAmountCents: 0 }], deliveries: [{ assetType: "AUDIO", role: "DELIVERY" }], workTitle: "Œuvre livrée", existingStatuses: [] } as const;
+  assert.equal(publicationLicenseEligibility(baseline).eligible, true);
+  assert.ok(publicationLicenseEligibility({ ...baseline, orderStatus: "DRAFT" }).reasons.includes("ORDER_NOT_DELIVERED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, orderStatus: "AWAITING_PAYMENT", payments: [] }).reasons.includes("PAYMENT_NOT_CONFIRMED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, orderStatus: "IN_PROGRESS" }).reasons.includes("ORDER_NOT_DELIVERED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, deliveries: [] }).reasons.includes("FINAL_AUDIO_MISSING"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, deliveredAt: null }).reasons.includes("DELIVERY_DATE_MISSING"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, orderStatus: "CANCELLED" }).reasons.includes("ORDER_NOT_DELIVERED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, ownerMatches: false }).reasons.includes("NOT_OWNER"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, payments: [{ status: "REFUNDED", amountCents: 5_000, currency: "EUR", refundedAmountCents: 5_000 }] }).reasons.includes("PAYMENT_NOT_CONFIRMED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, payments: [{ status: "SUCCEEDED", amountCents: 5_000, currency: "EUR", refundedAmountCents: 1_000 }] }).reasons.includes("PAYMENT_NOT_CONFIRMED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, payments: [{ status: "SUCCEEDED", amountCents: 4_999, currency: "EUR", refundedAmountCents: 0 }] }).reasons.includes("PAYMENT_NOT_CONFIRMED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, payments: [{ status: "SUCCEEDED", amountCents: 5_000, currency: "USD", refundedAmountCents: 0 }] }).reasons.includes("PAYMENT_NOT_CONFIRMED"));
+  assert.ok(publicationLicenseEligibility({ ...baseline, existingStatuses: ["ACTIVE"] }).reasons.includes("LICENSE_ALREADY_EXISTS"));
 });
 
 test("a delivered order with a published master is required", () => {

@@ -113,7 +113,7 @@ Chaque changement important doit produire un événement horodaté et compréhen
 
 Commander porte uniquement la création personnelle, de 20 à 60 € selon les options pour la grille courante `2026-08-v2`. Les Orders historiques `2026-08-v1` conservent leurs montants de 50 à 90 €. Aucun choix commercial ni tarif à 1 500 € ne doit détourner la rencontre artistique initiale.
 
-Une fois l’`Order` livrée, le propriétaire peut ouvrir soit une demande de licence de publication à 150 €, soit une étude de partenariat d’exploitation à 1 500 €. Le détail privé sépare le paiement initial, le dossier de droits et ses documents. Ces montants restent des cibles futures : aucun paiement de droits, droit actif ou déclaration SACEM n’est ouvert dans V0.7.2.
+Une fois l’`Order` payée, livrée et dotée de son fichier audio final, le propriétaire pourra ouvrir une demande de licence de publication via distributeur à 150 €. Le détail privé sépare le paiement initial, le dossier de droits et ses documents. L’ancien périmètre à 1 500 € n’est plus une offre publique : une demande atypique relève d’un contact direct hors e-commerce. Aucun paiement de droits, droit actif ou déclaration SACEM n’est encore ouvert.
 
 Les demandes disposent de coordonnées confirmées, contributions, paramètres structurés, modèles versionnés, PDF privés et preuves d’acceptation. Une proposition 70/30 ne peut apparaître qu’après action volontaire de l’Admin et ne constitue jamais une clé SACEM automatique. Le droit moral, la qualité d’auteur et les contributions reconnues restent soumis à une analyse et une validation juridiques distinctes.
 

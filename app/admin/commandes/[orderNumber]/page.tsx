@@ -272,7 +272,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
 
           <section className="admin-side-window" aria-labelledby="admin-rights-title">
             <p className="admin-section-label">Droits & contrats</p><h2 id="admin-rights-title">{order.rightsRequests.length ? `${order.rightsRequests.length} demande${order.rightsRequests.length > 1 ? "s" : ""}` : "Aucune demande"}</h2>
-            {order.rightsRequests.map((rights) => <dl key={rights.id}><div><dt>Référence</dt><dd><Link href={`/admin/droits/${rights.requestNumber}`}>{rights.requestNumber}</Link></dd></div><div><dt>Offre</dt><dd>{rights.type === "PUBLICATION_LICENSE" ? "Licence 150 €" : "Partenariat 1 500 €"}</dd></div><div><dt>Statut</dt><dd>{rightsStatusPresentation[rights.status].label}</dd></div><div><dt>Paiement</dt><dd>Désactivé</dd></div></dl>)}
+            {order.rightsRequests.map((rights) => <dl key={rights.id}><div><dt>Référence</dt><dd><Link href={`/admin/droits/${rights.requestNumber}`}>{rights.requestNumber}</Link></dd></div><div><dt>Offre</dt><dd>{rights.type === "PUBLICATION_LICENSE" ? "Licence 150 €" : "Partenariat historique · non proposé"}</dd></div><div><dt>Statut</dt><dd>{rightsStatusPresentation[rights.status].label}</dd></div><div><dt>Paiement</dt><dd>Désactivé</dd></div></dl>)}
             {order.rightsRequests.length ? <p>Ouvrir la rubrique Droits & contrats pour la revue, les documents et l’historique.</p> : null}
           </section>
         </aside>

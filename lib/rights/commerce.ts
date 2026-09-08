@@ -1,6 +1,6 @@
 import "server-only";
 
-import { rightsOffers, type RightsOfferType } from "@/data/rights-offer";
+import { rightsOffers, type PublicRightsOfferType } from "@/data/rights-offer";
 import { isLegalTemplateUsable } from "@/lib/rights/domain";
 import { validateContractTemplate } from "@/lib/rights/templates";
 
@@ -53,13 +53,13 @@ export const RIGHTS_COMMERCE_OPEN_REQUESTED: boolean = false;
 export const RIGHTS_NEW_REQUESTS_ENABLED: boolean = false;
 
 export type RightsOfferCommerceReadiness = Readonly<{
-  type: RightsOfferType;
+  type: PublicRightsOfferType;
   label: string;
   title: string;
   priceCents: number;
   currency: string;
   pricingVersion: string;
-  requiredTemplateType: RightsOfferType;
+  requiredTemplateType: PublicRightsOfferType;
   templateVersion: number | null;
   templateStatus: string | null;
   templateSourceValid: boolean;
@@ -81,7 +81,7 @@ export type RightsCommerceReadiness = Readonly<{
 
 function latestTemplateForOffer(
   templates: readonly RightsCommerceTemplate[],
-  type: RightsOfferType,
+  type: PublicRightsOfferType,
 ) {
   return templates
     .filter((template) => template.type === type)
@@ -89,7 +89,7 @@ function latestTemplateForOffer(
 }
 
 function offerReadiness(
-  type: RightsOfferType,
+  type: PublicRightsOfferType,
   templates: readonly RightsCommerceTemplate[],
 ): RightsOfferCommerceReadiness {
   const offer = rightsOffers[type];
@@ -134,7 +134,7 @@ function offerReadiness(
 export function evaluateRightsCommerceReadiness(
   templates: readonly RightsCommerceTemplate[],
 ): RightsCommerceReadiness {
-  const offers = (Object.keys(rightsOffers) as RightsOfferType[]).map((type) => offerReadiness(type, templates));
+  const offers = (Object.keys(rightsOffers) as PublicRightsOfferType[]).map((type) => offerReadiness(type, templates));
   const reasons = [...new Set(offers.flatMap((offer) => offer.reasons))];
   const ready = reasons.length === 0;
   const state: RightsCommerceState = ready

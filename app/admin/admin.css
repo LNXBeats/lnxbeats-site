@@ -206,7 +206,7 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-archive-list > li > span { color: #8f8a82; font-size: .68rem; text-align: right; }
 .admin-archive-list > li > p { grid-column: 1 / -1; margin: .25rem 0 0; color: #aaa59c; font-size: .72rem; line-height: 1.55; }
 .admin-template-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; }
-.admin-template-grid--offers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-template-grid--offers { grid-template-columns: minmax(0, 1fr); }
 .admin-template-grid article, .admin-card-list > *, .admin-card-list article { min-width: 0; padding: 1rem; border: 1px solid rgba(244,240,232,.1); border-radius: 14px; background: rgba(255,255,255,.02); }
 .admin-template-grid h3 { margin-top: 0; }
 .admin-template-grid form { display: grid; gap: .75rem; }

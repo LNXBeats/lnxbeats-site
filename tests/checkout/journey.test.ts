@@ -19,6 +19,7 @@ function order(status: OrderState["status"], paymentStatus?: OrderState["payment
       provider: "STRIPE",
       status: paymentStatus,
       amountCents: 5_000,
+      refundedAmountCents: 0,
       currency: "EUR",
       paymentMethod: null,
       checkoutExpiresAt: null,

@@ -146,7 +146,7 @@ export default async function AdminRightsDetailPage({ params, searchParams }: {
       <div>
         <p className="admin-section-label">{request.requestNumber}</p>
         <h1>{request.workTitle}</h1>
-        <p>{request.type === "PUBLICATION_LICENSE" ? "Licence de publication · 150 €" : "Partenariat d’exploitation · 1 500 €"}</p>
+        <p>{request.type === "PUBLICATION_LICENSE" ? "Licence de publication · 150 €" : "Partenariat historique · offre non proposée"}</p>
       </div>
       <span className="admin-status">{rightsStatusPresentation[request.status].label}</span>
     </header>

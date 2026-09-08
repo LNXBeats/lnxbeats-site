@@ -2,11 +2,12 @@
 
 > Documentation d’architecture, pas consultation juridique. Toute ouverture publique exige la validation d’un professionnel du droit de la propriété intellectuelle.
 
-## Trois niveaux séparés
+## Offre commerciale retenue
 
 1. **Création personnelle** — grille courante `2026-08-v2` : 20 €, 30 €, 50 € ou 60 € selon Illustration/Priorité. Les Orders historiques `2026-08-v1` conservent leurs montants de 50 €, 60 €, 80 € ou 90 €. La version tarifaire et la version acceptée des conditions d’usage personnel sont figées sur chaque `Order`. Elles ne valent pas autorisation de publier, distribuer, monétiser, revendiquer la qualité d’auteur/compositeur ou obtenir une quote-part SACEM.
-2. **Licence de publication** — tarif cible serveur 150 € (`15_000` centimes). Elle prépare une autorisation délimitée par droits, destination, supports, territoire et durée. V0.7.2 n’encaisse rien.
-3. **Partenariat d’exploitation** — tarif cible serveur 1 500 € (`150_000` centimes). Il ouvre une étude manuelle des contributions, rôles, IA et paramètres contractuels. Une proposition 70/30 est facultative, volontairement créée par l’Admin et non automatique.
+2. **Licence de publication via distributeur** — unique offre commerciale Droits retenue, prix serveur 150 € (`15_000` centimes). Elle est non exclusive, attachée à une seule œuvre livrée, mondiale et prévue pour cinq ans.
+
+L’ancien périmètre de partenariat à 1 500 € est abandonné comme offre publique : aucun tarif, CTA, checkout ou API de création ne doit l’exposer. Les modèles et demandes historiques restent lisibles comme archives internes. Une demande atypique passe uniquement par un contact direct hors e-commerce.
 
 Une demande exige un utilisateur actif et vérifié, propriétaire d’une `Order` payée, `DELIVERED`, possédant un master privé publié. Un autre membre obtient une réponse neutre ; l’Admin possède une vue dédiée. Une contrainte partielle PostgreSQL interdit deux demandes actives de même type pour une même commande.
 
@@ -14,7 +15,7 @@ Une demande exige un utilisateur actif et vérifié, propriétaire d’une `Orde
 
 Les statuts techniques sont traduits en libellés humains. Le workflow couvre brouillon, soumission, informations requises, étude, préautorisation, préparation/lecture du contrat, acceptations séparées, étape future de paiement, rejet et annulation. `ACTIVE` existe pour l’évolution du modèle mais un trigger V0.7.2 interdit toute insertion ou transition vers cet état.
 
-Une licence peut précéder une étude de partenariat. Aucun remboursement, crédit ou réduction n’est calculé automatiquement. Une demande rejetée est historique ; une nouvelle demande peut être créée selon la contrainte d’unicité active.
+L’ancienne architecture permettait qu’une licence précède une étude de partenariat ; ce second parcours n’accepte plus aucune nouvelle demande. Aucun remboursement, crédit ou réduction n’est calculé automatiquement. Une demande rejetée est historique ; une nouvelle demande de licence reste soumise au gate et à la contrainte d’unicité active.
 
 ## Contributions et SACEM
 
@@ -32,7 +33,7 @@ La V1.2 expose dans l’Admin un diagnostic par offre fondé sur les tarifs serv
 - `READY_NOT_OPEN` : tous les prérequis seraient démontrés, mais une ouverture explicite resterait nécessaire ;
 - `OPEN` : état réservé à une évolution future. Le code actuel ne peut pas l’atteindre.
 
-Les deux montants restent ceux des offres LNX Beats : 150 € pour la licence de publication et 1 500 € pour le partenariat d’exploitation. Les 1 500 € ne sont pas un tarif SACEM et ne garantissent ni l’éligibilité d’une œuvre, ni une déclaration, ni une répartition. Le prix est lu depuis `data/rights-offer.ts`; les formulaires client ne peuvent pas le redéfinir.
+Le seul montant commercial est 150 € pour la licence de publication via distributeur. Il est lu depuis `data/rights-offer.ts`; les formulaires client ne peuvent pas le redéfinir.
 
 Le commerce reste `BLOCKED` même si une ligne `ContractTemplate` porte le statut `APPROVED`, pour les raisons techniques vérifiées suivantes :
 
@@ -49,7 +50,7 @@ Tant que cet état est `BLOCKED`, les cartes et formulaires de création d’une
 
 `SACEM_PREPARATION` ne soumet rien à la SACEM. Une incohérence subsiste dans le workflow actuel : l’interface propose sa génération pour `ADMIN_VALIDATED` ou `READY_FOR_PAYMENT`, alors que le service rejette d’abord `READY_FOR_PAYMENT`; le parcours normal passe directement de l’acceptation client à `READY_FOR_PAYMENT`. L’audience est aussi à décider : le libellé décrit un document privé Admin, tandis que le lecteur de documents autorise actuellement le propriétaire de la commande. Aucune correction implicite n’est appliquée dans ce lot de readiness. La portée, l’audience et le moment de génération doivent être décidés avant toute utilisation réelle.
 
-Cette section décrit des barrières techniques. Le contenu final des contrats, la nature juridique des offres, la rétractation, les annulations/remboursements, la fiscalité et toute démarche de gestion collective restent soumis à une décision humaine et à la revue du professionnel compétent.
+La décision produit fixe déjà la non-exclusivité, une œuvre, le monde entier, cinq ans, le paiement unique, les limites de sous-licence/transfert/adaptation/Content ID et le crédit selon le rôle réel. Le modèle source a été aligné sur ces décisions. Sa revue juridique formelle, les modalités de résiliation, retrait, responsabilité, droit applicable et rétractation restent nécessaires avant approbation et ouverture.
 
 ## Non-rétroactivité
 

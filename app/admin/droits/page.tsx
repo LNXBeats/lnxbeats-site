@@ -90,9 +90,7 @@ export default async function AdminRightsPage({ searchParams }: { searchParams: 
               <h3>{offer.label}</h3>
               <p><strong>{euros(offer.priceCents, offer.currency)}</strong> · tarif serveur {offer.pricingVersion}</p>
               <p>{offer.title}. La portée finale dépendra exclusivement du contrat juridiquement validé.</p>
-              {offer.type === "EXPLOITATION_PARTNERSHIP" ? (
-                <p>Les 1 500 € correspondent à l’offre LNX Beats de partenariat d’exploitation. Ce n’est ni un tarif SACEM, ni une garantie d’éligibilité, de déclaration ou de répartition.</p>
-              ) : null}
+              <p>Offre unique post-livraison, rattachée à une œuvre livrée et à sa commande source.</p>
               <dl className="admin-definition-grid">
                 <div><dt>Statut</dt><dd>{offer.reasons.length ? "Verrouillée" : "Prête techniquement"}</dd></div>
                 <div><dt>Modèle</dt><dd>{contractTemplateTypeLabels[offer.requiredTemplateType]}</dd></div>
@@ -105,6 +103,7 @@ export default async function AdminRightsPage({ searchParams }: { searchParams: 
             </article>
           ))}
         </div>
+        <aside className="admin-alert"><strong>Ancien périmètre 1 500 € non proposé.</strong> Aucun produit, tarif, CTA ou checkout public n’est disponible. Toute demande atypique relève d’un contact direct hors e-commerce.</aside>
       </section>
 
       <section className="admin-panel" aria-labelledby="rights-requests-title">

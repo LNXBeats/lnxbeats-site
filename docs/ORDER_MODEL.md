@@ -101,7 +101,7 @@ Les transitions futures doivent passer par un service central, valider l’état
 
 ## Droits et contrats après livraison
 
-V0.7.2 remplace le flux runtime historique `CommercialLicense` par `RightsRequest`. L’ancien modèle demeure une archive additive en lecture seule afin de ne pas effacer l’historique ; aucune route ne l’écrit. Une commande `DELIVERED`, payée et dotée d’un master privé publié peut ouvrir une licence de publication à 150 € ou un partenariat d’exploitation à 1 500 €. Les montants sont des snapshots serveur et aucun paiement de droits n’est disponible.
+V0.7.2 remplace le flux runtime historique `CommercialLicense` par `RightsRequest`. L’ancien modèle demeure une archive additive en lecture seule afin de ne pas effacer l’historique ; aucune route ne l’écrit. Pour la politique V1.2, seule une commande `DELIVERED`, payée sans remboursement et dotée d’un fichier audio final privé peut devenir éligible à la licence de publication via distributeur à 150 €. Les partenariats historiques restent lisibles, mais ne sont plus proposés ou tarifés publiquement. Aucun paiement de droits n’est encore disponible.
 
 Les coordonnées confirmées, contributions déclarées, paramètres structurés, échanges, modèles versionnés, PDF privés, acceptations et événements disposent de relations distinctes. Une contrainte partielle interdit deux demandes actives du même type pour une Order. Un brouillon sans document peut être supprimé ; une demande soumise peut être annulée en conservant son historique. Les documents acceptés sont protégés contre la suppression et toute correction crée une nouvelle version.
 
@@ -127,7 +127,7 @@ Avant toute activation commerciale, il faut confirmer le régime de TVA associé
 
 ## Tests et environnement jetable
 
-Les tests de commande couvrent la grille courante v2 plafonnée à 60 €, la grille historique v1 plafonnée à 90 €, l’usage personnel versionné et le workflow de livraison. Les tests de contrats couvrent les tarifs serveur 150/1 500 €, l’éligibilité post-livraison, l’ownership, la concurrence, les snapshots, l’idempotence, le PDF privé, le hash, la réauthentification, la double validation, l’interdiction d’activation et l’absence de paiement. La suite runtime exige l’instance jetable exacte `lnx-studio-v072-test`, des identités `@example.invalid`, un stockage R2 simulé et Stripe absent ; elle nettoie cette base dans un `finally` et vérifie une postcondition vide.
+Les tests de commande couvrent la grille courante v2 plafonnée à 60 €, la grille historique v1 plafonnée à 90 €, l’usage personnel versionné et le workflow de livraison. Les tests de contrats couvrent le tarif serveur public de 150 €, l’absence d’offre publique à 1 500 €, l’éligibilité post-livraison, l’ownership, la concurrence, les snapshots, l’idempotence, le PDF privé, le hash, la réauthentification, la double validation, l’interdiction d’activation et l’absence de paiement. Les fixtures de partenariat servent uniquement à la non-régression des dossiers historiques. La suite runtime exige l’instance jetable exacte `lnx-studio-v072-test`, des identités `@example.invalid`, un stockage R2 simulé et Stripe absent ; elle nettoie cette base dans un `finally` et vérifie une postcondition vide.
 
 ## Données professionnelles confirmées
 

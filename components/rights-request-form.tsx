@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { rightsPlatforms, type RightsOfferType } from "@/data/rights-offer";
+import { rightsOffers, rightsPlatforms, type RightsOfferType } from "@/data/rights-offer";
 import { formatEuro } from "@/lib/orders/domain";
 
 const platformLabels = {
@@ -74,8 +74,8 @@ export function RightsRequestForm({ type, orderNumber, orderTitle, account }: Pr
     otherPlatforms: "",
     targetDate: "",
     monetized: false,
-    territory: "France",
-    duration: "À définir avec LNX Beats",
+    territory: "Monde entier",
+    duration: "5 ans",
     clips: "",
     socialNetworks: "",
     advertising: false,
@@ -109,7 +109,7 @@ export function RightsRequestForm({ type, orderNumber, orderTitle, account }: Pr
     relatedWorks: "",
     desiredSplit: "",
   });
-  const price = partnership ? 150_000 : 15_000;
+  const price = rightsOffers.PUBLICATION_LICENSE.priceCents;
   const partyIsIndividual = party.partyType === "INDIVIDUAL" || party.partyType === "SOLE_PROPRIETOR";
   const steps = useMemo(() => ["Coordonnées", "Projet", "Contributions", "Vérification"], []);
 
@@ -195,7 +195,7 @@ export function RightsRequestForm({ type, orderNumber, orderTitle, account }: Pr
         <div className="field-grid"><div className="field"><label htmlFor="rights-work-title">Titre de la création *</label><input id="rights-work-title" required maxLength={240} value={project.workTitle} onChange={(event) => setProjectField("workTitle", event.target.value)} /></div><div className="field"><label htmlFor="rights-publication-name">Nom de publication</label><input id="rights-publication-name" maxLength={240} value={project.publicationName} onChange={(event) => setProjectField("publicationName", event.target.value)} /></div><div className="field"><label htmlFor="rights-project-artist">Nom d’artiste *</label><input id="rights-project-artist" required maxLength={180} value={project.artistName} onChange={(event) => setProjectField("artistName", event.target.value)} /></div><div className="field"><label htmlFor="rights-distributor">Distributeur envisagé</label><input id="rights-distributor" maxLength={180} value={project.distributor} onChange={(event) => setProjectField("distributor", event.target.value)} /></div></div>
         <fieldset className="fieldset"><legend>Plateformes souhaitées *</legend><div className="choice-grid">{rightsPlatforms.map((platform) => <label className="choice" key={platform}><input type="checkbox" checked={project.platforms.includes(platform)} onChange={() => togglePlatform(platform)} /><span>{platformLabels[platform]}</span></label>)}</div></fieldset>
         {project.platforms.includes("OTHER") ? <div className="field"><label htmlFor="rights-other-platforms">Autres plateformes *</label><input id="rights-other-platforms" required maxLength={500} value={project.otherPlatforms} onChange={(event) => setProjectField("otherPlatforms", event.target.value)} /></div> : null}
-        <div className="field-grid"><div className="field"><label htmlFor="rights-target-date">Date envisagée</label><input id="rights-target-date" type="date" value={project.targetDate} onChange={(event) => setProjectField("targetDate", event.target.value)} /></div><div className="field"><label htmlFor="rights-territory">Territoire souhaité *</label><input id="rights-territory" required maxLength={240} value={project.territory} onChange={(event) => setProjectField("territory", event.target.value)} /></div><div className="field"><label htmlFor="rights-duration">Durée souhaitée *</label><input id="rights-duration" required maxLength={240} value={project.duration} onChange={(event) => setProjectField("duration", event.target.value)} /></div></div>
+        <div className="field-grid"><div className="field"><label htmlFor="rights-target-date">Date envisagée</label><input id="rights-target-date" type="date" value={project.targetDate} onChange={(event) => setProjectField("targetDate", event.target.value)} /></div><div className="field"><label htmlFor="rights-territory">Territoire contractuel</label><input id="rights-territory" readOnly value={project.territory} /></div><div className="field"><label htmlFor="rights-duration">Durée contractuelle</label><input id="rights-duration" readOnly value={project.duration} /></div></div>
         <div className="choice-grid"><label className="choice"><input type="checkbox" checked={project.monetized} onChange={(event) => setProjectField("monetized", event.target.checked)} /><span>Exploitation monétisée envisagée</span></label><label className="choice"><input type="checkbox" checked={project.advertising} onChange={(event) => setProjectField("advertising", event.target.checked)} /><span>Publicité / sponsoring envisagé</span></label><label className="choice"><input type="checkbox" checked={project.contentId} onChange={(event) => setProjectField("contentId", event.target.checked)} /><span>Content ID envisagé</span></label></div>
         <div className="field"><label htmlFor="rights-clips">Clips / vidéos envisagés</label><textarea id="rights-clips" maxLength={1000} value={project.clips} onChange={(event) => setProjectField("clips", event.target.value)} /></div><div className="field"><label htmlFor="rights-social">Réseaux sociaux</label><textarea id="rights-social" maxLength={1000} value={project.socialNetworks} onChange={(event) => setProjectField("socialNetworks", event.target.value)} /></div><div className="field"><label htmlFor="rights-modifications">Modifications du morceau envisagées</label><textarea id="rights-modifications" maxLength={2000} value={project.modifications} onChange={(event) => setProjectField("modifications", event.target.value)} /></div><div className="field"><label htmlFor="rights-credits">Crédits souhaités</label><textarea id="rights-credits" maxLength={1000} value={project.credits} onChange={(event) => setProjectField("credits", event.target.value)} /></div>
       </section> : null}

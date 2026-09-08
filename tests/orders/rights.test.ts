@@ -3,10 +3,10 @@ import test from "node:test";
 
 import { canCreateRightsRequest, rightsPriceSnapshot } from "@/lib/rights/domain";
 
-test("fige les deux tarifs de demandes de droits côté serveur", () => {
+test("fige l’unique tarif public de licence côté serveur", () => {
   assert.equal(rightsPriceSnapshot("PUBLICATION_LICENSE").priceCents, 15_000);
-  assert.equal(rightsPriceSnapshot("EXPLOITATION_PARTNERSHIP").priceCents, 150_000);
-  assert.equal(rightsPriceSnapshot("EXPLOITATION_PARTNERSHIP").currency, "EUR");
+  assert.equal(rightsPriceSnapshot("PUBLICATION_LICENSE").currency, "EUR");
+  assert.throws(() => rightsPriceSnapshot("EXPLOITATION_PARTNERSHIP"), /RIGHTS_OFFER_NOT_COMMERCIAL/);
 });
 
 test("autorise une demande seulement après livraison publiée sans demande active", () => {

@@ -37,6 +37,7 @@ export type SerializedOrderPayment = {
   provider: PaymentProvider;
   status: PaymentStatus;
   amountCents: number;
+  refundedAmountCents: number;
   currency: string;
   paymentMethod: PaymentMethod | null;
   checkoutExpiresAt: string | null;

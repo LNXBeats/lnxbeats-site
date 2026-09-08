@@ -26,7 +26,7 @@ function template(
   };
 }
 
-test("rights commerce publishes the two server-owned offer snapshots", () => {
+test("rights commerce publishes only the server-owned 150 euro offer", () => {
   const readiness = evaluateRightsCommerceReadiness([]);
   const offers = Object.fromEntries(readiness.offers.map((offer) => [offer.type, offer]));
 
@@ -44,20 +44,8 @@ test("rights commerce publishes the two server-owned offer snapshots", () => {
       requiredTemplateType: "PUBLICATION_LICENSE",
     },
   );
-  assert.deepEqual(
-    {
-      priceCents: offers.EXPLOITATION_PARTNERSHIP?.priceCents,
-      currency: offers.EXPLOITATION_PARTNERSHIP?.currency,
-      pricingVersion: offers.EXPLOITATION_PARTNERSHIP?.pricingVersion,
-      requiredTemplateType: offers.EXPLOITATION_PARTNERSHIP?.requiredTemplateType,
-    },
-    {
-      priceCents: rightsOffers.EXPLOITATION_PARTNERSHIP.priceCents,
-      currency: rightsOffers.EXPLOITATION_PARTNERSHIP.currency,
-      pricingVersion: rightsOffers.EXPLOITATION_PARTNERSHIP.pricingVersion,
-      requiredTemplateType: "EXPLOITATION_PARTNERSHIP",
-    },
-  );
+  assert.equal(readiness.offers.length, 1);
+  assert.equal(offers.EXPLOITATION_PARTNERSHIP, undefined);
 });
 
 test("new member rights requests are explicitly closed while offers are blocked", () => {
@@ -75,10 +63,9 @@ test("rights commerce is blocked when required legal templates are absent", () =
   assert.ok(readiness.offers.every((offer) => offer.reasons.includes("LEGAL_REVIEW_REQUIRED")));
 });
 
-test("legal approval alone cannot open commerce without renderer, billing, payment and activation", () => {
+test("legal approval alone cannot open the single offer without renderer, billing, payment and activation", () => {
   const readiness = evaluateRightsCommerceReadiness([
     template("PUBLICATION_LICENSE"),
-    template("EXPLOITATION_PARTNERSHIP"),
   ]);
 
   assert.equal(readiness.state, "BLOCKED");
@@ -98,7 +85,6 @@ test("legal approval alone cannot open commerce without renderer, billing, payme
   assert.throws(
     () => assertRightsCommerceOpen([
       template("PUBLICATION_LICENSE"),
-      template("EXPLOITATION_PARTNERSHIP"),
     ]),
     /RIGHTS_COMMERCE_NOT_OPEN/,
   );
@@ -114,7 +100,6 @@ test("the latest required template must itself carry a valid legal approval", ()
       approvedByAdminId: null,
       legalReviewReference: null,
     }),
-    template("EXPLOITATION_PARTNERSHIP"),
   ]);
   const publication = readiness.offers.find((offer) => offer.type === "PUBLICATION_LICENSE");
 
@@ -139,12 +124,12 @@ test("the Admin rights page separates offers, requests, legal models and fail-cl
   assert.match(page, /Validation juridique des modèles/);
   assert.match(page, /contractTemplateTypeLabels/);
   assert.match(page, /admin-template-grid admin-template-grid--offers/);
-  assert.match(await readFile("app/admin/admin.css", "utf8"), /\.admin-template-grid--offers \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(await readFile("app/admin/admin.css", "utf8"), /\.admin-template-grid--offers \{ grid-template-columns: minmax\(0, 1fr\); \}/);
   assert.match(page, /PUBLICATION_LICENSE: "Licence de publication"/);
   assert.match(page, /EXPLOITATION_PARTNERSHIP: "Partenariat d’exploitation"/);
   assert.doesNotMatch(page, /<dt>Modèle<\/dt><dd>\{offer\.requiredTemplateType\}<\/dd>/);
-  assert.match(page, /Les 1 500 € correspondent à l’offre LNX Beats de partenariat d’exploitation/);
-  assert.match(page, /Ce n’est ni un tarif SACEM, ni une garantie d’éligibilité, de déclaration ou de répartition/);
+  assert.match(page, /Ancien périmètre 1 500 € non proposé/);
+  assert.match(page, /Aucun produit, tarif, CTA ou checkout public n’est disponible/);
   assert.match(page, /<dt>Paiement activable<\/dt><dd>\{offer\.paymentReady && commerce\.open \? "Oui" : "Non"\}<\/dd>/);
   assert.match(page, /Achat public désactivé/);
   assert.match(page, /evaluateRightsCommerceReadiness\(templates\)/);

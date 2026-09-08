@@ -28,7 +28,10 @@ const PAGE_MARGIN = 56;
 // metrics can differ by fractions of a point once WinAnsi glyphs are encoded;
 // an explicit band ensures every continuation goes through addPage(), which
 // redraws the branded header and keeps body text clear of the footer.
-const CONTENT_BOTTOM = A4.height - 92;
+// Keep the whole body above both PDFKit's automatic bottom-margin break and
+// the two-line footer. Long legal paragraphs otherwise risk creating an
+// unbranded implicit continuation page or touching the page counter.
+const CONTENT_BOTTOM = A4.height - 124;
 const CONTENT_WIDTH = A4.width - PAGE_MARGIN * 2;
 const SECTION_TITLE_SIZE = 11.5;
 const SECTION_BODY_SIZE = 9.3;
@@ -36,6 +39,7 @@ const SECTION_LINE_GAP = 1.6;
 const SECTION_PARAGRAPH_GAP = 3;
 const SECTION_HEADING_GAP = 3.5;
 const SECTION_GAP = 5;
+const PDFKIT_AUTO_BREAK_BUFFER = 40;
 const WATERMARK = "PROJET - NON ACTIF - VALIDATION JURIDIQUE REQUISE";
 
 function parisDate(value: Date) {
@@ -196,7 +200,7 @@ export async function generateContractPdf(input: ContractPdfInput) {
   for (const [index, section] of input.sections.entries()) {
     if (balancedBreakIndex === index) addPage();
     const measuredHeight = measuredSections[index]!;
-    if (measuredHeight <= followingPageCapacity) ensureSpace(measuredHeight);
+    if (measuredHeight <= followingPageCapacity) ensureSpace(measuredHeight + PDFKIT_AUTO_BREAK_BUFFER);
     document.x = PAGE_MARGIN;
     document.fillColor("#1d2026").font("Helvetica-Bold").fontSize(SECTION_TITLE_SIZE);
     const titleY = document.y;
@@ -211,7 +215,7 @@ export async function generateContractPdf(input: ContractPdfInput) {
         width: CONTENT_WIDTH,
         lineGap: SECTION_LINE_GAP,
       });
-      if (paragraphHeight <= followingPageCapacity) ensureSpace(paragraphHeight + SECTION_PARAGRAPH_GAP);
+      if (paragraphHeight <= followingPageCapacity) ensureSpace(paragraphHeight + SECTION_PARAGRAPH_GAP + PDFKIT_AUTO_BREAK_BUFFER);
       document.x = PAGE_MARGIN;
       document.fillColor("#30343b").font("Helvetica").fontSize(SECTION_BODY_SIZE);
       const paragraphY = document.y;
