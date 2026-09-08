@@ -161,11 +161,13 @@ test("Commander and Boutique retain their editorial identity with denser respons
 test("Compte and Admin separate unpaid checkout from paid work", () => {
   const account = readFileSync("app/compte/page.tsx", "utf8");
   const adminService = readFileSync("lib/admin/service.ts", "utf8");
+  const adminOperations = readFileSync("lib/admin/operations.ts", "utf8");
   const adminPage = readFileSync("app/admin/commandes/page.tsx", "utf8");
   assert.match(account, /Paiement et confirmation/);
   assert.match(account, /clientPaymentPresentation/);
   assert.match(account, /Options :/);
-  assert.match(adminService, /pendingStatuses.*DRAFT.*AWAITING_PAYMENT/);
+  assert.match(adminOperations, /commanderPendingStatuses\s*=\s*\["DRAFT",\s*"AWAITING_PAYMENT"\]/);
+  assert.match(adminService, /\$\{filter\}::text = 'pending'.*DRAFT.*AWAITING_PAYMENT/s);
   assert.match(adminService, /PAYMENT_CONFIRMED/);
   assert.match(adminPage, /Paiements à vérifier/);
 });

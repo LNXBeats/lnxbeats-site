@@ -230,6 +230,10 @@ test("Admin billing supports invoice, credit-note, order, customer and date look
   assert.match(service, /creditNotes: \{ some: \{ creditNoteNumber/);
   assert.match(service, /parisDayRange/);
   assert.match(list, /Facture, commande, client/);
+  assert.match(list, /className="admin-table-wrap admin-desktop-records"/);
+  assert.match(list, /className="admin-mobile-records admin-billing-records"/);
+  assert.match(list, /role="region" aria-label="Registre des factures, défilement horizontal disponible"/);
+  assert.match(list, /className="admin-search-form"/);
   assert.match(detail, /Consulter l’avoir/);
   assert.match(credit, /Aucun bouton de modification ou suppression/);
   assert.doesNotMatch(`${list}${detail}${credit}`, />\s*Supprimer\s*</i);

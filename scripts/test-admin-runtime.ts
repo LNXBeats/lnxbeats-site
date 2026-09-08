@@ -4,13 +4,13 @@ import sharp from "sharp";
 
 import {
   addInternalOrderNote,
-  deleteEligibleAdminOrder,
   getAdminOrder,
   getDatabaseCatalogueAudit,
   listAdminMembers,
   listAdminOrders,
   transitionOrderStatus,
 } from "@/lib/admin/service";
+import { executeAdminCleanupPlan, listAdminCleanupCandidates } from "@/lib/admin/cleanup";
 import { createInternalAuthUser } from "@/lib/auth/internal-user";
 import { canAccessAdmin } from "@/lib/auth/roles";
 import type { OrderActor, OrderDraftInput } from "@/lib/orders/domain";
@@ -57,6 +57,8 @@ async function guards() {
 
 async function cleanup() {
   await prisma.$transaction(async (transaction) => {
+    await transaction.adminCleanupAuditEvent.deleteMany();
+    await transaction.adminRecordArchive.deleteMany();
     await transaction.paymentAuditEvent.deleteMany();
     await transaction.providerEvent.deleteMany();
     await transaction.paymentIncident.deleteMany();
@@ -139,7 +141,7 @@ async function run() {
     const transitioned = await getAdminOrder(draft.orderNumber);
     assert.equal(transitioned?.status, "ACCEPTED");
     assert.equal(transitioned?.events.filter(({ toStatus }) => toStatus === "ACCEPTED").length, 1);
-    await assert.rejects(deleteEligibleAdminOrder(draft.orderNumber));
+    assert.equal((await listAdminCleanupCandidates()).find(({ id }) => id === paymentOrder.id)?.classification, "KEEP_ACTION_REQUIRED");
     passed.push("unpaid bypass refused, paid order highlighted, valid and concurrent transitions protected");
 
     const protectedDraft = await createDraftOrder(member, { ...input, title: "Conservation paiement Admin QA" });
@@ -161,10 +163,16 @@ async function run() {
       },
     });
     assert.equal(await transitionOrderStatus(protectedDraft.orderNumber, "CANCELLED", adminUser.id), "CANCELLED");
-    await assert.rejects(deleteEligibleAdminOrder(protectedDraft.orderNumber));
+    assert.equal((await listAdminCleanupCandidates()).find(({ id }) => id === protectedOrder.id)?.classification, "KEEP_ACTION_REQUIRED");
     passed.push("any payment attempt blocks destructive Admin deletion");
 
-    const removableDraft = await createDraftOrder(member, { ...input, title: "Suppression Admin QA" });
+    const safeDraft = await createDraftOrder(member, { ...input, title: "Suppression Admin QA" });
+    const safeDraftId = (await prisma.order.findUniqueOrThrow({ where: { orderNumber: safeDraft.orderNumber }, select: { id: true } })).id;
+    assert.equal((await listAdminCleanupCandidates()).find(({ id }) => id === safeDraftId)?.classification, "DELETE_SAFE");
+    await executeAdminCleanupPlan([{ type: "MUSIC_ORDER", id: safeDraftId, expected: "DELETE_SAFE" }], adminUser.id);
+    assert.equal(await prisma.order.count({ where: { id: safeDraftId } }), 0);
+
+    const removableDraft = await createDraftOrder(member, { ...input, title: "Archivage fichier Admin QA" });
     const photoBuffer = await sharp({ create: { width: 40, height: 30, channels: 3, background: "#6b5634" } }).jpeg().toBuffer();
     const removableWithPhoto = await addOrderPhotos(member, removableDraft.orderNumber, [{ buffer: photoBuffer, originalFilename: "admin-delete.jpg", declaredMimeType: "image/jpeg" }]);
     const removableAsset = await prisma.asset.findUniqueOrThrow({ where: { id: removableWithPhoto.photos[0]!.id } });
@@ -174,13 +182,13 @@ async function run() {
     });
     assert.equal(await transitionOrderStatus(removableDraft.orderNumber, "CANCELLED", adminUser.id), "CANCELLED");
     const removableOrderId = (await prisma.order.findUniqueOrThrow({ where: { orderNumber: removableDraft.orderNumber }, select: { id: true } })).id;
-    await deleteEligibleAdminOrder(removableDraft.orderNumber);
-    assert.equal(await prisma.order.count({ where: { orderNumber: removableDraft.orderNumber } }), 0);
-    assert.equal(await prisma.orderEvent.count({ where: { orderId: removableOrderId } }), 0);
-    assert.equal(await prisma.orderAsset.count({ where: { orderId: removableOrderId } }), 0);
-    assert.equal(await prisma.asset.count({ where: { id: removableAsset.id } }), 0);
-    await assert.rejects(readPrivateOrderFile(removableAsset.storageKey));
-    passed.push("eligible cancelled order, timeline, asset relation and private file deleted without orphans");
+    assert.equal((await listAdminCleanupCandidates()).find(({ id }) => id === removableOrderId)?.classification, "ARCHIVE_REQUIRED");
+    await executeAdminCleanupPlan([{ type: "MUSIC_ORDER", id: removableOrderId, expected: "ARCHIVE_REQUIRED" }], adminUser.id);
+    assert.equal(await prisma.order.count({ where: { id: removableOrderId } }), 1);
+    assert.equal(await prisma.orderAsset.count({ where: { orderId: removableOrderId } }), 1);
+    assert.equal(await prisma.asset.count({ where: { id: removableAsset.id } }), 1);
+    await readPrivateOrderFile(removableAsset.storageKey);
+    passed.push("DELETE_SAFE removes an empty fixture while any stored file forces archive and remains readable");
 
     await addInternalOrderNote(draft.orderNumber, "Note réservée au cockpit.", adminUser.id);
     const payment = await prisma.payment.findFirstOrThrow({ where: { orderId: paymentOrder.id } });

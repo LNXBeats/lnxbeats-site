@@ -254,7 +254,7 @@ test("all migrations apply and seed the immutable V1 pricing parity", async () =
     assert.ok(migrations.indexOf(SHIPPING_OPERATIONS_MIGRATION) < migrations.indexOf(SHIPPING_PROVIDER_MIGRATION));
     assert.ok(migrations.indexOf(SHIPPING_PROVIDER_MIGRATION) < migrations.indexOf(PRODUCTION_READINESS_MIGRATION));
     assert.ok(migrations.indexOf(PRODUCTION_READINESS_MIGRATION) < migrations.indexOf(EARLY_PERFORMANCE_CONSENT_MIGRATION));
-    assert.equal(migrations.at(-1), EARLY_PERFORMANCE_CONSENT_MIGRATION);
+    assert.ok(migrations.includes(EARLY_PERFORMANCE_CONSENT_MIGRATION));
 
     const pricing = await database.query<{
       version: string;

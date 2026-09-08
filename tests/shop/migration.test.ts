@@ -215,8 +215,10 @@ test("Phase 5D shipping provider migration is additive and preserves the physica
 
 test("Phase 5E readiness migration precedes the additive legal consent migration and preserves historical ledgers", async () => {
   const migrationDirectories = await directories();
-  assert.equal(migrationDirectories.at(-2), PRODUCTION_READINESS_MIGRATION);
-  assert.equal(migrationDirectories.at(-1), EARLY_PERFORMANCE_CONSENT_MIGRATION);
+  assert.ok(
+    migrationDirectories.indexOf(PRODUCTION_READINESS_MIGRATION)
+      < migrationDirectories.indexOf(EARLY_PERFORMANCE_CONSENT_MIGRATION),
+  );
   const sql = await readFile(path.join(MIGRATIONS_DIRECTORY, PRODUCTION_READINESS_MIGRATION, "migration.sql"), "utf8");
   assert.doesNotMatch(sql, /\b(?:DROP TABLE|DROP COLUMN|TRUNCATE|DELETE\s+FROM|UPDATE\s+"|INSERT\s+INTO)\b/i);
   for (const table of ["packaging_profiles", "shop_return_evidence", "shop_order_customer_requests", "shop_readiness_alerts", "shop_maintenance_runs"]) {

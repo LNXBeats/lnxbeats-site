@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -48,4 +49,23 @@ test("les libellés Admin incluent les notifications Boutique sans enum techniqu
   assert.equal(notificationKindPresentation.CUSTOMER_SHOP_PREPARING, "Commande Boutique en préparation — client");
   assert.equal(notificationKindPresentation.CUSTOMER_SHOP_SHIPPED, "Commande Boutique expédiée — client");
   assert.doesNotMatch(Object.values(notificationKindPresentation).join("\n"), /OWNER_SHOP|CUSTOMER_SHOP/);
+});
+
+test("la vue Admin place les opérations avant les détails et fournit des cartes mobiles", async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL("../../app/admin/notifications/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/admin/admin.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /<th>État \/ objet<\/th><th>Ressource<\/th><th>Destination<\/th><th>Action<\/th><th>Détails<\/th>/);
+  assert.match(page, /function NotificationTechnicalDetails/);
+  assert.match(page, /<details className="admin-technical-details">/);
+  assert.match(page, /<details className="admin-panel admin-diagnostics-panel" open=\{reviewEvents\.length > 0\}>/);
+  assert.match(page, /DIAGNOSTIC TECHNIQUE/);
+  assert.match(page, /Suivi opérationnel/);
+  assert.match(page, /className="admin-mobile-records admin-notification-records"/);
+  assert.match(page, /className="admin-check"><input required type="checkbox" name="retryConfirmation"/);
+  assert.match(page, /className="admin-check"><input required type="checkbox" name="suppressionConfirmation"/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.admin-desktop-records \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.admin-mobile-records \{ display: grid;/);
 });
