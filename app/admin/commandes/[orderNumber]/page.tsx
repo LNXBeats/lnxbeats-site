@@ -8,7 +8,7 @@ import { AdminOrderActions } from "@/components/admin-order-actions";
 import { AdminOrderDeliveryPanel } from "@/components/admin-order-delivery-panel";
 import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
 import { orderIllustrationFormatLabel } from "@/data/order-illustration";
-import { getAllowedOrderTransitions, getOrderDeletionEligibility } from "@/lib/admin/order-machine";
+import { getAllowedOrderTransitions } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { notificationKindPresentation } from "@/lib/notifications/admin-presentation";
@@ -40,7 +40,6 @@ const stateMessages: Record<string, string> = {
   "annulation-paiement-a-verifier": "La commande est annulée. La session Stripe Test n’a pas pu être fermée automatiquement et a été placée en vérification.",
   "note-ajoutee": "La note interne a été ajoutée. Elle reste invisible dans l’espace client.",
   "note-invalide": "La note n’a pas été ajoutée. Vérifiez sa longueur.",
-  "suppression-refusee": "Cette commande doit être conservée : la règle de suppression serveur a refusé l’action.",
   "remboursement-confirme": "Le prestataire a confirmé le remboursement. Le statut métier de la commande est inchangé.",
   "remboursement-en-cours": "Le remboursement est en cours. Aucun nouvel ordre de remboursement ne doit être créé.",
   "remboursement-a-verifier": "Le remboursement nécessite une réconciliation opérateur avant toute nouvelle tentative.",
@@ -87,7 +86,6 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
   const { orderNumber } = await params;
   const order = await getAdminOrder(orderNumber);
   if (!order) notFound();
-  const deletion = getOrderDeletionEligibility(order);
   const message = stateMessages[(await searchParams).etat ?? ""];
   const currentStatus = orderStatusPresentation[order.status];
   let paymentConfiguration;
@@ -235,10 +233,9 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
             <AdminOrderActions
               orderNumber={order.orderNumber}
               transitions={transitions}
-              deletionEligible={deletion.eligible}
-              deletionReason={deletion.reason}
               emptyReason={deliveryRequiredToPublish ? "Ajoutez d’abord au moins un livrable privé valide. La publication sera ensuite disponible." : undefined}
             />
+            <Link className="admin-action-reason" href="/admin/nettoyage">Les suppressions et archivages passent exclusivement par « Nettoyage & archives ».</Link>
           </section>
 
           <details className="admin-side-window admin-note-panel">

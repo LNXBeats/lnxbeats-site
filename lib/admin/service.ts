@@ -2,16 +2,24 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 
+import { commanderAttentionWhere } from "@/lib/admin/cockpit";
 import {
   getAdminOrderTransition,
-  getOrderDeletionEligibility,
   getOrderTransitionTimestamps,
   normalizeAdminNote,
 } from "@/lib/admin/order-machine";
+import {
+  adminOrderFilters,
+  classifyCommanderOperation,
+  compareOperationClassifications,
+  commanderActiveStatuses,
+  rightsAdminAttentionStatuses,
+  type AdminOrderFilter,
+} from "@/lib/admin/operations";
+import { adminPaymentReviewEventWhere } from "@/lib/admin/operation-queries";
 import type { KnownOrderStatus } from "@/lib/orders/status";
 import { enqueueCustomerDeliveryNotification, enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
-import { deletePrivateOrderFile } from "@/lib/orders/storage";
 import { ORDER_DELIVERY_MIME_TYPES } from "@/lib/orders/audio-request";
 import { MAXIMUM_ORDER_DELIVERIES } from "@/lib/orders/delivery";
 import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
@@ -25,14 +33,9 @@ export class AdminServiceError extends Error {
   }
 }
 
-export const adminOrderFilters = ["attention", "active", "pending", "delivered", "closed", "all"] as const;
-export type AdminOrderFilter = (typeof adminOrderFilters)[number];
+export { adminOrderFilters } from "@/lib/admin/operations";
+export type { AdminOrderFilter } from "@/lib/admin/operations";
 
-const attentionStatuses: KnownOrderStatus[] = ["PAYMENT_CONFIRMED", "RECEIVED", "SUBMITTED", "REVIEWING", "REVISION_REQUESTED", "FIRST_VERSION_READY"];
-const activeStatuses: KnownOrderStatus[] = ["ACCEPTED", "IN_PROGRESS", "FIRST_VERSION_READY", "REVISION_REQUESTED", "FINALIZING"];
-const pendingStatuses: KnownOrderStatus[] = ["DRAFT", "AWAITING_PAYMENT"];
-const closedStatuses: KnownOrderStatus[] = ["REFUSED", "CANCELLED", "REFUND_PENDING", "REFUNDED"];
-const paymentReviewFailureCodeFilter = { startsWith: "WEBHOOK_" } as const;
 const paidFulfillmentTargets = new Set<KnownOrderStatus>([
   "RECEIVED", "REVIEWING", "ACCEPTED", "IN_PROGRESS", "FIRST_VERSION_READY",
   "REVISION_REQUESTED", "FINALIZING", "DELIVERED",
@@ -44,19 +47,10 @@ export function parseAdminOrderFilter(value: unknown): AdminOrderFilter {
     : "attention";
 }
 
-function statusesForFilter(filter: AdminOrderFilter): KnownOrderStatus[] | undefined {
-  if (filter === "attention") return attentionStatuses;
-  if (filter === "active") return activeStatuses;
-  if (filter === "pending") return pendingStatuses;
-  if (filter === "delivered") return ["DELIVERED"];
-  if (filter === "closed") return closedStatuses;
-  return undefined;
-}
-
 export async function listAdminPaymentReviewEvents() {
   assertDatabaseConfigured();
   return prisma.providerEvent.findMany({
-    where: { outcome: "REQUIRES_REVIEW" },
+    where: adminPaymentReviewEventWhere,
     orderBy: [{ processedAt: "desc" }, { id: "desc" }],
     take: 50,
     select: {
@@ -72,20 +66,57 @@ export async function listAdminPaymentReviewEvents() {
   });
 }
 
+async function listUnarchivedCommanderOrderIds(filter: Exclude<AdminOrderFilter, "archives">) {
+  return prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT orders."id"
+    FROM "orders" orders
+    WHERE (
+      ${filter}::text = 'attention'
+      OR NOT EXISTS (
+        SELECT 1 FROM "admin_record_archives" archive
+        WHERE archive."recordType" = 'MUSIC_ORDER' AND archive."recordId" = orders."id"
+      )
+    ) AND (
+      ${filter}::text = 'all'
+      OR (${filter}::text = 'attention' AND (
+        orders."status" IN ('PAYMENT_CONFIRMED', 'RECEIVED', 'SUBMITTED', 'REVIEWING', 'REVISION_REQUESTED', 'FIRST_VERSION_READY', 'REFUND_PENDING')
+        OR EXISTS (SELECT 1 FROM "payments" payments WHERE payments."orderId" = orders."id" AND payments."status" IN ('REQUIRES_REVIEW', 'REFUND_PENDING'))
+        OR EXISTS (
+          SELECT 1 FROM "payment_incidents" incidents
+          JOIN "payments" payments ON payments."id" = incidents."paymentId"
+          WHERE payments."orderId" = orders."id"
+            AND incidents."requiresOperatorReview" = TRUE
+            AND incidents."status" <> 'RESOLVED'
+        )
+        OR (orders."status" IN ('REFUSED', 'CANCELLED') AND EXISTS (
+          SELECT 1 FROM "payments" payments
+          WHERE payments."orderId" = orders."id" AND payments."status" IN ('SUCCEEDED', 'PARTIALLY_REFUNDED')
+        ))
+        OR (orders."status" = 'REFUNDED' AND EXISTS (
+          SELECT 1 FROM "payments" payments
+          WHERE payments."orderId" = orders."id" AND payments."status" IN ('SUCCEEDED', 'PARTIALLY_REFUNDED')
+        ))
+        OR EXISTS (
+          SELECT 1 FROM "rights_requests" requests
+          WHERE requests."orderId" = orders."id"
+            AND requests."status" IN ('SUBMITTED', 'UNDER_REVIEW', 'PREAUTHORIZATION_GENERATED', 'CONTRACT_PREPARATION', 'CLIENT_ACCEPTED', 'ADMIN_VALIDATED')
+        )
+      ))
+      OR (${filter}::text = 'active' AND orders."status" IN ('ACCEPTED', 'IN_PROGRESS', 'FIRST_VERSION_READY', 'REVISION_REQUESTED', 'FINALIZING'))
+      OR (${filter}::text = 'pending' AND orders."status" IN ('DRAFT', 'AWAITING_PAYMENT'))
+      OR (${filter}::text = 'completed' AND orders."status" IN ('DELIVERED', 'REFUSED', 'CANCELLED', 'REFUNDED'))
+    )
+    ORDER BY orders."updatedAt" DESC, orders."id" DESC
+    LIMIT 200
+  `;
+}
+
 export async function getAdminOverview() {
   assertDatabaseConfigured();
   const [orders, attention, active, delivered, members, databaseProjects, featuredProject] = await Promise.all([
     prisma.order.count(),
-    prisma.order.count({
-      where: {
-        OR: [
-          { status: { in: attentionStatuses } },
-          { payments: { some: { OR: [{ status: "REQUIRES_REVIEW" }, { failureCode: paymentReviewFailureCodeFilter }] } } },
-          { payments: { some: { events: { some: { outcome: "REQUIRES_REVIEW" } } } } },
-        ],
-      },
-    }),
-    prisma.order.count({ where: { status: { in: activeStatuses } } }),
+    prisma.order.count({ where: commanderAttentionWhere }),
+    prisma.order.count({ where: { status: { in: [...commanderActiveStatuses] } } }),
     prisma.order.count({ where: { status: "DELIVERED" } }),
     prisma.user.count(),
     prisma.project.count(),
@@ -104,20 +135,24 @@ export async function getAdminOverview() {
 
 export async function listAdminOrders(filter: AdminOrderFilter) {
   assertDatabaseConfigured();
-  const statuses = statusesForFilter(filter);
-  return prisma.order.findMany({
-    where: filter === "attention"
-      ? {
-          OR: [
-            { status: { in: statuses } },
-            { payments: { some: { OR: [{ status: "REQUIRES_REVIEW" }, { failureCode: paymentReviewFailureCodeFilter }] } } },
-            { payments: { some: { events: { some: { outcome: "REQUIRES_REVIEW" } } } } },
-          ],
-        }
-      : statuses ? { status: { in: statuses } } : undefined,
+  const archiveRows = filter === "archives"
+    ? await prisma.adminRecordArchive.findMany({
+        where: { recordType: "MUSIC_ORDER" },
+        orderBy: [{ archivedAt: "desc" }, { id: "desc" }],
+        take: 200,
+        select: { recordId: true, archivedAt: true },
+      })
+    : [];
+  const archivedAtById = new Map(archiveRows.map((row) => [row.recordId, row.archivedAt]));
+  const visibleIds = filter === "archives" ? [] : await listUnarchivedCommanderOrderIds(filter);
+  const candidates = await prisma.order.findMany({
+    where: filter === "archives"
+      ? { id: { in: archiveRows.map((row) => row.recordId) } }
+      : { id: { in: visibleIds.map((row) => row.id) } },
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: 200,
     select: {
+      id: true,
       orderNumber: true,
       customerName: true,
       customerEmail: true,
@@ -132,21 +167,54 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
       createdAt: true,
       updatedAt: true,
       rightsRequests: {
-        where: { status: { in: ["SUBMITTED", "INFORMATION_REQUIRED", "UNDER_REVIEW", "PREAUTHORIZATION_GENERATED", "CONTRACT_PREPARATION", "CONTRACT_READY", "CLIENT_ACCEPTED", "ADMIN_VALIDATED", "READY_FOR_PAYMENT"] } },
+        where: { status: { in: [...rightsAdminAttentionStatuses] } },
         select: { id: true },
       },
       payments: {
         where: {
           OR: [
-            { status: "REQUIRES_REVIEW" },
-            { failureCode: paymentReviewFailureCodeFilter },
-            { events: { some: { outcome: "REQUIRES_REVIEW" } } },
+            { status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REQUIRES_REVIEW"] } },
+            { incidents: { some: { requiresOperatorReview: true, status: { not: "RESOLVED" } } } },
           ],
         },
-        select: { id: true },
+        select: {
+          status: true,
+          incidents: {
+            where: { requiresOperatorReview: true, status: { not: "RESOLVED" } },
+            select: { id: true },
+            take: 1,
+          },
+        },
       },
     },
   });
+  const withOperations = (rows: typeof candidates, archived: boolean) => rows.map((order) => ({
+    ...order,
+    operation: classifyCommanderOperation({
+      status: order.status,
+      archived,
+      hasPaymentReview: order.payments.some((payment) => payment.status === "REQUIRES_REVIEW"),
+      hasUnresolvedFinancialIncident: order.payments.some((payment) => payment.incidents.length > 0),
+      hasRefundPending: order.payments.some((payment) => payment.status === "REFUND_PENDING"),
+      hasRefundDue: ["REFUSED", "CANCELLED"].includes(order.status)
+        && order.payments.some((payment) => ["SUCCEEDED", "PARTIALLY_REFUNDED"].includes(payment.status)),
+      hasRefundContradiction: order.status === "REFUNDED"
+        && order.payments.some((payment) => ["SUCCEEDED", "PARTIALLY_REFUNDED"].includes(payment.status)),
+      hasRightsReview: order.rightsRequests.length > 0,
+    }),
+  }));
+  if (filter === "archives") {
+    return withOperations(candidates.sort((left, right) => {
+      const leftAt = archivedAtById.get(left.id)?.getTime() ?? 0;
+      const rightAt = archivedAtById.get(right.id)?.getTime() ?? 0;
+      return rightAt - leftAt || right.id.localeCompare(left.id);
+    }), true);
+  }
+  return withOperations(candidates, false)
+    .sort((left, right) => compareOperationClassifications(left.operation, right.operation)
+      || right.updatedAt.getTime() - left.updatedAt.getTime()
+      || right.id.localeCompare(left.id))
+    .slice(0, 200);
 }
 
 export async function getAdminOrder(orderNumber: string) {
@@ -395,45 +463,4 @@ export async function addInternalOrderNote(orderNumber: string, rawNote: unknown
       },
     });
   });
-}
-
-export async function deleteEligibleAdminOrder(orderNumber: string) {
-  assertDatabaseConfigured();
-  const storageKeys = await withOrderLock(orderNumber, async (transaction) => {
-    const order = await transaction.order.findUnique({
-      where: { orderNumber },
-    });
-    if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");
-    const [events, assets, commercialLicenses, rightsRequests, payments] = await runSequentialDatabaseQueries(
-      () => transaction.orderEvent.findMany({ where: { orderId: order.id }, select: { toStatus: true } }),
-      () => transaction.orderAsset.findMany({ where: { orderId: order.id }, include: { asset: true } }),
-      () => transaction.commercialLicense.findMany({ where: { orderId: order.id }, select: { id: true } }),
-      () => transaction.rightsRequest.findMany({ where: { orderId: order.id }, select: { id: true } }),
-      () => transaction.payment.findMany({ where: { orderId: order.id }, select: { id: true } }),
-    );
-    const eligibility = getOrderDeletionEligibility({ ...order, events, assets, commercialLicenses, rightsRequests, payments });
-    if (!eligibility.eligible) throw new AdminServiceError(eligibility.reason, "ORDER_DELETE_FORBIDDEN");
-
-    const assetIds = assets.map(({ assetId }) => assetId);
-    await transaction.orderAsset.deleteMany({ where: { orderId: order.id } });
-    await transaction.orderEvent.deleteMany({ where: { orderId: order.id } });
-    await transaction.order.delete({ where: { id: order.id } });
-    const deletableAssets = assetIds.length ? await transaction.asset.findMany({
-      where: {
-        id: { in: assetIds },
-        projects: { none: {} },
-        orders: { none: {} },
-        products: { none: {} },
-        contractDocuments: { none: {} },
-      },
-      select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true },
-    }) : [];
-    if (assetIds.length) {
-      await transaction.asset.deleteMany({
-        where: { id: { in: deletableAssets.map(({ id }) => id) } },
-      });
-    }
-    return deletableAssets;
-  });
-  await Promise.all(storageKeys.map((asset) => deletePrivateOrderFile(asset)));
 }

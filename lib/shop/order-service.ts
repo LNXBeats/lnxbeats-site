@@ -1,6 +1,12 @@
 import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
+import {
+  adminShopOrderFilters,
+  classifyShopOrderOperation,
+  compareOperationClassifications,
+  type AdminShopOrderFilter,
+} from "@/lib/admin/operations";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { parseShopConfiguration } from "@/lib/shop/config";
 import { parseShopPaymentConfiguration } from "@/lib/shop/payment-config";
@@ -728,11 +734,65 @@ export async function cancelMemberShopOrder(userId: string, orderNumber: string,
   return releaseShopOrderReservation(order.id, now);
 }
 
-export async function listAdminShopOrders(status?: "OPEN" | "EXPIRED" | "CANCELLED") {
+export { adminShopOrderFilters } from "@/lib/admin/operations";
+export type { AdminShopOrderFilter } from "@/lib/admin/operations";
+
+export function parseAdminShopOrderFilter(value: unknown): AdminShopOrderFilter {
+  return typeof value === "string" && adminShopOrderFilters.includes(value as AdminShopOrderFilter)
+    ? value as AdminShopOrderFilter
+    : "attention";
+}
+
+async function listUnarchivedAdminShopOrderIds(filter: Exclude<AdminShopOrderFilter, "archives">) {
+  return prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT orders."id"
+    FROM "shop_orders" orders
+    WHERE (
+      ${filter}::text = 'attention'
+      OR NOT EXISTS (
+        SELECT 1 FROM "admin_record_archives" archive
+        WHERE archive."recordType" = 'SHOP_ORDER' AND archive."recordId" = orders."id"
+      )
+    ) AND (
+      ${filter}::text = 'all'
+      OR (${filter}::text = 'attention' AND (
+        orders."paymentReviewAt" IS NOT NULL
+        OR (orders."status" = 'OPEN' AND orders."paymentStatus" = 'PAID' AND orders."paymentReviewAt" IS NULL AND orders."fulfillmentStatus" IN ('PENDING', 'PREPARING', 'READY_TO_SHIP'))
+        OR EXISTS (SELECT 1 FROM "shop_order_customer_requests" requests WHERE requests."shopOrderId" = orders."id" AND requests."status" = 'REQUESTED')
+        OR EXISTS (
+          SELECT 1 FROM "shop_order_customer_requests" requests
+          JOIN "refund_attempts" attempts ON attempts."shopCustomerRequestId" = requests."id"
+          WHERE requests."shopOrderId" = orders."id" AND attempts."status" IN ('PENDING', 'PROCESSING', 'REQUIRES_REVIEW')
+        )
+        OR EXISTS (SELECT 1 FROM "shop_shipping_provider_attempts" attempts WHERE attempts."shopOrderId" = orders."id" AND attempts."status" IN ('PENDING', 'REQUIRES_REVIEW'))
+      ))
+      OR (${filter}::text = 'active' AND orders."status" = 'OPEN' AND orders."paymentStatus" = 'PAID' AND orders."paymentReviewAt" IS NULL AND orders."fulfillmentStatus" IN ('PENDING', 'PREPARING', 'READY_TO_SHIP'))
+      OR (${filter}::text = 'pending' AND orders."status" = 'OPEN' AND orders."paymentStatus" = 'AWAITING_PAYMENT')
+      OR (${filter}::text = 'completed' AND (orders."fulfillmentStatus" = 'SHIPPED' OR orders."status" IN ('EXPIRED', 'CANCELLED')))
+    )
+    ORDER BY orders."updatedAt" DESC, orders."id" DESC
+    LIMIT 200
+  `;
+}
+
+export async function listAdminShopOrders(filter: AdminShopOrderFilter = "attention") {
   assertDatabaseConfigured();
-  return prisma.shopOrder.findMany({
-    where: status ? { status } : undefined,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  const archiveRows = filter === "archives"
+    ? await prisma.adminRecordArchive.findMany({
+        where: { recordType: "SHOP_ORDER" },
+        orderBy: [{ archivedAt: "desc" }, { id: "desc" }],
+        take: 200,
+        select: { recordId: true, archivedAt: true },
+      })
+    : [];
+  const archivedAtById = new Map(archiveRows.map((row) => [row.recordId, row.archivedAt]));
+  const visibleIds = filter === "archives" ? [] : await listUnarchivedAdminShopOrderIds(filter);
+  const candidates = await prisma.shopOrder.findMany({
+    where: filter === "archives"
+      ? { id: { in: archiveRows.map((row) => row.recordId) } }
+      : { id: { in: visibleIds.map((row) => row.id) } },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: 200,
     select: {
       id: true,
       orderNumber: true,
@@ -745,9 +805,58 @@ export async function listAdminShopOrders(status?: "OPEN" | "EXPIRED" | "CANCELL
       currency: true,
       reservationExpiresAt: true,
       createdAt: true,
+      updatedAt: true,
+      customerRequests: {
+        where: { status: "REQUESTED" },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+        select: { id: true },
+        take: 1,
+      },
+      payments: {
+        where: {
+          refundAttempts: {
+            some: {
+              shopCustomerRequestId: { not: null },
+              status: { in: ["PENDING", "PROCESSING", "REQUIRES_REVIEW"] },
+            },
+          },
+        },
+        select: { id: true },
+        take: 1,
+      },
+      shippingProviderAttempts: {
+        where: { status: { in: ["PENDING", "REQUIRES_REVIEW"] } },
+        select: { id: true },
+        take: 1,
+      },
       _count: { select: { items: true } },
     },
   });
+  const visibleCandidates = filter === "archives"
+    ? candidates.sort((left, right) => {
+        const leftAt = archivedAtById.get(left.id)?.getTime() ?? 0;
+        const rightAt = archivedAtById.get(right.id)?.getTime() ?? 0;
+        return rightAt - leftAt || right.id.localeCompare(left.id);
+      })
+    : candidates;
+
+  const orders = visibleCandidates.map((order) => ({
+    ...order,
+    operation: classifyShopOrderOperation({
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      fulfillmentStatus: order.fulfillmentStatus,
+      paymentReviewAt: order.paymentReviewAt,
+      archived: filter === "archives",
+      hasCustomerRequest: order.customerRequests.length > 0,
+      hasRefundReview: order.payments.length > 0,
+      hasShippingReview: order.shippingProviderAttempts.length > 0,
+    }),
+  }));
+  if (filter === "archives") return orders;
+  return orders.sort((left, right) => compareOperationClassifications(left.operation, right.operation)
+    || right.updatedAt.getTime() - left.updatedAt.getTime()
+    || right.id.localeCompare(left.id));
 }
 
 export async function getAdminShopOrder(orderNumber: string) {

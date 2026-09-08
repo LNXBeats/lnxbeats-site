@@ -234,6 +234,23 @@ enum OrderStatus {
   REFUNDED
 }
 
+enum AdminManagedRecordType {
+  MUSIC_ORDER
+  SHOP_ORDER
+  RIGHTS_REQUEST
+}
+
+enum AdminCleanupClassification {
+  DELETE_SAFE
+  ARCHIVE_REQUIRED
+  KEEP_ACTION_REQUIRED
+}
+
+enum AdminCleanupOperation {
+  ARCHIVED
+  HARD_DELETED
+}
+
 enum OrderUsage {
   PERSONAL
   COMMERCIAL_EXTENDED
@@ -864,9 +881,47 @@ model User {
   shopReturnRequests                 ShopReturnRequest[]           @relation("ShopReturnOwner")
   shopReturnReviews                  ShopReturnRequest[]           @relation("ShopReturnReviewer")
   shopReturnAuditEvents              ShopReturnAuditEvent[]        @relation("ShopReturnAuditActor")
+  adminRecordArchives                AdminRecordArchive[]          @relation("AdminRecordArchiveActor")
+  adminCleanupAuditEvents            AdminCleanupAuditEvent[]      @relation("AdminCleanupAuditActor")
 
   @@index([role, status])
   @@map("users")
+}
+
+model AdminRecordArchive {
+  id               String                     @id @default(uuid()) @db.Uuid
+  recordType       AdminManagedRecordType
+  recordId         String                     @db.Uuid
+  recordReference  String                     @db.VarChar(80)
+  classification   AdminCleanupClassification
+  reason           String                     @db.VarChar(500)
+  archivedAt       DateTime                   @default(now()) @db.Timestamptz(3)
+  archivedByUserId String                     @db.Uuid
+  archivedBy       User                       @relation("AdminRecordArchiveActor", fields: [archivedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([recordType, recordId])
+  @@index([recordType, archivedAt])
+  @@index([recordReference])
+  @@index([archivedByUserId])
+  @@map("admin_record_archives")
+}
+
+model AdminCleanupAuditEvent {
+  id              String                     @id @default(uuid()) @db.Uuid
+  recordType      AdminManagedRecordType
+  recordId        String?                    @db.Uuid
+  recordReference String                     @db.VarChar(80)
+  operation       AdminCleanupOperation
+  classification  AdminCleanupClassification
+  reason          String                     @db.VarChar(500)
+  actorUserId     String                     @db.Uuid
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(3)
+  actor           User                       @relation("AdminCleanupAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([recordType, recordId, createdAt])
+  @@index([recordReference, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("admin_cleanup_audit_events")
 }
 
 model Session {

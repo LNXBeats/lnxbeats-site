@@ -4,19 +4,24 @@ import Link from "next/link";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
-import { listAdminShopOrders } from "@/lib/shop/order-service";
+import {
+  adminShopOrderFilters,
+  listAdminShopOrders,
+  parseAdminShopOrderFilter,
+  type AdminShopOrderFilter,
+} from "@/lib/shop/order-service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Commandes Boutique · Administration" };
 
-type ShopOrderFilter = "OPEN" | "EXPIRED" | "CANCELLED";
-
-const FILTERS = [
-  { value: "all", label: "Toutes" },
-  { value: "OPEN", label: "Ouvertes" },
-  { value: "EXPIRED", label: "Expirées" },
-  { value: "CANCELLED", label: "Annulées" },
-] as const;
+const FILTER_LABELS: Record<AdminShopOrderFilter, string> = {
+  attention: "À traiter",
+  active: "En préparation",
+  pending: "Paiement en attente",
+  completed: "Terminées",
+  archives: "Archivées",
+  all: "Toutes (audit)",
+};
 
 const ORDER_STATUS_LABELS = {
   OPEN: "Ouverte",
@@ -44,20 +49,14 @@ const DATE_FORMAT = new Intl.DateTimeFormat("fr-FR", {
   timeZone: "Europe/Paris",
 });
 
-function shopOrderFilter(value: string | undefined): ShopOrderFilter | undefined {
-  return value === "OPEN" || value === "EXPIRED" || value === "CANCELLED" ? value : undefined;
-}
-
 export default async function AdminShopOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ statut?: string; etat?: string }>;
+  searchParams: Promise<{ filtre?: string; statut?: string; etat?: string }>;
 }) {
   await requireAdmin();
   const query = await searchParams;
-  const requestedFilter = query.statut;
-  const filter = shopOrderFilter(requestedFilter);
-  const selectedFilter = filter ?? "all";
+  const filter = parseAdminShopOrderFilter(query.filtre ?? query.statut);
   const orders = await listAdminShopOrders(filter);
 
   return (
@@ -74,15 +73,15 @@ export default async function AdminShopOrdersPage({
       {query.etat === "transition-refusee" ? <p className="admin-alert" role="alert">La transition demandée a été refusée par les règles de paiement ou de fulfillment.</p> : null}
 
       <nav className="admin-filters" aria-label="Filtrer les commandes Boutique">
-        {FILTERS.map(({ value, label }) => {
-          const href = value === "all" ? "/admin/boutique/commandes" : `/admin/boutique/commandes?statut=${value}`;
-          return <Link key={value} href={href} aria-current={selectedFilter === value ? "page" : undefined}>{label}</Link>;
+        {adminShopOrderFilters.map((value) => {
+          const href = value === "attention" ? "/admin/boutique/commandes" : `/admin/boutique/commandes?filtre=${value}`;
+          return <Link key={value} href={href} aria-current={filter === value ? "page" : undefined}>{FILTER_LABELS[value]}</Link>;
         })}
       </nav>
 
       <section className="admin-list-window" aria-labelledby="admin-shop-orders-title">
         <div className="admin-list-window__heading">
-          <h2 id="admin-shop-orders-title">Commandes Boutique</h2>
+          <h2 id="admin-shop-orders-title">{FILTER_LABELS[filter]}</h2>
           <span>{orders.length} résultat{orders.length === 1 ? "" : "s"}</span>
         </div>
         {orders.length ? (
@@ -98,7 +97,7 @@ export default async function AdminShopOrdersPage({
                   <span className="admin-order-list__facts">
                     <span>{ORDER_STATUS_LABELS[order.status]}</span>
                     <small>{order.paymentReviewAt ? "Paiement à vérifier" : PAYMENT_STATUS_LABELS[order.paymentStatus]}</small>
-                    <b>{FULFILLMENT_STATUS_LABELS[order.fulfillmentStatus]}</b>
+                    <b>{order.operation?.label ?? FULFILLMENT_STATUS_LABELS[order.fulfillmentStatus]}</b>
                   </span>
                   <span className="admin-order-list__next">
                     <strong>{formatShopMoney(order.totalCents)}</strong>
