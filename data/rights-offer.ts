@@ -22,8 +22,9 @@ export type RightsOfferType = "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP"
 export type PublicRightsOfferType = keyof typeof rightsOffers;
 
 export const publicationLicenseTerms = {
-  version: "2026-09-publication-license-terms-v2-draft",
+  version: "2026-09-publication-license-terms-v2",
   status: "DRAFT",
+  operatorPolicyApproved: true,
   legalReviewRequired: true,
   duration: "5 ans",
   territory: "Monde entier",
@@ -47,12 +48,13 @@ export const publicationLicenseTerms = {
   ],
   activationPolicy: {
     automaticEarlyPerformance: false,
-    uncheckedConsentRequiredForEarlyPerformance: true,
+    withdrawalPeriodDays: 14,
+    uncheckedConsentRequiredForEarlyPerformance: false,
     effectiveOnlyAfter: [
       "paiement intégral confirmé côté serveur",
       "acceptation traçable du modèle contractuel applicable",
       "génération du document final valide",
-      "expiration du délai légal de rétractation ou commencement anticipé juridiquement validé",
+      "expiration complète du délai de rétractation de quatorze jours",
     ],
   },
 } as const;

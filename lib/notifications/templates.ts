@@ -131,6 +131,30 @@ function copy(message: OrderNotificationMessage) {
       "Votre dossier est prêt pour une étape future", "Paiement non ouvert", "Votre dossier a franchi l’étape de revue",
       "Le paiement des droits restera fermé jusqu’aux validations juridique et technique. Aucun droit n’est actif.", "Consulter le dossier",
     ],
+    CUSTOMER_RIGHTS_PAYMENT_CONFIRMED: [
+      "Paiement de votre licence confirmé — LNX Studio", "Droits & contrats", "Votre licence est en attente de prise d’effet",
+      "Le paiement est confirmé. La licence prendra effet après l’expiration complète du délai de rétractation de quatorze jours, en l’absence de rétractation.", "Voir ma licence",
+    ],
+    OWNER_RIGHTS_PAYMENT_CONFIRMED: [
+      `Nouvelle licence de publication payée — ${(message.payload as OrderNotificationPayload).rightsRequestNumber ?? message.payload.orderNumber}`, "Droits & contrats", "Une licence à 150 € a été payée",
+      "Le paiement est confirmé et le dossier attend la fin du délai de rétractation. Aucune activation anticipée n’est effectuée.", "Ouvrir le dossier",
+    ],
+    CUSTOMER_RIGHTS_LICENSE_ACTIVE: [
+      "Votre licence de publication est active — LNX Studio", "Droits & contrats", "Votre licence est maintenant active",
+      "La période de rétractation est terminée. Retrouvez le contrat, la facture et les dates de la licence dans votre Compte.", "Voir ma licence",
+    ],
+    CUSTOMER_RIGHTS_WITHDRAWAL_RECORDED: [
+      "Votre demande de rétractation est enregistrée — LNX Studio", "Droits & contrats", "Votre rétractation est enregistrée",
+      "La prise d’effet de la licence est bloquée pendant le traitement. Aucun nouveau paiement n’est nécessaire.", "Voir ma demande",
+    ],
+    OWNER_RIGHTS_WITHDRAWAL_REQUESTED: [
+      `Rétractation Rights à examiner — ${(message.payload as OrderNotificationPayload).rightsRequestNumber ?? message.payload.orderNumber}`, "Droits & contrats", "Une rétractation attend votre décision",
+      "La demande a été reçue dans le délai déclaré. Vérifiez le dossier avant toute opération financière.", "Ouvrir le dossier",
+    ],
+    CUSTOMER_RIGHTS_WITHDRAWAL_REFUNDED: [
+      "Rétractation et remboursement confirmés — LNX Studio", "Droits & contrats", "Votre rétractation est terminée",
+      "Le remboursement total de la licence a été confirmé sur le paiement d’origine. La licence ne prendra pas effet.", "Voir mes documents",
+    ],
     CUSTOMER_PARTIAL_REFUND: [
       "Remboursement partiel confirmé — LNX Beats", "Paiement", "Votre remboursement partiel est confirmé",
       "Le remboursement a été confirmé par le prestataire. L’état de votre création reste visible séparément dans votre Compte.", "Voir ma commande",
@@ -273,6 +297,12 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
     details = [
       `Commande : ${payload.orderNumber}`,
       ...(payload.rightsRequestNumber ? [`Demande : ${payload.rightsRequestNumber}`] : []),
+      ...(payload.contractNumber ? [`Contrat : ${payload.contractNumber}`] : []),
+      ...(payload.licenseNumber ? [`Licence : ${payload.licenseNumber}`] : []),
+      ...(payload.withdrawalRequestNumber ? [`Rétractation : ${payload.withdrawalRequestNumber}`] : []),
+      ...(payload.withdrawalEndsAt ? [`Fin du délai de rétractation : ${formatDate(payload.withdrawalEndsAt)}`] : []),
+      ...(payload.effectiveAt ? [`Prise d’effet : ${formatDate(payload.effectiveAt)}`] : []),
+      ...(payload.expiresAt ? [`Échéance : ${formatDate(payload.expiresAt)}`] : []),
       ...(message.kind === "OWNER_NEW_ORDER" ? [
         `Client : ${payload.customerName || "Non renseigné"} — ${payload.customerEmail}`,
         ...(payload.workTitle ? [`Projet : ${payload.workTitle}`] : []),
@@ -284,6 +314,7 @@ export function orderNotificationTemplate(message: OrderNotificationMessage, con
         `Montant remboursé : ${formatEuro(payload.refundAmountCents, payload.currency)}`,
       ] : []),
       ...(payload.invoiceNumber ? [`Facture : ${payload.invoiceNumber}`] : []),
+      ...(payload.creditNoteNumber ? [`Avoir : ${payload.creditNoteNumber}`] : []),
       ...(message.kind === "CUSTOMER_PAYMENT_CONFIRMED" && payload.termsVersion ? legalSupportDetails(payload.termsVersion, configuration) : []),
     ];
   }

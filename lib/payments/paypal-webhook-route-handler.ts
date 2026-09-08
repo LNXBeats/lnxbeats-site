@@ -11,6 +11,7 @@ import { isPaypalFinancialEvent, processVerifiedPaypalFinancialEvent } from "@/l
 import type { PaymentsConfiguration } from "@/lib/payments/types";
 import type { PaypalReconciliationConfiguration } from "@/lib/payments/config";
 import { processVerifiedPaypalWebhookEventByPaymentSource } from "@/lib/shop/payment-webhooks";
+import { isRightsPaypalWebhookEvent, processVerifiedRightsPaypalWebhookEvent } from "@/lib/rights/payment-webhooks";
 
 export const PAYPAL_WEBHOOK_MAX_BYTES = 256 * 1024;
 
@@ -28,6 +29,10 @@ const dependencies: PaypalWebhookRouteDependencies = {
     const environment = configuration.paypal.environment;
     if (isPaypalFinancialEvent(event.event_type)) {
       return { ...(await processVerifiedPaypalFinancialEvent(event, environment)), orderConfirmed: false };
+    }
+    if (await isRightsPaypalWebhookEvent(event)) {
+      const result = await processVerifiedRightsPaypalWebhookEvent(event, environment);
+      return { outcome: result.outcome, duplicate: result.duplicate, orderConfirmed: false };
     }
     const result = await processVerifiedPaypalWebhookEventByPaymentSource(event, environment);
     return "orderConfirmed" in result

@@ -21,6 +21,14 @@ type HostedCheckoutSource =
     shopOrderId: string;
     orderNumber: string;
     orderId?: never;
+    rightsRequestId?: never;
+  }>
+  | Readonly<{
+    paymentSource: "RIGHTS_REQUEST";
+    rightsRequestId: string;
+    orderNumber: string;
+    orderId?: never;
+    shopOrderId?: never;
   }>;
 
 export type HostedCheckoutRequest = Readonly<{
@@ -160,7 +168,8 @@ export function hostedCheckoutParameters(
   request: HostedCheckoutRequest,
 ): Stripe.Checkout.SessionCreateParams {
   const shopCheckout = request.paymentSource === "SHOP_ORDER";
-  const sourceId = shopCheckout ? request.shopOrderId : request.orderId;
+  const rightsCheckout = request.paymentSource === "RIGHTS_REQUEST";
+  const sourceId = shopCheckout ? request.shopOrderId : rightsCheckout ? request.rightsRequestId : request.orderId;
   const metadata: Stripe.MetadataParam = shopCheckout
     ? {
       paymentSource: "SHOP_ORDER",
@@ -169,7 +178,15 @@ export function hostedCheckoutParameters(
       orderNumber: request.orderNumber,
       pricingVersion: request.pricingVersion,
     }
-    : {
+    : rightsCheckout
+      ? {
+        paymentSource: "RIGHTS_REQUEST",
+        paymentId: request.paymentId,
+        rightsRequestId: request.rightsRequestId,
+        requestNumber: request.orderNumber,
+        pricingVersion: request.pricingVersion,
+      }
+      : {
       paymentId: request.paymentId,
       orderId: request.orderId,
       pricingVersion: request.pricingVersion,

@@ -21,6 +21,7 @@ import {
   type StripeWebhookProcessingResult,
   type VerifiedStripeWebhookEvent,
 } from "@/lib/payments/webhook";
+import { isRightsStripeWebhookEvent, processVerifiedRightsStripeWebhookEvent } from "@/lib/rights/payment-webhooks";
 
 export const STRIPE_WEBHOOK_MAX_BYTES = 256 * 1024;
 
@@ -119,6 +120,8 @@ export function paymentIntentEvidenceFromCheckoutSession(
   const method = intent ? expandedPaymentMethod(intent.payment_method) : null;
   const paymentId = intent?.metadata.paymentId;
   const orderId = intent?.metadata.orderId;
+  const rightsRequestId = intent?.metadata.rightsRequestId;
+  const paymentSource = intent?.metadata.paymentSource;
   const pricingVersion = intent?.metadata.pricingVersion;
   if (
     session.id !== expectedSessionId
@@ -133,7 +136,7 @@ export function paymentIntentEvidenceFromCheckoutSession(
     || intent.amount <= 0
     || !intent.currency
     || !paymentId
-    || !orderId
+    || (!(orderId) && !(paymentSource === "RIGHTS_REQUEST" && rightsRequestId))
     || !pricingVersion
     || !method?.type
   ) {
@@ -146,7 +149,9 @@ export function paymentIntentEvidenceFromCheckoutSession(
     livemode: expectedLivemode,
     status: "succeeded",
     paymentId,
-    orderId,
+    ...(paymentSource === "RIGHTS_REQUEST"
+      ? { paymentSource: "RIGHTS_REQUEST" as const, rightsRequestId: rightsRequestId! }
+      : { orderId: orderId! }),
     pricingVersion,
     paymentMethod: normalizePaymentMethod(method.type),
   };
@@ -158,6 +163,8 @@ function successfulCheckoutSessionId(event: VerifiedStripeWebhookEvent, expected
   const metadata = objectRecord(session?.metadata);
   const paymentId = typeof metadata?.paymentId === "string" ? metadata.paymentId : "";
   const orderId = typeof metadata?.orderId === "string" ? metadata.orderId : "";
+  const rightsRequestId = typeof metadata?.rightsRequestId === "string" ? metadata.rightsRequestId : "";
+  const sourceId = metadata?.paymentSource === "RIGHTS_REQUEST" ? rightsRequestId : orderId;
   const pricingVersion = typeof metadata?.pricingVersion === "string" ? metadata.pricingVersion : "";
   const internalId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (
@@ -168,8 +175,8 @@ function successfulCheckoutSessionId(event: VerifiedStripeWebhookEvent, expected
     || session.id.length > 255
     || session.livemode !== expectedLivemode
     || !internalId.test(paymentId)
-    || !internalId.test(orderId)
-    || session.client_reference_id !== orderId
+    || !internalId.test(sourceId)
+    || session.client_reference_id !== sourceId
     || !pricingVersion
     || pricingVersion.length > 32
   ) return null;
@@ -215,6 +222,7 @@ const routeDependencies: StripeWebhookRouteDependencies = {
   findDuplicateEvent: findProcessedStripeWebhookEvent,
   processEvent: (event) => {
     if (isStripeFinancialEvent(event.type)) return processVerifiedStripeFinancialEvent(event);
+    if (isRightsStripeWebhookEvent(event)) return processVerifiedRightsStripeWebhookEvent(event);
     return isShopStripeWebhookEvent(event)
       ? processVerifiedShopStripeWebhookEvent(event)
       : processVerifiedStripeWebhookEvent(event);

@@ -773,6 +773,12 @@ export async function getAdminRightsCase(requestNumber: string) {
       documents: { orderBy: [{ generatedAt: "desc" }, { id: "desc" }], include: { template: true, acceptances: { include: { acceptedBy: { select: { displayName: true, role: true } } } } } },
       events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { actor: { select: { displayName: true } } } },
       messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      payments: { orderBy: [{ createdAt: "desc" }, { id: "desc" }] },
+      invoices: { orderBy: { issuedAt: "desc" } },
+      paymentWinner: { include: { payment: true } },
+      license: { include: { invoice: true, contractDocument: true } },
+      withdrawalRequest: { include: { refundAttempt: true, invoice: true, contractDocument: true } },
+      notifications: { orderBy: { createdAt: "desc" }, take: 30 },
     },
   });
 }

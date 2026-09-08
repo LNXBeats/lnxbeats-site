@@ -18,6 +18,7 @@ import { paymentStatusAfterRefund, refundableAmount, type RefundProviderEvidence
 import type { VerifiedPaypalWebhookEvent } from "@/lib/payments/paypal-webhook";
 import type { StripeWebhookProcessingResult, VerifiedStripeWebhookEvent } from "@/lib/payments/webhook";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { createRightsWithdrawalRepository } from "@/lib/rights/withdrawal";
 import {
   applyShopReturnRefundEvidenceInTransaction,
   type ShopRefundEvidence,
@@ -936,6 +937,63 @@ async function processRefundEvent(input: RefundEventEvidence & Readonly<{ livemo
         },
         include: { order: true, invoice: { select: { id: true } } },
       });
+      if (payment?.rightsRequestId && !payment.orderId && !payment.shopOrderId) {
+        const exact = await transaction.refundAttempt.findUnique({
+          where: { provider_providerRefundId: { provider: input.provider, providerRefundId: input.providerRefundId } },
+          include: { rightsWithdrawal: true },
+        });
+        const candidates = exact ? [exact] : await transaction.refundAttempt.findMany({
+          where: {
+            paymentId: payment.id,
+            provider: input.provider,
+            rightsWithdrawalId: { not: null },
+            status: { in: [...activeRefundStatuses] },
+          },
+          include: { rightsWithdrawal: true },
+          take: 2,
+        });
+        const correlated = candidates.filter((candidate) => {
+          if (!candidate.rightsWithdrawal || candidate.paymentId !== payment.id
+            || candidate.amountCents !== input.amountCents || candidate.currency !== input.currency) return false;
+          if (input.provider === "STRIPE") {
+            return input.stripeApplicationMetadata?.present === true
+              && input.stripeApplicationMetadata.paymentId === payment.id
+              && input.stripeApplicationMetadata.refundAttemptId === candidate.id;
+          }
+          return input.paypalApplicationReference?.present === true
+            && input.paypalApplicationReference.value === paypalRefundApplicationReference(candidate.providerIdempotencyKey);
+        });
+        if (correlated.length !== 1) {
+          return createReceipt(transaction, {
+            provider: input.provider, eventId: input.eventId, type: input.eventType,
+            objectId: input.providerRefundId, outcome: "REQUIRES_REVIEW", paymentId: payment.id,
+            ...(exact?.paymentId === payment.id ? { refundAttemptId: exact.id } : {}),
+            occurredAt: input.occurredAt, livemode: input.livemode,
+          });
+        }
+        const attempt = correlated[0]!;
+        const evidence: RefundProviderEvidence = {
+          provider: input.provider,
+          providerRefundId: input.providerRefundId,
+          providerPaymentId: input.providerPaymentId,
+          status: input.status,
+          amountCents: input.amountCents,
+          currency: input.currency,
+          occurredAt: input.occurredAt,
+          applicationEvidence: input.provider === "STRIPE"
+            ? { kind: "STRIPE_METADATA", present: true, paymentId: input.stripeApplicationMetadata!.paymentId, refundAttemptId: input.stripeApplicationMetadata!.refundAttemptId }
+            : { kind: "PAYPAL_INVOICE_REFERENCE", present: true, value: input.paypalApplicationReference!.value },
+        };
+        const finalized = await createRightsWithdrawalRepository(prisma, input.livemode ? "LIVE" : "TEST")
+          .applyEvidence(attempt.id, evidence, transaction);
+        return createReceipt(transaction, {
+          provider: input.provider, eventId: input.eventId, type: input.eventType,
+          objectId: input.providerRefundId,
+          outcome: finalized.status === "REQUIRES_REVIEW" ? "REQUIRES_REVIEW" : "PROCESSED",
+          paymentId: payment.id, refundAttemptId: attempt.id,
+          occurredAt: input.occurredAt, livemode: input.livemode,
+        });
+      }
       if (payment?.shopOrderId && !payment.orderId) {
         const correlation = await correlateExpectedShopRefund(transaction, payment, input);
         if (correlation.outcome === "REVIEW") {

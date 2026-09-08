@@ -168,6 +168,85 @@ export async function enqueueOrderNotification(
   return { id: notification.id };
 }
 
+export async function enqueueRightsNotification(
+  transaction: Transaction,
+  input: Readonly<{
+    rightsRequestId: string;
+    kind: Extract<OrderNotificationKind, "CUSTOMER_RIGHTS_PAYMENT_CONFIRMED" | "OWNER_RIGHTS_PAYMENT_CONFIRMED" | "CUSTOMER_RIGHTS_LICENSE_ACTIVE" | "CUSTOMER_RIGHTS_WITHDRAWAL_RECORDED" | "OWNER_RIGHTS_WITHDRAWAL_REQUESTED" | "CUSTOMER_RIGHTS_WITHDRAWAL_REFUNDED">;
+    recipient: string | null;
+    idempotencyKey: string;
+    invoiceNumber?: string;
+    contractNumber: string;
+    licenseNumber: string;
+    withdrawalEndsAt: Date;
+    effectiveAt?: Date;
+    expiresAt?: Date;
+    withdrawalRequestNumber?: string;
+    refundAmountCents?: number;
+    creditNoteNumber?: string;
+  }>,
+) {
+  const definition = notificationDefinition(input.kind);
+  const request = await transaction.rightsRequest.findUniqueOrThrow({
+    where: { id: input.rightsRequestId },
+    select: {
+      id: true, requestNumber: true, type: true, workTitle: true, requestedPriceCents: true,
+      currency: true, createdAt: true,
+      order: { select: { id: true, orderNumber: true, customerName: true, customerEmail: true } },
+    },
+  });
+  const payload = {
+    orderNumber: request.order.orderNumber,
+    customerName: request.order.customerName,
+    customerEmail: request.order.customerEmail,
+    totalCents: request.requestedPriceCents,
+    currency: request.currency,
+    coverIncluded: false,
+    priorityProcessing: false,
+    createdAt: request.createdAt.toISOString(),
+    workTitle: request.workTitle,
+    rightsRequestNumber: request.requestNumber,
+    rightsRequestType: request.type,
+    requestedPriceCents: request.requestedPriceCents,
+    ...(input.invoiceNumber ? { invoiceNumber: input.invoiceNumber } : {}),
+    contractNumber: input.contractNumber,
+    licenseNumber: input.licenseNumber,
+    withdrawalEndsAt: input.withdrawalEndsAt.toISOString(),
+    ...(input.effectiveAt ? { effectiveAt: input.effectiveAt.toISOString() } : {}),
+    ...(input.expiresAt ? { expiresAt: input.expiresAt.toISOString() } : {}),
+    ...(input.withdrawalRequestNumber ? { withdrawalRequestNumber: input.withdrawalRequestNumber } : {}),
+    ...(input.refundAmountCents ? { refundAmountCents: input.refundAmountCents } : {}),
+    ...(input.creditNoteNumber ? { creditNoteNumber: input.creditNoteNumber } : {}),
+    termsVersion: null,
+  } satisfies Prisma.InputJsonObject;
+  const recipient = notificationRecipientSnapshot(input.recipient);
+  const notification = await transaction.orderNotification.upsert({
+    where: { idempotencyKey: input.idempotencyKey },
+    update: {},
+    create: {
+      rightsRequestId: request.id,
+      kind: input.kind,
+      channel: "EMAIL",
+      priority: definition.priority,
+      recipient,
+      idempotencyKey: input.idempotencyKey,
+      templateKey: definition.templateKey,
+      templateVersion: NOTIFICATION_TEMPLATE_VERSION,
+      payloadVersion: NOTIFICATION_PAYLOAD_VERSION,
+      payload,
+      resourceType: "RIGHTS_REQUEST",
+      resourceId: request.id,
+      resourceReference: request.requestNumber,
+      deploymentEnvironment: notificationEnvironmentSnapshot(),
+    },
+    select: { id: true, rightsRequestId: true, kind: true },
+  });
+  if (notification.rightsRequestId !== request.id || notification.kind !== input.kind) {
+    throw new Error("Rights notification idempotency conflict.");
+  }
+  return { id: notification.id };
+}
+
 export function enqueueOwnerNewOrderNotification(transaction: Transaction, orderId: string) {
   return enqueueOrderNotification(transaction, {
     orderId,

@@ -19,6 +19,7 @@ import {
   startRightsReview,
   updateAiContributionAssessment,
 } from "@/lib/rights/workflow";
+import { createRightsWithdrawalRepository, refundRightsWithdrawal } from "@/lib/rights/withdrawal";
 
 function path(requestNumber: string, state: string) {
   return `/admin/droits/${encodeURIComponent(requestNumber)}?etat=${encodeURIComponent(state)}`;
@@ -44,6 +45,12 @@ function refresh(value: string) {
   revalidatePath(`/admin/droits/${value}`);
   revalidatePath("/compte");
   revalidatePath(`/compte/droits/${value}`);
+}
+
+function withdrawalNumber(formData: FormData) {
+  const value = String(formData.get("withdrawalNumber") ?? "");
+  if (!/^LNX-RET-LIC-\d{4}-[A-F0-9]{12}$/.test(value)) redirect("/admin/droits?etat=retractation-invalide");
+  return value;
 }
 
 function dispatchNotifications() {}
@@ -128,6 +135,23 @@ export async function adminValidateRightsContractAction(formData: FormData) {
   const value = requestNumber(formData);
   try { await adminValidateRightsContract(await adminActor(), value, formData.get("typedFullName"), formData.get("accepted") === "on"); } catch { redirect(path(value, "validation-refusee")); }
   refresh(value); dispatchNotifications(); redirect(path(value, "validation-admin-enregistree"));
+}
+
+export async function refundRightsWithdrawalAction(formData: FormData) {
+  const value = requestNumber(formData);
+  const withdrawal = withdrawalNumber(formData);
+  if (formData.get("confirmed") !== "on" || String(formData.get("typedConfirmation") ?? "").trim() !== "REMBOURSER 150 EUR") {
+    redirect(path(value, "retractation-confirmation-requise"));
+  }
+  try { await refundRightsWithdrawal(await adminActor(), withdrawal); } catch { redirect(path(value, "retractation-remboursement-refuse")); }
+  refresh(value); dispatchNotifications(); redirect(path(value, "retractation-remboursee"));
+}
+
+export async function rejectRightsWithdrawalAction(formData: FormData) {
+  const value = requestNumber(formData);
+  const withdrawal = withdrawalNumber(formData);
+  try { await createRightsWithdrawalRepository().reject(await adminActor(), withdrawal, formData.get("reason")); } catch { redirect(path(value, "retractation-rejet-refuse")); }
+  refresh(value); redirect(path(value, "retractation-rejetee"));
 }
 
 export async function approveContractTemplateAction(formData: FormData) {

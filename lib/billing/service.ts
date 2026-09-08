@@ -15,6 +15,7 @@ import {
 } from "@/lib/billing/domain";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { shopOrderCustomerSnapshotName } from "@/lib/shop/customer-snapshot";
+import { publicationLicenseOffer, publicationLicenseTerms } from "@/data/rights-offer";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -106,12 +107,26 @@ export async function issueInvoiceForPayment(
   const shopOrder = shopOrderRow && shopUser
     ? { ...shopOrderRow, user: shopUser, items: shopItems }
     : null;
+  const rightsRequest = payment?.rightsRequestId ? await transaction.rightsRequest.findUnique({
+    where: { id: payment.rightsRequestId },
+    select: {
+      id: true, requestNumber: true, type: true, status: true, requestedPriceCents: true,
+      currency: true, pricingVersion: true, workTitle: true, userId: true,
+      owner: { select: { email: true } },
+      partySnapshots: { where: { confirmedAt: { not: null } }, orderBy: { version: "desc" }, take: 1 },
+      documents: {
+        where: { kind: "CONTRACT", status: { in: ["ADMIN_VALIDATED", "ACTIVE"] } },
+        orderBy: { documentVersion: "desc" }, take: 1,
+        select: { templateVersion: true, documentHashSha256: true },
+      },
+    },
+  }) : null;
   if (!payment || payment.status !== "SUCCEEDED" || !payment.paidAt) throw new BillingServiceError("PAYMENT_NOT_INVOICEABLE");
-  if ((payment.orderId ? 1 : 0) + (payment.shopOrderId ? 1 : 0) !== 1) throw new BillingServiceError("INVOICE_PARENT_INVALID");
+  if ((payment.orderId ? 1 : 0) + (payment.shopOrderId ? 1 : 0) + (payment.rightsRequestId ? 1 : 0) !== 1) throw new BillingServiceError("INVOICE_PARENT_INVALID");
   if (payment.currency !== "EUR" || payment.amountCents <= 0) throw new BillingServiceError("INVOICE_FINANCIAL_SNAPSHOT_INVALID");
 
   const issuedAt = options.issuedAt ?? new Date();
-  let documentType: "MUSIC" | "SHOP";
+  let documentType: "MUSIC" | "SHOP" | "RIGHTS";
   let operationCategory: "SERVICES" | "GOODS";
   let orderNumberSnapshot: string;
   let customer: BillingCustomerIdentity;
@@ -170,6 +185,51 @@ export async function issueInvoiceForPayment(
     shippingCents = shopOrder.shippingCents;
     termsVersion = shopOrder.termsVersion;
     termsHashSha256 = shopOrder.termsHashSha256;
+  } else if (rightsRequest && payment.rightsRequestId) {
+    const offer = publicationLicenseOffer.PUBLICATION_LICENSE;
+    const party = rightsRequest.partySnapshots[0];
+    const contract = rightsRequest.documents[0];
+    if (
+      rightsRequest.type !== "PUBLICATION_LICENSE"
+      || !["READY_FOR_PAYMENT", "PAID_WAITING_WITHDRAWAL_PERIOD", "ACTIVE"].includes(rightsRequest.status)
+      || rightsRequest.requestedPriceCents !== offer.priceCents
+      || rightsRequest.currency !== offer.currency
+      || rightsRequest.pricingVersion !== offer.pricingVersion
+      || payment.amountCents !== offer.priceCents
+      || payment.currency !== offer.currency
+      || !party?.confirmedAt
+      || !contract
+    ) throw new BillingServiceError("RIGHTS_NOT_INVOICEABLE");
+    const individualName = [party.firstName, party.lastName].filter(Boolean).join(" ").trim();
+    const name = party.companyName?.trim() || individualName;
+    if (!name || !party.contractEmail || !party.streetAddress || !party.postalCode || !party.city || party.country !== "FR") {
+      throw new BillingServiceError("INVOICE_CUSTOMER_SNAPSHOT_INVALID");
+    }
+    documentType = "RIGHTS";
+    operationCategory = "SERVICES";
+    orderNumberSnapshot = rightsRequest.requestNumber;
+    customer = validateBillingCustomerIdentity({
+      type: party.companyName ? "PROFESSIONAL" : "INDIVIDUAL",
+      name,
+      ...(party.companyName ? { companyName: party.companyName } : {}),
+      email: party.contractEmail,
+      billingAddress: {
+        line1: party.streetAddress,
+        postalCode: party.postalCode,
+        city: party.city,
+        countryCode: "FR",
+      },
+    });
+    lineItems = [{
+      description: `Licence de publication via distributeur — ${rightsRequest.workTitle}`,
+      quantity: 1,
+      unitPriceCents: offer.priceCents,
+      lineTotalCents: offer.priceCents,
+    }];
+    subtotalCents = offer.priceCents;
+    shippingCents = 0;
+    termsVersion = publicationLicenseTerms.version;
+    termsHashSha256 = contract.documentHashSha256;
   } else {
     throw new BillingServiceError("INVOICE_PARENT_INVALID");
   }
@@ -210,6 +270,7 @@ export async function issueInvoiceForPayment(
       operationCategory,
       orderId: payment.orderId,
       shopOrderId: payment.shopOrderId,
+      rightsRequestId: payment.rightsRequestId,
       paymentId: payment.id,
       orderNumberSnapshot,
       customerType: customer.type,
@@ -335,7 +396,7 @@ export async function issueCreditNoteForRefund(
 export async function listMemberInvoices(userId: string, client: PrismaClient = prisma) {
   assertDatabaseConfigured();
   return client.invoice.findMany({
-    where: { OR: [{ order: { userId } }, { shopOrder: { userId } }] },
+    where: { OR: [{ order: { userId } }, { shopOrder: { userId } }, { rightsRequest: { userId } }] },
     orderBy: [{ issuedAt: "desc" }, { sequenceNumber: "desc" }],
     include: { payment: { select: { mode: true } }, creditNotes: { orderBy: { issuedAt: "asc" } } },
   });
@@ -344,7 +405,7 @@ export async function listMemberInvoices(userId: string, client: PrismaClient = 
 export async function getInvoiceForMember(invoiceNumberValue: string, userId: string, client: PrismaClient = prisma) {
   assertDatabaseConfigured();
   return client.invoice.findFirst({
-    where: { invoiceNumber: invoiceNumberValue, OR: [{ order: { userId } }, { shopOrder: { userId } }] },
+    where: { invoiceNumber: invoiceNumberValue, OR: [{ order: { userId } }, { shopOrder: { userId } }, { rightsRequest: { userId } }] },
     include: { payment: { select: { mode: true } }, creditNotes: { orderBy: { issuedAt: "asc" } } },
   });
 }
@@ -352,7 +413,7 @@ export async function getInvoiceForMember(invoiceNumberValue: string, userId: st
 export async function getCreditNoteForMember(number: string, userId: string, client: PrismaClient = prisma) {
   assertDatabaseConfigured();
   return client.creditNote.findFirst({
-    where: { creditNoteNumber: number, invoice: { OR: [{ order: { userId } }, { shopOrder: { userId } }] } },
+    where: { creditNoteNumber: number, invoice: { OR: [{ order: { userId } }, { shopOrder: { userId } }, { rightsRequest: { userId } }] } },
     include: { invoice: { include: { payment: { select: { mode: true } } } } },
   });
 }

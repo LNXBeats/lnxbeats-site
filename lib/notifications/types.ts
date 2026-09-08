@@ -11,6 +11,12 @@ export type OrderNotificationKind =
   | "OWNER_RIGHTS_CLIENT_ACCEPTED"
   | "CUSTOMER_RIGHTS_REJECTED"
   | "CUSTOMER_RIGHTS_READY_FOR_PAYMENT"
+  | "CUSTOMER_RIGHTS_PAYMENT_CONFIRMED"
+  | "OWNER_RIGHTS_PAYMENT_CONFIRMED"
+  | "CUSTOMER_RIGHTS_LICENSE_ACTIVE"
+  | "CUSTOMER_RIGHTS_WITHDRAWAL_RECORDED"
+  | "OWNER_RIGHTS_WITHDRAWAL_REQUESTED"
+  | "CUSTOMER_RIGHTS_WITHDRAWAL_REFUNDED"
   | "CUSTOMER_PARTIAL_REFUND"
   | "CUSTOMER_REFUND_COMPLETED"
   | "OWNER_PAYMENT_INCIDENT"
@@ -51,6 +57,13 @@ export type OrderNotificationPayload = Readonly<{
   refundAmountCents?: number;
   invoiceNumber?: string;
   termsVersion?: string | null;
+  contractNumber?: string;
+  licenseNumber?: string;
+  withdrawalEndsAt?: string;
+  effectiveAt?: string;
+  expiresAt?: string;
+  withdrawalRequestNumber?: string;
+  creditNoteNumber?: string;
 }>;
 
 export type ShopNotificationItem = Readonly<{

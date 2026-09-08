@@ -27,17 +27,21 @@ export type VerifiedStripeWebhookEvent = Readonly<{
   paymentIntentEvidence?: StripePaymentIntentEvidence;
 }>;
 
-export type StripePaymentIntentEvidence = Readonly<{
+type StripePaymentIntentEvidenceBase = Readonly<{
   id: string;
   amountCents: number;
   currency: string;
   livemode: boolean;
   status: "succeeded";
   paymentId: string;
-  orderId: string;
   pricingVersion: string;
   paymentMethod: PaymentMethod;
 }>;
+
+export type StripePaymentIntentEvidence = StripePaymentIntentEvidenceBase & (
+  | Readonly<{ paymentSource?: "MUSIC_ORDER"; orderId: string; rightsRequestId?: never }>
+  | Readonly<{ paymentSource: "RIGHTS_REQUEST"; rightsRequestId: string; orderId?: never }>
+);
 
 type ProviderEventOutcome = "PROCESSED" | "IGNORED" | "REQUIRES_REVIEW";
 
@@ -399,6 +403,7 @@ function firstMismatch(
       || evidence.livemode !== event.livemode
       || evidence.status !== "succeeded"
       || evidence.paymentId !== event.paymentId
+      || !("orderId" in evidence)
       || evidence.orderId !== event.orderId
       || evidence.pricingVersion !== event.pricingVersion
     ) return "WEBHOOK_PAYMENT_INTENT_EVIDENCE_MISMATCH";

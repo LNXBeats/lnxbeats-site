@@ -6,6 +6,7 @@ import { ContractAcceptanceForm } from "@/components/contract-acceptance-form";
 import { PartnershipPreauthorizationRevision } from "@/components/partnership-preauthorization-revision";
 import { RightsInformationResponse } from "@/components/rights-information-response";
 import { RightsRequestCloseActions } from "@/components/rights-request-close-actions";
+import { RightsWithdrawalForm } from "@/components/rights-withdrawal-form";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import type { OrderActor } from "@/lib/orders/domain";
 import { formatRightsCurrency, humanRightsPlatform } from "@/lib/rights/document-presentation";
@@ -31,6 +32,7 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
   const request = await getRightsRequestForActor(actor, requestNumber);
   if (!request) notFound();
   const presentation = rightsStatusPresentation[request.status];
+  const winningPayment = request.payments.find((payment) => ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REFUNDED"].includes(payment.status));
   const latestContract = request.documents.find((document) => document.kind === "CONTRACT" && document.status !== "SUPERSEDED");
   const expectedName = request.party?.companyName || [request.party?.firstName, request.party?.lastName].filter(Boolean).join(" ");
   const project = request.formData && typeof request.formData === "object" && !Array.isArray(request.formData)
@@ -73,7 +75,7 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
           <div><dt>{administrativeTerritories.length ? "Territoire retenu pour étude" : "Territoire souhaité"}</dt><dd>{administrativeTerritories.length ? administrativeTerritories.join(" ; ") : typeof project?.territory === "string" ? project.territory : "À définir"}</dd></div>
           <div><dt>{administrativeDurations.length ? "Durée retenue pour étude" : "Durée souhaitée"}</dt><dd>{administrativeDurations.length ? administrativeDurations.join(" ; ") : typeof project?.duration === "string" ? project.duration : "À définir"}</dd></div>
           <div><dt>Plateformes souhaitées</dt><dd>{Array.isArray(project?.platforms) ? project.platforms.filter((item): item is string => typeof item === "string").map(humanRightsPlatform).join(", ") : "À définir"}</dd></div>
-          <div><dt>Paiement</dt><dd>Non disponible - validation juridique et technique requise</dd></div>
+          <div><dt>Paiement</dt><dd>{winningPayment ? `${winningPayment.provider} · ${winningPayment.status}` : request.status === "READY_FOR_PAYMENT" ? "Dossier prêt · commerce fermé" : "Non confirmé"}</dd></div>
         </dl>
 
         {request.grants.length ? <section>
@@ -100,12 +102,17 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
           {canGeneratePartnershipP02 ? <PartnershipPreauthorizationRevision requestNumber={request.requestNumber} /> : null}
         </section>
         {latestContract?.status === "READY_FOR_CLIENT" && expectedName ? <ContractAcceptanceForm requestNumber={request.requestNumber} expectedName={expectedName} documentId={latestContract.id} documentVersion={latestContract.documentVersion} hashShort={latestContract.hashShort} /> : null}
+        {request.license ? <section className="rights-license-summary"><p className="auth-panel__label">Licence</p><h2>{request.license.status === "ACTIVE" ? "LICENCE DE PUBLICATION ACTIVE" : "PAIEMENT CONFIRMÉ · DÉLAI DE RÉTRACTATION"}</h2><dl className="order-detail__facts"><div><dt>Référence</dt><dd>{request.license.licenseNumber}</dd></div><div><dt>Fin du délai</dt><dd>{new Date(request.license.withdrawalEndsAt).toLocaleString("fr-FR")}</dd></div>{request.license.effectiveAt ? <div><dt>Prise d’effet</dt><dd>{new Date(request.license.effectiveAt).toLocaleString("fr-FR")}</dd></div> : null}{request.license.expiresAt ? <div><dt>Échéance</dt><dd>{new Date(request.license.expiresAt).toLocaleString("fr-FR")}</dd></div> : null}{request.invoice ? <div><dt>Facture</dt><dd>{request.invoice.invoiceNumber}</dd></div> : null}</dl></section> : null}
+        {request.withdrawal ? <section className="rights-info-request"><p className="eyebrow">Rétractation</p><h2>{request.withdrawal.status === "COMPLETED" ? "RÉTRACTATION TERMINÉE" : "RÉTRACTATION EN COURS"}</h2><dl className="order-detail__facts"><div><dt>Référence</dt><dd>{request.withdrawal.requestNumber}</dd></div><div><dt>Demandée le</dt><dd>{new Date(request.withdrawal.requestedAt).toLocaleString("fr-FR")}</dd></div><div><dt>État</dt><dd>{request.withdrawal.status}</dd></div></dl></section> : null}
+        {!request.withdrawal && request.status === "PAID_WAITING_WITHDRAWAL_PERIOD" && winningPayment?.paidAt && request.license && new Date(request.license.withdrawalEndsAt) >= new Date()
+          ? <RightsWithdrawalForm requestNumber={request.requestNumber} workTitle={request.workTitle} paidAt={winningPayment.paidAt} deadline={request.license.withdrawalEndsAt} />
+          : null}
         {cancellable.has(request.status) ? <RightsRequestCloseActions requestNumber={request.requestNumber} orderNumber={request.orderNumber} draft={false} /> : null}
         <section>
           <h2>Historique</h2>
           <ol className="order-timeline">{request.events.map((event) => <li key={event.id}><span aria-hidden="true" /><div><time>{new Date(event.createdAt).toLocaleString("fr-FR")}</time><strong>{rightsEventPresentation[event.type]}</strong>{event.note ? <p>{event.note}</p> : null}</div></li>)}</ol>
         </section>
-        <p className="rights-form__warning">Aucun document de cette version n’accorde de droit actif. Aucune déclaration SACEM et aucun paiement de droits ne sont réalisés.</p>
+        <p className="rights-form__warning">{request.status === "ACTIVE" ? "Seuls les droits expressément prévus par le contrat actif sont accordés." : "Aucun document non actif n’accorde de droit d’exploitation. Aucune déclaration SACEM n’est réalisée automatiquement."}</p>
       </Container>
     </section>
   );

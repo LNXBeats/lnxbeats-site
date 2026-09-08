@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { personalUseTerms, rightsOffers, type RightsOfferType } from "@/data/rights-offer";
 
-export const terminalRightsStatuses = new Set(["REJECTED", "CANCELLED"] as const);
+export const terminalRightsStatuses = new Set(["REJECTED", "CANCELLED", "WITHDRAWN", "TERMINATED"] as const);
 
 export const activeRightsStatuses = [
   "DRAFT",
@@ -15,6 +15,9 @@ export const activeRightsStatuses = [
   "CLIENT_ACCEPTED",
   "ADMIN_VALIDATED",
   "READY_FOR_PAYMENT",
+  "PAID_WAITING_WITHDRAWAL_PERIOD",
+  "WITHDRAWAL_REQUESTED",
+  "REQUIRES_REVIEW",
   "ACTIVE",
 ] as const;
 
@@ -29,9 +32,14 @@ export const rightsStatusPresentation = {
   CLIENT_ACCEPTED: { label: "Accepté par le client", action: "Validation LNX Beats en attente." },
   ADMIN_VALIDATED: { label: "Validé par LNX Beats", action: "Le paiement reste fermé." },
   READY_FOR_PAYMENT: { label: "Prêt pour paiement futur", action: "Le paiement sera ouvert après validation juridique et technique." },
+  PAID_WAITING_WITHDRAWAL_PERIOD: { label: "Payé · délai de rétractation", action: "La licence prendra effet après quatorze jours, en l’absence de rétractation." },
+  WITHDRAWAL_REQUESTED: { label: "Rétractation en cours", action: "La prise d’effet est bloquée pendant le traitement du remboursement." },
+  REQUIRES_REVIEW: { label: "Revue requise", action: "Une preuve financière doit être rapprochée sans relancer de paiement." },
   REJECTED: { label: "Demande non retenue", action: "Consultez le motif de la décision." },
   CANCELLED: { label: "Demande annulée", action: "Aucune action requise." },
+  WITHDRAWN: { label: "Rétractée", action: "La licence n’a pas pris effet." },
   ACTIVE: { label: "Actif", action: "Consultez votre document contractuel." },
+  TERMINATED: { label: "Résiliée", action: "Consultez les obligations de retrait applicables." },
 } as const;
 
 export const rightsEventPresentation = {
@@ -49,6 +57,14 @@ export const rightsEventPresentation = {
   CLIENT_ACCEPTED: "Acceptation client enregistrée",
   ADMIN_VALIDATED: "Validation Admin enregistrée",
   READY_FOR_PAYMENT: "Prêt pour une étape future",
+  PAYMENT_CONFIRMED: "Paiement de licence confirmé",
+  PAYMENT_REQUIRES_REVIEW: "Paiement de licence à rapprocher",
+  LICENSE_ACTIVATED: "Licence activée",
+  LICENSE_TERMINATED: "Licence résiliée",
+  WITHDRAWAL_RECORDED: "Rétractation enregistrée",
+  WITHDRAWAL_APPROVED: "Rétractation approuvée",
+  WITHDRAWAL_REJECTED: "Rétractation refusée",
+  WITHDRAWAL_REFUNDED: "Rétractation remboursée",
   REQUEST_REJECTED: "Demande non retenue",
   REQUEST_CANCELLED: "Demande annulée",
 } as const;
@@ -77,10 +93,15 @@ export const rightsAllowedTransitions = {
   CONTRACT_READY: ["CLIENT_ACCEPTED", "CONTRACT_PREPARATION", "REJECTED"],
   CLIENT_ACCEPTED: ["ADMIN_VALIDATED", "CONTRACT_PREPARATION", "REJECTED"],
   ADMIN_VALIDATED: ["READY_FOR_PAYMENT", "CONTRACT_PREPARATION"],
-  READY_FOR_PAYMENT: [],
+  READY_FOR_PAYMENT: ["PAID_WAITING_WITHDRAWAL_PERIOD", "REQUIRES_REVIEW"],
+  PAID_WAITING_WITHDRAWAL_PERIOD: ["WITHDRAWAL_REQUESTED", "ACTIVE", "WITHDRAWN", "REQUIRES_REVIEW"],
+  WITHDRAWAL_REQUESTED: ["WITHDRAWN", "REQUIRES_REVIEW"],
+  REQUIRES_REVIEW: ["PAID_WAITING_WITHDRAWAL_PERIOD", "WITHDRAWN", "TERMINATED"],
   REJECTED: [],
   CANCELLED: [],
+  WITHDRAWN: [],
   ACTIVE: [],
+  TERMINATED: [],
 } as const;
 
 export type RightsStatus = keyof typeof rightsAllowedTransitions;

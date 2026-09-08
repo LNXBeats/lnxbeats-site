@@ -68,6 +68,10 @@ const requestInclude = {
   },
   events: { orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }] },
   messages: { orderBy: [{ createdAt: "asc" as const }, { id: "asc" as const }] },
+  payments: { orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }], select: { id: true, provider: true, mode: true, status: true, amountCents: true, paidAt: true } },
+  invoices: { orderBy: { issuedAt: "desc" as const }, take: 1, select: { id: true, invoiceNumber: true, issuedAt: true } },
+  license: { select: { licenseNumber: true, status: true, withdrawalEndsAt: true, effectiveAt: true, expiresAt: true } },
+  withdrawalRequest: { select: { requestNumber: true, status: true, requestedAt: true, withdrawalDeadline: true, completedAt: true } },
 } satisfies Prisma.RightsRequestInclude;
 
 type RequestWithRelations = Prisma.RightsRequestGetPayload<{ include: typeof requestInclude }>;
@@ -83,6 +87,10 @@ type RightsReader = Pick<
   | "contractDocument"
   | "rightsRequestEvent"
   | "rightsMessage"
+  | "payment"
+  | "invoice"
+  | "rightsLicense"
+  | "rightsWithdrawalRequest"
 >;
 
 async function findRequestWithRelations(database: RightsReader, where: Prisma.RightsRequestWhereInput) {
@@ -107,7 +115,11 @@ async function findRequestWithRelations(database: RightsReader, where: Prisma.Ri
   });
   const events = await database.rightsRequestEvent.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   const messages = await database.rightsMessage.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
-  return { ...request, order, partySnapshots, contributions, grants, splitProposals, documents, events, messages } as RequestWithRelations;
+  const payments = await database.payment.findMany({ where: { rightsRequestId: request.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: requestInclude.payments.select });
+  const invoices = await database.invoice.findMany({ where: { rightsRequestId: request.id }, orderBy: { issuedAt: "desc" }, take: 1, select: requestInclude.invoices.select });
+  const license = await database.rightsLicense.findUnique({ where: { rightsRequestId: request.id }, select: requestInclude.license.select });
+  const withdrawalRequest = await database.rightsWithdrawalRequest.findUnique({ where: { rightsRequestId: request.id }, select: requestInclude.withdrawalRequest.select });
+  return { ...request, order, partySnapshots, contributions, grants, splitProposals, documents, events, messages, payments, invoices, license, withdrawalRequest } as RequestWithRelations;
 }
 
 export function serializeRightsRequest(request: RequestWithRelations): SerializedRightsRequest {
@@ -132,6 +144,22 @@ export function serializeRightsRequest(request: RequestWithRelations): Serialize
     needsInformationMessage: request.needsInformationMessage ?? "",
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString(),
+    payments: request.payments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null })),
+    invoice: request.invoices[0] ? { ...request.invoices[0], issuedAt: request.invoices[0].issuedAt.toISOString() } : null,
+    license: request.license ? {
+      licenseNumber: request.license.licenseNumber,
+      status: request.license.status,
+      withdrawalEndsAt: request.license.withdrawalEndsAt.toISOString(),
+      effectiveAt: request.license.effectiveAt?.toISOString() ?? null,
+      expiresAt: request.license.expiresAt?.toISOString() ?? null,
+    } : null,
+    withdrawal: request.withdrawalRequest ? {
+      requestNumber: request.withdrawalRequest.requestNumber,
+      status: request.withdrawalRequest.status,
+      requestedAt: request.withdrawalRequest.requestedAt.toISOString(),
+      withdrawalDeadline: request.withdrawalRequest.withdrawalDeadline.toISOString(),
+      completedAt: request.withdrawalRequest.completedAt?.toISOString() ?? null,
+    } : null,
     party: party ? {
       version: party.version,
       partyType: party.partyType,

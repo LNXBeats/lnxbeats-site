@@ -151,6 +151,12 @@ enum OrderNotificationKind {
   OWNER_RIGHTS_CLIENT_ACCEPTED
   CUSTOMER_RIGHTS_REJECTED
   CUSTOMER_RIGHTS_READY_FOR_PAYMENT
+  CUSTOMER_RIGHTS_PAYMENT_CONFIRMED
+  OWNER_RIGHTS_PAYMENT_CONFIRMED
+  CUSTOMER_RIGHTS_LICENSE_ACTIVE
+  CUSTOMER_RIGHTS_WITHDRAWAL_RECORDED
+  OWNER_RIGHTS_WITHDRAWAL_REQUESTED
+  CUSTOMER_RIGHTS_WITHDRAWAL_REFUNDED
   CUSTOMER_PARTIAL_REFUND
   CUSTOMER_REFUND_COMPLETED
   OWNER_PAYMENT_INCIDENT
@@ -570,6 +576,7 @@ enum BillingCustomerType {
 enum InvoiceDocumentType {
   MUSIC
   SHOP
+  RIGHTS
 }
 
 enum InvoiceOperationCategory {
@@ -613,9 +620,14 @@ enum RightsRequestStatus {
   CLIENT_ACCEPTED
   ADMIN_VALIDATED
   READY_FOR_PAYMENT
+  PAID_WAITING_WITHDRAWAL_PERIOD
+  WITHDRAWAL_REQUESTED
+  REQUIRES_REVIEW
   REJECTED
   CANCELLED
+  WITHDRAWN
   ACTIVE
+  TERMINATED
 }
 
 enum ContractPartyType {
@@ -715,8 +727,34 @@ enum RightsEventType {
   CLIENT_ACCEPTED
   ADMIN_VALIDATED
   READY_FOR_PAYMENT
+  PAYMENT_CONFIRMED
+  PAYMENT_REQUIRES_REVIEW
+  LICENSE_ACTIVATED
+  LICENSE_TERMINATED
+  WITHDRAWAL_RECORDED
+  WITHDRAWAL_APPROVED
+  WITHDRAWAL_REJECTED
+  WITHDRAWAL_REFUNDED
   REQUEST_REJECTED
   REQUEST_CANCELLED
+}
+
+enum RightsLicenseStatus {
+  PAID_WAITING_WITHDRAWAL_PERIOD
+  WITHDRAWAL_REQUESTED
+  ACTIVE
+  WITHDRAWN
+  TERMINATED
+  REQUIRES_REVIEW
+}
+
+enum RightsWithdrawalStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  REFUND_PENDING
+  COMPLETED
+  REQUIRES_REVIEW
 }
 
 enum RightsMessageKind {
@@ -877,6 +915,8 @@ model User {
   shippingProviderAttemptsReconciled ShopShippingProviderAttempt[] @relation("ShopShippingProviderAttemptReconciledBy")
   legalDocumentApprovals             LegalDocumentVersion[]        @relation("LegalDocumentApprover")
   withdrawalReviews                  ConsumerWithdrawalRequest[]   @relation("ConsumerWithdrawalReviewer")
+  rightsWithdrawalRequests           RightsWithdrawalRequest[]     @relation("RightsWithdrawalRequester")
+  rightsWithdrawalReviews            RightsWithdrawalRequest[]     @relation("RightsWithdrawalReviewer")
   billingAuditEvents                 BillingAuditEvent[]           @relation("BillingAuditActor")
   shopReturnRequests                 ShopReturnRequest[]           @relation("ShopReturnOwner")
   shopReturnReviews                  ShopReturnRequest[]           @relation("ShopReturnReviewer")
@@ -1245,6 +1285,7 @@ model OrderNotification {
   orderId               String?               @db.Uuid
   shopOrderId           String?               @db.Uuid
   shopReturnRequestId   String?               @db.Uuid
+  rightsRequestId       String?               @db.Uuid
   kind                  OrderNotificationKind
   channel               NotificationChannel
   priority              NotificationPriority  @default(INFORMATIONAL)
@@ -1275,6 +1316,7 @@ model OrderNotification {
   order                 Order?                @relation(fields: [orderId], references: [id], onDelete: Restrict)
   shopOrder             ShopOrder?            @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
   shopReturnRequest     ShopReturnRequest?    @relation(fields: [shopReturnRequestId], references: [id], onDelete: Restrict)
+  rightsRequest         RightsRequest?        @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
   events                NotificationEvent[]
 
   @@index([status, availableAt])
@@ -1282,6 +1324,7 @@ model OrderNotification {
   @@index([orderId, kind, channel])
   @@index([shopOrderId, kind, channel])
   @@index([shopReturnRequestId, kind, channel])
+  @@index([rightsRequestId, kind, channel])
   @@index([resourceType, resourceId])
   @@map("order_notifications")
 }
@@ -1330,6 +1373,7 @@ model Payment {
   id                       String                    @id @default(uuid()) @db.Uuid
   orderId                  String?                   @db.Uuid
   shopOrderId              String?                   @db.Uuid
+  rightsRequestId          String?                   @db.Uuid
   provider                 PaymentProvider           @default(STRIPE)
   mode                     PaymentMode
   status                   PaymentStatus             @default(CREATED)
@@ -1352,6 +1396,10 @@ model Payment {
   updatedAt                DateTime                  @updatedAt @db.Timestamptz(3)
   order                    Order?                    @relation(fields: [orderId], references: [id], onDelete: Restrict)
   shopOrder                ShopOrder?                @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  rightsRequest            RightsRequest?            @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  rightsWinner             RightsPaymentWinner?
+  rightsLicense            RightsLicense?
+  rightsWithdrawal         RightsWithdrawalRequest?
   events                   ProviderEvent[]
   refundAttempts           RefundAttempt[]
   incidents                PaymentIncident[]
@@ -1362,8 +1410,10 @@ model Payment {
   @@unique([provider, providerCheckoutId])
   @@unique([provider, providerPaymentId])
   @@unique([id, shopOrderId])
+  @@unique([id, rightsRequestId])
   @@index([orderId, createdAt])
   @@index([shopOrderId, createdAt])
+  @@index([rightsRequestId, createdAt])
   @@index([provider, mode, status, updatedAt])
   @@map("payments")
 }
@@ -1378,6 +1428,7 @@ model RefundAttempt {
   requestedByUserId      String?                   @db.Uuid
   shopReturnRequestId    String?                   @unique @db.Uuid
   shopCustomerRequestId  String?                   @unique @db.Uuid
+  rightsWithdrawalId     String?                   @unique @db.Uuid
   localIdempotencyKey    String                    @unique @db.VarChar(255)
   providerRefundId       String?                   @db.VarChar(255)
   providerIdempotencyKey String                    @db.VarChar(255)
@@ -1392,6 +1443,7 @@ model RefundAttempt {
   requestedBy            User?                     @relation("RefundRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   shopReturnRequest      ShopReturnRequest?        @relation(fields: [shopReturnRequestId], references: [id], onDelete: Restrict)
   shopCustomerRequest    ShopOrderCustomerRequest? @relation(fields: [shopCustomerRequestId], references: [id], onDelete: Restrict)
+  rightsWithdrawal       RightsWithdrawalRequest?  @relation(fields: [rightsWithdrawalId], references: [id], onDelete: Restrict)
   providerEvents         ProviderEvent[]
   auditEvents            PaymentAuditEvent[]
   creditNotes            CreditNote[]
@@ -1509,11 +1561,95 @@ model RightsRequest {
   events                    RightsRequestEvent[]
   messages                  RightsMessage[]
   documents                 ContractDocument[]
+  payments                  Payment[]
+  invoices                  Invoice[]
+  notifications             OrderNotification[]
+  paymentWinner             RightsPaymentWinner?
+  license                   RightsLicense?
+  withdrawalRequest         RightsWithdrawalRequest?
 
   @@index([orderId, createdAt])
   @@index([userId, updatedAt])
   @@index([type, status, updatedAt])
   @@map("rights_requests")
+}
+
+model RightsPaymentWinner {
+  rightsRequestId String        @id @db.Uuid
+  paymentId       String        @unique @db.Uuid
+  selectedAt      DateTime      @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  request         RightsRequest @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  payment         Payment       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@map("rights_payment_winners")
+}
+
+model RightsLicense {
+  id                 String              @id @default(uuid()) @db.Uuid
+  licenseNumber      String              @unique @db.VarChar(40)
+  rightsRequestId    String              @unique @db.Uuid
+  paymentId          String              @unique @db.Uuid
+  invoiceId          String              @unique @db.Uuid
+  contractDocumentId String              @unique @db.Uuid
+  status             RightsLicenseStatus @default(PAID_WAITING_WITHDRAWAL_PERIOD)
+  contractVersion    Int
+  termsVersion       String              @db.VarChar(80)
+  termsHashSha256    String              @db.Char(64)
+  acceptedAt         DateTime            @db.Timestamptz(3)
+  paidAt             DateTime            @db.Timestamptz(3)
+  withdrawalEndsAt   DateTime            @db.Timestamptz(3)
+  effectiveAt        DateTime?           @db.Timestamptz(3)
+  expiresAt          DateTime?           @db.Timestamptz(3)
+  territory          String              @default("WORLD") @db.VarChar(32)
+  exclusive          Boolean             @default(false)
+  durationYears      Int                 @default(5)
+  activatedAt        DateTime?           @db.Timestamptz(3)
+  terminatedAt       DateTime?           @db.Timestamptz(3)
+  terminationReason  String?             @db.VarChar(500)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  request            RightsRequest       @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  payment            Payment             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  invoice            Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  contractDocument   ContractDocument    @relation(fields: [contractDocumentId], references: [id], onDelete: Restrict)
+
+  @@index([status, withdrawalEndsAt])
+  @@map("rights_licenses")
+}
+
+model RightsWithdrawalRequest {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  requestNumber      String                 @unique @db.VarChar(40)
+  rightsRequestId    String                 @unique @db.Uuid
+  paymentId          String                 @unique @db.Uuid
+  invoiceId          String                 @unique @db.Uuid
+  contractDocumentId String                 @unique @db.Uuid
+  requestedByUserId  String                 @db.Uuid
+  status             RightsWithdrawalStatus @default(REQUESTED)
+  requestedAt        DateTime               @db.Timestamptz(3)
+  withdrawalDeadline DateTime               @db.Timestamptz(3)
+  reason             String?                @db.VarChar(1000)
+  declarationText    String                 @db.Text
+  evidenceSnapshot   Json
+  evidenceHashSha256 String                 @unique @db.Char(64)
+  reviewedAt         DateTime?              @db.Timestamptz(3)
+  reviewedByUserId   String?                @db.Uuid
+  rejectionReason    String?                @db.VarChar(1000)
+  completedAt        DateTime?              @db.Timestamptz(3)
+  createdAt          DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime               @updatedAt @db.Timestamptz(3)
+  request            RightsRequest          @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  payment            Payment                @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  invoice            Invoice                @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  contractDocument   ContractDocument       @relation(fields: [contractDocumentId], references: [id], onDelete: Restrict)
+  requestedBy        User                   @relation("RightsWithdrawalRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy         User?                  @relation("RightsWithdrawalReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  refundAttempt      RefundAttempt?
+
+  @@unique([id, paymentId])
+  @@index([status, requestedAt])
+  @@map("rights_withdrawal_requests")
 }
 
 model ContractPartySnapshot {
@@ -1632,32 +1768,34 @@ model ContractTemplate {
 }
 
 model ContractDocument {
-  id                   String                 @id @default(uuid()) @db.Uuid
-  contractNumber       String                 @unique @db.VarChar(32)
-  rightsRequestId      String                 @db.Uuid
-  templateId           String                 @db.Uuid
+  id                   String                   @id @default(uuid()) @db.Uuid
+  contractNumber       String                   @unique @db.VarChar(32)
+  rightsRequestId      String                   @db.Uuid
+  templateId           String                   @db.Uuid
   templateVersion      Int
   documentVersion      Int
   kind                 ContractDocumentKind
-  status               ContractDocumentStatus @default(DRAFT)
-  generatedAt          DateTime               @db.Timestamptz(3)
-  acceptedAt           DateTime?              @db.Timestamptz(3)
-  adminAcceptedAt      DateTime?              @db.Timestamptz(3)
-  activatedAt          DateTime?              @db.Timestamptz(3)
+  status               ContractDocumentStatus   @default(DRAFT)
+  generatedAt          DateTime                 @db.Timestamptz(3)
+  acceptedAt           DateTime?                @db.Timestamptz(3)
+  adminAcceptedAt      DateTime?                @db.Timestamptz(3)
+  activatedAt          DateTime?                @db.Timestamptz(3)
   priceSnapshotCents   Int
-  currency             String                 @db.VarChar(3)
+  currency             String                   @db.VarChar(3)
   sourceSnapshot       Json
-  documentHashSha256   String                 @db.VarChar(64)
-  assetId              String                 @unique @db.Uuid
-  retentionUntil       DateTime?              @db.Timestamptz(3)
-  supersedesDocumentId String?                @unique @db.Uuid
-  createdAt            DateTime               @default(now()) @db.Timestamptz(3)
-  request              RightsRequest          @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
-  template             ContractTemplate       @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  asset                Asset                  @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  supersedes           ContractDocument?      @relation("ContractDocumentVersions", fields: [supersedesDocumentId], references: [id], onDelete: Restrict)
-  supersededBy         ContractDocument?      @relation("ContractDocumentVersions")
+  documentHashSha256   String                   @db.VarChar(64)
+  assetId              String                   @unique @db.Uuid
+  retentionUntil       DateTime?                @db.Timestamptz(3)
+  supersedesDocumentId String?                  @unique @db.Uuid
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  request              RightsRequest            @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  template             ContractTemplate         @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  asset                Asset                    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  supersedes           ContractDocument?        @relation("ContractDocumentVersions", fields: [supersedesDocumentId], references: [id], onDelete: Restrict)
+  supersededBy         ContractDocument?        @relation("ContractDocumentVersions")
   acceptances          ContractAcceptance[]
+  rightsLicense        RightsLicense?
+  rightsWithdrawal     RightsWithdrawalRequest?
 
   @@unique([rightsRequestId, kind, documentVersion])
   @@index([rightsRequestId, createdAt])
@@ -2179,6 +2317,7 @@ model Invoice {
   operationCategory   InvoiceOperationCategory
   orderId             String?                  @db.Uuid
   shopOrderId         String?                  @db.Uuid
+  rightsRequestId     String?                  @db.Uuid
   paymentId           String                   @unique @db.Uuid
   orderNumberSnapshot String                   @db.VarChar(32)
   customerType        BillingCustomerType
@@ -2202,12 +2341,16 @@ model Invoice {
   createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
   order               Order?                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
   shopOrder           ShopOrder?               @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  rightsRequest       RightsRequest?           @relation(fields: [rightsRequestId], references: [id], onDelete: Restrict)
+  rightsLicense       RightsLicense?
+  rightsWithdrawal    RightsWithdrawalRequest?
   payment             Payment                  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   creditNotes         CreditNote[]
   auditEvents         BillingAuditEvent[]
 
   @@unique([orderId])
   @@unique([shopOrderId])
+  @@unique([rightsRequestId])
   @@index([documentType, issuedAt])
   @@index([customerNameSearch, issuedAt])
   @@index([customerEmailSearch, issuedAt])

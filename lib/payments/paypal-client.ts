@@ -29,6 +29,13 @@ type PaypalCreateOrderSource =
     paymentSource: "SHOP_ORDER";
     shopOrderId: string;
     orderId?: never;
+    rightsRequestId?: never;
+  }>
+  | Readonly<{
+    paymentSource: "RIGHTS_REQUEST";
+    rightsRequestId: string;
+    orderId?: never;
+    shopOrderId?: never;
   }>;
 
 export type PaypalCreateOrderRequest = Readonly<{
@@ -168,7 +175,9 @@ export function paypalCentsFromAmount(value: unknown) {
 export function paypalCreateOrderBody(request: PaypalCreateOrderRequest) {
   const sourceId = request.paymentSource === "SHOP_ORDER"
     ? request.shopOrderId
-    : request.orderId;
+    : request.paymentSource === "RIGHTS_REQUEST"
+      ? request.rightsRequestId
+      : request.orderId;
   return {
     intent: "CAPTURE",
     payment_source: {

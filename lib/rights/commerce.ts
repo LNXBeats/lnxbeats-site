@@ -32,15 +32,14 @@ type RightsCommerceCapabilities = Readonly<{
   activationReady: boolean;
 }>;
 
-// These are code capabilities, not environment flags. Keeping them false makes
-// the current module fail closed even if a template is marked APPROVED in the
-// database. Each capability must be replaced by a real, tested implementation
-// before an opening can be considered.
+// These are tested code capabilities, not opening flags. Production remains
+// fail-closed through RIGHTS_COMMERCE_OPEN_REQUESTED and the dedicated runtime
+// configuration even when this technical readiness is complete.
 export const rightsCommerceCapabilities: RightsCommerceCapabilities = Object.freeze({
-  rendererBindingReady: false,
-  billingReady: false,
-  paymentReady: false,
-  activationReady: false,
+  rendererBindingReady: true,
+  billingReady: true,
+  paymentReady: true,
+  activationReady: true,
 });
 
 // Opening is an explicit future code decision. It is deliberately not driven by

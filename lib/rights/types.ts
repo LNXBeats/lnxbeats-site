@@ -50,6 +50,29 @@ export type SerializedRightsRequest = Readonly<{
   needsInformationMessage: string;
   createdAt: string;
   updatedAt: string;
+  payments: readonly Readonly<{
+    id: string;
+    provider: "STRIPE" | "PAYPAL";
+    mode: "TEST" | "LIVE";
+    status: string;
+    amountCents: number;
+    paidAt: string | null;
+  }>[];
+  invoice: Readonly<{ id: string; invoiceNumber: string; issuedAt: string }> | null;
+  license: Readonly<{
+    licenseNumber: string;
+    status: string;
+    withdrawalEndsAt: string;
+    effectiveAt: string | null;
+    expiresAt: string | null;
+  }> | null;
+  withdrawal: Readonly<{
+    requestNumber: string;
+    status: string;
+    requestedAt: string;
+    withdrawalDeadline: string;
+    completedAt: string | null;
+  }> | null;
   party: SerializedContractParty | null;
   contributions: readonly Readonly<{
     kind: RightsContributionKind;

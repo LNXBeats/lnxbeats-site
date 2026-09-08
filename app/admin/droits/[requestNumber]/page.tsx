@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 
 import {
   adminValidateRightsContractAction,
+  refundRightsWithdrawalAction,
   generateRightsDocumentAction,
   rejectRightsRequestAction,
+  rejectRightsWithdrawalAction,
   requestRightsInformationAction,
   startRightsReviewAction,
   updateAiAssessmentAction,
@@ -158,11 +160,42 @@ export default async function AdminRightsDetailPage({ params, searchParams }: {
         <div><dt>Commande</dt><dd><Link href={`/admin/commandes/${request.order.orderNumber}`}>{request.order.orderNumber}</Link><small>{orderStatusPresentation[request.order.status].label} · {euros(request.order.totalCents)}</small></dd></div>
         <div><dt>Paiement initial</dt><dd>{request.order.payments.length === 1 ? "Confirmé" : "À vérifier"}<small>{request.order.payments[0] ? `${euros(request.order.payments[0].amountCents)} · ${date(request.order.payments[0].paidAt)}` : "Aucune preuve"}</small></dd></div>
         <div><dt>Livraison</dt><dd>{request.order.assets.length === 1 ? "Master privé publié" : "À vérifier"}<small>{request.order.assets[0]?.asset.filename ?? "Aucun fichier"}</small></dd></div>
-        <div><dt>Montant cible</dt><dd>{euros(request.requestedPriceCents)}<small>Aucun paiement de droits</small></dd></div>
+        <div><dt>Montant licence</dt><dd>{euros(request.requestedPriceCents)}<small>{request.paymentWinner ? `${request.paymentWinner.payment.provider} · ${request.paymentWinner.payment.status}` : "Aucun paiement Rights confirmé"}</small></dd></div>
         <div><dt>Évaluation IA</dt><dd>{assessmentLabels[request.aiAssessment]}</dd></div>
+        <div><dt>Facture Rights</dt><dd>{request.invoices[0]?.invoiceNumber ?? "Non émise"}</dd></div>
+        <div><dt>Licence</dt><dd>{request.license?.licenseNumber ?? "Non créée"}<small>{request.license ? request.license.status : "Commerce fermé"}</small></dd></div>
+        <div><dt>Prise d’effet</dt><dd>{request.license?.effectiveAt ? date(request.license.effectiveAt) : request.license?.withdrawalEndsAt ? `Après le ${date(request.license.withdrawalEndsAt)}` : "Non applicable"}</dd></div>
       </dl>
       {canStartRightsReview(request.status) ? <form action={startRightsReviewAction}><input type="hidden" name="requestNumber" value={request.requestNumber} /><button className="admin-button" type="submit">PLACER EN ÉTUDE</button></form> : null}
     </section>
+
+    {request.withdrawalRequest ? <section className="admin-panel">
+      <div className="admin-panel__heading"><p className="admin-section-label">Rétractation</p><h2>{request.withdrawalRequest.requestNumber}</h2></div>
+      <dl className="admin-definition-grid">
+        <div><dt>État</dt><dd>{request.withdrawalRequest.status}</dd></div>
+        <div><dt>Demandée</dt><dd>{date(request.withdrawalRequest.requestedAt)}</dd></div>
+        <div><dt>Date limite</dt><dd>{date(request.withdrawalRequest.withdrawalDeadline)}</dd></div>
+        <div><dt>Montant</dt><dd>{euros(request.withdrawalRequest.refundAttempt?.amountCents ?? request.withdrawalRequest.invoice.totalCents)}</dd></div>
+        <div><dt>Provider</dt><dd>{request.withdrawalRequest.refundAttempt?.provider ?? request.paymentWinner?.payment.provider ?? "À vérifier"}</dd></div>
+        <div><dt>Remboursement</dt><dd>{request.withdrawalRequest.refundAttempt?.status ?? "Non réservé"}</dd></div>
+      </dl>
+      {request.withdrawalRequest.status === "REQUESTED" ? <div className="admin-action-row">
+        <form className="admin-contract-form" action={refundRightsWithdrawalAction}>
+          <input type="hidden" name="requestNumber" value={request.requestNumber} />
+          <input type="hidden" name="withdrawalNumber" value={request.withdrawalRequest.requestNumber} />
+          <p>Cette confirmation déclenche un remboursement total de 150,00 € sur le provider du paiement d’origine, puis l’avoir si la preuve financière est confirmée.</p>
+          <label>Confirmation<input name="typedConfirmation" required autoComplete="off" placeholder="REMBOURSER 150 EUR" /></label>
+          <label className="admin-check"><input type="checkbox" name="confirmed" /> Je confirme la rétractation, le remboursement total et la non-activation de la licence.</label>
+          <button className="admin-button admin-button--danger" type="submit">REMBOURSER 150 € ET TERMINER</button>
+        </form>
+        <form className="admin-contract-form" action={rejectRightsWithdrawalAction}>
+          <input type="hidden" name="requestNumber" value={request.requestNumber} />
+          <input type="hidden" name="withdrawalNumber" value={request.withdrawalRequest.requestNumber} />
+          <label>Motif du refus<textarea name="reason" required maxLength={1000} /></label>
+          <button className="admin-button" type="submit">REFUSER SANS REMBOURSEMENT</button>
+        </form>
+      </div> : null}
+    </section> : null}
 
     <section className="admin-panel">
       <div className="admin-panel__heading"><p className="admin-section-label">Coordonnées vérifiées</p><h2>Partie contractuelle.</h2></div>
@@ -326,6 +359,6 @@ export default async function AdminRightsDetailPage({ params, searchParams }: {
         <button className="admin-button admin-button--danger" type="submit">REJETER AVEC MOTIF</button>
       </form>
     </section>
-    <aside className="admin-alert"><strong>Aucun paiement de droits implémenté.</strong> Aucun Checkout, PaymentIntent, contrat actif ou déclaration SACEM n’est créé par ces actions.</aside>
+    <aside className="admin-alert"><strong>Commerce Rights fermé en Production.</strong> Le code prépare le paiement, la rétractation et l’activation différée, mais les gates dédiés restent fermés jusqu’au checkpoint d’ouverture.</aside>
   </main>;
 }

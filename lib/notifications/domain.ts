@@ -41,6 +41,12 @@ const definitions: Record<OrderNotificationKind, Readonly<{
   OWNER_RIGHTS_CLIENT_ACCEPTED: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-rights-client-accepted" },
   CUSTOMER_RIGHTS_REJECTED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-rights-rejected" },
   CUSTOMER_RIGHTS_READY_FOR_PAYMENT: { audience: "CLIENT", priority: "INFORMATIONAL", templateKey: "customer-rights-ready-for-payment" },
+  CUSTOMER_RIGHTS_PAYMENT_CONFIRMED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-rights-payment-confirmed" },
+  OWNER_RIGHTS_PAYMENT_CONFIRMED: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-rights-payment-confirmed" },
+  CUSTOMER_RIGHTS_LICENSE_ACTIVE: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-rights-license-active" },
+  CUSTOMER_RIGHTS_WITHDRAWAL_RECORDED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-rights-withdrawal-recorded" },
+  OWNER_RIGHTS_WITHDRAWAL_REQUESTED: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-rights-withdrawal-requested" },
+  CUSTOMER_RIGHTS_WITHDRAWAL_REFUNDED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-rights-withdrawal-refunded" },
   CUSTOMER_PARTIAL_REFUND: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-partial-refund" },
   CUSTOMER_REFUND_COMPLETED: { audience: "CLIENT", priority: "CRITICAL", templateKey: "customer-refund-completed" },
   OWNER_PAYMENT_INCIDENT: { audience: "OWNER", priority: "CRITICAL", templateKey: "owner-payment-incident" },
@@ -142,6 +148,7 @@ const orderPayloadKeys = new Set([
   "orderNumber", "customerName", "customerEmail", "totalCents", "currency", "coverIncluded",
   "priorityProcessing", "createdAt", "workTitle", "rightsRequestNumber", "rightsRequestType", "requestedPriceCents",
   "refundAmountCents", "invoiceNumber", "termsVersion",
+  "contractNumber", "licenseNumber", "withdrawalEndsAt", "effectiveAt", "expiresAt",
 ]);
 
 const shopPayloadKeys = new Set([
@@ -235,6 +242,12 @@ export function parseNotificationPayload(value: unknown, kind?: OrderNotificatio
   if (payload.refundAmountCents !== undefined && (!Number.isInteger(payload.refundAmountCents) || Number(payload.refundAmountCents) <= 0)) throw new Error("Notification payload is invalid.");
   if (payload.invoiceNumber !== undefined && (typeof payload.invoiceNumber !== "string" || !/^LNX-[0-9]{8}-[0-9]{4,}$/.test(payload.invoiceNumber))) throw new Error("Notification payload is invalid.");
   if (payload.termsVersion !== undefined && !(payload.termsVersion === null || (typeof payload.termsVersion === "string" && payload.termsVersion.length > 0 && payload.termsVersion.length <= 80))) throw new Error("Notification payload is invalid.");
+  for (const key of ["contractNumber", "licenseNumber"] as const) {
+    if (payload[key] !== undefined && (typeof payload[key] !== "string" || !payload[key] || payload[key].length > 80)) throw new Error("Notification payload is invalid.");
+  }
+  for (const key of ["withdrawalEndsAt", "effectiveAt", "expiresAt"] as const) {
+    if (payload[key] !== undefined && (typeof payload[key] !== "string" || Number.isNaN(Date.parse(payload[key] as string)))) throw new Error("Notification payload is invalid.");
+  }
   return payload as NotificationPayload;
 }
 
