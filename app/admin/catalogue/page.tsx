@@ -3,20 +3,29 @@ import Link from "next/link";
 
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
-import { listAdminCatalogProjects } from "@/lib/catalog/service";
+import { getAdminCatalogPage } from "@/lib/catalog/service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Catalogue" };
 
 const statusLabels: Record<string, string> = { DRAFT: "Brouillon", IN_DEVELOPMENT: "En développement", PUBLISHED: "Publié", ARCHIVED: "Archivé" };
 
-export default async function AdminCataloguePage({ searchParams }: { searchParams: Promise<{ q?: string; statut?: string; etat?: string }> }) {
+export default async function AdminCataloguePage({ searchParams }: { searchParams: Promise<{ q?: string; statut?: string; etat?: string; page?: string }> }) {
   await requireAdmin();
   const params = await searchParams;
   const query = params.q ?? "";
   const status = params.statut ?? "all";
-  const projects = await listAdminCatalogProjects(query, status);
-  const featured = projects.find((project) => project.featured) ?? (await listAdminCatalogProjects()).find((project) => project.featured);
+  const requestedPage = /^\d+$/.test(params.page ?? "") ? Number(params.page) : 1;
+  const catalogue = await getAdminCatalogPage(query, status, requestedPage);
+  const { projects, featured } = catalogue;
+  const pageHref = (page: number) => {
+    const values = new URLSearchParams();
+    if (query) values.set("q", query);
+    if (status !== "all") values.set("statut", status);
+    if (page > 1) values.set("page", String(page));
+    const suffix = values.toString();
+    return suffix ? `/admin/catalogue?${suffix}` : "/admin/catalogue";
+  };
 
   return (
     <div className="admin-main">
@@ -33,12 +42,12 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
 
       <form className="admin-catalogue-filters" action="/admin/catalogue" method="get" role="search">
         <label><span>Rechercher</span><input name="q" defaultValue={query} maxLength={120} placeholder="Titre ou slug" /></label>
-        <label><span>Statut</span><select name="statut" defaultValue={status}><option value="all">Tous</option><option value="PUBLISHED">Publié</option><option value="IN_DEVELOPMENT">En développement</option><option value="DRAFT">Brouillon</option><option value="ARCHIVED">Archivé</option></select></label>
+        <label><span>Statut</span><select name="statut" defaultValue={status}><option value="all">Tous ({Object.values(catalogue.counts).reduce((sum, count) => sum + (count ?? 0), 0)})</option><option value="PUBLISHED">Publiés ({catalogue.counts.PUBLISHED ?? 0})</option><option value="IN_DEVELOPMENT">En développement ({catalogue.counts.IN_DEVELOPMENT ?? 0})</option><option value="DRAFT">Brouillons ({catalogue.counts.DRAFT ?? 0})</option><option value="ARCHIVED">Masqués / archivés ({catalogue.counts.ARCHIVED ?? 0})</option></select></label>
         <button type="submit">Filtrer</button>
       </form>
 
       <section className="admin-list-window" aria-labelledby="catalogue-title">
-        <div className="admin-list-window__heading"><h2 id="catalogue-title">Catalogue LNX Beats</h2><span>{projects.length} projet{projects.length === 1 ? "" : "s"}</span></div>
+        <div className="admin-list-window__heading"><h2 id="catalogue-title">Catalogue LNX Beats</h2><span>{catalogue.total} projet{catalogue.total === 1 ? "" : "s"} · page {catalogue.page}/{catalogue.pageCount}</span></div>
         {projects.length ? <ul className="admin-catalogue-list">
           {projects.map((project) => <li key={project.id}>
             <div><strong><Link href={`/admin/catalogue/${project.slug}`}>{project.title}</Link></strong><small>{project.slug} · {statusLabels[project.status]}</small></div>
@@ -52,6 +61,11 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
             <Link className="admin-row-action" href={`/admin/catalogue/${project.slug}`}>Modifier <span aria-hidden="true">→</span></Link>
           </li>)}
         </ul> : <div className="admin-empty"><h2>Aucun projet ne correspond.</h2><p>Modifiez la recherche ou le filtre de statut.</p></div>}
+        {catalogue.pageCount > 1 ? <nav className="admin-pagination" aria-label="Pagination de la discographie">
+          {catalogue.page > 1 ? <Link href={pageHref(catalogue.page - 1)}>← Précédente</Link> : <span aria-disabled="true">← Précédente</span>}
+          <span>Page {catalogue.page} sur {catalogue.pageCount}</span>
+          {catalogue.page < catalogue.pageCount ? <Link href={pageHref(catalogue.page + 1)}>Suivante →</Link> : <span aria-disabled="true">Suivante →</span>}
+        </nav> : null}
       </section>
     </div>
   );

@@ -5,6 +5,7 @@ import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatProductPrice } from "@/lib/shop/product-domain";
 import { listAdminProducts } from "@/lib/shop/product-service";
+import { getShopAdminOperationalStatus, shopAdminOperationalLabel } from "@/lib/shop/admin-operational-status";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Boutique · Administration" };
@@ -20,19 +21,31 @@ export default async function AdminShopPage({
   const params = await searchParams;
   const query = params.q ?? "";
   const status = params.statut ?? "all";
-  const products = await listAdminProducts(query, status);
+  const [products, operations] = await Promise.all([
+    listAdminProducts(query, status),
+    Promise.resolve(getShopAdminOperationalStatus()),
+  ]);
 
   return <div className="admin-main">
     <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
     <header className="admin-page-heading">
       <div><p className="admin-kicker">Boutique</p><h1>Les produits, sous contrôle.</h1></div>
       <div className="admin-page-heading__actions">
-        <p>Les produits naissent en brouillon. La publication alimente la Boutique QA ; le paiement produit reste volontairement désactivé.</p>
+        <p>Les produits naissent en brouillon. Leur publication alimente la Boutique publique lorsque les guards opérationnels sont prêts.</p>
         <Link className="admin-primary-action" href="/admin/boutique/nouveau"><span aria-hidden="true">+</span> Nouveau produit</Link>
         <Link className="admin-row-action" href="/admin/boutique/logistique">Consulter la logistique <span aria-hidden="true">→</span></Link>
         {process.env.SHOP_AFTER_SALES_ENABLED === "true" ? <Link className="admin-row-action" href="/admin/boutique/retours">Consulter le SAV <span aria-hidden="true">→</span></Link> : null}
       </div>
     </header>
+
+    <section className="admin-operations-strip" aria-label="État opérationnel de la Boutique">
+      <div><span>Boutique publique</span><strong>{shopAdminOperationalLabel[operations.shop]}</strong></div>
+      <div><span>Paiements</span><strong>{shopAdminOperationalLabel[operations.payments]}</strong></div>
+      <div><span>Livraison</span><strong>{shopAdminOperationalLabel[operations.shipping]}</strong></div>
+      <div><span>SAV financier</span><strong>{shopAdminOperationalLabel[operations.afterSales]}</strong></div>
+      <div><span>Suivi</span><strong>{shopAdminOperationalLabel[operations.tracking]}</strong></div>
+      <div><span>API transporteur</span><strong>{shopAdminOperationalLabel[operations.carrierApi]}</strong></div>
+    </section>
 
     {params.etat ? <p className="admin-feedback" role="alert">
       {params.etat === "conflit" ? "La fiche a changé dans un autre onglet. Rechargez-la avant de recommencer."

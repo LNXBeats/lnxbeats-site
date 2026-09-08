@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 
+import { adminNotificationAttentionWhere } from "@/lib/admin/operation-queries";
 import { maskedProviderMessageId } from "@/lib/notifications/admin-presentation";
 import { maskedRecipient, notificationStatusPresentation } from "@/lib/notifications/domain";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -17,7 +18,7 @@ export function parseAdminNotificationFilter(value: unknown): AdminNotificationF
 
 export async function listAdminNotifications(filter: AdminNotificationFilter) {
   assertDatabaseConfigured();
-  const where: Prisma.OrderNotificationWhereInput | undefined = filter === "attention" ? { status: { in: ["FAILED_RETRYABLE", "FAILED_FINAL", "BOUNCED", "COMPLAINED", "SUPPRESSED"] } }
+  const where: Prisma.OrderNotificationWhereInput | undefined = filter === "attention" ? adminNotificationAttentionWhere(new Date())
     : filter === "pending" ? { status: { in: ["PENDING", "PROCESSING", "FAILED_RETRYABLE"] } }
       : filter === "sent" ? { status: { in: ["SENT", "DELIVERED"] } }
         : filter === "suppressed" ? { status: { in: ["BOUNCED", "COMPLAINED", "SUPPRESSED"] } }

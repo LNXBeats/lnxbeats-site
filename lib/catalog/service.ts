@@ -49,20 +49,71 @@ const adminInclude = {
 
 export async function listAdminCatalogProjects(query = "", status = "all") {
   assertDatabaseConfigured();
-  const search = query.trim().slice(0, 120);
-  const allowedStatuses = ["DRAFT", "IN_DEVELOPMENT", "PUBLISHED", "ARCHIVED"] as const;
-  const normalizedStatus = allowedStatuses.includes(status as typeof allowedStatuses[number]) ? status as typeof allowedStatuses[number] : null;
+  const { search, normalizedStatus } = adminCatalogFilters(query, status);
   return prisma.project.findMany({
-    where: {
-      ...(normalizedStatus ? { status: normalizedStatus } : {}),
-      ...(search ? { OR: [{ title: { contains: search, mode: "insensitive" } }, { slug: { contains: search, mode: "insensitive" } }] } : {}),
-    },
+    where: adminCatalogWhere(search, normalizedStatus),
     orderBy: [{ catalogPosition: "asc" }, { id: "asc" }],
     include: {
       _count: { select: { tracks: true, platformLinks: true } },
       assets: { where: { role: { in: ["COVER", "AUDIO_PREVIEW"] } }, select: { role: true } },
     },
   });
+}
+
+const ADMIN_CATALOG_PAGE_SIZE = 10;
+
+function adminCatalogFilters(query: string, status: string) {
+  const search = query.trim().slice(0, 120);
+  const allowedStatuses = ["DRAFT", "IN_DEVELOPMENT", "PUBLISHED", "ARCHIVED"] as const;
+  const normalizedStatus = allowedStatuses.includes(status as typeof allowedStatuses[number])
+    ? status as typeof allowedStatuses[number]
+    : null;
+  return { search, normalizedStatus };
+}
+
+function adminCatalogWhere(
+  search: string,
+  normalizedStatus: "DRAFT" | "IN_DEVELOPMENT" | "PUBLISHED" | "ARCHIVED" | null,
+) {
+  return {
+    ...(normalizedStatus ? { status: normalizedStatus } : {}),
+    ...(search ? { OR: [
+      { title: { contains: search, mode: "insensitive" as const } },
+      { slug: { contains: search, mode: "insensitive" as const } },
+    ] } : {}),
+  } satisfies Prisma.ProjectWhereInput;
+}
+
+export async function getAdminCatalogPage(query = "", status = "all", requestedPage = 1) {
+  assertDatabaseConfigured();
+  const { search, normalizedStatus } = adminCatalogFilters(query, status);
+  const where = adminCatalogWhere(search, normalizedStatus);
+  const total = await prisma.project.count({ where });
+  const pageCount = Math.max(1, Math.ceil(total / ADMIN_CATALOG_PAGE_SIZE));
+  const page = Math.min(Math.max(Number.isSafeInteger(requestedPage) ? requestedPage : 1, 1), pageCount);
+  const [projects, featured, statusCounts] = await Promise.all([
+    prisma.project.findMany({
+      where,
+      orderBy: [{ catalogPosition: "asc" }, { id: "asc" }],
+      skip: (page - 1) * ADMIN_CATALOG_PAGE_SIZE,
+      take: ADMIN_CATALOG_PAGE_SIZE,
+      include: {
+        _count: { select: { tracks: true, platformLinks: true } },
+        assets: { where: { role: { in: ["COVER", "AUDIO_PREVIEW"] } }, select: { role: true } },
+      },
+    }),
+    prisma.project.findFirst({ where: { featured: true }, select: { title: true, slug: true } }),
+    prisma.project.groupBy({ by: ["status"], _count: { _all: true } }),
+  ]);
+  return {
+    projects,
+    featured,
+    total,
+    page,
+    pageCount,
+    pageSize: ADMIN_CATALOG_PAGE_SIZE,
+    counts: Object.fromEntries(statusCounts.map((item) => [item.status, item._count._all])) as Partial<Record<"DRAFT" | "IN_DEVELOPMENT" | "PUBLISHED" | "ARCHIVED", number>>,
+  };
 }
 
 export async function getAdminCatalogProject(slug: string) {
