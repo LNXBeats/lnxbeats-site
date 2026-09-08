@@ -206,7 +206,8 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-archive-list > li > span { color: #8f8a82; font-size: .68rem; text-align: right; }
 .admin-archive-list > li > p { grid-column: 1 / -1; margin: .25rem 0 0; color: #aaa59c; font-size: .72rem; line-height: 1.55; }
 .admin-template-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; }
-.admin-template-grid article, .admin-card-list > *, .admin-card-list article { padding: 1rem; border: 1px solid rgba(244,240,232,.1); border-radius: 14px; background: rgba(255,255,255,.02); }
+.admin-template-grid--offers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-template-grid article, .admin-card-list > *, .admin-card-list article { min-width: 0; padding: 1rem; border: 1px solid rgba(244,240,232,.1); border-radius: 14px; background: rgba(255,255,255,.02); }
 .admin-template-grid h3 { margin-top: 0; }
 .admin-template-grid form { display: grid; gap: .75rem; }
 .admin-alert { padding: 1rem; border: 1px solid rgba(214,179,106,.38); border-radius: 14px; background: rgba(214,179,106,.08); color: #ead39f; line-height: 1.6; }
@@ -215,8 +216,16 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-definition-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0; }
 .admin-definition-grid div { padding: 1rem 0; border-top: 1px solid rgba(244,240,232,.1); }
 .admin-definition-grid dt { color: #8f8a82; font-size: .65rem; text-transform: uppercase; }
-.admin-definition-grid dd { display: grid; gap: .25rem; margin: .35rem 0 0; }
+.admin-definition-grid dd { display: grid; min-width: 0; gap: .25rem; margin: .35rem 0 0; overflow-wrap: anywhere; }
 .admin-definition-grid small { color: #918d85; }
+.admin-operations-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; margin-bottom: 1.25rem; }
+.admin-operations-strip > div { display: grid; min-width: 0; gap: .3rem; padding: .85rem 1rem; border: 1px solid rgba(244,240,232,.11); border-radius: 13px; background: rgba(255,255,255,.025); }
+.admin-operations-strip span { color: #8f8a82; font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; }
+.admin-operations-strip strong { color: #ead39f; font-size: .72rem; overflow-wrap: anywhere; }
+.admin-pagination { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border-top: 1px solid rgba(244,240,232,.1); color: #aaa59c; font-size: .72rem; }
+.admin-pagination a { display: inline-flex; min-height: 44px; align-items: center; color: #e5c982; font-weight: 700; }
+.admin-pagination > span:not([aria-disabled]) { color: #d8d2c7; font-variant-numeric: tabular-nums; }
+.admin-pagination [aria-disabled="true"] { opacity: .45; }
 .admin-json { max-height: 28rem; overflow: auto; padding: 1rem; border-radius: 12px; background: #080807; color: #d8d2c7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .admin-card-list { display: grid; gap: .7rem; margin: 1rem 0 0; padding: 0; list-style: none; }
 .admin-card-list > * { display: grid; gap: .3rem; }
@@ -819,6 +828,7 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-project-state-grid > div { border-top: 1px solid rgba(244, 240, 232, 0.09); border-left: 0 !important; }
   .admin-project-state-grid > div:nth-child(-n + 2) { border-top: 0; }
   .admin-project-state-grid > div:nth-child(even) { border-left: 1px solid rgba(244, 240, 232, 0.09) !important; }
+  .admin-operations-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
@@ -855,6 +865,9 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-overview-card { min-height: 220px; gap: 1rem; padding: 1.25rem; }
   .admin-overview-card > div > strong { font-size: clamp(3rem, 15vw, 4.5rem); }
   .admin-overview-card > div > .admin-overview-card__title { font-size: clamp(1.65rem, 8vw, 2.4rem); }
+  .admin-operations-strip { grid-template-columns: 1fr 1fr; }
+  .admin-pagination { flex-wrap: wrap; justify-content: center; padding-inline: .75rem; text-align: center; }
+  .admin-pagination > span:not([aria-disabled]) { order: -1; width: 100%; }
   .admin-page-heading { gap: 1rem; margin-bottom: 1.75rem; }
   .admin-page-heading h1,
   .admin-order-hero h1 { max-width: 13ch; font-size: clamp(2.2rem, 10.5vw, 3.25rem); line-height: 0.96; overflow-wrap: anywhere; }

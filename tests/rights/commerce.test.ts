@@ -137,6 +137,12 @@ test("the Admin rights page separates offers, requests, legal models and fail-cl
   assert.ok(offersIndex >= 0 && requestsIndex > offersIndex && templatesIndex > requestsIndex && diagnosticIndex > templatesIndex);
   assert.match(page, /MODULE DROITS &amp; CONTRATS NON OUVERT/);
   assert.match(page, /Validation juridique des modèles/);
+  assert.match(page, /contractTemplateTypeLabels/);
+  assert.match(page, /admin-template-grid admin-template-grid--offers/);
+  assert.match(await readFile("app/admin/admin.css", "utf8"), /\.admin-template-grid--offers \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(page, /PUBLICATION_LICENSE: "Licence de publication"/);
+  assert.match(page, /EXPLOITATION_PARTNERSHIP: "Partenariat d’exploitation"/);
+  assert.doesNotMatch(page, /<dt>Modèle<\/dt><dd>\{offer\.requiredTemplateType\}<\/dd>/);
   assert.match(page, /Les 1 500 € correspondent à l’offre LNX Beats de partenariat d’exploitation/);
   assert.match(page, /Ce n’est ni un tarif SACEM, ni une garantie d’éligibilité, de déclaration ou de répartition/);
   assert.match(page, /<dt>Paiement activable<\/dt><dd>\{offer\.paymentReady && commerce\.open \? "Oui" : "Non"\}<\/dd>/);

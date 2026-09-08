@@ -25,6 +25,11 @@ const commerceStateLabels = {
   OPEN: "Ouvert",
 } as const;
 
+const contractTemplateTypeLabels = {
+  PUBLICATION_LICENSE: "Licence de publication",
+  EXPLOITATION_PARTNERSHIP: "Partenariat d’exploitation",
+} as const;
+
 const readinessReasonLabels: Record<RightsCommerceReason, string> = {
   REQUIRED_TEMPLATE_MISSING: "Modèle contractuel requis absent",
   TEMPLATE_SOURCE_INVALID: "Source du modèle invalide",
@@ -79,7 +84,7 @@ export default async function AdminRightsPage({ searchParams }: { searchParams: 
           <p className="admin-section-label">Offres</p>
           <h2 id="rights-offers-title">Offres LNX Beats.</h2>
         </div>
-        <div className="admin-template-grid">
+        <div className="admin-template-grid admin-template-grid--offers">
           {commerce.offers.map((offer) => (
             <article key={offer.type}>
               <h3>{offer.label}</h3>
@@ -90,7 +95,7 @@ export default async function AdminRightsPage({ searchParams }: { searchParams: 
               ) : null}
               <dl className="admin-definition-grid">
                 <div><dt>Statut</dt><dd>{offer.reasons.length ? "Verrouillée" : "Prête techniquement"}</dd></div>
-                <div><dt>Modèle</dt><dd>{offer.requiredTemplateType}</dd></div>
+                <div><dt>Modèle</dt><dd>{contractTemplateTypeLabels[offer.requiredTemplateType]}</dd></div>
                 <div><dt>Version</dt><dd>{offer.templateVersion ?? "Aucune"}</dd></div>
                 <div><dt>Validation juridique</dt><dd>{offer.legalReviewApproved ? "Référencée" : "Requise"}</dd></div>
                 <div><dt>Paiement activable</dt><dd>{offer.paymentReady && commerce.open ? "Oui" : "Non"}</dd></div>

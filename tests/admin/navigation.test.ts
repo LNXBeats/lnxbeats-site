@@ -76,3 +76,14 @@ test("cleanup and archive surfaces keep safe actions readable on narrow screens"
   assert.match(css, /\.admin-archive-list > li :is\(strong, span, p\) \{[^}]*overflow-wrap: anywhere;/);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*?\.admin-cleanup-list > li,[\s\S]*?\.admin-archive-list > li \{ grid-template-columns: 1fr; \}/);
 });
+
+test("Admin operational states remain structured and readable on narrow screens", () => {
+  const [page, css] = [
+    readFileSync("app/admin/boutique/page.tsx", "utf8"),
+    readFileSync("app/admin/admin.css", "utf8"),
+  ];
+  assert.match(page, /className="admin-operations-strip"/);
+  assert.match(css, /\.admin-operations-strip \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.admin-operations-strip > div \{[^}]*display: grid;[^}]*gap: \.3rem;/);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*?\.admin-operations-strip \{ grid-template-columns: 1fr 1fr; \}/);
+});
