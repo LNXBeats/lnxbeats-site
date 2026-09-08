@@ -63,25 +63,21 @@ test("rights commerce is blocked when required legal templates are absent", () =
   assert.ok(readiness.offers.every((offer) => offer.reasons.includes("LEGAL_REVIEW_REQUIRED")));
 });
 
-test("legal approval alone cannot open the single offer without renderer, billing, payment and activation", () => {
+test("tested code capabilities still cannot open the offer without the explicit opening decision", () => {
   const readiness = evaluateRightsCommerceReadiness([
     template("PUBLICATION_LICENSE"),
   ]);
 
-  assert.equal(readiness.state, "BLOCKED");
+  assert.equal(readiness.state, "READY_NOT_OPEN");
   assert.equal(readiness.open, false);
+  assert.equal(readiness.openingRequested, false);
   assert.ok(readiness.offers.every((offer) => offer.templateSourceValid));
   assert.ok(readiness.offers.every((offer) => offer.legalReviewApproved));
-  assert.ok(readiness.offers.every((offer) => !offer.rendererBound));
-  assert.ok(readiness.offers.every((offer) => !offer.billingReady));
-  assert.ok(readiness.offers.every((offer) => !offer.paymentReady));
-  assert.ok(readiness.offers.every((offer) => !offer.activationReady));
-  assert.deepEqual(readiness.reasons, [
-    "TEMPLATE_RENDERER_BINDING_MISSING",
-    "RIGHTS_BILLING_UNAVAILABLE",
-    "RIGHTS_PAYMENT_UNAVAILABLE",
-    "RIGHTS_ACTIVATION_UNAVAILABLE",
-  ]);
+  assert.ok(readiness.offers.every((offer) => offer.rendererBound));
+  assert.ok(readiness.offers.every((offer) => offer.billingReady));
+  assert.ok(readiness.offers.every((offer) => offer.paymentReady));
+  assert.ok(readiness.offers.every((offer) => offer.activationReady));
+  assert.deepEqual(readiness.reasons, []);
   assert.throws(
     () => assertRightsCommerceOpen([
       template("PUBLICATION_LICENSE"),

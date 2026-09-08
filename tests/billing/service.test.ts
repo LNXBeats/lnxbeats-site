@@ -151,6 +151,35 @@ function musicTransaction() {
   return { transaction: transaction as unknown as InvoiceTransaction, payment, state };
 }
 
+function rightsTransaction(input: { firstName?: string | null; lastName?: string | null; companyName?: string | null } = {}) {
+  const state: InvoiceState = { sequenceAllocations: 0, invoiceCreates: 0, billingAuditCreates: 0 };
+  const paidAt = new Date("2099-01-02T11:00:00.000Z");
+  const payment = {
+    id: "rights-payment", orderId: null, shopOrderId: null, rightsRequestId: "rights-request",
+    provider: "PAYPAL", paymentMethod: "PAYPAL", status: "SUCCEEDED", paidAt,
+    amountCents: 15_000, currency: "EUR", pricingVersion: "2026-09-publication-license-v1",
+  };
+  const transaction = {
+    $executeRaw: async () => 1,
+    $queryRaw: async () => { state.sequenceAllocations += 1; return [{ value: BigInt(state.sequenceAllocations) }]; },
+    invoice: {
+      findUnique: async () => null,
+      create: async ({ data }: { data: Record<string, unknown> }) => { state.invoiceCreates += 1; return { id: "rights-invoice", ...data }; },
+    },
+    payment: { findUnique: async () => payment },
+    order: { findUnique: async () => null }, shopOrder: { findUnique: async () => null }, user: { findUnique: async () => null }, shopOrderItem: { findMany: async () => [] },
+    rightsRequest: { findUnique: async () => ({
+      id: payment.rightsRequestId, requestNumber: "LNX-LIC-2099-000001", type: "PUBLICATION_LICENSE", status: "READY_FOR_PAYMENT",
+      requestedPriceCents: 15_000, currency: "EUR", pricingVersion: "2026-09-publication-license-v1", workTitle: "Œuvre fictive", userId: "member-id",
+      owner: { email: "mutable-profile@example.invalid" },
+      partySnapshots: [{ confirmedAt: new Date("2098-12-01T10:00:00.000Z"), partyType: "INDIVIDUAL", firstName: input.firstName === undefined ? "Camille" : input.firstName, lastName: input.lastName === undefined ? "Exemple" : input.lastName, companyName: input.companyName ?? null, contractEmail: "contract-snapshot@example.invalid", streetAddress: "4 rue Fictive", postalCode: "75001", city: "Paris", country: "FR" }],
+      documents: [{ templateVersion: 2, documentHashSha256: "c".repeat(64) }],
+    }) },
+    billingAuditEvent: { create: async () => { state.billingAuditCreates += 1; return { id: "rights-audit" }; } },
+  };
+  return { transaction: transaction as unknown as InvoiceTransaction, payment, state };
+}
+
 test("Shop Stripe invoices use the immutable shipping name instead of a generic member profile", async () => {
   const fixture = shopTransaction({
     provider: "STRIPE",
@@ -217,4 +246,24 @@ test("Commander invoice identity remains sourced from the music order", async ()
   assert.equal(customer.name, "Cliente Commander");
   assert.equal(customer.email, "commander@example.invalid");
   assert.equal(fixture.state.sequenceAllocations, 1);
+});
+
+test("Rights invoices use the immutable confirmed contract-party snapshot", async () => {
+  const fixture = rightsTransaction();
+  const result = await issueInvoiceForPayment(fixture.transaction, fixture.payment.id, { issuedAt: new Date("2099-01-02T12:03:00.000Z") });
+  const customer = result.invoice.customerSnapshot as { name: string; email: string; billingAddress: { line1: string } };
+  assert.equal(result.invoice.documentType, "RIGHTS");
+  assert.equal(result.invoice.orderNumberSnapshot, "LNX-LIC-2099-000001");
+  assert.equal(result.invoice.totalCents, 15_000);
+  assert.equal(customer.name, "Camille Exemple");
+  assert.equal(customer.email, "contract-snapshot@example.invalid");
+  assert.equal(customer.billingAddress.line1, "4 rue Fictive");
+  assert.equal(fixture.state.sequenceAllocations, 1);
+});
+
+test("Rights invoice identity fails closed before sequence allocation when the confirmed snapshot is incomplete", async () => {
+  const fixture = rightsTransaction({ firstName: null, lastName: null });
+  await assert.rejects(issueInvoiceForPayment(fixture.transaction, fixture.payment.id), (error: unknown) => error instanceof BillingServiceError && error.code === "INVOICE_CUSTOMER_SNAPSHOT_INVALID");
+  assert.equal(fixture.state.sequenceAllocations, 0);
+  assert.equal(fixture.state.invoiceCreates, 0);
 });

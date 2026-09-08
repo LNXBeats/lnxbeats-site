@@ -71,10 +71,10 @@ test("contract presentation uses the Admin RightsGrant as its contractual source
     "13. SACEM / gestion collective",
     "14. Obligations des parties",
     "15. Entrée en vigueur",
-    "16. Rétractation et commencement anticipé",
+    "16. Rétractation",
     "17. Retrait et fin de la licence",
     "18. Responsabilité, droit applicable et litiges",
-    "19. Statut DRAFT / validation juridique",
+    "19. Statut DRAFT / approbation",
   ]);
   assert.match(rendered, /Durée contractuelle : cinq ans/);
   assert.doesNotMatch(rendered, /Durée contractuelle : 2 ans\./);
@@ -92,13 +92,13 @@ test("contract presentation uses the Admin RightsGrant as its contractual source
   assert.match(rendered, /sous-licence : non/);
   assert.match(rendered, /Aucune répartition n’est promise\. Aucune déclaration SACEM n’est effectuée/);
   assert.match(rendered, /Prix unique de la licence : 150 €\./);
-  assert.match(rendered, /Aucun paiement au titre de cette licence n’est ouvert à ce stade/);
+  assert.match(rendered, /Le paiement ne rend pas la licence immédiatement active/);
   assert.match(rendered, /L’acceptation du présent projet ne suffit pas à rendre la licence active/);
-  assert.match(rendered, /validation de LNX Beats/);
+  assert.match(rendered, /approbation référencée du modèle/);
   assert.match(rendered, /monde entier/);
-  assert.match(rendered, /Aucun commencement anticipé n’est automatique/);
+  assert.match(rendered, /Aucun commencement anticipé ni renoncement anticipé n’est proposé/);
   assert.match(rendered, /mise en demeure écrite restée sans effet pendant trente jours/);
-  assert.match(rendered, /VALIDATION JURIDIQUE EXTERNE REQUISE/);
+  assert.match(rendered, /APPROBATION JURIDIQUE RÉFÉRENCÉE REQUISE/);
   assert.doesNotMatch(rendered, /acceptation QA|validation Admin|Montant cible futur/i);
   assert.doesNotMatch(rendered, /STORY_BRIEF_ONLY|SPOTIFY|APPLE_MUSIC|DEEZER/);
   assert.doesNotMatch(rendered, /\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/);

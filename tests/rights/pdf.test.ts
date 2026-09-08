@@ -172,15 +172,15 @@ test("the Safari C03 licence PDF uses final grants, client vocabulary, and balan
   assert.doesNotMatch(rendered, /STORY_BRIEF_ONLY/);
   assert.match(rendered, /Élégie d’été/);
   assert.match(rendered, /LNX Beats — création musicale/);
-  assert.match(rendered, /PROJET - NON ACTIF - VALIDATION JURIDIQUE EXTERNE REQUISE/);
+  assert.match(rendered, /PROJET - NON ACTIF - APPROBATION JURIDIQUE RÉFÉRENCÉE REQUISE/);
   assert.match(rendered, /Aucune répartition n’est promise/);
   assert.match(rendered, /Aucune déclaration SACEM n’est effectuée/);
   assert.match(rendered, /Prix unique de la licence : 150 €\./);
   assert.doesNotMatch(rendered, /Montant cible futur/);
   assert.match(rendered, /L’acceptation du présent projet ne suffit pas à rendre la licence active/);
-  assert.match(rendered, /Aucun\s+commencement anticipé n’est automatique/);
+  assert.match(rendered, /Aucun\s+commencement anticipé ni\s+renoncement anticipé n’est proposé/);
   assert.match(rendered, /mise en demeure écrite\s+restée sans effet pendant trente jours/);
-  assert.match(rendered, /médiateur indiqué dans les mentions légales/);
+  assert.match(rendered, /CM2C selon les coordonnées indiquées dans les mentions légales/);
   assert.doesNotMatch(rendered, /acceptation QA|validation Admin/i);
   assert.match(result.sha256, /^[a-f0-9]{64}$/);
   const forbidden = [

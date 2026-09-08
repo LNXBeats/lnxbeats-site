@@ -42,7 +42,7 @@ test("client content is escaped before deterministic rendering", () => {
 
 test("publication template carries the locked 150 euro contract decisions", () => {
   const rendered = renderContractTemplate(publicationLicenseDraftTemplate, values);
-  for (const term of ["non exclusive", "monde entier", "cinq ans", "150,00 EUR", "distributeur numérique", "transférer ni revendre", "adaptation substantielle", "Content ID exclusif", "paiement confirmé", "reproduction", "communication au public", "délai légal de rétractation", "demande expresse distincte", "sans case précochée", "mise en demeure", "droit français", "médiateur", "VALIDATION JURIDIQUE EXTERNE REQUISE"]) {
+  for (const term of ["non exclusive", "monde entier", "cinq ans", "150,00 EUR", "distributeur numérique", "transférer ni revendre", "adaptation substantielle", "Content ID exclusif", "paiement confirmé", "reproduction", "communication au public", "délai légal de rétractation", "Aucun commencement anticipé", "reste sans effet pendant toute la période", "mise en demeure", "droit français", "CM2C", "VALIDATION JURIDIQUE RÉFÉRENCÉE REQUISE"]) {
     assert.match(rendered, new RegExp(term, "i"));
   }
   assert.doesNotMatch(rendered, /1[ .]?500|partenariat d’exploitation|tarif SACEM/i);

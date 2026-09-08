@@ -58,7 +58,7 @@ test("database gates make legal approval and activation non-bypassable", async (
   assert.match(migration, /ON DELETE RESTRICT/g);
 });
 
-test("rights application code has no Stripe or rights payment creation path", async () => {
+test("the contract workflow cannot create payments and delegates commerce to the separately gated subsystem", async () => {
   const sources = await Promise.all([
     readFile("lib/rights/service.ts", "utf8"),
     readFile("lib/rights/workflow.ts", "utf8"),
@@ -68,6 +68,10 @@ test("rights application code has no Stripe or rights payment creation path", as
   assert.doesNotMatch(joined, /from ["']stripe["']/);
   assert.doesNotMatch(joined, /\.payment\.(?:create|upsert|update)/);
   assert.doesNotMatch(joined, /checkout\.sessions|PaymentIntent/);
+  const paymentConfig = await readFile("lib/rights/payment-config.ts", "utf8");
+  assert.match(paymentConfig, /RIGHTS_COMMERCE_ENABLED/);
+  assert.match(paymentConfig, /RIGHTS_PAYMENTS_ENABLED/);
+  assert.match(paymentConfig, /RIGHTS_PRODUCTION_CONFIRM/);
 });
 
 test("contract generation is guarded by workflow state and structured parameters", async () => {
