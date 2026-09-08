@@ -728,6 +728,7 @@ export async function listAdminRightsCases(input: { type?: string; status?: stri
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: 200,
     select: {
+      id: true,
       requestNumber: true,
       type: true,
       status: true,
@@ -737,10 +738,19 @@ export async function listAdminRightsCases(input: { type?: string; status?: stri
       createdAt: true,
       updatedAt: true,
       order: { select: { orderNumber: true, priorityProcessing: true } },
-      owner: { select: { displayName: true, email: true } },
+      owner: { select: { displayName: true } },
       _count: { select: { documents: true, messages: true } },
     },
   });
+}
+
+export async function listAdminRightsArchiveIds() {
+  assertDatabaseConfigured();
+  const archives = await prisma.adminRecordArchive.findMany({
+    where: { recordType: "RIGHTS_REQUEST" },
+    select: { recordId: true },
+  });
+  return new Set(archives.map((archive) => archive.recordId));
 }
 
 export async function getAdminRightsCase(requestNumber: string) {

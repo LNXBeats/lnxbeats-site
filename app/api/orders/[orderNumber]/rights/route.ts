@@ -3,7 +3,7 @@ import { enforceOrderRateLimit } from "@/lib/orders/service";
 import { rightsErrorResponse } from "@/lib/rights/http";
 import { parseRightsDraftInput } from "@/lib/rights/input";
 import { readRightsJson, rightsRequestDependencies } from "@/lib/rights/request";
-import { createRightsDraft } from "@/lib/rights/service";
+import { assertRightsNewRequestsEnabled, createMemberRightsDraft } from "@/lib/rights/service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,10 +15,13 @@ export async function POST(request: Request, context: RouteContext) {
   const actor = await rightsRequestDependencies.actor(request.headers);
   if (!actor) return orderJson({ error: "Authentification requise." }, 401);
   try {
+    // Refuse a closed offer before the rate-limit write. The service repeats
+    // this gate so non-HTTP callers retain the same fail-closed boundary.
+    assertRightsNewRequestsEnabled();
     await enforceOrderRateLimit(actor.id, "rights");
     const { orderNumber } = await context.params;
     const input = parseRightsDraftInput(await readRightsJson(request));
-    return orderJson({ request: await createRightsDraft(actor, orderNumber, input) }, 201);
+    return orderJson({ request: await createMemberRightsDraft(actor, orderNumber, input) }, 201);
   } catch (error) {
     return rightsErrorResponse(error);
   }

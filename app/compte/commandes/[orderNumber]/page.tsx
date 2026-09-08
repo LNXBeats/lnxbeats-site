@@ -169,7 +169,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           )}
         </section>
 
-        {order.status === "DELIVERED" && order.deliveries.length ? <RightsOptionsSection orderNumber={order.orderNumber} requests={rightsRequests} /> : null}
+        {order.status === "DELIVERED" && order.deliveries.length ? <RightsOptionsSection requests={rightsRequests} /> : null}
 
         <section className="order-detail__section" aria-labelledby="order-brief-title">
           <p className="auth-panel__label">Récapitulatif</p>

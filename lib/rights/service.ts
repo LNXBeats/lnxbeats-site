@@ -12,6 +12,7 @@ import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/sto
 import { enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { activeRightsStatuses, canCreateRightsRequest, formatRightsNumber, rightsPriceSnapshot } from "@/lib/rights/domain";
+import { RIGHTS_NEW_REQUESTS_ENABLED } from "@/lib/rights/commerce";
 import { buildRightsDocumentSections, formatRightsCurrency, humanRightsContribution, humanRightsPlatform } from "@/lib/rights/document-presentation";
 import type { RightsDraftInput } from "@/lib/rights/input";
 import { generateContractPdf } from "@/lib/rights/pdf";
@@ -333,6 +334,21 @@ export async function createRightsDraft(actor: OrderActor, orderNumber: string, 
     if (!persisted) throw new RightsServiceError("Cette demande est introuvable.", 404, "RIGHTS_REQUEST_NOT_FOUND");
     return serializeRightsRequest(persisted);
   });
+}
+
+export function assertRightsNewRequestsEnabled() {
+  if (!RIGHTS_NEW_REQUESTS_ENABLED) {
+    throw new RightsServiceError(
+      "Cette offre n’est pas ouverte aux nouvelles demandes.",
+      409,
+      "RIGHTS_COMMERCE_NOT_OPEN",
+    );
+  }
+}
+
+export async function createMemberRightsDraft(actor: OrderActor, orderNumber: string, input: RightsDraftInput) {
+  assertRightsNewRequestsEnabled();
+  return createRightsDraft(actor, orderNumber, input);
 }
 
 function partyDisplayName(party: RequestWithRelations["partySnapshots"][number]) {
