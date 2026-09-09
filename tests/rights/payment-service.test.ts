@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createPaypalOrderForRights, createStripeCheckoutForRights, rightsPaymentReturnUrls } from "@/lib/rights/payment-service";
+import { capturePaypalOrderForRights, createPaypalOrderForRights, createStripeCheckoutForRights, rightsPaymentReturnUrls } from "@/lib/rights/payment-service";
 import type { RightsPaymentActor, ReservedRightsPaymentAttempt } from "@/lib/rights/payment-types";
 
 const actor: RightsPaymentActor = { id: "11111111-1111-4111-8111-111111111111", email: "member@example.invalid", role: "MEMBER", status: "ACTIVE", emailVerified: true };
@@ -68,4 +68,24 @@ test("contract acceptance is mandatory before any repository or provider operati
   const deps = { repository: { ...repository(), reserveAttempt: async () => { called = true; return attempt; } } as never, baseUrl: "https://www.lnxbeats.fr", mode: "TEST" as const, skipGate: true };
   await assert.rejects(createStripeCheckoutForRights(actor, attempt.requestNumber, false, deps), /RIGHTS_CONTRACT_ACCEPTANCE_REQUIRED/);
   assert.equal(called, false);
+});
+
+test("closing new sales does not strand capture of an existing PayPal order", async () => {
+  let captured = 0;
+  const result = await capturePaypalOrderForRights(actor, attempt.requestNumber, "PAYPAL-ORDER", {
+    repository: repository() as never,
+    baseUrl: "https://www.lnxbeats.fr",
+    mode: "TEST",
+    paypal: {
+      createOrder: async () => { throw new Error("unexpected create"); },
+      retrieveOrder: async () => { throw new Error("unexpected retrieve"); },
+      captureOrder: async () => {
+        captured += 1;
+        return { providerOrderId: "PAYPAL-ORDER", captureId: "CAPTURE-FICTIVE", status: "COMPLETED", amountCents: 15_000, currency: "EUR", occurredAt: new Date(), paymentId: attempt.paymentId, evidenceConsistent: true };
+      },
+      verifyWebhook: async () => false,
+    },
+  });
+  assert.equal(captured, 1);
+  assert.equal(result.outcome, "PROCESSED");
 });

@@ -5,7 +5,7 @@ import { RightsRequestForm } from "@/components/rights-request-form";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
-import { RIGHTS_NEW_REQUESTS_ENABLED } from "@/lib/rights/commerce";
+import { loadRightsCommerceReadiness } from "@/lib/rights/commerce";
 import { publicationLicenseEligibility } from "@/lib/rights/domain";
 import { publicationLicenseTerms, rightsOffers } from "@/data/rights-offer";
 import { listRightsRequestsForOrderActor } from "@/lib/rights/service";
@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Licence de publication", robots: { index: false, follow: false } };
 
 export default async function PublicationLicensePage({ params }: { params: Promise<{ orderNumber: string }> }) {
-  if (!RIGHTS_NEW_REQUESTS_ENABLED) notFound();
+  const commerce = await loadRightsCommerceReadiness();
+  if (!commerce.open) notFound();
   const { orderNumber } = await params;
   const session = await requireVerifiedUser(`/compte/commandes/${orderNumber}/droits/licence`);
   const actor: OrderActor = { id: session.user.id, email: session.user.email, name: session.user.name, role: session.user.role, status: "ACTIVE", emailVerified: true };

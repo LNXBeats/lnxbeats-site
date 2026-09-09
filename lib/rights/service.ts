@@ -12,7 +12,7 @@ import { deletePrivateOrderFile, writePrivateOrderMedia } from "@/lib/orders/sto
 import { enqueueOrderNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { activeRightsStatuses, formatRightsNumber, publicationLicenseEligibility, rightsPriceSnapshot } from "@/lib/rights/domain";
-import { RIGHTS_NEW_REQUESTS_ENABLED } from "@/lib/rights/commerce";
+import { loadRightsCommerceReadiness } from "@/lib/rights/commerce";
 import { buildRightsDocumentSections, formatRightsCurrency, humanRightsContribution, humanRightsPlatform } from "@/lib/rights/document-presentation";
 import type { RightsDraftInput } from "@/lib/rights/input";
 import { generateContractPdf } from "@/lib/rights/pdf";
@@ -388,8 +388,9 @@ export async function createRightsDraft(actor: OrderActor, orderNumber: string, 
   });
 }
 
-export function assertRightsNewRequestsEnabled() {
-  if (!RIGHTS_NEW_REQUESTS_ENABLED) {
+export async function assertRightsNewRequestsEnabled() {
+  const readiness = await loadRightsCommerceReadiness();
+  if (!readiness.open) {
     throw new RightsServiceError(
       "Cette offre n’est pas ouverte aux nouvelles demandes.",
       409,
@@ -399,7 +400,7 @@ export function assertRightsNewRequestsEnabled() {
 }
 
 export async function createMemberRightsDraft(actor: OrderActor, orderNumber: string, input: RightsDraftInput) {
-  assertRightsNewRequestsEnabled();
+  await assertRightsNewRequestsEnabled();
   return createRightsDraft(actor, orderNumber, input);
 }
 

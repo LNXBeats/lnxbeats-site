@@ -27,14 +27,14 @@ test("les routes membre et l’API refusent toute nouvelle demande tant que le c
     readFile("lib/rights/service.ts", "utf8"),
     readFile("lib/rights/commerce.ts", "utf8"),
   ]);
-  assert.match(commerce, /RIGHTS_NEW_REQUESTS_ENABLED: boolean = false/);
-  assert.match(publicationPage, /if \(!RIGHTS_NEW_REQUESTS_ENABLED\) notFound\(\)/);
+  assert.match(commerce, /loadRightsCommerceReadiness/);
+  assert.match(publicationPage, /if \(!commerce\.open\) notFound\(\)/);
   assert.doesNotMatch(partnershipPage, /RightsRequestForm|RIGHTS_NEW_REQUESTS_ENABLED/);
   assert.match(partnershipPage, /notFound\(\)/);
   assert.match(api, /createMemberRightsDraft/);
   assert.doesNotMatch(api, /\bcreateRightsDraft\b/);
   assert.ok(api.indexOf("assertRightsNewRequestsEnabled();") < api.indexOf('enforceOrderRateLimit(actor.id, "rights")'));
-  assert.match(service, /if \(!RIGHTS_NEW_REQUESTS_ENABLED\)/);
+  assert.match(service, /if \(!readiness\.open\)/);
   assert.match(service, /RIGHTS_COMMERCE_NOT_OPEN/);
 });
 

@@ -6,9 +6,9 @@ import { rightsOffers, type RightsOfferType } from "@/data/rights-offer";
 import {
   assertRightsCommerceOpen,
   evaluateRightsCommerceReadiness,
-  RIGHTS_NEW_REQUESTS_ENABLED,
   type RightsCommerceTemplate,
 } from "@/lib/rights/commerce";
+import { publicationLicenseDraftTemplate } from "@/lib/rights/templates";
 
 function template(
   type: RightsOfferType,
@@ -16,9 +16,9 @@ function template(
 ): RightsCommerceTemplate {
   return {
     type,
-    version: 1,
+    version: 3,
     status: "APPROVED",
-    sourceMarkup: "# Conditions {{contractNumber}} — {{workTitle}}",
+    sourceMarkup: publicationLicenseDraftTemplate,
     approvedAt: new Date("2026-09-08T10:00:00.000Z"),
     approvedByAdminId: "00000000-0000-4000-8000-000000000001",
     legalReviewReference: "REVUE-JURIDIQUE-QA",
@@ -48,12 +48,8 @@ test("rights commerce publishes only the server-owned 150 euro offer", () => {
   assert.equal(offers.EXPLOITATION_PARTNERSHIP, undefined);
 });
 
-test("new member rights requests are explicitly closed while offers are blocked", () => {
-  assert.equal(RIGHTS_NEW_REQUESTS_ENABLED, false);
-});
-
 test("rights commerce is blocked when required legal templates are absent", () => {
-  const readiness = evaluateRightsCommerceReadiness([]);
+  const readiness = evaluateRightsCommerceReadiness([], {});
 
   assert.equal(readiness.state, "BLOCKED");
   assert.equal(readiness.open, false);
@@ -63,10 +59,10 @@ test("rights commerce is blocked when required legal templates are absent", () =
   assert.ok(readiness.offers.every((offer) => offer.reasons.includes("LEGAL_REVIEW_REQUIRED")));
 });
 
-test("tested code capabilities still cannot open the offer without the explicit opening decision", () => {
+test("tested code capabilities remain ready but closed when no opening is requested", () => {
   const readiness = evaluateRightsCommerceReadiness([
     template("PUBLICATION_LICENSE"),
-  ]);
+  ], {});
 
   assert.equal(readiness.state, "READY_NOT_OPEN");
   assert.equal(readiness.open, false);
@@ -81,28 +77,67 @@ test("tested code capabilities still cannot open the offer without the explicit 
   assert.throws(
     () => assertRightsCommerceOpen([
       template("PUBLICATION_LICENSE"),
-    ]),
+    ], {}),
     /RIGHTS_COMMERCE_NOT_OPEN/,
   );
 });
 
-test("the latest required template must itself carry a valid legal approval", () => {
+test("a partial opening request is blocked with actionable runtime reasons", () => {
   const readiness = evaluateRightsCommerceReadiness([
-    template("PUBLICATION_LICENSE", { version: 1 }),
+    template("PUBLICATION_LICENSE"),
+  ], { RIGHTS_COMMERCE_ENABLED: "true" });
+
+  assert.equal(readiness.state, "BLOCKED");
+  assert.equal(readiness.openingRequested, true);
+  assert.deepEqual(readiness.reasons, ["RIGHTS_PAYMENT_CONFIGURATION_INCOMPLETE"]);
+});
+
+test("complete local configuration opens only an approved valid template", () => {
+  const environment = { RIGHTS_COMMERCE_ENABLED: "true", RIGHTS_PAYMENTS_ENABLED: "true" };
+  const readiness = evaluateRightsCommerceReadiness([template("PUBLICATION_LICENSE")], environment);
+  assert.equal(readiness.state, "OPEN");
+  assert.equal(readiness.open, true);
+  assert.doesNotThrow(() => assertRightsCommerceOpen([template("PUBLICATION_LICENSE")], environment));
+
+  const draft = evaluateRightsCommerceReadiness([template("PUBLICATION_LICENSE", {
+    status: "DRAFT", approvedAt: null, approvedByAdminId: null, legalReviewReference: null,
+  })], environment);
+  assert.equal(draft.state, "BLOCKED");
+  assert.ok(draft.reasons.includes("LEGAL_REVIEW_REQUIRED"));
+});
+
+test("Production needs the exact dedicated confirmation", () => {
+  const base = { NODE_ENV: "production", RIGHTS_COMMERCE_ENABLED: "true", RIGHTS_PAYMENTS_ENABLED: "true" };
+  const missing = evaluateRightsCommerceReadiness([template("PUBLICATION_LICENSE")], base);
+  assert.equal(missing.state, "BLOCKED");
+  assert.ok(missing.reasons.includes("RIGHTS_PRODUCTION_CONFIRMATION_REQUIRED"));
+});
+
+test("the offer is bound to the exact required v3 template, not a later draft", () => {
+  const readiness = evaluateRightsCommerceReadiness([
+    template("PUBLICATION_LICENSE"),
     template("PUBLICATION_LICENSE", {
-      version: 2,
+      version: 4,
       status: "DRAFT",
       approvedAt: null,
       approvedByAdminId: null,
       legalReviewReference: null,
     }),
-  ]);
+  ], {});
   const publication = readiness.offers.find((offer) => offer.type === "PUBLICATION_LICENSE");
 
-  assert.equal(publication?.templateVersion, 2);
-  assert.equal(publication?.templateStatus, "DRAFT");
-  assert.equal(publication?.legalReviewApproved, false);
-  assert.ok(publication?.reasons.includes("LEGAL_REVIEW_REQUIRED"));
+  assert.equal(publication?.templateVersion, 3);
+  assert.equal(publication?.templateStatus, "APPROVED");
+  assert.equal(publication?.legalReviewApproved, true);
+  assert.equal(publication?.rendererBound, true);
+});
+
+test("a syntactically valid but altered v3 source is not renderer-bound", () => {
+  const readiness = evaluateRightsCommerceReadiness([
+    template("PUBLICATION_LICENSE", { sourceMarkup: `${publicationLicenseDraftTemplate}\nTexte ajouté.` }),
+  ], { RIGHTS_COMMERCE_ENABLED: "true", RIGHTS_PAYMENTS_ENABLED: "true" });
+  assert.equal(readiness.state, "BLOCKED");
+  assert.ok(readiness.reasons.includes("TEMPLATE_RENDERER_BINDING_MISSING"));
 });
 
 test("the Admin rights page separates offers, requests, legal models and fail-closed diagnostics", async () => {
@@ -116,7 +151,7 @@ test("the Admin rights page separates offers, requests, legal models and fail-cl
   const templatesIndex = page.indexOf(">Modèles<");
   const diagnosticIndex = page.indexOf(">Diagnostic<");
   assert.ok(offersIndex >= 0 && requestsIndex > offersIndex && templatesIndex > requestsIndex && diagnosticIndex > templatesIndex);
-  assert.match(page, /MODULE DROITS &amp; CONTRATS NON OUVERT/);
+  assert.match(page, /MODULE DROITS & CONTRATS NON OUVERT/);
   assert.match(page, /Validation juridique des modèles/);
   assert.match(page, /contractTemplateTypeLabels/);
   assert.match(page, /admin-template-grid admin-template-grid--offers/);
@@ -132,5 +167,5 @@ test("the Admin rights page separates offers, requests, legal models and fail-cl
   assert.match(page, /<details className="admin-technical-details">/);
   assert.match(page, /<summary>DIAGNOSTIC AVANCÉ<\/summary>/);
   assert.doesNotMatch(page, /PRODUCTION BLOQUÉE/);
-  assert.doesNotMatch(commerce, /process\.env|RAILWAY|STRIPE|PAYPAL/);
+  assert.doesNotMatch(commerce, /RAILWAY|STRIPE|PAYPAL/);
 });

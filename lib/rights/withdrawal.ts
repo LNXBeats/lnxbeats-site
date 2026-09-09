@@ -18,7 +18,6 @@ import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-p
 import { parsePaymentsConfiguration } from "@/lib/payments/config";
 import { paypalRefundApplicationReference } from "@/lib/payments/paypal-client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
-import { assertRightsPaymentsOpen } from "@/lib/rights/payment-config";
 
 type Transaction = Prisma.TransactionClient;
 type Mode = "TEST" | "LIVE";
@@ -338,12 +337,10 @@ export type RightsWithdrawalDependencies = Readonly<{
   repository: ReturnType<typeof createRightsWithdrawalRepository>;
   gateway(provider: "STRIPE" | "PAYPAL"): RefundProviderGateway;
   assertRuntime(): Promise<RefundRuntimePolicy>;
-  skipGate?: boolean;
 }>;
 
 function defaults(): RightsWithdrawalDependencies {
   assertDatabaseConfigured();
-  assertRightsPaymentsOpen();
   const configuration = parsePaymentsConfiguration();
   const mode: Mode = configuration.deploymentEnvironment === "production" ? "LIVE" : "TEST";
   const livePolicy = evaluateLiveRefundProductionPolicy(process.env, configuration);
@@ -364,7 +361,8 @@ export function submitRightsWithdrawal(actor: OrderActor, requestNumberValue: st
 export async function refundRightsWithdrawal(actor: OrderActor, withdrawalNumber: string, dependencies?: RightsWithdrawalDependencies) {
   admin(actor);
   const resolved = dependencies ?? defaults();
-  if (!resolved.skipGate) assertRightsPaymentsOpen();
+  // This is a separately authorized refund of an existing Rights payment.
+  // The new-sales gate must not block withdrawal processing or reconciliation.
   const runtime = await resolved.assertRuntime();
   assertLiveRefundMutationAllowed(runtime);
   const attempt = await resolved.repository.reserveRefund(actor, withdrawalNumber);

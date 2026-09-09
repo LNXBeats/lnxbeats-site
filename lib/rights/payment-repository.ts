@@ -9,6 +9,7 @@ import { enqueueRightsNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { licenseExpiresAt, withdrawalEndsAt } from "@/lib/rights/license-calendar";
 import { assertRightsProviderEvent } from "@/lib/rights/payment-domain";
+import { isPublicationLicenseV3CanonicalSource } from "@/lib/rights/templates";
 import type { ReservedRightsPaymentAttempt, RightsPaymentResult, RightsProviderEvent } from "@/lib/rights/payment-types";
 import type { HostedCheckoutSession } from "@/lib/payments/stripe-client";
 
@@ -57,7 +58,7 @@ async function eligibleRequest(tx: Transaction, actorId: string, requestNumber: 
         orderBy: { documentVersion: "desc" }, take: 1,
         select: {
           id: true, contractNumber: true, templateVersion: true, documentHashSha256: true,
-          template: { select: { status: true, approvedAt: true, approvedByAdminId: true, legalReviewReference: true } },
+          template: { select: { status: true, sourceMarkup: true, approvedAt: true, approvedByAdminId: true, legalReviewReference: true } },
           acceptances: { where: { kind: "CLIENT" }, orderBy: { acceptedAt: "desc" }, take: 1, select: { acceptedAt: true, templateVersion: true, documentHashSha256: true, acceptedByUserId: true } },
         },
       },
@@ -84,8 +85,9 @@ async function eligibleRequest(tx: Transaction, actorId: string, requestNumber: 
     || request.paymentWinner
     || request.license
     || !document
-    || document.templateVersion !== 3
+    || document.templateVersion !== offer.contractTemplateVersion
     || document.template.status !== "APPROVED"
+    || !isPublicationLicenseV3CanonicalSource(document.template.sourceMarkup)
     || !document.template.approvedAt
     || !document.template.approvedByAdminId
     || !document.template.legalReviewReference
@@ -134,7 +136,7 @@ async function finalizeSuccess(tx: Transaction, paymentId: string, event: Rights
           order: { select: { status: true, deliveredAt: true, assets: { where: { role: "DELIVERY", asset: { type: "AUDIO" } }, take: 1, select: { assetId: true } } } },
           documents: {
             where: { kind: "CONTRACT", status: { in: ["ADMIN_VALIDATED", "ACTIVE"] } }, orderBy: { documentVersion: "desc" }, take: 1,
-            select: { id: true, contractNumber: true, templateVersion: true, documentHashSha256: true, template: { select: { status: true } }, acceptances: { where: { kind: "CLIENT" }, take: 1, select: { acceptedAt: true, acceptedByUserId: true, documentHashSha256: true, templateVersion: true } } },
+            select: { id: true, contractNumber: true, templateVersion: true, documentHashSha256: true, template: { select: { status: true, sourceMarkup: true } }, acceptances: { where: { kind: "CLIENT" }, take: 1, select: { acceptedAt: true, acceptedByUserId: true, documentHashSha256: true, templateVersion: true } } },
           },
         },
       },
@@ -153,7 +155,8 @@ async function finalizeSuccess(tx: Transaction, paymentId: string, event: Rights
     || !["READY_FOR_PAYMENT", "PAID_WAITING_WITHDRAWAL_PERIOD", "ACTIVE", "REQUIRES_REVIEW"].includes(request.status)
     || request.type !== "PUBLICATION_LICENSE" || request.requestedPriceCents !== offer.priceCents
     || request.order.status !== "DELIVERED" || !request.order.deliveredAt || !request.order.assets[0]
-    || !document || document.templateVersion !== 3 || document.template.status !== "APPROVED"
+    || !document || document.templateVersion !== offer.contractTemplateVersion || document.template.status !== "APPROVED"
+    || !isPublicationLicenseV3CanonicalSource(document.template.sourceMarkup)
     || !acceptance || acceptance.acceptedByUserId !== request.userId
     || acceptance.documentHashSha256 !== document.documentHashSha256
     || acceptance.templateVersion !== document.templateVersion

@@ -68,10 +68,14 @@ test("the contract workflow cannot create payments and delegates commerce to the
   assert.doesNotMatch(joined, /from ["']stripe["']/);
   assert.doesNotMatch(joined, /\.payment\.(?:create|upsert|update)/);
   assert.doesNotMatch(joined, /checkout\.sessions|PaymentIntent/);
-  const paymentConfig = await readFile("lib/rights/payment-config.ts", "utf8");
-  assert.match(paymentConfig, /RIGHTS_COMMERCE_ENABLED/);
-  assert.match(paymentConfig, /RIGHTS_PAYMENTS_ENABLED/);
-  assert.match(paymentConfig, /RIGHTS_PRODUCTION_CONFIRM/);
+  const [paymentConfig, openingConfig] = await Promise.all([
+    readFile("lib/rights/payment-config.ts", "utf8"),
+    readFile("lib/rights/opening-config.ts", "utf8"),
+  ]);
+  assert.match(paymentConfig, /rightsOpeningConfiguration/);
+  assert.match(openingConfig, /RIGHTS_COMMERCE_ENABLED/);
+  assert.match(openingConfig, /RIGHTS_PAYMENTS_ENABLED/);
+  assert.match(openingConfig, /RIGHTS_PRODUCTION_CONFIRM/);
 });
 
 test("contract generation is guarded by workflow state and structured parameters", async () => {

@@ -38,6 +38,9 @@ const readinessReasonLabels: Record<RightsCommerceReason, string> = {
   RIGHTS_BILLING_UNAVAILABLE: "Facturation dédiée aux droits indisponible",
   RIGHTS_PAYMENT_UNAVAILABLE: "Paiement dédié aux droits indisponible",
   RIGHTS_ACTIVATION_UNAVAILABLE: "Activation contractuelle indisponible",
+  RIGHTS_COMMERCE_CONFIGURATION_INCOMPLETE: "Gate commerce Rights incomplet",
+  RIGHTS_PAYMENT_CONFIGURATION_INCOMPLETE: "Gate paiements Rights incomplet",
+  RIGHTS_PRODUCTION_CONFIRMATION_REQUIRED: "Confirmation Production Rights absente ou incorrecte",
 };
 
 function euros(cents: number, currency = "EUR") {
@@ -73,8 +76,8 @@ export default async function AdminRightsPage({ searchParams }: { searchParams: 
       <header className="admin-page-heading">
         <div>
           <p className="admin-section-label">Droits & contrats</p>
-          <h1>MODULE DROITS &amp; CONTRATS NON OUVERT.</h1>
-          <p>Les demandes et documents restent préparatoires. Aucun paiement et aucun droit actif ne sont disponibles.</p>
+          <h1>{commerce.open ? "MODULE DROITS & CONTRATS OUVERT." : "MODULE DROITS & CONTRATS NON OUVERT."}</h1>
+          <p>{commerce.open ? "Les nouvelles demandes restent soumises aux contrôles d’éligibilité et au modèle contractuel approuvé." : "Les demandes et documents restent préparatoires. Aucun paiement et aucun droit actif ne sont disponibles."}</p>
         </div>
         <span className="admin-status">{commerceStateLabels[commerce.state]}</span>
       </header>
@@ -169,7 +172,7 @@ export default async function AdminRightsPage({ searchParams }: { searchParams: 
         </div>
         <details className="admin-technical-details">
           <summary>DIAGNOSTIC AVANCÉ</summary>
-          <p><strong>État : {commerceStateLabels[commerce.state]}.</strong> L’ouverture n’est pilotée par aucune variable distante.</p>
+          <p><strong>État : {commerceStateLabels[commerce.state]}.</strong> Demande d’ouverture runtime : {commerce.openingRequested ? "présente" : "absente"}. Les trois gates dédiés et le modèle approuvé restent cumulatifs.</p>
           <div className="admin-template-grid">
             {commerce.offers.map((offer) => (
               <article key={offer.type}>

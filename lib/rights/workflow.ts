@@ -19,7 +19,7 @@ import { assertRightsSplit, canGenerateContractDraft, canStartRightsReview, isLe
 import { buildRightsDocumentSections } from "@/lib/rights/document-presentation";
 import { generateContractPdf } from "@/lib/rights/pdf";
 import { defaultPrivateDocumentDependencies, RightsServiceError, type PreauthorizationDependencies } from "@/lib/rights/service";
-import { validateContractTemplate } from "@/lib/rights/templates";
+import { isPublicationLicenseV3CanonicalSource, validateContractTemplate } from "@/lib/rights/templates";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -454,6 +454,9 @@ export async function generateRightsDocument(
   if (!validateContractTemplate(template.sourceMarkup).ok) {
     throw new RightsServiceError("Le modèle contractuel est invalide et doit être corrigé.", 409, "CONTRACT_TEMPLATE_INVALID");
   }
+  if (request.type === "PUBLICATION_LICENSE" && (template.version !== 3 || !isPublicationLicenseV3CanonicalSource(template.sourceMarkup))) {
+    throw new RightsServiceError("Le modèle Publication License n’est pas lié au renderer v3 validé.", 409, "CONTRACT_TEMPLATE_RENDERER_MISMATCH");
+  }
   const legalTemplateApproved = isLegalTemplateUsable(template.status, template.approvedAt, template.approvedByAdminId, template.legalReviewReference);
   const previous = request.documents.find((document) => document.kind === kind) ?? null;
   const nextDocumentVersion = (previous?.documentVersion ?? 0) + 1;
@@ -594,6 +597,9 @@ export async function acceptRightsContract(
   if (existing) return requestNumber;
   const template = await prisma.contractTemplate.findUnique({ where: { id: document.templateId } });
   if (!template) throw new RightsServiceError("Le modèle du contrat est introuvable.", 409, "CONTRACT_TEMPLATE_UNAVAILABLE");
+  if (candidate.type === "PUBLICATION_LICENSE" && (template.version !== 3 || !isPublicationLicenseV3CanonicalSource(template.sourceMarkup))) {
+    throw new RightsServiceError("Le modèle Publication License n’est pas lié au renderer v3 validé.", 409, "CONTRACT_TEMPLATE_RENDERER_MISMATCH");
+  }
   if (!isLegalTemplateUsable(template.status, template.approvedAt, template.approvedByAdminId, template.legalReviewReference)) {
     throw new RightsServiceError("Ce projet DRAFT ne peut pas être accepté avant la revue juridique du modèle.", 409, "LEGAL_REVIEW_REQUIRED");
   }

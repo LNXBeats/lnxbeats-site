@@ -17,7 +17,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     // Refuse a closed offer before the rate-limit write. The service repeats
     // this gate so non-HTTP callers retain the same fail-closed boundary.
-    assertRightsNewRequestsEnabled();
+    await assertRightsNewRequestsEnabled();
     await enforceOrderRateLimit(actor.id, "rights");
     const { orderNumber } = await context.params;
     const input = parseRightsDraftInput(await readRightsJson(request));

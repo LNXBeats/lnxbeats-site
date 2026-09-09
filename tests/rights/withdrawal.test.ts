@@ -23,7 +23,6 @@ test("a Rights withdrawal makes one provider request with the immutable 150 EUR 
   let requests = 0;
   let observed: unknown;
   const result = await refundRightsWithdrawal(admin, "LNX-RET-LIC-2027-ABCDEF123456", {
-    skipGate: true,
     assertRuntime: async () => ({ mode: "TEST", liveRefundsEnabled: false, liveRefundsArmed: false }),
     repository: {
       reserveRefund: async () => attempt,
@@ -53,7 +52,6 @@ test("an existing provider refund is retrieved and never created again", async (
   let created = 0;
   let retrieved = 0;
   await refundRightsWithdrawal(admin, "LNX-RET-LIC-2027-ABCDEF123456", {
-    skipGate: true,
     assertRuntime: async () => ({ mode: "TEST", liveRefundsEnabled: false, liveRefundsArmed: false }),
     repository: {
       reserveRefund: async () => ({ ...attempt, providerRefundId: "REFUND-EXISTANT", status: "PENDING" }),

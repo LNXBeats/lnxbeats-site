@@ -1,11 +1,14 @@
 import "server-only";
 
 import {
-  RIGHTS_COMMERCE_OPEN_REQUESTED,
   rightsCommerceCapabilities,
 } from "@/lib/rights/commerce";
+import {
+  rightsOpeningConfiguration,
+  RIGHTS_PRODUCTION_CONFIRMATION,
+} from "@/lib/rights/opening-config";
 
-export const RIGHTS_PRODUCTION_CONFIRMATION = "enable-production-rights-commerce";
+export { RIGHTS_PRODUCTION_CONFIRMATION };
 
 export type RightsPaymentConfiguration = Readonly<{
   codeOpen: boolean;
@@ -15,28 +18,20 @@ export type RightsPaymentConfiguration = Readonly<{
   open: boolean;
 }>;
 
-function enabled(value: string | undefined) {
-  return value === "true";
-}
-
 export function rightsPaymentConfiguration(
   environment: Record<string, string | undefined> = process.env,
 ): RightsPaymentConfiguration {
-  const commerceEnabled = enabled(environment.RIGHTS_COMMERCE_ENABLED);
-  const paymentsEnabled = enabled(environment.RIGHTS_PAYMENTS_ENABLED);
+  const opening = rightsOpeningConfiguration(environment);
   const codeOpen = rightsCommerceCapabilities.rendererBindingReady
     && rightsCommerceCapabilities.billingReady
     && rightsCommerceCapabilities.paymentReady
     && rightsCommerceCapabilities.activationReady;
-  const production = environment.NODE_ENV === "production" || environment.DEPLOYMENT_ENVIRONMENT === "production";
-  const productionConfirmed = !production
-    || environment.RIGHTS_PRODUCTION_CONFIRM === RIGHTS_PRODUCTION_CONFIRMATION;
   return {
     codeOpen,
-    commerceEnabled,
-    paymentsEnabled,
-    productionConfirmed,
-    open: codeOpen && RIGHTS_COMMERCE_OPEN_REQUESTED && commerceEnabled && paymentsEnabled && productionConfirmed,
+    commerceEnabled: opening.commerceEnabled,
+    paymentsEnabled: opening.paymentsEnabled,
+    productionConfirmed: opening.productionConfirmed,
+    open: codeOpen && opening.complete,
   };
 }
 

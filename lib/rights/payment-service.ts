@@ -132,7 +132,8 @@ export async function capturePaypalOrderForRights(actor: RightsPaymentActor, req
     const baseUrl = process.env.APP_CANONICAL_URL ?? process.env.AUTH_URL ?? process.env.SITE_URL ?? "http://localhost";
     return { repository: createRightsPaymentRepository(undefined, mode), paypal: createPaypalReconciliationGateway(), baseUrl, mode };
   })();
-  ensureGate(resolved);
+  // A capture completes an already-created PayPal order. Closing new Rights
+  // sales must not strand that in-flight operation or its provider evidence.
   if (!resolved.paypal) throw new RightsPaymentError(503, "RIGHTS_PAYMENT_UNAVAILABLE");
   const reserved = await resolved.repository.reservePaypalCapture(actor.id, requestNumber, providerOrderId, resolved.mode);
   const capture = await resolved.paypal.captureOrder(reserved.providerOrderId, reserved.captureIdempotencyKey);

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export const contractPlaceholderNames = [
   "contractNumber",
   "generatedDate",
@@ -32,6 +34,16 @@ export function validateContractTemplate(source: string) {
   const unknown = templatePlaceholders(source).find((name) => !allowed.has(name));
   if (unknown) return { ok: false, code: "UNKNOWN_PLACEHOLDER", placeholder: unknown } as const;
   return { ok: true } as const;
+}
+
+export const PUBLICATION_LICENSE_V3_CANONICAL_SHA256 = "4ec562158d64c5ba99877295f99bb492003527565f01c0b2d3b01ae6cf249f03";
+
+export function normalizedContractTemplateHash(source: string) {
+  return createHash("sha256").update(source.trim(), "utf8").digest("hex");
+}
+
+export function isPublicationLicenseV3CanonicalSource(source: string) {
+  return normalizedContractTemplateHash(source) === PUBLICATION_LICENSE_V3_CANONICAL_SHA256;
 }
 
 function escapePlainText(value: string) {

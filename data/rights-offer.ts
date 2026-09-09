@@ -9,6 +9,7 @@ export const publicationLicenseOffer = {
     priceCents: 15_000,
     currency: "EUR",
     pricingVersion: "2026-09-publication-license-v1",
+    contractTemplateVersion: 3,
     label: "Licence de publication via distributeur",
     title: "Publier votre titre sur les plateformes",
   },

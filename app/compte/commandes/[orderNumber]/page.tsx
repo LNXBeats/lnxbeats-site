@@ -14,7 +14,7 @@ import { clientOrderAction, clientPaymentState, orderCanStillBeEdited } from "@/
 import { formatEuro, type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { orderStatusPresentation } from "@/lib/orders/status";
-import { RIGHTS_NEW_REQUESTS_ENABLED } from "@/lib/rights/commerce";
+import { loadRightsCommerceReadiness } from "@/lib/rights/commerce";
 import { publicationLicenseEligibility } from "@/lib/rights/domain";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
 import { listRightsRequestsForOrderActor } from "@/lib/rights/service";
@@ -67,7 +67,10 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   if (!order) notFound();
   const status = orderStatusPresentation[order.status];
   const paymentState = clientPaymentState(order);
-  const paymentProviders = await paymentProvidersAvailable();
+  const [paymentProviders, rightsCommerce] = await Promise.all([
+    paymentProvidersAvailable(),
+    loadRightsCommerceReadiness(),
+  ]);
   const rightsRequests = order.status === "DELIVERED" ? await listRightsRequestsForOrderActor(actor, order.orderNumber) : [];
   const publicationEligibility = publicationLicenseEligibility({
     ownerMatches: true,
@@ -182,7 +185,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           )}
         </section>
 
-        <RightsOptionsSection requests={rightsRequests} eligible={publicationEligibility.eligible} commerceOpen={RIGHTS_NEW_REQUESTS_ENABLED} orderNumber={order.orderNumber} workTitle={order.title || order.recipient || "Création LNX"} />
+        <RightsOptionsSection requests={rightsRequests} eligible={publicationEligibility.eligible} commerceOpen={rightsCommerce.open} orderNumber={order.orderNumber} workTitle={order.title || order.recipient || "Création LNX"} />
 
         <section className="order-detail__section" aria-labelledby="order-brief-title">
           <p className="auth-panel__label">Récapitulatif</p>
