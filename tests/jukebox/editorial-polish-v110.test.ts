@@ -28,7 +28,7 @@ test("Home mounts the isolated editorial layer without changing its copy or dest
   assert.doesNotMatch(css, /url\(/);
 });
 
-test("About keeps the existing biography, quotation and portrait in a readable editorial measure", async () => {
+test("About keeps the existing biography and portrait in a continuous readable editorial measure", async () => {
   const [page, css] = await Promise.all([
     source("app/a-propos/page.tsx"),
     source("app/v110-editorial-polish.css"),
@@ -40,11 +40,12 @@ test("About keeps the existing biography, quotation and portrait in a readable e
   assert.equal((page.match(/<Image\b/g) ?? []).length, 1);
   assert.match(page, /artistBiography\.principal\.map/);
   assert.match(page, /about-editorial__biography/);
-  assert.match(page, /<blockquote>Chaque histoire mérite sa musique\.<\/blockquote>/);
+  assert.match(page, /about-editorial__continuation/);
+  assert.doesNotMatch(page, /Une histoire d’abord\. La forme musicale ensuite\./);
+  assert.doesNotMatch(page, /<blockquote>Chaque histoire mérite sa musique\.<\/blockquote>/);
   assert.match(css, /\.about-editorial__copy \{[\s\S]*?width: min\(100%, 46rem\)/);
   assert.match(css, /\.about-editorial__biography > p \{[\s\S]*?max-width: 68ch;[\s\S]*?line-height: 1\.85;/);
-  assert.match(css, /\.about-story-scene__thread--editorial > p \{[\s\S]*?max-width: 62ch;/);
-  assert.match(css, /\.about-story-scene__thread--editorial blockquote \{[\s\S]*?text-wrap: balance;/);
+  assert.match(css, /\.about-editorial__biography > p \{[\s\S]*?max-width: 68ch;/);
 });
 
 test("the editorial layer covers tablet, mobile, focus, overflow and reduced motion", async () => {

@@ -54,6 +54,10 @@ test("public shop presentation distinguishes unavailable reservations from sold 
   assert.match(cataloguePage, /availabilityState === "SOLD_OUT"[\s\S]*"Épuisé"[\s\S]*availabilityState === "TEMPORARILY_UNAVAILABLE"[\s\S]*"Temporairement indisponible"/);
   assert.match(cataloguePage, /unavailableLabel=\{product\.availabilityState === "TEMPORARILY_UNAVAILABLE"/);
   assert.match(productPage, /Indisponible temporairement : les derniers exemplaires sont réservés/);
+  assert.match(productPage, /: "Disponible\."/);
+  assert.doesNotMatch(productPage, /`\$\{product\.availableQuantity\} exemplaire/);
+  assert.match(productPage, /Livraison Colissimo à domicile avec signature/);
+  assert.match(productPage, /France métropolitaine uniquement · frais calculés selon le poids du panier\./);
   assert.match(productPage, /unavailableLabel=\{product\.availabilityState === "TEMPORARILY_UNAVAILABLE"/);
   assert.match(cart, /product\.availabilityState !== "AVAILABLE"/);
   assert.match(cart, /availabilityState === "SOLD_OUT" \? <em>Épuisé<\/em>/);
