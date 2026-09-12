@@ -46,7 +46,7 @@ export default async function HomePage() {
     {leadProject ? <section className="section home-featured home-featured--editorial" aria-labelledby="featured-title">
       <Container>
         <div className="home-featured__heading motion-reveal"><div><p className="section-index">À la une</p><h2 id="featured-title">Une histoire à écouter.</h2></div><ButtonLink href="/discographie" variant="quiet">Toute la discographie</ButtonLink></div>
-        <article className="home-project-lead motion-reveal motion-reveal--soft">
+        <article className="home-project-lead motion-reveal motion-reveal--soft" data-motion-tilt="featured-project">
           <Link className="home-project-lead__art" href={`/album/${leadProject.slug}`} aria-label={`Ouvrir l’univers ${leadProject.title}`}><ProjectArtwork project={leadProject} priority sizes="(max-width: 820px) calc(100vw - 48px), 48vw" /></Link>
           <div className="home-project-lead__copy"><p className="eyebrow">Projet à la une · {leadProject.type === "album" ? "Album" : "Single"}</p><h3>{leadProject.title}</h3><p>{leadProject.description}</p>{leadProject.audioPreview ? <AudioPreviewPlayer src={leadProject.audioPreview.url} title={leadProject.title} durationMs={leadProject.audioPreview.durationMs} compact /> : null}<ButtonLink href={`/album/${leadProject.slug}`} variant="quiet">Entrer dans le projet</ButtonLink></div>
         </article>

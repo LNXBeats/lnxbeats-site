@@ -64,8 +64,8 @@ function ShopTeaser() {
 function ShopEmptyState() {
   return (
     <div className="shop-commerce-shell">
-      <header className="shop-commerce-hero">
-        <div className="shop-commerce-hero__backdrop" aria-hidden="true" />
+      <header className="shop-commerce-hero" data-motion-scene="shop">
+        <div className="shop-commerce-hero__backdrop" aria-hidden="true" data-motion-layer="media" />
         <Container className="shop-commerce-hero__inner">
           <p className="eyebrow">Boutique LNX Beats</p>
           <h1>La collection se prépare.</h1>
@@ -99,8 +99,8 @@ export default async function ShopPage() {
 
   return (
     <div className="shop-commerce-shell">
-      <header className="shop-commerce-hero">
-        <div className="shop-commerce-hero__backdrop" aria-hidden="true" />
+      <header className="shop-commerce-hero" data-motion-scene="shop">
+        <div className="shop-commerce-hero__backdrop" aria-hidden="true" data-motion-layer="media" />
         <Container className="shop-commerce-hero__inner">
           <p className="eyebrow">Boutique LNX Beats</p>
           <h1><span>Boutique</span> LNX Beats</h1>
@@ -118,7 +118,7 @@ export default async function ShopPage() {
           </div>
           <div className="shop-product-grid">
             {products.map((product) => (
-              <article className="shop-product-card" key={product.id}>
+              <article className="shop-product-card" data-motion-tilt="shop-product" key={product.id}>
                 <Link className="shop-product-card__image" href={`/boutique/${encodeURIComponent(product.slug)}`}>
                   <ShopProductMedia
                     image={product.image}

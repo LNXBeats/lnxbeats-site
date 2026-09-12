@@ -90,6 +90,8 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const railRef = useRef<HTMLUListElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const programmaticRef = useRef(false);
+  const programmaticTimerRef = useRef<number | null>(null);
+  const pendingFocusIndexRef = useRef<number | null>(null);
   const playRequestRef = useRef(0);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const pointerDraggedRef = useRef(false);
@@ -124,6 +126,32 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     setProgress(0);
     setPlaying(false);
     if (!preserveContinuous) setContinuousPlayback(false);
+  }, []);
+
+  const scheduleProgrammaticRelease = useCallback(() => {
+    programmaticRef.current = true;
+    if (programmaticTimerRef.current !== null) {
+      window.clearTimeout(programmaticTimerRef.current);
+    }
+    programmaticTimerRef.current = window.setTimeout(() => {
+      programmaticTimerRef.current = null;
+      programmaticRef.current = false;
+      const focusIndex = pendingFocusIndexRef.current;
+      pendingFocusIndexRef.current = null;
+      if (focusIndex === null) return;
+      const nextItem = railRef.current?.querySelector<HTMLElement>(`[data-project-index="${focusIndex}"]`);
+      const nextControl = nextItem?.querySelector<HTMLElement>("[data-active-control='true']");
+      (nextControl ?? nextItem)?.focus({ preventScroll: true });
+    }, 360);
+  }, []);
+
+  const clearProgrammaticTimer = useCallback(() => {
+    if (programmaticTimerRef.current !== null) {
+      window.clearTimeout(programmaticTimerRef.current);
+      programmaticTimerRef.current = null;
+    }
+    programmaticRef.current = false;
+    pendingFocusIndexRef.current = null;
   }, []);
 
   const syncTrackMedia = useCallback((index: number) => {
@@ -183,8 +211,9 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     }
 
     if (fromGesture) {
-      programmaticRef.current = true;
       const focusWasInsideScene = railRef.current?.contains(document.activeElement) ?? false;
+      pendingFocusIndexRef.current = focusWasInsideScene ? next : null;
+      scheduleProgrammaticRelease();
       if (window.matchMedia("(max-width: 700px)").matches) {
         const rail = railRef.current;
         const item = rail?.querySelector<HTMLElement>(`[data-project-index="${next}"]`);
@@ -192,16 +221,10 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
           centerRailItem(rail, item, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
         }
       }
-      window.setTimeout(() => {
-        programmaticRef.current = false;
-        if (focusWasInsideScene) {
-          const nextItem = railRef.current?.querySelector<HTMLElement>(`[data-project-index="${next}"]`);
-          const nextControl = nextItem?.querySelector<HTMLElement>("[data-active-control='true']");
-          (nextControl ?? nextItem)?.focus({ preventScroll: true });
-        }
-      }, 360);
+    } else {
+      clearProgrammaticTimer();
     }
-  }, [activeIndex, attemptPlayback, continuousPlayback, pauseCurrent, projects, syncTrackMedia]);
+  }, [activeIndex, attemptPlayback, clearProgrammaticTimer, continuousPlayback, pauseCurrent, projects, scheduleProgrammaticRelease, syncTrackMedia]);
 
   const selectVisible = useCallback((index: number, fromGesture = true) => {
     const project = visibleProjects[index];
@@ -293,7 +316,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
 
   useEffect(() => {
     if (!window.matchMedia("(max-width: 700px)").matches) return;
-    programmaticRef.current = true;
+    scheduleProgrammaticRelease();
     const frame = window.requestAnimationFrame(() => {
       const index = globalIndexBySlug.get(activeSlug);
       if (index === undefined) return;
@@ -303,22 +326,19 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
         centerRailItem(rail, item, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
       }
     });
-    const timer = window.setTimeout(() => {
-      programmaticRef.current = false;
-    }, 360);
     return () => {
       window.cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
     };
-  }, [activeSlug, filter, globalIndexBySlug, sort]);
+  }, [activeSlug, filter, globalIndexBySlug, scheduleProgrammaticRelease, sort]);
 
   useEffect(() => {
     const audio = audioRef.current;
     return () => {
+      clearProgrammaticTimer();
       playRequestRef.current += 1;
       audio?.pause();
     };
-  }, []);
+  }, [clearProgrammaticTimer]);
 
   if (!active) return null;
 
@@ -335,6 +355,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     className="home-jukebox discography-jukebox motion-reveal"
     aria-labelledby={regionId}
     aria-roledescription="carrousel"
+    data-motion-scene="jukebox"
     data-active-index={currentVisibleIndex}
     data-active-project-index={activeIndex}
     data-audio-unlocked={audioUnlocked}
@@ -396,7 +417,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
           const preloadCover = Math.abs(distance) <= 1;
           const outsideScene = Math.abs(distance) > 2;
           const globalIndex = globalIndexBySlug.get(project.slug) ?? 0;
-          const artwork = <ProjectArtwork project={project} priority={eager && preloadCover} sizes="(max-width: 700px) 86vw, (max-width: 1000px) 42vw, 430px" className="discography-card__artwork" />;
+          const artwork = <ProjectArtwork project={project} priority={eager && preloadCover} sizes="(max-width: 700px) 86vw, (max-width: 1000px) 42vw, (max-width: 1440px) 430px, (max-width: 2200px) 20vw, 500px" className="discography-card__artwork" />;
 
           return <li className={`home-jukebox__item ${position}`} data-project-index={globalIndex} aria-hidden={outsideScene || undefined} tabIndex={distance === 0 ? -1 : undefined} key={project.slug}>
             <article className="discography-card" data-active={distance === 0 || undefined} aria-current={distance === 0 ? "true" : undefined}>

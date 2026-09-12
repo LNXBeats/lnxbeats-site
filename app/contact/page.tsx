@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contact" },
 };
 
+const contactPlatforms = [
+  ...quickAccessPlatforms.filter(({ name }) => name === "YouTube"),
+  ...quickAccessPlatforms.filter(({ name }) => name !== "YouTube"),
+];
+
 export default function ContactPage() {
   return (
     <>
@@ -51,11 +56,15 @@ export default function ContactPage() {
               <h2>Écouter et suivre LNX Beats.</h2>
             </div>
             <ul className="contact-platforms__list" aria-label="Plateformes officielles de LNX Beats">
-              {quickAccessPlatforms.map(({ icon, name, tone, url }) => (
-                <li key={name} data-contact-platform={tone}>
-                  <PlatformLink icon={icon} name={name} url={url} />
-                </li>
-              ))}
+              {contactPlatforms.map(({ icon, name, tone, url }) => {
+                const isFeatured = name === "YouTube";
+
+                return (
+                  <li key={name} data-contact-platform={tone} data-contact-featured={isFeatured ? "true" : undefined}>
+                    <PlatformLink icon={icon} name={name} url={url} featured={isFeatured} />
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </Container>

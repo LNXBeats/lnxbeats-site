@@ -17,7 +17,7 @@ test("the visual motion layer is global, route-aware and progressively enhanced"
   assert.match(motion, /IntersectionObserver/);
   assert.match(motion, /prefers-reduced-motion: reduce/);
   assert.match(motion, /requestAnimationFrame/);
-  assert.match(motion, /removeEventListener\("pointermove", handlePointerMove\)/);
+  assert.match(motion, /removeEventListener\("pointermove", target\.handlePointerMove\)/);
   assert.match(css, /main#contenu\.route-motion-enter/);
   assert.match(css, /\.motion-reveal\.motion-reveal--pending\.is-revealed/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);

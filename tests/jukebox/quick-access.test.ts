@@ -36,11 +36,22 @@ test("the contact platform directory reuses every official destination and its l
     readFile(new URL("../../app/v130-ui-refinement.css", import.meta.url), "utf8"),
   ]);
 
-  assert.match(contact, /quickAccessPlatforms\.map/);
+  assert.match(contact, /\.\.\.quickAccessPlatforms\.filter\(\(\{ name \}\) => name === "YouTube"\)/);
+  assert.match(contact, /\.\.\.quickAccessPlatforms\.filter\(\(\{ name \}\) => name !== "YouTube"\)/);
+  assert.match(contact, /contactPlatforms\.map/);
   assert.doesNotMatch(contact, /siteConfig\.social\.map/);
-  assert.match(contact, /<PlatformLink icon=\{icon\} name=\{name\} url=\{url\}/);
+  assert.match(contact, /const isFeatured = name === "YouTube"/);
+  assert.match(contact, /data-contact-featured=\{isFeatured \? "true" : undefined\}/);
+  assert.match(contact, /<PlatformLink icon=\{icon\} name=\{name\} url=\{url\} featured=\{isFeatured\}/);
   assert.match(platformLink, /platform-link__mark--brand/);
   assert.match(platformLink, /Suivre LNX Beats sur/);
+  assert.match(platformLink, /Regarder et écouter LNX Beats sur YouTube/);
+  assert.match(platformLink, /featured \? "platform-link--featured" : null/);
+  assert.match(platformLink, /data-featured=\{featured \? "true" : undefined\}/);
+  assert.match(platformLink, /data-motion-tilt=\{compact \? undefined : "contact-card"\}/);
+  assert.match(platformLink, /target="_blank"/);
+  assert.match(platformLink, /rel="noopener noreferrer"/);
+  assert.match(platformLink, /aria-label=\{`\$\{action\} — nouvel onglet`\}/);
   assert.match(css, /\.contact-platforms__list/);
   assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
