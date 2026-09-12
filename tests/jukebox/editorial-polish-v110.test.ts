@@ -13,17 +13,11 @@ test("Home mounts the isolated editorial layer without changing its copy or dest
   assert.match(page, /import "\.\/v110-editorial-polish\.css"/);
   assert.match(page, /home-hero home-hero--editorial/);
   assert.match(page, /home-featured home-featured--editorial/);
-  assert.match(page, /home-perspectives home-perspectives--editorial/);
-  assert.match(page, /home-perspectives__texture" aria-hidden="true"/);
-  assert.match(page, /home-perspective home-perspective--editorial/);
-  assert.match(page, /home-perspective__number/);
+  assert.doesNotMatch(page, /home-perspectives/);
+  assert.doesNotMatch(page, /Une musique qui prend le réel au sérieux/);
   assert.match(page, /href="\/discographie"/);
   assert.match(page, /href="\/commander"/);
   assert.match(page, /href="\/contact"/);
-  assert.equal((page.match(/title: "(?:Histoires|Univers|Sur mesure)"/g) ?? []).length, 3);
-  assert.match(css, /\.home-perspectives--editorial \{[\s\S]*?overflow: clip;[\s\S]*?radial-gradient/);
-  assert.match(css, /\.home-perspectives__texture \{[\s\S]*?repeating-linear-gradient/);
-  assert.match(css, /\.home-perspective--editorial::before \{[\s\S]*?repeating-radial-gradient/);
   assert.match(css, /\.home-featured--editorial \.home-project-lead__copy h3 \{[\s\S]*?max-width: min\(12ch, 100%\);[\s\S]*?overflow-wrap: break-word;[\s\S]*?word-break: normal;/);
   assert.doesNotMatch(css, /url\(/);
 });
@@ -36,7 +30,7 @@ test("About keeps the existing biography and portrait in a continuous readable e
 
   assert.match(page, /import "\.\.\/v110-editorial-polish\.css"/);
   assert.match(page, /about-hero about-hero--editorial/);
-  assert.match(page, /src="\/assets\/hero-mobile\.jpg"/);
+  assert.match(page, /src="\/assets\/(?:hero-mobile\.jpg|v3\/hero-main-ludovic-dog-exact\.jpg)"/);
   assert.equal((page.match(/<Image\b/g) ?? []).length, 1);
   assert.match(page, /artistBiography\.principal\.map/);
   assert.match(page, /about-editorial__biography/);

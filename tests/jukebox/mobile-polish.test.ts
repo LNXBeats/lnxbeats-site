@@ -22,19 +22,17 @@ test("the mobile menu keeps its accessible navigation without decorative numberi
 });
 
 test("mobile editorial cleanup uses one compact Commander progress indicator", async () => {
-  const [homepage, shop, orderForm, globalCss, commanderCss] = await Promise.all([
-    source("app/page.tsx"),
+  const [shop, orderForm, globalCss, commanderCss] = await Promise.all([
     source("app/boutique/page.tsx"),
     source("components/music-order-form.tsx"),
     source("app/globals.css"),
     source("app/v084-commander.css"),
   ]);
 
-  assert.match(homepage, /number: "01"/);
   assert.match(shop, /shop-card__index">PRODUITS DÉRIVÉS/);
   assert.match(orderForm, /order-progress__number/);
   assert.match(orderForm, /<progress max=\{steps\.length\} value=\{step \+ 1\}/);
-  assert.match(globalCss, /@media \(max-width: 700px\)[\s\S]*?\.home-perspective > span \{ display: none; \}[\s\S]*?\.home-perspective h3 \{ margin-top: 0; \}[\s\S]*?\.shop-card \{ justify-content: flex-end; \}[\s\S]*?\.shop-card__index \{ display: none; \}/);
+  assert.match(globalCss, /@media \(max-width: 700px\)[\s\S]*?\.shop-card \{ justify-content: flex-end; \}[\s\S]*?\.shop-card__index \{ display: none; \}/);
   assert.match(commanderCss, /@media \(max-width: 600px\)[\s\S]*?\.commander-v084 \.order-progress \{ display: none; \}/);
   assert.match(commanderCss, /\.commander-v084 \.order-progress__summary \{[\s\S]*?display: grid;/);
   assert.match(commanderCss, /\.order-step-heading__index \{ display: none; \}/);
@@ -49,7 +47,8 @@ test("shared mobile polish groups the Home promise and keeps the global rails co
     source("components/quick-access-bar.tsx"),
   ]);
 
-  assert.match(homepage, /home-hero__eyebrow-story-key">Les histoires<\/span> deviennent musique/);
+  assert.match(homepage, /home-hero__eyebrow-story">Des histoires, des personnages, des morceaux qui restent\.<\/span>/);
+  assert.match(homepage, /home-hero__slogan">Les histoires deviennent musique\.<\/p>/);
   assert.doesNotMatch(homepage, /home-hero__eyebrow-brand|home-hero__eyebrow-separator/);
   assert.ok(
     homepage.indexOf('id="home-hero-title"') < homepage.indexOf("home-hero__eyebrow-story"),
