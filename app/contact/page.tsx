@@ -3,7 +3,7 @@ import Image from "next/image";
 import { ButtonLink } from "@/components/button";
 import { Container } from "@/components/container";
 import { PlatformLink } from "@/components/platform-link";
-import { siteConfig } from "@/data/site";
+import { quickAccessPlatforms, siteConfig } from "@/data/site";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -43,13 +43,20 @@ export default function ContactPage() {
           </div>
         </Container>
       </section>
-      <section className="section section--soft">
+      <section className="section section--soft contact-platforms-section">
         <Container>
-          <div className="content-columns motion-reveal">
-            <p className="content-columns__label">Le dialogue continue</p>
-            <div>
-              {siteConfig.social.map((item) => <PlatformLink key={item.name} {...item} compact />)}
+          <div className="contact-platforms motion-reveal">
+            <div className="contact-platforms__intro">
+              <p className="content-columns__label">Le dialogue continue</p>
+              <h2>Écouter et suivre LNX Beats.</h2>
             </div>
+            <ul className="contact-platforms__list" aria-label="Plateformes officielles de LNX Beats">
+              {quickAccessPlatforms.map(({ icon, name, tone, url }) => (
+                <li key={name} data-contact-platform={tone}>
+                  <PlatformLink icon={icon} name={name} url={url} />
+                </li>
+              ))}
+            </ul>
           </div>
         </Container>
       </section>

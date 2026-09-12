@@ -18,6 +18,31 @@ test("quick access uses the seven configured official destinations in editorial 
   assert.equal(new Set(quickAccessPlatforms.map(({ url }) => url)).size, 7);
   assert.equal(quickAccessPlatforms.every(({ url }) => url.startsWith("https://")), true);
   assert.equal(quickAccessPlatforms.every(({ icon }) => icon.startsWith("/brands/") && icon.endsWith(".svg")), true);
+  assert.deepEqual(quickAccessPlatforms.map(({ url }) => url), [
+    "https://open.spotify.com/artist/4Qqg1iO2aKxcV0e64Hkg5R",
+    "https://music.apple.com/fr/artist/lnx-beats/1856898446",
+    "https://link.deezer.com/s/343dUyN0Jo0qIXG4hR6X2",
+    "https://youtube.com/@lnxbeats",
+    "https://music.amazon.fr/artists/B09VNR4Y3W",
+    "https://www.tiktok.com/@lnx.beats",
+    "https://www.instagram.com/lnxbeats",
+  ]);
+});
+
+test("the contact platform directory reuses every official destination and its local brand icon", async () => {
+  const [contact, platformLink, css] = await Promise.all([
+    readFile(new URL("../../app/contact/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/platform-link.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/v130-ui-refinement.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(contact, /quickAccessPlatforms\.map/);
+  assert.doesNotMatch(contact, /siteConfig\.social\.map/);
+  assert.match(contact, /<PlatformLink icon=\{icon\} name=\{name\} url=\{url\}/);
+  assert.match(platformLink, /platform-link__mark--brand/);
+  assert.match(platformLink, /Suivre LNX Beats sur/);
+  assert.match(css, /\.contact-platforms__list/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
 test("the homepage does not duplicate quick access with the former large platform grid", async () => {

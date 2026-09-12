@@ -549,9 +549,15 @@ main#contenu.route-motion-enter {
   .motion-reveal.motion-reveal--pending.is-revealed,
   [data-motion-layer],
   .home-jukebox__item,
-  .home-jukebox__background,
-  .desktop-navigation__active-indicator {
+  .home-jukebox__background {
     opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .desktop-navigation__active-indicator {
+    left: var(--active-nav-left);
+    opacity: var(--active-nav-opacity);
     transform: none;
     transition: none;
   }

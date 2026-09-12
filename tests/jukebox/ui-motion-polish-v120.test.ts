@@ -36,6 +36,10 @@ test("the public header uses a measured shared active indicator", async () => {
   assert.match(header, /desktop-navigation__active-indicator/);
   assert.match(css, /\.desktop-navigation__active-indicator \{/);
   assert.match(css, /transform: translateX\(var\(--active-nav-left\)\)/);
+  assert.match(
+    css,
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.desktop-navigation__active-indicator \{[\s\S]*?left: var\(--active-nav-left\);[\s\S]*?opacity: var\(--active-nav-opacity\);[\s\S]*?transform: none;/,
+  );
 });
 
 test("cinematic depth follows existing artwork tones and keeps mobile transforms restrained", async () => {
