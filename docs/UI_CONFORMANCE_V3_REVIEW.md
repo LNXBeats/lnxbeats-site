@@ -45,7 +45,7 @@ Les deux fichiers fournis avec une extension `.png` contiennent en réalité des
 | Discographie | Cover active dominante et voisines lisibles, hauteur naturellement réservée, aucun contenu derrière le footer. |
 | Album | Hiérarchie plus nette avec cover, lecteur et contenu réels ; aucune piste ou plateforme inventée. |
 | Commander | Composition seule affinée ; workflow réel en six étapes inchangé et aucun recouvrement mobile. |
-| Boutique | Catalogue réel, grille stable avec un seul produit, stock qualitatif, Boutique LNX et DistroKid distincts, Etsy absent. |
+| Boutique | Tous les produits fournis par la source métier sont rendus dans leur ordre réel ; la fixture visuelle V3 locale n’en contenait qu’un. Stock qualitatif, Boutique LNX et DistroKid distincts, Etsy absent. |
 | Produit | Média réel lorsqu’il existe, fallback neutre uniquement en QA, prix et panier inchangés, libellés Colissimo exacts. |
 | À propos | Portrait issu du hero exact, lecture ouverte et respirante, encadrés décoratifs retirés, biographie et CTA Discographie conservés. |
 | Contact | Mise en cohérence du hero, des intentions et du CTA existants, sans nouveau flux. |
@@ -64,6 +64,14 @@ Le parcours Commander a été traversé réellement de l’étape 1 à l’étap
 ## Limite locale honnête
 
 Lorsque la base QA pointe vers un média produit volontairement absent, le fallback reste neutre et conserve la géométrie de la carte. Il ne remplace pas la vraie photo par un contenu fictif et ne constitue pas une modification du catalogue. Aucun média, secret ou identifiant Production n’est copié pour produire les captures.
+
+## Correctif de vérification V3.1
+
+Le titre complet « Boutique LNX Beats » était déjà dégagé du header sur le contenu V3 final : le rognage signalé provenait des captures V2 antérieures. La V3.1 le verrouille aux largeurs `375`, `390`, `430`, `768`, `1024`, `1440` et `1920` pixels, sans marge négative ni translation. La récupération `listPublicShopProducts()` et le rendu `products.map(...)` sont inchangés par rapport au point de départ : aucun produit n’est filtré, limité ou codé en dur par la refonte.
+
+Une fixture locale dédiée fournit deux produits synthétiques et deux WebP bénins de ratios différents. Elle prouve que le média réel remplace seul le fallback, remplit le même cadre carré avec `object-fit: cover` et `object-position: center`, sans étirement ni état simultané. Cette preuve ne lit ni ne copie aucun média Production.
+
+Cette fixture multi-produits a révélé puis permis de corriger un débordement interne des actions, invisible avec l’unique produit QA initial : la composition horizontale des cartes est conservée, sur deux colonnes larges au desktop puis une colonne jusqu’à `1100px`. Les contrôles restent intégralement contenus dans chaque carte.
 
 ## Invariants de sécurité
 
