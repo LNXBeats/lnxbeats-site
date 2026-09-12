@@ -91,7 +91,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
       </section>
       <section className="section editorial-break commander-meeting-v084">
         <Container className="content-columns motion-reveal">
-          <p className="content-columns__label">Comment ça marche ?</p>
+          <p className="content-columns__label commander-meeting-v084__desktop">Comment ça marche ?</p>
           <div className="commander-meeting-v084__desktop">
             <CommanderMeetingCopy paymentAvailable={paymentAvailable} />
           </div>

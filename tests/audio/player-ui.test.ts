@@ -31,14 +31,15 @@ test("ended playback changes only the public control presentation to replay", as
 
   for (const component of [standalone, jukebox]) {
     assert.match(component, /const \[ended, setEnded\] = useState\(false\);/);
-    assert.match(component, /ended \? "replay" : "play"/);
+    assert.match(component, /"replay" : "play"/);
     assert.match(component, /Relire l’extrait de/);
   }
 
   assert.match(standalone, /onEnded=\{\(event\) => \{[\s\S]*?setEnded\(true\);/);
   assert.match(standalone, /onPlay=\{\(\) => \{[\s\S]*?setEnded\(false\);/);
-  assert.match(jukebox, /onEnded=\{\(\) => \{ setPlaying\(false\); setProgress\(0\); setEnded\(true\); \}\}/);
-  assert.match(jukebox, /onPlay=\{\(\) => \{ setPlaying\(true\); setEnded\(false\); \}\}/);
+  assert.match(jukebox, /onEnded=\{\(event\) => \{[\s\S]*?transitionPlayerState\(\{ type: "pause", slug: sourceSlug \}\);[\s\S]*?setEnded\(playerStateRef\.current\.selectedSlug === sourceSlug\);/);
+  assert.match(jukebox, /const expectedPlay = pendingPlay\?\.requestId === playRequestRef\.current && pendingPlay\.slug === sourceSlug;/);
+  assert.match(jukebox, /await audio\.play\(\);[\s\S]*?transitionPlayerState\(\{ type: "play", slug: target\.slug \}\);/);
   assert.equal((jukebox.match(/<audio\b/g)?.length ?? 0), 1);
   assert.doesNotMatch(jukebox, /\bautoPlay\b/);
 });

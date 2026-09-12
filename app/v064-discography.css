@@ -377,6 +377,97 @@ main:has(> .v064-discography-stage) + .site-footer {
 
 .discography-jukebox .home-jukebox__progress { z-index: 6; }
 
+.discography-card__playing {
+  position: absolute;
+  z-index: 7;
+  top: .75rem;
+  left: .75rem;
+  padding: .42rem .62rem;
+  border: 1px solid rgba(226, 196, 126, .62);
+  border-radius: 999px;
+  background: rgba(7, 7, 7, .84);
+  color: var(--gold-light);
+  font-size: .54rem;
+  font-weight: 760;
+  letter-spacing: .12em;
+  pointer-events: none;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+}
+
+.discography-jukebox__player-context {
+  position: relative;
+  display: none;
+  min-height: 72px;
+  padding: .8rem 4.35rem .85rem .9rem;
+  overflow: hidden;
+  border: 1px solid rgba(226, 196, 126, .24);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(24, 21, 16, .92), rgba(8, 8, 7, .96));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .28);
+  gap: .55rem;
+}
+
+.discography-jukebox__player-copy { display: grid; min-width: 0; gap: .18rem; }
+.discography-jukebox__player-copy > span {
+  color: var(--gold-light);
+  font-size: .54rem;
+  font-weight: 760;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.discography-jukebox__player-copy strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: .86rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discography-jukebox__player-copy small { color: var(--text-soft); font-size: .62rem; }
+.discography-jukebox__selected-context {
+  margin: .1rem 0 0;
+  color: var(--text-soft);
+  font-size: .62rem;
+  line-height: 1.35;
+}
+.discography-jukebox__selected-context strong { color: var(--text); font-weight: 650; }
+.discography-jukebox__player-toggle {
+  position: absolute;
+  top: 50%;
+  right: .85rem;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(226, 196, 126, .62);
+  border-radius: 50%;
+  background: rgba(6, 6, 5, .86);
+  color: var(--gold-light);
+  transform: translateY(-50%);
+}
+.discography-jukebox__player-toggle .studio-vinyl-control { width: 38px; height: 38px; }
+.discography-jukebox__player-toggle:disabled { cursor: not-allowed; opacity: .38; }
+.discography-jukebox__player-toggle:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 3px; }
+.discography-jukebox__player-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(244, 240, 232, .1);
+}
+.discography-jukebox__player-progress > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+  transition: transform 120ms linear;
+}
+
 .discography-jukebox .home-jukebox__arrow {
   top: calc(var(--discography-scene-top-space) + (var(--discography-card-width) / 2));
   --jukebox-arrow-vertical: -50%;
@@ -399,6 +490,18 @@ main:has(> .v064-discography-stage) + .site-footer {
 
   .discography-jukebox .home-jukebox__arrow-line {
     display: none;
+  }
+
+  .discography-jukebox[data-selection-playing-mismatch="true"] .discography-jukebox__player-context {
+    position: fixed;
+    z-index: 70;
+    right: clamp(1rem, 2.5vw, 2.5rem);
+    bottom: clamp(1rem, 2vw, 2rem);
+    display: grid;
+    width: min(420px, calc(100vw - 2rem));
+    margin: 0;
+    background: linear-gradient(145deg, rgba(24, 21, 16, .96), rgba(8, 8, 7, .98));
+    box-shadow: 0 22px 56px rgba(0, 0, 0, .56);
   }
 }
 
@@ -540,6 +643,11 @@ main:has(> .v064-discography-stage) + .site-footer {
   .discography-jukebox .home-jukebox__navigation-hint { margin-top: .65rem; }
   .discography-jukebox .home-jukebox__navigation-hint span:first-child { display: none; }
   .discography-jukebox .home-jukebox__navigation-hint span:last-child { display: inline; }
+
+  .discography-jukebox__player-context {
+    display: grid;
+    margin: .85rem 1.1rem 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -547,6 +655,7 @@ main:has(> .v064-discography-stage) + .site-footer {
   .discography-jukebox .home-jukebox__item,
   .discography-card,
   .discography-jukebox .home-jukebox__progress,
+  .discography-jukebox__player-progress > span,
   .discography-jukebox__filters button,
   .discography-jukebox__sort select { transition: none !important; animation: none !important; }
 

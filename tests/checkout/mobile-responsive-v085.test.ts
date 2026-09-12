@@ -11,6 +11,7 @@ test("V0.8.5 Commander owns its scoped stylesheet and collapses secondary mobile
   assert.doesNotMatch(layout, /v084-commander\.css/);
   assert.match(page, /import "\.\.\/v084-commander\.css"/);
   assert.match(page, /className="commander-meeting-v084__desktop"/);
+  assert.match(page, /className="content-columns__label commander-meeting-v084__desktop">Comment ça marche \?<\/p>/);
   assert.match(page, /<details className="commander-meeting-v084__details commander-meeting-v084__mobile">/);
   assert.match(page, /<summary>Comment ça marche<\/summary>/);
   assert.match(form, /<details className="order-aside__disclosure order-aside__mobile">/);
@@ -20,6 +21,7 @@ test("V0.8.5 Commander owns its scoped stylesheet and collapses secondary mobile
   assert.match(css, /\.commander-meeting-v084__desktop \{ display: block; \}/);
   assert.match(css, /\.commander-meeting-v084__mobile \{ display: none; \}/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.commander-meeting-v084__desktop \{ display: none; \}[\s\S]*?\.commander-meeting-v084__mobile \{ display: block; \}/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.commander-hero-v084::after \{ display: none; \}/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.commander-hero-v084 \{[\s\S]*?min-height: 0;/);
   assert.match(css, /\.commander-v084 \.order-aside::after \{ pointer-events: none; \}/);
   assert.match(css, /@media \(max-width: 1100px\) \{[\s\S]*?\.commander-v084 \{ grid-template-columns: minmax\(0, 1fr\); \}/);

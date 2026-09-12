@@ -100,7 +100,7 @@ test("changing the sort resets the scene to the first project in the selected or
   assert.match(component, /const applySort = \(nextSort: DiscographySort\) => \{/);
   assert.match(component, /const nextProjects = visibleDiscographyProjects\(projects, nextFilter, sort\);/);
   assert.match(component, /const nextProjects = visibleDiscographyProjects\(projects, filter, nextSort\);/);
-  assert.match(component, /setSort\(nextSort\);[\s\S]*?select\(nextIndex, false\);/);
+  assert.match(component, /setSort\(nextSort\);[\s\S]*?select\(nextIndex\);/);
   assert.match(component, /onChange=\{\(event\) => applySort\(event\.target\.value as DiscographySort\)\}/);
   assert.match(component, /data-active-index=\{currentVisibleIndex\}/);
   assert.match(component, /data-active-project-index=\{activeIndex\}/);
@@ -111,20 +111,46 @@ test("the desktop scene keeps five relative cover positions", async () => {
   for (const position of ["is-far-previous", "is-previous", "is-active", "is-next", "is-far-next"]) assert.match(component, new RegExp(position));
 });
 
-test("the jukebox keeps one explicit continuous model for safari-friendly playback", async () => {
+test("the jukebox keeps explicit selected, playing and player-metadata identities", async () => {
   const component = await readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8");
+
   assert.match(component, /const \[audioUnlocked, setAudioUnlocked\] = useState\(false\);/);
-  assert.match(component, /const \[continuousPlayback, setContinuousPlayback\] = useState\(false\);/);
-  assert.match(component, /const shouldAutoplay = useCallback/);
+  assert.match(component, /const \[playerState, dispatchPlayerState\] = useReducer/);
+  assert.match(component, /const activeSlug = playerState\.selectedSlug;/);
+  assert.match(component, /const playingSlug = playerState\.playingSlug;/);
+  assert.match(component, /const playerMetadataSlug = jukeboxPlayerMetadataSlug\(playerState\);/);
   assert.match(component, /const attemptPlayback = useCallback/);
   assert.match(component, /const playRequestRef = useRef\(0\);/);
-  assert.match(component, /const playbackAllowed = continuousPlayback;/);
-  assert.doesNotMatch(component, /const playbackAllowed = fromGesture \|\| continuousPlayback;/);
-  assert.match(component, /if \(playbackAllowed && nextProject\.audioPreview\)/);
+  assert.match(component, /const pendingPlayRef = useRef/);
+  assert.match(component, /if \(!playerStateRef\.current\.playingSlug\) syncTrackMedia\(next\);/);
+  assert.match(component, /data-selected-project=\{active\.slug\}/);
+  assert.match(component, /data-playing-project=\{playingSlug \?\? ""\}/);
+  assert.match(component, /data-player-project=\{playerProject\.slug\}/);
+  assert.match(component, /data-selection-playing-mismatch=\{playingProject && playingProject\.slug !== active\.slug \? true : undefined\}/);
+  assert.match(component, /En lecture/);
+  assert.match(component, /Sélection affichée/);
   assert.match(component, /playRequestRef\.current \+= 1;/);
+  assert.match(component, /pendingPlayRef\.current = null;/);
   assert.match(component, /if \(audio\.src !== targetSrc\)/);
   assert.doesNotMatch(component, /audio\.currentSrc !== targetSrc/);
   assert.match(component, /window\.dispatchEvent\(new CustomEvent\("lnx-audio-preview-play"/);
+  assert.match(component, /setEnded\(playerStateRef\.current\.selectedSlug === sourceSlug\);/);
+  assert.match(component, /const metadataSlug = jukeboxPlayerMetadataSlug\(playerStateRef\.current\);/);
+  assert.match(component, /pendingCenterIndexRef\.current = next;[\s\S]*?scheduleProgrammaticRelease\(\);/);
+  assert.equal(component.match(/scheduleProgrammaticRelease\(\);/g)?.length, 1, "seule une navigation contrôlée doit armer le verrou de recentrage");
+});
+
+test("selected and playing projects remain explicit and controllable on mobile and desktop", async () => {
+  const [component, css] = await Promise.all([
+    readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../app/v064-discography.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(component, /playingProject && playingProject\.slug !== active\.slug/);
+  assert.match(component, /if \(playing\) pauseCurrent\(\); else void togglePlay\(\);/);
+  assert.match(css, /\.discography-card__playing \{[\s\S]*?pointer-events: none;/);
+  assert.match(css, /@media \(min-width: 701px\)[\s\S]*?\[data-selection-playing-mismatch="true"\][\s\S]*?\.discography-jukebox__player-context \{[\s\S]*?position: fixed;[\s\S]*?display: grid;/);
+  assert.match(css, /@media \(max-width: 700px\)[\s\S]*?\.discography-jukebox__player-context \{[\s\S]*?display: grid;/);
 });
 
 test("all public players coordinate through one playback event", async () => {
@@ -133,7 +159,7 @@ test("all public players coordinate through one playback event", async () => {
     readFile(new URL("../../components/audio-preview-player.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(jukebox, /window\.addEventListener\("lnx-audio-preview-play", stopOtherJukebox\)/);
-  assert.match(jukebox, /pauseCurrent\(false\)/);
+  assert.match(jukebox, /pauseCurrent\(\)/);
   assert.match(standalone, /window\.addEventListener\(playbackEvent, stopOtherPlayer\)/);
 });
 
@@ -143,7 +169,7 @@ test("the jukebox uses a single shared audio element and explicit user-triggered
   assert.match(component, /ref={audioRef}/);
   assert.doesNotMatch(component, /\bautoPlay\b/);
   assert.doesNotMatch(component, /\bcontrols\b/);
-  assert.match(component, /pauseCurrent\(false\)/);
+  assert.match(component, /pauseCurrent\(\)/);
   assert.match(component, /catch \{/);
   assert.doesNotMatch(component, /audio\.play\(\)\.catch/);
 });
@@ -155,7 +181,7 @@ test("navigation is bounded and exposes symmetric accessible 48px controls plus 
   ]);
   assert.match(component, /const selectVisible = useCallback/);
   assert.match(component, /if \(globalIndex !== undefined\) select\(globalIndex, fromGesture\);/);
-  assert.match(component, /next === activeIndex/);
+  assert.match(component, /const selectionChanged = nextProject\.slug !== playerStateRef\.current\.selectedSlug;/);
   assert.match(component, /aria-label="Projet précédent"/);
   assert.match(component, /aria-label="Projet suivant"/);
   assert.match(component, /disabled={currentVisibleIndex === 0}/);

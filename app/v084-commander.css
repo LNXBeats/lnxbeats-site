@@ -513,6 +513,7 @@ main:has(.commander-v084) .commander-meeting-v084 { padding-block: clamp(2.5rem,
 @media (max-width: 600px) {
   .commander-meeting-v084__desktop { display: none; }
   .commander-meeting-v084__mobile { display: block; }
+  .commander-hero-v084::after { display: none; }
   .commander-hero-v084 {
     min-height: 0;
     padding-block: calc(var(--header-height) + 2.5rem) 2.75rem;
