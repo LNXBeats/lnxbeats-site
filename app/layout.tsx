@@ -17,6 +17,9 @@ import "./legal-compliance.css";
 import "./v110-chrome-polish.css";
 import "./v110-surface-polish.css";
 import "./v120-ui-motion-polish.css";
+import "./v120-ui-conformance-v2.css";
+import "./v120-ui-conformance-v2-reference.css";
+import "./v130-ui-refinement.css";
 
 const siteUrl = CANONICAL_SITE_ORIGIN;
 const socialImage = new URL("/og.png", siteUrl).toString();

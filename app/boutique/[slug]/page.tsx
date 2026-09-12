@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ShopAddButton } from "@/components/shop-add-button";
 import { Container } from "@/components/container";
+import { ShopProductMedia } from "@/components/shop-product-media";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
 import { getPublicShopProduct } from "@/lib/shop/order-service";
 
@@ -34,16 +34,12 @@ export default async function ShopProductPage({ params }: Context) {
         <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true">←</span> Retour à la Boutique</Link>
         <article className="shop-product-detail">
           <div className="shop-product-detail__image">
-            {product.image ? (
-              <Image
-                alt={product.image.alt}
-                height={product.image.height ?? 1200}
-                priority
-                sizes="(max-width: 900px) min(calc(100vw - 40px), 600px), (max-width: 1440px) 45vw, 640px"
-                src={`/media/boutique/${product.image.id}`}
-                width={product.image.width ?? 1200}
-              />
-            ) : null}
+            <ShopProductMedia
+              image={product.image}
+              priority
+              productTitle={product.title}
+              sizes="(max-width: 900px) min(calc(100vw - 40px), 600px), (max-width: 1440px) 45vw, 640px"
+            />
           </div>
           <div className="shop-product-detail__copy">
             <p className="eyebrow">Édition LNX Beats</p>

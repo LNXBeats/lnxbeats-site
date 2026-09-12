@@ -18,12 +18,6 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "LNX Beats — Chaque histoire mérite sa musique", description: homeDescription, images: ["/og.png"] },
 };
 
-const perspectives = [
-  { number: "01", title: "Histoires", description: "Des personnages, du vécu, des scènes qui restent." },
-  { number: "02", title: "Univers", description: "Rap, humour, émotion, expérimentation : chaque récit trouve sa lumière." },
-  { number: "03", title: "Sur mesure", description: "Votre histoire devient une création LNX Beats, pensée dans ses détails." },
-] as const;
-
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
@@ -31,18 +25,21 @@ export default async function HomePage() {
 
   return <>
     <section className="home-hero home-hero--editorial" aria-labelledby="home-hero-title" data-motion-scene="home">
-      <div className="home-hero__media" aria-hidden="true" data-motion-layer="media"><Image src="/assets/hero-desktop.jpg" alt="" fill priority sizes="100vw" /></div>
+      <div className="home-hero__media" aria-hidden="true" data-motion-layer="media"><Image src="/assets/v3/hero-main-ludovic-dog-exact.jpg" alt="" fill priority sizes="100vw" /></div>
       <Container className="home-hero__inner">
         <div className="home-hero__copy home-hero__copy--editorial" data-motion-layer="copy">
-          <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
+          <h1 id="home-hero-title" className="home-hero__wordmark">
+            <span className="visually-hidden">LNX Beats</span>
+            <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} priority />
+          </h1>
           <p className="eyebrow home-hero__eyebrow">
-            <span className="home-hero__eyebrow-story"><span className="home-hero__eyebrow-story-key">Les histoires</span> deviennent musique</span>
+            <span className="home-hero__eyebrow-story">Des histoires, des personnages, des morceaux qui restent.</span>
           </p>
-          <p className="home-hero__slogan">Chaque histoire mérite sa musique.</p>
-          <p className="home-hero__lead">Un prénom, un souvenir ou une scène banale : LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
+          <p className="home-hero__slogan">Les histoires deviennent musique.</p>
+          <p className="home-hero__lead">Chaque histoire mérite sa musique.</p>
           <div className="home-hero__actions"><ButtonLink href="/discographie">Découvrir la musique</ButtonLink><ButtonLink href="/commander" variant="secondary">Commander une création</ButtonLink></div>
         </div>
-        <div className="home-hero__signature" aria-hidden="true" data-motion-layer="signature"><span>Rap narratif</span><span>Humour</span><span>Émotion</span></div>
+        <div className="home-hero__signature" aria-hidden="true" data-motion-layer="signature"><span>Des univers qui touchent</span><span>Une ambiance unique</span><span>Plus qu’une musique, des émotions</span></div>
       </Container>
     </section>
 
@@ -55,11 +52,6 @@ export default async function HomePage() {
         </article>
       </Container>
     </section> : null}
-
-    <section className="section home-perspectives home-perspectives--editorial" aria-labelledby="perspectives-title">
-      <div className="home-perspectives__texture" aria-hidden="true" />
-      <Container className="home-perspectives__inner"><div className="home-perspectives__heading motion-reveal"><p className="section-index">LNX en trois regards</p><h2 id="perspectives-title">Une musique qui prend le réel au sérieux.</h2></div><div className="home-perspectives__grid motion-reveal motion-reveal--soft">{perspectives.map((perspective) => <article className="home-perspective home-perspective--editorial" key={perspective.title}><span className="home-perspective__number">{perspective.number}</span><h3>{perspective.title}</h3><p>{perspective.description}</p></article>)}</div></Container>
-    </section>
 
     <section className="home-contact home-contact--compact home-contact--editorial" id="sur-mesure" aria-labelledby="home-contact-title"><Container className="home-contact__inner motion-reveal"><p className="section-index">Votre histoire</p><div><h2 id="home-contact-title">Et si la prochaine histoire était la vôtre ?</h2><p>Quelques détails suffisent pour ouvrir la première scène.</p><div className="home-contact__actions"><ButtonLink href="/commander">Commander une création</ButtonLink><ButtonLink href="/contact" variant="quiet">Écrire à LNX Beats</ButtonLink></div></div></Container></section>
   </>;

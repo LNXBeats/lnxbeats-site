@@ -18,11 +18,11 @@ export default function AboutPage() {
         <Container className="about-hero__grid">
           <div className="about-hero__copy about-hero__copy--editorial" data-motion-layer="copy">
             <p className="eyebrow">Derrière LNX Beats</p>
-            <h1>Ludovic<br /><em>Mathon.</em></h1>
+            <h1>Ludovic<br /> <em>Mathon.</em></h1>
             <p>{artistBiography.short}</p>
           </div>
           <div className="about-hero__portrait about-hero__portrait--editorial" data-motion-layer="media">
-            <Image src="/assets/hero-mobile.jpg" alt="LNX Beats dans une ambiance de studio sombre" fill loading="eager" sizes="(max-width: 820px) 100vw, 48vw" />
+            <Image src="/assets/v3/hero-main-ludovic-dog-exact.jpg" alt="Ludovic et son chien dans l’univers visuel LNX Beats" fill loading="eager" sizes="(max-width: 820px) 100vw, 48vw" />
             <span aria-hidden="true">Portrait / studio</span>
           </div>
         </Container>
@@ -41,6 +41,12 @@ export default function AboutPage() {
             </div>
             <ButtonLink href="/discographie" variant="quiet">Écouter la discographie</ButtonLink>
           </div>
+        </Container>
+      </section>
+      <section className="about-final-cta" aria-labelledby="about-final-cta-title">
+        <Container className="about-final-cta__inner motion-reveal">
+          <div><p className="eyebrow">La suite s’écoute</p><h2 id="about-final-cta-title">Entrez dans les histoires LNX Beats.</h2></div>
+          <ButtonLink href="/discographie" variant="secondary">Découvrir la discographie</ButtonLink>
         </Container>
       </section>
     </>

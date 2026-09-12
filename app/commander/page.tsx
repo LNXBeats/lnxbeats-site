@@ -62,7 +62,8 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
 
   return (
     <>
-      <header className="page-hero page-hero--story commander-hero-v084">
+      <header className="page-hero page-hero--story commander-hero-v084" data-motion-scene="commander">
+        <div className="commander-hero-v2__backdrop" aria-hidden="true" data-motion-layer="media" />
         <Container className="page-hero__grid">
           <div>
             <p className="eyebrow">Une histoire à confier</p>
@@ -77,18 +78,6 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
           </div>
         </Container>
       </header>
-      <section className="section editorial-break commander-meeting-v084">
-        <Container className="content-columns motion-reveal">
-          <p className="content-columns__label">La rencontre</p>
-          <div className="commander-meeting-v084__desktop">
-            <CommanderMeetingCopy paymentAvailable={paymentAvailable} />
-          </div>
-          <details className="commander-meeting-v084__details commander-meeting-v084__mobile">
-            <summary>Comment ça marche</summary>
-            <CommanderMeetingCopy paymentAvailable={paymentAvailable} />
-          </details>
-        </Container>
-      </section>
       <section className="section commander-order-section-v084">
         <Container className="order-layout commander-v084 motion-reveal motion-reveal--soft">
           <MusicOrderForm
@@ -98,6 +87,18 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
             paymentProviders={paymentProviders}
             resumeJourney={resumeJourney}
           />
+        </Container>
+      </section>
+      <section className="section editorial-break commander-meeting-v084">
+        <Container className="content-columns motion-reveal">
+          <p className="content-columns__label">Comment ça marche ?</p>
+          <div className="commander-meeting-v084__desktop">
+            <CommanderMeetingCopy paymentAvailable={paymentAvailable} />
+          </div>
+          <details className="commander-meeting-v084__details commander-meeting-v084__mobile">
+            <summary>Comment ça marche</summary>
+            <CommanderMeetingCopy paymentAvailable={paymentAvailable} />
+          </details>
         </Container>
       </section>
     </>

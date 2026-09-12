@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Container } from "@/components/container";
 import { ExternalLinkIcon } from "@/components/link-icons";
 import { navigation, siteConfig } from "@/data/site";
@@ -8,8 +9,7 @@ export function SiteFooter() {
     <footer className="site-footer">
       <Container>
         <div className="site-footer__signature" aria-hidden="true">
-          <span>LNX</span>
-          <span>BEATS</span>
+          <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} />
         </div>
         <div className="site-footer__top">
           <div className="site-footer__statement">

@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <>
-      <header className="contact-hero">
-        <Image src="/assets/hero-desktop.jpg" alt="" fill loading="eager" sizes="100vw" />
+      <header className="contact-hero contact-hero--v3" data-motion-scene="contact">
+        <Image src="/assets/v3/hero-main-ludovic-dog-exact.jpg" alt="" fill loading="eager" sizes="100vw" data-motion-layer="media" />
         <Container className="contact-hero__inner">
           <div>
             <p className="eyebrow">Entrer en conversation</p>
@@ -24,7 +24,7 @@ export default function ContactPage() {
           </div>
         </Container>
       </header>
-      <section className="section">
+      <section className="section contact-section--v3">
         <Container>
           <div className="contact-intents motion-reveal motion-reveal--soft" aria-label="Motifs de contact">
             <span>Création personnalisée</span>

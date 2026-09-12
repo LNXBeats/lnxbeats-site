@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { navigation } from "@/data/site";
@@ -134,8 +135,12 @@ export function SiteHeader() {
     <header className={`site-header ${pathname === "/" ? "site-header--home" : ""} ${compact && !open ? "site-header--compact" : ""}`}>
       <Container className="site-header__inner">
         <Link className="brand" href="/" aria-label="LNX Beats — accueil" onClick={() => setOpen(false)}>
-          <span className="brand__lnx">LNX</span>
-          <span className="brand__beats">Beats</span>
+          <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} priority />
+        </Link>
+
+        <Link className="mobile-account-link" href="/compte" aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}>
+          <span aria-hidden="true">♙</span>
+          <span>Compte</span>
         </Link>
 
         <nav ref={desktopNavigationRef} className="desktop-navigation" aria-label="Navigation principale">

@@ -66,7 +66,8 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   return (
     <>
       <header className="album-hero" data-motion-scene="album">
-        <Container>
+        <div className="album-hero__backdrop" aria-hidden="true" />
+        <Container className="album-hero__inner">
           <Link className="back-link" href="/discographie"><span aria-hidden="true">←</span> Retour à la discographie</Link>
           <div className="album-hero__grid">
             <div data-motion-layer="media"><ProjectArtwork project={project} priority sizes="(max-width: 820px) 100vw, 48vw" className="album-hero__art" /></div>
@@ -104,12 +105,12 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
 
       <section className="section album-details">
         <Container className="album-details__grid motion-reveal motion-reveal--soft">
-          <Tracklist project={project} />
           <aside className="album-editorial-note">
             <p className="eyebrow">Derrière le projet</p>
             <h2>{project.description ? "L’histoire qui ouvre la musique." : "Le récit viendra trouver sa place."}</h2>
             <p>{project.description || "Aucun récit éditorial n’est publié pour ce projet à ce jour."}</p>
           </aside>
+          <Tracklist project={project} />
         </Container>
       </section>
     </>

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 
 import { ButtonLink } from "@/components/button";
 import { ShopAddButton } from "@/components/shop-add-button";
+import { ShopProductMedia } from "@/components/shop-product-media";
 import { Container } from "@/components/container";
 import { siteConfig } from "@/data/site";
 import { parseShopConfiguration } from "@/lib/shop/config";
@@ -65,7 +65,8 @@ function ShopEmptyState() {
   return (
     <div className="shop-commerce-shell">
       <header className="shop-commerce-hero">
-        <Container>
+        <div className="shop-commerce-hero__backdrop" aria-hidden="true" />
+        <Container className="shop-commerce-hero__inner">
           <p className="eyebrow">Boutique LNX Beats</p>
           <h1>La collection se prépare.</h1>
           <p>La Boutique est activée, mais aucun produit publié n’est disponible pour le moment.</p>
@@ -99,9 +100,10 @@ export default async function ShopPage() {
   return (
     <div className="shop-commerce-shell">
       <header className="shop-commerce-hero">
-        <Container>
+        <div className="shop-commerce-hero__backdrop" aria-hidden="true" />
+        <Container className="shop-commerce-hero__inner">
           <p className="eyebrow">Boutique LNX Beats</p>
-          <h1>Des histoires à garder.</h1>
+          <h1><span>Boutique</span> LNX Beats</h1>
           <p>Éditions physiques et objets officiels, préparés en quantité maîtrisée.</p>
         </Container>
       </header>
@@ -118,15 +120,11 @@ export default async function ShopPage() {
             {products.map((product) => (
               <article className="shop-product-card" key={product.id}>
                 <Link className="shop-product-card__image" href={`/boutique/${encodeURIComponent(product.slug)}`}>
-                  {product.image ? (
-                    <Image
-                      alt={product.image.alt}
-                      height={product.image.height ?? 1200}
-                      sizes="(max-width: 620px) calc(100vw - 40px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 430px"
-                      src={`/media/boutique/${product.image.id}`}
-                      width={product.image.width ?? 1200}
-                    />
-                  ) : null}
+                  <ShopProductMedia
+                    image={product.image}
+                    productTitle={product.title}
+                    sizes="(max-width: 620px) calc(100vw - 40px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 430px"
+                  />
                 </Link>
                 <div className="shop-product-card__body">
                   <p className="shop-product-card__status">

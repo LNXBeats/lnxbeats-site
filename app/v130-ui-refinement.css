@@ -1,0 +1,967 @@
+/* V3 visual refinement for the V1.2 public interface.
+ *
+ * This final presentation layer removes the fixed-height/absolute-position
+ * assumptions that caused the V2 home and discography collisions. It does not
+ * change content, routes, form behaviour, catalogue data, or commerce rules.
+ */
+
+:root {
+  --v3-yellow: #ffcc19;
+  --v3-ink: #050706;
+  --v3-line: rgba(255, 255, 255, 0.14);
+  --v3-gutter: clamp(1rem, 4vw, 3.6rem);
+  --header-height: 64px;
+}
+
+/* Shared chrome --------------------------------------------------------- */
+
+.site-header,
+.site-header--home {
+  height: 64px;
+  background: rgba(4, 7, 7, 0.92);
+}
+
+.site-header.site-header--compact {
+  height: 56px;
+}
+
+.site-header__inner {
+  width: min(100%, 1440px);
+  max-width: 1440px;
+  padding-inline: var(--v3-gutter);
+}
+
+.brand,
+.site-header--compact .brand {
+  width: clamp(138px, 11.5vw, 166px);
+  min-width: 0;
+  min-height: 44px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.site-header--compact .brand {
+  width: clamp(126px, 10vw, 148px);
+}
+
+.brand img,
+.site-footer__signature img,
+.home-hero__wordmark img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.desktop-navigation {
+  min-width: 0;
+  gap: clamp(0.18rem, 0.75vw, 0.82rem);
+}
+
+.desktop-navigation__link,
+.desktop-navigation__cta,
+.desktop-navigation__account {
+  min-height: 44px;
+  padding-inline: clamp(0.46rem, 0.78vw, 0.78rem);
+  font-size: clamp(0.61rem, 0.66vw, 0.7rem);
+  white-space: nowrap;
+}
+
+.site-footer {
+  border-top: 1px solid var(--v3-line);
+  background: #050807;
+}
+
+body .site-footer {
+  padding-top: 0 !important;
+}
+
+body .site-footer > div {
+  display: grid !important;
+  width: min(100%, 1440px) !important;
+  max-width: 1440px !important;
+  grid-template-columns: minmax(132px, 164px) minmax(0, 1fr) !important;
+  gap: 0.35rem clamp(1.4rem, 3vw, 3rem) !important;
+  padding: 0.85rem var(--v3-gutter) 0.65rem !important;
+}
+
+body .site-footer__signature {
+  width: clamp(132px, 12vw, 158px);
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: start;
+  aspect-ratio: auto;
+}
+
+body .site-footer__top {
+  display: block !important;
+  padding: 0 !important;
+}
+
+.site-footer__columns--desktop {
+  grid-template-columns: 0.95fr 0.85fr 1.4fr;
+  gap: clamp(0.85rem, 2vw, 2rem);
+}
+
+body .site-footer__columns--desktop > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  align-items: center;
+  gap: 0.05rem 0.65rem;
+}
+
+body .site-footer__columns--desktop h2 {
+  flex: 0 0 100%;
+  margin-bottom: 0.1rem;
+  font-size: 0.55rem;
+}
+
+body .site-footer__columns--desktop a {
+  min-height: 24px;
+  font-size: 0.61rem;
+}
+
+body .site-footer__bottom {
+  grid-column: 1 / -1;
+  gap: 1rem 2rem;
+  padding-block: 0.4rem 0 !important;
+  font-size: 0.54rem;
+}
+
+/* Home: the benefit rail is in normal flow, never over the CTAs. -------- */
+
+body main#contenu .home-hero--editorial {
+  min-height: 550px !important;
+}
+
+body main#contenu .home-hero--editorial::before {
+  background:
+    linear-gradient(90deg, rgba(3, 6, 6, 0.98), rgba(3, 6, 6, 0.88) 34%, rgba(3, 6, 6, 0.2) 66%, rgba(3, 6, 6, 0.08)),
+    linear-gradient(0deg, rgba(3, 6, 6, 0.72), transparent 50%);
+}
+
+body main#contenu .home-hero--editorial .home-hero__media img {
+  object-position: 66% 43%;
+}
+
+body main#contenu .home-hero--editorial .home-hero__inner {
+  display: grid;
+  min-height: 550px !important;
+  grid-template-columns: minmax(360px, 0.88fr) minmax(300px, 1.12fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  align-content: stretch;
+  column-gap: clamp(1.5rem, 4vw, 4rem);
+  row-gap: 1.25rem;
+  padding-top: 88px !important;
+  padding-bottom: 1.35rem !important;
+}
+
+body main#contenu .home-hero--editorial .home-hero__copy--editorial {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  gap: 0.34rem !important;
+  padding: 0 !important;
+}
+
+body main#contenu .home-hero--editorial .home-hero__wordmark {
+  width: min(100%, 420px) !important;
+}
+
+body main#contenu .home-hero--editorial .home-hero__actions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  width: 100%;
+  margin-top: 1.15rem;
+}
+
+body main#contenu .home-hero--editorial .home-hero__actions .button {
+  min-height: 46px;
+}
+
+body main#contenu .home-hero--editorial .home-hero__signature {
+  position: relative !important;
+  inset: auto !important;
+  display: grid;
+  width: min(100%, 620px);
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(0.45rem, 1vw, 0.9rem);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  transform: none;
+}
+
+body main#contenu .home-hero--editorial .home-hero__signature span {
+  min-width: 0;
+  padding: 0.2rem 0 0.2rem clamp(0.42rem, 0.8vw, 0.72rem);
+  border-left: 2px solid var(--v3-yellow);
+  font-size: clamp(0.46rem, 0.55vw, 0.56rem);
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+body main#contenu .home-featured--editorial {
+  padding-block: clamp(1.6rem, 3vw, 2.7rem) !important;
+}
+
+body main#contenu .home-featured--editorial .home-project-lead {
+  height: auto !important;
+  min-height: 220px !important;
+  grid-template-columns: 220px minmax(0, 1fr) !important;
+  overflow: visible;
+}
+
+body main#contenu .home-featured--editorial .home-project-lead__art,
+body main#contenu .home-featured--editorial .home-project-lead__art .project-artwork {
+  width: 220px !important;
+  height: 100% !important;
+  min-height: 220px !important;
+}
+
+body main#contenu .home-featured--editorial .home-project-lead__copy {
+  width: 100%;
+  height: auto !important;
+  min-height: 220px !important;
+  overflow: visible !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.home-featured--editorial .home-project-lead__copy .audio-preview-player {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Discography: reserve the real card height before the footer. ---------- */
+
+body main#contenu .v064-discography-stage {
+  min-height: 0 !important;
+  padding-block: 80px clamp(2.5rem, 4vw, 4rem) !important;
+  overflow-x: clip;
+  overflow-y: visible;
+  background:
+    linear-gradient(90deg, rgba(4, 6, 5, 0.8), rgba(4, 6, 5, 0.4) 50%, rgba(4, 6, 5, 0.78)),
+    linear-gradient(0deg, #050706, transparent 44%, rgba(5, 7, 6, 0.38)),
+    url("/assets/v3/hero-main-ludovic-dog-exact.jpg") 67% 46% / cover;
+}
+
+body main#contenu .discography-jukebox .home-jukebox__scene {
+  --jukebox-cover-size: clamp(270px, 24vw, 350px) !important;
+  --discography-card-width: var(--jukebox-cover-size) !important;
+  --discography-card-body: 96px;
+  --discography-scene-top-space: clamp(2.6rem, 4vw, 3.6rem) !important;
+  min-height: calc(var(--discography-card-width) + var(--discography-card-body) + var(--discography-scene-top-space) + 2rem) !important;
+  margin-top: 0.5rem;
+}
+
+body main#contenu .discography-jukebox .home-jukebox__rail {
+  height: calc(var(--discography-card-width) + var(--discography-card-body)) !important;
+  margin-top: var(--discography-scene-top-space) !important;
+}
+
+body main#contenu .discography-card {
+  grid-template-rows: auto minmax(var(--discography-card-body), auto);
+}
+
+body main#contenu .discography-card__body {
+  min-height: var(--discography-card-body) !important;
+}
+
+/* Interior pages keep the real data and reuse the exact V3 image only as a
+ * presentation layer. No fictional tracks, products or form controls. */
+
+body main#contenu .album-hero__backdrop {
+  background:
+    linear-gradient(90deg, rgba(4, 6, 5, 0.94), rgba(4, 6, 5, 0.58) 54%, rgba(4, 6, 5, 0.4)),
+    linear-gradient(0deg, #060807, transparent 48%),
+    url("/assets/v3/hero-main-ludovic-dog-exact.jpg") 64% 43% / cover;
+  filter: saturate(0.86) brightness(0.74);
+}
+
+body main#contenu .album-hero__art.project-artwork:not(.project-artwork--image) .project-artwork__title {
+  font-size: clamp(2rem, 3.2vw, 3rem);
+  line-height: 0.9;
+}
+
+body main#contenu .album-hero__art.project-artwork:not(.project-artwork--image) .project-artwork__status {
+  padding-top: 0.55rem;
+  font-size: 0.5rem;
+}
+
+body main#contenu .commander-hero-v2__backdrop {
+  background:
+    linear-gradient(90deg, rgba(4, 6, 5, 0.96), rgba(4, 6, 5, 0.56) 52%, rgba(4, 6, 5, 0.34)),
+    linear-gradient(0deg, rgba(4, 6, 5, 0.88), transparent 55%),
+    url("/assets/v3/hero-main-ludovic-dog-exact.jpg") 64% 45% / cover;
+}
+
+body main#contenu .commander-order-section-v084,
+body main#contenu .shop-commerce-shell,
+body main#contenu .shop-product-page {
+  overflow-x: clip;
+}
+
+body main#contenu .shop-commerce-hero__backdrop {
+  background:
+    linear-gradient(90deg, rgba(4, 6, 5, 0.97), rgba(4, 6, 5, 0.54) 50%, rgba(4, 6, 5, 0.2)),
+    linear-gradient(0deg, #060807, transparent 48%),
+    url("/assets/v3/hero-main-ludovic-dog-exact.jpg") 66% 45% / cover;
+}
+
+body main#contenu .shop-product-card,
+body main#contenu .shop-product-detail,
+body main#contenu .commander-v084 {
+  min-width: 0;
+}
+
+/* The fixed header must never cover the first line of the shop hero. */
+body main#contenu .shop-commerce-hero,
+body main#contenu .shop-commerce-hero .shop-commerce-hero__inner {
+  min-height: 360px !important;
+}
+
+body main#contenu .shop-commerce-hero .shop-commerce-hero__inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  box-sizing: border-box;
+  align-content: center;
+  padding-top: calc(var(--header-height) + 1.75rem) !important;
+  padding-bottom: 1.5rem !important;
+}
+
+body main#contenu .shop-commerce-hero h1 {
+  margin-block: 0.35rem 0.55rem;
+}
+
+/* The supplied Contact board is a consistency sheet rather than a new flow.
+ * This harmonises the existing direct-contact page without inventing fields. */
+
+body main#contenu .contact-hero--v3 {
+  min-height: clamp(430px, 52vw, 620px);
+  padding-top: var(--header-height);
+  overflow: hidden;
+  background: #050706;
+}
+
+body main#contenu .contact-hero--v3 > img {
+  object-position: 64% 44%;
+  filter: saturate(0.8) brightness(0.72) contrast(1.06);
+}
+
+body main#contenu .contact-hero--v3::after {
+  background:
+    linear-gradient(90deg, rgba(4, 6, 5, 0.98), rgba(4, 6, 5, 0.78) 45%, rgba(4, 6, 5, 0.2)),
+    linear-gradient(0deg, #050706, transparent 48%);
+}
+
+body main#contenu .contact-hero--v3 .contact-hero__inner {
+  display: grid;
+  min-height: calc(clamp(430px, 52vw, 620px) - var(--header-height));
+  align-items: center;
+  padding-block: clamp(2rem, 5vw, 4rem) !important;
+}
+
+body main#contenu .contact-hero--v3 h1 {
+  max-width: 13ch;
+  font-size: clamp(3.1rem, 6.8vw, 7rem);
+  line-height: 0.9;
+}
+
+body main#contenu .contact-section--v3 {
+  padding-block: clamp(2rem, 4vw, 3.5rem);
+}
+
+body main#contenu .contact-intents {
+  gap: 0.5rem;
+}
+
+body main#contenu .contact-intents span {
+  min-height: 42px;
+  border-color: rgba(255, 204, 25, 0.2);
+  background: rgba(9, 11, 10, 0.72);
+}
+
+body main#contenu .contact-panel {
+  border-color: rgba(255, 204, 25, 0.2);
+  background: linear-gradient(145deg, rgba(18, 16, 12, 0.88), rgba(7, 9, 8, 0.96));
+}
+
+/* About: one continuous editorial surface, not a framed card. ----------- */
+
+body main#contenu .about-story-scene--editorial {
+  padding-block: clamp(2.3rem, 5vw, 4.8rem) !important;
+}
+
+body main#contenu .about-teaser--editorial {
+  width: min(calc(100% - (var(--v3-gutter) * 2)), 1120px);
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body main#contenu .about-editorial__copy > h2 {
+  max-width: 20ch !important;
+}
+
+body main#contenu .about-editorial__biography {
+  gap: 1rem clamp(2rem, 5vw, 4.5rem) !important;
+  margin-top: clamp(1.5rem, 3vw, 2.4rem) !important;
+}
+
+body main#contenu .about-editorial__biography > p,
+body main#contenu .about-editorial__continuation p {
+  font-size: clamp(0.88rem, 1vw, 1rem) !important;
+  line-height: 1.68 !important;
+}
+
+body main#contenu .about-editorial__continuation {
+  gap: clamp(1.5rem, 4vw, 4rem);
+  margin-block: clamp(1.5rem, 3vw, 2.5rem) !important;
+  padding-top: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+body main#contenu .about-final-cta__inner {
+  min-height: 140px !important;
+  padding-block: 1.5rem !important;
+}
+
+/* Shop media fallback. The real media remains the preferred rendering. -- */
+
+.shop-product-media {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  place-items: stretch;
+  overflow: hidden;
+  background: #0a0b0a;
+}
+
+.shop-product-media > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shop-product-media--fallback {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  place-content: center;
+  place-items: center;
+  gap: 0.65rem;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 204, 25, 0.16), transparent 32%),
+    linear-gradient(145deg, #15140f, #070908 68%);
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.shop-product-media--fallback::before,
+.shop-product-media--fallback::after {
+  position: absolute;
+  border: 1px solid rgba(255, 204, 25, 0.16);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.shop-product-media--fallback::before {
+  width: min(70%, 260px);
+  aspect-ratio: 1;
+}
+
+.shop-product-media--fallback::after {
+  width: min(46%, 170px);
+  aspect-ratio: 1;
+}
+
+.shop-product-media--fallback > * {
+  position: relative;
+  z-index: 1;
+}
+
+.shop-product-media--fallback strong {
+  color: #fff;
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  line-height: 1.1;
+}
+
+.shop-product-media--fallback span {
+  max-width: 26ch;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.shop-product-card__image > .shop-product-media,
+.shop-product-card__image > .shop-product-media--fallback,
+.shop-product-detail__image > .shop-product-media,
+.shop-product-detail__image > .shop-product-media--fallback {
+  min-height: 100%;
+}
+
+.shop-product-detail__image .shop-product-media {
+  aspect-ratio: 1;
+}
+
+/* Tablet ---------------------------------------------------------------- */
+
+@media (max-width: 1100px) and (min-width: 821px) {
+  .desktop-navigation__link {
+    display: inline-flex;
+  }
+
+  .desktop-navigation {
+    gap: 0.08rem;
+  }
+
+  .desktop-navigation__link,
+  .desktop-navigation__cta,
+  .desktop-navigation__account {
+    padding-inline: 0.42rem;
+    font-size: 0.59rem;
+  }
+
+  .brand,
+  .site-header--compact .brand {
+    width: 132px;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__inner {
+    grid-template-columns: minmax(340px, 0.95fr) minmax(260px, 1.05fr);
+  }
+}
+
+/* Mobile ---------------------------------------------------------------- */
+
+@media (max-width: 820px) {
+  :root {
+    --header-height: 64px;
+  }
+
+  .site-header,
+  .site-header--home,
+  .site-header.site-header--compact {
+    height: 64px;
+  }
+
+  .site-header__inner {
+    grid-template-columns: 58px minmax(0, 1fr) 78px;
+    padding-inline: 1rem;
+  }
+
+  .brand,
+  .site-header--compact .brand {
+    width: clamp(126px, 37vw, 148px);
+  }
+
+  .menu-button {
+    width: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    justify-content: flex-start;
+  }
+
+  .mobile-account-link {
+    min-width: 72px;
+    min-height: 48px;
+  }
+
+  .mobile-navigation {
+    top: 64px;
+    height: calc(100dvh - 64px);
+  }
+
+  body .site-footer > div {
+    grid-template-columns: 1fr !important;
+    gap: 0.9rem !important;
+    padding: 1.25rem 1rem 1rem !important;
+  }
+
+  body .site-footer__signature {
+    width: 142px;
+  }
+
+  body .site-footer__columns--mobile {
+    display: grid;
+    gap: 0;
+  }
+
+  body .site-footer__group > summary {
+    min-height: 44px;
+    font-size: 0.64rem;
+  }
+
+  body .site-footer__group-links a {
+    min-height: 44px;
+    font-size: 0.65rem;
+  }
+
+  body .site-footer__bottom {
+    align-items: flex-start;
+    flex-direction: column-reverse;
+    gap: 0.7rem;
+    padding-top: 0.8rem !important;
+    font-size: 0.54rem;
+  }
+
+  body .site-footer__bottom nav {
+    justify-content: flex-start;
+    gap: 0.25rem 0.8rem;
+  }
+
+  body .site-footer__bottom a {
+    min-height: 36px;
+  }
+
+  body main#contenu .home-hero--editorial,
+  body main#contenu .home-hero--editorial .home-hero__inner {
+    min-height: 650px !important;
+  }
+
+  body main#contenu .home-hero--editorial::before {
+    background:
+      linear-gradient(0deg, rgba(3, 6, 6, 0.99), rgba(3, 6, 6, 0.83) 45%, rgba(3, 6, 6, 0.12) 77%),
+      linear-gradient(90deg, rgba(3, 6, 6, 0.62), transparent 74%);
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__media img {
+    object-position: 57% 24%;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__inner {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    align-content: end;
+    row-gap: 1rem;
+    padding: 82px 1rem 1.15rem !important;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__copy--editorial {
+    width: min(100%, 34rem);
+    justify-self: start;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__wordmark {
+    width: min(76vw, 320px) !important;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__signature {
+    width: min(100%, 34rem);
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead {
+    height: auto !important;
+    min-height: 190px !important;
+    grid-template-columns: minmax(138px, 42%) minmax(0, 58%) !important;
+    overflow: hidden;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead__art,
+  body main#contenu .home-featured--editorial .home-project-lead__art .project-artwork {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 190px !important;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead__copy {
+    height: auto !important;
+    min-height: 190px !important;
+    overflow: visible !important;
+    padding: 0.75rem !important;
+  }
+
+  body main#contenu .v064-discography-stage {
+    min-height: 0 !important;
+    padding-block: 76px 2.75rem !important;
+    background:
+      linear-gradient(0deg, rgba(4, 6, 5, 0.97), rgba(4, 6, 5, 0.42) 64%, rgba(4, 6, 5, 0.58)),
+      url("/assets/v3/hero-main-ludovic-dog-exact.jpg") 58% 4% / auto 390px no-repeat,
+      #050706;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__scene {
+    --discography-card-width: min(76vw, 320px) !important;
+    --discography-card-body: 86px;
+    --discography-scene-top-space: 0px !important;
+    min-height: 0 !important;
+    margin-top: 1.15rem;
+    padding-bottom: 3.75rem;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__rail {
+    display: flex;
+    height: auto !important;
+    gap: clamp(0.45rem, 2vw, 0.6rem);
+    margin-top: 0 !important;
+    padding: 0.25rem 12vw 1rem !important;
+    overflow-x: auto;
+    scroll-padding-inline: 12vw !important;
+    scroll-snap-type: x mandatory;
+    perspective: none;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__item,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-active,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-previous,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-next,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-far-previous,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-far-next,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-hidden-before,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-hidden-after {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    height: auto;
+    flex: 0 0 var(--discography-card-width);
+    visibility: visible !important;
+    pointer-events: auto;
+    transform: none !important;
+    opacity: 0.48;
+    scroll-snap-align: center;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__item.is-active {
+    opacity: 1;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__item.is-previous,
+  body main#contenu .discography-jukebox .home-jukebox__item.is-next {
+    opacity: 0.68;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__arrow {
+    top: auto;
+    bottom: 0;
+    transform: none;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__arrow--previous {
+    right: auto;
+    left: 1rem;
+  }
+
+  body main#contenu .discography-jukebox .home-jukebox__arrow--next {
+    right: 1rem;
+    left: auto;
+  }
+
+  body main#contenu .discography-card {
+    grid-template-rows: auto minmax(var(--discography-card-body), auto);
+  }
+
+  body main#contenu .discography-card__body {
+    min-height: var(--discography-card-body) !important;
+  }
+
+  body main#contenu .about-story-scene--editorial {
+    padding-block: 2rem !important;
+  }
+
+  body main#contenu .about-teaser--editorial {
+    width: calc(100% - 2rem);
+    padding: 0 !important;
+  }
+
+  body main#contenu .about-editorial__biography,
+  body main#contenu .about-editorial__continuation {
+    grid-template-columns: 1fr;
+  }
+
+  body main#contenu .about-final-cta__inner {
+    min-height: 150px !important;
+    padding-block: 1.5rem !important;
+  }
+
+  body main#contenu .album-hero__backdrop,
+  body main#contenu .commander-hero-v2__backdrop,
+  body main#contenu .shop-commerce-hero__backdrop {
+    background-position: 58% 25%;
+  }
+
+  body main#contenu .album-hero {
+    padding-top: calc(var(--header-height) + 1rem) !important;
+  }
+
+  body main#contenu .album-hero .back-link {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    margin: 0 0 0.65rem;
+  }
+
+  body main#contenu .shop-commerce-hero,
+  body main#contenu .shop-commerce-hero .shop-commerce-hero__inner {
+    min-height: 380px !important;
+  }
+
+  body main#contenu .shop-commerce-hero .shop-commerce-hero__inner {
+    align-content: end;
+    padding-top: calc(var(--header-height) + 1.5rem) !important;
+    padding-bottom: 1.35rem !important;
+  }
+
+  body main#contenu .contact-hero--v3 {
+    min-height: 540px;
+  }
+
+  body main#contenu .contact-hero--v3 > img {
+    object-position: 58% 24%;
+  }
+
+  body main#contenu .contact-hero--v3::after {
+    background:
+      linear-gradient(0deg, rgba(4, 6, 5, 0.99), rgba(4, 6, 5, 0.72) 48%, rgba(4, 6, 5, 0.18) 78%),
+      linear-gradient(90deg, rgba(4, 6, 5, 0.54), transparent 72%);
+  }
+
+  body main#contenu .contact-hero--v3 .contact-hero__inner {
+    min-height: calc(540px - var(--header-height));
+    align-items: end;
+    padding: 1.5rem 1rem 2rem !important;
+  }
+
+  body main#contenu .contact-hero--v3 h1 {
+    font-size: clamp(2.7rem, 12vw, 4.6rem);
+  }
+}
+
+@media (max-width: 430px) {
+  .site-header__inner {
+    grid-template-columns: 52px minmax(0, 1fr) 72px;
+    padding-inline: 0.8rem;
+  }
+
+  .brand,
+  .site-header--compact .brand {
+    width: clamp(120px, 36vw, 138px);
+  }
+
+  body main#contenu .home-hero--editorial,
+  body main#contenu .home-hero--editorial .home-hero__inner {
+    min-height: 680px !important;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: min(100%, 300px);
+    gap: 0.5rem;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__actions .button {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__signature {
+    gap: 0.32rem;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__signature span {
+    padding-left: 0.34rem;
+    font-size: 0.42rem;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead {
+    min-height: 180px !important;
+    grid-template-columns: minmax(118px, 40%) minmax(0, 60%) !important;
+    overflow: hidden;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead__art,
+  body main#contenu .home-featured--editorial .home-project-lead__art .project-artwork {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 180px !important;
+    aspect-ratio: auto;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead__copy {
+    min-height: 180px !important;
+    padding: 0.7rem !important;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead__copy > p:not(.eyebrow) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead__copy > .button {
+    display: none;
+  }
+
+  body main#contenu .home-featured--editorial .home-project-lead__copy .audio-preview-player--compact {
+    width: 100%;
+    margin-block: 0.35rem 0;
+    padding: 0.48rem;
+  }
+
+  .shop-product-media--fallback {
+    min-height: 168px;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 390px) {
+  body .site-footer__signature {
+    width: 132px;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__inner {
+    padding-inline: 0.85rem !important;
+  }
+
+  body main#contenu .home-hero--editorial .home-hero__wordmark {
+    width: min(74vw, 278px) !important;
+  }
+}
+
+@media (max-height: 700px) and (min-width: 821px) {
+  body main#contenu .home-hero--editorial,
+  body main#contenu .home-hero--editorial .home-hero__inner {
+    min-height: 550px !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  body .site-footer__columns--desktop a,
+  body .site-footer__bottom a {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero--editorial [data-motion-layer="signature"],
+  .shop-product-card,
+  .shop-product-media > img {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .v064-discography-stage {
+    background-attachment: scroll;
+  }
+}

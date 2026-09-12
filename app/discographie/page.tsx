@@ -41,8 +41,8 @@ export default async function DiscographyPage() {
         <ProjectJukebox
           projects={sceneProjects}
           initialIndex={0}
-          eyebrow="Catalogue"
-          heading="Tous les projets."
+          eyebrow="LNX Beats · Discographie"
+          heading="Chaque projet, une histoire."
           eager
         />
       </Container>
