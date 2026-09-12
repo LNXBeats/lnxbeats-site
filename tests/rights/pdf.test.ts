@@ -37,14 +37,14 @@ function safariContractSections() {
       exclusive: false,
       destination: "Publication et monétisation de la création sur les plateformes expressément autorisées.",
       platforms: ["SPOTIFY", "APPLE_MUSIC", "DEEZER"],
-      territory: "France",
-      duration: "2 ans",
+      territory: "Monde entier",
+      duration: "5 ans",
       monetization: true,
       adaptation: false,
       advertising: false,
       audiovisualSync: false,
       contentId: false,
-      sublicense: false,
+      sublicense: true,
       credit: "LNX Beats — création musicale",
       restrictions: "Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID, adaptation ou sous-licence sans autorisation contractuelle distincte de LNX Beats.",
     }],
@@ -163,7 +163,7 @@ test("the Safari C03 licence PDF uses final grants, client vocabulary, and balan
 
   assert.equal(result.pageCount, pages.length);
   assert.equal(result.pageCount, 3);
-  assert.match(rendered, /Durée contractuelle : cinq ans/);
+  assert.match(rendered, /Durée contractuelle : cinq années calendaires/);
   assert.doesNotMatch(rendered, /Durée contractuelle : 2 ans\./);
   assert.doesNotMatch(rendered, /À définir avec LNX Beats/);
   assert.match(rendered, /Spotify, Apple Music, Deezer/);
@@ -172,13 +172,13 @@ test("the Safari C03 licence PDF uses final grants, client vocabulary, and balan
   assert.doesNotMatch(rendered, /STORY_BRIEF_ONLY/);
   assert.match(rendered, /Élégie d’été/);
   assert.match(rendered, /LNX Beats — création musicale/);
-  assert.match(rendered, /PROJET - NON ACTIF - APPROBATION JURIDIQUE RÉFÉRENCÉE REQUISE/);
+  assert.match(rendered, /PROJET - NON ACTIF - VALIDATION JURIDIQUE REQUISE/);
   assert.match(rendered, /Aucune répartition n’est promise/);
   assert.match(rendered, /Aucune déclaration SACEM n’est effectuée/);
-  assert.match(rendered, /Prix unique de la licence : 150 €\./);
+  assert.match(rendered, /Rémunération forfaitaire prévue : 150 €\./);
   assert.doesNotMatch(rendered, /Montant cible futur/);
-  assert.match(rendered, /L’acceptation du présent projet ne suffit pas à rendre la licence active/);
-  assert.match(rendered, /Aucun\s+commencement anticipé ni\s+renoncement anticipé n’est proposé/);
+  assert.match(rendered, /contrat à distance portant sur une prestation de licence est conclu/);
+  assert.match(rendered, /Ne sont\s+proposés ni commencement\s+anticipé ni renonciation anticipée/);
   assert.match(rendered, /mise en demeure écrite\s+restée sans effet pendant trente jours/);
   assert.match(rendered, /CM2C selon les coordonnées indiquées dans les mentions légales/);
   assert.doesNotMatch(rendered, /acceptation QA|validation Admin/i);

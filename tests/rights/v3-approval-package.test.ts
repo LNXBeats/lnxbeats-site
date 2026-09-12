@@ -7,7 +7,7 @@ import {
   isPublicationLicenseV3CanonicalSource,
   normalizedContractTemplateHash,
   PUBLICATION_LICENSE_V3_CANONICAL_SHA256,
-  publicationLicenseDraftTemplate,
+  publicationLicenseV3DraftTemplate,
 } from "@/lib/rights/templates";
 
 const migrationPath = "prisma/migrations/20260909125000_publication_license_operator_policy_v3/migration.sql";
@@ -24,8 +24,8 @@ test("the v3 migration, code binding and human approval package contain one exac
   assert.ok(documented);
   assert.equal(persisted.length, 5_265);
   assert.equal(createHash("sha256").update(persisted, "utf8").digest("hex"), "0ad636a04bc3e89c08f8cce2ab95396daa156c97cad4fe38cc46badb1cbc1f5e");
-  assert.equal(persisted.trim(), publicationLicenseDraftTemplate.trim());
-  assert.equal(documented, publicationLicenseDraftTemplate.trim());
+  assert.equal(persisted.trim(), publicationLicenseV3DraftTemplate.trim());
+  assert.equal(documented, publicationLicenseV3DraftTemplate.trim());
   assert.equal(normalizedContractTemplateHash(documented), PUBLICATION_LICENSE_V3_CANONICAL_SHA256);
   assert.equal(isPublicationLicenseV3CanonicalSource(documented), true);
 });

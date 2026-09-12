@@ -323,7 +323,7 @@ async function run() {
     await respondRightsInformation(member, generationRequest.requestNumber, "Destination et paramètres fictifs confirmés pour la QA.");
     await startRightsReview(admin, generationRequest.requestNumber);
     await updateAiContributionAssessment(admin, generationRequest.requestNumber, "HUMAN_CONTRIBUTION_DOCUMENTED");
-    await saveRightsGrant(admin, generationRequest.requestNumber, { kind: "PUBLICATION", authorized: true, exclusive: false, destination: "Publication et monétisation de la création sur les plateformes expressément autorisées.", platforms: ["Spotify", "Apple Music", "Deezer"], territory: "France", duration: "2 ans", monetization: true, adaptation: false, advertising: false, audiovisualSync: false, contentId: false, sublicense: false, credit: "LNX Beats — création musicale", restrictions: "Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID, adaptation ou sous-licence sans autorisation contractuelle distincte de LNX Beats." });
+    await saveRightsGrant(admin, generationRequest.requestNumber, { kind: "PUBLICATION", authorized: true, exclusive: false, destination: "Publication et monétisation de la création sur les plateformes expressément autorisées.", platforms: ["Spotify", "Apple Music", "Deezer"], territory: "Monde entier", duration: "5 ans", monetization: true, adaptation: false, advertising: false, audiovisualSync: false, contentId: false, sublicense: true, credit: "LNX Beats — création musicale", restrictions: "Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID ou adaptation sans autorisation contractuelle distincte de LNX Beats." });
     await saveSplitProposal(admin, generationRequest.requestNumber, {
       clientSharePercent: 30,
       lnxSharePercent: 70,
@@ -378,10 +378,10 @@ async function run() {
       ...sourceSnapshot.grants?.[0],
       destination: "Publication et monétisation de la création sur les plateformes expressément autorisées.",
       platforms: ["Spotify", "Apple Music", "Deezer"],
-      territory: "France",
-      duration: "2 ans",
+      territory: "Monde entier",
+      duration: "5 ans",
       credit: "LNX Beats — création musicale",
-      restrictions: "Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID, adaptation ou sous-licence sans autorisation contractuelle distincte de LNX Beats.",
+      restrictions: "Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID ou adaptation sans autorisation contractuelle distincte de LNX Beats.",
     });
     assert.deepEqual(sourceSnapshot.splitProposal && {
       version: sourceSnapshot.splitProposal.version,

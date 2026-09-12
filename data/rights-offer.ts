@@ -9,7 +9,7 @@ export const publicationLicenseOffer = {
     priceCents: 15_000,
     currency: "EUR",
     pricingVersion: "2026-09-publication-license-v1",
-    contractTemplateVersion: 3,
+    contractTemplateVersion: 4,
     label: "Licence de publication via distributeur",
     title: "Publier votre titre sur les plateformes",
   },
@@ -23,7 +23,7 @@ export type RightsOfferType = "PUBLICATION_LICENSE" | "EXPLOITATION_PARTNERSHIP"
 export type PublicRightsOfferType = keyof typeof rightsOffers;
 
 export const publicationLicenseTerms = {
-  version: "2026-09-publication-license-terms-v2",
+  version: "2026-09-publication-license-terms-v4-draft",
   status: "DRAFT",
   operatorPolicyApproved: true,
   legalReviewRequired: true,
@@ -32,6 +32,7 @@ export const publicationLicenseTerms = {
   exclusive: false,
   oneWorkOnly: true,
   oneTimePriceCents: publicationLicenseOffer.PUBLICATION_LICENSE.priceCents,
+  fixedFeeLegalReviewRequired: true,
   allowedUses: [
     "Publication de l’œuvre identifiée via un distributeur numérique.",
     "Reproduction et communication au public strictement nécessaires à cette publication.",

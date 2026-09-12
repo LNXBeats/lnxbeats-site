@@ -40,7 +40,7 @@ export type AdminRightsGrantPrefill = Readonly<{
   advertising: false;
   audiovisualSync: false;
   contentId: false;
-  sublicense: false;
+  sublicense: boolean;
 }>;
 
 export type AdminRightsAuditTimestamp = Readonly<{
@@ -121,8 +121,8 @@ export function adminRightsGrantPrefill(formData: unknown): AdminRightsGrantPref
   const wishes = adminClientRightsWishes(formData);
   return {
     platforms: wishes.platformsInput,
-    territory: wishes.territory,
-    duration: wishes.duration,
+    territory: "Monde entier",
+    duration: "5 ans",
     authorized: false,
     exclusive: false,
     monetization: wishes.monetization === true,
@@ -130,7 +130,7 @@ export function adminRightsGrantPrefill(formData: unknown): AdminRightsGrantPref
     advertising: false,
     audiovisualSync: false,
     contentId: false,
-    sublicense: false,
+    sublicense: true,
   };
 }
 

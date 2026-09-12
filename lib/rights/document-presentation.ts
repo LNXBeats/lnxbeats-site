@@ -59,7 +59,42 @@ export type RightsDocumentPresentationInput = Readonly<{
     proposedRoles?: unknown;
   }> | null;
   aiAssessment: string;
+  lifecycle?: "DRAFT" | "FINAL";
 }>;
+
+export const publicationLicenseRightsMatrixParagraphs = Object.freeze([
+  "Reproduction : autorisée uniquement pour les copies techniques nécessaires à la livraison de l’œuvre au distributeur et à sa mise à disposition sur les plateformes autorisées.",
+  "Distribution : autorisée uniquement sous forme numérique, par téléchargement, via le distributeur et les plateformes autorisés.",
+  "Communication au public : autorisée uniquement par streaming et mise à disposition à la demande via le distributeur et les plateformes autorisés.",
+  "Monétisation : autorisée pour les exploitations expressément accordées pendant la durée de la licence.",
+  "Sous-licence technique : autorisée uniquement au distributeur choisi et aux plateformes qu’il dessert, dans la stricte mesure nécessaire à ces exploitations, sans élargissement du périmètre, du territoire ou de la durée.",
+  "Adaptation : non accordée. Toute adaptation substantielle exige un accord écrit distinct de LNX Beats.",
+  "Content ID : aucune revendication exclusive ni aucune revendication portant atteinte aux droits de LNX Beats n’est accordée.",
+  "Transfert et revente : interdits. La licence est personnelle au client et non transférable.",
+] as const);
+
+function assertPublicationLicenseGrantEnvelope(grants: readonly ContractGrant[]) {
+  const authorized = grants.filter((grant) => grant.authorized);
+  const publication = authorized.length === 1 ? authorized[0] : null;
+  if (
+    !publication
+    || publication.kind !== "PUBLICATION"
+    || publication.exclusive
+    || !publication.monetization
+    || publication.adaptation
+    || publication.advertising
+    || publication.audiovisualSync
+    || publication.contentId
+    || !publication.sublicense
+    || !stringList(publication.platforms).length
+    || !/monde entier/i.test(publication.territory ?? "")
+    || !/(?:5|cinq)\s*(?:ans|années)/i.test(publication.duration ?? "")
+    || !publication.credit?.trim()
+  ) {
+    throw new Error("PUBLICATION_LICENSE_RIGHTS_MATRIX_MISMATCH");
+  }
+  return publication;
+}
 
 const grantLabels: Readonly<Record<string, string>> = {
   PUBLICATION: "Publication",
@@ -355,42 +390,32 @@ export function buildRightsDocumentSections(input: RightsDocumentPresentationInp
     throw new Error("PUBLICATION_LICENSE_PRICE_MISMATCH");
   }
 
-  const destinations = unique(authorized.map((grant) => grant.destination));
-  const platforms = unique(authorized.flatMap((grant) => stringList(grant.platforms).map(humanRightsPlatform)));
-  const territories = unique(authorized.map((grant) => grant.territory));
-  const durations = unique(authorized.map((grant) => grant.duration));
-  const credits = unique(authorized.map((grant) => grant.credit));
-  const restrictions = unique(authorized.map((grant) => grant.restrictions));
-  const grantParagraphs = input.grants.length ? input.grants.map((grant) => [
-    `${label(grant.kind, grantLabels, "Droit examiné")} : ${grant.authorized ? "autorisé" : "non accordé"}`,
-    grant.authorized ? grant.exclusive ? "exclusif" : "non exclusif" : null,
-    grant.authorized ? `monétisation : ${yesNo(grant.monetization)}` : null,
-    grant.authorized ? `adaptation : ${yesNo(grant.adaptation)}` : null,
-    grant.authorized ? `publicité : ${yesNo(grant.advertising)}` : null,
-    grant.authorized ? `synchronisation audiovisuelle : ${yesNo(grant.audiovisualSync)}` : null,
-    grant.authorized ? `Content ID : ${yesNo(grant.contentId)}` : null,
-    grant.authorized ? `sous-licence : ${yesNo(grant.sublicense)}` : null,
-  ].filter(Boolean).join(" ; ") + ".") : ["Aucun droit n’est expressément accordé dans ce projet. Les droits non listés restent non accordés."];
-
-  return [
+  const publication = assertPublicationLicenseGrantEnvelope(input.grants);
+  const platforms = unique(stringList(publication.platforms).map(humanRightsPlatform));
+  const sections: ContractPdfSection[] = [
     { title: "1. Parties", paragraphs: [`LNX Beats et ${partyName}, ${input.party.streetAddress}, ${input.party.postalCode} ${input.party.city}, ${input.party.country}.`] },
     { title: "2. Œuvre concernée", paragraphs: [`Œuvre : ${input.workTitle}. Commande ${input.orderNumber}.`] },
-    { title: "3. Objet de la licence", paragraphs: [`Offre : licence de publication via distributeur. Nom de publication demandé : ${text(project.publicationName)}. Distributeur envisagé : ${humanRightsDistributor(project.distributor)}.`, "La licence autorise, pour cette seule œuvre, la reproduction, la distribution et la communication au public strictement nécessaires à sa publication via ce distributeur sur les plateformes de streaming et de téléchargement compatibles.", `Destination contractuelle retenue : ${sentence(joined(destinations))}`] },
-    { title: "4. Droits expressément accordés", paragraphs: grantParagraphs },
+    { title: "3. Objet de la licence", paragraphs: [`Offre : licence de publication via distributeur. Nom de publication demandé : ${text(project.publicationName)}. Distributeur identifié : ${humanRightsDistributor(project.distributor)}.`, "La licence autorise, pour cette seule œuvre, sa publication via ce distributeur sur les plateformes de streaming et de téléchargement expressément indiquées dans le présent document."] },
+    { title: "4. Matrice exacte des droits accordés", paragraphs: publicationLicenseRightsMatrixParagraphs },
     { title: "5. Supports / plateformes", paragraphs: [`Plateformes expressément retenues : ${sentence(platforms.length ? platforms.join(", ") : "Aucune plateforme expressément autorisée")}`] },
-    { title: "6. Territoire", paragraphs: ["Territoire contractuel : monde entier.", ...(territories.length && !territories.some((value) => /monde entier/i.test(value)) ? ["Une restriction territoriale saisie dans la demande ne peut pas étendre ni remplacer ce périmètre contractuel sans une version distincte approuvée."] : [])] },
-    { title: "7. Durée", paragraphs: ["Durée contractuelle : cinq ans à compter de la prise d’effet définie au contrat final.", ...(durations.length && !durations.some((value) => /5|cinq/i.test(value)) ? ["Une durée différente saisie dans la demande ne peut pas modifier la durée de cette offre sans une version contractuelle distincte approuvée."] : [])] },
-    { title: "8. Monétisation", paragraphs: [`Monétisation autorisée : ${yesNo(authorized.some((grant) => grant.monetization))}.`] },
-    { title: "9. Crédit", paragraphs: [`Crédit retenu : ${joined(credits)}.`] },
-    { title: "10. Restrictions", paragraphs: [...(restrictions.length ? restrictions : ["Les droits non expressément accordés restent non accordés."]), "La licence est non exclusive. Elle ne peut être transférée ou revendue. La sous-licence est limitée aux besoins techniques du distributeur. Toute adaptation substantielle et tout Content ID exclusif nécessitent un accord écrit distinct de LNX Beats."] },
-    { title: "11. Prix / rémunération", paragraphs: [`Prix unique de la licence : ${formatRightsCurrency(input.requestedPriceCents)}. Le paiement ne rend pas la licence immédiatement active : sa prise d’effet reste soumise aux conditions de la section 15.`] },
+    { title: "6. Territoire", paragraphs: ["Territoire contractuel : monde entier."] },
+    { title: "7. Durée", paragraphs: ["Durée contractuelle : cinq années calendaires à compter de la prise d’effet définie au contrat final."] },
+    { title: "8. Monétisation", paragraphs: ["Monétisation autorisée : oui, uniquement pour les exploitations expressément accordées par la matrice."] },
+    { title: "9. Crédit", paragraphs: [`Crédit contractuel : ${publication.credit}.`] },
+    { title: "10. Restrictions", paragraphs: ["Les droits non expressément accordés restent non accordés. La licence est non exclusive et personnelle au client. Elle ne peut être transférée ou revendue. La sous-licence est limitée aux seuls besoins techniques du distributeur et des plateformes. Toute adaptation substantielle et tout Content ID exclusif exigent un accord écrit distinct de LNX Beats."] },
+    { title: "11. Prix / rémunération", paragraphs: [`Rémunération forfaitaire prévue : ${formatRightsCurrency(input.requestedPriceCents)}. Le paiement ne rend pas la licence immédiatement active : sa prise d’effet reste soumise aux conditions de la section 16.`] },
     { title: "12. Contributions déclarées", paragraphs: input.contributions.length ? input.contributions.map((item) => `${label(item.kind, contributionLabels, "Contribution déclarée")} : ${sentence(item.description)}${item.claimedPercentage === null ? "" : ` Pourcentage revendiqué par le client : ${item.claimedPercentage} %.`} Cette déclaration reste à vérifier.`) : ["Aucune contribution créative déclarée par le client."] },
     { title: "13. SACEM / gestion collective", paragraphs: ["Ce document ne transfère ni la qualité d’auteur, ni les droits moraux, ni une quote-part SACEM. Une proposition entre les parties n’est pas une répartition SACEM automatique.", input.requestType === "EXPLOITATION_PARTNERSHIP" && input.splitProposal ? `Proposition commerciale : ${input.splitProposal.clientSharePercent} % client / ${input.splitProposal.lnxSharePercent} % LNX Beats, sous réserve d’étude et de validation.` : "Aucune répartition n’est promise. Aucune déclaration SACEM n’est effectuée dans cette version."] },
     { title: "14. Obligations des parties", paragraphs: ["Le client garantit disposer des droits nécessaires sur les éléments, visuels, noms, marques et métadonnées qu’il ajoute. Il respecte les conditions du distributeur et des plateformes et n’accorde pas à un tiers plus de droits que ceux prévus au contrat.", "LNX Beats garantit seulement être habilité à consentir les droits expressément accordés au titre de ses propres contributions. Aucune acceptation par un distributeur, audience, revenu, validation SACEM, Content ID ou placement éditorial n’est garanti."] },
-    { title: "15. Entrée en vigueur", paragraphs: ["L’acceptation du présent projet ne suffit pas à rendre la licence active. La prise d’effet reste subordonnée à l’approbation référencée du modèle, aux acceptations traçables requises, au paiement intégral confirmé côté serveur, à la génération valide du document contractuel final, à l’absence de rétractation et à l’expiration complète du délai de quatorze jours."] },
-    { title: "16. Rétractation", paragraphs: ["Le consommateur dispose d’un délai de rétractation de quatorze jours. Aucun commencement anticipé ni renoncement anticipé n’est proposé dans cette version : la licence reste sans effet pendant toute cette période.", "La fonctionnalité en ligne de rétractation et les coordonnées de contact sont celles publiées par LNX STUDIO. Aucune clause du présent projet ne neutralise un droit légal."] },
-    { title: "17. Retrait et fin de la licence", paragraphs: ["À l’expiration normale de la licence, ou après sa résolution dans les conditions légalement applicables, le client cesse les nouvelles exploitations et demande dans un délai raisonnable le retrait de la publication à son distributeur. Les délais techniques propres aux plateformes tierces peuvent subsister.", "En cas de manquement suffisamment grave, la résolution peut être demandée après une mise en demeure écrite restée sans effet pendant trente jours. Une suspension immédiate n’est possible que lorsqu’elle est nécessaire pour faire cesser une situation grave, illicite ou manifestement préjudiciable, ou lorsqu’une règle impérative l’exige. Les conséquences financières dépendent des règles légales et de la situation effectivement exécutée."] },
-    { title: "18. Responsabilité, droit applicable et litiges", paragraphs: ["Chaque partie répond de ses obligations dans les limites permises par la loi. Aucune clause ne prive le consommateur d’une garantie ou d’un recours impératif.", "Le contrat est soumis au droit français sans priver le consommateur de ses protections impératives. Une réclamation préalable peut être adressée à LNX Beats. En cas de désaccord persistant, le consommateur peut saisir gratuitement le CM2C selon les coordonnées indiquées dans les mentions légales, sans préjudice de son droit de saisir la juridiction compétente."] },
-    { title: "19. Statut DRAFT / approbation", paragraphs: ["PROJET - NON ACTIF - APPROBATION JURIDIQUE RÉFÉRENCÉE REQUISE. La politique contractuelle V2 a été approuvée par l’opérateur ; le modèle doit encore suivre le mécanisme normal d’approbation et de versioning. Cette mention ne signifie pas qu’un avocat externe a revu le document."] },
+    { title: "15. Transparence et reddition des informations d’exploitation", paragraphs: ["Le client adresse à LNX Beats, par voie électronique, au moins une fois par an et au plus tard dans les trente jours suivant chaque date anniversaire de la prise d’effet, des informations explicites et transparentes sur l’exploitation de l’œuvre, distinguées par mode d’exploitation, plateforme et territoire.", "Pour la période écoulée, cette reddition indique les quantités ou relevés disponibles, les revenus bruts attribuables à l’œuvre, les commissions et retenues, les revenus nets reçus et toute rémunération due à LNX Beats pour chaque mode. Les relevés du distributeur ou des plateformes sont joints, avec occultation possible des informations étrangères à l’œuvre et des données personnelles non nécessaires. Une déclaration d’absence est adressée si aucune exploitation ou aucun revenu n’est constaté. Une dernière reddition est adressée dans les trente jours suivant la fin de la licence."] },
+    { title: "16. Conclusion et entrée en vigueur", paragraphs: ["Ce contrat à distance portant sur une prestation de licence est conclu lorsque le paiement intégral est confirmé après l’acceptation traçable du client et la validation du dossier par LNX Beats. La date de confirmation du paiement conservée dans le dossier constitue le point de départ du délai de rétractation.", "La licence ne prend effet qu’après paiement confirmé, acceptation conservée, génération valide du document final, absence de rétractation et expiration complète du délai de quatorze jours."] },
+    { title: "17. Rétractation", paragraphs: ["Le consommateur dispose de quatorze jours à compter de la conclusion du contrat pour se rétracter. Ne sont proposés ni commencement anticipé ni renonciation anticipée : la licence reste sans effet pendant toute cette période.", "La fonctionnalité en ligne de rétractation et les coordonnées de contact sont celles publiées par LNX STUDIO. Le formulaire type figure dans le présent document. Aucune clause ne neutralise un droit légal."] },
+    { title: "18. Formulaire type de rétractation", paragraphs: ["Veuillez compléter et renvoyer le présent formulaire uniquement si vous souhaitez vous rétracter du contrat.", "À l’attention de Ludovic Mickaël Mathon, entrepreneur individuel — LNX Beats, 35 Impasse des Orties, 07370 Ozon, France — lnx.beats.pro@gmail.com.", "Je vous notifie par la présente ma rétractation du contrat de prestation de licence de publication via distributeur portant sur l’œuvre : ____________________", "Contrat ou demande numéro : ____________________   Contrat conclu le : ____________________", "Nom et adresse du consommateur : ____________________", "Date : ____________________   Signature, uniquement en cas de notification sur papier : ____________________"] },
+    { title: "19. Retrait et fin de la licence", paragraphs: ["À l’expiration normale de la licence, ou après sa résolution dans les conditions légalement applicables, le client cesse les nouvelles exploitations et demande dans un délai raisonnable le retrait de la publication à son distributeur. Les délais techniques propres aux plateformes tierces peuvent subsister.", "En cas de manquement suffisamment grave, la résolution peut être demandée après une mise en demeure écrite restée sans effet pendant trente jours. Une suspension immédiate n’est possible que lorsqu’elle est nécessaire pour faire cesser une situation grave, illicite ou manifestement préjudiciable, ou lorsqu’une règle impérative l’exige. Les conséquences financières dépendent des règles légales et de la situation effectivement exécutée."] },
+    { title: "20. Responsabilité, droit applicable et litiges", paragraphs: ["Chaque partie répond de ses obligations dans les limites permises par la loi. Aucune clause ne prive le consommateur d’une garantie ou d’un recours impératif.", "Le contrat est soumis au droit français sans priver le consommateur de ses protections impératives. Une réclamation préalable peut être adressée à LNX Beats. En cas de désaccord persistant, le consommateur peut saisir gratuitement le CM2C selon les coordonnées indiquées dans les mentions légales, sans préjudice de son droit de saisir la juridiction compétente."] },
   ];
+  if ((input.lifecycle ?? "DRAFT") === "DRAFT") {
+    sections.push({ title: "Statut du rendu", paragraphs: ["PROJET — DRAFT — NON ACTIF. Ce marquage de cycle de vie ne fait pas partie des clauses canoniques destinées au contrat final."] });
+  }
+  return sections;
 }

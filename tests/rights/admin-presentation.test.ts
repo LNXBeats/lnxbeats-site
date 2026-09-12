@@ -58,8 +58,8 @@ test("client wishes prefill only working fields and never grant a right", () => 
   });
   assert.deepEqual(adminRightsGrantPrefill(formData), {
     platforms: "Spotify, Apple Music, Deezer",
-    territory: "France",
-    duration: "À définir avec LNX Beats",
+    territory: "Monde entier",
+    duration: "5 ans",
     authorized: false,
     exclusive: false,
     monetization: true,
@@ -67,7 +67,7 @@ test("client wishes prefill only working fields and never grant a right", () => 
     advertising: false,
     audiovisualSync: false,
     contentId: false,
-    sublicense: false,
+    sublicense: true,
   });
 });
 

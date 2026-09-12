@@ -98,7 +98,7 @@ async function seedPaidLicense() {
     { id: adminId, email: `rights-role-admin-${suffix}@example.invalid`, emailVerified: true, emailVerifiedAt: now, displayName: "Admin Permissions", role: "ADMIN", status: "ACTIVE" },
   ] });
   const template = await admin.contractTemplate.update({
-    where: { type_version: { type: "PUBLICATION_LICENSE", version: 3 } },
+    where: { type_version: { type: "PUBLICATION_LICENSE", version: 4 } },
     data: { status: "APPROVED", approvedAt: now, approvedByAdminId: adminId, legalReviewReference: "LOCAL-RUNTIME-ROLE-QA" },
   });
   await admin.order.create({ data: {
@@ -141,14 +141,14 @@ async function seedPaidLicense() {
   const documentHash = "d".repeat(64);
   await admin.contractDocument.create({ data: {
     id: documentId, contractNumber: `${requestNumber}-C01`, rightsRequestId: requestId,
-    templateId: template.id, templateVersion: 3, documentVersion: 1, kind: "CONTRACT",
+    templateId: template.id, templateVersion: 4, documentVersion: 1, kind: "CONTRACT",
     status: "DRAFT", generatedAt: now, priceSnapshotCents: 15_000, currency: "EUR",
     sourceSnapshot: {}, documentHashSha256: documentHash, assetId: documentAssetId,
     retentionUntil: new Date("2088-01-15T12:00:00.000Z"),
   } });
   await admin.contractAcceptance.create({ data: {
     contractDocumentId: documentId, acceptedByUserId: memberId, kind: "CLIENT",
-    typedFullName: "Camille Permissions", documentHashSha256: documentHash, templateVersion: 3,
+    typedFullName: "Camille Permissions", documentHashSha256: documentHash, templateVersion: 4,
     orderId, rightsRequestId: requestId, sessionReferenceHash: "e".repeat(64), acceptedAt: now,
   } });
   await admin.contractDocument.update({ where: { id: documentId }, data: { status: "ADMIN_VALIDATED", acceptedAt: now, adminAcceptedAt: now } });
@@ -213,7 +213,7 @@ async function main() {
   const web = new Client({ connectionString: roleUrl(roles.web, passwords.web) });
   await web.connect();
   await web.query("BEGIN");
-  assert.equal((await web.query("SELECT count(*)::int count FROM contract_templates WHERE type = 'PUBLICATION_LICENSE' AND version = 3")).rows[0].count, 1);
+  assert.equal((await web.query("SELECT count(*)::int count FROM contract_templates WHERE type = 'PUBLICATION_LICENSE' AND version = 4")).rows[0].count, 1);
   await web.query('UPDATE rights_requests SET "updatedAt" = "updatedAt" WHERE id = $1', [fixture.requestId]);
   await web.query('INSERT INTO rights_request_events (id, "rightsRequestId", type, "idempotencyKey", note) VALUES ($1, $2, $3, $4, $5)', [randomUUID(), fixture.requestId, "LICENSE_ACTIVATED", `rights-role-web-${suffix}`, "Fixture locale annulée."]);
   await web.query("SELECT nextval('lnx_rights_license_number_seq')");

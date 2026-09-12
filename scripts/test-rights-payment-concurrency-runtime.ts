@@ -47,7 +47,7 @@ async function fixture(options: { party?: boolean } = {}) {
   sequence += 1;
   const tag = String(sequence).padStart(6, "0");
   const orderId = randomUUID(); const requestId = randomUUID(); const audioId = randomUUID(); const documentAssetId = randomUUID(); const documentId = randomUUID();
-  const template = await primary.contractTemplate.findUniqueOrThrow({ where: { type_version: { type: "PUBLICATION_LICENSE", version: 3 } } });
+  const template = await primary.contractTemplate.findUniqueOrThrow({ where: { type_version: { type: "PUBLICATION_LICENSE", version: 4 } } });
   await primary.order.create({ data: {
     id: orderId, orderNumber: `LNX-2077-${tag}`, userId: actorIds.member, customerEmail: member.email, customerName: "Camille Runtime",
     status: "DELIVERED", title: `Œuvre runtime ${tag}`, brief: "Fixture locale PostgreSQL.", usage: "PERSONAL", totalCents: 5_000,
@@ -60,8 +60,8 @@ async function fixture(options: { party?: boolean } = {}) {
   await primary.rightsRequest.create({ data: { id: requestId, requestNumber: `LNX-LIC-2077-${tag}`, orderId, userId: actorIds.member, type: "PUBLICATION_LICENSE", status: "READY_FOR_PAYMENT", requestedPriceCents: 15_000, currency: "EUR", pricingVersion: "2026-09-publication-license-v1", workTitle: `Œuvre runtime ${tag}`, formVersion: "runtime-v1", formData: {}, submittedAt: now, reviewedAt: now, approvedAt: now } });
   if (options.party !== false) await primary.contractPartySnapshot.create({ data: { rightsRequestId: requestId, version: 1, partyType: "INDIVIDUAL", firstName: "Camille", lastName: "Runtime", streetAddress: "1 rue du Test", postalCode: "75001", city: "Paris", country: "FR", contractEmail: member.email, confirmedAt: now, confirmedByUserId: actorIds.member } });
   await primary.asset.create({ data: { id: documentAssetId, type: "DOCUMENT", storageKey: `runtime/contract-${tag}.pdf`, storageBackend: "LOCAL", storageProvider: "local", visibility: "PRIVATE", checksumSha256: "c".repeat(64), filename: `contract-${tag}.pdf`, mimeType: "application/pdf", sizeBytes: 1000n, rightsStatus: "RESTRICTED", confidence: "CONFIRMED" } });
-  await primary.contractDocument.create({ data: { id: documentId, contractNumber: `LNX-LIC-2077-${tag}-C01`, rightsRequestId: requestId, templateId: template.id, templateVersion: 3, documentVersion: 1, kind: "CONTRACT", status: "DRAFT", generatedAt: now, priceSnapshotCents: 15_000, currency: "EUR", sourceSnapshot: {}, documentHashSha256: "d".repeat(63) + String(sequence % 10), assetId: documentAssetId, retentionUntil: new Date(now.getTime() + 10 * 365 * 86400_000) } });
-  await primary.contractAcceptance.create({ data: { contractDocumentId: documentId, acceptedByUserId: actorIds.member, kind: "CLIENT", typedFullName: "Camille Runtime", documentHashSha256: "d".repeat(63) + String(sequence % 10), templateVersion: 3, orderId, rightsRequestId: requestId, sessionReferenceHash: "e".repeat(64), acceptedAt: now } });
+  await primary.contractDocument.create({ data: { id: documentId, contractNumber: `LNX-LIC-2077-${tag}-C01`, rightsRequestId: requestId, templateId: template.id, templateVersion: 4, documentVersion: 1, kind: "CONTRACT", status: "DRAFT", generatedAt: now, priceSnapshotCents: 15_000, currency: "EUR", sourceSnapshot: {}, documentHashSha256: "d".repeat(63) + String(sequence % 10), assetId: documentAssetId, retentionUntil: new Date(now.getTime() + 10 * 365 * 86400_000) } });
+  await primary.contractAcceptance.create({ data: { contractDocumentId: documentId, acceptedByUserId: actorIds.member, kind: "CLIENT", typedFullName: "Camille Runtime", documentHashSha256: "d".repeat(63) + String(sequence % 10), templateVersion: 4, orderId, rightsRequestId: requestId, sessionReferenceHash: "e".repeat(64), acceptedAt: now } });
   await primary.contractDocument.update({ where: { id: documentId }, data: { status: "ADMIN_VALIDATED", acceptedAt: now, adminAcceptedAt: now } });
   return { id: requestId, requestNumber: `LNX-LIC-2077-${tag}`, documentId };
 }
@@ -78,14 +78,14 @@ async function paid(request: Awaited<ReturnType<typeof fixture>>, provider: "STR
 
 async function main() {
   const migrations = await primary.$queryRaw<Array<{ applied: number; total: number }>>`SELECT count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL)::int applied, count(*)::int total FROM "_prisma_migrations"`;
-  assert.deepEqual(migrations[0], { applied: 34, total: 34 });
+  assert.deepEqual(migrations[0], { applied: 35, total: 35 });
   const pids = await Promise.all([a, b, primary].map((db) => db.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid()::int pid`));
   assert.equal(new Set(pids.map((row) => row[0]!.pid)).size, 3);
   await primary.user.createMany({ data: [
     { id: actorIds.member, email: member.email, emailVerified: true, emailVerifiedAt: now, displayName: "Camille Runtime", role: "MEMBER", status: "ACTIVE" },
     { id: actorIds.admin, email: admin.email, emailVerified: true, emailVerifiedAt: now, displayName: "Admin Runtime", role: "ADMIN", status: "ACTIVE" },
   ] });
-  await primary.contractTemplate.update({ where: { type_version: { type: "PUBLICATION_LICENSE", version: 3 } }, data: { status: "APPROVED", approvedAt: now, approvedByAdminId: actorIds.admin, legalReviewReference: "RUNTIME-LOCAL-ONLY" } });
+  await primary.contractTemplate.update({ where: { type_version: { type: "PUBLICATION_LICENSE", version: 4 } }, data: { status: "APPROVED", approvedAt: now, approvedByAdminId: actorIds.admin, legalReviewReference: "RUNTIME-LOCAL-ONLY" } });
   const passed: string[] = [];
 
   const s1 = await fixture();

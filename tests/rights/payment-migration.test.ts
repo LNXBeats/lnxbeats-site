@@ -28,6 +28,16 @@ test("the final operator policy is a new unapproved template version without ear
   assert.doesNotMatch(sql, /\bUPDATE\b|\bDELETE\b|\bAPPROVED\b/);
 });
 
+test("the v4 contract candidate is additive, DRAFT, and leaves every historical template untouched", async () => {
+  const sql = await readFile("prisma/migrations/20260912120000_publication_license_contract_v4/migration.sql", "utf8");
+  assert.match(sql, /'PUBLICATION_LICENSE',\s*4,\s*'Conditions particulières/s);
+  assert.match(sql, /'DRAFT'/);
+  assert.match(sql, /WHERE NOT EXISTS/);
+  assert.match(sql, /Ne sont proposés ni commencement anticipé ni renonciation anticipée/);
+  assert.match(sql, /Transparence et reddition des informations d’exploitation/);
+  assert.doesNotMatch(sql, /\bUPDATE\b|\bDELETE\b|\bAPPROVED\b|DROP TABLE|TRUNCATE/i);
+});
+
 test("the Rights withdrawal migration is additive and guards activation and refund parentage", async () => {
   const sql = await readFile("prisma/migrations/20260909131000_rights_withdrawal_lifecycle/migration.sql", "utf8");
   assert.match(sql, /CREATE TABLE "rights_withdrawal_requests"/);

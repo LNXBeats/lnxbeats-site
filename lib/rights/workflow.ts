@@ -19,7 +19,7 @@ import { assertRightsSplit, canGenerateContractDraft, canStartRightsReview, isLe
 import { buildRightsDocumentSections } from "@/lib/rights/document-presentation";
 import { generateContractPdf } from "@/lib/rights/pdf";
 import { defaultPrivateDocumentDependencies, RightsServiceError, type PreauthorizationDependencies } from "@/lib/rights/service";
-import { isPublicationLicenseV3CanonicalSource, validateContractTemplate } from "@/lib/rights/templates";
+import { isPublicationLicenseV4CanonicalSource, validateContractTemplate } from "@/lib/rights/templates";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -377,7 +377,11 @@ export async function saveSplitProposal(actor: OrderActor, requestNumber: string
   });
 }
 
-function contractSections(request: Awaited<ReturnType<typeof adminRequest>>, kind: ContractDocumentKind) {
+function contractSections(
+  request: Awaited<ReturnType<typeof adminRequest>>,
+  kind: ContractDocumentKind,
+  lifecycle: "DRAFT" | "FINAL" = "DRAFT",
+) {
   const party = request.partySnapshots[0];
   if (!party?.confirmedAt) throw new RightsServiceError("Les coordonnées doivent être confirmées.", 409, "CONTACT_NOT_CONFIRMED");
   return buildRightsDocumentSections({
@@ -392,6 +396,7 @@ function contractSections(request: Awaited<ReturnType<typeof adminRequest>>, kin
     contributions: request.contributions,
     splitProposal: request.splitProposals[0] ?? null,
     aiAssessment: request.aiAssessment,
+    lifecycle,
   });
 }
 
@@ -454,8 +459,8 @@ export async function generateRightsDocument(
   if (!validateContractTemplate(template.sourceMarkup).ok) {
     throw new RightsServiceError("Le modèle contractuel est invalide et doit être corrigé.", 409, "CONTRACT_TEMPLATE_INVALID");
   }
-  if (request.type === "PUBLICATION_LICENSE" && (template.version !== 3 || !isPublicationLicenseV3CanonicalSource(template.sourceMarkup))) {
-    throw new RightsServiceError("Le modèle Publication License n’est pas lié au renderer v3 validé.", 409, "CONTRACT_TEMPLATE_RENDERER_MISMATCH");
+  if (request.type === "PUBLICATION_LICENSE" && (template.version !== 4 || !isPublicationLicenseV4CanonicalSource(template.sourceMarkup))) {
+    throw new RightsServiceError("Le modèle Publication License n’est pas lié au renderer v4 validé.", 409, "CONTRACT_TEMPLATE_RENDERER_MISMATCH");
   }
   const legalTemplateApproved = isLegalTemplateUsable(template.status, template.approvedAt, template.approvedByAdminId, template.legalReviewReference);
   const previous = request.documents.find((document) => document.kind === kind) ?? null;
@@ -477,13 +482,15 @@ export async function generateRightsDocument(
   const suffix = kind === "CONTRACT" ? `C${String(documentVersion).padStart(2, "0")}` : `S${String(documentVersion).padStart(2, "0")}`;
   const contractNumber = `${request.requestNumber}-${suffix}`;
   const generatedAt = new Date();
-  const sections = contractSections(request, kind);
+  const sections = contractSections(request, kind, legalTemplateApproved ? "FINAL" : "DRAFT");
   const pdf = await generateContractPdf({
     contractNumber,
     requestNumber: request.requestNumber,
     orderNumber: request.order.orderNumber,
     title: kind === "CONTRACT" ? `Conditions particulières - ${request.workTitle}` : `Fiche de préparation - ${request.workTitle}`,
-    statusLabel: kind === "CONTRACT" ? "Projet de contrat - non actif" : "Préparation SACEM éventuelle - document privé Admin",
+    statusLabel: kind === "CONTRACT"
+      ? legalTemplateApproved ? "Contrat approuvé — prêt pour acceptation" : "Projet de contrat - non actif"
+      : "Préparation SACEM éventuelle - document privé Admin",
     templateVersion: template.version,
     generatedAt,
     legalTemplateApproved,
@@ -597,8 +604,8 @@ export async function acceptRightsContract(
   if (existing) return requestNumber;
   const template = await prisma.contractTemplate.findUnique({ where: { id: document.templateId } });
   if (!template) throw new RightsServiceError("Le modèle du contrat est introuvable.", 409, "CONTRACT_TEMPLATE_UNAVAILABLE");
-  if (candidate.type === "PUBLICATION_LICENSE" && (template.version !== 3 || !isPublicationLicenseV3CanonicalSource(template.sourceMarkup))) {
-    throw new RightsServiceError("Le modèle Publication License n’est pas lié au renderer v3 validé.", 409, "CONTRACT_TEMPLATE_RENDERER_MISMATCH");
+  if (candidate.type === "PUBLICATION_LICENSE" && (template.version !== 4 || !isPublicationLicenseV4CanonicalSource(template.sourceMarkup))) {
+    throw new RightsServiceError("Le modèle Publication License n’est pas lié au renderer v4 validé.", 409, "CONTRACT_TEMPLATE_RENDERER_MISMATCH");
   }
   if (!isLegalTemplateUsable(template.status, template.approvedAt, template.approvedByAdminId, template.legalReviewReference)) {
     throw new RightsServiceError("Ce projet DRAFT ne peut pas être accepté avant la revue juridique du modèle.", 409, "LEGAL_REVIEW_REQUIRED");
@@ -610,7 +617,7 @@ export async function acceptRightsContract(
     requestNumber: candidate.requestNumber,
     orderNumber: candidate.order.orderNumber,
     title: `Preuve d’acceptation - ${candidate.workTitle}`,
-    statusLabel: "Acceptation électronique enregistrée - droits non actifs",
+    statusLabel: "Acceptation électronique enregistrée",
     templateVersion: document.templateVersion,
     generatedAt: acceptedAt,
     legalTemplateApproved: true,
@@ -618,8 +625,8 @@ export async function acceptRightsContract(
     sections: [
       { title: "Document accepté", paragraphs: [`Conditions particulières ${document.contractNumber}, version ${document.documentVersion}, modèle version ${document.templateVersion}.`, `Empreinte SHA-256 du document accepté : ${document.documentHashSha256}.`] },
       { title: "Identité et consentement", paragraphs: [`Acceptation enregistrée au nom de ${typedName}, depuis un compte authentifié dont l’e-mail est vérifié.`, `Acceptation explicite horodatée le ${acceptedAt.toISOString()}. Référence de session non sensible : ${input.sessionReferenceHash.slice(0, 12).toUpperCase()}.`] },
-      ...contractSections(candidate, "CONTRACT"),
-      { title: "Portée de la preuve", paragraphs: ["Cette preuve relie le compte, le consentement, la version du modèle et l’empreinte du document. Elle n’est pas présentée comme une signature électronique qualifiée.", "Aucun droit n’est actif et aucun paiement de droits n’est ouvert dans V0.7.2. Toute activation future exige les validations juridiques, administratives et techniques prévues."] },
+      ...contractSections(candidate, "CONTRACT", "FINAL"),
+      { title: "Portée de la preuve", paragraphs: ["Cette preuve relie le compte, le consentement, la version du modèle et l’empreinte du document. Elle n’est pas présentée comme une signature électronique qualifiée.", "La prise d’effet de la licence demeure régie par les conditions contractuelles, notamment la confirmation du paiement et l’expiration complète du délai de rétractation."] },
     ],
   });
   const storageKey = `orders/${candidate.orderId}/documents/${randomUUID()}.pdf`;

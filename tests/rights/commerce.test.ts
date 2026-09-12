@@ -16,7 +16,7 @@ function template(
 ): RightsCommerceTemplate {
   return {
     type,
-    version: 3,
+    version: 4,
     status: "APPROVED",
     sourceMarkup: publicationLicenseDraftTemplate,
     approvedAt: new Date("2026-09-08T10:00:00.000Z"),
@@ -113,11 +113,11 @@ test("Production needs the exact dedicated confirmation", () => {
   assert.ok(missing.reasons.includes("RIGHTS_PRODUCTION_CONFIRMATION_REQUIRED"));
 });
 
-test("the offer is bound to the exact required v3 template, not a later draft", () => {
+test("the offer is bound to the exact required v4 template, not a later draft", () => {
   const readiness = evaluateRightsCommerceReadiness([
     template("PUBLICATION_LICENSE"),
     template("PUBLICATION_LICENSE", {
-      version: 4,
+      version: 5,
       status: "DRAFT",
       approvedAt: null,
       approvedByAdminId: null,
@@ -126,13 +126,13 @@ test("the offer is bound to the exact required v3 template, not a later draft", 
   ], {});
   const publication = readiness.offers.find((offer) => offer.type === "PUBLICATION_LICENSE");
 
-  assert.equal(publication?.templateVersion, 3);
+  assert.equal(publication?.templateVersion, 4);
   assert.equal(publication?.templateStatus, "APPROVED");
   assert.equal(publication?.legalReviewApproved, true);
   assert.equal(publication?.rendererBound, true);
 });
 
-test("a syntactically valid but altered v3 source is not renderer-bound", () => {
+test("a syntactically valid but altered v4 source is not renderer-bound", () => {
   const readiness = evaluateRightsCommerceReadiness([
     template("PUBLICATION_LICENSE", { sourceMarkup: `${publicationLicenseDraftTemplate}\nTexte ajouté.` }),
   ], { RIGHTS_COMMERCE_ENABLED: "true", RIGHTS_PAYMENTS_ENABLED: "true" });

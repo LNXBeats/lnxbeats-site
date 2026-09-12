@@ -32,14 +32,14 @@ export const safariLicensePresentationInput: RightsDocumentPresentationInput = {
     exclusive: false,
     destination: "Publication et monétisation de la création sur les plateformes expressément autorisées.",
     platforms: ["SPOTIFY", "APPLE_MUSIC", "DEEZER"],
-    territory: "France",
-    duration: "2 ans",
+    territory: "Monde entier",
+    duration: "5 ans",
     monetization: true,
     adaptation: false,
     advertising: false,
     audiovisualSync: false,
     contentId: false,
-    sublicense: false,
+    sublicense: true,
     credit: "LNX Beats — création musicale",
     restrictions: "Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID, adaptation ou sous-licence sans autorisation contractuelle distincte de LNX Beats.",
   }],
@@ -51,7 +51,7 @@ export const safariLicensePresentationInput: RightsDocumentPresentationInput = {
   aiAssessment: "NOT_REVIEWED",
 };
 
-test("contract presentation uses the Admin RightsGrant as its contractual source of truth", () => {
+test("publication contract uses the immutable v4 rights matrix and exact dossier destinations", () => {
   const sections = buildRightsDocumentSections(safariLicensePresentationInput);
   const rendered = sections.flatMap((section) => [section.title, ...section.paragraphs]).join("\n");
 
@@ -59,7 +59,7 @@ test("contract presentation uses the Admin RightsGrant as its contractual source
     "1. Parties",
     "2. Œuvre concernée",
     "3. Objet de la licence",
-    "4. Droits expressément accordés",
+    "4. Matrice exacte des droits accordés",
     "5. Supports / plateformes",
     "6. Territoire",
     "7. Durée",
@@ -70,38 +70,68 @@ test("contract presentation uses the Admin RightsGrant as its contractual source
     "12. Contributions déclarées",
     "13. SACEM / gestion collective",
     "14. Obligations des parties",
-    "15. Entrée en vigueur",
-    "16. Rétractation",
-    "17. Retrait et fin de la licence",
-    "18. Responsabilité, droit applicable et litiges",
-    "19. Statut DRAFT / approbation",
+    "15. Transparence et reddition des informations d’exploitation",
+    "16. Conclusion et entrée en vigueur",
+    "17. Rétractation",
+    "18. Formulaire type de rétractation",
+    "19. Retrait et fin de la licence",
+    "20. Responsabilité, droit applicable et litiges",
+    "Statut du rendu",
   ]);
-  assert.match(rendered, /Durée contractuelle : cinq ans/);
+  assert.match(rendered, /Durée contractuelle : cinq années calendaires/);
   assert.doesNotMatch(rendered, /Durée contractuelle : 2 ans\./);
   assert.doesNotMatch(rendered, /À définir avec LNX Beats/);
   assert.match(rendered, /Spotify, Apple Music, Deezer/);
   assert.match(rendered, /Histoire \/ brief uniquement/);
-  assert.match(rendered, /Publication et monétisation de la création sur les plateformes expressément autorisées/);
+  assert.match(rendered, /Reproduction : autorisée uniquement/);
+  assert.match(rendered, /Distribution : autorisée uniquement/);
+  assert.match(rendered, /Communication au public : autorisée uniquement/);
   assert.match(rendered, /LNX Beats — création musicale/);
-  assert.match(rendered, /Aucune utilisation publicitaire, synchronisation audiovisuelle, Content ID, adaptation ou sous-licence/);
-  assert.match(rendered, /monétisation : oui/);
-  assert.match(rendered, /adaptation : non/);
-  assert.match(rendered, /publicité : non/);
-  assert.match(rendered, /synchronisation audiovisuelle : non/);
-  assert.match(rendered, /Content ID : non/);
-  assert.match(rendered, /sous-licence : non/);
+  assert.match(rendered, /Les droits non expressément accordés restent non accordés/);
+  assert.match(rendered, /Monétisation : autorisée/);
+  assert.match(rendered, /Adaptation : non accordée/);
+  assert.match(rendered, /Content ID : aucune revendication exclusive/);
+  assert.match(rendered, /Sous-licence technique : autorisée uniquement/);
+  assert.match(rendered, /Transfert et revente : interdits/);
   assert.match(rendered, /Aucune répartition n’est promise\. Aucune déclaration SACEM n’est effectuée/);
-  assert.match(rendered, /Prix unique de la licence : 150 €\./);
+  assert.match(rendered, /Rémunération forfaitaire prévue : 150 €\./);
   assert.match(rendered, /Le paiement ne rend pas la licence immédiatement active/);
-  assert.match(rendered, /L’acceptation du présent projet ne suffit pas à rendre la licence active/);
-  assert.match(rendered, /approbation référencée du modèle/);
+  assert.match(rendered, /contrat à distance portant sur une prestation de licence est conclu/);
   assert.match(rendered, /monde entier/);
-  assert.match(rendered, /Aucun commencement anticipé ni renoncement anticipé n’est proposé/);
+  assert.match(rendered, /Ne sont proposés ni commencement anticipé ni renonciation anticipée/);
   assert.match(rendered, /mise en demeure écrite restée sans effet pendant trente jours/);
-  assert.match(rendered, /APPROBATION JURIDIQUE RÉFÉRENCÉE REQUISE/);
+  assert.match(rendered, /PROJET — DRAFT — NON ACTIF/);
+  assert.match(rendered, /trente jours suivant chaque date anniversaire/);
+  assert.match(rendered, /Formulaire type de rétractation/);
   assert.doesNotMatch(rendered, /acceptation QA|validation Admin|Montant cible futur/i);
   assert.doesNotMatch(rendered, /STORY_BRIEF_ONLY|SPOTIFY|APPLE_MUSIC|DEEZER/);
   assert.doesNotMatch(rendered, /\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/);
+});
+
+test("final v4 rendering contains contractual clauses without DRAFT lifecycle statements", () => {
+  const rendered = buildRightsDocumentSections({ ...safariLicensePresentationInput, lifecycle: "FINAL" })
+    .flatMap((section) => [section.title, ...section.paragraphs])
+    .join("\n");
+  assert.doesNotMatch(rendered, /PROJET|DRAFT|NON ACTIF|APPROBATION JURIDIQUE/i);
+  assert.match(rendered, /Rémunération forfaitaire prévue : 150 €/);
+  assert.match(rendered, /quatorze jours à compter de la conclusion du contrat/);
+});
+
+test("publication v4 fails closed when runtime grants conflict with the approved matrix", () => {
+  assert.throws(
+    () => buildRightsDocumentSections({
+      ...safariLicensePresentationInput,
+      grants: [{ ...safariLicensePresentationInput.grants[0]!, contentId: true }],
+    }),
+    /PUBLICATION_LICENSE_RIGHTS_MATRIX_MISMATCH/,
+  );
+  assert.throws(
+    () => buildRightsDocumentSections({
+      ...safariLicensePresentationInput,
+      grants: [{ ...safariLicensePresentationInput.grants[0]!, territory: "France" }],
+    }),
+    /PUBLICATION_LICENSE_RIGHTS_MATRIX_MISMATCH/,
+  );
 });
 
 test("publication contract rendering fails closed on a client-controlled price", () => {

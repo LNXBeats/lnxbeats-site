@@ -4,7 +4,7 @@ import { rightsOffers, type PublicRightsOfferType } from "@/data/rights-offer";
 import { prisma } from "@/lib/prisma";
 import { isLegalTemplateUsable } from "@/lib/rights/domain";
 import { rightsOpeningConfiguration } from "@/lib/rights/opening-config";
-import { isPublicationLicenseV3CanonicalSource, validateContractTemplate } from "@/lib/rights/templates";
+import { isPublicationLicenseV4CanonicalSource, validateContractTemplate } from "@/lib/rights/templates";
 
 export type RightsCommerceState = "BLOCKED" | "READY_NOT_OPEN" | "OPEN";
 
@@ -93,7 +93,7 @@ function offerReadiness(
   const rendererBound = Boolean(template
     && rightsCommerceCapabilities.rendererBindingReady
     && type === "PUBLICATION_LICENSE"
-    && isPublicationLicenseV3CanonicalSource(template.sourceMarkup));
+    && isPublicationLicenseV4CanonicalSource(template.sourceMarkup));
   const legalReviewApproved = Boolean(template && isLegalTemplateUsable(
     template.status,
     template.approvedAt,

@@ -9,7 +9,7 @@ import { enqueueRightsNotification } from "@/lib/notifications/service";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { licenseExpiresAt, withdrawalEndsAt } from "@/lib/rights/license-calendar";
 import { assertRightsProviderEvent } from "@/lib/rights/payment-domain";
-import { isPublicationLicenseV3CanonicalSource } from "@/lib/rights/templates";
+import { isPublicationLicenseV4CanonicalSource } from "@/lib/rights/templates";
 import type { ReservedRightsPaymentAttempt, RightsPaymentResult, RightsProviderEvent } from "@/lib/rights/payment-types";
 import type { HostedCheckoutSession } from "@/lib/payments/stripe-client";
 
@@ -87,7 +87,7 @@ async function eligibleRequest(tx: Transaction, actorId: string, requestNumber: 
     || !document
     || document.templateVersion !== offer.contractTemplateVersion
     || document.template.status !== "APPROVED"
-    || !isPublicationLicenseV3CanonicalSource(document.template.sourceMarkup)
+    || !isPublicationLicenseV4CanonicalSource(document.template.sourceMarkup)
     || !document.template.approvedAt
     || !document.template.approvedByAdminId
     || !document.template.legalReviewReference
@@ -156,7 +156,7 @@ async function finalizeSuccess(tx: Transaction, paymentId: string, event: Rights
     || request.type !== "PUBLICATION_LICENSE" || request.requestedPriceCents !== offer.priceCents
     || request.order.status !== "DELIVERED" || !request.order.deliveredAt || !request.order.assets[0]
     || !document || document.templateVersion !== offer.contractTemplateVersion || document.template.status !== "APPROVED"
-    || !isPublicationLicenseV3CanonicalSource(document.template.sourceMarkup)
+    || !isPublicationLicenseV4CanonicalSource(document.template.sourceMarkup)
     || !acceptance || acceptance.acceptedByUserId !== request.userId
     || acceptance.documentHashSha256 !== document.documentHashSha256
     || acceptance.templateVersion !== document.templateVersion
