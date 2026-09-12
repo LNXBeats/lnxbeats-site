@@ -338,6 +338,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     data-active-index={currentVisibleIndex}
     data-active-project-index={activeIndex}
     data-audio-unlocked={audioUnlocked}
+    data-active-tone={active.artworkTone}
     data-continuous-playback={continuousPlayback}
     data-filter={filter}
     data-playing={playing}
@@ -354,7 +355,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       }
     }}
   >
-    <div className="home-jukebox__background" aria-hidden="true" />
+    <div className="home-jukebox__background" aria-hidden="true" data-motion-layer="background" />
     <div className="home-jukebox__heading">
       <div><p className="section-index">{eyebrow}</p><h1 id={regionId}>{heading}</h1></div>
       <output aria-live="polite" aria-atomic="true">

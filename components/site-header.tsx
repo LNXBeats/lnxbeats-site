@@ -13,6 +13,7 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const desktopNavigationRef = useRef<HTMLElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const lastLinkRef = useRef<HTMLAnchorElement>(null);
 
@@ -89,6 +90,35 @@ export function SiteHeader() {
     };
   }, [open]);
 
+  useEffect(() => {
+    const navigationElement = desktopNavigationRef.current;
+    if (!navigationElement) return;
+
+    let animationFrame = 0;
+    const updateIndicator = () => {
+      animationFrame = 0;
+      const activeLink = navigationElement.querySelector<HTMLElement>("[data-nav-active='true']");
+      if (!activeLink) {
+        navigationElement.style.setProperty("--active-nav-opacity", "0");
+        return;
+      }
+      navigationElement.style.setProperty("--active-nav-left", `${activeLink.offsetLeft}px`);
+      navigationElement.style.setProperty("--active-nav-width", `${activeLink.offsetWidth}px`);
+      navigationElement.style.setProperty("--active-nav-opacity", "1");
+    };
+    const scheduleUpdate = () => {
+      if (!animationFrame) animationFrame = window.requestAnimationFrame(updateIndicator);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("resize", scheduleUpdate, { passive: true });
+    document.fonts?.ready.then(scheduleUpdate).catch(() => undefined);
+    return () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [compact, pathname]);
+
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const toggleMenu = () => {
     const nextOpen = !open;
@@ -108,13 +138,14 @@ export function SiteHeader() {
           <span className="brand__beats">Beats</span>
         </Link>
 
-        <nav className="desktop-navigation" aria-label="Navigation principale">
+        <nav ref={desktopNavigationRef} className="desktop-navigation" aria-label="Navigation principale">
           {navigation.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               className={`${item.href === "/commander" ? "desktop-navigation__cta" : "desktop-navigation__link"} ${isActive(item.href) ? "is-active" : ""}`}
               aria-current={isActive(item.href) ? "page" : undefined}
+              data-nav-active={isActive(item.href)}
             >
               {item.label}
             </Link>
@@ -123,9 +154,11 @@ export function SiteHeader() {
             href="/compte"
             className={`desktop-navigation__account ${isActive("/connexion") || isActive("/compte") ? "is-active" : ""}`}
             aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}
+            data-nav-active={isActive("/connexion") || isActive("/compte")}
           >
             Compte
           </Link>
+          <span className="desktop-navigation__active-indicator" aria-hidden="true" />
         </nav>
 
         <button

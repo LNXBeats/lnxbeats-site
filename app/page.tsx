@@ -30,10 +30,10 @@ export default async function HomePage() {
   const { lead: leadProject } = await getHomepageProjects();
 
   return <>
-    <section className="home-hero home-hero--editorial" aria-labelledby="home-hero-title">
-      <div className="home-hero__media" aria-hidden="true"><Image src="/assets/hero-desktop.jpg" alt="" fill priority sizes="100vw" /></div>
+    <section className="home-hero home-hero--editorial" aria-labelledby="home-hero-title" data-motion-scene="home">
+      <div className="home-hero__media" aria-hidden="true" data-motion-layer="media"><Image src="/assets/hero-desktop.jpg" alt="" fill priority sizes="100vw" /></div>
       <Container className="home-hero__inner">
-        <div className="home-hero__copy home-hero__copy--editorial">
+        <div className="home-hero__copy home-hero__copy--editorial" data-motion-layer="copy">
           <h1 id="home-hero-title">LNX <span>BEATS</span></h1>
           <p className="eyebrow home-hero__eyebrow">
             <span className="home-hero__eyebrow-story"><span className="home-hero__eyebrow-story-key">Les histoires</span> deviennent musique</span>
@@ -42,7 +42,7 @@ export default async function HomePage() {
           <p className="home-hero__lead">Un prénom, un souvenir ou une scène banale : LNX Beats écoute ce qui s’y cache et lui donne une voix, un rythme, un monde.</p>
           <div className="home-hero__actions"><ButtonLink href="/discographie">Découvrir la musique</ButtonLink><ButtonLink href="/commander" variant="secondary">Commander une création</ButtonLink></div>
         </div>
-        <div className="home-hero__signature" aria-hidden="true"><span>Rap narratif</span><span>Humour</span><span>Émotion</span></div>
+        <div className="home-hero__signature" aria-hidden="true" data-motion-layer="signature"><span>Rap narratif</span><span>Humour</span><span>Émotion</span></div>
       </Container>
     </section>
 

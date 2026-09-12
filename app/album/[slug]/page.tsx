@@ -65,12 +65,12 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
 
   return (
     <>
-      <header className="album-hero">
+      <header className="album-hero" data-motion-scene="album">
         <Container>
           <Link className="back-link" href="/discographie"><span aria-hidden="true">←</span> Retour à la discographie</Link>
           <div className="album-hero__grid">
-            <ProjectArtwork project={project} priority sizes="(max-width: 820px) 100vw, 48vw" className="album-hero__art" />
-            <div className="album-hero__content">
+            <div data-motion-layer="media"><ProjectArtwork project={project} priority sizes="(max-width: 820px) 100vw, 48vw" className="album-hero__art" /></div>
+            <div className="album-hero__content" data-motion-layer="copy">
               <p className="album-status"><span>{kind}</span><span>{status}</span></p>
               <h1>{project.title}</h1>
               {project.subtitle ? <p className="album-hero__subtitle">{project.subtitle}</p> : null}

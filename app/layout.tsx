@@ -3,6 +3,7 @@ import { QuickAccessBar } from "@/components/quick-access-bar";
 import { OrderJourneyProvider } from "@/components/order-journey-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SiteMotion } from "@/components/site-motion";
 import { siteConfig } from "@/data/site";
 import { CANONICAL_SITE_ORIGIN } from "@/lib/seo/canonical";
 import "./globals.css";
@@ -15,6 +16,7 @@ import "./v0854-audio-payment.css";
 import "./legal-compliance.css";
 import "./v110-chrome-polish.css";
 import "./v110-surface-polish.css";
+import "./v120-ui-motion-polish.css";
 
 const siteUrl = CANONICAL_SITE_ORIGIN;
 const socialImage = new URL("/og.png", siteUrl).toString();
@@ -71,6 +73,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <QuickAccessBar />
           <main id="contenu">{children}</main>
           <SiteFooter />
+          <SiteMotion />
         </OrderJourneyProvider>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializedStructuredData }} />
       </body>

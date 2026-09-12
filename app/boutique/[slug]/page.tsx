@@ -55,13 +55,12 @@ export default async function ShopProductPage({ params }: Context) {
                 ? "Ce produit est épuisé."
                 : product.availabilityState === "TEMPORARILY_UNAVAILABLE"
                   ? "Indisponible temporairement : les derniers exemplaires sont réservés pendant un paiement."
-                : product.availableQuantity === null
-                  ? "Disponible."
-                  : `${product.availableQuantity} exemplaire${product.availableQuantity > 1 ? "s" : ""} disponible${product.availableQuantity > 1 ? "s" : ""}.`}
+                : "Disponible."}
             </p>
             {product.shippingRequired ? (
               <p className="shop-product-detail__shipping">
-                Livraison calculée automatiquement selon le poids du panier. Le montant exact est affiché avant la création de la commande.
+                <strong>Livraison Colissimo à domicile avec signature</strong>
+                <span>France métropolitaine uniquement · frais calculés selon le poids du panier.</span>
               </p>
             ) : <p className="shop-product-detail__shipping">Aucun envoi postal requis.</p>}
             <ShopAddButton
