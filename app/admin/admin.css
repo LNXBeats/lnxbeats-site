@@ -713,6 +713,49 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-product-image__delete summary { display: flex; min-height: 44px; align-items: center; cursor: pointer; color: #efc1b8; font-size: 0.72rem; font-weight: 700; }
 .admin-product-image__delete p { color: #918d85; font-size: 0.68rem; }
 .admin-product-image__delete button { margin-top: 0.75rem; border-color: rgba(198, 112, 96, 0.45); background: rgba(198, 112, 96, 0.08); color: #efc1b8; }
+
+.admin-creation-media-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.admin-creation-media {
+  min-width: 0;
+  margin: 0;
+}
+.admin-creation-media .admin-panel__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.admin-creation-media .admin-panel__heading h3 { margin: 0; color: #f4f0e8; }
+.admin-creation-media .admin-panel__heading span { color: #918d85; font-size: 0.68rem; text-transform: uppercase; }
+.admin-creation-media__preview { display: grid; gap: 0.75rem; margin: 1rem 0; }
+.admin-creation-media__preview :is(img, video) {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border: 1px solid rgba(229, 201, 130, 0.18);
+  border-radius: 12px;
+  background: #050505;
+}
+.admin-creation-media__preview audio { width: 100%; }
+.admin-creation-media__preview p { margin: 0; overflow-wrap: anywhere; color: #a6a198; font-size: 0.72rem; }
+.admin-creation-media__delete {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(198, 112, 96, 0.28);
+  border-radius: 13px;
+}
+
+@media (max-width: 900px) {
+  .admin-creation-media-grid { grid-template-columns: 1fr; }
+}
 .admin-audio-preview { display: grid; gap: 1rem; }
 .admin-audio-current { display: grid; gap: 0.55rem; }
 .admin-audio-current > p { margin: 0; color: #918d85; font-size: 0.66rem; }

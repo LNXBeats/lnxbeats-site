@@ -424,10 +424,11 @@ export class S3MediaStorage implements MediaStorage {
   }
 
   private async createSignedUrlForObject(input: MediaSignedUrlInput) {
-    if (!Number.isSafeInteger(input.expiresInSeconds) || input.expiresInSeconds < 30 || input.expiresInSeconds > 900) {
-      throw new MediaStorageError("CONFIGURATION", "Private signed URLs must expire between 30 and 900 seconds.");
+    const maximumExpiry = input.scope === "public" ? 3_600 : 900;
+    if (!Number.isSafeInteger(input.expiresInSeconds) || input.expiresInSeconds < 30 || input.expiresInSeconds > maximumExpiry) {
+      throw new MediaStorageError("CONFIGURATION", `Signed URLs for ${input.scope} media must expire between 30 and ${maximumExpiry} seconds.`);
     }
-    const bucket = this.bucket("private", input.key);
+    const bucket = this.bucket(input.scope, input.key);
     const command = input.operation === "get"
       ? new GetObjectCommand({
           Bucket: bucket,
@@ -439,7 +440,7 @@ export class S3MediaStorage implements MediaStorage {
           Key: input.key,
           ...(input.contentType ? { ContentType: input.contentType } : {}),
           ...(input.contentLength !== undefined ? { ContentLength: input.contentLength } : {}),
-          CacheControl: "private, no-store",
+          CacheControl: input.scope === "public" ? "public, max-age=31536000, immutable" : "private, no-store",
         });
     try {
       return await this.countSdkOperation(() => this.signer(

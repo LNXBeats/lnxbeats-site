@@ -50,7 +50,7 @@ export type MediaObject = MediaObjectMetadata & {
 };
 
 export type MediaSignedUrlInput = {
-  scope: "private";
+  scope: MediaScope;
   key: string;
   operation: "get" | "put";
   expiresInSeconds: number;

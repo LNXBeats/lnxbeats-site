@@ -66,3 +66,16 @@ export function createPrivateMediaSignedUrl(reference: MediaStorageReference, in
   if (reference.visibility !== "PRIVATE") throw new Error("Signed application URLs are reserved for private media.");
   return mediaStorageForReference(reference).createSignedUrl({ ...input, scope: "private", key: reference.storageKey });
 }
+
+export function createPublicMediaSignedUrl(
+  reference: MediaStorageReference,
+  input: Omit<MediaSignedUrlInput, "scope" | "key" | "operation">,
+) {
+  if (reference.visibility !== "PUBLIC") throw new Error("Public media signatures require a public asset.");
+  return mediaStorageForReference(reference).createSignedUrl({
+    ...input,
+    scope: "public",
+    key: reference.storageKey,
+    operation: "get",
+  });
+}

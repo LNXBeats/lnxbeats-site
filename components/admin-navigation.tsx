@@ -19,6 +19,7 @@ const adminNavigation = [
   { href: "/admin/notifications", label: "Notifications", group: "Finance" },
   { href: "/admin/droits", label: "Droits & contrats", group: "Droits" },
   { href: "/admin/catalogue", label: "Catalogue", group: "Contenu" },
+  { href: "/admin/creations", label: "Créations", group: "Contenu" },
   { href: "/admin/membres", label: "Membres", group: "Comptes" },
 ] as const;
 
