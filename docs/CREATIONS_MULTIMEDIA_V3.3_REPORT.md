@@ -135,9 +135,11 @@ Rapport de candidat local — 13 septembre 2026.
 - Direction conservée : noir, blanc, or, halo discret et transitions courtes sans moteur d'animation supplémentaire.
 - Layout fluide par Grid/Flex, `clamp`, `aspect-ratio`, contraintes de hauteur et paliers fondés sur l'espace disponible.
 - Mobile : média pleine largeur utile, informations sous la scène, rail scroll-snap, cibles tactiles observées à 48 px minimum.
+- Sur 360–430 px, les trois sélecteurs de média utilisent une grille 2+1 sans défilement horizontal; chaque libellé reste complet dans une cible de 48 px.
 - Tablette/laptop : bascule progressive; le viewport 1366×768 reste sans découpe ni overflow horizontal.
 - Desktop/grand écran : largeur utile bornée; le contenu ne s'étire pas artificiellement à 2560 px.
 - Vidéo verticale QA : source 540×960 rendue 308×550 environ à 390 px, `contain`, sans overflow.
+- Dans « Toutes les créations », catégorie/collaborateur sont limités visuellement à 2 lignes et le titre à 3 lignes. Le texte complet reste dans le DOM et le H1 de la fiche n'est pas concerné.
 - Rail navigable au clavier, boutons réels, labels/états accessibles, focus visible et contrôles vidéo natifs.
 - `prefers-reduced-motion: reduce` neutralise les translations/transitions non essentielles.
 - La navigation expose « Créations » sur mobile comme sur desktop et l'état actif est segment-safe.
@@ -157,9 +159,9 @@ Rapport de candidat local — 13 septembre 2026.
 
 ### Tests automatisés
 
-- Suite Créations : 48/48 PASS.
+- Suite Créations après polish final : 50/50 PASS.
 - Tests ciblés finaux (Créations, média, SEO, Merchant, Jukebox, audio, Admin) : tous PASS.
-- Suite canonique complète : 1184/1184 PASS, 0 échec.
+- Suite canonique complète avant le polish CSS ciblé : 1184/1184 PASS, 0 échec; la surface finale modifiée a ensuite été revalidée par les suites Créations et média, ESLint, TypeScript et le build Production.
 - Couverture de non-régression incluse : Discographie/Jukebox, audio, Admin, catalogue, Boutique, checkout, paiements, auth, sécurité, Rights et contrats.
 - `npm run lint` : PASS.
 - `npm run typecheck` : PASS.
@@ -209,6 +211,16 @@ Répertoire temporaire non versionné : `/private/tmp/lnx-v33-qa-captures`.
 - Mesures automatisées : `/private/tmp/lnx-v33-qa-captures/qa-report.json`.
 
 Sur les 11 viewports : `scrollWidth === clientWidth`, aucun scroll initial parasite, aucune vidéo montée au chargement, menu mobile jusqu'à 768 px et navigation desktop complète dès 1024 px. Les captures ont été inspectées visuellement après correction du scroll vertical involontaire du rail.
+
+### Polish final avant push feature
+
+Répertoire temporaire non versionné : `/private/tmp/lnx-v33-polish-qa`.
+
+- Fiche audio + vidéo : `creation-detail-audio-video-{360x640,375x667,390x844,430x932}-polish.png`.
+- Grille avec titre long : `creations-grid-long-title-{390x844,1366x768,1920x1080}-polish.png`.
+- Rapport mesuré : `/private/tmp/lnx-v33-polish-qa/qa-report.json`.
+- Viewports contrôlés : 360, 375, 390, 430, 768, 1366×768 et 1920×1080.
+- Tous les sélecteurs sont contenus, leurs libellés sont complets, leur hauteur est de 48 px et aucune page ne présente d'overflow horizontal.
 
 ## 11. Risques et limites avant Production
 

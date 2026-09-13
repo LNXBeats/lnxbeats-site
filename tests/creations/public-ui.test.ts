@@ -63,6 +63,35 @@ test("hidden native video controls are not keyboard traps and public controls ar
   assert.match(styles, /min-height: 48px/);
 });
 
+test("mobile media choices stay complete, tactile and contained without a horizontal carousel", async () => {
+  const [source, styles] = await Promise.all([
+    read("components/creations/creation-media-stage.tsx"),
+    read("app/creations/creations.css"),
+  ]);
+  const mobile = styles.match(/@media \(max-width: 540px\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+  assert.match(source, /return "Voir le visuel"/);
+  assert.match(source, /return "Écouter l’audio"/);
+  assert.match(source, /return "Voir la vidéo"/);
+  assert.match(styles, /\.creation-stage__media-tabs \{[\s\S]*?flex-wrap: wrap;[\s\S]*?overflow: visible;/);
+  assert.match(mobile, /\.creation-stage__media-tabs \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*overflow: visible;/);
+  assert.match(mobile, /\.creation-stage__media-tabs button \{[^}]*width: 100%;[^}]*min-width: 0;[^}]*min-height: 48px;[^}]*white-space: normal;/);
+  assert.match(mobile, /button:nth-child\(3\):last-child \{ grid-column: 1 \/ -1; \}/);
+});
+
+test("catalogue cards clamp exceptional labels and titles without mutating their accessible text", async () => {
+  const [source, styles] = await Promise.all([
+    read("components/creations/creation-media-stage.tsx"),
+    read("app/creations/creations.css"),
+  ]);
+
+  assert.match(source, /<small>\{creation\.category \|\| "Création"\}/);
+  assert.match(source, /<strong>\{creation\.title\}<\/strong>/);
+  assert.doesNotMatch(source, /creation\.title\.(?:slice|substring)\(/);
+  assert.match(styles, /\.creation-card__body small \{[\s\S]*?max-height: 2\.7em;[\s\S]*?overflow: hidden;[\s\S]*?overflow-wrap: anywhere;[\s\S]*?-webkit-line-clamp: 2;/);
+  assert.match(styles, /\.creation-card__body strong \{[\s\S]*?max-height: 3\.15em;[\s\S]*?overflow: hidden;[\s\S]*?overflow-wrap: anywhere;[\s\S]*?-webkit-line-clamp: 3;/);
+});
+
 test("the stage keeps 16:9, 9:16 and 1:1 media contained at all responsive tiers", async () => {
   const [source, styles] = await Promise.all([
     read("components/creations/creation-media-stage.tsx"),

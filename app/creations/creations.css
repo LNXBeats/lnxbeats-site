@@ -265,10 +265,10 @@
 
 .creation-stage__media-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: .55rem;
   margin-top: .8rem;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: visible;
 }
 
 .creation-stage__media-tabs button,
@@ -374,8 +374,34 @@
 .creation-card .creation-artwork { min-height: 0; aspect-ratio: 4 / 3; border-bottom: 1px solid rgba(244, 240, 232, .1); }
 .creation-card .creation-artwork img { object-fit: cover; }
 .creation-card__body { display: grid; gap: .35rem; padding: 1rem; }
-.creation-card__body small { color: var(--gold-light); font-size: .58rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.creation-card__body strong { font-family: Georgia, serif; font-size: clamp(1.05rem, 1.6vw, 1.35rem); font-weight: 400; line-height: 1.05; }
+.creation-card__body small {
+  display: -webkit-box;
+  min-width: 0;
+  max-height: 2.7em;
+  overflow: hidden;
+  color: var(--gold-light);
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.creation-card__body strong {
+  display: -webkit-box;
+  min-width: 0;
+  max-height: 3.15em;
+  overflow: hidden;
+  font-family: Georgia, serif;
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  font-weight: 400;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .creation-card__body > span { color: rgba(244, 240, 232, .48); font-size: .68rem; }
 
 .creations-empty { display: grid; grid-template-columns: auto minmax(0, 680px); align-items: center; justify-content: center; gap: clamp(1.5rem, 4vw, 4rem); min-height: min(54svh, 520px); padding: clamp(2rem, 5vw, 5rem); border: 1px solid rgba(244, 240, 232, .12); border-radius: 28px; background: rgba(12, 12, 11, .72); }
@@ -426,8 +452,10 @@
   .creation-stage__audio-overlay { right: .65rem; bottom: .65rem; left: .65rem; gap: .65rem; padding: .65rem; }
   .creation-stage__audio-overlay button { min-width: 56px; min-height: 56px; }
   .creation-stage__copy h1, .creation-stage__copy h2 { font-size: clamp(2.1rem, 11vw, 3.2rem); }
+  .creation-stage__media-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .creation-stage__media-tabs button { width: 100%; min-width: 0; min-height: 48px; line-height: 1.25; text-align: center; white-space: normal; }
+  .creation-stage__media-tabs button:nth-child(3):last-child { grid-column: 1 / -1; }
   .creation-stage__actions { display: grid; grid-template-columns: 1fr; }
-  .creation-stage__media-tabs button { min-height: 48px; }
   .creation-rail > button { min-width: min(250px, 82vw); }
   .creation-catalogue__grid { grid-template-columns: 1fr; }
   .creations-empty { grid-template-columns: 1fr; justify-items: start; padding: 1.5rem; }
