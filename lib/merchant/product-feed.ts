@@ -26,6 +26,7 @@ export type MerchantFeedProduct = Readonly<{
   currency: string;
   availabilityState: "AVAILABLE" | "TEMPORARILY_UNAVAILABLE" | "SOLD_OUT";
   shippingRequired: boolean;
+  shippingWeightGrams: number | null;
   image: Readonly<{
     id: string;
     alt: string;
@@ -45,6 +46,7 @@ export type MerchantFeedItem = Readonly<{
   condition: "new";
   brand: string;
   mpn: string;
+  shippingWeight: string;
 }>;
 
 export function merchantMpnForProductSlug(slug: string) {
@@ -87,6 +89,9 @@ export function toMerchantFeedItem(product: MerchantFeedProduct): MerchantFeedIt
     || !Number.isSafeInteger(product.priceCents)
     || product.priceCents <= 0
     || product.currency !== "EUR"
+    || product.shippingWeightGrams === null
+    || !Number.isSafeInteger(product.shippingWeightGrams)
+    || product.shippingWeightGrams <= 0
     || !product.image
     || !UUID_PATTERN.test(product.image.id)
     || !mpn
@@ -103,6 +108,7 @@ export function toMerchantFeedItem(product: MerchantFeedProduct): MerchantFeedIt
     condition: "new",
     brand: siteConfig.name,
     mpn,
+    shippingWeight: `${product.shippingWeightGrams} g`,
   };
 }
 
@@ -123,6 +129,7 @@ function serializeItem(item: MerchantFeedItem) {
     element("g:condition", item.condition),
     element("g:brand", item.brand),
     element("g:mpn", item.mpn),
+    element("g:shipping_weight", item.shippingWeight),
     "  </item>",
   ].join("\n");
 }

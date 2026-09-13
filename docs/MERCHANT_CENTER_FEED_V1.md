@@ -22,9 +22,22 @@ La quantité numérique, les réservations et les données de commande ne sont j
 
 ## Champs
 
-Chaque article fournit `g:id`, `g:title`, `g:description`, `g:link`, `g:image_link`, `g:availability`, `g:price`, `g:condition`, `g:brand` et `g:mpn`.
+Chaque article fournit `g:id`, `g:title`, `g:description`, `g:link`, `g:image_link`, `g:availability`, `g:price`, `g:condition`, `g:brand`, `g:mpn` et `g:shipping_weight`.
 
 Les URL utilisent exclusivement `https://www.lnxbeats.fr`. Le prix vient de `priceCents`, avec deux décimales et la devise EUR du contrat Boutique. La marque vient de l’identité centrale du site. L’image est la première image publique déjà retenue par le catalogue.
+
+## Poids d’expédition V1.1
+
+`g:shipping_weight` vient exclusivement de `Product.shippingWeightGrams`, déjà exposé par la projection publique du catalogue. La valeur doit être un entier strictement positif ; sans poids fiable, le produit est exclu du flux. Il n’existe aucun poids par défaut ni déduction à partir du titre, du slug, de la catégorie, du MPN ou de l’UUID.
+
+Les mesures produit validées sont actuellement :
+
+- CD « J’ai adopté un humain » : poids produit et `g:shipping_weight` de `25 g` ;
+- Badge LNX Beats : poids produit et `g:shipping_weight` de `10 g`.
+
+Le packaging de `60 g` est ajouté une seule fois par commande par le checkout. Il n’est donc jamais ajouté au poids de chaque offre Merchant, ce qui éviterait un double comptage pour plusieurs unités ou un panier mixte. Le minimum facturable de `250 g` reste lui aussi une règle tarifaire du checkout et n’est pas appliqué au flux. Les tranches de livraison Merchant Center sont configurées séparément.
+
+La couleur du badge n’est pas émise : aucune valeur métier n’a encore été validée humainement (`COLOR_ATTRIBUTE_HUMAN_DECISION_REQUIRED`). Aucune couleur n’est déduite de l’image.
 
 ## Identifiants produits
 

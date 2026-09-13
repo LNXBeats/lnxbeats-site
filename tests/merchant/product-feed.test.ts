@@ -26,6 +26,7 @@ function product(overrides: Partial<MerchantFeedProduct> = {}): MerchantFeedProd
     currency: "EUR",
     availabilityState: "AVAILABLE",
     shippingRequired: true,
+    shippingWeightGrams: 25,
     image: {
       id: "22222222-2222-4222-8222-222222222222",
       alt: "Photographie de l’édition physique",
@@ -48,6 +49,44 @@ test("a product supplied by the public published catalogue is included", () => {
   const xml = buildMerchantCenterFeed([product()]);
   assert.match(xml, /<g:id>11111111-1111-4111-8111-111111111111<\/g:id>/);
   assert.match(xml, /<g:title>Édition physique LNX Beats<\/g:title>/);
+});
+
+test("the CD exports its 25 g product weight with the Google unit", () => {
+  const xml = buildMerchantCenterFeed([product({ shippingWeightGrams: 25 })]);
+  assert.match(xml, /<g:shipping_weight>25 g<\/g:shipping_weight>/);
+});
+
+test("the badge exports its measured 10 g product weight", () => {
+  const xml = buildMerchantCenterFeed([product({
+    slug: "badge-lnx-beats",
+    shippingWeightGrams: 10,
+  })]);
+  assert.match(xml, /<g:shipping_weight>10 g<\/g:shipping_weight>/);
+});
+
+test("shipping_weight derives directly from shippingWeightGrams", () => {
+  assert.equal(toMerchantFeedItem(product({ shippingWeightGrams: 37 }))?.shippingWeight, "37 g");
+});
+
+test("shipping_weight excludes packaging and the checkout billing minimum", () => {
+  const xml = buildMerchantCenterFeed([
+    product({ shippingWeightGrams: 25 }),
+    product({
+      id: "33333333-3333-4333-8333-333333333333",
+      slug: "badge-lnx-beats",
+      shippingWeightGrams: 10,
+    }),
+  ]);
+  assert.match(xml, /<g:shipping_weight>25 g<\/g:shipping_weight>/);
+  assert.match(xml, /<g:shipping_weight>10 g<\/g:shipping_weight>/);
+  assert.doesNotMatch(xml, /<g:shipping_weight>(?:70|85|250) g<\/g:shipping_weight>/);
+});
+
+test("products without a strictly positive integer weight fail closed", () => {
+  assert.equal(toMerchantFeedItem(product({ shippingWeightGrams: null })), null);
+  assert.equal(toMerchantFeedItem(product({ shippingWeightGrams: 0 })), null);
+  assert.equal(toMerchantFeedItem(product({ shippingWeightGrams: -1 })), null);
+  assert.equal(toMerchantFeedItem(product({ shippingWeightGrams: 10.5 })), null);
 });
 
 test("the route delegates exclusively to the existing published-product reader", async () => {
@@ -148,6 +187,7 @@ test("known MPN products never emit GTIN or identifier_exists", () => {
     product({
       id: "33333333-3333-4333-8333-333333333333",
       slug: "badge-lnx-beats",
+      shippingWeightGrams: 10,
       image: {
         id: "44444444-4444-4444-8444-444444444444",
         alt: "Badge LNX Beats",
