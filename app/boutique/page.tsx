@@ -9,14 +9,15 @@ import { siteConfig } from "@/data/site";
 import { parseShopConfiguration } from "@/lib/shop/config";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
 import { listPublicShopProducts } from "@/lib/shop/order-service";
+import { createPublicPageMetadata } from "@/lib/seo/metadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Boutique",
-  description: "Les éditions et objets officiels de l’univers LNX Beats.",
-  alternates: { canonical: "/boutique" },
-};
+export const metadata: Metadata = createPublicPageMetadata({
+  title: "Boutique officielle",
+  description: "Découvrez les CD, éditions physiques et objets LNX Beats actuellement publiés dans la Boutique officielle.",
+  pathname: "/boutique",
+});
 
 const distroKidMerchShop = siteConfig.shops[0];
 

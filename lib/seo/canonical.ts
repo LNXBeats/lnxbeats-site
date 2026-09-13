@@ -1,8 +1,12 @@
 export const CANONICAL_SITE_ORIGIN = "https://www.lnxbeats.fr" as const;
 export const PRODUCTION_RAILWAY_PUBLIC_HOST = "lnxbeats-site-production.up.railway.app" as const;
+export const PRODUCTION_RAILWAY_PUBLIC_HOSTS = [
+  PRODUCTION_RAILWAY_PUBLIC_HOST,
+  "lnxbeats-site-production-edb7.up.railway.app",
+] as const;
 
 const CANONICAL_SITE_HOST = new URL(CANONICAL_SITE_ORIGIN).hostname;
-const LEGACY_PUBLIC_HOSTS = new Set(["lnxbeats.fr", PRODUCTION_RAILWAY_PUBLIC_HOST]);
+const LEGACY_PUBLIC_HOSTS = new Set(["lnxbeats.fr", ...PRODUCTION_RAILWAY_PUBLIC_HOSTS]);
 const TECHNICAL_PATH_PREFIXES = ["/api", "/_next", "/media"] as const;
 
 export type PublicOriginPolicy =

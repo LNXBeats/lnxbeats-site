@@ -3,7 +3,7 @@ import test from "node:test";
 import { NextRequest } from "next/server";
 
 import robots from "@/app/robots";
-import { CANONICAL_SITE_ORIGIN, PRODUCTION_RAILWAY_PUBLIC_HOST, canonicalPublicUrl, resolvePublicOriginPolicy } from "@/lib/seo/canonical";
+import { CANONICAL_SITE_ORIGIN, PRODUCTION_RAILWAY_PUBLIC_HOST, PRODUCTION_RAILWAY_PUBLIC_HOSTS, canonicalPublicUrl, resolvePublicOriginPolicy } from "@/lib/seo/canonical";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildPublicSitemap } from "@/lib/seo/sitemap";
 import { proxy } from "@/proxy";
@@ -32,20 +32,26 @@ test("robots allows public routes and points only to the official sitemap", () =
 });
 
 test("sitemap contains only canonical public project and product URLs", () => {
+  const projectUpdatedAt = new Date("2026-09-10T12:00:00.000Z");
+  const productUpdatedAt = "2026-09-11T13:30:00.000Z";
   const entries = buildPublicSitemap(
-    [{ slug: "projet-publie", status: "PUBLISHED", featured: true }],
-    [{ slug: "cd-test" }],
+    [{ slug: "projet-publie", status: "PUBLISHED", featured: true, updatedAt: projectUpdatedAt }],
+    [{ slug: "cd-test", updatedAt: productUpdatedAt }],
   );
-  assert.ok(entries.some((entry) => entry.url === "https://www.lnxbeats.fr/album/projet-publie"));
-  assert.ok(entries.some((entry) => entry.url === "https://www.lnxbeats.fr/boutique/cd-test"));
+  assert.deepEqual(entries.find((entry) => entry.url === "https://www.lnxbeats.fr/album/projet-publie")?.lastModified, projectUpdatedAt);
+  assert.equal(entries.find((entry) => entry.url === "https://www.lnxbeats.fr/boutique/cd-test")?.lastModified, productUpdatedAt);
   assert.ok(entries.every((entry) => entry.url.startsWith(`${CANONICAL_SITE_ORIGIN}/`)));
   assert.ok(entries.every((entry) => !/(railway|localhost|\/admin|\/api)/i.test(entry.url)));
 });
 
-test("apex and exact public Railway host redirect while preserving path and query", () => {
-  for (const host of ["lnxbeats.fr", PRODUCTION_RAILWAY_PUBLIC_HOST]) {
+test("apex and exact public Railway hosts redirect while preserving path and query", () => {
+  assert.equal(PRODUCTION_RAILWAY_PUBLIC_HOSTS[0], PRODUCTION_RAILWAY_PUBLIC_HOST);
+  for (const host of ["lnxbeats.fr", ...PRODUCTION_RAILWAY_PUBLIC_HOSTS]) {
     assert.deepEqual(resolvePublicOriginPolicy({ method: "GET", host, pathname: "/album/test", search: "?x=1" }), {
       action: "redirect", location: "https://www.lnxbeats.fr/album/test?x=1", status: 308,
+    });
+    assert.deepEqual(resolvePublicOriginPolicy({ method: "HEAD", host, pathname: "/boutique/test" }), {
+      action: "redirect", location: "https://www.lnxbeats.fr/boutique/test", status: 308,
     });
   }
 });
@@ -58,10 +64,14 @@ test("canonical and local hosts never redirect; unknown Railway page hosts are n
 });
 
 test("technical routes and mutations bypass canonical host routing", () => {
-  for (const pathname of ["/api/health", "/api/payments/stripe/webhook", "/api/payments/paypal/webhook", "/_next/static/a.js", "/media/catalog/id"]) {
-    assert.deepEqual(resolvePublicOriginPolicy({ method: "GET", host: PRODUCTION_RAILWAY_PUBLIC_HOST, pathname }), { action: "none" });
+  for (const pathname of ["/api/health", "/api/auth/session", "/api/payments/stripe/webhook", "/api/payments/paypal/webhook", "/_next/static/a.js", "/media/catalog/id"]) {
+    for (const host of PRODUCTION_RAILWAY_PUBLIC_HOSTS) {
+      assert.deepEqual(resolvePublicOriginPolicy({ method: "GET", host, pathname }), { action: "none" });
+    }
   }
-  assert.deepEqual(resolvePublicOriginPolicy({ method: "POST", host: "lnxbeats.fr", pathname: "/discographie" }), { action: "none" });
+  for (const host of ["lnxbeats.fr", ...PRODUCTION_RAILWAY_PUBLIC_HOSTS]) {
+    assert.deepEqual(resolvePublicOriginPolicy({ method: "POST", host, pathname: "/discographie" }), { action: "none" });
+  }
 });
 
 test("Next proxy applies redirects and noindex without a canonical loop", () => {

@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Container } from "@/components/container";
 import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
+import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import "../v064-discography.css";
 
-export const metadata: Metadata = {
-  title: "Discographie",
+export const metadata: Metadata = createPublicPageMetadata({
+  title: "Discographie et albums",
   description: "Albums, singles et projets en développement de LNX Beats, avec des fiches qui distinguent les informations confirmées de celles encore inconnues.",
-  alternates: { canonical: "/discographie" },
-};
+  pathname: "/discographie",
+});
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,24 @@ export default async function DiscographyPage() {
           heading="Chaque projet, une histoire."
           eager
         />
+        <details className="discography-directory">
+          <summary>
+            <span>Accès direct aux projets</span>
+            <small>{sceneProjects.length} fiche{sceneProjects.length > 1 ? "s" : ""}</small>
+          </summary>
+          <nav aria-label="Toutes les fiches de la discographie">
+            <ul>
+              {sceneProjects.map((project) => (
+                <li key={project.slug}>
+                  <Link href={`/album/${project.slug}`}>
+                    <span>{project.title}</span>
+                    <small>{project.type === "album" ? "Album" : project.type === "single" ? "Single" : "Projet"}{project.year ? ` · ${project.year}` : ""}</small>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </details>
       </Container>
     </section>
   );

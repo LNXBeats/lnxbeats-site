@@ -4,12 +4,13 @@ import { ButtonLink } from "@/components/button";
 import { Container } from "@/components/container";
 import { PlatformLink } from "@/components/platform-link";
 import { quickAccessPlatforms, siteConfig } from "@/data/site";
+import { createPublicPageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createPublicPageMetadata({
   title: "Contact",
   description: "Échanger directement avec LNX Beats autour d’une idée, d’une collaboration ou d’un projet musical.",
-  alternates: { canonical: "/contact" },
-};
+  pathname: "/contact",
+});
 
 const contactPlatforms = [
   ...quickAccessPlatforms.filter(({ name }) => name === "YouTube"),

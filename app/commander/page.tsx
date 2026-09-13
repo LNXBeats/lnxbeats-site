@@ -8,15 +8,16 @@ import { formatEuro } from "@/lib/orders/domain";
 import { orderActorFromHeaders } from "@/lib/orders/request";
 import { getCommanderOrderForActor } from "@/lib/orders/service";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
+import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import "../v084-commander.css";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Confier une histoire",
-  description: "Préparez, sauvegardez et suivez une demande de création musicale personnalisée avec LNX Beats.",
-  alternates: { canonical: "/commander" },
-};
+export const metadata: Metadata = createPublicPageMetadata({
+  title: "Création musicale personnalisée",
+  description: "Confiez votre histoire à LNX Beats et préparez une création musicale personnalisée avec le parcours sécurisé de LNX STUDIO.",
+  pathname: "/commander",
+});
 
 type OrderPageProps = {
   searchParams: Promise<{ brouillon?: string; etape?: string; reprendre?: string }>;

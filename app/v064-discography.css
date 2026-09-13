@@ -507,6 +507,58 @@ main:has(> .v064-discography-stage) + .site-footer {
 
 .discography-jukebox .home-jukebox__navigation-hint { margin-top: .9rem; }
 
+.discography-directory {
+  width: min(1120px, 100%);
+  margin: clamp(1.25rem, 2vw, 2rem) auto 0;
+  border-top: 1px solid rgba(244, 240, 232, .12);
+  color: var(--text-soft);
+}
+
+.discography-directory summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .85rem .25rem;
+  color: var(--text);
+  cursor: pointer;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .11em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.discography-directory summary::-webkit-details-marker { display: none; }
+.discography-directory summary::after { content: "+"; color: var(--gold-light); font-size: 1rem; }
+.discography-directory[open] summary::after { content: "−"; }
+.discography-directory summary small { color: var(--text-soft); font-size: .6rem; font-weight: 600; }
+.discography-directory summary:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 4px; }
+.discography-directory ul {
+  display: grid;
+  margin: 0;
+  padding: .35rem 0 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .45rem;
+  list-style: none;
+}
+.discography-directory a {
+  display: grid;
+  min-height: 48px;
+  align-content: center;
+  gap: .18rem;
+  padding: .65rem .75rem;
+  border: 1px solid rgba(244, 240, 232, .1);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: .72rem;
+  line-height: 1.25;
+  text-decoration: none;
+}
+.discography-directory a small { color: var(--text-soft); font-size: .58rem; text-transform: uppercase; }
+.discography-directory a:is(:hover, :focus-visible) { border-color: rgba(226, 196, 126, .55); color: var(--gold-light); }
+
 @media (min-width: 701px) and (max-width: 1000px) {
   .discography-jukebox .home-jukebox__scene {
     --jukebox-cover-size: clamp(270px, 43vw, 350px);
@@ -526,6 +578,7 @@ main:has(> .v064-discography-stage) + .site-footer {
   .discography-jukebox__filters { overflow-x: auto; padding: 3px; scrollbar-width: none; }
   .discography-jukebox__filters::-webkit-scrollbar { display: none; }
   .discography-jukebox__sort select { width: 100%; }
+  .discography-directory ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 700px) {
@@ -648,6 +701,9 @@ main:has(> .v064-discography-stage) + .site-footer {
     display: grid;
     margin: .85rem 1.1rem 0;
   }
+
+  .discography-directory { width: calc(100% - 2.2rem); }
+  .discography-directory ul { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

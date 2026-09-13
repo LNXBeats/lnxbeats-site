@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
 import { AudioPreviewPlayer } from "@/components/audio-preview-player";
+import { JsonLd } from "@/components/json-ld";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { ProjectPlatforms } from "@/components/project-platforms";
 import { Tracklist } from "@/components/tracklist";
@@ -14,6 +15,8 @@ import {
   getProjectStatusLabel,
 } from "@/lib/catalog/types";
 import { getPublicProjectBySlug } from "@/lib/catalog/queries";
+import { createPublicPageMetadata } from "@/lib/seo/metadata";
+import { buildProjectStructuredData } from "@/lib/seo/structured-data";
 
 type AlbumPageProps = {
   params: Promise<{ slug: string }>;
@@ -30,24 +33,13 @@ export async function generateMetadata({ params }: AlbumPageProps): Promise<Meta
   const canonical = `/album/${project.slug}`;
   const title = project.seo.title ?? project.title;
 
-  return {
+  return createPublicPageMetadata({
     title,
     description: project.seo.description,
-    alternates: { canonical },
-    openGraph: {
-      type: "website",
-      url: canonical,
-      title: `${title} — LNX Beats`,
-      description: project.seo.description,
-      images: [{ url: project.cover ?? "/og.png", width: 1200, height: 630, alt: resolveCatalogCoverAlt(project.title, project.coverAlt) }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: `${title} — LNX Beats`,
-      description: project.seo.description,
-      images: [project.cover ?? "/og.png"],
-    },
-  };
+    pathname: canonical,
+    image: project.cover ?? "/og.png",
+    imageAlt: resolveCatalogCoverAlt(project.title, project.coverAlt),
+  });
 }
 
 export default async function AlbumPage({ params }: AlbumPageProps) {
@@ -65,6 +57,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
 
   return (
     <>
+      <JsonLd id="lnx-project-structured-data" data={buildProjectStructuredData(project)} />
       <header className="album-hero" data-motion-scene="album">
         <div className="album-hero__backdrop" aria-hidden="true" />
         <Container className="album-hero__inner">

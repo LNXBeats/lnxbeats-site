@@ -7,6 +7,8 @@ export function createPublicPageMetadata(input: Readonly<{
   socialTitle?: string;
   image?: string;
   imageAlt?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }>): Metadata {
   const socialTitle = input.socialTitle ?? `${input.title} — LNX Beats`;
   const image = input.image ?? "/og.png";
@@ -20,7 +22,7 @@ export function createPublicPageMetadata(input: Readonly<{
       url: input.pathname,
       title: socialTitle,
       description: input.description,
-      images: [{ url: image, width: 1200, height: 630, alt: imageAlt }],
+      images: [{ url: image, width: input.imageWidth ?? 1200, height: input.imageHeight ?? 630, alt: imageAlt }],
     },
     twitter: { card: "summary_large_image", title: socialTitle, description: input.description, images: [image] },
   };

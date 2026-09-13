@@ -73,7 +73,7 @@ test("the featured eligible project is initial, otherwise the editorial first it
   assert.equal(jukeboxInitialIndex([{ featured: false }, { featured: false }, { featured: false }, { featured: false }, { featured: true }], 2), 2);
 });
 
-test("discography renders one exhaustive scene without the former duplicate grid", async () => {
+test("discography renders one exhaustive scene with a compact crawlable directory instead of the former duplicate grid", async () => {
   const [homepage, discography, component] = await Promise.all([
     readFile(new URL("../../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../app/discographie/page.tsx", import.meta.url), "utf8"),
@@ -82,6 +82,9 @@ test("discography renders one exhaustive scene without the former duplicate grid
   assert.doesNotMatch(homepage, /ProjectJukebox|HomeJukebox/);
   assert.equal((discography.match(/<ProjectJukebox\b/g)?.length ?? 0), 1);
   assert.doesNotMatch(discography, /CompactProjectCatalog/);
+  assert.match(discography, /<details className="discography-directory">/);
+  assert.match(discography, /sceneProjects\.map\(\(project\)/);
+  assert.match(discography, /href=\{`\/album\/\$\{project\.slug\}`\}/);
   assert.doesNotMatch(discography, /developmentJukebox\.length \?/);
   assert.match(discography, /const sceneProjects = discographyView\(projects\)/);
   assert.doesNotMatch(discography, /eligibleSlugs|publishedJukeboxProjects|developmentJukeboxProjects/);

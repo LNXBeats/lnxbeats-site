@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { QuickAccessBar } from "@/components/quick-access-bar";
+import { JsonLd } from "@/components/json-ld";
 import { OrderJourneyProvider } from "@/components/order-journey-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SiteMotion } from "@/components/site-motion";
-import { siteConfig } from "@/data/site";
 import { CANONICAL_SITE_ORIGIN } from "@/lib/seo/canonical";
+import { buildSiteStructuredData } from "@/lib/seo/structured-data";
 import "./globals.css";
 import "./visual-phase2.css";
 import "./visual-phase3.css";
@@ -59,15 +60,6 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "MusicGroup",
-    name: siteConfig.name,
-    url: siteUrl,
-    sameAs: [...siteConfig.platforms, ...siteConfig.social].map((item) => item.url),
-  };
-  const serializedStructuredData = JSON.stringify(structuredData).replace(/</g, "\\u003c");
-
   return (
     <html lang="fr">
       <body>
@@ -79,7 +71,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SiteFooter />
           <SiteMotion />
         </OrderJourneyProvider>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializedStructuredData }} />
+        <JsonLd id="lnx-site-identity" data={buildSiteStructuredData()} />
       </body>
     </html>
   );

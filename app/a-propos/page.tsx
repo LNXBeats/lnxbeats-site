@@ -3,13 +3,14 @@ import Image from "next/image";
 import { ButtonLink } from "@/components/button";
 import { Container } from "@/components/container";
 import { artistBiography } from "@/data/artist";
+import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import "../v110-editorial-polish.css";
 
-export const metadata: Metadata = {
-  title: "À propos",
+export const metadata: Metadata = createPublicPageMetadata({
+  title: "Ludovic Mathon — À propos",
   description: artistBiography.short,
-  alternates: { canonical: "/a-propos" },
-};
+  pathname: "/a-propos",
+});
 
 export default function AboutPage() {
   return (
