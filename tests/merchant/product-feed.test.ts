@@ -12,7 +12,7 @@ import {
   type MerchantFeedProduct,
 } from "@/lib/merchant/product-feed";
 import { buildProductStructuredData } from "@/lib/seo/structured-data";
-import { buildPublicSitemap } from "@/lib/seo/sitemap";
+import { buildPublicSitemap, PUBLIC_SITEMAP_PATHS } from "@/lib/seo/sitemap";
 
 const root = new URL("../../", import.meta.url);
 
@@ -232,9 +232,9 @@ test("Merchant and Product JSON-LD derive matching commercial fields", () => {
   assert.match(jsonLd, new RegExp(merchant.imageLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
-test("the SEO sitemap remains unchanged and excludes the Merchant feed", async () => {
+test("the SEO sitemap counts its public routes and excludes the Merchant feed", async () => {
   const sitemap = buildPublicSitemap([], [{ slug: "j-ai-adopte-un-humain-cd" }]);
-  assert.equal(sitemap.length, 7);
+  assert.equal(sitemap.length, PUBLIC_SITEMAP_PATHS.length + 1);
   assert.equal(sitemap.some(({ url }) => url.includes("merchant-center.xml")), false);
   const source = await readFile(new URL("app/sitemap.ts", root), "utf8");
   assert.doesNotMatch(source, /merchant-center\.xml/);

@@ -44,6 +44,21 @@ test("ended playback changes only the public control presentation to replay", as
   assert.doesNotMatch(jukebox, /\bautoPlay\b/);
 });
 
+test("cross-player coordination pauses without resetting the current position", async () => {
+  const [standalone, jukebox, coordinator] = await Promise.all([
+    source("components/audio-preview-player.tsx"),
+    source("components/home-jukebox.tsx"),
+    source("lib/media/playback-coordinator.ts"),
+  ]);
+
+  assert.match(standalone, /listenForOtherMediaPlayback\(playerId,[\s\S]*?audioRef\.current\?\.pause\(\)/);
+  assert.match(jukebox, /const pauseCurrent = useCallback\(\(resetPosition = true\)/);
+  assert.match(jukebox, /if \(resetPosition\) \{[\s\S]*?audio\.currentTime = 0;[\s\S]*?setProgress\(0\);[\s\S]*?\}/);
+  assert.match(jukebox, /listenForOtherMediaPlayback\(playerId,[\s\S]*?pauseCurrent\(false\)/);
+  assert.match(jukebox, /externallyPausedSourceRef/);
+  assert.match(coordinator, /MediaPlaybackKind = "audio" \| "video"/);
+});
+
 test("studio-vinyl renders distinct accessible SVG states", () => {
   const states: StudioVinylControlState[] = ["play", "pause", "replay", "loading"];
   const rendered = states.map((state) => {

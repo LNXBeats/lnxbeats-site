@@ -44,6 +44,7 @@
     "catalog:preview:backup": "NODE_OPTIONS=--conditions=react-server tsx scripts/catalog-preview-backup.ts",
     "catalog:preview:verify": "NODE_OPTIONS=--conditions=react-server tsx scripts/catalog-preview-verify.ts",
     "test:catalog": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/catalog/*.test.ts",
+    "test:creations": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/creations/*.test.ts",
     "test:catalog:runtime": "NODE_OPTIONS=--conditions=react-server tsx scripts/test-catalog-runtime.ts",
     "test:catalog:lifecycle-runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-catalog-lifecycle-runtime.ts",
     "test:catalog:lifecycle-http": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-catalog-lifecycle-http.ts",

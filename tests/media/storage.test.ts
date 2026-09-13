@@ -449,7 +449,7 @@ test("central order media authorization blocks IDOR", () => {
   assert.equal(canReadOrderMedia({ ...member, emailVerified: false }, "member"), false);
 });
 
-test("S3 adapter keeps buckets separate, verifies metadata, supports range, delete and short signed URLs", async () => {
+test("S3 adapter keeps buckets separate, verifies metadata, supports range, delete and bounded signed URLs", async () => {
   const calls: unknown[] = [];
   const data = Buffer.from("object-body");
   const fakeClient = {
@@ -489,6 +489,23 @@ test("S3 adapter keeps buckets separate, verifies metadata, supports range, dele
   assert.equal(signed[0]?.expiresIn, 60);
   assert.equal((signed[0]?.command as GetObjectCommand).input.Bucket, "lnx-private-test");
   await assert.rejects(storage.createSignedUrl({ scope: "private", key: privateKey, operation: "get", expiresInSeconds: 3 }), MediaStorageError);
+
+  const creationVideoKey = "creations/00000000-0000-4000-8000-000000000011/video/00000000-0000-4000-8000-000000000012.mp4";
+  const publicUrl = await storage.createSignedUrl({
+    scope: "public",
+    key: creationVideoKey,
+    operation: "get",
+    expiresInSeconds: 3_600,
+  });
+  assert.equal(publicUrl, "https://signed.example.invalid/object?redacted");
+  assert.equal(signed[1]?.expiresIn, 3_600);
+  assert.equal((signed[1]?.command as GetObjectCommand).input.Bucket, "lnx-public-test");
+  await assert.rejects(storage.createSignedUrl({
+    scope: "public",
+    key: creationVideoKey,
+    operation: "get",
+    expiresInSeconds: 3_601,
+  }), MediaStorageError);
 });
 
 test("S3 GET streams close normally without destroying the shared client", async () => {

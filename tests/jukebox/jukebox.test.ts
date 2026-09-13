@@ -136,7 +136,7 @@ test("the jukebox keeps explicit selected, playing and player-metadata identitie
   assert.match(component, /pendingPlayRef\.current = null;/);
   assert.match(component, /if \(audio\.src !== targetSrc\)/);
   assert.doesNotMatch(component, /audio\.currentSrc !== targetSrc/);
-  assert.match(component, /window\.dispatchEvent\(new CustomEvent\("lnx-audio-preview-play"/);
+  assert.match(component, /announceMediaPlayback\(\{ ownerId: playerId, kind: "audio" \}\)/);
   assert.match(component, /setEnded\(playerStateRef\.current\.selectedSlug === sourceSlug\);/);
   assert.match(component, /const metadataSlug = jukeboxPlayerMetadataSlug\(playerStateRef\.current\);/);
   assert.match(component, /pendingCenterIndexRef\.current = next;[\s\S]*?scheduleProgrammaticRelease\(\);/);
@@ -161,9 +161,13 @@ test("all public players coordinate through one playback event", async () => {
     readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../components/audio-preview-player.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(jukebox, /window\.addEventListener\("lnx-audio-preview-play", stopOtherJukebox\)/);
-  assert.match(jukebox, /pauseCurrent\(\)/);
-  assert.match(standalone, /window\.addEventListener\(playbackEvent, stopOtherPlayer\)/);
+  assert.match(jukebox, /listenForOtherMediaPlayback\(playerId/);
+  assert.match(jukebox, /pauseCurrent\(false\)/);
+  assert.match(jukebox, /externallyPausedSourceRef\.current = loadedSlugRef\.current/);
+  assert.match(standalone, /listenForOtherMediaPlayback\(playerId/);
+  assert.match(standalone, /audioRef\.current\?\.pause\(\)/);
+  assert.doesNotMatch(jukebox, /lnx-audio-preview-play/);
+  assert.doesNotMatch(standalone, /lnx-audio-preview-play/);
 });
 
 test("the jukebox uses a single shared audio element and explicit user-triggered play attempts", async () => {
