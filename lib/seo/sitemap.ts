@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
 import { canonicalPublicUrl } from "@/lib/seo/canonical";
 
-export const PUBLIC_SITEMAP_PATHS = ["", "/discographie", "/commander", "/boutique", "/a-propos", "/contact"] as const;
+export const PUBLIC_SITEMAP_PATHS = ["", "/discographie", "/creations", "/commander", "/boutique", "/a-propos", "/contact"] as const;
 
 export function buildPublicSitemap(
   projects: readonly Readonly<{ slug: string; status: string; featured: boolean; updatedAt?: Date | string | null }>[],
   products: readonly Readonly<{ slug: string; updatedAt?: Date | string | null }>[]= [],
+  creations: readonly Readonly<{ slug: string; updatedAt?: Date | string | null }>[]= [],
 ): MetadataRoute.Sitemap {
   const staticRoutes: MetadataRoute.Sitemap = PUBLIC_SITEMAP_PATHS.map((pathname) => ({
     url: canonicalPublicUrl(pathname || "/"),
@@ -24,5 +25,11 @@ export function buildPublicSitemap(
     changeFrequency: "weekly",
     priority: 0.6,
   }));
-  return [...staticRoutes, ...projectRoutes, ...productRoutes];
+  const creationRoutes: MetadataRoute.Sitemap = creations.map((creation) => ({
+    url: canonicalPublicUrl(`/creations/${creation.slug}`),
+    ...(creation.updatedAt ? { lastModified: creation.updatedAt } : {}),
+    changeFrequency: "monthly",
+    priority: 0.65,
+  }));
+  return [...staticRoutes, ...projectRoutes, ...productRoutes, ...creationRoutes];
 }

@@ -1802,11 +1802,7 @@ a {
 
 @media (max-width: 1100px) {
   .desktop-navigation { gap: 0.75rem; }
-  .desktop-navigation__link { display: none; }
-  .desktop-navigation__link:nth-child(2),
-  .desktop-navigation__link:nth-child(4),
-  .desktop-navigation__link:nth-child(5),
-  .desktop-navigation__link:nth-child(6) { display: inline-flex; }
+  .desktop-navigation__link { display: inline-flex; }
   .home-hero__signature { display: none; }
   .home-project-lead { grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr); }
   .universe-card { min-height: 270px; }

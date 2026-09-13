@@ -32,6 +32,7 @@ import {
   type ProjectKind,
   type ProjectStatus,
 } from "@/lib/catalog/types";
+import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
 
 export type JukeboxProject = {
   slug: string;
@@ -112,6 +113,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const pendingFocusIndexRef = useRef<number | null>(null);
   const playRequestRef = useRef(0);
   const pendingPlayRef = useRef<{ requestId: number; slug: string } | null>(null);
+  const externallyPausedSourceRef = useRef<string | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const pointerDraggedRef = useRef(false);
   const regionId = useId();
@@ -144,15 +146,17 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     return next;
   }, []);
 
-  const pauseCurrent = useCallback(() => {
+  const pauseCurrent = useCallback((resetPosition = true) => {
     const audio = audioRef.current;
     if (!audio) return;
 
     playRequestRef.current += 1;
     pendingPlayRef.current = null;
     if (!audio.paused) audio.pause();
-    audio.currentTime = 0;
-    setProgress(0);
+    if (resetPosition) {
+      audio.currentTime = 0;
+      setProgress(0);
+    }
     const currentPlayingSlug = playerStateRef.current.playingSlug;
     if (currentPlayingSlug) transitionPlayerState({ type: "pause", slug: currentPlayingSlug });
   }, [transitionPlayerState]);
@@ -220,7 +224,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     const requestId = ++playRequestRef.current;
     pendingPlayRef.current = { requestId, slug: target.slug };
     try {
-      window.dispatchEvent(new CustomEvent("lnx-audio-preview-play", { detail: playerId }));
+      announceMediaPlayback({ ownerId: playerId, kind: "audio" });
       await audio.play();
       if (requestId !== playRequestRef.current || loadedSlugRef.current !== target.slug || audio.paused) return false;
       pendingPlayRef.current = null;
@@ -326,6 +330,9 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   }, [playerState]);
 
   useEffect(() => {
+    const externallyPausedSource = externallyPausedSourceRef.current;
+    externallyPausedSourceRef.current = null;
+    if (externallyPausedSource && loadedSlugRef.current === externallyPausedSource) return;
     if (playerMetadataIndex >= 0) syncTrackMedia(playerMetadataIndex);
   }, [playerMetadataIndex, syncTrackMedia]);
 
@@ -347,12 +354,16 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   }, [activeSlug, filter, sort, visibleProjects.length]);
 
   useEffect(() => {
-    const stopOtherJukebox = (event: Event) => {
-      if (!(event instanceof CustomEvent) || event.detail === playerId) return;
-      pauseCurrent();
-    };
-    window.addEventListener("lnx-audio-preview-play", stopOtherJukebox);
-    return () => window.removeEventListener("lnx-audio-preview-play", stopOtherJukebox);
+    return listenForOtherMediaPlayback(playerId, () => {
+      const audio = audioRef.current;
+      const playbackPending = pendingPlayRef.current !== null;
+      const playbackActive = playerStateRef.current.playingSlug !== null || !audio?.paused;
+      if (!audio || (!playbackPending && !playbackActive)) return;
+      if (loadedSlugRef.current !== playerStateRef.current.selectedSlug) {
+        externallyPausedSourceRef.current = loadedSlugRef.current;
+      }
+      pauseCurrent(false);
+    });
   }, [pauseCurrent, playerId]);
 
   useEffect(() => {
@@ -541,6 +552,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
           if (!event.currentTarget.paused) event.currentTarget.pause();
           return;
         }
+        announceMediaPlayback({ ownerId: playerId, kind: "audio" });
         setEnded(false);
       }}
       onPause={(event) => {

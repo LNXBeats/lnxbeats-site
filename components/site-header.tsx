@@ -120,7 +120,8 @@ export function SiteHeader() {
     };
   }, [compact, pathname]);
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
   const toggleMenu = () => {
     const nextOpen = !open;
     setOpen(nextOpen);

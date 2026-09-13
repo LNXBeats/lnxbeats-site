@@ -47,6 +47,7 @@ export const siteConfig = {
 export const navigation = [
   { label: "Accueil", href: "/" },
   { label: "Discographie", href: "/discographie" },
+  { label: "Créations", href: "/creations" },
   { label: "Commander", href: "/commander" },
   { label: "Boutique", href: "/boutique" },
   { label: "À propos", href: "/a-propos" },

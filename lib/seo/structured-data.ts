@@ -49,6 +49,116 @@ function breadcrumbs(items: readonly Readonly<{ name: string; pathname: string }
   };
 }
 
+function publicHttpUrl(value: string | null | undefined) {
+  const candidate = value?.trim();
+  if (!candidate) return null;
+  if (candidate.startsWith("/") && !candidate.startsWith("//") && !candidate.includes("\\")) {
+    return canonicalPublicUrl(candidate);
+  }
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "https:" && !url.username && !url.password ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function structuredDate(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+export type StructuredCreationVideo = Readonly<{
+  published: boolean;
+  url?: string | null;
+  contentUrl?: string | null;
+  thumbnailUrl?: string | null;
+  name?: string | null;
+  description?: string | null;
+  uploadDate?: Date | string | null;
+  duration?: string | null;
+}>;
+
+export type StructuredCreation = Readonly<{
+  slug: string;
+  title: string;
+  description: string;
+  image?: string | null;
+  publishedAt?: Date | string | null;
+  collaborator?: string | null;
+  category?: string | null;
+  links?: readonly string[];
+  video?: StructuredCreationVideo | null;
+}>;
+
+export function buildCreationStructuredData(creation: StructuredCreation) {
+  const slug = creation.slug.trim();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 160) {
+    throw new TypeError("Invalid public creation slug.");
+  }
+  const pathname = `/creations/${slug}`;
+  const url = canonicalPublicUrl(pathname);
+  const image = publicHttpUrl(creation.image);
+  const publishedAt = structuredDate(creation.publishedAt);
+  const sameAs = creation.links
+    ?.map((link) => publicHttpUrl(link))
+    .filter((link): link is string => link !== null);
+  const videoContentUrl = creation.video?.published
+    ? publicHttpUrl(creation.video.contentUrl ?? creation.video.url)
+    : null;
+  const videoThumbnailUrl = creation.video?.published
+    ? publicHttpUrl(creation.video.thumbnailUrl ?? creation.image)
+    : null;
+  const videoUploadDate = creation.video?.published
+    ? structuredDate(creation.video.uploadDate ?? creation.publishedAt)
+    : null;
+  const hasStructuredVideo = Boolean(videoContentUrl && videoThumbnailUrl && videoUploadDate);
+  const videoId = `${url}#video`;
+  const creativeWork = {
+    "@type": "CreativeWork",
+    "@id": `${url}#creation`,
+    url,
+    name: creation.title,
+    description: creation.description,
+    inLanguage: "fr-FR",
+    creator: { "@id": LNX_ARTIST_ID },
+    ...(image ? { image } : {}),
+    ...(publishedAt ? { datePublished: publishedAt } : {}),
+    ...(creation.collaborator?.trim() ? { contributor: creation.collaborator.trim() } : {}),
+    ...(creation.category?.trim() ? { genre: creation.category.trim() } : {}),
+    ...(sameAs && sameAs.length > 0 ? { sameAs } : {}),
+    ...(hasStructuredVideo ? { associatedMedia: { "@id": videoId } } : {}),
+  };
+  const videoObject = hasStructuredVideo
+    ? {
+        "@type": "VideoObject",
+        "@id": videoId,
+        url,
+        contentUrl: videoContentUrl,
+        name: creation.video?.name?.trim() || creation.title,
+        description: creation.video?.description?.trim() || creation.description,
+        thumbnailUrl: videoThumbnailUrl!,
+        uploadDate: videoUploadDate!,
+        ...(creation.video?.duration?.trim() ? { duration: creation.video.duration.trim() } : {}),
+        creator: { "@id": LNX_ARTIST_ID },
+      }
+    : null;
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      breadcrumbs([
+        { name: "Accueil", pathname: "/" },
+        { name: "Créations", pathname: "/creations" },
+        { name: creation.title, pathname },
+      ]),
+      creativeWork,
+      ...(videoObject ? [videoObject] : []),
+    ],
+  };
+}
+
 export function buildProjectStructuredData(project: PublicProject) {
   const pathname = `/album/${project.slug}`;
   const url = canonicalPublicUrl(pathname);

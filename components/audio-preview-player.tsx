@@ -2,8 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
-
-const playbackEvent = "lnx-audio-preview-play";
+import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
 
 function timeLabel(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -37,12 +36,9 @@ export function AudioPreviewPlayer({
   const [duration, setDuration] = useState((durationMs ?? 0) / 1_000);
 
   useEffect(() => {
-    const stopOtherPlayer = (event: Event) => {
-      if (!(event instanceof CustomEvent) || event.detail === playerId) return;
+    return listenForOtherMediaPlayback(playerId, () => {
       audioRef.current?.pause();
-    };
-    window.addEventListener(playbackEvent, stopOtherPlayer);
-    return () => window.removeEventListener(playbackEvent, stopOtherPlayer);
+    });
   }, [playerId]);
 
   async function toggle() {
@@ -69,7 +65,7 @@ export function AudioPreviewPlayer({
         onPlay={() => {
           setPlaying(true);
           setEnded(false);
-          window.dispatchEvent(new CustomEvent(playbackEvent, { detail: playerId }));
+          announceMediaPlayback({ ownerId: playerId, kind: "audio" });
         }}
         onPause={() => setPlaying(false)}
         onTimeUpdate={(event) => {
