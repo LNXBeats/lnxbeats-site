@@ -63,6 +63,7 @@
     "test:shop": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/shop/*.test.ts",
     "test:legal": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/legal/*.test.ts",
     "test:seo": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/seo/*.test.ts",
+    "test:merchant": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/merchant/*.test.ts",
     "test:legal:runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-legal-runtime.ts",
     "test:billing": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/billing/*.test.ts",
     "billing:historical-invoices:dry-run": "node --env-file-if-exists=.env.local scripts/historical-invoice-backfill-dry-run.mjs --dry-run",
