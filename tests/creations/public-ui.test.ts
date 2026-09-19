@@ -92,6 +92,32 @@ test("catalogue cards clamp exceptional labels and titles without mutating their
   assert.match(styles, /\.creation-card__body strong \{[\s\S]*?max-height: 3\.15em;[\s\S]*?overflow: hidden;[\s\S]*?overflow-wrap: anywhere;[\s\S]*?-webkit-line-clamp: 3;/);
 });
 
+test("public catalogue filters are data-driven, accessible and keep mixed media in both media filters", async () => {
+  const [source, styles] = await Promise.all([
+    read("components/creations/creation-media-stage.tsx"),
+    read("app/creations/creations.css"),
+  ]);
+
+  assert.match(source, /label: "Tous"/);
+  assert.match(source, /label: "Musique"/);
+  assert.match(source, /label: "Vidéos"/);
+  assert.match(source, /label: "Collaborations"/);
+  assert.match(source, /if \(filter === "music"\) return Boolean\(creation\.audio\)/);
+  assert.match(source, /if \(filter === "video"\) return Boolean\(creation\.video\)/);
+  assert.match(source, /filterCounts = useMemo/);
+  assert.match(source, /role="group" aria-label="Filtrer les créations"/);
+  assert.match(source, /aria-pressed=\{creationFilter === filter\.id\}/);
+  assert.match(styles, /\.creation-filters button \{[\s\S]*?min-height: 48px;/);
+  assert.match(styles, /@media \(max-width: 540px\)[\s\S]*?\.creation-filters \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+});
+
+test("detail pages rely on the stage controls without duplicating catalogue action buttons", async () => {
+  const source = await read("components/creations/creation-media-stage.tsx");
+
+  assert.match(source, /\{showGrid \? \(\s*<div className="creation-stage__actions">/);
+  assert.match(source, /<Link href=\{`\/creations\/\$\{selected\.slug\}`\}>Découvrir la création/);
+});
+
 test("the stage keeps 16:9, 9:16 and 1:1 media contained at all responsive tiers", async () => {
   const [source, styles] = await Promise.all([
     read("components/creations/creation-media-stage.tsx"),

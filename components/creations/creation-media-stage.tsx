@@ -40,6 +40,26 @@ type CreationMediaStageProps = {
 };
 
 type MediaElement = HTMLAudioElement | HTMLVideoElement;
+type CreationFilter = "all" | "music" | "video" | "collaboration";
+
+const creationFilters: readonly Readonly<{ id: CreationFilter; label: string }>[] = [
+  { id: "all", label: "Tous" },
+  { id: "music", label: "Musique" },
+  { id: "video", label: "Vidéos" },
+  { id: "collaboration", label: "Collaborations" },
+];
+
+function isCollaboration(creation: PublicCreation) {
+  return Boolean(creation.collaborator?.trim())
+    || creation.category?.toLocaleLowerCase("fr").includes("collaboration") === true;
+}
+
+function matchesCreationFilter(creation: PublicCreation, filter: CreationFilter) {
+  if (filter === "music") return Boolean(creation.audio);
+  if (filter === "video") return Boolean(creation.video);
+  if (filter === "collaboration") return isCollaboration(creation);
+  return true;
+}
 
 function timeLabel(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -130,16 +150,26 @@ export function CreationMediaStage({
   });
   const [progress, setProgress] = useState({ key: "", current: 0, duration: 0 });
   const [failedMedia, setFailedMedia] = useState<string | null>(null);
+  const [creationFilter, setCreationFilter] = useState<CreationFilter>("all");
   const componentId = useId();
   const ownerId = `creation-media-${componentId}`;
   const headingId = `creation-heading-${componentId}`;
 
-  const selectedIndex = Math.max(0, creations.findIndex((creation) => creation.slug === state.selectedCreationSlug));
-  const selected = creations[selectedIndex] ?? initialCreation;
+  const selected = creations.find((creation) => creation.slug === state.selectedCreationSlug) ?? initialCreation;
   const activeCreation = state.activeMedia
     ? creations.find((creation) => creation.slug === state.activeMedia?.creationSlug) ?? null
     : null;
   const selectedMediaKinds = selected ? creationPresentationMedia(selected) : [];
+  const filteredCreations = useMemo(
+    () => creations.filter((creation) => matchesCreationFilter(creation, creationFilter)),
+    [creationFilter, creations],
+  );
+  const filterCounts = useMemo(() => ({
+    all: creations.length,
+    music: creations.filter((creation) => matchesCreationFilter(creation, "music")).length,
+    video: creations.filter((creation) => matchesCreationFilter(creation, "video")).length,
+    collaboration: creations.filter((creation) => matchesCreationFilter(creation, "collaboration")).length,
+  }), [creations]);
 
   const transition = useCallback((action: CreationMediaPlayerAction) => {
     stateRef.current = reduceCreationMediaPlayerState(stateRef.current, action);
@@ -327,8 +357,9 @@ export function CreationMediaStage({
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
     const direction = event.key === "ArrowLeft" ? -1 : 1;
-    const next = Math.min(creations.length - 1, Math.max(0, selectedIndex + direction));
-    const target = creations[next];
+    const filteredSelectedIndex = Math.max(0, filteredCreations.findIndex((creation) => creation.slug === selected.slug));
+    const next = Math.min(filteredCreations.length - 1, Math.max(0, filteredSelectedIndex + direction));
+    const target = filteredCreations[next];
     if (!target) return;
     selectCreation(target);
     railRef.current?.querySelector<HTMLButtonElement>(`[data-creation-slug="${CSS.escape(target.slug)}"]`)?.focus();
@@ -460,11 +491,13 @@ export function CreationMediaStage({
           {activeCreation && activeCreation.slug !== selected.slug ? (
             <p className="creation-stage__selection-note">Vous regardez <strong>{selected.title}</strong> pendant que <strong>{activeCreation.title}</strong> reste en lecture.</p>
           ) : null}
-          <div className="creation-stage__actions">
-            {selected.audio ? <button type="button" data-active={selectedAudioActive || undefined} onClick={() => void play("audio", selected)}>{selectedAudioActive ? "Mettre en pause" : "Écouter l’audio"}</button> : null}
-            {selected.video ? <button type="button" data-active={selectedVideoActive || undefined} onClick={() => void play("video", selected)}>{selectedVideoActive ? "Mettre en pause" : "Voir la vidéo"}</button> : null}
-            {showGrid ? <Link href={`/creations/${selected.slug}`}>Découvrir la création <span aria-hidden="true">→</span></Link> : null}
-          </div>
+          {showGrid ? (
+            <div className="creation-stage__actions">
+              {selected.audio ? <button type="button" data-active={selectedAudioActive || undefined} onClick={() => void play("audio", selected)}>{selectedAudioActive ? "Mettre en pause" : "Écouter l’audio"}</button> : null}
+              {selected.video ? <button type="button" data-active={selectedVideoActive || undefined} onClick={() => void play("video", selected)}>{selectedVideoActive ? "Mettre en pause" : "Voir la vidéo"}</button> : null}
+              <Link href={`/creations/${selected.slug}`}>Découvrir la création <span aria-hidden="true">→</span></Link>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -509,9 +542,29 @@ export function CreationMediaStage({
         }}
       />
 
-      {showRail && creations.length > 1 ? (
+      {showGrid ? (
+        <div className="creation-filters" role="group" aria-label="Filtrer les créations">
+          {creationFilters.map((filter) => (
+            <button
+              type="button"
+              key={filter.id}
+              aria-pressed={creationFilter === filter.id}
+              onClick={() => {
+                setCreationFilter(filter.id);
+                const next = creations.find((creation) => matchesCreationFilter(creation, filter.id));
+                if (next && !matchesCreationFilter(selected, filter.id)) selectCreation(next);
+              }}
+            >
+              <span>{filter.label}</span>
+              <small aria-label={`${filterCounts[filter.id]} créations`}>{filterCounts[filter.id]}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {showRail && filteredCreations.length > 1 ? (
         <div className="creation-rail" ref={railRef} role="group" aria-label="Parcourir les créations" onKeyDown={railKeyboard}>
-          {creations.map((creation) => {
+          {filteredCreations.map((creation) => {
             const itemArtwork = creationArtwork(creation);
             return (
               <button
@@ -535,8 +588,8 @@ export function CreationMediaStage({
       {showGrid ? (
         <div className="creation-catalogue">
           <div className="creation-catalogue__heading"><p>Le répertoire</p><h2>Toutes les créations.</h2></div>
-          <div className="creation-catalogue__grid">
-            {creations.map((creation) => (
+          {filteredCreations.length ? <div className="creation-catalogue__grid">
+            {filteredCreations.map((creation) => (
               <Link href={`/creations/${creation.slug}`} key={creation.slug} className="creation-card">
                 <CreationArtwork creation={creation} />
                 <span className="creation-card__body">
@@ -546,7 +599,9 @@ export function CreationMediaStage({
                 </span>
               </Link>
             ))}
-          </div>
+          </div> : (
+            <p className="creation-catalogue__empty" role="status">Aucune création ne correspond à ce filtre pour le moment.</p>
+          )}
         </div>
       ) : null}
     </section>

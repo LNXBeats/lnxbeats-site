@@ -327,6 +327,52 @@
 .creation-stage__actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.5rem; }
 .creation-stage__actions :is(button, a) { flex: 1 1 140px; border-radius: 10px; }
 
+.creation-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+  padding: .15rem 0;
+}
+
+.creation-filters button {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: .65rem;
+  padding: .7rem 1rem;
+  border: 1px solid rgba(244, 240, 232, .16);
+  border-radius: 999px;
+  background: rgba(12, 12, 11, .72);
+  color: rgba(244, 240, 232, .68);
+  cursor: pointer;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+
+.creation-filters button small {
+  display: grid;
+  min-width: 1.65rem;
+  min-height: 1.65rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(244, 240, 232, .08);
+  color: var(--gold-light);
+  font-size: .62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.creation-filters button[aria-pressed="true"],
+.creation-filters button:is(:hover, :focus-visible) {
+  border-color: var(--gold-light);
+  background: var(--gold);
+  color: #080808;
+}
+
+.creation-filters button[aria-pressed="true"] small,
+.creation-filters button:is(:hover, :focus-visible) small { background: rgba(8, 8, 8, .12); color: #080808; }
+
 .creation-rail {
   display: flex;
   gap: .8rem;
@@ -403,6 +449,7 @@
   -webkit-line-clamp: 3;
 }
 .creation-card__body > span { color: rgba(244, 240, 232, .48); font-size: .68rem; }
+.creation-catalogue__empty { margin: 0; padding: 2rem; border: 1px dashed rgba(244, 240, 232, .16); border-radius: 16px; color: rgba(244, 240, 232, .58); text-align: center; }
 
 .creations-empty { display: grid; grid-template-columns: auto minmax(0, 680px); align-items: center; justify-content: center; gap: clamp(1.5rem, 4vw, 4rem); min-height: min(54svh, 520px); padding: clamp(2rem, 5vw, 5rem); border: 1px solid rgba(244, 240, 232, .12); border-radius: 28px; background: rgba(12, 12, 11, .72); }
 .creations-empty > span { color: rgba(226, 196, 126, .16); font-size: clamp(5rem, 14vw, 13rem); font-weight: 900; letter-spacing: -.1em; }
@@ -456,6 +503,8 @@
   .creation-stage__media-tabs button { width: 100%; min-width: 0; min-height: 48px; line-height: 1.25; text-align: center; white-space: normal; }
   .creation-stage__media-tabs button:nth-child(3):last-child { grid-column: 1 / -1; }
   .creation-stage__actions { display: grid; grid-template-columns: 1fr; }
+  .creation-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .creation-filters button { width: 100%; min-width: 0; padding-inline: .7rem; }
   .creation-rail > button { min-width: min(250px, 82vw); }
   .creation-catalogue__grid { grid-template-columns: 1fr; }
   .creations-empty { grid-template-columns: 1fr; justify-items: start; padding: 1.5rem; }
