@@ -383,3 +383,26 @@ La preuve finale doit encore utiliser les buckets R2 Preview existants et le wor
 - La CORS privée autorise uniquement l'origine HTTPS Preview, `PUT`, `Content-Type` et expose `ETag`. La CORS de diffusion autorise uniquement cette origine, `GET`/`HEAD`, `Range` et expose les en-têtes de lecture partielle. `r2.dev` et les domaines publics restent désactivés.
 - Les multipart incomplets expirent au bout de 7 jours et les objets `creations/quarantine/` au bout de 2 jours; aucune règle n'expire les médias READY.
 - Restent non démontrés : renouvellement navigateur après expiration réelle de l'URL signée d'une heure, replay après crash forcé du worker et recette Safari sur iPhone physique.
+
+## 15. V3.4 — provisioning des privilèges runtime Créations
+
+Les migrations sont exécutées par le rôle de migration alors que le Web et le worker utilisent un rôle runtime rotatif distinct. Le domaine Créations ne dépend donc plus d'un `GRANT` ponctuel accordé au nom courant du rôle rotatif.
+
+Le provisionneur `npm run database:provision-creations-runtime` :
+
+- dérive l'identité runtime de `DATABASE_URL` (ou de `RUNTIME_DATABASE_URL` pour un lancement contrôlé) et se connecte exclusivement avec `MIGRATION_DATABASE_URL` ;
+- refuse les identifiants SQL non normalisés, un rôle runtime absent, `NOINHERIT`, `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `REPLICATION` ou `BYPASSRLS` ;
+- crée de manière idempotente le rôle de groupe stable `lnx_creations_runtime`, obligatoirement `NOLOGIN` et sans capacité élevée ;
+- limite la découverte aux tables et séquences `creations` / `creation_*` du schéma `public`, vérifie qu'elles appartiennent au rôle de migration, puis accorde CRUD sur les tables et `USAGE` uniquement sur les séquences réellement présentes ;
+- accorde `CONNECT` sur la base, `USAGE` sur `public` et l'adhésion au groupe au rôle runtime courant ;
+- s'exécute sous verrou transactionnel et est relancé après chaque `prisma migrate deploy`, ce qui couvre une rotation future et les futurs objets du domaine.
+
+Les `ALTER DEFAULT PRIVILEGES` globaux ne sont volontairement pas utilisés : PostgreSQL ne permet pas de les limiter à un préfixe d'objets dans `public`, et les activer donnerait au Web des droits sur de futures tables Boutique, Rights ou paiement sans rapport avec Créations. La prévention durable est le provisionnement post-migration, limité par préfixe et testé avec une table et une séquence synthétiques locales.
+
+Commande pre-deploy Web attendue :
+
+```sh
+sh -c 'DATABASE_URL="$MIGRATION_DATABASE_URL" npx prisma migrate deploy && npm run database:provision-creations-runtime'
+```
+
+L'affectation `DATABASE_URL=...` est limitée au processus Prisma : le provisionneur reçoit ensuite la `DATABASE_URL` runtime originale et la `MIGRATION_DATABASE_URL` de migration. Le worker ne lance aucune migration ni aucun provisionnement ; il hérite du même rôle runtime déjà provisionné que le Web.

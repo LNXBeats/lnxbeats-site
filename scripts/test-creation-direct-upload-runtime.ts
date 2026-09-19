@@ -141,7 +141,7 @@ try {
   const videoBytes = await readFile(videoPath);
   const size = videoBytes.length;
   const session = await initializeCreationVideoUpload({ actorUserId, media: media(size) });
-  assert.match(session.quarantineKey, new RegExp(`^creations/quarantine/${creationId}/[0-9a-f-]{36}/video\\.mp4$`));
+  assert.match(session.quarantineKey, new RegExp(`^creations/quarantine/${creationId}/[0-9a-f-]{36}/source\\.mp4$`));
   assert.equal(session.actorUserId, actorUserId);
   await assert.rejects(
     getCreationVideoUploadStatus({ actorUserId: otherUserId, sessionToken: session.sessionToken, baseUrl: "http://localhost" }),
