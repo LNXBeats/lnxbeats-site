@@ -35,8 +35,21 @@ function waitForNextPoll() {
 }
 
 while (!stopping) {
-  const result = await processNextCreationVideoValidation(new Date(), { signal: shutdown.signal });
-  await cleanupTerminalCreationVideoQuarantine();
-  await expireAbandonedCreationVideoUploads();
-  if (!result.processed) await waitForNextPoll();
+  try {
+    const result = await processNextCreationVideoValidation(new Date(), { signal: shutdown.signal });
+    await cleanupTerminalCreationVideoQuarantine();
+    await expireAbandonedCreationVideoUploads();
+    if (!result.processed) await waitForNextPoll();
+  } catch (error) {
+    // Web and worker deployments can overlap. In particular, the worker may
+    // briefly start before the Web pre-deploy has applied an additive schema
+    // migration. Treat every failed poll as retryable so a transient database
+    // or object-storage outage cannot put the worker into a crash loop. The
+    // next successful cycle remains authoritative for state transitions.
+    console.error(
+      "[creation-media-worker] Cycle failed; retrying after the poll interval.",
+      error instanceof Error ? error.message : "Unknown worker error.",
+    );
+    await waitForNextPoll();
+  }
 }

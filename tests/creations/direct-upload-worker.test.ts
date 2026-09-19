@@ -75,6 +75,8 @@ test("worker publication and cleanup remain lease/CAS guarded and replay-idempot
   assert.match(service, /current\.leaseToken !== lease\.leaseToken/);
   assert.match(workerScript, /shutdown\.abort\(\)/);
   assert.match(workerScript, /signal: shutdown\.signal/);
+  assert.match(workerScript, /Cycle failed; retrying after the poll interval/);
+  assert.match(workerScript, /catch \(error\)[\s\S]*await waitForNextPoll\(\)/);
   assert.match(video, /child\.kill\(graceful \? "SIGTERM" : "SIGKILL"\)/);
   assert.match(video, /child\.kill\("SIGKILL"\)/);
   assert.match(video, /stderr\.length < 128 \* 1024/);
