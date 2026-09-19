@@ -11,17 +11,17 @@ test("short signed media TTL is strictly limited to Preview", () => {
   assert.equal(publicMediaSignedUrlTtlSeconds({}), 3_600);
   assert.equal(publicMediaSignedUrlTtlSeconds({
     MEDIA_DEPLOYMENT_ENV: "preview",
-    CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "5",
-  }), 5);
+    CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "30",
+  }), 30);
   for (const deployment of ["production", "staging", "test"]) {
     assert.equal(publicMediaSignedUrlTtlSeconds({
       MEDIA_DEPLOYMENT_ENV: deployment,
-      CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "5",
+      CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "30",
     }), 3_600);
   }
   assert.equal(publicMediaSignedUrlTtlSeconds({
     MEDIA_DEPLOYMENT_ENV: "preview",
-    CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "2",
+    CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "29",
   }), 3_600);
   assert.equal(publicMediaSignedUrlTtlSeconds({
     MEDIA_DEPLOYMENT_ENV: "preview",

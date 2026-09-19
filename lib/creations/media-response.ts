@@ -26,7 +26,7 @@ export function publicMediaSignedUrlTtlSeconds(
 
   const deployment = environment.MEDIA_DEPLOYMENT_ENV?.trim();
   const seconds = Number(raw);
-  if (deployment !== "preview" || !Number.isSafeInteger(seconds) || seconds < 3 || seconds > 60) {
+  if (deployment !== "preview" || !Number.isSafeInteger(seconds) || seconds < 30 || seconds > 60) {
     return DEFAULT_PUBLIC_MEDIA_SIGNED_URL_TTL_SECONDS;
   }
   return seconds;
