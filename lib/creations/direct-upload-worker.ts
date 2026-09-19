@@ -160,7 +160,7 @@ export async function downloadCreationVideoToTemporary(
 }
 
 function terminalErrorCode(error: unknown) {
-  if (error instanceof CreationVideoError) return "VALIDATION_FAILED";
+  if (error instanceof CreationVideoError) return error.code === "ABORTED" ? null : "VALIDATION_FAILED";
   if (error instanceof CreationMediaError) return error.code === "CONFLICT" ? "MEDIA_CONFLICT" : "STORAGE_INTEGRITY";
   if (error instanceof MediaStorageError && error.code === "INTEGRITY") return "STORAGE_INTEGRITY";
   return null;
@@ -231,7 +231,10 @@ async function markReady(session: ClaimedSession, result: { assetId: string; loc
   return true;
 }
 
-export async function processNextCreationVideoValidation(now = new Date()) {
+export async function processNextCreationVideoValidation(
+  now = new Date(),
+  options: { signal?: AbortSignal } = {},
+) {
   assertDatabaseConfigured();
   const session = await claimValidationSession(now);
   if (!session) return { processed: false as const };
@@ -239,7 +242,7 @@ export async function processNextCreationVideoValidation(now = new Date()) {
   let temporary: Awaited<ReturnType<typeof downloadCreationVideoToTemporary>> | null = null;
   try {
     temporary = await downloadCreationVideoToTemporary(session);
-    const video = await validateCreationVideo(temporary.target);
+    const video = await validateCreationVideo(temporary.target, { signal: options.signal });
     if (!(await ownsLease(session))) return { processed: true as const, status: "LEASE_LOST" as const, sessionId: session.id };
     const result = await replaceAdminCreationMedia({
       creationId: session.creationId,
@@ -260,6 +263,7 @@ export async function processNextCreationVideoValidation(now = new Date()) {
       checksumSha256: temporary.checksumSha256,
       cleanup: async () => undefined,
       activationAssetId: session.resultAssetId ?? session.id,
+      activationLease: { uploadSessionId: session.id, leaseToken: session.leaseToken },
     });
     if (!(await markReady(session, result))) {
       return { processed: true as const, status: "LEASE_LOST" as const, sessionId: session.id };

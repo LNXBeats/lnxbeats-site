@@ -32,6 +32,8 @@ export type UploadPhase = "initializing" | "uploading" | "retrying" | "paused" |
 export type MultipartProgress = {
   phase: UploadPhase;
   uploadedBytes: number;
+  confirmedBytes: number;
+  inFlightBytes: number;
   totalBytes: number;
   completedParts: number;
   partCount: number;
@@ -255,17 +257,22 @@ export async function runDirectMultipartVideoUpload(input: {
   dependencies?: Partial<Dependencies>;
 }) {
   const dependencies = { ...browser, ...input.dependencies };
-  let highWaterBytes = 0;
   let retries = 0;
-  const emit = (phase: UploadPhase, actualBytes: number, completedParts: number, partCount: number) => {
-    highWaterBytes = Math.max(highWaterBytes, Math.min(input.init.sizeBytes, actualBytes));
+  const emit = (
+    phase: UploadPhase,
+    confirmedBytes: number,
+    inFlightBytes: number,
+    completedParts: number,
+    partCount: number,
+  ) => {
+    const uploadedBytes = Math.min(input.init.sizeBytes, confirmedBytes + inFlightBytes);
     input.onProgress?.({
-      phase, uploadedBytes: highWaterBytes, totalBytes: input.init.sizeBytes, completedParts, partCount,
-      percent: Math.round((highWaterBytes / input.init.sizeBytes) * 1_000) / 10, retryCount: retries,
+      phase, uploadedBytes, confirmedBytes, inFlightBytes, totalBytes: input.init.sizeBytes, completedParts, partCount,
+      percent: Math.round((uploadedBytes / input.init.sizeBytes) * 1_000) / 10, retryCount: retries,
     });
   };
   assertActive(input.signal);
-  emit("initializing", 0, 0, 0);
+  emit("initializing", 0, 0, 0, 0);
   let status: MultipartStatusResponse;
   if (input.resumeSessionToken) status = await dependencies.status(token(input.resumeSessionToken), input.signal);
   else {
@@ -273,7 +280,10 @@ export async function runDirectMultipartVideoUpload(input: {
     status = { ok: true, status: "UPLOADING", state: "media-upload", ...session };
   }
   input.onSession?.(status);
-  if (status.status === "READY") return { state: "media-enregistre" as const, location: status.location ?? null };
+  if (status.status === "READY") {
+    emit("ready", input.init.sizeBytes, 0, status.partCount, status.partCount);
+    return { state: "media-enregistre" as const, location: status.location ?? null };
+  }
   const terminalState = terminal(status);
   if (terminalState) throw new DirectMultipartUploadError(terminalState);
 
@@ -285,8 +295,12 @@ export async function runDirectMultipartVideoUpload(input: {
     const progress = new Map(plan.map((part) => [part.partNumber, completed.has(part.partNumber) ? part.sizeBytes : 0]));
     const pending = plan.filter((part) => !completed.has(part.partNumber));
     let cursor = 0;
-    const actual = () => [...progress.values()].reduce((sum, value) => sum + value, 0);
-    emit("uploading", actual(), completed.size, plan.length);
+    const confirmedBytes = () => [...completed.values()].reduce((sum, part) => sum + part.sizeBytes, 0);
+    const inFlightBytes = () => plan.reduce(
+      (sum, part) => sum + (completed.has(part.partNumber) ? 0 : progress.get(part.partNumber) ?? 0),
+      0,
+    );
+    emit("uploading", confirmedBytes(), inFlightBytes(), completed.size, plan.length);
     const worker = async () => {
       while (cursor < pending.length) {
         const part = pending[cursor++]!;
@@ -297,11 +311,14 @@ export async function runDirectMultipartVideoUpload(input: {
             const signed = await dependencies.partUrl(status.sessionToken, part.partNumber, input.signal);
             const result = await dependencies.uploadPart({
               url: signed.url, body: input.file!.slice(part.start, part.end), signal: input.signal,
-              onProgress(bytes) { progress.set(part.partNumber, Math.max(progress.get(part.partNumber) ?? 0, bytes)); emit(attempt > 1 ? "retrying" : "uploading", actual(), completed.size, plan.length); },
+              onProgress(bytes) {
+                progress.set(part.partNumber, Math.max(progress.get(part.partNumber) ?? 0, bytes));
+                emit(attempt > 1 ? "retrying" : "uploading", confirmedBytes(), inFlightBytes(), completed.size, plan.length);
+              },
             });
             completed.set(part.partNumber, { partNumber: part.partNumber, etag: etag(result.etag), sizeBytes: part.sizeBytes });
             progress.set(part.partNumber, part.sizeBytes);
-            emit("uploading", actual(), completed.size, plan.length);
+            emit("uploading", confirmedBytes(), inFlightBytes(), completed.size, plan.length);
             lastError = undefined;
             break;
           } catch (error) {
@@ -310,7 +327,8 @@ export async function runDirectMultipartVideoUpload(input: {
             const recoverable = error instanceof DirectMultipartUploadError ? error.recoverable : true;
             if (!recoverable || attempt === CREATION_VIDEO_UPLOAD_MAX_ATTEMPTS) break;
             retries += 1;
-            emit("retrying", actual(), completed.size, plan.length);
+            progress.set(part.partNumber, 0);
+            emit("retrying", confirmedBytes(), inFlightBytes(), completed.size, plan.length);
             await dependencies.wait(Math.min(2_000, 250 * 2 ** (attempt - 1)), input.signal);
           }
         }
@@ -318,7 +336,7 @@ export async function runDirectMultipartVideoUpload(input: {
       }
     };
     await Promise.all(Array.from({ length: Math.min(CREATION_DIRECT_UPLOAD_CONCURRENCY, Math.max(1, pending.length)) }, worker));
-    emit("finalizing", input.file.size, completed.size, plan.length);
+    emit("finalizing", input.file.size, 0, completed.size, plan.length);
     const canonical = await dependencies.status(status.sessionToken, input.signal);
     if (canonical.completedParts.length !== canonical.partCount) throw new DirectMultipartUploadError("media-stockage", true);
     status = await dependencies.complete(
@@ -329,13 +347,13 @@ export async function runDirectMultipartVideoUpload(input: {
   }
 
   while (status.status === "QUARANTINE" || status.status === "VALIDATING") {
-    emit("validating", input.init.sizeBytes, status.partCount, status.partCount);
+    emit("validating", input.init.sizeBytes, 0, status.partCount, status.partCount);
     await dependencies.waitUntilVisible(input.signal);
     await dependencies.wait(status.retryAfterMs ?? CREATION_DIRECT_UPLOAD_POLL_SECONDS * 1_000, input.signal);
     status = await dependencies.status(status.sessionToken, input.signal);
   }
   if (status.status !== "READY") throw new DirectMultipartUploadError(terminal(status) ?? "media-erreur");
-  emit("ready", input.init.sizeBytes, status.partCount, status.partCount);
+  emit("ready", input.init.sizeBytes, 0, status.partCount, status.partCount);
   return { state: "media-enregistre" as const, location: status.location ?? null };
 }
 

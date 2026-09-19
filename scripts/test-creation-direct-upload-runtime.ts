@@ -178,6 +178,25 @@ try {
   assert.equal(replay.assetId, ready.resultAssetId);
   expectedLockVersion = ready.resultLockVersion!;
   expectedAssetId = ready.resultAssetId;
+
+  const lostLease = await initializeCreationVideoUpload({ actorUserId, media: media(size) });
+  await assert.rejects(
+    replaceAdminCreationMedia({
+      creationId, slug: "runtime-direct-video", expectedLockVersion: String(expectedLockVersion), expectedAssetId,
+      rightsConfirmed: true, alt: null, role: "VIDEO", path: videoPath,
+      originalFilename: "runtime.mp4", mimeType: "video/mp4", extension: "mp4", sizeBytes: size,
+      width: activatedAsset.width, height: activatedAsset.height, durationMs: activatedAsset.durationMs,
+      checksumSha256: activatedAsset.checksumSha256!, cleanup: async () => undefined,
+      activationAssetId: lostLease.id,
+      activationLease: { uploadSessionId: lostLease.id, leaseToken: "lease-that-was-never-claimed" },
+    }),
+  );
+  assert.equal(
+    (await prisma.creationAsset.findUniqueOrThrow({ where: { creationId_role: { creationId, role: "VIDEO" } } })).assetId,
+    ready.resultAssetId,
+  );
+  assert.equal(await prisma.asset.findUnique({ where: { id: lostLease.id } }), null);
+  await abortCreationVideoUpload({ actorUserId, sessionToken: lostLease.sessionToken, baseUrl: "http://localhost" });
   await rm(mediaRoot, { recursive: true, force: true });
 
   const aborted = await initializeCreationVideoUpload({ actorUserId, media: media(1024) });
@@ -197,7 +216,7 @@ try {
     completeCreationVideoUpload({ actorUserId, sessionToken: mismatch.sessionToken, parts: [{ partNumber: 1, etag: "etag-mismatch" }], baseUrl: "http://localhost" }),
     (error) => error instanceof CreationDirectUploadError && error.code === "STORAGE_INTEGRITY",
   );
-  console.log(JSON.stringify({ ok: true, sessions: 4, actorBinding: true, generatedKeys: true, complete: true, asyncValidation: true, deterministicAsset: true, crashReplayIdempotent: true, abort: true, expiry: true, headMismatch: true }));
+  console.log(JSON.stringify({ ok: true, sessions: 5, actorBinding: true, generatedKeys: true, complete: true, asyncValidation: true, deterministicAsset: true, crashReplayIdempotent: true, lostLeaseCannotAttach: true, abort: true, expiry: true, headMismatch: true }));
 } finally {
   const creation = await prisma.creation.findUnique({ where: { id: creationId }, select: { assets: { select: { assetId: true } } } });
   await prisma.creationAsset.deleteMany({ where: { creationId } });

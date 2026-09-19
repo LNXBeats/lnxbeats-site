@@ -29,10 +29,10 @@ const ROLE_DETAILS: Record<CreationMediaRole, {
   hint: string;
   maximumBytes: number;
 }> = {
-  COVER: { label: "Cover", accept: "image/jpeg,image/png,image/webp", hint: "JPEG, PNG ou WebP · 10 Mo max.", maximumBytes: CREATION_IMAGE_MAXIMUM_BYTES },
-  VIDEO_POSTER: { label: "Poster vidéo", accept: "image/jpeg,image/png,image/webp", hint: "JPEG, PNG ou WebP · 10 Mo max.", maximumBytes: CREATION_IMAGE_MAXIMUM_BYTES },
-  AUDIO: { label: "Audio", accept: "audio/mpeg,.mp3", hint: "MP3 authentique · 80 Mo max.", maximumBytes: CREATION_AUDIO_MAXIMUM_BYTES },
-  VIDEO: { label: "Vidéo", accept: "video/mp4,.mp4", hint: "MP4 H.264/AAC · 20 min et 200 Mo max.", maximumBytes: CREATION_VIDEO_MAXIMUM_BYTES },
+  COVER: { label: "Cover", accept: "image/jpeg,image/png,image/webp", hint: `JPEG, PNG ou WebP · ${formatBytes(CREATION_IMAGE_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_IMAGE_MAXIMUM_BYTES },
+  VIDEO_POSTER: { label: "Poster vidéo", accept: "image/jpeg,image/png,image/webp", hint: `JPEG, PNG ou WebP · ${formatBytes(CREATION_IMAGE_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_IMAGE_MAXIMUM_BYTES },
+  AUDIO: { label: "Audio", accept: "audio/mpeg,.mp3", hint: `MP3 authentique · ${formatBytes(CREATION_AUDIO_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_AUDIO_MAXIMUM_BYTES },
+  VIDEO: { label: "Vidéo", accept: "video/mp4,.mp4", hint: `MP4 H.264/AAC · 20 min et ${formatBytes(CREATION_VIDEO_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_VIDEO_MAXIMUM_BYTES },
 };
 
 const feedback: Record<string, string> = {
@@ -83,14 +83,58 @@ type MediaResponse = {
 
 function formatBytes(value: number) {
   if (value < 1_024) return `${value} octets`;
-  if (value < 1_024 * 1_024) return `${(value / 1_024).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Ko`;
-  return `${(value / (1_024 * 1_024)).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Mo`;
+  if (value < 1_024 * 1_024) return `${(value / 1_024).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Kio`;
+  return `${(value / (1_024 * 1_024)).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Mio`;
 }
 
 function formatDuration(durationMs: number | null) {
   if (!durationMs || durationMs <= 0) return "Non renseignée";
   const seconds = Math.round(durationMs / 1_000);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+export function AdminCreationUploadProgress({
+  progress,
+  onCancel,
+}: {
+  progress: MultipartProgress;
+  onCancel?: () => void;
+}) {
+  const validating = progress.phase === "validating";
+  return <div className="admin-creation-upload" aria-live="polite">
+    <div className="admin-creation-upload__heading">
+      <strong>{progress.phase === "ready" ? "Prêt" : validating ? "Validation intégrale" : progress.phase === "finalizing" ? "Finalisation" : progress.phase === "retrying" ? "Nouvelle tentative" : progress.phase === "initializing" ? "Préparation" : "Envoi direct vers le stockage"}</strong>
+      <span>{validating ? "Analyse en cours" : progress.phase === "ready" ? "Terminé" : `${progress.percent.toLocaleString("fr-FR")} %`}</span>
+    </div>
+    {validating
+      ? <progress max={100} aria-label="Analyse de la vidéo en cours" />
+      : <progress max={100} value={progress.percent}>{progress.percent} %</progress>}
+    <small>{validating
+      ? `Envoi terminé · ${progress.completedParts}/${progress.partCount} parties confirmées · analyse complète en cours`
+      : progress.phase === "ready"
+        ? "Validation réussie et média attaché"
+        : `${progress.completedParts}/${progress.partCount || "…"} parties confirmées · ${formatBytes(progress.confirmedBytes)} confirmés · ${formatBytes(progress.inFlightBytes)} en cours · ${formatBytes(progress.totalBytes)} au total`}</small>
+    {onCancel && !validating && progress.phase !== "ready"
+      ? <button className="admin-button admin-button--danger" type="button" onClick={onCancel}>Annuler l’envoi</button>
+      : null}
+  </div>;
+}
+
+export function AdminCreationUploadFeedback({ state }: { state: string }) {
+  return feedback[state] ? <p className="admin-feedback" role="status">{feedback[state]}</p> : null;
+}
+
+export function AdminCreationUploadResume({
+  filename,
+  onResume,
+}: {
+  filename: string;
+  onResume?: () => void;
+}) {
+  return <div className="admin-creation-upload-resume">
+    <p className="admin-form-note">Une session interrompue est disponible. Resélectionnez <strong>{filename}</strong> pour reprendre les parties manquantes, ou vérifiez si sa validation est déjà en cours.</p>
+    <button className="admin-button" type="button" onClick={onResume}>Reprendre la session</button>
+  </div>;
 }
 
 async function payload(response: Response) {
@@ -381,20 +425,13 @@ function MediaEditor({
       </dl>
     </div> : <p className="admin-muted">Aucun fichier pour cet emplacement.</p>}
 
-    {state && feedback[state] ? <p className="admin-feedback" role="status">{feedback[state]}</p> : null}
-    {role === "VIDEO" && directProgress ? <div className="admin-creation-upload" aria-live="polite">
-      <div className="admin-creation-upload__heading">
-        <strong>{directProgress.phase === "validating" ? "Validation intégrale" : directProgress.phase === "finalizing" ? "Finalisation" : directProgress.phase === "retrying" ? "Nouvelle tentative" : "Envoi direct vers le stockage"}</strong>
-        <span>{directProgress.percent.toLocaleString("fr-FR")} %</span>
-      </div>
-      <progress max={100} value={directProgress.percent}>{directProgress.percent} %</progress>
-      <small>{directProgress.completedParts}/{directProgress.partCount || "…"} parties · {formatBytes(directProgress.uploadedBytes)} / {formatBytes(directProgress.totalBytes)}</small>
-      {directProgress.phase !== "validating" && directProgress.phase !== "ready" ? <button className="admin-button admin-button--danger" type="button" onClick={cancelVideoUpload}>Annuler l’envoi</button> : null}
-    </div> : null}
-    {role === "VIDEO" && resume && !pending && !directProgress ? <div className="admin-creation-upload-resume">
-      <p className="admin-form-note">Une session interrompue est disponible. Resélectionnez <strong>{resume.filename}</strong> pour reprendre les parties manquantes, ou vérifiez si sa validation est déjà en cours.</p>
-      <button className="admin-button" type="button" onClick={resumeVideoValidation}>Reprendre la session</button>
-    </div> : null}
+    {state ? <AdminCreationUploadFeedback state={state} /> : null}
+    {role === "VIDEO" && directProgress
+      ? <AdminCreationUploadProgress progress={directProgress} onCancel={cancelVideoUpload} />
+      : null}
+    {role === "VIDEO" && resume && !pending && !directProgress
+      ? <AdminCreationUploadResume filename={resume.filename} onResume={resumeVideoValidation} />
+      : null}
     {editable ? <form ref={formRef} className="admin-catalogue-form" onSubmit={upload}>
       <label className="admin-delivery-picker admin-product-image__picker">
         <input
@@ -462,7 +499,7 @@ export function AdminCreationMediaManager({
   const editable = status !== "ARCHIVED";
   const byRole = new Map(media.map((item) => [item.role, item]));
   return <>
-    {initialState && feedback[initialState] ? <p className="admin-feedback" role="status">{feedback[initialState]}</p> : null}
+    {initialState ? <AdminCreationUploadFeedback state={initialState} /> : null}
     <div className="admin-creation-media-grid">
     {(Object.keys(ROLE_DETAILS) as CreationMediaRole[]).map((role) => <MediaEditor
       key={role}

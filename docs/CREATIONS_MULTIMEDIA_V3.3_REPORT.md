@@ -10,7 +10,7 @@ Rapport de candidat local — 13 septembre 2026.
 - Worktree isolé : `/private/tmp/lnxbeats-v33-creations-multimedia`.
 - Le worktree principal historique et ses fichiers non suivis suffixés ` 2` n'ont pas été modifiés.
 - V3.3 reste additive : la Discographie, Commander, la Boutique, les paiements et Rights conservent leur logique métier.
-- Aucun push, merge, déploiement, accès DB Production, objet R2 Production ou appel provider n'a été effectué.
+- Aucun push vers `main`/`develop`, merge, déploiement, accès DB Production, objet R2 Production ou appel provider n'a été effectué. Le seul push autorisé après les gates de cette revue est celui de la branche feature V3.3.
 
 ## 2. Audit de l'existant
 
@@ -99,12 +99,12 @@ Le flux vidéo est désormais :
 
 1. l'Admin authentifié demande une session same-origin ;
 2. le serveur vérifie création, version optimiste, rôle, droits, MIME, extension et taille puis génère la clé `creations/quarantine/<creationId>/<uploadUuid>/video.mp4` ;
-3. le navigateur envoie directement des parts de 8 Mio vers R2 avec au maximum deux requêtes simultanées et des URL PUT présignées 5 minutes ;
-4. la progression vient des octets réellement envoyés par `XMLHttpRequest` ; une part échouée est retentée au maximum trois fois sans renvoyer les parts confirmées par R2 ;
+3. le navigateur envoie directement des parts de 8 Mio vers R2 avec au maximum deux requêtes simultanées et des URL PUT présignées 5 minutes ; à la limite exacte de 200 Mio, le plan contient donc 25 parts, pas 24 ;
+4. la progression vient des octets réellement envoyés par `XMLHttpRequest` et distingue les octets confirmés par R2 des octets en vol ; une part échouée remet uniquement sa progression volatile à zéro, puis est retentée au maximum trois fois sans renvoyer les parts déjà confirmées ;
 5. le navigateur ne conserve en `sessionStorage` qu'un token opaque lié à l'Admin, la création et le rôle, jamais un credential R2 ;
 6. la finalisation compare les ETag client à la liste canonique R2, puis vérifie par `HEAD` taille, MIME et métadonnées de session ;
 7. l'objet reste privé en `QUARANTINE`; un worker dédié le revendique par bail atomique, le télécharge dans un fichier `0600` imprévisible et borné, le décode intégralement, puis seulement le promeut ;
-8. l'activation utilise un Asset réservé déterministe afin qu'un crash après activation mais avant marquage `READY` soit rejouable sans double Asset ;
+8. l'activation utilise un Asset réservé déterministe afin qu'un crash après activation mais avant marquage `READY` soit rejouable sans double Asset ; la même transaction verrouille la session d'upload et revérifie son bail juste avant l'attachement, de sorte qu'un worker ayant perdu son bail ne peut pas publier ;
 9. abort, expiration, rejet et succès passent d'abord leur statut terminal par CAS avant suppression; un marqueur `*_CLEANUP_REQUIRED` rend le nettoyage rejouable.
 
 Les sessions expirent après une heure. Les multipart abandonnés sont abortés opportunistement; l'abort automatique R2 des multipart incomplets (7 jours par défaut) reste le filet final.
@@ -131,7 +131,7 @@ Le staging doit utiliser sa propre origine et son propre bucket. Une lifecycle r
 
 Références : [CORS R2](https://developers.cloudflare.com/r2/buckets/cors/) et [Object Lifecycles R2](https://developers.cloudflare.com/r2/buckets/object-lifecycles/).
 
-Le worker se lance séparément avec `CREATION_MEDIA_WORKER_ENABLED=true npm run creations:media-worker`. Il est idempotent, concurrence-safe, possède un bail renouvelé, trois tentatives avec backoff et un nettoyage des états terminaux. Aucun service Railway n'a été créé ici.
+Le worker se lance séparément avec `CREATION_MEDIA_WORKER_ENABLED=true npm run creations:media-worker`. Il est idempotent, concurrence-safe, possède un bail renouvelé, trois tentatives avec backoff et un nettoyage des états terminaux. `SIGINT`/`SIGTERM` interrompent proprement le décodage actif (FFmpeg reçoit d'abord `SIGTERM`, puis `SIGKILL` après 2 secondes au maximum), libèrent le cycle et laissent la session reprenable. Aucun service Railway n'a été créé ici.
 
 ### Contrats acceptés
 
@@ -143,7 +143,7 @@ Le worker se lance séparément avec `CREATION_MEDIA_WORKER_ENABLED=true npm run
 | Vidéo | MP4, H.264, AAC si piste audio | MP4 | 200 Mio |
 
 - La durée vidéo maximale est de 20 minutes.
-- La validation finale FFmpeg (`-v error -xerror`) décode intégralement vidéo et audio éventuel vers `null`; aucune fenêtre de 30 secondes ne subsiste.
+- La validation finale FFmpeg (`-v error -xerror`, deux threads de décodage) exige exactement une piste vidéo H.264, vérifie que toutes les pistes audio éventuelles sont AAC, puis décode intégralement ces flux vers `null`; aucune fenêtre de 30 secondes ne subsiste.
 - Le parseur multipart serveur reste utilisé uniquement pour les petits médias; la route historique refuse `VIDEO` avant toute lecture du corps.
 - Les fichiers sont écrits avec permissions privées dans un répertoire temporaire, inspectés, hashés en SHA-256, puis nettoyés.
 - Les clés sont générées côté serveur sous `creations/<creation-id>/<role>/<asset-id>.<ext>` et validées par une allowlist stricte.
@@ -166,7 +166,7 @@ Le worker se lance séparément avec `CREATION_MEDIA_WORKER_ENABLED=true npm run
 - Liste paginée, recherche et filtres `DRAFT` / `PUBLISHED` / `ARCHIVED`.
 - Création et édition des champs éditoriaux/SEO, position, média principal et liens externes.
 - Gestion séparée des quatre rôles média avec aperçu, remplacement et retrait confirmé.
-- Pour la vidéo : états Préparation, Envoi, Retry, Finalisation, Validation, Prêt, Erreur ou Annulé; progression réelle, reprise et annulation restent accessibles sur mobile.
+- Pour la vidéo : états Préparation, Envoi, Nouvelle tentative, Finalisation, Validation intégrale, Prêt, Erreur ou Annulé; progression réelle, reprise et annulation restent accessibles sur mobile. La validation est volontairement indéterminée (« Analyse en cours »), car aucun pourcentage fiable n'est exposé par le décodeur.
 - Publication fail-closed : titre, résumé, média principal, média jouable, visibilité publique, droits `CLEARED`, type et MIME cohérents.
 - Une édition d'une création déjà publiée est soumise aux mêmes invariants.
 - Dépublication avant archivage; aucune suppression destructive de création.
@@ -202,10 +202,10 @@ Le worker se lance séparément avec `CREATION_MEDIA_WORKER_ENABLED=true npm run
 
 ### Tests automatisés
 
-- Suite Créations corrective finale : 75/75 PASS, incluant UUID strict, multipart direct, worker, formats vidéo réels et corruption tardive.
+- Suite Créations corrective finale : 76/76 PASS, incluant UUID strict, multipart direct, séparation confirmé/en vol, worker, formats vidéo réels et corruption tardive.
 - Suites ciblées finales : média 63/63, Admin 45/45, sécurité 16/16, Jukebox 78/78 et SEO 27/27, toutes PASS.
-- Runtime direct-upload sur PostgreSQL local et stockage R2 simulé : PASS (liaison acteur/session, clés serveur, finalisation, validation asynchrone, Asset déterministe, replay après crash, abort, expiration et rejet d'un `HEAD` incohérent).
-- Suite canonique complète finale : 1215/1215 PASS, 0 échec.
+- Runtime direct-upload sur PostgreSQL local et stockage R2 simulé : PASS (5 sessions : liaison acteur/session, clés serveur, finalisation, validation asynchrone, Asset déterministe, replay après crash, interdiction d'attacher après perte de bail, abort, expiration et rejet d'un `HEAD` incohérent).
+- Suite canonique complète finale : 1216/1216 PASS, 0 échec.
 - Couverture de non-régression incluse : Discographie/Jukebox, audio, Admin, catalogue, Boutique, checkout, paiements, auth, sécurité, Rights et contrats.
 - `npm run lint` : PASS.
 - `npm run typecheck` : PASS.
@@ -274,7 +274,50 @@ Répertoire temporaire non versionné : `/private/tmp/lnx-v33-corrective-qa`.
 - Reflow mobile Admin à 390 px : `admin-upload-mobile-390.png`.
 - Cette revue locale a utilisé un rendu statique Quick Look sans requête réseau; elle valide la composition et complète les assertions CSS automatisées, mais ne remplace pas le futur essai navigateur réel avec un objet R2 de staging.
 
-## 11. Risques et limites avant Production
+### Preuve composant Admin réelle avant push
+
+Répertoire temporaire non versionné : `/private/tmp/lnx-v33-admin-component-evidence`.
+
+- 27 captures du composant React de production, soit 9 états (`preparation`, `upload`, `retry`, `finalization`, `validation`, `ready`, `resume`, `error`, `cancelled`) sur `390×844`, `430×932` et `1440×900`.
+- Exemples : `admin-video-upload-390x844.png`, `admin-video-validation-430x932.png`, `admin-video-ready-1440x900.png`.
+- Rapport mesuré : `qa-report.json`.
+- Résultat : aucun overflow horizontal, boutons visibles de 48 px sur mobile, 200 Mio affichés en unités binaires cohérentes, 25 parts de 8 Mio, progression fondée sur les octets réels et validation sans faux pourcentage.
+- Le harnais de rendu était une route locale temporaire; elle a été supprimée avant le commit et n'appartient pas au diff.
+
+## 11. Plan Preview isolé — non exécuté
+
+Ce plan prépare la validation manquante sans repointer un service existant et sans réutiliser une donnée Production. L'état Railway observé pendant la revue reste : le service Web Production suit `main`; le Web staging existant suit une ancienne branche sans rapport avec V3.3; aucun service media worker V3.3 n'existe. Aucun service, variable, bucket ou domaine n'a été créé ou modifié.
+
+### Topologie cible
+
+1. créer un Web Preview isolé sur le SHA feature exact, avec domaine Preview distinct et healthcheck `/api/health` ;
+2. créer un worker média Preview distinct sur le même SHA, commande exacte `CREATION_MEDIA_WORKER_ENABLED=true npm run creations:media-worker`, concurrence applicative actuelle de un job par processus ;
+3. attribuer une base PostgreSQL Preview dédiée et jetable aux deux services, jamais une URL Production ; le Web applique les migrations additives à cette base avant démarrage ;
+4. attribuer deux buckets R2 Preview distincts (public et privé/quarantaine) et des credentials restreints à ces seuls buckets ;
+5. vérifier dans l'image Railway du worker `ffmpeg -version` avant tout essai média ; aucune validation réelle ne commence si FFmpeg est absent ou d'une version imprévue.
+
+Variables nécessaires, par nom uniquement : `DATABASE_URL`, `MIGRATION_DATABASE_URL` pour le pre-deploy Web, `AUTH_URL`, `SITE_URL`, `APP_CANONICAL_URL`, `AUTH_SECRET`, `MEDIA_STORAGE_DRIVER`, `MEDIA_DEPLOYMENT_ENV`, `MEDIA_STORAGE_PROVIDER`, `MEDIA_S3_ENDPOINT`, `MEDIA_S3_REGION`, `MEDIA_S3_ACCESS_KEY_ID`, `MEDIA_S3_SECRET_ACCESS_KEY`, `MEDIA_PUBLIC_BUCKET`, `MEDIA_PRIVATE_BUCKET`, `MEDIA_S3_FORCE_PATH_STYLE` et, pour le worker seulement, `CREATION_MEDIA_WORKER_ENABLED`. Les secrets ne doivent jamais être copiés dans un rapport ou transmis au navigateur.
+
+Le Preview n'hérite d'aucun provider de paiement, email réel, cron notification, maintenance Boutique ou accès Production. L'authentification Admin utilise uniquement des comptes QA sur l'origine Preview. Les rôles PostgreSQL et R2 sont limités aux ressources Preview.
+
+### CORS et lifecycle Preview
+
+- conserver toute règle existante sans l'écraser et ajouter une règle minimale pour l'origine HTTPS Preview exacte : méthode `PUT`, header `Content-Type`, header exposé `ETag`, preflight 3600 s, aucun wildcard ;
+- tester séparément les lectures publiques/signées : elles ne nécessitent pas d'élargir la CORS d'upload si le lecteur suit la redirection normalement ;
+- activer l'abort automatique des multipart incomplets sur un délai court documenté, puis une règle distincte limitée au préfixe `creations/quarantine/` pour les objets complétés mais orphelins ;
+- exclure explicitement les clés finales `creations/<creationId>/video/...` de toute règle de quarantaine.
+
+### Matrice de validation Preview
+
+- Upload : MP4 réel H.264/AAC représentatif, proche de 200 Mio et de 20 minutes, au moins HD et avec fréquence d'image réaliste; observer durée, CPU, mémoire, disque temporaire, progression, retry d'une part, reprise et annulation. Les seuils CPU/RAM du worker seront définis depuis ces mesures, pas inventés avant le benchmark.
+- Worker : arrêt `SIGTERM` pendant téléchargement puis pendant FFmpeg, reprise par un autre cycle, bail perdu, absence de double Asset, nettoyage temp/quarantaine et état Admin lisible.
+- Range : requêtes `bytes=0-`, plage médiane et fin de fichier; attendre `206`, `Accept-Ranges`, `Content-Range` et longueurs cohérentes. Tester lecture, pause, reprise et renouvellement après expiration d'une URL signée d'une heure.
+- Coordination : Discographie audio vers vidéo Créations, vidéo vers Discographie, audio Créations vers vidéo, vidéo vers audio, sélection seule et pause sans reset.
+- Safari : Safari macOS réel puis iPhone réel, Wi-Fi et réseau mobile raisonnable, lecture inline, poster, seeking début/milieu/fin, pause/reprise et rotation. Playwright WebKit seul ne vaut pas cette preuve matérielle.
+
+Résultats externes restant obligatoires : `CONTROLLED R2 CONFIGURATION REQUIRED BEFORE PRODUCTION`, `REAL R2 END-TO-END = PENDING`, `SAFARI MACOS AND IPHONE SEEKING = PENDING` et `MEDIA WORKER DEPLOYMENT = PENDING`.
+
+## 12. Risques et limites avant Production
 
 1. **Migration non déployée.** La migration V3.3 devra être revue puis appliquée par le mécanisme Production habituel seulement après une autorisation distincte.
 2. **Configuration contrôlée R2.** La CORS privée et la lifecycle quarantaine doivent être appliquées humainement sur staging puis Production. `CONTROLLED R2 CONFIGURATION REQUIRED BEFORE PRODUCTION`.
@@ -284,7 +327,7 @@ Répertoire temporaire non versionné : `/private/tmp/lnx-v33-corrective-qa`.
 6. **Contenu.** Aucun contenu Production n'est fourni par la migration. Les premières créations, covers, posters, textes, crédits et liens devront être ajoutés humainement dans l'Admin.
 7. **Sous-titres.** WebVTT est prévu par l'architecture mais aucun fichier de sous-titres n'est inventé ou obligatoire dans cette V1.
 
-## 12. Étapes requises avant Production
+## 13. Étapes requises avant Production
 
 1. Autoriser uniquement le push de la branche feature.
 2. Effectuer une revue humaine du diff, du SQL et des captures.

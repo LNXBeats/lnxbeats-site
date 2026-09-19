@@ -57,9 +57,11 @@ test("short, oversized and metadata-mismatched quarantine objects leave no temp 
 });
 
 test("worker publication and cleanup remain lease/CAS guarded and replay-idempotent", async () => {
-  const [worker, service] = await Promise.all([
+  const [worker, service, workerScript, video] = await Promise.all([
     readFile(new URL("../../lib/creations/direct-upload-worker.ts", import.meta.url), "utf8"),
     readFile(new URL("../../lib/creations/media-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../scripts/creation-media-worker.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../lib/creations/video.ts", import.meta.url), "utf8"),
   ]);
   assert.match(worker, /if \(!\(await ownsLease\(session\)\)\) return/);
   assert.match(worker, /where: \{ id: session\.id, status: "VALIDATING", leaseToken: session\.leaseToken \}/);
@@ -67,4 +69,12 @@ test("worker publication and cleanup remain lease/CAS guarded and replay-idempot
   assert.match(worker, /lastErrorCode: "QUARANTINE_CLEANUP_REQUIRED"/);
   assert.match(service, /activated\?\.assetId === assetId/);
   assert.match(service, /return \{ assetId, slug, lockVersion: activated\.creation\.lockVersion \}/);
+  assert.match(worker, /activationLease: \{ uploadSessionId: session\.id, leaseToken: session\.leaseToken \}/);
+  assert.match(service, /FOR UPDATE/);
+  assert.match(service, /current\.leaseToken !== lease\.leaseToken/);
+  assert.match(workerScript, /shutdown\.abort\(\)/);
+  assert.match(workerScript, /signal: shutdown\.signal/);
+  assert.match(video, /child\.kill\(graceful \? "SIGTERM" : "SIGKILL"\)/);
+  assert.match(video, /child\.kill\("SIGKILL"\)/);
+  assert.match(video, /stderr\.length < 128 \* 1024/);
 });

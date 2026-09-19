@@ -11,28 +11,39 @@ const CREATION_VIDEO_MINIMUM_VALIDATION_TIMEOUT_MS = 5 * 60 * 1_000;
 const CREATION_VIDEO_MAXIMUM_VALIDATION_TIMEOUT_MS = 60 * 60 * 1_000;
 
 export class CreationVideoError extends Error {
-  constructor(readonly code: "UNREADABLE_VIDEO" | "UNSUPPORTED_CODEC" | "VIDEO_TOO_LONG" | "TIMEOUT") {
+  constructor(readonly code: "UNREADABLE_VIDEO" | "UNSUPPORTED_CODEC" | "VIDEO_TOO_LONG" | "TIMEOUT" | "ABORTED") {
     super(code);
     this.name = "CreationVideoError";
   }
 }
 
-function runFfmpeg(args: string[], timeoutMs: number, acceptNonZero = false) {
+function runFfmpeg(args: string[], timeoutMs: number, acceptNonZero = false, signal?: AbortSignal) {
   return new Promise<string>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new CreationVideoError("ABORTED"));
+      return;
+    }
     let stderr = "";
     let settled = false;
+    let terminationError: CreationVideoError | null = null;
+    let forcedKill: NodeJS.Timeout | null = null;
     const child = spawn(catalogFfmpegPath(), ["-nostdin", "-hide_banner", ...args], {
       shell: false,
       stdio: ["ignore", "ignore", "pipe"],
       env: { ...process.env, AV_LOG_FORCE_NOCOLOR: "1" },
     });
-    const timeout = setTimeout(() => {
-      child.kill("SIGKILL");
-      if (!settled) {
-        settled = true;
-        reject(new CreationVideoError("TIMEOUT"));
+    const stop = (error: CreationVideoError, graceful: boolean) => {
+      if (settled || terminationError) return;
+      terminationError = error;
+      child.kill(graceful ? "SIGTERM" : "SIGKILL");
+      if (graceful) {
+        forcedKill = setTimeout(() => child.kill("SIGKILL"), 2_000);
+        forcedKill.unref();
       }
-    }, timeoutMs);
+    };
+    const abort = () => stop(new CreationVideoError("ABORTED"), true);
+    signal?.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(() => stop(new CreationVideoError("TIMEOUT"), false), timeoutMs);
     timeout.unref();
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
@@ -40,16 +51,21 @@ function runFfmpeg(args: string[], timeoutMs: number, acceptNonZero = false) {
     });
     child.once("error", () => {
       clearTimeout(timeout);
+      if (forcedKill) clearTimeout(forcedKill);
+      signal?.removeEventListener("abort", abort);
       if (!settled) {
         settled = true;
-        reject(new CreationVideoError("UNREADABLE_VIDEO"));
+        reject(terminationError ?? new CreationVideoError("UNREADABLE_VIDEO"));
       }
     });
     child.once("close", (code) => {
       clearTimeout(timeout);
+      if (forcedKill) clearTimeout(forcedKill);
+      signal?.removeEventListener("abort", abort);
       if (settled) return;
       settled = true;
-      if (code !== 0 && !acceptNonZero) reject(new CreationVideoError("UNREADABLE_VIDEO"));
+      if (terminationError) reject(terminationError);
+      else if (code !== 0 && !acceptNonZero) reject(new CreationVideoError("UNREADABLE_VIDEO"));
       else resolve(stderr);
     });
   });
@@ -65,8 +81,9 @@ function parsedDuration(stderr: string) {
 }
 
 export function parseCreationVideoInspection(stderr: string) {
-  const videoLine = stderr.split("\n").find((line) => /Video:\s/.test(line));
-  if (!videoLine || !/Video:\s*h264\b/i.test(videoLine)) throw new CreationVideoError("UNSUPPORTED_CODEC");
+  const videoLines = stderr.split("\n").filter((line) => /Video:\s/.test(line));
+  if (videoLines.length !== 1 || !/Video:\s*h264\b/i.test(videoLines[0]!)) throw new CreationVideoError("UNSUPPORTED_CODEC");
+  const videoLine = videoLines[0]!;
   const dimensions = videoLine.match(/\b(\d{2,5})x(\d{2,5})(?:\s|,|\[)/);
   if (!dimensions) throw new CreationVideoError("UNREADABLE_VIDEO");
   let width = Number(dimensions[1]);
@@ -95,8 +112,8 @@ function assertMp4Container(stderr: string) {
   }
 }
 
-export async function validateCreationVideo(sourcePath: string) {
-  const inspection = await runFfmpeg(["-i", sourcePath], 30_000, true);
+export async function validateCreationVideo(sourcePath: string, options: { signal?: AbortSignal } = {}) {
+  const inspection = await runFfmpeg(["-i", sourcePath], 30_000, true, options.signal);
   assertMp4Container(inspection);
   const metadata = parseCreationVideoInspection(inspection);
   const validationTimeoutMs = Math.min(
@@ -106,6 +123,7 @@ export async function validateCreationVideo(sourcePath: string) {
   await runFfmpeg([
     "-v", "error",
     "-xerror",
+    "-threads", "2",
     "-i", sourcePath,
     "-map", "0:v:0",
     "-map", "0:a?",
@@ -113,6 +131,6 @@ export async function validateCreationVideo(sourcePath: string) {
     "-dn",
     "-f", "null",
     "-",
-  ], validationTimeoutMs);
+  ], validationTimeoutMs, false, options.signal);
   return metadata;
 }

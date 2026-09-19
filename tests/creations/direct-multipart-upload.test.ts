@@ -11,6 +11,8 @@ import {
   type MultipartProgress,
   type MultipartStatusResponse,
 } from "@/lib/creations/direct-multipart-upload";
+import { CREATION_DIRECT_UPLOAD_PART_SIZE_BYTES } from "@/lib/creations/direct-upload-contract";
+import { CREATION_VIDEO_MAXIMUM_BYTES } from "@/lib/creations/media-contract";
 
 const sessionToken = "10000000-0000-4000-8000-000000000001.abcdefghijklmnopqrstuvwxyzABCDEFGH123456789";
 const expiresAt = new Date(Date.now() + 60_000).toISOString();
@@ -31,9 +33,13 @@ test("client multipart plan has exact non-overlapping slices", () => {
     { partNumber: 3, start: 20, end: 25, sizeBytes: 5 },
   ]);
   assert.throws(() => multipartPartPlan(25, 10, 2), DirectMultipartUploadError);
+  assert.equal(
+    multipartPartPlan(CREATION_VIDEO_MAXIMUM_BYTES, CREATION_DIRECT_UPLOAD_PART_SIZE_BYTES, 25).length,
+    25,
+  );
 });
 
-test("client bounds concurrency, retries only a failed part and reports monotone real progress", async () => {
+test("client bounds concurrency, retries only a failed part and separates confirmed from in-flight bytes", async () => {
   const file = new File([Buffer.alloc(25)], "test.mp4", { type: "video/mp4", lastModified: 1 });
   const attempts = new Map<number, number>();
   let active = 0;
@@ -69,7 +75,16 @@ test("client bounds concurrency, retries only a failed part and reports monotone
   assert.deepEqual(Object.fromEntries(attempts), { 1: 1, 2: 2, 3: 1 });
   assert.equal(statusCalls, 1);
   assert.ok(observed.some((item) => item.phase === "retrying"));
-  for (let index = 1; index < observed.length; index += 1) assert.ok(observed[index]!.uploadedBytes >= observed[index - 1]!.uploadedBytes);
+  for (const item of observed) {
+    assert.equal(item.uploadedBytes, item.confirmedBytes + item.inFlightBytes);
+    assert.ok(item.uploadedBytes <= item.totalBytes);
+  }
+  const retry = observed.find((item) => item.phase === "retrying" && item.retryCount === 1);
+  assert.ok(retry);
+  assert.ok(retry.inFlightBytes < retry.totalBytes - retry.confirmedBytes);
+  for (let index = 1; index < observed.length; index += 1) {
+    assert.ok(observed[index]!.confirmedBytes >= observed[index - 1]!.confirmedBytes);
+  }
 });
 
 test("resume trusts the provider part list and does not resend completed parts", async () => {
@@ -110,10 +125,16 @@ test("Admin exposes real upload phases, cancellation, resume and 48px mobile con
     readFile(new URL("../../components/admin-creation-media-manager.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../app/admin/admin.css", import.meta.url), "utf8"),
   ]);
-  for (const label of ["Envoi direct vers le stockage", "Finalisation", "Validation intégrale", "Annuler l’envoi", "Reprendre la session"]) {
+  for (const label of ["Préparation", "Envoi direct vers le stockage", "Finalisation", "Validation intégrale", "Analyse en cours", "Prêt", "Annuler l’envoi", "Reprendre la session"]) {
     assert.match(component, new RegExp(label));
   }
-  assert.match(component, /<progress max=\{100\} value=\{directProgress\.percent\}/);
+  assert.match(component, /<progress max=\{100\} value=\{progress\.percent\}/);
+  assert.match(component, /<progress max=\{100\} aria-label="Analyse de la vidéo en cours"/);
+  assert.match(component, /parties confirmées/);
+  assert.match(component, /confirmés ·/);
+  assert.match(component, /en cours ·/);
+  assert.match(component, /formatBytes\(CREATION_VIDEO_MAXIMUM_BYTES\)/);
+  assert.match(component, /Mio/);
   assert.match(css, /\.admin-creation-upload button \{ min-height: 48px/);
   assert.match(css, /@media \(max-width: 480px\)[\s\S]*\.admin-creation-upload button \{ width: 100%/);
 });

@@ -67,6 +67,17 @@ test("non-H.264 video and non-AAC audio fail closed", () => {
   }
 });
 
+test("additional video tracks are rejected while every AAC audio track remains in scope", () => {
+  assert.throws(
+    () => parseCreationVideoInspection(`${inspection()}\n  Stream #0:2: Video: h264 (High), yuv420p, 640x360 [SAR 1:1 DAR 16:9], 25 fps`),
+    (error: unknown) => error instanceof CreationVideoError && error.code === "UNSUPPORTED_CODEC",
+  );
+  assert.equal(
+    parseCreationVideoInspection(`${inspection()}\n  Stream #0:2: Audio: aac (LC), 48000 Hz, stereo, fltp`).hasAudio,
+    true,
+  );
+});
+
 test("the 20-minute limit is inclusive and longer media is refused", () => {
   assert.equal(parseCreationVideoInspection(inspection({ duration: "00:20:00.000" })).durationMs, 1_200_000);
   assert.throws(
@@ -101,6 +112,14 @@ test("complete validation rejects corruption after the former 30-second window",
     const metadata = await validateCreationVideo(validPath);
     assert.equal(metadata.hasAudio, true);
     assert.ok(metadata.durationMs >= 41_900 && metadata.durationMs <= 42_100);
+
+    const controller = new AbortController();
+    const interrupted = validateCreationVideo(validPath, { signal: controller.signal });
+    controller.abort();
+    await assert.rejects(
+      interrupted,
+      (error: unknown) => error instanceof CreationVideoError && error.code === "ABORTED",
+    );
 
     await copyFile(validPath, corruptPath);
     await truncate(corruptPath, Math.floor((await stat(corruptPath)).size * 0.9));

@@ -17,6 +17,7 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 type Transaction = Prisma.TransactionClient;
 type CleanupCandidate = CreationMediaReference & { id: string };
+type CreationMediaActivationLease = { uploadSessionId: string; leaseToken: string };
 
 const ROLE_CONFIGURATION = {
   COVER: { directory: "cover", extension: "webp", type: "COVER", mimeType: "image/webp" },
@@ -210,7 +211,36 @@ function assertUploadContract(upload: CreationMediaUpload) {
   }
 }
 
-export async function replaceAdminCreationMedia(upload: CreationMediaUpload & { activationAssetId?: string }) {
+async function assertActivationLease(
+  transaction: Transaction,
+  lease: CreationMediaActivationLease | undefined,
+) {
+  if (!lease) return;
+  const rows = await transaction.$queryRaw<Array<{
+    status: string;
+    leaseToken: string | null;
+    leaseExpiresAt: Date | null;
+  }>>`SELECT "status", "leaseToken", "leaseExpiresAt"
+      FROM "creation_media_upload_sessions"
+      WHERE "id" = ${lease.uploadSessionId}::uuid
+      FOR UPDATE`;
+  const current = rows[0];
+  if (
+    current?.status !== "VALIDATING"
+    || current.leaseToken !== lease.leaseToken
+    || !current.leaseExpiresAt
+    || current.leaseExpiresAt.getTime() <= Date.now()
+  ) {
+    throw new CreationMediaError("CONFLICT", "Le bail de validation du média n’est plus actif.");
+  }
+}
+
+export async function replaceAdminCreationMedia(
+  upload: CreationMediaUpload & {
+    activationAssetId?: string;
+    activationLease?: CreationMediaActivationLease;
+  },
+) {
   assertDatabaseConfigured();
   const creationId = parseIdentity(upload.creationId);
   const slug = parseSlug(upload.slug);
@@ -305,6 +335,7 @@ export async function replaceAdminCreationMedia(upload: CreationMediaUpload & { 
       const state = await lockedCreationMediaState(transaction, creationId, upload.role);
       if (state.creation.slug !== slug) throw new CreationMediaError("INVALID_IDENTITY");
       assertExpectedState(state, expectedLockVersion, expectedAssetId);
+      await assertActivationLease(transaction, upload.activationLease);
       if (state.current) {
         obsoleteReference = {
           id: state.current.id,
