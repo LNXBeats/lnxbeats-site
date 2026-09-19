@@ -338,3 +338,37 @@ Résultats externes restant obligatoires : `CONTROLLED R2 CONFIGURATION REQUIRED
 Prochaine décision maximale :
 
 `AUTHORIZE V3.3 CORRECTIVE FEATURE BRANCH PUSH`
+
+## 14. V3.4 — ingest vidéo normalisé et collaborateurs
+
+### Pipeline vidéo
+
+- Entrées fermées : `.mp4` (`video/mp4`), `.mov` (`video/quicktime` ou `video/mp4`), `.m4v` (`video/x-m4v` ou `video/mp4`) et `.webm` (`video/webm`). Le serveur vérifie l'accord extension/MIME avant toute session multipart.
+- Codecs source acceptés après inspection FFmpeg : H.264, HEVC, VP8 ou VP9, avec zéro ou une piste AAC, MP3, Opus ou Vorbis. Une seule piste vidéo est autorisée; sous-titres, données, pièces jointes et pistes supplémentaires sont refusés.
+- Plafonds centralisés et autoritaires : 500 Mio source, 20 minutes, 4096 px par axe, 4096×4096 pixels et 120 fps. La sortie normalisée est elle aussi bornée à 500 Mio.
+- Le navigateur envoie toujours directement vers le bucket R2 privé/quarantaine en parts de 8 Mio avec trois envois concurrents au maximum. Railway Web ne reçoit jamais le corps vidéo lourd.
+- Le worker passe explicitement par `ANALYZING`, `TRANSCODING` si nécessaire, puis `VALIDATING`. Une source déjà H.264/AAC est remuxée; toute autre combinaison acceptée est normalisée en MP4 progressif H.264 High/yuv420p + AAC 192 kbit/s, CRF 22, preset `fast`, `+faststart`, maximum 1920 px sans upscale et deux threads encodeur.
+- La validation finale décode intégralement vidéo et audio avec `-xerror`. La source de quarantaine n'est supprimée qu'après remplacement atomique de l'Asset; l'ancien Asset reste actif en cas d'échec. Les fichiers temporaires vivent dans un répertoire aléatoire en mode privé et sont supprimés en `finally`.
+- La migration V3.4 élargit les deux contraintes `CHECK` historiques taille/MIME. PostgreSQL ne sachant pas modifier une expression `CHECK` en place, elle remplace uniquement ces contraintes nommées sans supprimer colonne, table, type ni donnée.
+
+### Mesure locale représentative
+
+Fixture synthétique non versionnée : MOV H.264/MP3, 1920×1080, 30 fps, 80 s, 341 676 779 octets (325,85 Mio). Avec deux threads encodeur : inspection 11 ms, normalisation 22,78 s, décodage intégral 3,34 s, total 26,13 s; pic arbre Node+FFmpeg observé 467 648 Kio et pic processus 261 % CPU. La sortie H.264/AAC validée pèse 69 079 065 octets, soit une réduction de 79,8 %. Cette mesure locale justifie le maintien de la cible 500 Mio, mais ne remplace pas la preuve R2/Railway réelle exigée en Preview.
+
+### Collaborateurs et liens officiels
+
+- `CreationCollaborator` est propre à une création : nom obligatoire, rôle libre facultatif, position et relation 0..N.
+- `CreationCollaboratorLink` autorise plusieurs liens ordonnés par personne. Les plateformes reconnues sont YouTube, Instagram, TikTok, Spotify, Apple Music et Deezer, avec Site web et Autre comme extensions HTTPS.
+- Les URLs sont normalisées et refusent protocole actif, HTTP, credentials et hostname incohérent pour une plateforme connue. Une contrainte DB HTTPS complète la validation applicative; l'unicité personne+URL bloque le doublon exact.
+- L'Admin propose des cartes empilées responsives pour ajout, édition, ordre et suppression. La suppression est création-scoped et efface explicitement uniquement les liens locaux avant le collaborateur; aucune entité artiste globale n'existe.
+- La fiche publique n'affiche la section qu'en présence de collaborateurs. Les liens sont des ancres externes directes avec `target="_blank"`, `rel="noopener noreferrer"` et libellé accessible; aucun `dangerouslySetInnerHTML` et aucune URL collaborateur n'est attribuée à `sameAs` de LNX Beats.
+
+### Validation migration locale
+
+- Base PostgreSQL 17 vierge : 37/37 migrations appliquées par `prisma migrate deploy`, schéma à jour.
+- Upgrade simulé : 34 migrations `origin/main`, puis fondation V3.3, pipeline direct V3.3 et migration V3.4. La création, l'Asset, la relation média, le crédit historique et la session d'upload préexistants sont restés identiques.
+- Le plafond DB accepte exactement 524 288 000 octets et refuse la valeur suivante. Les FKs collaborateurs/liens restent `RESTRICT`; aucun artefact `publication_license_contract_v4` n'est introduit.
+
+### Gates restant propres à la Preview
+
+La preuve finale doit encore utiliser les buckets R2 Preview existants et le worker Railway Preview sur le même SHA : upload réel de chaque format, fichier réellement supérieur à 315 Mo, états Admin, remplacement atomique, Range/seek, renouvellement d'URL signée et lecture Safari macOS. L'iPhone physique demeure une recette humaine et ne peut pas être remplacé par une simulation WebKit.

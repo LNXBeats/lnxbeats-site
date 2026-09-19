@@ -22,6 +22,22 @@ export type PublicCreationLink = Readonly<{
   position: number;
 }>;
 
+export type PublicCreationCollaboratorLink = Readonly<{
+  id: string;
+  platform: string;
+  label: string | null;
+  url: string;
+  position: number;
+}>;
+
+export type PublicCreationCollaborator = Readonly<{
+  id: string;
+  displayName: string;
+  role: string | null;
+  position: number;
+  links: readonly PublicCreationCollaboratorLink[];
+}>;
+
 export type PublicCreation = Readonly<{
   slug: string;
   title: string;
@@ -39,7 +55,14 @@ export type PublicCreation = Readonly<{
   audio: PublicCreationAsset | null;
   video: PublicCreationAsset | null;
   links: readonly PublicCreationLink[];
+  collaborators?: readonly PublicCreationCollaborator[];
 }>;
+
+export function creationCollaboratorNames(creation: Pick<PublicCreation, "collaborator" | "collaborators">) {
+  const structured = (creation.collaborators ?? []).map(({ displayName }) => displayName.trim()).filter(Boolean);
+  if (structured.length) return structured;
+  return creation.collaborator?.trim() ? [creation.collaborator.trim()] : [];
+}
 
 export function creationArtwork(creation: PublicCreation) {
   return creation.cover ?? creation.poster;

@@ -7,7 +7,7 @@ import {
   type CreationDirectUploadInitInput,
   type CreationDirectUploadStatus,
 } from "@/lib/creations/direct-upload-contract";
-import { CREATION_VIDEO_MAXIMUM_BYTES } from "@/lib/creations/media-contract";
+import { CREATION_VIDEO_MAXIMUM_BYTES, creationVideoInputFormat, type CreationVideoInputMimeType } from "@/lib/creations/media-contract";
 import { parseCreationIdentity, parseCreationLockVersion, parseCreationSlug } from "@/lib/creations/validation";
 import { sanitizeOriginalFilename } from "@/lib/orders/domain";
 
@@ -61,11 +61,12 @@ export function parseCreationDirectUploadInit(value: unknown): CreationDirectUpl
     throw new CreationDirectUploadError("INVALID_REQUEST");
   }
   if (input.role !== "VIDEO" || input.rightsConfirmed !== true) throw new CreationDirectUploadError("INVALID_REQUEST");
-  if (input.mimeType !== "video/mp4" || typeof input.filename !== "string") {
+  if (typeof input.mimeType !== "string" || typeof input.filename !== "string") {
     throw new CreationDirectUploadError("UNSUPPORTED_FORMAT");
   }
   const filename = sanitizeOriginalFilename(input.filename);
-  if (path.extname(filename).toLowerCase() !== ".mp4") throw new CreationDirectUploadError("UNSUPPORTED_FORMAT");
+  const format = creationVideoInputFormat(filename, input.mimeType);
+  if (!format || path.extname(filename).toLowerCase() !== `.${format.extension}`) throw new CreationDirectUploadError("UNSUPPORTED_FORMAT");
   if (!Number.isSafeInteger(input.sizeBytes) || Number(input.sizeBytes) <= 0) {
     throw new CreationDirectUploadError("INVALID_REQUEST");
   }
@@ -73,7 +74,7 @@ export function parseCreationDirectUploadInit(value: unknown): CreationDirectUpl
   if (sizeBytes > CREATION_VIDEO_MAXIMUM_BYTES) throw new CreationDirectUploadError("FILE_TOO_LARGE");
   return {
     creationId, slug, expectedLockVersion, expectedAssetId, rightsConfirmed: true,
-    alt: optionalAlt(input.alt), role: "VIDEO", filename, mimeType: "video/mp4", sizeBytes,
+    alt: optionalAlt(input.alt), role: "VIDEO", filename, mimeType: input.mimeType as CreationVideoInputMimeType, sizeBytes,
   };
 }
 
@@ -118,7 +119,10 @@ export function directUploadExpiry(now = new Date()) {
 
 export function directUploadState(status: CreationDirectUploadStatus, errorCode: string | null) {
   if (status === "UPLOADING") return "media-upload";
-  if (status === "QUARANTINE" || status === "VALIDATING") return "media-validation";
+  if (status === "QUARANTINE") return "media-quarantaine";
+  if (status === "ANALYZING") return "media-analyse";
+  if (status === "TRANSCODING") return "media-conversion";
+  if (status === "VALIDATING") return "media-validation";
   if (status === "READY") return "media-enregistre";
   if (status === "ABORTED") return "media-annule";
   if (status === "EXPIRED") return "media-expire";

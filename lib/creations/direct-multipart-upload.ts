@@ -4,12 +4,13 @@ import {
   CREATION_DIRECT_UPLOAD_CONCURRENCY,
   CREATION_DIRECT_UPLOAD_POLL_SECONDS,
 } from "@/lib/creations/direct-upload-contract";
+import type { CreationVideoInputMimeType } from "@/lib/creations/media-contract";
 
 export const CREATION_VIDEO_UPLOAD_MAX_ATTEMPTS = 3;
 const ROOT = "/api/admin/creations/media/multipart";
 const STORAGE_PREFIX = "lnx:creation-video-upload:v1";
 
-export type MultipartStatus = "UPLOADING" | "QUARANTINE" | "VALIDATING" | "READY" | "REJECTED" | "ABORTED" | "EXPIRED";
+export type MultipartStatus = "UPLOADING" | "QUARANTINE" | "ANALYZING" | "TRANSCODING" | "VALIDATING" | "READY" | "REJECTED" | "ABORTED" | "EXPIRED";
 export type MultipartPart = { partNumber: number; etag: string; sizeBytes: number };
 export type MultipartSession = {
   sessionToken: string;
@@ -28,7 +29,7 @@ export type MultipartStatusResponse = MultipartSession & {
   location?: string | null;
   retryAfterMs?: number;
 };
-export type UploadPhase = "initializing" | "uploading" | "retrying" | "paused" | "finalizing" | "validating" | "ready" | "cancelled" | "error";
+export type UploadPhase = "initializing" | "uploading" | "retrying" | "paused" | "finalizing" | "analyzing" | "transcoding" | "validating" | "ready" | "cancelled" | "error";
 export type MultipartProgress = {
   phase: UploadPhase;
   uploadedBytes: number;
@@ -49,7 +50,7 @@ export type MultipartInit = {
   alt: string;
   role: "VIDEO";
   filename: string;
-  mimeType: "video/mp4";
+  mimeType: CreationVideoInputMimeType;
   sizeBytes: number;
 };
 export type StoredMultipartSession = {
@@ -59,7 +60,7 @@ export type StoredMultipartSession = {
   role: "VIDEO";
   fileSignature: string;
   filename: string;
-  mimeType: "video/mp4";
+  mimeType: CreationVideoInputMimeType;
   sizeBytes: number;
   lastModified: number;
 };
@@ -133,7 +134,7 @@ export function readStoredMultipartSession(storage: StorageLike, creationId: str
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredMultipartSession>;
     if (
-      parsed.creationId !== creationId || parsed.role !== "VIDEO" || parsed.mimeType !== "video/mp4"
+      parsed.creationId !== creationId || parsed.role !== "VIDEO" || typeof parsed.mimeType !== "string"
       || typeof parsed.sessionToken !== "string" || typeof parsed.expiresAt !== "string"
       || typeof parsed.fileSignature !== "string" || typeof parsed.filename !== "string"
       || !Number.isSafeInteger(parsed.sizeBytes) || Number(parsed.sizeBytes) <= 0
@@ -289,7 +290,7 @@ export async function runDirectMultipartVideoUpload(input: {
 
   if (status.status === "UPLOADING") {
     if (!input.file) throw new DirectMultipartUploadError("media-reselection", true);
-    if (input.file.size !== input.init.sizeBytes || input.file.type !== "video/mp4") throw new DirectMultipartUploadError("media-session");
+    if (input.file.size !== input.init.sizeBytes) throw new DirectMultipartUploadError("media-session");
     const plan = multipartPartPlan(input.file.size, status.partSizeBytes, status.partCount);
     const completed = new Map(status.completedParts.map((part) => [part.partNumber, part]));
     const progress = new Map(plan.map((part) => [part.partNumber, completed.has(part.partNumber) ? part.sizeBytes : 0]));
@@ -346,8 +347,11 @@ export async function runDirectMultipartVideoUpload(input: {
     );
   }
 
-  while (status.status === "QUARANTINE" || status.status === "VALIDATING") {
-    emit("validating", input.init.sizeBytes, 0, status.partCount, status.partCount);
+  while (["QUARANTINE", "ANALYZING", "TRANSCODING", "VALIDATING"].includes(status.status)) {
+    const phase: UploadPhase = status.status === "ANALYZING" ? "analyzing"
+      : status.status === "TRANSCODING" ? "transcoding"
+        : "validating";
+    emit(phase, input.init.sizeBytes, 0, status.partCount, status.partCount);
     await dependencies.waitUntilVisible(input.signal);
     await dependencies.wait(status.retryAfterMs ?? CREATION_DIRECT_UPLOAD_POLL_SECONDS * 1_000, input.signal);
     status = await dependencies.status(status.sessionToken, input.signal);

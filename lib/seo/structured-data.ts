@@ -87,6 +87,7 @@ export type StructuredCreation = Readonly<{
   image?: string | null;
   publishedAt?: Date | string | null;
   collaborator?: string | null;
+  collaborators?: readonly Readonly<{ displayName: string; role?: string | null }>[];
   category?: string | null;
   video?: StructuredCreationVideo | null;
 }>;
@@ -111,6 +112,10 @@ export function buildCreationStructuredData(creation: StructuredCreation) {
     : null;
   const hasStructuredVideo = Boolean(videoContentUrl && videoThumbnailUrl && videoUploadDate);
   const videoId = `${url}#video`;
+  const contributorNames = (creation.collaborators ?? [])
+    .map(({ displayName }) => displayName.trim())
+    .filter(Boolean);
+  if (!contributorNames.length && creation.collaborator?.trim()) contributorNames.push(creation.collaborator.trim());
   const creativeWork = {
     "@type": "CreativeWork",
     "@id": `${url}#creation`,
@@ -121,7 +126,7 @@ export function buildCreationStructuredData(creation: StructuredCreation) {
     creator: { "@id": LNX_ARTIST_ID },
     ...(image ? { image } : {}),
     ...(publishedAt ? { datePublished: publishedAt } : {}),
-    ...(creation.collaborator?.trim() ? { contributor: creation.collaborator.trim() } : {}),
+    ...(contributorNames.length ? { contributor: contributorNames.map((name) => ({ "@type": "Person", name })) } : {}),
     ...(creation.category?.trim() ? { genre: creation.category.trim() } : {}),
     ...(hasStructuredVideo ? { associatedMedia: { "@id": videoId } } : {}),
   };

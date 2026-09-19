@@ -12,6 +12,10 @@ const correctiveMigrationUrl = new URL(
   "../../prisma/migrations/20260913220000_creation_direct_upload_pipeline/migration.sql",
   import.meta.url,
 );
+const v34MigrationUrl = new URL(
+  "../../prisma/migrations/20260919120000_creation_video_ingest_collaborators/migration.sql",
+  import.meta.url,
+);
 
 test("V3.3 migration is additive and contains no Rights V4 payload", async () => {
   const [sql, migrationDirectories] = await Promise.all([
@@ -72,6 +76,91 @@ test("corrective direct-upload migration upgrades the reviewed V3.3 foundation",
     assert.deepEqual(result.rows, [{ status: "UPLOADING", size: "25" }]);
     await assert.rejects(database.exec(`UPDATE "creation_media_upload_sessions" SET "declaredSizeBytes" = 0;`), /size_valid/);
     await assert.rejects(database.exec(`UPDATE "creation_media_upload_sessions" SET "role" = 'AUDIO';`), /video_only/);
+  } finally {
+    await database.close();
+  }
+});
+
+test("V3.4 upgrades the V3.3 schema, accepts 500 MiB sources and enforces collaborator ownership", async () => {
+  const [foundation, directUpload, v34] = await Promise.all([
+    readFile(migrationUrl, "utf8"),
+    readFile(correctiveMigrationUrl, "utf8"),
+    readFile(v34MigrationUrl, "utf8"),
+  ]);
+  const database = new PGlite();
+  try {
+    await database.exec('CREATE TABLE "assets" ("id" UUID NOT NULL, CONSTRAINT "assets_pkey" PRIMARY KEY ("id"));');
+    await database.exec('CREATE TABLE "users" ("id" UUID NOT NULL, CONSTRAINT "users_pkey" PRIMARY KEY ("id"));');
+    await database.exec(foundation);
+    await database.exec(directUpload);
+    await database.exec(`
+      INSERT INTO "users" ("id") VALUES ('30000000-0000-4000-8000-000000000001');
+      INSERT INTO "creations" ("id", "slug", "title", "status", "lockVersion", "updatedAt") VALUES
+        ('10000000-0000-4000-8000-000000000001', 'video-v34', 'Vidéo V3.4', 'DRAFT', 1, CURRENT_TIMESTAMP),
+        ('10000000-0000-4000-8000-000000000002', 'legacy-v33', 'Vidéo V3.3 conservée', 'DRAFT', 1, CURRENT_TIMESTAMP);
+      INSERT INTO "creation_media_upload_sessions" (
+        "id", "tokenHash", "creationId", "creationSlug", "actorUserId", "role", "expectedLockVersion",
+        "rightsConfirmed", "originalFilename", "declaredMimeType", "declaredSizeBytes", "quarantineKey",
+        "provider", "providerUploadId", "partSizeBytes", "partCount", "expiresAt", "updatedAt"
+      ) VALUES (
+        '40000000-0000-4000-8000-000000000002', '${"a".repeat(64)}',
+        '10000000-0000-4000-8000-000000000002', 'legacy-v33', '30000000-0000-4000-8000-000000000001',
+        'VIDEO', 1, TRUE, 'legacy.mp4', 'video/mp4', 100,
+        'creations/quarantine/legacy-v33/upload/source.mp4', 'r2', 'upload-v33', 8388608, 1,
+        CURRENT_TIMESTAMP + interval '1 hour', CURRENT_TIMESTAMP
+      );
+    `);
+    await database.exec(v34);
+    await database.exec(`
+      INSERT INTO "creation_media_upload_sessions" (
+        "id", "tokenHash", "creationId", "creationSlug", "actorUserId", "role", "expectedLockVersion",
+        "rightsConfirmed", "originalFilename", "declaredMimeType", "declaredSizeBytes", "quarantineKey",
+        "provider", "providerUploadId", "partSizeBytes", "partCount", "expiresAt", "updatedAt"
+      ) VALUES (
+        '40000000-0000-4000-8000-000000000001', '${"b".repeat(64)}',
+        '10000000-0000-4000-8000-000000000001', 'video-v34', '30000000-0000-4000-8000-000000000001',
+        'VIDEO', 1, TRUE, 'source.mov', 'video/quicktime', 524288000,
+        'creations/quarantine/video-v34/upload/source.mov', 'r2', 'upload-v34', 8388608, 63,
+        CURRENT_TIMESTAMP + interval '1 hour', CURRENT_TIMESTAMP
+      );
+      INSERT INTO "creation_collaborators" (
+        "id", "creationId", "displayName", "role", "position", "updatedAt"
+      ) VALUES (
+        '50000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+        'Da Lord', 'Artiste invité', 0, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "creation_collaborator_links" (
+        "id", "collaboratorId", "platform", "url", "position", "updatedAt"
+      ) VALUES (
+        '60000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001',
+        'YOUTUBE', 'https://www.youtube.com/@dalord', 0, CURRENT_TIMESTAMP
+      );
+    `);
+    const session = await database.query<{ size: string }>(
+      'SELECT "declaredSizeBytes"::text AS size FROM "creation_media_upload_sessions" ORDER BY "declaredSizeBytes"',
+    );
+    assert.deepEqual(session.rows, [{ size: "100" }, { size: "524288000" }]);
+    await assert.rejects(
+      database.exec('UPDATE "creation_media_upload_sessions" SET "declaredSizeBytes" = 524288001;'),
+      /size_valid/,
+    );
+    await assert.rejects(
+      database.exec('DELETE FROM "creation_collaborators" WHERE "id" = \'50000000-0000-4000-8000-000000000001\';'),
+      /creation_collaborator_links_collaboratorId_fkey/,
+    );
+    await assert.rejects(
+      database.exec('DELETE FROM "creations" WHERE "id" = \'10000000-0000-4000-8000-000000000001\';'),
+      /creation_collaborators_creationId_fkey|creation_media_upload_sessions_creationId_fkey/,
+    );
+    await assert.rejects(
+      database.exec(`INSERT INTO "creation_collaborator_links" (
+        "id", "collaboratorId", "platform", "url", "position", "updatedAt"
+      ) VALUES (
+        '60000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000001',
+        'WEBSITE', 'http://unsafe.example', 1, CURRENT_TIMESTAMP
+      );`),
+      /creation_collaborator_links_url_valid/,
+    );
   } finally {
     await database.close();
   }

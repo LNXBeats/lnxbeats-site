@@ -1,8 +1,8 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -10,7 +10,8 @@ import { pipeline } from "node:stream/promises";
 
 import type { CreationMediaUploadSession } from "@/generated/prisma/client";
 import { CreationMediaError, replaceAdminCreationMedia } from "@/lib/creations/media-service";
-import { CreationVideoError, validateCreationVideo } from "@/lib/creations/video";
+import { CREATION_VIDEO_MAXIMUM_BYTES } from "@/lib/creations/media-contract";
+import { CreationVideoError, inspectCreationVideoSource, normalizeCreationVideo, validateCreationVideo } from "@/lib/creations/video";
 import { activeMediaStorage } from "@/lib/media/storage/config";
 import { MediaStorageError, type MediaStorage } from "@/lib/media/storage/types";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -21,6 +22,7 @@ const MAXIMUM_VALIDATION_FAILURES = 3;
 const RETRY_BASE_MS = 30_000;
 
 type ClaimedSession = CreationMediaUploadSession & { leaseToken: string };
+const ACTIVE_WORKER_STATUSES = ["ANALYZING", "TRANSCODING", "VALIDATING"] as const;
 
 function quarantineInput(session: Pick<CreationMediaUploadSession, "quarantineKey">) {
   return { scope: "private" as const, key: session.quarantineKey };
@@ -43,7 +45,7 @@ async function claimValidationSession(now = new Date()): Promise<ClaimedSession 
       where: {
         attempts: { lt: MAXIMUM_VALIDATION_FAILURES },
         availableAt: { lte: now },
-        OR: [{ status: "QUARANTINE" }, { status: "VALIDATING", leaseExpiresAt: { lte: now } }],
+        OR: [{ status: "QUARANTINE" }, { status: { in: [...ACTIVE_WORKER_STATUSES] }, leaseExpiresAt: { lte: now } }],
       },
       orderBy: [{ availableAt: "asc" }, { createdAt: "asc" }],
     });
@@ -54,10 +56,10 @@ async function claimValidationSession(now = new Date()): Promise<ClaimedSession 
         id: candidate.id,
         attempts: { lt: MAXIMUM_VALIDATION_FAILURES },
         availableAt: { lte: now },
-        OR: [{ status: "QUARANTINE" }, { status: "VALIDATING", leaseExpiresAt: { lte: now } }],
+        OR: [{ status: "QUARANTINE" }, { status: { in: [...ACTIVE_WORKER_STATUSES] }, leaseExpiresAt: { lte: now } }],
       },
       data: {
-        status: "VALIDATING",
+        status: "ANALYZING",
         leaseToken,
         leaseExpiresAt: new Date(now.getTime() + VALIDATION_LEASE_MS),
         validationStartedAt: candidate.validationStartedAt ?? now,
@@ -77,8 +79,8 @@ async function ownsLease(session: ClaimedSession) {
     where: { id: session.id },
     select: { status: true, leaseToken: true, leaseExpiresAt: true },
   });
-  return current?.status === "VALIDATING"
-    && current.leaseToken === session.leaseToken
+  if (!current || !ACTIVE_WORKER_STATUSES.includes(current.status as typeof ACTIVE_WORKER_STATUSES[number])) return false;
+  return current.leaseToken === session.leaseToken
     && Boolean(current.leaseExpiresAt && current.leaseExpiresAt.getTime() > Date.now());
 }
 
@@ -89,7 +91,7 @@ function startLeaseHeartbeat(session: ClaimedSession) {
     if (stopped) return;
     try {
       await prisma.creationMediaUploadSession.updateMany({
-        where: { id: session.id, status: "VALIDATING", leaseToken: session.leaseToken },
+        where: { id: session.id, status: { in: [...ACTIVE_WORKER_STATUSES] }, leaseToken: session.leaseToken },
         data: { leaseExpiresAt: new Date(Date.now() + VALIDATION_LEASE_MS) },
       });
     } catch {
@@ -111,7 +113,7 @@ function startLeaseHeartbeat(session: ClaimedSession) {
 }
 
 type QuarantineDownloadSession = Pick<CreationMediaUploadSession,
-  "id" | "creationId" | "provider" | "quarantineKey" | "declaredSizeBytes"
+  "id" | "creationId" | "provider" | "quarantineKey" | "declaredSizeBytes" | "declaredMimeType"
 >;
 
 export async function downloadCreationVideoToTemporary(
@@ -122,14 +124,15 @@ export async function downloadCreationVideoToTemporary(
   const metadata = await storage.head(quarantineInput(session));
   if (
     metadata.contentLength !== Number(session.declaredSizeBytes)
-    || metadata.contentType !== "video/mp4"
+    || metadata.contentType !== session.declaredMimeType
     || metadata.customMetadata?.["lnx-session-id"] !== session.id
     || metadata.customMetadata?.["lnx-creation-id"] !== session.creationId
     || metadata.customMetadata?.["lnx-declared-size"] !== String(session.declaredSizeBytes)
   ) throw new MediaStorageError("INTEGRITY", "Quarantine metadata does not match the upload session.");
 
   const directory = await mkdtemp(path.join(options.temporaryRoot ?? os.tmpdir(), "lnx-creation-validation-"));
-  const target = path.join(directory, `${randomUUID()}.mp4`);
+  const extension = path.extname(session.quarantineKey).toLowerCase();
+  const target = path.join(directory, `${randomUUID()}${extension || ".source"}`);
   const object = await storage.get(quarantineInput(session));
   if (object.contentLength !== Number(session.declaredSizeBytes)) {
     await rm(directory, { recursive: true, force: true });
@@ -159,6 +162,20 @@ export async function downloadCreationVideoToTemporary(
   }
 }
 
+async function checksumFile(filename: string) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(filename)) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
+async function setWorkerPhase(session: ClaimedSession, status: "ANALYZING" | "TRANSCODING" | "VALIDATING") {
+  const updated = await prisma.creationMediaUploadSession.updateMany({
+    where: { id: session.id, status: { in: [...ACTIVE_WORKER_STATUSES] }, leaseToken: session.leaseToken },
+    data: { status },
+  });
+  if (updated.count !== 1) throw new CreationVideoError("ABORTED");
+}
+
 function terminalErrorCode(error: unknown) {
   if (error instanceof CreationVideoError) return error.code === "ABORTED" ? null : "VALIDATION_FAILED";
   if (error instanceof CreationMediaError) return error.code === "CONFLICT" ? "MEDIA_CONFLICT" : "STORAGE_INTEGRITY";
@@ -184,7 +201,7 @@ async function markFailure(session: ClaimedSession, error: unknown) {
   const failureCount = session.attempts + 1;
   if (!terminalCode && failureCount < MAXIMUM_VALIDATION_FAILURES) {
     const released = await prisma.creationMediaUploadSession.updateMany({
-      where: { id: session.id, status: "VALIDATING", leaseToken: session.leaseToken },
+      where: { id: session.id, status: { in: [...ACTIVE_WORKER_STATUSES] }, leaseToken: session.leaseToken },
       data: {
         status: "QUARANTINE",
         attempts: failureCount,
@@ -198,7 +215,7 @@ async function markFailure(session: ClaimedSession, error: unknown) {
   }
   const baseError = terminalCode ?? "INTERNAL_ERROR";
   const rejected = await prisma.creationMediaUploadSession.updateMany({
-    where: { id: session.id, status: "VALIDATING", leaseToken: session.leaseToken },
+    where: { id: session.id, status: { in: [...ACTIVE_WORKER_STATUSES] }, leaseToken: session.leaseToken },
     data: {
       status: "REJECTED",
       attempts: failureCount,
@@ -242,7 +259,18 @@ export async function processNextCreationVideoValidation(
   let temporary: Awaited<ReturnType<typeof downloadCreationVideoToTemporary>> | null = null;
   try {
     temporary = await downloadCreationVideoToTemporary(session);
-    const video = await validateCreationVideo(temporary.target, { signal: options.signal });
+    await setWorkerPhase(session, "ANALYZING");
+    const source = await inspectCreationVideoSource(temporary.target, { signal: options.signal });
+    await setWorkerPhase(session, source.requiresTranscode ? "TRANSCODING" : "VALIDATING");
+    const normalizedPath = path.join(temporary.directory, `${randomUUID()}.mp4`);
+    await normalizeCreationVideo(temporary.target, normalizedPath, source, { signal: options.signal });
+    await setWorkerPhase(session, "VALIDATING");
+    const video = await validateCreationVideo(normalizedPath, { signal: options.signal });
+    const normalizedSize = (await stat(normalizedPath)).size;
+    if (normalizedSize <= 0 || normalizedSize > CREATION_VIDEO_MAXIMUM_BYTES) {
+      throw new CreationMediaError("STORAGE_INTEGRITY", "La vidéo normalisée dépasse la limite de sécurité.");
+    }
+    const normalizedChecksum = await checksumFile(normalizedPath);
     if (!(await ownsLease(session))) return { processed: true as const, status: "LEASE_LOST" as const, sessionId: session.id };
     const result = await replaceAdminCreationMedia({
       creationId: session.creationId,
@@ -252,15 +280,15 @@ export async function processNextCreationVideoValidation(
       rightsConfirmed: session.rightsConfirmed,
       alt: session.alt,
       role: "VIDEO",
-      path: temporary.target,
+      path: normalizedPath,
       originalFilename: session.originalFilename,
       mimeType: "video/mp4",
       extension: "mp4",
-      sizeBytes: Number(session.declaredSizeBytes),
+      sizeBytes: normalizedSize,
       width: video.width,
       height: video.height,
       durationMs: video.durationMs,
-      checksumSha256: temporary.checksumSha256,
+      checksumSha256: normalizedChecksum,
       cleanup: async () => undefined,
       activationAssetId: session.resultAssetId ?? session.id,
       activationLease: { uploadSessionId: session.id, leaseToken: session.leaseToken },

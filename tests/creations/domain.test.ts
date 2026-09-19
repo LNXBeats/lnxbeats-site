@@ -136,6 +136,8 @@ test("lifecycle operations require distinct explicit confirmations", () => {
     unpublish: "CONFIRM_CREATION_UNPUBLICATION",
     archive: "CONFIRM_CREATION_ARCHIVAL",
     deleteExternalLink: "CONFIRM_CREATION_EXTERNAL_LINK_DELETION",
+    deleteCollaborator: "CONFIRM_CREATION_COLLABORATOR_DELETION",
+    deleteCollaboratorLink: "CONFIRM_CREATION_COLLABORATOR_LINK_DELETION",
   });
-  assert.equal(new Set(Object.values(CREATION_ACTION_CONFIRMATIONS)).size, 4);
+  assert.equal(new Set(Object.values(CREATION_ACTION_CONFIRMATIONS)).size, 6);
 });

@@ -465,6 +465,20 @@
 .creation-detail-content aside ul { display: grid; gap: .45rem; margin: .8rem 0 0; padding: 0; list-style: none; }
 .creation-detail-content aside a { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 1rem; padding: .6rem 0; border-bottom: 1px solid rgba(244, 240, 232, .12); font-size: .78rem; }
 .creation-detail-content aside a span { color: var(--gold-light); }
+.creation-collaborators { display: grid; gap: 1.5rem; margin-top: clamp(3rem, 7vw, 7rem); }
+.creation-collaborators__heading { max-width: 820px; }
+.creation-collaborators__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 1rem; }
+.creation-collaborator { display: grid; align-content: start; gap: 1.25rem; min-width: 0; padding: clamp(1.1rem, 2.3vw, 1.75rem); border: 1px solid rgba(244, 240, 232, .12); border-radius: 16px; background: linear-gradient(145deg, rgba(198, 161, 91, .08), rgba(12, 12, 11, .78)); }
+.creation-collaborator h3 { margin: 0; overflow-wrap: anywhere; font-family: Georgia, serif; font-size: clamp(1.45rem, 2vw, 2rem); font-weight: 400; }
+.creation-collaborator > div > p { margin: .35rem 0 0; color: var(--gold-light); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.creation-collaborator ul { display: flex; flex-wrap: wrap; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.creation-collaborator li { min-width: 0; }
+.creation-collaborator a { display: inline-flex; min-height: 48px; align-items: center; gap: .55rem; max-width: 100%; padding: .65rem .8rem; border: 1px solid rgba(244, 240, 232, .13); border-radius: 10px; color: rgba(244, 240, 232, .8); font-size: .72rem; }
+.creation-collaborator a:is(:hover, :focus-visible) { border-color: var(--gold); color: #fff; }
+.creation-collaborator a > span:nth-child(2) { overflow-wrap: anywhere; }
+.creation-collaborator__icon { display: grid; flex: 0 0 20px; width: 20px; height: 20px; place-items: center; color: var(--gold-light); }
+.creation-collaborator__icon img { width: 20px; height: 20px; object-fit: contain; }
+.creation-collaborator .link-icon { flex: 0 0 auto; }
 .creation-related { display: grid; gap: 1.5rem; margin-top: clamp(3rem, 7vw, 7rem); }
 .creation-related > div:last-child { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; }
 .creation-related a { display: grid; min-height: 150px; align-content: end; gap: .35rem; padding: 1.25rem; border: 1px solid rgba(244, 240, 232, .12); border-radius: 14px; background: linear-gradient(145deg, rgba(198, 161, 91, .08), rgba(12, 12, 11, .78)); }
@@ -507,6 +521,9 @@
   .creation-filters button { width: 100%; min-width: 0; padding-inline: .7rem; }
   .creation-rail > button { min-width: min(250px, 82vw); }
   .creation-catalogue__grid { grid-template-columns: 1fr; }
+  .creation-collaborators__grid { grid-template-columns: 1fr; }
+  .creation-collaborator ul { display: grid; grid-template-columns: 1fr; }
+  .creation-collaborator a { width: 100%; justify-content: space-between; }
   .creations-empty { grid-template-columns: 1fr; justify-items: start; padding: 1.5rem; }
   .creations-empty > span { font-size: 5rem; }
 }

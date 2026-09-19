@@ -73,7 +73,7 @@ export default async function AdminCreationsPage({
             <small>{creation.slug} · {STATUS_LABELS[creation.status]}</small>
           </div>
           <dl>
-            <div><dt>Collaborateur</dt><dd>{creation.collaborator ?? "—"}</dd></div>
+            <div><dt>Collaborateurs</dt><dd>{creation._count.collaborators || (creation.collaborator ? 1 : 0)}</dd></div>
             <div><dt>Catégorie</dt><dd>{creation.category ?? "—"}</dd></div>
             <div><dt>Média principal</dt><dd>{creation.primaryMedia ?? "À définir"}</dd></div>
             <div><dt>Médias</dt><dd>{creation._count.assets}</dd></div>

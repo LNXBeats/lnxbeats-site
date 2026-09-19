@@ -1,4 +1,5 @@
 import type { CreationMediaRole } from "@/lib/creations/media-contract";
+import type { CreationVideoInputMimeType } from "@/lib/creations/media-contract";
 
 export const CREATION_DIRECT_UPLOAD_PART_SIZE_BYTES = 8 * 1024 * 1024;
 export const CREATION_DIRECT_UPLOAD_CONCURRENCY = 2;
@@ -7,7 +8,7 @@ export const CREATION_DIRECT_UPLOAD_PART_URL_TTL_SECONDS = 5 * 60;
 export const CREATION_DIRECT_UPLOAD_POLL_SECONDS = 3;
 
 export const CREATION_DIRECT_UPLOAD_STATUSES = [
-  "UPLOADING", "QUARANTINE", "VALIDATING", "READY", "REJECTED", "ABORTED", "EXPIRED",
+  "UPLOADING", "QUARANTINE", "ANALYZING", "TRANSCODING", "VALIDATING", "READY", "REJECTED", "ABORTED", "EXPIRED",
 ] as const;
 
 export type CreationDirectUploadStatus = typeof CREATION_DIRECT_UPLOAD_STATUSES[number];
@@ -27,7 +28,7 @@ export type CreationDirectUploadInitInput = {
   alt: string | null;
   role: Extract<CreationMediaRole, "VIDEO">;
   filename: string;
-  mimeType: "video/mp4";
+  mimeType: CreationVideoInputMimeType;
   sizeBytes: number;
 };
 

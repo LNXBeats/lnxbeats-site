@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CreationMediaStage } from "@/components/creations/creation-media-stage";
+import { CreationCollaborators } from "@/components/creations/creation-collaborators";
 import { Container } from "@/components/container";
 import { JsonLd } from "@/components/json-ld";
 import { creationArtwork } from "@/lib/creations/types";
@@ -48,6 +49,7 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
     image: artwork?.url,
     publishedAt: creation.publishedAt,
     collaborator: creation.collaborator,
+    collaborators: (creation.collaborators ?? []).map(({ displayName, role }) => ({ displayName, role })),
     category: creation.category,
     video: creation.video ? {
       published: true,
@@ -83,6 +85,8 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
             </aside>
           ) : null}
         </div>
+
+        <CreationCollaborators collaborators={creation.collaborators ?? []} />
 
         {related.length ? (
           <section className="creation-related" aria-labelledby="creation-related-title">

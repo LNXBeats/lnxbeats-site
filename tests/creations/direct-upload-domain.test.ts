@@ -32,9 +32,12 @@ function valid(overrides: Record<string, unknown> = {}) {
 
 test("direct video init is closed, role-bound and fail-closed on size and MIME", () => {
   assert.equal(parseCreationDirectUploadInit(valid()).sizeBytes, 20 * 1024 * 1024);
+  assert.equal(parseCreationDirectUploadInit(valid({ filename: "clip.mov", mimeType: "video/quicktime" })).mimeType, "video/quicktime");
+  assert.equal(parseCreationDirectUploadInit(valid({ filename: "clip.m4v", mimeType: "video/x-m4v" })).mimeType, "video/x-m4v");
+  assert.equal(parseCreationDirectUploadInit(valid({ filename: "clip.webm", mimeType: "video/webm" })).mimeType, "video/webm");
   for (const input of [
-    valid({ role: "AUDIO" }), valid({ mimeType: "video/quicktime" }), valid({ filename: "test.mov" }),
-    valid({ sizeBytes: 0 }), valid({ sizeBytes: -1 }), valid({ sizeBytes: 200 * 1024 * 1024 + 1 }),
+    valid({ role: "AUDIO" }), valid({ mimeType: "video/quicktime" }), valid({ filename: "test.mov", mimeType: "video/webm" }),
+    valid({ sizeBytes: 0 }), valid({ sizeBytes: -1 }), valid({ sizeBytes: 500 * 1024 * 1024 + 1 }),
     valid({ rightsConfirmed: false }), valid({ objectKey: "creations/arbitrary.mp4" }),
   ]) {
     assert.throws(() => parseCreationDirectUploadInit(input), CreationDirectUploadError);

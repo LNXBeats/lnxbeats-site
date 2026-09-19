@@ -7,6 +7,7 @@ import {
   CREATION_IMAGE_MAXIMUM_BYTES,
   CREATION_MEDIA_DELETION_CONFIRMATION,
   CREATION_VIDEO_MAXIMUM_BYTES,
+  creationVideoMimeForFilename,
   type CreationMediaRole,
 } from "@/lib/creations/media-contract";
 import {
@@ -32,7 +33,7 @@ const ROLE_DETAILS: Record<CreationMediaRole, {
   COVER: { label: "Cover", accept: "image/jpeg,image/png,image/webp", hint: `JPEG, PNG ou WebP · ${formatBytes(CREATION_IMAGE_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_IMAGE_MAXIMUM_BYTES },
   VIDEO_POSTER: { label: "Poster vidéo", accept: "image/jpeg,image/png,image/webp", hint: `JPEG, PNG ou WebP · ${formatBytes(CREATION_IMAGE_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_IMAGE_MAXIMUM_BYTES },
   AUDIO: { label: "Audio", accept: "audio/mpeg,.mp3", hint: `MP3 authentique · ${formatBytes(CREATION_AUDIO_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_AUDIO_MAXIMUM_BYTES },
-  VIDEO: { label: "Vidéo", accept: "video/mp4,.mp4", hint: `MP4 H.264/AAC · 20 min et ${formatBytes(CREATION_VIDEO_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_VIDEO_MAXIMUM_BYTES },
+  VIDEO: { label: "Vidéo", accept: "video/mp4,video/quicktime,video/x-m4v,video/webm,.mp4,.mov,.m4v,.webm", hint: `MP4, MOV, M4V ou WebM · 20 min et ${formatBytes(CREATION_VIDEO_MAXIMUM_BYTES)} max.`, maximumBytes: CREATION_VIDEO_MAXIMUM_BYTES },
 };
 
 const feedback: Record<string, string> = {
@@ -56,6 +57,8 @@ const feedback: Record<string, string> = {
   "media-expire": "La session d’envoi a expiré. Relancez un nouvel envoi.",
   "media-annule": "L’envoi a été annulé et la quarantaine est en cours de nettoyage.",
   "media-direct-requis": "Les vidéos doivent utiliser l’envoi direct sécurisé.",
+  "media-analyse": "Analyse du fichier en cours.",
+  "media-conversion": "Conversion de la vidéo pour le web en cours.",
   "media-confirmation": "Confirmez explicitement la suppression du média.",
   "media-erreur": "Impossible de traiter ce média. Réessayez.",
 };
@@ -101,20 +104,23 @@ export function AdminCreationUploadProgress({
   onCancel?: () => void;
 }) {
   const validating = progress.phase === "validating";
+  const analyzing = progress.phase === "analyzing";
+  const transcoding = progress.phase === "transcoding";
+  const processing = validating || analyzing || transcoding;
   return <div className="admin-creation-upload" aria-live="polite">
     <div className="admin-creation-upload__heading">
-      <strong>{progress.phase === "ready" ? "Prêt" : validating ? "Validation intégrale" : progress.phase === "finalizing" ? "Finalisation" : progress.phase === "retrying" ? "Nouvelle tentative" : progress.phase === "initializing" ? "Préparation" : "Envoi direct vers le stockage"}</strong>
-      <span>{validating ? "Analyse en cours" : progress.phase === "ready" ? "Terminé" : `${progress.percent.toLocaleString("fr-FR")} %`}</span>
+      <strong>{progress.phase === "ready" ? "Prêt" : transcoding ? "Conversion vidéo" : analyzing ? "Analyse du fichier" : validating ? "Validation intégrale" : progress.phase === "finalizing" ? "Finalisation" : progress.phase === "retrying" ? "Nouvelle tentative" : progress.phase === "initializing" ? "Préparation" : "Envoi direct vers le stockage"}</strong>
+      <span>{processing ? "Traitement en cours" : progress.phase === "ready" ? "Terminé" : `${progress.percent.toLocaleString("fr-FR")} %`}</span>
     </div>
-    {validating
-      ? <progress max={100} aria-label="Analyse de la vidéo en cours" />
+    {processing
+      ? <progress max={100} aria-label={transcoding ? "Conversion de la vidéo en cours" : analyzing ? "Analyse de la vidéo en cours" : "Validation de la vidéo en cours"} />
       : <progress max={100} value={progress.percent}>{progress.percent} %</progress>}
-    <small>{validating
-      ? `Envoi terminé · ${progress.completedParts}/${progress.partCount} parties confirmées · analyse complète en cours`
+    <small>{processing
+      ? `Envoi terminé · ${progress.completedParts}/${progress.partCount} parties confirmées · ${transcoding ? "conversion web" : analyzing ? "inspection du format et des pistes" : "décodage intégral"} en cours`
       : progress.phase === "ready"
         ? "Validation réussie et média attaché"
         : `${progress.completedParts}/${progress.partCount || "…"} parties confirmées · ${formatBytes(progress.confirmedBytes)} confirmés · ${formatBytes(progress.inFlightBytes)} en cours · ${formatBytes(progress.totalBytes)} au total`}</small>
-    {onCancel && !validating && progress.phase !== "ready"
+    {onCancel && !processing && progress.phase !== "ready"
       ? <button className="admin-button admin-button--danger" type="button" onClick={onCancel}>Annuler l’envoi</button>
       : null}
   </div>;
@@ -225,6 +231,8 @@ function MediaEditor({
     const controller = new AbortController();
     uploadController.current = controller;
     const stored = readStoredMultipartSession(window.sessionStorage, creationId, file);
+    const mimeType = creationVideoMimeForFilename(file.name, file.type);
+    if (!mimeType) throw new DirectMultipartUploadError("media-format");
     const input = {
       creationId,
       slug,
@@ -234,7 +242,7 @@ function MediaEditor({
       alt: "",
       role: "VIDEO" as const,
       filename: file.name,
-      mimeType: "video/mp4" as const,
+      mimeType,
       sizeBytes: file.size,
     };
     if (!rightsConfirmed) throw new DirectMultipartUploadError("media-droits");
@@ -253,7 +261,7 @@ function MediaEditor({
             role: "VIDEO",
             fileSignature: multipartFileSignature(file),
             filename: file.name,
-            mimeType: "video/mp4",
+            mimeType,
             sizeBytes: file.size,
             lastModified: file.lastModified,
           };
@@ -353,7 +361,7 @@ function MediaEditor({
         init: {
           creationId, slug, expectedLockVersion: lockVersion, expectedAssetId: current?.id ?? "",
           rightsConfirmed: true, alt: "", role: "VIDEO", filename: resume.filename,
-          mimeType: "video/mp4", sizeBytes: resume.sizeBytes,
+          mimeType: resume.mimeType, sizeBytes: resume.sizeBytes,
         },
         resumeSessionToken: resume.sessionToken,
         signal: controller.signal,

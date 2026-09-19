@@ -34,8 +34,8 @@ test("client multipart plan has exact non-overlapping slices", () => {
   ]);
   assert.throws(() => multipartPartPlan(25, 10, 2), DirectMultipartUploadError);
   assert.equal(
-    multipartPartPlan(CREATION_VIDEO_MAXIMUM_BYTES, CREATION_DIRECT_UPLOAD_PART_SIZE_BYTES, 25).length,
-    25,
+    multipartPartPlan(CREATION_VIDEO_MAXIMUM_BYTES, CREATION_DIRECT_UPLOAD_PART_SIZE_BYTES, 63).length,
+    63,
   );
 });
 
@@ -125,11 +125,11 @@ test("Admin exposes real upload phases, cancellation, resume and 48px mobile con
     readFile(new URL("../../components/admin-creation-media-manager.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../app/admin/admin.css", import.meta.url), "utf8"),
   ]);
-  for (const label of ["Préparation", "Envoi direct vers le stockage", "Finalisation", "Validation intégrale", "Analyse en cours", "Prêt", "Annuler l’envoi", "Reprendre la session"]) {
+  for (const label of ["Préparation", "Envoi direct vers le stockage", "Finalisation", "Analyse du fichier", "Conversion vidéo", "Validation intégrale", "Prêt", "Annuler l’envoi", "Reprendre la session"]) {
     assert.match(component, new RegExp(label));
   }
   assert.match(component, /<progress max=\{100\} value=\{progress\.percent\}/);
-  assert.match(component, /<progress max=\{100\} aria-label="Analyse de la vidéo en cours"/);
+  assert.match(component, /Analyse de la vidéo en cours/);
   assert.match(component, /parties confirmées/);
   assert.match(component, /confirmés ·/);
   assert.match(component, /en cours ·/);

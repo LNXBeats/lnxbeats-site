@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import type { PublicCreation, PublicCreationAsset, PublicCreationLink } from "@/lib/creations/types";
+import type { PublicCreation, PublicCreationAsset, PublicCreationCollaborator, PublicCreationLink } from "@/lib/creations/types";
 
 const publicAssetState = {
   visibility: "PUBLIC" as const,
@@ -65,6 +65,19 @@ const publicCreationSelect = {
     orderBy: [{ position: "asc" as const }, { id: "asc" as const }],
     select: { id: true, label: true, url: true, position: true },
   },
+  collaborators: {
+    orderBy: [{ position: "asc" as const }, { id: "asc" as const }],
+    select: {
+      id: true,
+      displayName: true,
+      role: true,
+      position: true,
+      links: {
+        orderBy: [{ position: "asc" as const }, { id: "asc" as const }],
+        select: { id: true, platform: true, label: true, url: true, position: true },
+      },
+    },
+  },
 };
 
 function safeAssetSize(value: bigint) {
@@ -117,6 +130,29 @@ function publicExternalLink(
   }
 }
 
+function publicCollaborator(
+  collaborator: Awaited<ReturnType<typeof loadPublicCreations>>[number]["collaborators"][number],
+): PublicCreationCollaborator | null {
+  const displayName = collaborator.displayName.trim();
+  if (!displayName) return null;
+  const links = collaborator.links.flatMap((link) => {
+    try {
+      const url = new URL(link.url.trim());
+      if (url.protocol !== "https:" || url.username || url.password) return [];
+      return [{ ...link, label: link.label?.trim() || null, url: url.toString() }];
+    } catch {
+      return [];
+    }
+  });
+  return {
+    id: collaborator.id,
+    displayName,
+    role: collaborator.role?.trim() || null,
+    position: collaborator.position,
+    links,
+  };
+}
+
 function mapPublicCreation(creation: Awaited<ReturnType<typeof loadPublicCreations>>[number]): PublicCreation | null {
   const cover = mediaAsset(creation, "COVER");
   const poster = mediaAsset(creation, "VIDEO_POSTER");
@@ -154,6 +190,9 @@ function mapPublicCreation(creation: Awaited<ReturnType<typeof loadPublicCreatio
     links: creation.externalLinks
       .map(publicExternalLink)
       .filter((link): link is PublicCreationLink => link !== null),
+    collaborators: creation.collaborators
+      .map(publicCollaborator)
+      .filter((collaborator): collaborator is PublicCreationCollaborator => collaborator !== null),
   };
 }
 

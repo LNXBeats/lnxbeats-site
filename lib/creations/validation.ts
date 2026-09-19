@@ -18,6 +18,15 @@ export const CREATION_EDITOR_FORM_FIELDS = [
 
 export const CREATION_EXTERNAL_LINK_FORM_FIELDS = ["label", "url", "position"] as const;
 
+export const CREATION_COLLABORATOR_FORM_FIELDS = ["displayName", "role", "position"] as const;
+export const CREATION_COLLABORATOR_LINK_FORM_FIELDS = ["platform", "url", "label", "position"] as const;
+
+export const CREATION_COLLABORATOR_PLATFORMS = [
+  "YOUTUBE", "INSTAGRAM", "TIKTOK", "SPOTIFY", "APPLE_MUSIC", "DEEZER", "WEBSITE", "OTHER",
+] as const;
+
+export type CreationCollaboratorPlatform = typeof CREATION_COLLABORATOR_PLATFORMS[number];
+
 export type CreationEditorInput = {
   slug: string;
   title: string;
@@ -35,6 +44,19 @@ export type CreationEditorInput = {
 export type CreationExternalLinkInput = {
   label: string;
   url: string;
+  position: number;
+};
+
+export type CreationCollaboratorInput = {
+  displayName: string;
+  role: string | null;
+  position: number;
+};
+
+export type CreationCollaboratorLinkInput = {
+  platform: CreationCollaboratorPlatform;
+  url: string;
+  label: string | null;
   position: number;
 };
 
@@ -162,6 +184,57 @@ export function parseCreationExternalLinkInput(input: Record<string, unknown>): 
   };
 }
 
+export function parseCreationCollaboratorInput(input: Record<string, unknown>): CreationCollaboratorInput {
+  assertClosedPayload(input, new Set(CREATION_COLLABORATOR_FORM_FIELDS));
+  return {
+    displayName: requiredText(input.displayName, "Le nom du collaborateur", 180),
+    role: optionalText(input.role, "Le rôle", 120),
+    position: integerValue(input.position ?? 0, "La position", 0, 1_000_000),
+  };
+}
+
+const PLATFORM_HOSTS: Partial<Record<CreationCollaboratorPlatform, readonly string[]>> = {
+  YOUTUBE: ["youtube.com", "youtu.be", "music.youtube.com"],
+  INSTAGRAM: ["instagram.com"],
+  TIKTOK: ["tiktok.com"],
+  SPOTIFY: ["open.spotify.com"],
+  APPLE_MUSIC: ["music.apple.com"],
+  DEEZER: ["deezer.com", "link.deezer.com"],
+};
+
+function hostnameAllowed(hostname: string, allowed: readonly string[]) {
+  const normalized = hostname.toLowerCase().replace(/\.$/, "");
+  return allowed.some((host) => normalized === host || normalized.endsWith(`.${host}`));
+}
+
+export function parseCreationCollaboratorLinkInput(input: Record<string, unknown>): CreationCollaboratorLinkInput {
+  assertClosedPayload(input, new Set(CREATION_COLLABORATOR_LINK_FORM_FIELDS));
+  if (typeof input.platform !== "string" || !CREATION_COLLABORATOR_PLATFORMS.includes(input.platform as CreationCollaboratorPlatform)) {
+    throw new CreationValidationError("La plateforme est invalide.", "INVALID_PLATFORM");
+  }
+  const platform = input.platform as CreationCollaboratorPlatform;
+  const serializedUrl = requiredText(input.url, "L’URL", 2048);
+  let url: URL;
+  try {
+    url = new URL(serializedUrl);
+  } catch {
+    throw new CreationValidationError("L’URL officielle est invalide.", "INVALID_URL");
+  }
+  if (url.protocol !== "https:" || url.username || url.password) {
+    throw new CreationValidationError("Le lien officiel doit utiliser HTTPS sans identifiants.", "INVALID_URL");
+  }
+  const allowedHosts = PLATFORM_HOSTS[platform];
+  if (allowedHosts && !hostnameAllowed(url.hostname, allowedHosts)) {
+    throw new CreationValidationError("Le domaine ne correspond pas à la plateforme choisie.", "INVALID_PLATFORM_HOST");
+  }
+  return {
+    platform,
+    url: url.toString(),
+    label: optionalText(input.label, "Le libellé", 120),
+    position: integerValue(input.position ?? 0, "La position", 0, 1_000_000),
+  };
+}
+
 export function parseCreationIdentity(value: unknown) {
   if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
     throw new CreationValidationError("La création est invalide.", "INVALID_CREATION_ID");
@@ -172,6 +245,20 @@ export function parseCreationIdentity(value: unknown) {
 export function parseCreationExternalLinkIdentity(value: unknown) {
   if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
     throw new CreationValidationError("Le lien externe est invalide.", "INVALID_LINK_ID");
+  }
+  return value;
+}
+
+export function parseCreationCollaboratorIdentity(value: unknown) {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
+    throw new CreationValidationError("Le collaborateur est invalide.", "INVALID_COLLABORATOR_ID");
+  }
+  return value;
+}
+
+export function parseCreationCollaboratorLinkIdentity(value: unknown) {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
+    throw new CreationValidationError("Le lien du collaborateur est invalide.", "INVALID_COLLABORATOR_LINK_ID");
   }
   return value;
 }

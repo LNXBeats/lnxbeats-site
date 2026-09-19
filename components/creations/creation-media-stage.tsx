@@ -22,6 +22,7 @@ import {
 } from "@/lib/creations/media-player";
 import {
   creationArtwork,
+  creationCollaboratorNames,
   creationPresentationMedia,
   creationVideoOrientation,
   resolvedCreationPrimaryMedia,
@@ -50,7 +51,7 @@ const creationFilters: readonly Readonly<{ id: CreationFilter; label: string }>[
 ];
 
 function isCollaboration(creation: PublicCreation) {
-  return Boolean(creation.collaborator?.trim())
+  return creationCollaboratorNames(creation).length > 0
     || creation.category?.toLocaleLowerCase("fr").includes("collaboration") === true;
 }
 
@@ -436,7 +437,7 @@ export function CreationMediaStage({
                 </button>
                 <div>
                   <strong>{selected.title}</strong>
-                  <span>{selected.collaborator ? `avec ${selected.collaborator}` : "Création LNX Beats"}</span>
+                  <span>{creationCollaboratorNames(selected).length ? `avec ${creationCollaboratorNames(selected).join(", ")}` : "Création LNX Beats"}</span>
                 </div>
               </div>
             ) : null}
@@ -483,7 +484,7 @@ export function CreationMediaStage({
         <div className="creation-stage__copy">
           <p className="creation-stage__eyebrow">{selected.category || "Création originale"}</p>
           <Heading id={headingId}>{selected.title}</Heading>
-          {selected.collaborator ? <p className="creation-stage__collaborator">Avec <strong>{selected.collaborator}</strong></p> : null}
+          {creationCollaboratorNames(selected).length ? <p className="creation-stage__collaborator">Avec <strong>{creationCollaboratorNames(selected).join(" · ")}</strong></p> : null}
           <p className="creation-stage__summary">{selected.summary}</p>
           <p className="creation-stage__playing-state" aria-live="polite">
             <span aria-hidden="true" data-playing={Boolean(state.activeMedia)} />
@@ -594,7 +595,7 @@ export function CreationMediaStage({
               <Link href={`/creations/${creation.slug}`} key={creation.slug} className="creation-card">
                 <CreationArtwork creation={creation} />
                 <span className="creation-card__body">
-                  <small>{creation.category || "Création"}{creation.collaborator ? ` · avec ${creation.collaborator}` : ""}</small>
+                  <small>{creation.category || "Création"}{creationCollaboratorNames(creation).length ? ` · avec ${creationCollaboratorNames(creation).join(", ")}` : ""}</small>
                   <strong>{creation.title}</strong>
                   <span>{creation.audio ? "Audio" : ""}{creation.audio && creation.video ? " + " : ""}{creation.video ? "Vidéo" : ""}</span>
                 </span>

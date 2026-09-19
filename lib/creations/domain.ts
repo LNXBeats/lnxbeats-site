@@ -5,6 +5,8 @@ export const CREATION_ACTION_CONFIRMATIONS = {
   unpublish: "CONFIRM_CREATION_UNPUBLICATION",
   archive: "CONFIRM_CREATION_ARCHIVAL",
   deleteExternalLink: "CONFIRM_CREATION_EXTERNAL_LINK_DELETION",
+  deleteCollaborator: "CONFIRM_CREATION_COLLABORATOR_DELETION",
+  deleteCollaboratorLink: "CONFIRM_CREATION_COLLABORATOR_LINK_DELETION",
 } as const;
 
 export type CreationPublicationAsset = {

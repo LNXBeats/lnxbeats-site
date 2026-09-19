@@ -13,6 +13,7 @@ const session = {
   creationId: "10000000-0000-4000-8000-000000000001",
   provider: "r2",
   quarantineKey: "creations/quarantine/10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/video.mp4",
+  declaredMimeType: "video/mp4",
   declaredSizeBytes: BigInt(bytes.length),
 };
 

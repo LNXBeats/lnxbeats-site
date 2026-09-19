@@ -42,8 +42,9 @@ export function AdminCreationFields({
       <input name="category" defaultValue={values.category ?? ""} maxLength={120} placeholder="Collaboration, clip, création…" />
     </label>
     <label>
-      <span>Collaborateur</span>
+      <span>Mention courte héritée</span>
       <input name="collaborator" defaultValue={values.collaborator ?? ""} maxLength={240} />
+      <small className="admin-field-help">Utilisez ensuite la section Collaborateurs pour les profils et liens officiels structurés.</small>
     </label>
     <label>
       <span>Média principal</span>

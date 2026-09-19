@@ -31,7 +31,7 @@ test("server-generated Creation keys are isolated by creation, role and asset UU
 test("Creation media limits stay centralized and bounded", () => {
   assert.equal(CREATION_IMAGE_MAXIMUM_BYTES, 10 * 1024 * 1024);
   assert.equal(CREATION_AUDIO_MAXIMUM_BYTES, 80 * 1024 * 1024);
-  assert.equal(CREATION_VIDEO_MAXIMUM_BYTES, 200 * 1024 * 1024);
+  assert.equal(CREATION_VIDEO_MAXIMUM_BYTES, 500 * 1024 * 1024);
   assert.ok(CREATION_IMAGE_MAXIMUM_BYTES < CREATION_AUDIO_MAXIMUM_BYTES);
   assert.ok(CREATION_AUDIO_MAXIMUM_BYTES < CREATION_VIDEO_MAXIMUM_BYTES);
 });

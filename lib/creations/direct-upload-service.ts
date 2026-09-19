@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 import type { CreationMediaUploadStatus } from "@/generated/prisma/client";
 import {
@@ -27,6 +28,7 @@ import { MediaStorageError, type MediaMultipartPart } from "@/lib/media/storage/
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 const TERMINAL_STATUSES = new Set<CreationMediaUploadStatus>(["READY", "REJECTED", "ABORTED", "EXPIRED"]);
+const ACTIVE_WORKER_STATUSES = new Set<CreationMediaUploadStatus>(["ANALYZING", "TRANSCODING", "VALIDATING"]);
 
 type UploadSession = Awaited<ReturnType<typeof findAuthorizedSession>>;
 
@@ -167,7 +169,8 @@ export async function initializeCreationVideoUpload(input: { actorUserId: string
   const sessionId = randomUUID();
   const activationAssetId = randomUUID();
   const uploadToken = newSessionToken(sessionId);
-  const quarantineKey = `creations/quarantine/${input.media.creationId}/${randomUUID()}/video.mp4`;
+  const extension = path.extname(input.media.filename).slice(1).toLowerCase();
+  const quarantineKey = `creations/quarantine/${input.media.creationId}/${randomUUID()}/source.${extension}`;
   const now = input.now ?? new Date();
   const multipart = await storage.createMultipartUpload({
     scope: "private",
@@ -193,7 +196,7 @@ export async function initializeCreationVideoUpload(input: { actorUserId: string
         rightsConfirmed: true,
         alt: input.media.alt,
         originalFilename: input.media.filename,
-        declaredMimeType: "video/mp4",
+        declaredMimeType: input.media.mimeType,
         declaredSizeBytes: BigInt(input.media.sizeBytes),
         quarantineKey,
         provider: storage.provider,
@@ -304,7 +307,7 @@ export async function completeCreationVideoUpload(input: { actorUserId: string; 
 export async function abortCreationVideoUpload(input: { actorUserId: string; sessionToken: unknown; baseUrl: string }) {
   let session = await findAuthorizedSession(input.sessionToken, input.actorUserId);
   if (TERMINAL_STATUSES.has(session.status)) return directUploadStatusResponse(session, [], input.baseUrl);
-  if (session.status === "VALIDATING") throw new CreationDirectUploadError("INVALID_STATE", "La validation finale a déjà commencé.");
+  if (ACTIVE_WORKER_STATUSES.has(session.status)) throw new CreationDirectUploadError("INVALID_STATE", "Le traitement serveur a déjà commencé.");
   const previousStatus = session.status;
   const claimed = await prisma.creationMediaUploadSession.updateMany({
     where: { id: session.id, status: previousStatus },
@@ -314,7 +317,7 @@ export async function abortCreationVideoUpload(input: { actorUserId: string; ses
     await cleanupOwnedSession(session, { abortMultipart: previousStatus === "UPLOADING", terminalStatus: "ABORTED", baseError: null });
   }
   session = await findAuthorizedSession(session.sessionToken, session.actorUserId);
-  if (session.status === "VALIDATING") throw new CreationDirectUploadError("INVALID_STATE");
+  if (ACTIVE_WORKER_STATUSES.has(session.status)) throw new CreationDirectUploadError("INVALID_STATE");
   return directUploadStatusResponse(session, [], input.baseUrl);
 }
 

@@ -5,6 +5,8 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { assertCreationPublishable } from "@/lib/creations/domain";
 import {
   CreationValidationError,
+  parseCreationCollaboratorInput,
+  parseCreationCollaboratorLinkInput,
   parseCreationEditorInput,
   parseCreationExternalLinkInput,
 } from "@/lib/creations/validation";
@@ -22,7 +24,10 @@ export class CreationServiceError extends Error {
       | "ARCHIVED"
       | "MUST_UNPUBLISH"
       | "LINK_NOT_FOUND"
-      | "LINK_TAKEN",
+      | "LINK_TAKEN"
+      | "COLLABORATOR_NOT_FOUND"
+      | "COLLABORATOR_LINK_NOT_FOUND"
+      | "COLLABORATOR_LINK_TAKEN",
   ) {
     super(message);
     this.name = "CreationServiceError";
@@ -52,6 +57,7 @@ export async function listAdminCreations(query = "", status = "all", requestedPa
         { title: { contains: normalizedQuery, mode: "insensitive" } },
         { slug: { contains: normalizedQuery, mode: "insensitive" } },
         { collaborator: { contains: normalizedQuery, mode: "insensitive" } },
+        { collaborators: { some: { displayName: { contains: normalizedQuery, mode: "insensitive" } } } },
       ],
     } : {}),
   };
@@ -61,7 +67,7 @@ export async function listAdminCreations(query = "", status = "all", requestedPa
   const [creations, groupedStatuses] = await Promise.all([
     prisma.creation.findMany({
       where,
-      include: { _count: { select: { assets: true, externalLinks: true } } },
+      include: { _count: { select: { assets: true, externalLinks: true, collaborators: true } } },
       orderBy: [{ position: "asc" }, { createdAt: "desc" }, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -80,6 +86,10 @@ export async function getAdminCreation(slug: string) {
     include: {
       assets: { include: { asset: true }, orderBy: { role: "asc" } },
       externalLinks: { orderBy: [{ position: "asc" }, { id: "asc" }] },
+      collaborators: {
+        orderBy: [{ position: "asc" }, { id: "asc" }],
+        include: { links: { orderBy: [{ position: "asc" }, { id: "asc" }] } },
+      },
     },
   });
 }
@@ -311,6 +321,136 @@ export async function deleteAdminCreationExternalLink(
     assertEditableCreation(current, expectedLockVersion);
     const deleted = await transaction.creationExternalLink.deleteMany({ where: { id: linkId, creationId } });
     if (deleted.count !== 1) throw new CreationServiceError("Lien externe introuvable.", "LINK_NOT_FOUND");
+    await bumpLockVersion(transaction, creationId, expectedLockVersion);
+  });
+}
+
+export async function createAdminCreationCollaborator(
+  creationId: string,
+  expectedLockVersion: number,
+  input: Record<string, unknown>,
+) {
+  const values = parseCreationCollaboratorInput(input);
+  return withCreationLock(creationId, async (transaction) => {
+    const current = await transaction.creation.findUnique({ where: { id: creationId } });
+    if (!current) throw new CreationServiceError("Création introuvable.", "NOT_FOUND");
+    assertEditableCreation(current, expectedLockVersion);
+    const collaborator = await transaction.creationCollaborator.create({ data: { creationId, ...values } });
+    await bumpLockVersion(transaction, creationId, expectedLockVersion);
+    return collaborator;
+  });
+}
+
+export async function updateAdminCreationCollaborator(
+  creationId: string,
+  collaboratorId: string,
+  expectedLockVersion: number,
+  input: Record<string, unknown>,
+) {
+  const values = parseCreationCollaboratorInput(input);
+  return withCreationLock(creationId, async (transaction) => {
+    const current = await transaction.creation.findUnique({ where: { id: creationId } });
+    if (!current) throw new CreationServiceError("Création introuvable.", "NOT_FOUND");
+    assertEditableCreation(current, expectedLockVersion);
+    const collaborator = await transaction.creationCollaborator.findFirst({ where: { id: collaboratorId, creationId } });
+    if (!collaborator) throw new CreationServiceError("Collaborateur introuvable.", "COLLABORATOR_NOT_FOUND");
+    await transaction.creationCollaborator.update({ where: { id: collaboratorId }, data: values });
+    await bumpLockVersion(transaction, creationId, expectedLockVersion);
+    return transaction.creationCollaborator.findUniqueOrThrow({ where: { id: collaboratorId } });
+  });
+}
+
+export async function deleteAdminCreationCollaborator(
+  creationId: string,
+  collaboratorId: string,
+  expectedLockVersion: number,
+) {
+  return withCreationLock(creationId, async (transaction) => {
+    const current = await transaction.creation.findUnique({ where: { id: creationId } });
+    if (!current) throw new CreationServiceError("Création introuvable.", "NOT_FOUND");
+    assertEditableCreation(current, expectedLockVersion);
+    const collaborator = await transaction.creationCollaborator.findFirst({ where: { id: collaboratorId, creationId } });
+    if (!collaborator) throw new CreationServiceError("Collaborateur introuvable.", "COLLABORATOR_NOT_FOUND");
+    await transaction.creationCollaboratorLink.deleteMany({ where: { collaboratorId } });
+    await transaction.creationCollaborator.delete({ where: { id: collaboratorId } });
+    await bumpLockVersion(transaction, creationId, expectedLockVersion);
+  });
+}
+
+async function collaboratorForCreation(transaction: Transaction, creationId: string, collaboratorId: string) {
+  const collaborator = await transaction.creationCollaborator.findFirst({ where: { id: collaboratorId, creationId } });
+  if (!collaborator) throw new CreationServiceError("Collaborateur introuvable.", "COLLABORATOR_NOT_FOUND");
+  return collaborator;
+}
+
+export async function createAdminCreationCollaboratorLink(
+  creationId: string,
+  collaboratorId: string,
+  expectedLockVersion: number,
+  input: Record<string, unknown>,
+) {
+  const values = parseCreationCollaboratorLinkInput(input);
+  try {
+    return await withCreationLock(creationId, async (transaction) => {
+      const current = await transaction.creation.findUnique({ where: { id: creationId } });
+      if (!current) throw new CreationServiceError("Création introuvable.", "NOT_FOUND");
+      assertEditableCreation(current, expectedLockVersion);
+      await collaboratorForCreation(transaction, creationId, collaboratorId);
+      const link = await transaction.creationCollaboratorLink.create({ data: { collaboratorId, ...values } });
+      await bumpLockVersion(transaction, creationId, expectedLockVersion);
+      return link;
+    });
+  } catch (error) {
+    if (error instanceof CreationServiceError || error instanceof CreationValidationError) throw error;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new CreationServiceError("Ce lien est déjà associé à ce collaborateur.", "COLLABORATOR_LINK_TAKEN");
+    }
+    throw error;
+  }
+}
+
+export async function updateAdminCreationCollaboratorLink(
+  creationId: string,
+  collaboratorId: string,
+  linkId: string,
+  expectedLockVersion: number,
+  input: Record<string, unknown>,
+) {
+  const values = parseCreationCollaboratorLinkInput(input);
+  try {
+    return await withCreationLock(creationId, async (transaction) => {
+      const current = await transaction.creation.findUnique({ where: { id: creationId } });
+      if (!current) throw new CreationServiceError("Création introuvable.", "NOT_FOUND");
+      assertEditableCreation(current, expectedLockVersion);
+      await collaboratorForCreation(transaction, creationId, collaboratorId);
+      const link = await transaction.creationCollaboratorLink.findFirst({ where: { id: linkId, collaboratorId } });
+      if (!link) throw new CreationServiceError("Lien du collaborateur introuvable.", "COLLABORATOR_LINK_NOT_FOUND");
+      await transaction.creationCollaboratorLink.update({ where: { id: linkId }, data: values });
+      await bumpLockVersion(transaction, creationId, expectedLockVersion);
+      return transaction.creationCollaboratorLink.findUniqueOrThrow({ where: { id: linkId } });
+    });
+  } catch (error) {
+    if (error instanceof CreationServiceError || error instanceof CreationValidationError) throw error;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new CreationServiceError("Ce lien est déjà associé à ce collaborateur.", "COLLABORATOR_LINK_TAKEN");
+    }
+    throw error;
+  }
+}
+
+export async function deleteAdminCreationCollaboratorLink(
+  creationId: string,
+  collaboratorId: string,
+  linkId: string,
+  expectedLockVersion: number,
+) {
+  return withCreationLock(creationId, async (transaction) => {
+    const current = await transaction.creation.findUnique({ where: { id: creationId } });
+    if (!current) throw new CreationServiceError("Création introuvable.", "NOT_FOUND");
+    assertEditableCreation(current, expectedLockVersion);
+    await collaboratorForCreation(transaction, creationId, collaboratorId);
+    const deleted = await transaction.creationCollaboratorLink.deleteMany({ where: { id: linkId, collaboratorId } });
+    if (deleted.count !== 1) throw new CreationServiceError("Lien du collaborateur introuvable.", "COLLABORATOR_LINK_NOT_FOUND");
     await bumpLockVersion(transaction, creationId, expectedLockVersion);
   });
 }

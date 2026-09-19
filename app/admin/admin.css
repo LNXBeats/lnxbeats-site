@@ -752,6 +752,32 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   border: 1px solid rgba(198, 112, 96, 0.28);
   border-radius: 13px;
 }
+
+.admin-collaborator-list { display: grid; gap: 1rem; margin-top: 1.25rem; }
+.admin-collaborator-card { display: grid; min-width: 0; gap: 1rem; padding: clamp(1rem, 2vw, 1.5rem); border: 1px solid rgba(244,240,232,.12); border-radius: 18px; background: rgba(255,255,255,.018); }
+.admin-collaborator-card > .admin-panel__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.admin-collaborator-card > .admin-panel__heading h3 { margin: 0; color: #f4f0e8; }
+.admin-collaborator-card > .admin-panel__heading span { color: #d6b36a; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
+.admin-collaborator-form,
+.admin-collaborator-link-add { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-collaborator-form .admin-button,
+.admin-collaborator-link-add .admin-button { align-self: end; min-height: 48px; }
+.admin-collaborator-links { display: grid; gap: .9rem; min-width: 0; padding-top: .85rem; border-top: 1px solid rgba(244,240,232,.1); }
+.admin-collaborator-links h4 { margin: 0; color: #f4f0e8; }
+.admin-collaborator-link { display: grid; gap: .65rem; padding: .85rem; border-radius: 14px; background: rgba(0,0,0,.2); }
+.admin-collaborator-link .admin-inline-form:first-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-collaborator-link :is(input, select),
+.admin-collaborator-card :is(input, select) { min-width: 0; width: 100%; }
+.admin-collaborator-add { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(244,240,232,.1); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 760px) {
+  .admin-collaborator-form,
+  .admin-collaborator-link-add,
+  .admin-collaborator-link .admin-inline-form:first-child,
+  .admin-collaborator-add { grid-template-columns: 1fr; }
+  .admin-collaborator-card > .admin-panel__heading { align-items: flex-start; flex-direction: column; gap: .35rem; }
+  .admin-collaborator-card .admin-button { width: 100%; min-height: 48px; white-space: normal; }
+}
 .admin-creation-upload {
   display: grid;
   gap: 0.7rem;

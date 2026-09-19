@@ -153,6 +153,8 @@ enum CreationAssetRole {
 enum CreationMediaUploadStatus {
   UPLOADING
   QUARANTINE
+  ANALYZING
+  TRANSCODING
   VALIDATING
   READY
   REJECTED
@@ -1267,6 +1269,7 @@ model Creation {
   updatedAt           DateTime                     @updatedAt @db.Timestamptz(3)
   assets              CreationAsset[]
   externalLinks       CreationExternalLink[]
+  collaborators       CreationCollaborator[]
   mediaUploadSessions CreationMediaUploadSession[]
 
   @@index([status, position, id])
@@ -1341,6 +1344,37 @@ model CreationExternalLink {
   @@unique([creationId, url])
   @@index([creationId, position, id])
   @@map("creation_external_links")
+}
+
+model CreationCollaborator {
+  id          String                     @id @default(uuid()) @db.Uuid
+  creationId  String                     @db.Uuid
+  displayName String                     @db.VarChar(180)
+  role        String?                    @db.VarChar(120)
+  position    Int                        @default(0)
+  createdAt   DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                   @updatedAt @db.Timestamptz(3)
+  creation    Creation                   @relation(fields: [creationId], references: [id], onDelete: Restrict)
+  links       CreationCollaboratorLink[]
+
+  @@index([creationId, position, id])
+  @@map("creation_collaborators")
+}
+
+model CreationCollaboratorLink {
+  id             String               @id @default(uuid()) @db.Uuid
+  collaboratorId String               @db.Uuid
+  platform       String               @db.VarChar(40)
+  label          String?              @db.VarChar(120)
+  url            String               @db.Text
+  position       Int                  @default(0)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+  collaborator   CreationCollaborator @relation(fields: [collaboratorId], references: [id], onDelete: Restrict)
+
+  @@unique([collaboratorId, url])
+  @@index([collaboratorId, position, id])
+  @@map("creation_collaborator_links")
 }
 
 model Order {
