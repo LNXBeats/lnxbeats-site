@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
-import { directUploadConnectOrigin } from "./lib/media/storage/csp";
+import { directUploadConnectOrigin, publicMediaOrigin } from "./lib/media/storage/csp";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const directUploadOrigin = directUploadConnectOrigin();
+const playbackOrigin = publicMediaOrigin();
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -15,9 +16,9 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   `connect-src 'self'${directUploadOrigin ? ` ${directUploadOrigin}` : ""}${isDevelopment ? " ws: wss:" : ""}`,
-  // The Admin audio editor previews the owner-selected local File through an
-  // object URL; public audio still comes exclusively from same-origin routes.
-  "media-src 'self' blob:",
+  // Admin previews use local object URLs; validated public object media follows
+  // a same-origin route that redirects only to this exact R2 bucket origin.
+  `media-src 'self' blob:${playbackOrigin ? ` ${playbackOrigin}` : ""}`,
   "manifest-src 'self'",
 ].join("; ");
 
