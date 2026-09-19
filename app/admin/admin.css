@@ -752,9 +752,29 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   border: 1px solid rgba(198, 112, 96, 0.28);
   border-radius: 13px;
 }
+.admin-creation-upload {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1rem 0;
+  padding: 0.9rem;
+  border: 1px solid rgba(214, 179, 106, 0.32);
+  border-radius: 13px;
+  background: rgba(214, 179, 106, 0.06);
+}
+.admin-creation-upload__heading { display: flex; justify-content: space-between; gap: 1rem; color: #ead39f; font-size: 0.72rem; }
+.admin-creation-upload progress { width: 100%; min-height: 14px; accent-color: #d6b36a; }
+.admin-creation-upload small { color: #a6a198; overflow-wrap: anywhere; }
+.admin-creation-upload button { min-height: 48px; justify-self: start; }
+.admin-creation-upload-resume { display: grid; gap: 0.7rem; margin: 1rem 0; }
+.admin-creation-upload-resume button { min-height: 48px; justify-self: start; }
 
 @media (max-width: 900px) {
   .admin-creation-media-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .admin-creation-upload__heading { align-items: flex-start; flex-direction: column; gap: 0.35rem; }
+  .admin-creation-upload button { width: 100%; }
+  .admin-creation-upload-resume button { width: 100%; }
 }
 .admin-audio-preview { display: grid; gap: 1rem; }
 .admin-audio-current { display: grid; gap: 0.55rem; }

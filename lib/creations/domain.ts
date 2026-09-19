@@ -27,7 +27,7 @@ export type CreationPublishState = {
 function mediaRoleIsCoherent(asset: CreationPublicationAsset) {
   if (asset.role === "COVER" || asset.role === "VIDEO_POSTER") {
     return (asset.asset.type === "COVER" || asset.asset.type === "IMAGE")
-      && asset.asset.mimeType.startsWith("image/");
+      && asset.asset.mimeType === "image/webp";
   }
   if (asset.role === "AUDIO") {
     return asset.asset.type === "AUDIO" && asset.asset.mimeType === "audio/mpeg";

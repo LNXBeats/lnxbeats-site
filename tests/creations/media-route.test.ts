@@ -19,14 +19,14 @@ function mediaUpload(cleanup: () => Promise<void>): CreationMediaUpload {
     creationId,
     slug: "collaboration-qa",
     expectedLockVersion: "4",
-    role: "VIDEO",
+    role: "AUDIO",
     expectedAssetId: null,
     rightsConfirmed: true,
     alt: null,
     path: "/private/tmp/media.mp4",
-    originalFilename: "collaboration.mp4",
-    mimeType: "video/mp4",
-    extension: "mp4",
+    originalFilename: "collaboration.mp3",
+    mimeType: "audio/mpeg",
+    extension: "mp3",
     sizeBytes: 128,
     width: 1920,
     height: 1080,
@@ -35,6 +35,17 @@ function mediaUpload(cleanup: () => Promise<void>): CreationMediaUpload {
     cleanup,
   };
 }
+
+test("legacy video upload is rejected before multipart parsing", async () => {
+  const current = harness();
+  const response = await handleCreationMediaUpload(new Request(`${baseUrl}/api/admin/creations/media`, {
+    method: "POST",
+    headers: { origin: baseUrl, "x-lnx-creation-media-role": "VIDEO" },
+  }), current.dependencies);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).state, "media-direct-requis");
+  assert.deepEqual(current.counts(), { adminCalls: 1, readCalls: 0, replaceCalls: 0, removeCalls: 0, cleanupCalls: 0 });
+});
 
 function request(method: string, body?: object, origin = baseUrl) {
   return new Request(`${baseUrl}/api/admin/creations/media`, {

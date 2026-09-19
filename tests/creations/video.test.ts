@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { copyFile, mkdtemp, rename, rm, stat, truncate } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
-import { CreationVideoError, parseCreationVideoInspection } from "../../lib/creations/video";
+import { catalogFfmpegPath } from "../../lib/catalog/ffmpeg";
+import {
+  CREATION_VIDEO_MAXIMUM_DIMENSION,
+  CreationVideoError,
+  parseCreationVideoInspection,
+  validateCreationVideo,
+} from "../../lib/creations/video";
+
+const execFileAsync = promisify(execFile);
 
 function inspection({
   duration = "00:02:03.456",
@@ -60,4 +73,94 @@ test("the 20-minute limit is inclusive and longer media is refused", () => {
     () => parseCreationVideoInspection(inspection({ duration: "00:20:00.001" })),
     (error: unknown) => error instanceof CreationVideoError && error.code === "VIDEO_TOO_LONG",
   );
+});
+
+test("dimensions are bounded for a predictable decode memory envelope", () => {
+  assert.equal(parseCreationVideoInspection(inspection({ dimensions: "4096x2160" })).width, 4096);
+  for (const dimensions of [`${CREATION_VIDEO_MAXIMUM_DIMENSION + 1}x1080`, "10000x1000"]) {
+    assert.throws(
+      () => parseCreationVideoInspection(inspection({ dimensions })),
+      (error: unknown) => error instanceof CreationVideoError && error.code === "UNREADABLE_VIDEO",
+    );
+  }
+});
+
+test("complete validation rejects corruption after the former 30-second window", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "lnx-creation-video-late-corruption-"));
+  const validPath = path.join(root, "valid-42-seconds.mp4");
+  const corruptPath = path.join(root, "corrupt-after-30-seconds.mp4");
+  const ffmpeg = catalogFfmpegPath();
+  try {
+    await execFileAsync(ffmpeg, [
+      "-nostdin", "-hide_banner", "-loglevel", "error",
+      "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10:duration=42",
+      "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=42",
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "34", "-pix_fmt", "yuv420p", "-g", "20",
+      "-c:a", "aac", "-b:a", "32k", "-movflags", "+faststart", "-shortest", "-y", validPath,
+    ]);
+    const metadata = await validateCreationVideo(validPath);
+    assert.equal(metadata.hasAudio, true);
+    assert.ok(metadata.durationMs >= 41_900 && metadata.durationMs <= 42_100);
+
+    await copyFile(validPath, corruptPath);
+    await truncate(corruptPath, Math.floor((await stat(corruptPath)).size * 0.9));
+    await assert.doesNotReject(execFileAsync(ffmpeg, [
+      "-nostdin", "-hide_banner", "-v", "error", "-xerror", "-i", corruptPath,
+      "-map", "0:v:0", "-map", "0:a?", "-t", "30", "-sn", "-dn", "-f", "null", "-",
+    ]));
+    await assert.rejects(
+      validateCreationVideo(corruptPath),
+      (error: unknown) => error instanceof CreationVideoError && error.code === "UNREADABLE_VIDEO",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a Matroska file renamed to mp4 is rejected despite H.264 codec", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "lnx-creation-video-container-"));
+  const mkv = path.join(root, "source.mkv");
+  const disguised = path.join(root, "source.mp4");
+  try {
+    await execFileAsync(catalogFfmpegPath(), [
+      "-nostdin", "-hide_banner", "-loglevel", "error",
+      "-f", "lavfi", "-i", "color=size=160x90:rate=10:duration=1",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", mkv,
+    ]);
+    await rename(mkv, disguised);
+    await assert.rejects(
+      validateCreationVideo(disguised),
+      (error: unknown) => error instanceof CreationVideoError && error.code === "UNSUPPORTED_CODEC",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("full decoder accepts H.264 MP4 landscape, portrait and square without an audio track", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "lnx-creation-video-aspects-"));
+  try {
+    for (const [name, dimensions] of [["landscape", "160x90"], ["portrait", "90x160"], ["square", "128x128"]] as const) {
+      const target = path.join(root, `${name}.mp4`);
+      await execFileAsync(catalogFfmpegPath(), [
+        "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", `color=size=${dimensions}:rate=10:duration=1`,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", "-y", target,
+      ]);
+      const metadata = await validateCreationVideo(target);
+      assert.equal(metadata.hasAudio, false);
+      assert.equal(`${metadata.width}x${metadata.height}`, dimensions);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("full decoder rejects a real MP4 carrying a non-H.264 video codec", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "lnx-creation-video-codec-"));
+  const target = path.join(root, "mpeg4.mp4");
+  try {
+    await execFileAsync(catalogFfmpegPath(), [
+      "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=size=160x90:rate=10:duration=1",
+      "-c:v", "mpeg4", "-an", "-y", target,
+    ]);
+    await assert.rejects(validateCreationVideo(target), (error: unknown) => error instanceof CreationVideoError && error.code === "UNSUPPORTED_CODEC");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

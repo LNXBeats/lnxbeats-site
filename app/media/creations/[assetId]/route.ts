@@ -1,10 +1,9 @@
-import { creationMediaResponse } from "@/lib/creations/media-response";
+import { handlePublicCreationMediaRequest } from "@/lib/creations/public-media-route";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 async function publishedCreationMedia(assetId: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(assetId)) return null;
   return prisma.asset.findFirst({
     where: {
       id: assetId,
@@ -59,9 +58,9 @@ async function publishedCreationMedia(assetId: string) {
 
 async function serve(request: Request, params: Promise<{ assetId: string }>, head = false) {
   const { assetId } = await params;
-  const asset = await publishedCreationMedia(assetId);
-  if (!asset) return new Response(null, { status: 404 });
-  return creationMediaResponse(request, asset, head);
+  return handlePublicCreationMediaRequest(request, assetId, head, {
+    findPublishedAsset: publishedCreationMedia,
+  });
 }
 
 export function GET(request: Request, { params }: { params: Promise<{ assetId: string }> }) {

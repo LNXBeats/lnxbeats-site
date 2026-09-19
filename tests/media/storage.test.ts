@@ -13,6 +13,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListPartsCommand,
   PutObjectCommand,
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
@@ -728,6 +729,61 @@ test("S3 adapter attempts compensating cleanup when a PUT response is lost", asy
   }), (error) => error instanceof MediaStorageError && error.code === "PROVIDER");
   assert.equal(calls.filter((call) => call instanceof PutObjectCommand).length, 1);
   assert.equal(calls.filter((call) => call instanceof DeleteObjectCommand).length, 1);
+});
+
+test("direct private multipart lifecycle binds every operation to the server key, upload id and ETag", async () => {
+  const calls: unknown[] = [];
+  const signed: unknown[] = [];
+  const key = "creations/quarantine/10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/video.mp4";
+  const client = multipartClient(async (command) => {
+    calls.push(command);
+    if (command instanceof CreateMultipartUploadCommand) return { UploadId: "upload-1" };
+    if (command instanceof ListPartsCommand) return { Parts: [
+      { PartNumber: 2, ETag: "etag-2", Size: 5 },
+      { PartNumber: 1, ETag: "etag-1", Size: 8 * 1024 * 1024 },
+    ] };
+    if (command instanceof CompleteMultipartUploadCommand) return { ETag: "complete" };
+    if (command instanceof AbortMultipartUploadCommand) return {};
+    throw new Error("Unexpected command");
+  });
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: client as never,
+    signer: async (_client, command, options) => { signed.push({ command, options }); return "https://signed.example.test/part"; },
+  });
+  assert.deepEqual(await storage.createMultipartUpload({ scope: "private", key, contentType: "video/mp4", metadata: { "lnx-session-id": "session" } }), { uploadId: "upload-1" });
+  assert.equal(await storage.createMultipartPartSignedUrl({ scope: "private", key, uploadId: "upload-1", partNumber: 2, expiresInSeconds: 300 }), "https://signed.example.test/part");
+  assert.ok((signed[0] as { command: unknown }).command instanceof UploadPartCommand);
+  assert.equal(((signed[0] as { options: { expiresIn: number } }).options.expiresIn), 300);
+  assert.deepEqual(await storage.listMultipartParts({ scope: "private", key, uploadId: "upload-1" }), [
+    { partNumber: 1, etag: "etag-1", sizeBytes: 8 * 1024 * 1024 },
+    { partNumber: 2, etag: "etag-2", sizeBytes: 5 },
+  ]);
+  await storage.completeMultipartUpload({ scope: "private", key, uploadId: "upload-1", parts: [{ partNumber: 1, etag: "etag-1" }, { partNumber: 2, etag: "etag-2" }] });
+  await storage.abortMultipartUpload({ scope: "private", key, uploadId: "upload-1" });
+  const create = calls.find((call) => call instanceof CreateMultipartUploadCommand) as CreateMultipartUploadCommand;
+  assert.equal(create.input.Bucket, "lnx-private-test");
+  assert.equal(create.input.Key, key);
+  assert.equal(create.input.ContentType, "video/mp4");
+  assert.equal(create.input.CacheControl, "private, no-store");
+  const complete = calls.find((call) => call instanceof CompleteMultipartUploadCommand) as CompleteMultipartUploadCommand;
+  assert.equal(complete.input.UploadId, "upload-1");
+  assert.deepEqual(complete.input.MultipartUpload?.Parts, [{ PartNumber: 1, ETag: "etag-1" }, { PartNumber: 2, ETag: "etag-2" }]);
+});
+
+test("direct multipart presigning rejects unsafe part numbers and excessive TTL before provider access", async () => {
+  let calls = 0;
+  const storage = new S3MediaStorage({
+    provider: "r2", region: "auto", endpoint: "https://account.r2.cloudflarestorage.com",
+    accessKeyId: "test-access", secretAccessKey: "test-secret", publicBucket: "lnx-public-test", privateBucket: "lnx-private-test",
+    client: multipartClient(async () => { calls += 1; return {}; }) as never,
+    signer: async () => { calls += 1; return "https://signed.example.test"; },
+  });
+  const base = { scope: "private" as const, key: "creations/quarantine/10000000-0000-4000-8000-000000000001/20000000-0000-4000-8000-000000000001/video.mp4", uploadId: "upload-1" };
+  await assert.rejects(storage.createMultipartPartSignedUrl({ ...base, partNumber: 0, expiresInSeconds: 300 }), MediaStorageError);
+  await assert.rejects(storage.createMultipartPartSignedUrl({ ...base, partNumber: 1, expiresInSeconds: 901 }), MediaStorageError);
+  assert.equal(calls, 0);
 });
 
 test("S3 adapter uploads a fragmented 60 MiB Readable with bounded managed multipart parts", { timeout: 30_000 }, async () => {

@@ -41,12 +41,6 @@ test("an audio-only creation exposes BreadcrumbList and CreativeWork without Vid
     publishedAt: "2026-09-13T10:30:00.000Z",
     collaborator: "Artiste invité",
     category: "Collaboration",
-    links: [
-      "https://example.com/creation",
-      "http://example.com/non-securise",
-      "https://user:secret@example.com/prive",
-      "javascript:alert(1)",
-    ],
   });
   const serialized = JSON.stringify(data);
 
@@ -54,10 +48,16 @@ test("an audio-only creation exposes BreadcrumbList and CreativeWork without Vid
   assert.match(serialized, /"@type":"CreativeWork"/);
   assert.match(serialized, /https:\/\/www\.lnxbeats\.fr\/creations\/creation-audio/);
   assert.match(serialized, /https:\/\/www\.lnxbeats\.fr\/media\/creations\/cover-id/);
-  assert.match(serialized, /https:\/\/example\.com\/creation/);
+  assert.doesNotMatch(serialized, /sameAs/);
   assert.doesNotMatch(serialized, /VideoObject/);
   assert.doesNotMatch(serialized, /javascript:/);
   assert.doesNotMatch(serialized, /non-securise|user:secret|prive/);
+});
+
+test("ordinary project links stay visible but are not misrepresented as identity sameAs", async () => {
+  const page = await readFile(new URL("../../app/creations/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /creation\.links/);
+  assert.doesNotMatch(page, /links:\s*creation\.links/);
 });
 
 test("creation structured data rejects non-canonical slugs and neutralizes script injection", () => {

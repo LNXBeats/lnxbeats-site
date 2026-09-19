@@ -5,6 +5,10 @@ import { spawn } from "node:child_process";
 import { catalogFfmpegPath } from "@/lib/catalog/ffmpeg";
 
 export const CREATION_VIDEO_MAXIMUM_DURATION_MS = 20 * 60 * 1_000;
+export const CREATION_VIDEO_MAXIMUM_DIMENSION = 4_096;
+export const CREATION_VIDEO_MAXIMUM_PIXELS = 4_096 * 4_096;
+const CREATION_VIDEO_MINIMUM_VALIDATION_TIMEOUT_MS = 5 * 60 * 1_000;
+const CREATION_VIDEO_MAXIMUM_VALIDATION_TIMEOUT_MS = 60 * 60 * 1_000;
 
 export class CreationVideoError extends Error {
   constructor(readonly code: "UNREADABLE_VIDEO" | "UNSUPPORTED_CODEC" | "VIDEO_TOO_LONG" | "TIMEOUT") {
@@ -67,7 +71,15 @@ export function parseCreationVideoInspection(stderr: string) {
   if (!dimensions) throw new CreationVideoError("UNREADABLE_VIDEO");
   let width = Number(dimensions[1]);
   let height = Number(dimensions[2]);
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 16 || height < 16 || width * height > 67_108_864) {
+  if (
+    !Number.isSafeInteger(width)
+    || !Number.isSafeInteger(height)
+    || width < 16
+    || height < 16
+    || width > CREATION_VIDEO_MAXIMUM_DIMENSION
+    || height > CREATION_VIDEO_MAXIMUM_DIMENSION
+    || width * height > CREATION_VIDEO_MAXIMUM_PIXELS
+  ) {
     throw new CreationVideoError("UNREADABLE_VIDEO");
   }
   const audioCodecs = [...stderr.matchAll(/Audio:\s*([a-zA-Z0-9_]+)/g)].map((match) => match[1]?.toLowerCase());
@@ -77,19 +89,30 @@ export function parseCreationVideoInspection(stderr: string) {
   return { width, height, durationMs: parsedDuration(stderr), hasAudio: audioCodecs.length > 0 };
 }
 
+function assertMp4Container(stderr: string) {
+  if (!/Input #0,\s*mov,mp4(?:,|\s)/i.test(stderr)) {
+    throw new CreationVideoError("UNSUPPORTED_CODEC");
+  }
+}
+
 export async function validateCreationVideo(sourcePath: string) {
   const inspection = await runFfmpeg(["-i", sourcePath], 30_000, true);
+  assertMp4Container(inspection);
   const metadata = parseCreationVideoInspection(inspection);
+  const validationTimeoutMs = Math.min(
+    CREATION_VIDEO_MAXIMUM_VALIDATION_TIMEOUT_MS,
+    Math.max(CREATION_VIDEO_MINIMUM_VALIDATION_TIMEOUT_MS, metadata.durationMs * 3),
+  );
   await runFfmpeg([
     "-v", "error",
+    "-xerror",
     "-i", sourcePath,
     "-map", "0:v:0",
-    "-map", "0:a:0?",
-    "-t", "30",
+    "-map", "0:a?",
     "-sn",
     "-dn",
     "-f", "null",
     "-",
-  ], 180_000);
+  ], validationTimeoutMs);
   return metadata;
 }

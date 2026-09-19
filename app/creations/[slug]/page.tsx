@@ -49,7 +49,6 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
     publishedAt: creation.publishedAt,
     collaborator: creation.collaborator,
     category: creation.category,
-    links: creation.links.map(({ url }) => url),
     video: creation.video ? {
       published: true,
       contentUrl: creation.video.url,

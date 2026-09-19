@@ -31,7 +31,7 @@ Rapport de candidat local — 13 septembre 2026.
 ### Stockage et diffusion
 
 - Le stockage existant prend en charge un backend local de QA et un backend objet compatible S3/Cloudflare R2, avec buckets public/privé et clés contrôlées côté serveur.
-- L'upload V3.3 transite par l'application pour permettre la validation réelle par Sharp/FFmpeg, puis le fichier temporaire validé est envoyé au stockage par flux. Le processus Next.js ne conserve pas la vidéo entière en mémoire.
+- Les images et l'audio conservent leur trajet serveur borné. La vidéo ne transite plus dans le corps d'une requête Railway : elle utilise un multipart direct signé vers la quarantaine privée R2, puis un worker la télécharge de manière bornée pour validation.
 - Le driver objet existant effectue les gros transferts par multipart borné.
 - Les médias objets publics sont diffusés directement par une URL GET signée d'une heure après une redirection `307`; le flux vidéo n'est donc pas proxyfié par Railway pendant la lecture.
 - Le backend local implémente les réponses `200`, `206` et `416`, `Accept-Ranges`, `Content-Range`, longueur, ETag et cache immuable.
@@ -82,15 +82,56 @@ Rapport de candidat local — 13 septembre 2026.
 
 ### Migration
 
-- Migration additive : `20260913180000_creations_multimedia_foundation`.
+- Migrations additives : `20260913180000_creations_multimedia_foundation` (inchangée) puis `20260913220000_creation_direct_upload_pipeline`.
 - Elle crée 3 enums, 3 tables, leurs index, contraintes de cohérence et clés étrangères `ON DELETE RESTRICT`.
 - Une ligne publiée doit avoir un résumé, un média principal et une date de publication; le service impose en plus un média audio/vidéo public, autorisé et cohérent.
 - Le SQL ne modifie aucune table historique et ne contient aucune charge Rights V4.
-- Validation réelle depuis une base PostgreSQL locale vide : 35 migrations appliquées, schéma V3.3 utilisable.
+- La migration corrective ajoute uniquement les sessions d'upload durables, leur statut, leurs baux worker, index et contraintes fail-closed.
+- Validation réelle depuis une base PostgreSQL locale vide : 36 migrations appliquées. Upgrade simulé : 34 migrations `origin/main`, insertion d'un asset canari, puis les 2 migrations V3.3; canari conservé et schéma final cohérent.
 - `prisma format`, `prisma validate` et `prisma generate` passent.
 - Aucune migration n'a été appliquée à Production.
 
 ## 5. Médias, R2 et upload
+
+### V3.3 corrective media pipeline
+
+Le flux vidéo est désormais :
+
+1. l'Admin authentifié demande une session same-origin ;
+2. le serveur vérifie création, version optimiste, rôle, droits, MIME, extension et taille puis génère la clé `creations/quarantine/<creationId>/<uploadUuid>/video.mp4` ;
+3. le navigateur envoie directement des parts de 8 Mio vers R2 avec au maximum deux requêtes simultanées et des URL PUT présignées 5 minutes ;
+4. la progression vient des octets réellement envoyés par `XMLHttpRequest` ; une part échouée est retentée au maximum trois fois sans renvoyer les parts confirmées par R2 ;
+5. le navigateur ne conserve en `sessionStorage` qu'un token opaque lié à l'Admin, la création et le rôle, jamais un credential R2 ;
+6. la finalisation compare les ETag client à la liste canonique R2, puis vérifie par `HEAD` taille, MIME et métadonnées de session ;
+7. l'objet reste privé en `QUARANTINE`; un worker dédié le revendique par bail atomique, le télécharge dans un fichier `0600` imprévisible et borné, le décode intégralement, puis seulement le promeut ;
+8. l'activation utilise un Asset réservé déterministe afin qu'un crash après activation mais avant marquage `READY` soit rejouable sans double Asset ;
+9. abort, expiration, rejet et succès passent d'abord leur statut terminal par CAS avant suppression; un marqueur `*_CLEANUP_REQUIRED` rend le nettoyage rejouable.
+
+Les sessions expirent après une heure. Les multipart abandonnés sont abortés opportunistement; l'abort automatique R2 des multipart incomplets (7 jours par défaut) reste le filet final.
+
+Références : [Cloudflare R2 multipart](https://developers.cloudflare.com/r2/objects/upload-objects/), [URL présignées R2](https://developers.cloudflare.com/r2/api/s3/presigned-urls/), [limites Railway](https://docs.railway.com/networking/public-networking/specs-and-limits) et [upload direct recommandé par Railway](https://docs.railway.com/storage-buckets/uploading-serving).
+
+### Configuration R2 requise avant Production
+
+La CSP du site autorise uniquement l'origine exacte du endpoint R2 account-scoped configuré. Le bucket privé doit recevoir une CORS minimale, sans wildcard :
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://www.lnxbeats.fr"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Le staging doit utiliser sa propre origine et son propre bucket. Une lifecycle rule limitée à `creations/quarantine/` doit expirer les objets complétés orphelins après une courte rétention contrôlée (recommandation : 2 jours). Aucune configuration R2 Production n'a été modifiée.
+
+Références : [CORS R2](https://developers.cloudflare.com/r2/buckets/cors/) et [Object Lifecycles R2](https://developers.cloudflare.com/r2/buckets/object-lifecycles/).
+
+Le worker se lance séparément avec `CREATION_MEDIA_WORKER_ENABLED=true npm run creations:media-worker`. Il est idempotent, concurrence-safe, possède un bail renouvelé, trois tentatives avec backoff et un nettoyage des états terminaux. Aucun service Railway n'a été créé ici.
 
 ### Contrats acceptés
 
@@ -102,7 +143,8 @@ Rapport de candidat local — 13 septembre 2026.
 | Vidéo | MP4, H.264, AAC si piste audio | MP4 | 200 Mio |
 
 - La durée vidéo maximale est de 20 minutes.
-- Le parseur multipart exige `Content-Length`, un seul fichier, les champs attendus exactement et ferme le flux dès dépassement.
+- La validation finale FFmpeg (`-v error -xerror`) décode intégralement vidéo et audio éventuel vers `null`; aucune fenêtre de 30 secondes ne subsiste.
+- Le parseur multipart serveur reste utilisé uniquement pour les petits médias; la route historique refuse `VIDEO` avant toute lecture du corps.
 - Les fichiers sont écrits avec permissions privées dans un répertoire temporaire, inspectés, hashés en SHA-256, puis nettoyés.
 - Les clés sont générées côté serveur sous `creations/<creation-id>/<role>/<asset-id>.<ext>` et validées par une allowlist stricte.
 - L'Admin doit confirmer les droits de diffusion. Les nouveaux assets sont `PUBLIC`, `CLEARED` et `CONFIRMED` seulement après validation.
@@ -124,6 +166,7 @@ Rapport de candidat local — 13 septembre 2026.
 - Liste paginée, recherche et filtres `DRAFT` / `PUBLISHED` / `ARCHIVED`.
 - Création et édition des champs éditoriaux/SEO, position, média principal et liens externes.
 - Gestion séparée des quatre rôles média avec aperçu, remplacement et retrait confirmé.
+- Pour la vidéo : états Préparation, Envoi, Retry, Finalisation, Validation, Prêt, Erreur ou Annulé; progression réelle, reprise et annulation restent accessibles sur mobile.
 - Publication fail-closed : titre, résumé, média principal, média jouable, visibilité publique, droits `CLEARED`, type et MIME cohérents.
 - Une édition d'une création déjà publiée est soumise aux mêmes invariants.
 - Dépublication avant archivage; aucune suppression destructive de création.
@@ -150,7 +193,7 @@ Rapport de candidat local — 13 septembre 2026.
 - Canonicals sous `https://www.lnxbeats.fr/creations...`.
 - Open Graph utilise cover/poster quand il existe.
 - `/creations` et uniquement les fiches réellement publiables sont ajoutées au sitemap dynamique.
-- JSON-LD de fiche : `BreadcrumbList` + `CreativeWork`.
+- JSON-LD de fiche : `BreadcrumbList` + `CreativeWork`; les liens externes ordinaires ne sont plus détournés en `sameAs`.
 - `VideoObject` est ajouté uniquement si une vidéo publiée dispose d'une URL de contenu, d'une miniature et d'une vraie date de publication.
 - Une création audio seule ne reçoit pas de `VideoObject`.
 - URLs structurées limitées à HTTPS sans identifiants; slug canonique validé; sérialisation JSON-LD anti-injection conservée.
@@ -159,9 +202,10 @@ Rapport de candidat local — 13 septembre 2026.
 
 ### Tests automatisés
 
-- Suite Créations après polish final : 50/50 PASS.
-- Tests ciblés finaux (Créations, média, SEO, Merchant, Jukebox, audio, Admin) : tous PASS.
-- Suite canonique complète avant le polish CSS ciblé : 1184/1184 PASS, 0 échec; la surface finale modifiée a ensuite été revalidée par les suites Créations et média, ESLint, TypeScript et le build Production.
+- Suite Créations corrective finale : 75/75 PASS, incluant UUID strict, multipart direct, worker, formats vidéo réels et corruption tardive.
+- Suites ciblées finales : média 63/63, Admin 45/45, sécurité 16/16, Jukebox 78/78 et SEO 27/27, toutes PASS.
+- Runtime direct-upload sur PostgreSQL local et stockage R2 simulé : PASS (liaison acteur/session, clés serveur, finalisation, validation asynchrone, Asset déterministe, replay après crash, abort, expiration et rejet d'un `HEAD` incohérent).
+- Suite canonique complète finale : 1215/1215 PASS, 0 échec.
 - Couverture de non-régression incluse : Discographie/Jukebox, audio, Admin, catalogue, Boutique, checkout, paiements, auth, sécurité, Rights et contrats.
 - `npm run lint` : PASS.
 - `npm run typecheck` : PASS.
@@ -222,13 +266,21 @@ Répertoire temporaire non versionné : `/private/tmp/lnx-v33-polish-qa`.
 - Viewports contrôlés : 360, 375, 390, 430, 768, 1366×768 et 1920×1080.
 - Tous les sélecteurs sont contenus, leurs libellés sont complets, leur hauteur est de 48 px et aucune page ne présente d'overflow horizontal.
 
+### Correctif pipeline vidéo Admin
+
+Répertoire temporaire non versionné : `/private/tmp/lnx-v33-corrective-qa`.
+
+- États desktop Préparation / Upload / Finalisation / Validation / Prêt / Erreur : `admin-upload-states-desktop-1440.png`.
+- Reflow mobile Admin à 390 px : `admin-upload-mobile-390.png`.
+- Cette revue locale a utilisé un rendu statique Quick Look sans requête réseau; elle valide la composition et complète les assertions CSS automatisées, mais ne remplace pas le futur essai navigateur réel avec un objet R2 de staging.
+
 ## 11. Risques et limites avant Production
 
 1. **Migration non déployée.** La migration V3.3 devra être revue puis appliquée par le mécanisme Production habituel seulement après une autorisation distincte.
-2. **Premier média réel.** Aucun objet vidéo R2 Production n'a été créé. Il faudra valider sur staging ou lors d'une procédure contrôlée le `HEAD`, le `Range`, le seeking Safari et les headers réels du premier MP4.
-3. **Upload serveur.** Le trajet navigateur → Railway → fichier temporaire → R2 est nécessaire ici pour les validations Sharp/FFmpeg, mais un fichier de 200 Mio sur une liaison lente peut rencontrer la fenêtre d'upload Railway. Railway exige actuellement qu'un corps de requête soit entièrement envoyé en cinq minutes; un essai réel doit donc précéder Production. Voir [Railway — Specs & limits](https://docs.railway.com/networking/public-networking/specs-and-limits).
-4. **Évolution possible.** Si cette fenêtre est trop courte en conditions réelles, la suite logique est un multipart direct signé vers R2, suivi d'une finalisation Admin et d'une validation serveur; ce n'est pas nécessaire pour le candidat actuel et ne doit pas contourner la validation. Railway recommande les URL présignées pour servir/téléverser les objets sans faire transiter leur contenu par le service : [Uploading & serving files](https://docs.railway.com/storage-buckets/uploading-serving).
-5. **Validation appareils.** Chromium automatisé couvre la matrice responsive; un passage humain Safari iPhone et Safari macOS reste requis avant mise en Production.
+2. **Configuration contrôlée R2.** La CORS privée et la lifecycle quarantaine doivent être appliquées humainement sur staging puis Production. `CONTROLLED R2 CONFIGURATION REQUIRED BEFORE PRODUCTION`.
+3. **Premier média réel.** Aucun objet vidéo R2 Production n'a été créé. Le `HEAD`, les ETag CORS, le `Range`, le seeking et la lecture Safari/iPhone doivent être validés sur un bucket de staging réel. `REAL R2 + SAFARI/IPHONE SEEKING VALIDATION REQUIRED`.
+4. **Validation asynchrone.** La validation locale d'un MP4 synthétique H.264/AAC de 20 minutes (160×90, 5 fps) a pris environ 0,49 s après une génération de 1,87 s. Ce chiffre ne représente pas un fichier réel haute résolution/200 Mio; le worker asynchrone reste nécessaire pour supprimer tout couplage à une fenêtre de requête Railway.
+5. **Exposition après dépublication.** Une URL publique déjà signée peut rester valable au plus une heure; ce TTL est conservé pour permettre les Range requests et n'est pas présenté comme DRM.
 6. **Contenu.** Aucun contenu Production n'est fourni par la migration. Les premières créations, covers, posters, textes, crédits et liens devront être ajoutés humainement dans l'Admin.
 7. **Sous-titres.** WebVTT est prévu par l'architecture mais aucun fichier de sous-titres n'est inventé ou obligatoire dans cette V1.
 
@@ -236,10 +288,10 @@ Répertoire temporaire non versionné : `/private/tmp/lnx-v33-polish-qa`.
 
 1. Autoriser uniquement le push de la branche feature.
 2. Effectuer une revue humaine du diff, du SQL et des captures.
-3. Tester un vrai MP4 représentatif en staging, notamment upload lent, Safari, Range et seeking R2.
+3. Configurer CORS/lifecycle sur le bucket R2 de staging et tester un vrai MP4 représentatif : upload multipart, ETag, reprise, abort, validation worker, Safari, Range et seeking.
 4. Autoriser séparément l'intégration puis un déploiement contrôlé incluant la migration additive.
 5. Créer et publier les contenus réels depuis l'Admin après validation éditoriale et des droits.
 
 Prochaine décision maximale :
 
-`AUTHORIZE V3.3 FEATURE BRANCH PUSH`
+`AUTHORIZE V3.3 CORRECTIVE FEATURE BRANCH PUSH`

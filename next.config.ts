@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
+import { directUploadConnectOrigin } from "./lib/media/storage/csp";
+
 const isDevelopment = process.env.NODE_ENV === "development";
+const directUploadOrigin = directUploadConnectOrigin();
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -11,7 +14,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
+  `connect-src 'self'${directUploadOrigin ? ` ${directUploadOrigin}` : ""}${isDevelopment ? " ws: wss:" : ""}`,
   // The Admin audio editor previews the owner-selected local File through an
   // object URL; public audio still comes exclusively from same-origin routes.
   "media-src 'self' blob:",

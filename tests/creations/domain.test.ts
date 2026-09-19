@@ -102,6 +102,10 @@ test("publication accepts only public, cleared and role-coherent media", () => {
   assert.equal(isPublishableCreationAsset({ ...publishableVideo, asset: { ...publishableVideo.asset, rightsStatus: "PENDING" } }), false);
   assert.equal(isPublishableCreationAsset({ ...publishableVideo, asset: { ...publishableVideo.asset, mimeType: "video/webm" } }), false);
   assert.equal(isPublishableCreationAsset({ ...publishableVideo, role: "AUDIO" }), false);
+  assert.equal(isPublishableCreationAsset({
+    role: "COVER",
+    asset: { visibility: "PUBLIC", type: "COVER", mimeType: "image/jpeg", rightsStatus: "CLEARED" },
+  }), false);
 
   assert.deepEqual(getCreationPublicationBlockers({
     title: "Clip avec Anna",

@@ -88,7 +88,6 @@ export type StructuredCreation = Readonly<{
   publishedAt?: Date | string | null;
   collaborator?: string | null;
   category?: string | null;
-  links?: readonly string[];
   video?: StructuredCreationVideo | null;
 }>;
 
@@ -101,9 +100,6 @@ export function buildCreationStructuredData(creation: StructuredCreation) {
   const url = canonicalPublicUrl(pathname);
   const image = publicHttpUrl(creation.image);
   const publishedAt = structuredDate(creation.publishedAt);
-  const sameAs = creation.links
-    ?.map((link) => publicHttpUrl(link))
-    .filter((link): link is string => link !== null);
   const videoContentUrl = creation.video?.published
     ? publicHttpUrl(creation.video.contentUrl ?? creation.video.url)
     : null;
@@ -127,7 +123,6 @@ export function buildCreationStructuredData(creation: StructuredCreation) {
     ...(publishedAt ? { datePublished: publishedAt } : {}),
     ...(creation.collaborator?.trim() ? { contributor: creation.collaborator.trim() } : {}),
     ...(creation.category?.trim() ? { genre: creation.category.trim() } : {}),
-    ...(sameAs && sameAs.length > 0 ? { sameAs } : {}),
     ...(hasStructuredVideo ? { associatedMedia: { "@id": videoId } } : {}),
   };
   const videoObject = hasStructuredVideo

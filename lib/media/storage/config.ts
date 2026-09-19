@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { LocalMediaStorage } from "@/lib/media/storage/local";
 import { S3MediaStorage, type S3MediaStorageOptions } from "@/lib/media/storage/s3";
-import { MediaStorageError, type MediaStorage, type MediaStorageBackend, type MediaStorageReference } from "@/lib/media/storage/types";
+import { MediaStorageError, type MediaMultipartStorage, type MediaStorage, type MediaStorageBackend, type MediaStorageReference } from "@/lib/media/storage/types";
 
 type DriverName = "local" | "s3";
 type DeploymentEnvironment = "local-preview" | "test" | "staging" | "production";
@@ -23,7 +23,7 @@ type ObjectStorageConfiguration = {
 
 const objectStorageCacheSymbol = Symbol.for("lnx-studio.media.object-storage-cache.v1");
 type ObjectStorageGlobal = typeof globalThis & {
-  [objectStorageCacheSymbol]?: Map<string, MediaStorage>;
+  [objectStorageCacheSymbol]?: Map<string, S3MediaStorage>;
 };
 
 function objectStorageCache() {
@@ -31,8 +31,8 @@ function objectStorageCache() {
   // same Node process. A versioned global symbol makes the cache genuinely
   // process-scoped instead of relying on one specific bundle's module cache.
   const processGlobal = globalThis as ObjectStorageGlobal;
-  processGlobal[objectStorageCacheSymbol] ??= new Map<string, MediaStorage>();
-  return processGlobal[objectStorageCacheSymbol];
+  processGlobal[objectStorageCacheSymbol] ??= new Map<string, S3MediaStorage>();
+  return processGlobal[objectStorageCacheSymbol]!;
 }
 
 function configuredDeploymentEnvironment(): DeploymentEnvironment {
@@ -212,6 +212,14 @@ function objectStorage(
 export function activeMediaStorage(): MediaStorage {
   const deploymentEnvironment = configuredDeploymentEnvironment();
   return configuredDriver(deploymentEnvironment) === "s3" ? objectStorage() : localStorage();
+}
+
+export function activeMultipartMediaStorage(): MediaMultipartStorage {
+  const deploymentEnvironment = configuredDeploymentEnvironment();
+  if (configuredDriver(deploymentEnvironment) !== "s3") {
+    throw new MediaStorageError("CONFIGURATION", "Direct multipart uploads require object media storage.");
+  }
+  return objectStorage();
 }
 
 export function validateMediaStorageConfiguration() {

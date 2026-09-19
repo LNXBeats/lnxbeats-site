@@ -10,6 +10,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -36,6 +37,9 @@ import {
   type MediaStorage,
   type MediaStorageGetInput,
   type MediaStoragePutInput,
+  type MediaMultipartIdentity,
+  type MediaMultipartPart,
+  type MediaMultipartStorage,
 } from "@/lib/media/storage/types";
 
 type S3LikeClient = Pick<S3Client, "config" | "send">;
@@ -141,7 +145,7 @@ class ManagedMultipartUploadError extends Error {
   }
 }
 
-export class S3MediaStorage implements MediaStorage {
+export class S3MediaStorage implements MediaStorage, MediaMultipartStorage {
   readonly backend = "OBJECT" as const;
   readonly provider: string;
   private readonly buckets: Record<MediaScope, string>;
@@ -366,6 +370,7 @@ export class S3MediaStorage implements MediaStorage {
         etag: result.ETag ?? null,
         checksumSha256: result.Metadata?.sha256 ?? null,
         lastModified: result.LastModified ?? null,
+        customMetadata: result.Metadata ?? {},
       };
     } catch (error) {
       if (error instanceof MediaStorageError) throw error;
@@ -396,6 +401,7 @@ export class S3MediaStorage implements MediaStorage {
         etag: result.ETag ?? null,
         checksumSha256: result.Metadata?.sha256 ?? null,
         lastModified: result.LastModified ?? null,
+        customMetadata: result.Metadata ?? {},
       };
     } catch (error) {
       if (error instanceof MediaStorageError) throw error;
@@ -416,6 +422,125 @@ export class S3MediaStorage implements MediaStorage {
       );
     } catch (error) {
       return providerError(error);
+    }
+  }
+
+  async createMultipartUpload(input: {
+    scope: MediaScope;
+    key: string;
+    contentType: string;
+    metadata: Record<string, string>;
+  }) {
+    try {
+      const result = await this.countSdkOperation(() => this.client.send(
+        new CreateMultipartUploadCommand({
+          Bucket: this.bucket(input.scope, input.key),
+          Key: input.key,
+          ContentType: input.contentType,
+          CacheControl: input.scope === "public" ? "public, max-age=31536000, immutable" : "private, no-store",
+          Metadata: input.metadata,
+        }),
+        { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+      ));
+      if (!result.UploadId) throw new MediaStorageError("INTEGRITY", "The provider did not return a multipart upload id.");
+      return { uploadId: result.UploadId };
+    } catch (error) {
+      if (error instanceof MediaStorageError) throw error;
+      return providerError(error, "not_required", "MULTIPART_CREATE", "none");
+    }
+  }
+
+  async createMultipartPartSignedUrl(
+    input: MediaMultipartIdentity & { partNumber: number; expiresInSeconds: number },
+  ) {
+    if (!Number.isSafeInteger(input.partNumber) || input.partNumber < 1 || input.partNumber > 10_000) {
+      throw new MediaStorageError("CONFIGURATION", "Multipart part number is invalid.");
+    }
+    if (!Number.isSafeInteger(input.expiresInSeconds) || input.expiresInSeconds < 30 || input.expiresInSeconds > 900) {
+      throw new MediaStorageError("CONFIGURATION", "Multipart part signatures must expire between 30 and 900 seconds.");
+    }
+    try {
+      return await this.countSdkOperation(() => this.signer(
+        this.client as S3Client,
+        new UploadPartCommand({
+          Bucket: this.bucket(input.scope, input.key),
+          Key: input.key,
+          UploadId: input.uploadId,
+          PartNumber: input.partNumber,
+        }),
+        { expiresIn: input.expiresInSeconds },
+      ));
+    } catch (error) {
+      return providerError(error, "not_required", "MULTIPART_UPLOAD_PART", "multipart_incomplete");
+    }
+  }
+
+  async listMultipartParts(input: MediaMultipartIdentity): Promise<MediaMultipartPart[]> {
+    const parts: MediaMultipartPart[] = [];
+    let partNumberMarker: string | undefined;
+    try {
+      do {
+        const result = await this.countSdkOperation(() => this.client.send(
+          new ListPartsCommand({
+            Bucket: this.bucket(input.scope, input.key),
+            Key: input.key,
+            UploadId: input.uploadId,
+            ...(partNumberMarker ? { PartNumberMarker: partNumberMarker } : {}),
+          }),
+          { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+        ));
+        for (const part of result.Parts ?? []) {
+          if (!part.PartNumber || !part.ETag || part.Size === undefined) {
+            throw new MediaStorageError("INTEGRITY", "Multipart part metadata is incomplete.");
+          }
+          parts.push({ partNumber: part.PartNumber, etag: part.ETag, sizeBytes: part.Size });
+        }
+        partNumberMarker = result.IsTruncated ? result.NextPartNumberMarker : undefined;
+        if (result.IsTruncated && !partNumberMarker) {
+          throw new MediaStorageError("INTEGRITY", "Multipart pagination metadata is incomplete.");
+        }
+      } while (partNumberMarker);
+      return parts.sort((left, right) => left.partNumber - right.partNumber);
+    } catch (error) {
+      if (error instanceof MediaStorageError) throw error;
+      return providerError(error, "not_required", "MULTIPART_UPLOAD_PART", "multipart_incomplete");
+    }
+  }
+
+  async completeMultipartUpload(
+    input: MediaMultipartIdentity & { parts: Array<{ partNumber: number; etag: string }> },
+  ) {
+    try {
+      const result = await this.countSdkOperation(() => this.client.send(
+        new CompleteMultipartUploadCommand({
+          Bucket: this.bucket(input.scope, input.key),
+          Key: input.key,
+          UploadId: input.uploadId,
+          MultipartUpload: {
+            Parts: input.parts.map(({ partNumber, etag }) => ({ PartNumber: partNumber, ETag: etag })),
+          },
+        }),
+        { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+      ));
+      return { etag: result.ETag ?? null };
+    } catch (error) {
+      return providerError(error, "not_required", "MULTIPART_COMPLETE", "multipart_incomplete");
+    }
+  }
+
+  async abortMultipartUpload(input: MediaMultipartIdentity) {
+    try {
+      await this.countSdkOperation(() => this.client.send(
+        new AbortMultipartUploadCommand({
+          Bucket: this.bucket(input.scope, input.key),
+          Key: input.key,
+          UploadId: input.uploadId,
+        }),
+        { abortSignal: AbortSignal.timeout(this.operationTimeoutMs) },
+      ));
+    } catch (error) {
+      if (isNoSuchUpload(error)) return;
+      return providerError(error, "failed", "MULTIPART_UPLOAD_PART", "multipart_incomplete");
     }
   }
 

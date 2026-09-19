@@ -9,6 +9,17 @@ import {
   CREATION_VIDEO_MAXIMUM_BYTES,
   type CreationMediaRole,
 } from "@/lib/creations/media-contract";
+import {
+  abortDirectMultipartVideoUpload,
+  clearStoredMultipartSession,
+  DirectMultipartUploadError,
+  multipartFileSignature,
+  readStoredMultipartSession,
+  runDirectMultipartVideoUpload,
+  writeStoredMultipartSession,
+  type MultipartProgress,
+  type StoredMultipartSession,
+} from "@/lib/creations/direct-multipart-upload";
 
 const endpoint = "/api/admin/creations/media";
 
@@ -39,6 +50,12 @@ const feedback: Record<string, string> = {
   "media-absent": "Ce média n’existe plus. Rechargez la fiche.",
   "media-publication-bloquee": "Cette suppression rendrait une création publiée incomplète. Dépubliez-la ou choisissez d’abord un autre média principal.",
   "media-stockage": "Le stockage n’a pas confirmé l’intégrité du média.",
+  "media-reseau": "La connexion a été interrompue. Vous pouvez reprendre l’envoi sans renvoyer les parties déjà reçues.",
+  "media-session": "La session d’envoi n’est plus valide. Relancez un nouvel envoi.",
+  "media-reselection": "Resélectionnez le même fichier pour reprendre l’envoi.",
+  "media-expire": "La session d’envoi a expiré. Relancez un nouvel envoi.",
+  "media-annule": "L’envoi a été annulé et la quarantaine est en cours de nettoyage.",
+  "media-direct-requis": "Les vidéos doivent utiliser l’envoi direct sécurisé.",
   "media-confirmation": "Confirmez explicitement la suppression du média.",
   "media-erreur": "Impossible de traiter ce média. Réessayez.",
 };
@@ -128,13 +145,29 @@ function MediaEditor({
   const [selected, setSelected] = useState<{ file: File; url: string } | null>(null);
   const [state, setState] = useState<string>();
   const [pending, setPending] = useState<"upload" | "delete" | null>(null);
+  const [directProgress, setDirectProgress] = useState<MultipartProgress | null>(null);
+  const [resume, setResume] = useState<StoredMultipartSession | null>(null);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [alt, setAlt] = useState(current?.alt ?? title);
+  const uploadController = useRef<AbortController | null>(null);
+  const sessionToken = useRef<string | null>(null);
   const details = ROLE_DETAILS[role];
 
   useEffect(() => () => {
     if (selected) URL.revokeObjectURL(selected.url);
   }, [selected]);
+
+  useEffect(() => {
+    if (role !== "VIDEO") return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      const stored = readStoredMultipartSession(window.sessionStorage, creationId);
+      setResume(stored);
+      sessionToken.current = stored?.sessionToken ?? null;
+    });
+    return () => { active = false; };
+  }, [creationId, role]);
 
   function choose(file: File | null) {
     setSelected((previous) => {
@@ -142,6 +175,55 @@ function MediaEditor({
       return file ? { file, url: URL.createObjectURL(file) } : null;
     });
     setState(undefined);
+  }
+
+  async function uploadVideo(file: File, rightsConfirmed: boolean) {
+    const controller = new AbortController();
+    uploadController.current = controller;
+    const stored = readStoredMultipartSession(window.sessionStorage, creationId, file);
+    const input = {
+      creationId,
+      slug,
+      expectedLockVersion: lockVersion,
+      expectedAssetId: current?.id ?? "",
+      rightsConfirmed: true as const,
+      alt: "",
+      role: "VIDEO" as const,
+      filename: file.name,
+      mimeType: "video/mp4" as const,
+      sizeBytes: file.size,
+    };
+    if (!rightsConfirmed) throw new DirectMultipartUploadError("media-droits");
+    try {
+      const result = await runDirectMultipartVideoUpload({
+        file,
+        init: input,
+        resumeSessionToken: stored?.sessionToken,
+        signal: controller.signal,
+        onSession(session) {
+          sessionToken.current = session.sessionToken;
+          const value: StoredMultipartSession = {
+            sessionToken: session.sessionToken,
+            expiresAt: session.expiresAt,
+            creationId,
+            role: "VIDEO",
+            fileSignature: multipartFileSignature(file),
+            filename: file.name,
+            mimeType: "video/mp4",
+            sizeBytes: file.size,
+            lastModified: file.lastModified,
+          };
+          writeStoredMultipartSession(window.sessionStorage, value);
+          setResume(value);
+        },
+        onProgress: setDirectProgress,
+      });
+      clearStoredMultipartSession(window.sessionStorage, creationId);
+      setResume(null);
+      window.location.assign(result.location ?? window.location.href);
+    } finally {
+      uploadController.current = null;
+    }
   }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -165,6 +247,10 @@ function MediaEditor({
     setPending("upload");
     setState(undefined);
     try {
+      if (role === "VIDEO") {
+        await uploadVideo(file, rights.checked);
+        return;
+      }
       const body = new FormData();
       body.set("creationId", creationId);
       body.set("slug", slug);
@@ -186,9 +272,58 @@ function MediaEditor({
         return;
       }
       window.location.assign(result.location ?? window.location.href);
-    } catch {
-      setState("media-erreur");
+    } catch (error) {
+      setDirectProgress(null);
+      if (error instanceof DirectMultipartUploadError && feedback[error.state]) setState(error.state);
+      else if (error instanceof DOMException && error.name === "AbortError") setState("media-annule");
+      else setState("media-erreur");
     } finally {
+      setPending(null);
+    }
+  }
+
+  async function cancelVideoUpload() {
+    if (role !== "VIDEO" || !sessionToken.current) return;
+    uploadController.current?.abort();
+    const controller = new AbortController();
+    try {
+      await abortDirectMultipartVideoUpload(sessionToken.current, controller.signal);
+      clearStoredMultipartSession(window.sessionStorage, creationId);
+      sessionToken.current = null;
+      setResume(null);
+      setDirectProgress(null);
+      setState("media-annule");
+    } catch (error) {
+      setState(error instanceof DirectMultipartUploadError && feedback[error.state] ? error.state : "media-erreur");
+    }
+  }
+
+  async function resumeVideoValidation() {
+    if (role !== "VIDEO" || !resume || pending) return;
+    const controller = new AbortController();
+    uploadController.current = controller;
+    setPending("upload");
+    setState(undefined);
+    try {
+      const result = await runDirectMultipartVideoUpload({
+        init: {
+          creationId, slug, expectedLockVersion: lockVersion, expectedAssetId: current?.id ?? "",
+          rightsConfirmed: true, alt: "", role: "VIDEO", filename: resume.filename,
+          mimeType: "video/mp4", sizeBytes: resume.sizeBytes,
+        },
+        resumeSessionToken: resume.sessionToken,
+        signal: controller.signal,
+        onProgress: setDirectProgress,
+      });
+      clearStoredMultipartSession(window.sessionStorage, creationId);
+      window.location.assign(result.location ?? window.location.href);
+    } catch (error) {
+      setDirectProgress(null);
+      if (error instanceof DirectMultipartUploadError && feedback[error.state]) setState(error.state);
+      else if (error instanceof DOMException && error.name === "AbortError") setState("media-annule");
+      else setState("media-erreur");
+    } finally {
+      uploadController.current = null;
       setPending(null);
     }
   }
@@ -247,6 +382,19 @@ function MediaEditor({
     </div> : <p className="admin-muted">Aucun fichier pour cet emplacement.</p>}
 
     {state && feedback[state] ? <p className="admin-feedback" role="status">{feedback[state]}</p> : null}
+    {role === "VIDEO" && directProgress ? <div className="admin-creation-upload" aria-live="polite">
+      <div className="admin-creation-upload__heading">
+        <strong>{directProgress.phase === "validating" ? "Validation intégrale" : directProgress.phase === "finalizing" ? "Finalisation" : directProgress.phase === "retrying" ? "Nouvelle tentative" : "Envoi direct vers le stockage"}</strong>
+        <span>{directProgress.percent.toLocaleString("fr-FR")} %</span>
+      </div>
+      <progress max={100} value={directProgress.percent}>{directProgress.percent} %</progress>
+      <small>{directProgress.completedParts}/{directProgress.partCount || "…"} parties · {formatBytes(directProgress.uploadedBytes)} / {formatBytes(directProgress.totalBytes)}</small>
+      {directProgress.phase !== "validating" && directProgress.phase !== "ready" ? <button className="admin-button admin-button--danger" type="button" onClick={cancelVideoUpload}>Annuler l’envoi</button> : null}
+    </div> : null}
+    {role === "VIDEO" && resume && !pending && !directProgress ? <div className="admin-creation-upload-resume">
+      <p className="admin-form-note">Une session interrompue est disponible. Resélectionnez <strong>{resume.filename}</strong> pour reprendre les parties manquantes, ou vérifiez si sa validation est déjà en cours.</p>
+      <button className="admin-button" type="button" onClick={resumeVideoValidation}>Reprendre la session</button>
+    </div> : null}
     {editable ? <form ref={formRef} className="admin-catalogue-form" onSubmit={upload}>
       <label className="admin-delivery-picker admin-product-image__picker">
         <input
@@ -273,7 +421,7 @@ function MediaEditor({
         <span>Je confirme disposer des droits nécessaires pour diffuser ce média.</span>
       </label>
       <button className="admin-button" type="submit" disabled={pending !== null || !selected}>
-        {pending === "upload" ? "Téléversement en cours…" : current ? "Remplacer" : "Téléverser"}
+        {pending === "upload" ? (role === "VIDEO" ? "Envoi ou validation en cours…" : "Téléversement en cours…") : resume && role === "VIDEO" ? "Reprendre l’envoi" : current ? "Remplacer" : "Téléverser"}
       </button>
     </form> : null}
 

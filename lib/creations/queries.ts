@@ -82,7 +82,7 @@ function mediaAsset(
   if (role === "VIDEO" && (match.type !== "VIDEO" || match.mimeType !== "video/mp4")) return null;
   if (
     (role === "COVER" || role === "VIDEO_POSTER")
-    && ((match.type !== "COVER" && match.type !== "IMAGE") || !match.mimeType.startsWith("image/"))
+    && ((match.type !== "COVER" && match.type !== "IMAGE") || match.mimeType !== "image/webp")
   ) return null;
   return {
     id: match.id,

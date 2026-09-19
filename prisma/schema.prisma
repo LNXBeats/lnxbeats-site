@@ -150,6 +150,16 @@ enum CreationAssetRole {
   VIDEO
 }
 
+enum CreationMediaUploadStatus {
+  UPLOADING
+  QUARANTINE
+  VALIDATING
+  READY
+  REJECTED
+  ABORTED
+  EXPIRED
+}
+
 enum OrderAssetRole {
   REFERENCE
   DELIVERY
@@ -942,6 +952,7 @@ model User {
   shopReturnAuditEvents              ShopReturnAuditEvent[]        @relation("ShopReturnAuditActor")
   adminRecordArchives                AdminRecordArchive[]          @relation("AdminRecordArchiveActor")
   adminCleanupAuditEvents            AdminCleanupAuditEvent[]      @relation("AdminCleanupAuditActor")
+  creationMediaUploadSessions        CreationMediaUploadSession[]  @relation("CreationMediaUploadActor")
 
   @@index([role, status])
   @@map("users")
@@ -1237,28 +1248,71 @@ model ProjectAsset {
 }
 
 model Creation {
-  id             String                 @id @default(uuid()) @db.Uuid
-  slug           String                 @unique @db.VarChar(160)
-  title          String                 @db.VarChar(240)
-  summary        String?                @db.VarChar(1000)
-  description    String?                @db.Text
-  collaborator   String?                @db.VarChar(240)
-  credits        String?                @db.Text
-  category       String?                @db.VarChar(120)
-  primaryMedia   CreationPrimaryMedia?
-  position       Int                    @default(0)
-  status         CreationStatus         @default(DRAFT)
-  publishedAt    DateTime?              @db.Timestamptz(3)
-  seoTitle       String?                @db.VarChar(240)
-  seoDescription String?                @db.Text
-  lockVersion    Int                    @default(1)
-  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime               @updatedAt @db.Timestamptz(3)
-  assets         CreationAsset[]
-  externalLinks  CreationExternalLink[]
+  id                  String                       @id @default(uuid()) @db.Uuid
+  slug                String                       @unique @db.VarChar(160)
+  title               String                       @db.VarChar(240)
+  summary             String?                      @db.VarChar(1000)
+  description         String?                      @db.Text
+  collaborator        String?                      @db.VarChar(240)
+  credits             String?                      @db.Text
+  category            String?                      @db.VarChar(120)
+  primaryMedia        CreationPrimaryMedia?
+  position            Int                          @default(0)
+  status              CreationStatus               @default(DRAFT)
+  publishedAt         DateTime?                    @db.Timestamptz(3)
+  seoTitle            String?                      @db.VarChar(240)
+  seoDescription      String?                      @db.Text
+  lockVersion         Int                          @default(1)
+  createdAt           DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                     @updatedAt @db.Timestamptz(3)
+  assets              CreationAsset[]
+  externalLinks       CreationExternalLink[]
+  mediaUploadSessions CreationMediaUploadSession[]
 
   @@index([status, position, id])
   @@map("creations")
+}
+
+model CreationMediaUploadSession {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  tokenHash            String                    @unique @db.Char(64)
+  creationId           String                    @db.Uuid
+  creationSlug         String                    @db.VarChar(160)
+  actorUserId          String                    @db.Uuid
+  role                 CreationAssetRole
+  status               CreationMediaUploadStatus @default(UPLOADING)
+  expectedLockVersion  Int
+  expectedAssetId      String?                   @db.Uuid
+  rightsConfirmed      Boolean
+  alt                  String?                   @db.VarChar(500)
+  originalFilename     String                    @db.VarChar(255)
+  declaredMimeType     String                    @db.VarChar(160)
+  declaredSizeBytes    BigInt
+  quarantineKey        String                    @unique @db.VarChar(500)
+  provider             String                    @db.VarChar(80)
+  providerUploadId     String                    @unique @db.Text
+  partSizeBytes        Int
+  partCount            Int
+  expiresAt            DateTime                  @db.Timestamptz(3)
+  completedAt          DateTime?                 @db.Timestamptz(3)
+  validationStartedAt  DateTime?                 @db.Timestamptz(3)
+  validationFinishedAt DateTime?                 @db.Timestamptz(3)
+  availableAt          DateTime                  @default(now()) @db.Timestamptz(3)
+  leaseExpiresAt       DateTime?                 @db.Timestamptz(3)
+  leaseToken           String?                   @db.Uuid
+  attempts             Int                       @default(0)
+  lastErrorCode        String?                   @db.VarChar(80)
+  resultAssetId        String?                   @db.Uuid
+  resultLockVersion    Int?
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                  @updatedAt @db.Timestamptz(3)
+  creation             Creation                  @relation(fields: [creationId], references: [id], onDelete: Restrict)
+  actor                User                      @relation("CreationMediaUploadActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([actorUserId, status, expiresAt])
+  @@index([creationId, role, status])
+  @@index([status, availableAt, leaseExpiresAt, createdAt])
+  @@map("creation_media_upload_sessions")
 }
 
 model CreationAsset {

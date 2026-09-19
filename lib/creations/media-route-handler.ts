@@ -129,6 +129,9 @@ export async function handleCreationMediaUpload(
 ) {
   const baseUrl = await authorize(request, dependencies);
   if (!baseUrl) return json({ ok: false }, 403);
+  if (request.headers.get("x-lnx-creation-media-role")?.toUpperCase() === "VIDEO") {
+    return json({ ok: false, state: "media-direct-requis" }, 409);
+  }
   let upload: CreationMediaUpload | null = null;
   try {
     upload = await dependencies.readUpload(request);

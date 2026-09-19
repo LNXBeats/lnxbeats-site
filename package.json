@@ -141,6 +141,8 @@
     "media:backup": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/media-backup.ts",
     "media:migrate": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/media-migrate.ts",
     "media:import:production": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/import-production-media.ts",
+    "creations:media-worker": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/creation-media-worker.ts",
+    "test:creations:direct-upload-runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-creation-direct-upload-runtime.ts",
     "media:migrate:dry-run": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/media-migrate.ts --dry-run",
     "catalog:cover:browser-fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/catalog-cover-browser-fixtures.ts",
     "order:qa:fixtures": "NODE_OPTIONS=--conditions=react-server tsx scripts/order-qa-fixtures.ts",

@@ -150,7 +150,7 @@ function assertExpectedState(
   expectedLockVersion: number,
   expectedAssetId: string | null,
 ) {
-  if (state.creation.lockVersion !== expectedLockVersion || state.current?.id !== expectedAssetId) {
+  if (state.creation.lockVersion !== expectedLockVersion || (state.current?.id ?? null) !== expectedAssetId) {
     throw new CreationMediaConflictError(state.current?.id ?? null, state.creation.lockVersion);
   }
 }
@@ -210,7 +210,7 @@ function assertUploadContract(upload: CreationMediaUpload) {
   }
 }
 
-export async function replaceAdminCreationMedia(upload: CreationMediaUpload) {
+export async function replaceAdminCreationMedia(upload: CreationMediaUpload & { activationAssetId?: string }) {
   assertDatabaseConfigured();
   const creationId = parseIdentity(upload.creationId);
   const slug = parseSlug(upload.slug);
@@ -220,13 +220,38 @@ export async function replaceAdminCreationMedia(upload: CreationMediaUpload) {
     throw new CreationMediaError("RIGHTS_CONFIRMATION_REQUIRED", "Confirmez les droits de diffusion de ce média.");
   }
   assertUploadContract(upload);
+  const assetId = upload.activationAssetId ? parseIdentity(upload.activationAssetId) : randomUUID();
+  if (upload.activationAssetId) {
+    const activated = await prisma.creationAsset.findUnique({
+      where: { creationId_role: { creationId, role: upload.role } },
+      include: { creation: { select: { slug: true, lockVersion: true } }, asset: true },
+    });
+    if (activated?.assetId === assetId) {
+      if (
+        activated.creation.slug !== slug
+        || activated.asset.mimeType !== upload.mimeType
+        || activated.asset.sizeBytes !== BigInt(upload.sizeBytes)
+        || activated.asset.checksumSha256 !== upload.checksumSha256
+      ) throw new CreationMediaError("STORAGE_INTEGRITY", "Le média déjà activé ne correspond pas à la session.");
+      return { assetId, slug, lockVersion: activated.creation.lockVersion };
+    }
+  }
   const preflightState = await preflight(creationId, slug, upload.role, expectedLockVersion, expectedAssetId);
 
-  const assetId = randomUUID();
   const configuration = ROLE_CONFIGURATION[upload.role];
   const storageKey = creationMediaStorageKey(creationId, upload.role, assetId);
   const storage = activeStorageMetadata();
-  const stagedAsset = await prisma.asset.create({
+  const existingStagedAsset = upload.activationAssetId
+    ? await prisma.asset.findUnique({ where: { id: assetId } })
+    : null;
+  if (existingStagedAsset && (
+    existingStagedAsset.storageKey !== storageKey
+    || existingStagedAsset.mimeType !== configuration.mimeType
+    || existingStagedAsset.sizeBytes !== BigInt(upload.sizeBytes)
+    || existingStagedAsset.checksumSha256 !== upload.checksumSha256
+    || existingStagedAsset.visibility !== "PUBLIC"
+  )) throw new CreationMediaError("STORAGE_INTEGRITY", "Le média réservé ne correspond pas à la session.");
+  const stagedAsset = existingStagedAsset ?? await prisma.asset.create({
     data: {
       id: assetId,
       type: configuration.type,

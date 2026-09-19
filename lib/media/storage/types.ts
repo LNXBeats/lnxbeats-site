@@ -43,6 +43,7 @@ export type MediaObjectMetadata = {
   etag: string | null;
   checksumSha256: string | null;
   lastModified: Date | null;
+  customMetadata?: Record<string, string>;
 };
 
 export type MediaObject = MediaObjectMetadata & {
@@ -58,6 +59,37 @@ export type MediaSignedUrlInput = {
   contentLength?: number;
   downloadFilename?: string;
 };
+
+export type MediaMultipartPart = {
+  partNumber: number;
+  etag: string;
+  sizeBytes: number;
+};
+
+export type MediaMultipartIdentity = {
+  scope: MediaScope;
+  key: string;
+  uploadId: string;
+};
+
+export interface MediaMultipartStorage {
+  readonly backend: "OBJECT";
+  readonly provider: string;
+  createMultipartUpload(input: {
+    scope: MediaScope;
+    key: string;
+    contentType: string;
+    metadata: Record<string, string>;
+  }): Promise<{ uploadId: string }>;
+  createMultipartPartSignedUrl(
+    input: MediaMultipartIdentity & { partNumber: number; expiresInSeconds: number },
+  ): Promise<string>;
+  listMultipartParts(input: MediaMultipartIdentity): Promise<MediaMultipartPart[]>;
+  completeMultipartUpload(
+    input: MediaMultipartIdentity & { parts: Array<Pick<MediaMultipartPart, "partNumber" | "etag">> },
+  ): Promise<{ etag: string | null }>;
+  abortMultipartUpload(input: MediaMultipartIdentity): Promise<void>;
+}
 
 export interface MediaStorage {
   readonly backend: MediaStorageBackend;
