@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { directUploadConnectOrigin, publicMediaOrigin } from "@/lib/media/storage/csp";
@@ -20,4 +21,13 @@ test("R2 CSP permits only the exact configured bucket origins", () => {
   }
   assert.throws(() => directUploadConnectOrigin({ ...r2, MEDIA_PRIVATE_BUCKET: "bucket.example.invalid/path" }));
   assert.throws(() => publicMediaOrigin({ ...r2, MEDIA_PUBLIC_BUCKET: "" }));
+});
+
+test("validated public R2 media is allowed for images and audio/video without widening origins", async () => {
+  const config = await readFile(new URL("../../next.config.ts", import.meta.url), "utf8");
+
+  assert.match(config, /img-src 'self' data: blob:\$\{playbackOrigin \? ` \$\{playbackOrigin\}` : ""\}/);
+  assert.match(config, /media-src 'self' blob:\$\{playbackOrigin \? ` \$\{playbackOrigin\}` : ""\}/);
+  assert.doesNotMatch(config, /img-src[^\n]*\*/);
+  assert.doesNotMatch(config, /media-src[^\n]*\*/);
 });
