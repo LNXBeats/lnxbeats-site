@@ -4,8 +4,30 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { creationMediaResponse } from "../../lib/creations/media-response";
+import { creationMediaResponse, publicMediaSignedUrlTtlSeconds } from "../../lib/creations/media-response";
 import { putMediaObject } from "../../lib/media/storage";
+
+test("short signed media TTL is strictly limited to Preview", () => {
+  assert.equal(publicMediaSignedUrlTtlSeconds({}), 3_600);
+  assert.equal(publicMediaSignedUrlTtlSeconds({
+    MEDIA_DEPLOYMENT_ENV: "preview",
+    CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "5",
+  }), 5);
+  for (const deployment of ["production", "staging", "test"]) {
+    assert.equal(publicMediaSignedUrlTtlSeconds({
+      MEDIA_DEPLOYMENT_ENV: deployment,
+      CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "5",
+    }), 3_600);
+  }
+  assert.equal(publicMediaSignedUrlTtlSeconds({
+    MEDIA_DEPLOYMENT_ENV: "preview",
+    CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "2",
+  }), 3_600);
+  assert.equal(publicMediaSignedUrlTtlSeconds({
+    MEDIA_DEPLOYMENT_ENV: "preview",
+    CREATION_MEDIA_SIGNED_URL_TTL_SECONDS: "61",
+  }), 3_600);
+});
 
 test("Creation media supports byte ranges while authenticated draft previews remain private", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "lnx-creation-response-"));

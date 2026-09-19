@@ -20,6 +20,12 @@ test("the public stage performs no eager or automatic media playback", async () 
   assert.match(source, /\{videoMounted \? \(/);
   assert.match(source, /flushSync\(\(\) => setVideoMounted\(true\)\)/);
   assert.match(source, /element\.src = source/);
+  assert.match(source, /CREATION_MEDIA_NETWORK_RECOVERY_LIMIT/);
+  assert.match(source, /refreshedCreationMediaUrl/);
+  assert.match(source, /element\.load\(\)/);
+  const recoveryBody = source.match(/const recoverExpiredMedia = useCallback\(\(kind:[\s\S]*?\n  \}, \[/)?.[0] ?? "";
+  assert.match(recoveryBody, /element\.load\(\)/);
+  assert.doesNotMatch(recoveryBody, /\.play\(\)/);
   assert.match(source, /onClick=\{\(\) => void play\("video", selected\)\}/);
   assert.equal(source.match(/\bunoptimized\b/g)?.length, 3, "redirected private R2 artwork must bypass the Next image optimizer");
 });

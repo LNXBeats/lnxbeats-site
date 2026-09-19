@@ -16,7 +16,9 @@ import {
 import { flushSync } from "react-dom";
 
 import {
+  CREATION_MEDIA_NETWORK_RECOVERY_LIMIT,
   initialCreationMediaPlayerState,
+  refreshedCreationMediaUrl,
   reduceCreationMediaPlayerState,
   type CreationMediaPlayerAction,
 } from "@/lib/creations/media-player";
@@ -145,6 +147,7 @@ export function CreationMediaStage({
   const loadedRef = useRef<Record<CreationMediaKind, string | null>>({ audio: null, video: null });
   const positionsRef = useRef(new Map<string, number>());
   const playRequestRef = useRef(0);
+  const recoveryAttemptsRef = useRef(new Map<string, number>());
   const [videoMounted, setVideoMounted] = useState(false);
   const [loadedMedia, setLoadedMedia] = useState<Record<CreationMediaKind, string | null>>({
     audio: null,
@@ -229,6 +232,30 @@ export function CreationMediaStage({
     setFailedMedia(null);
     return true;
   }, [elementFor, rememberPosition, sourceFor, transition]);
+
+  const recoverExpiredMedia = useCallback((kind: CreationMediaKind) => {
+    const element = elementFor(kind);
+    const creation = creationForLoadedMedia(kind);
+    const source = creation ? sourceFor(creation, kind) : null;
+    if (!element || !creation || !source) return false;
+
+    const key = mediaKey(creation.slug, kind);
+    const attempts = recoveryAttemptsRef.current.get(key) ?? 0;
+    if (attempts >= CREATION_MEDIA_NETWORK_RECOVERY_LIMIT) return false;
+
+    rememberPosition(kind);
+    if (!element.paused) element.pause();
+    transition({ type: "pause", slug: creation.slug, kind });
+    recoveryAttemptsRef.current.set(key, attempts + 1);
+    setFailedMedia(null);
+    element.src = refreshedCreationMediaUrl(
+      source,
+      `${Date.now()}-${attempts + 1}`,
+      window.location.href,
+    );
+    element.load();
+    return true;
+  }, [creationForLoadedMedia, elementFor, rememberPosition, sourceFor, transition]);
 
   const play = useCallback(async (kind: CreationMediaKind, creation: PublicCreation) => {
     if (!sourceFor(creation, kind)) return;
@@ -390,6 +417,10 @@ export function CreationMediaStage({
                 aria-hidden={!videoVisible}
                 aria-label={`Vidéo de ${loadedMedia.video ? creations.find((creation) => creation.slug === loadedMedia.video)?.title ?? selected.title : selected.title}`}
                 onLoadedMetadata={(event) => restoreRememberedPosition("video", event.currentTarget)}
+                onCanPlay={() => {
+                  const slug = loadedRef.current.video;
+                  if (slug) recoveryAttemptsRef.current.delete(mediaKey(slug, "video"));
+                }}
                 onPlay={(event) => {
                   const loaded = creationForLoadedMedia("video");
                   if (!loaded || event.currentTarget.paused) return;
@@ -412,7 +443,7 @@ export function CreationMediaStage({
                 }}
                 onError={() => {
                   const slug = loadedRef.current.video;
-                  if (slug) setFailedMedia(mediaKey(slug, "video"));
+                  if (slug && !recoverExpiredMedia("video")) setFailedMedia(mediaKey(slug, "video"));
                 }}
               >
                 Votre navigateur ne peut pas lire cette vidéo MP4.
@@ -507,6 +538,10 @@ export function CreationMediaStage({
         ref={audioRef}
         preload="none"
         onLoadedMetadata={(event) => restoreRememberedPosition("audio", event.currentTarget)}
+        onCanPlay={() => {
+          const slug = loadedRef.current.audio;
+          if (slug) recoveryAttemptsRef.current.delete(mediaKey(slug, "audio"));
+        }}
         onPlay={(event) => {
           const loaded = creationForLoadedMedia("audio");
           if (!loaded || event.currentTarget.paused) return;
@@ -540,7 +575,7 @@ export function CreationMediaStage({
         }}
         onError={() => {
           const slug = loadedRef.current.audio;
-          if (slug) setFailedMedia(mediaKey(slug, "audio"));
+          if (slug && !recoverExpiredMedia("audio")) setFailedMedia(mediaKey(slug, "audio"));
         }}
       />
 

@@ -17,6 +17,14 @@ export type CreationMediaPlayerAction =
   | { type: "play"; slug: string; kind: CreationMediaKind }
   | { type: "pause"; slug: string; kind: CreationMediaKind };
 
+export const CREATION_MEDIA_NETWORK_RECOVERY_LIMIT = 1;
+
+export function refreshedCreationMediaUrl(source: string, nonce: string, baseUrl: string) {
+  const url = new URL(source, baseUrl);
+  url.searchParams.set("lnx-media-refresh", nonce);
+  return url.toString();
+}
+
 export function initialCreationMediaPlayerState(
   selectedCreationSlug: string,
   primaryMedia: CreationPrimaryMedia,

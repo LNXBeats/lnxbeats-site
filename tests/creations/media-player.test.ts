@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CREATION_MEDIA_NETWORK_RECOVERY_LIMIT,
   initialCreationMediaPlayerState,
+  refreshedCreationMediaUrl,
   reduceCreationMediaPlayerState,
 } from "../../lib/creations/media-player";
 import {
@@ -133,4 +135,16 @@ test("video dimensions map deterministically to 16:9, 9:16 and 1:1 presentation 
   assert.equal(creationVideoOrientation(asset({ width: 1_080, height: 1_080 })), "square");
   assert.equal(creationVideoOrientation(asset({ width: null, height: null })), "landscape");
   assert.equal(creationVideoOrientation(null), "landscape");
+});
+
+test("signed media recovery is bounded and forces a fresh application request", () => {
+  assert.equal(CREATION_MEDIA_NETWORK_RECOVERY_LIMIT, 1);
+  const refreshed = new URL(refreshedCreationMediaUrl(
+    "/media/creations/00000000-0000-4000-8000-000000000001",
+    "expiry-proof-1",
+    "https://preview.example/creations/demo",
+  ));
+  assert.equal(refreshed.origin, "https://preview.example");
+  assert.equal(refreshed.pathname, "/media/creations/00000000-0000-4000-8000-000000000001");
+  assert.equal(refreshed.searchParams.get("lnx-media-refresh"), "expiry-proof-1");
 });

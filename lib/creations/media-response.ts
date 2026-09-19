@@ -16,6 +16,22 @@ export type CreationMediaAsset = MediaStorageReference & {
   updatedAt: Date;
 };
 
+const DEFAULT_PUBLIC_MEDIA_SIGNED_URL_TTL_SECONDS = 3_600;
+
+export function publicMediaSignedUrlTtlSeconds(
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const raw = environment.CREATION_MEDIA_SIGNED_URL_TTL_SECONDS?.trim();
+  if (!raw) return DEFAULT_PUBLIC_MEDIA_SIGNED_URL_TTL_SECONDS;
+
+  const deployment = environment.MEDIA_DEPLOYMENT_ENV?.trim();
+  const seconds = Number(raw);
+  if (deployment !== "preview" || !Number.isSafeInteger(seconds) || seconds < 3 || seconds > 60) {
+    return DEFAULT_PUBLIC_MEDIA_SIGNED_URL_TTL_SECONDS;
+  }
+  return seconds;
+}
+
 function mediaHeaders(asset: CreationMediaAsset, size: number, privatePreview: boolean) {
   return {
     "Accept-Ranges": "bytes",
@@ -52,7 +68,9 @@ export async function creationMediaResponse(
     }
 
     if (asset.storageBackend === "OBJECT" && !privatePreview) {
-      const location = await createPublicMediaSignedUrl(asset, { expiresInSeconds: 3_600 });
+      const location = await createPublicMediaSignedUrl(asset, {
+        expiresInSeconds: publicMediaSignedUrlTtlSeconds(),
+      });
       if (location) {
         return new Response(null, {
           status: 307,
