@@ -21,6 +21,7 @@ test("the public stage performs no eager or automatic media playback", async () 
   assert.match(source, /flushSync\(\(\) => setVideoMounted\(true\)\)/);
   assert.match(source, /element\.src = source/);
   assert.match(source, /onClick=\{\(\) => void play\("video", selected\)\}/);
+  assert.equal(source.match(/\bunoptimized\b/g)?.length, 3, "redirected private R2 artwork must bypass the Next image optimizer");
 });
 
 test("selection, active media, saved positions and the global playback claim remain separate", async () => {

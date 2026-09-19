@@ -93,6 +93,7 @@ function CreationArtwork({
           src={artwork.url}
           alt={artwork.alt || `Visuel de ${creation.title}`}
           fill
+          unoptimized
           priority={priority}
           loading={priority ? "eager" : "lazy"}
           sizes="(max-width: 820px) 92vw, (max-width: 1440px) 58vw, 900px"
@@ -368,7 +369,7 @@ export function CreationMediaStage({
   return (
     <section className="creation-experience" aria-labelledby={headingId} data-selected-creation={selected.slug} data-active-media={state.activeMedia ? `${state.activeMedia.creationSlug}:${state.activeMedia.kind}` : ""}>
       <div className="creation-stage" data-primary-media={state.selectedMedia}>
-        {artwork ? <div className="creation-stage__ambient" aria-hidden="true"><Image src={artwork.url} alt="" fill sizes="1px" /></div> : null}
+        {artwork ? <div className="creation-stage__ambient" aria-hidden="true"><Image src={artwork.url} alt="" fill unoptimized sizes="1px" /></div> : null}
         <div className="creation-stage__media">
           <div
             className="creation-stage__frame"
@@ -575,7 +576,7 @@ export function CreationMediaStage({
                 onClick={() => selectCreation(creation)}
               >
                 <span className="creation-rail__art">
-                  {itemArtwork ? <Image src={itemArtwork.url} alt="" fill sizes="160px" /> : <span>LNX</span>}
+                  {itemArtwork ? <Image src={itemArtwork.url} alt="" fill unoptimized sizes="160px" /> : <span>LNX</span>}
                 </span>
                 <span className="creation-rail__copy"><strong>{creation.title}</strong><small>{creation.category || "Création"}</small></span>
                 <span className="creation-rail__media" aria-label={[creation.audio ? "audio" : null, creation.video ? "vidéo" : null].filter(Boolean).join(" et ")}>{creation.audio ? "♪" : ""}{creation.video ? "▶" : ""}</span>
