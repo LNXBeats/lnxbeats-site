@@ -372,3 +372,14 @@ Fixture synthétique non versionnée : MOV H.264/MP3, 1920×1080, 30 fps, 80 s, 
 ### Gates restant propres à la Preview
 
 La preuve finale doit encore utiliser les buckets R2 Preview existants et le worker Railway Preview sur le même SHA : upload réel de chaque format, fichier réellement supérieur à 315 Mo, états Admin, remplacement atomique, Range/seek, renouvellement d'URL signée et lecture Safari macOS. L'iPhone physique demeure une recette humaine et ne peut pas être remplacé par une simulation WebKit.
+
+### Recette réelle Preview V3.4 — 19 septembre 2026
+
+- Web et worker ont servi le même SHA feature sur l'environnement isolé `preview-v33-media`; PostgreSQL et les deux buckets privés `lnx-studio-v33-preview-public` / `lnx-studio-v33-preview-private` étaient exclusivement ceux de la Preview.
+- Les sources MOV (325,8 Mio puis 469,6 Mio), WebM et M4V ont été envoyées par le multipart navigateur → R2, traitées par le worker puis exposées en MP4 H.264/AAC READY. Le fichier de 469,6 Mio a produit une sortie de 94,8 Mio en 1 920×1 080 et 1 min 56 s.
+- Le pic observé pendant ces recettes cumulées a été de 3,042 vCPU et 1 402,634 Mio de RAM sur l'enveloppe Preview de 8 vCPU / 8 192 Mio. La cible de 500 Mio reste donc retenue, avec une marge mesurée sur une source proche de la limite et un test PostgreSQL à la borne exacte.
+- Un WebM tronqué a été rejeté sans remplacer le M4V READY précédent. Le client efface désormais la reprise locale lorsqu'une session atteint un échec terminal, tout en la conservant pour une panne réseau récupérable.
+- La route publique a répondu `206` à une plage de 1 024 octets avec `Accept-Ranges`, `Content-Range`, `Content-Length` et `video/mp4`. Chromium et Safari macOS réel ont lu et seeké la vidéo; Safari a été vérifié jusqu'à 49 s sur 1 min 56 s.
+- La CORS privée autorise uniquement l'origine HTTPS Preview, `PUT`, `Content-Type` et expose `ETag`. La CORS de diffusion autorise uniquement cette origine, `GET`/`HEAD`, `Range` et expose les en-têtes de lecture partielle. `r2.dev` et les domaines publics restent désactivés.
+- Les multipart incomplets expirent au bout de 7 jours et les objets `creations/quarantine/` au bout de 2 jours; aucune règle n'expire les médias READY.
+- Restent non démontrés : renouvellement navigateur après expiration réelle de l'URL signée d'une heure, replay après crash forcé du worker et recette Safari sur iPhone physique.

@@ -83,6 +83,10 @@ export class DirectMultipartUploadError extends Error {
   }
 }
 
+export function shouldClearStoredMultipartSession(error: unknown) {
+  return error instanceof DirectMultipartUploadError && !error.recoverable;
+}
+
 function abortError() { return new DOMException("Upload interrupted", "AbortError"); }
 export function isUploadAbort(error: unknown) { return error instanceof DOMException && error.name === "AbortError"; }
 function assertActive(signal: AbortSignal) { if (signal.aborted) throw abortError(); }

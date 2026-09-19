@@ -7,6 +7,7 @@ import {
   multipartPartPlan,
   readStoredMultipartSession,
   runDirectMultipartVideoUpload,
+  shouldClearStoredMultipartSession,
   writeStoredMultipartSession,
   type MultipartProgress,
   type MultipartStatusResponse,
@@ -118,6 +119,13 @@ test("stored resume state contains only an opaque token and requires the exact s
   assert.equal(readStoredMultipartSession(storage, init.creationId, same)?.sessionToken, sessionToken);
   assert.equal(readStoredMultipartSession(storage, init.creationId, other), null);
   assert.doesNotMatch(JSON.stringify(value), /access.?key|secret/i);
+});
+
+test("terminal upload failures discard stale resume sessions while transient failures remain resumable", () => {
+  assert.equal(shouldClearStoredMultipartSession(new DirectMultipartUploadError("media-illisible")), true);
+  assert.equal(shouldClearStoredMultipartSession(new DirectMultipartUploadError("media-expire")), true);
+  assert.equal(shouldClearStoredMultipartSession(new DirectMultipartUploadError("media-reseau", true)), false);
+  assert.equal(shouldClearStoredMultipartSession(new DOMException("interrupted", "AbortError")), false);
 });
 
 test("Admin exposes real upload phases, cancellation, resume and 48px mobile controls", async () => {

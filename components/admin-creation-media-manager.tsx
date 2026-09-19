@@ -17,6 +17,7 @@ import {
   multipartFileSignature,
   readStoredMultipartSession,
   runDirectMultipartVideoUpload,
+  shouldClearStoredMultipartSession,
   writeStoredMultipartSession,
   type MultipartProgress,
   type StoredMultipartSession,
@@ -326,6 +327,11 @@ function MediaEditor({
       window.location.assign(result.location ?? window.location.href);
     } catch (error) {
       setDirectProgress(null);
+      if (shouldClearStoredMultipartSession(error)) {
+        clearStoredMultipartSession(window.sessionStorage, creationId);
+        sessionToken.current = null;
+        setResume(null);
+      }
       if (error instanceof DirectMultipartUploadError && feedback[error.state]) setState(error.state);
       else if (error instanceof DOMException && error.name === "AbortError") setState("media-annule");
       else setState("media-erreur");
@@ -371,6 +377,11 @@ function MediaEditor({
       window.location.assign(result.location ?? window.location.href);
     } catch (error) {
       setDirectProgress(null);
+      if (shouldClearStoredMultipartSession(error)) {
+        clearStoredMultipartSession(window.sessionStorage, creationId);
+        sessionToken.current = null;
+        setResume(null);
+      }
       if (error instanceof DirectMultipartUploadError && feedback[error.state]) setState(error.state);
       else if (error instanceof DOMException && error.name === "AbortError") setState("media-annule");
       else setState("media-erreur");
