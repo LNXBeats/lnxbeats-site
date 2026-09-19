@@ -107,7 +107,7 @@ test("production media migration is additive and classifies catalogue assets as 
   assert.doesNotMatch(sql, /TRUNCATE|DELETE\s+FROM/i);
 });
 
-test("a staging, production or Railway environment refuses ephemeral local media storage", () => {
+test("a preview, staging, production or Railway environment refuses ephemeral local media storage", () => {
   const previous = {
     driver: process.env.MEDIA_STORAGE_DRIVER,
     deployment: process.env.MEDIA_DEPLOYMENT_ENV,
@@ -127,6 +127,9 @@ test("a staging, production or Railway environment refuses ephemeral local media
 
     process.env.MEDIA_DEPLOYMENT_ENV = "production";
     delete process.env.RAILWAY_ENVIRONMENT;
+    assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+
+    process.env.MEDIA_DEPLOYMENT_ENV = "preview";
     assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
 
     delete process.env.MEDIA_STORAGE_DRIVER;
@@ -193,6 +196,56 @@ test("Cloudflare R2 configuration requires its canonical endpoint and environmen
       ["MEDIA_PRIVATE_BUCKET", "lnx-studio-staging-private-copy"],
     ] as const;
     for (const [name, value] of invalidConfigurations) {
+      const validValue = process.env[name];
+      process.env[name] = value;
+      assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");
+      process.env[name] = validValue;
+    }
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test("Cloudflare R2 preview configuration accepts only dedicated role-scoped preview buckets", () => {
+  const names = [
+    "MEDIA_STORAGE_DRIVER",
+    "MEDIA_DEPLOYMENT_ENV",
+    "MEDIA_STORAGE_PROVIDER",
+    "MEDIA_S3_ENDPOINT",
+    "MEDIA_S3_REGION",
+    "MEDIA_S3_ACCESS_KEY_ID",
+    "MEDIA_S3_SECRET_ACCESS_KEY",
+    "MEDIA_PUBLIC_BUCKET",
+    "MEDIA_PRIVATE_BUCKET",
+    "MEDIA_S3_FORCE_PATH_STYLE",
+  ] as const;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, {
+      MEDIA_STORAGE_DRIVER: "s3",
+      MEDIA_DEPLOYMENT_ENV: "preview",
+      MEDIA_STORAGE_PROVIDER: "r2",
+      MEDIA_S3_ENDPOINT: "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
+      MEDIA_S3_REGION: "auto",
+      MEDIA_S3_ACCESS_KEY_ID: "test-access",
+      MEDIA_S3_SECRET_ACCESS_KEY: "test-secret",
+      MEDIA_PUBLIC_BUCKET: "lnx-studio-v33-preview-public",
+      MEDIA_PRIVATE_BUCKET: "lnx-studio-v33-preview-private",
+      MEDIA_S3_FORCE_PATH_STYLE: "false",
+    });
+    assert.deepEqual(validateMediaStorageConfiguration(), { backend: "OBJECT", provider: "r2" });
+
+    for (const [name, value] of [
+      ["MEDIA_PUBLIC_BUCKET", "lnx-studio-v33-production-public"],
+      ["MEDIA_PRIVATE_BUCKET", "lnx-studio-v33-staging-private"],
+      ["MEDIA_PUBLIC_BUCKET", "lnx-studio-v33-preview-private"],
+      ["MEDIA_PRIVATE_BUCKET", "lnx-studio-v33-preview-public"],
+      ["MEDIA_PUBLIC_BUCKET", "lnx-studio-v33-public"],
+      ["MEDIA_PRIVATE_BUCKET", "lnx-studio-v33-private"],
+    ] as const) {
       const validValue = process.env[name];
       process.env[name] = value;
       assert.throws(validateMediaStorageConfiguration, (error) => error instanceof MediaStorageError && error.code === "CONFIGURATION");

@@ -8,7 +8,7 @@ import { S3MediaStorage, type S3MediaStorageOptions } from "@/lib/media/storage/
 import { MediaStorageError, type MediaMultipartStorage, type MediaStorage, type MediaStorageBackend, type MediaStorageReference } from "@/lib/media/storage/types";
 
 type DriverName = "local" | "s3";
-type DeploymentEnvironment = "local-preview" | "test" | "staging" | "production";
+type DeploymentEnvironment = "local-preview" | "test" | "preview" | "staging" | "production";
 
 type ObjectStorageConfiguration = {
   provider: string;
@@ -37,7 +37,7 @@ function objectStorageCache() {
 
 function configuredDeploymentEnvironment(): DeploymentEnvironment {
   const value = process.env.MEDIA_DEPLOYMENT_ENV?.trim() || "local-preview";
-  if (!(["local-preview", "test", "staging", "production"] as string[]).includes(value)) {
+  if (!(["local-preview", "test", "preview", "staging", "production"] as string[]).includes(value)) {
     throw new MediaStorageError("CONFIGURATION", "MEDIA_DEPLOYMENT_ENV is invalid.");
   }
   return value as DeploymentEnvironment;
@@ -52,6 +52,7 @@ function configuredDriver(deploymentEnvironment = configuredDeploymentEnvironmen
     value === "local"
     && (
       deploymentEnvironment === "staging"
+      || deploymentEnvironment === "preview"
       || deploymentEnvironment === "production"
       || process.env.RAILWAY_ENVIRONMENT
     )
@@ -89,7 +90,7 @@ function configuredBoolean(name: string, fallback = false) {
   return value === "true";
 }
 
-function assertEnvironmentBucket(scope: "public" | "private", bucket: string, deploymentEnvironment: "staging" | "production") {
+function assertEnvironmentBucket(scope: "public" | "private", bucket: string, deploymentEnvironment: "preview" | "staging" | "production") {
   if (deploymentEnvironment === "staging") {
     const expectedBucket = `lnx-studio-staging-${scope}`;
     if (bucket !== expectedBucket) {
@@ -102,6 +103,21 @@ function assertEnvironmentBucket(scope: "public" | "private", bucket: string, de
   }
 
   const normalized = bucket.toLowerCase();
+  if (deploymentEnvironment === "preview") {
+    if (
+      !normalized.split("-").includes(scope)
+      || !normalized.split("-").includes("preview")
+      || normalized.split("-").includes("staging")
+      || normalized.split("-").includes("production")
+    ) {
+      throw new MediaStorageError(
+        "CONFIGURATION",
+        `MEDIA_${scope.toUpperCase()}_BUCKET must identify a dedicated ${scope} preview bucket.`,
+      );
+    }
+    return;
+  }
+
   if (
     !normalized.split("-").includes(scope)
     || !normalized.split("-").includes(deploymentEnvironment)
@@ -148,8 +164,8 @@ function validateR2Configuration(configuration: ObjectStorageConfiguration, depl
     throw new MediaStorageError("CONFIGURATION", "MEDIA_S3_FORCE_PATH_STYLE must be false for Cloudflare R2.");
   }
 
-  if (deploymentEnvironment !== "staging" && deploymentEnvironment !== "production") {
-    throw new MediaStorageError("CONFIGURATION", "Cloudflare R2 requires MEDIA_DEPLOYMENT_ENV=staging or production.");
+  if (deploymentEnvironment !== "preview" && deploymentEnvironment !== "staging" && deploymentEnvironment !== "production") {
+    throw new MediaStorageError("CONFIGURATION", "Cloudflare R2 requires MEDIA_DEPLOYMENT_ENV=preview, staging or production.");
   }
   assertEnvironmentBucket("public", configuration.publicBucket, deploymentEnvironment);
   assertEnvironmentBucket("private", configuration.privateBucket, deploymentEnvironment);
