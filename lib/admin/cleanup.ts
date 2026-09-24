@@ -149,7 +149,7 @@ export async function listAdminCleanupCandidates(): Promise<AdminCleanupCandidat
     });
   }
   return candidates.sort((left, right) => {
-    const rank = { DELETE_SAFE: 0, ARCHIVE_REQUIRED: 1, KEEP_ACTION_REQUIRED: 2 } as const;
+    const rank = { DELETE_SAFE: 0, ARCHIVE_REQUIRED: 1, HUMAN_REVIEW: 2, KEEP_ACTION_REQUIRED: 3 } as const;
     return rank[left.classification] - rank[right.classification]
       || right.createdAt.getTime() - left.createdAt.getTime()
       || left.reference.localeCompare(right.reference);
@@ -177,14 +177,14 @@ export function parseAdminCleanupTargets(values: readonly string[]): ParsedTarge
     const [type, id, expected, extra] = raw.split(":");
     if (extra || !adminManagedRecordTypes.includes(type as AdminManagedRecordType)) throw new Error("CLEANUP_TARGET_INVALID");
     if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)) throw new Error("CLEANUP_TARGET_INVALID");
-    if (!["DELETE_SAFE", "ARCHIVE_REQUIRED", "KEEP_ACTION_REQUIRED"].includes(expected)) throw new Error("CLEANUP_TARGET_INVALID");
+    if (!["DELETE_SAFE", "ARCHIVE_REQUIRED", "KEEP_ACTION_REQUIRED", "HUMAN_REVIEW"].includes(expected)) throw new Error("CLEANUP_TARGET_INVALID");
     unique.set(`${type}:${id}`, { type: type as AdminManagedRecordType, id, expected: expected as AdminCleanupClassification });
   }
   const targets = [...unique.values()];
   if (targets.length > 1 && targets.some((target) => target.type !== targets[0].type || target.expected !== targets[0].expected)) {
     throw new Error("CLEANUP_MIXED_ACTIONS_FORBIDDEN");
   }
-  if (targets.some((target) => target.expected === "KEEP_ACTION_REQUIRED")) {
+  if (targets.some((target) => target.expected === "KEEP_ACTION_REQUIRED" || target.expected === "HUMAN_REVIEW")) {
     throw new Error("CLEANUP_ACTION_REQUIRED");
   }
   return targets;
@@ -233,10 +233,7 @@ export async function executeAdminCleanupPlan(targets: readonly ParsedTarget[], 
     for (const target of targets) {
       const current = await classifyTarget(transaction, target);
       if (current.classification.classification !== target.expected) throw new Error("CLEANUP_CLASSIFICATION_CHANGED");
-      if (target.expected === "KEEP_ACTION_REQUIRED") {
-        counters.ignored += 1;
-        continue;
-      }
+      if (target.expected === "KEEP_ACTION_REQUIRED" || target.expected === "HUMAN_REVIEW") throw new Error("CLEANUP_ACTION_REQUIRED");
       if (target.expected === "ARCHIVE_REQUIRED") {
         const existing = await transaction.adminRecordArchive.findUnique({
           where: { recordType_recordId: { recordType: target.type, recordId: target.id } }, select: { id: true },

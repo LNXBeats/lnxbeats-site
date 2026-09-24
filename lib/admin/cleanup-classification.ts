@@ -1,6 +1,7 @@
 import { getOrderDeletionEligibility } from "@/lib/admin/order-machine";
 
-export type AdminCleanupClassification = "DELETE_SAFE" | "ARCHIVE_REQUIRED" | "KEEP_ACTION_REQUIRED";
+// HUMAN_REVIEW is a preview-only state; it is never persisted as an audit enum.
+export type AdminCleanupClassification = "DELETE_SAFE" | "ARCHIVE_REQUIRED" | "KEEP_ACTION_REQUIRED" | "HUMAN_REVIEW";
 
 type CleanupDecision = Readonly<{
   classification: AdminCleanupClassification;
@@ -82,11 +83,15 @@ export function classifyMusicOrderCleanup(snapshot: MusicCleanupSnapshot): Clean
       reason: "Dossier terminé ou porteur d’un historique à conserver ; seule sa sortie des vues courantes est autorisée.",
     };
   }
+  if (baseEligibility.eligible || snapshot.status === "AWAITING_PAYMENT") {
+    return {
+      classification: "HUMAN_REVIEW",
+      reason: "L’historique ne suffit pas à prouver qu’il s’agit d’un essai abandonné ; décision humaine requise, sans action automatique.",
+    };
+  }
   return {
     classification: "KEEP_ACTION_REQUIRED",
-    reason: baseEligibility.eligible
-      ? "Aucune preuve explicite de fixture : une validation humaine est requise avant toute suppression."
-      : baseEligibility.reason,
+    reason: baseEligibility.reason,
   };
 }
 

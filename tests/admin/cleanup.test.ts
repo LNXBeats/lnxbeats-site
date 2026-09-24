@@ -37,6 +37,29 @@ test("an active music order remains actionable even when its label looks like QA
   assert.equal(classifyMusicOrderCleanup(music({ status: "IN_PROGRESS" })).classification, "KEEP_ACTION_REQUIRED");
 });
 
+test("historical financial cases stay protected and an old unpaid order remains ambiguous", () => {
+  for (const reference of ["LNX-2026-000003", "LNX-2026-000007", "LNX-2026-000011"]) {
+    const decision = classifyMusicOrderCleanup(music({
+      status: "REFUSED",
+      customerEmail: "historical@example.invalid",
+      assets: [],
+      payments: [{ status: "SUCCEEDED", amountCents: 5_000, refundedAmountCents: 0 }],
+      invoices: [{ creditNotes: [] }],
+    }));
+    assert.equal(decision.classification, "KEEP_ACTION_REQUIRED", reference);
+  }
+  const ambiguous = classifyMusicOrderCleanup(music({
+    status: "AWAITING_PAYMENT",
+    customerEmail: "unknown@example.com",
+    assets: [{ role: "REFERENCE" }],
+    payments: [], invoices: [], notifications: [], withdrawalRequests: [],
+  }));
+  assert.equal(ambiguous.classification, "HUMAN_REVIEW", "historic LNX-2026-000012 cannot be automatically archived or deleted");
+  assert.equal(classifyMusicOrderCleanup(music({ status: "DRAFT", assets: [], customerEmail: "real@example.com" })).classification, "HUMAN_REVIEW");
+  assert.equal(classifyMusicOrderCleanup(music({ status: "DRAFT", assets: [], customerEmail: "stripe-test@example.com" })).classification, "HUMAN_REVIEW");
+  assert.equal(classifyMusicOrderCleanup(music({ status: "DRAFT", assets: [], customerEmail: "paypal-qa@example.com" })).classification, "HUMAN_REVIEW");
+});
+
 test("terminal labels cannot hide an unresolved financial or operational action", () => {
   assert.equal(classifyMusicOrderCleanup(music({
     payments: [{ status: "SUCCEEDED", amountCents: 5_000, refundedAmountCents: 0 }],
@@ -112,6 +135,7 @@ test("cleanup targets are typed, deduplicated and carry the preview classificati
   assert.throws(() => parseAdminCleanupTargets([`SHOP_ORDER:${id}:DELETE_SAFE:extra`]));
   assert.throws(() => parseAdminCleanupTargets([`UNKNOWN:${id}:DELETE_SAFE`]));
   assert.throws(() => parseAdminCleanupTargets([`MUSIC_ORDER:${id}:KEEP_ACTION_REQUIRED`]));
+  assert.throws(() => parseAdminCleanupTargets([`MUSIC_ORDER:${id}:HUMAN_REVIEW`]));
   assert.throws(() => parseAdminCleanupTargets([`MUSIC_ORDER:${id}:DELETE_SAFE`, `SHOP_ORDER:20000000-0000-4000-8000-000000000002:DELETE_SAFE`]));
   assert.throws(() => parseAdminCleanupTargets([`MUSIC_ORDER:${id}:DELETE_SAFE`, `MUSIC_ORDER:20000000-0000-4000-8000-000000000002:ARCHIVE_REQUIRED`]));
 });

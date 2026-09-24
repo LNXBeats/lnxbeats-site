@@ -9,11 +9,16 @@ const LABELS = {
   DELETE_SAFE: "Supprimable définitivement",
   ARCHIVE_REQUIRED: "À archiver",
   KEEP_ACTION_REQUIRED: "À conserver",
+  HUMAN_REVIEW: "Décision humaine requise",
 } as const;
 
 export function AdminCleanupForm({ candidates }: { candidates: readonly AdminCleanupCandidate[] }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [confirmed, setConfirmed] = useState(false);
+  const classifications = useMemo(() => candidates.reduce((counts, item) => {
+    if (!item.archived) counts[item.classification] += 1;
+    return counts;
+  }, { DELETE_SAFE: 0, ARCHIVE_REQUIRED: 0, KEEP_ACTION_REQUIRED: 0, HUMAN_REVIEW: 0 }), [candidates]);
   const summary = useMemo(() => {
     const values = { deleted: 0, archived: 0, ignored: 0 };
     for (const item of candidates) {
@@ -26,6 +31,12 @@ export function AdminCleanupForm({ candidates }: { candidates: readonly AdminCle
   }, [candidates, selected]);
 
   return <form action={executeAdminCleanupAction} className="admin-cleanup-form">
+    <div className="admin-cleanup-summary" aria-label="Classification des dossiers visibles">
+      <strong>A · {classifications.DELETE_SAFE} supprimable{classifications.DELETE_SAFE === 1 ? "" : "s"}</strong>
+      <strong>B · {classifications.ARCHIVE_REQUIRED} archivable{classifications.ARCHIVE_REQUIRED === 1 ? "" : "s"}</strong>
+      <strong>C · {classifications.KEEP_ACTION_REQUIRED} à conserver</strong>
+      <strong>D · {classifications.HUMAN_REVIEW} à examiner humainement</strong>
+    </div>
     <div className="admin-cleanup-summary" aria-live="polite">
       <strong>{summary.deleted} supprimé{summary.deleted === 1 ? "" : "s"} définitivement</strong>
       <strong>{summary.archived} archivé{summary.archived === 1 ? "" : "s"}</strong>
@@ -41,7 +52,7 @@ export function AdminCleanupForm({ candidates }: { candidates: readonly AdminCle
               name="targets"
               value={`${key}:${item.classification}`}
               checked={selected.has(key)}
-              disabled={item.classification === "KEEP_ACTION_REQUIRED"}
+              disabled={item.classification !== "DELETE_SAFE" && item.classification !== "ARCHIVE_REQUIRED"}
               onChange={(event) => {
                 setConfirmed(false);
                 setSelected((current) => {

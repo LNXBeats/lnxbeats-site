@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 
 import { rightsOffers } from "@/data/rights-offer";
-import { classifyMusicOrderCleanup } from "@/lib/admin/cleanup-classification";
+import { classifyMusicOrderCleanup, type AdminCleanupClassification } from "@/lib/admin/cleanup-classification";
 import {
   classifyCommanderOperation,
   commanderAttentionStatuses,
@@ -16,8 +16,6 @@ import { validateContractTemplate } from "@/lib/rights/templates";
 const INVENTORY_CONFIRMATION = "read-only-v120-admin-inventory";
 const MUSIC_ORDER_LIMIT = 10;
 const QA_TITLE_MARKER = /\b(?:qa|test|fixture|e2e|demo)\b/i;
-
-type CleanupClassification = "DELETE_SAFE" | "ARCHIVE_REQUIRED" | "KEEP_ACTION_REQUIRED";
 
 function assertProductionInventoryEnvironment(environment: NodeJS.ProcessEnv) {
   const railwayProduction = environment.RAILWAY_ENVIRONMENT_NAME === "production"
@@ -138,7 +136,7 @@ function hasQaTitleMarker(title: string | null) {
   return Boolean(title && QA_TITLE_MARKER.test(title));
 }
 
-function classifyMusicOrder(row: MusicOrderRow): CleanupClassification {
+function classifyMusicOrder(row: MusicOrderRow): AdminCleanupClassification {
   return classifyMusicOrderCleanup(row).classification;
 }
 
@@ -241,10 +239,11 @@ async function buildInventory(transaction: Prisma.TransactionClient) {
   ]);
 
   const musicOrders = musicRows.map(musicOrderInventory);
-  const classifications: Record<CleanupClassification, string[]> = {
+  const classifications: Record<AdminCleanupClassification, string[]> = {
     DELETE_SAFE: [],
     ARCHIVE_REQUIRED: [],
     KEEP_ACTION_REQUIRED: [],
+    HUMAN_REVIEW: [],
   };
   for (const order of musicOrders) classifications[order.classification].push(order.reference);
 
