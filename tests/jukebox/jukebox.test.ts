@@ -258,6 +258,8 @@ test("hidden projects are filtered from lists, direct pages, sitemap and public 
   assert.match(queries, /listSitemapProjects[\s\S]*?where: publicProjectWhere/);
   assert.match(coverRoute, /publicVisible: true/);
   assert.match(audioRoute, /publicVisible: true/);
-  assert.match(albumPage, /if \(!project\) notFound\(\)/);
+  assert.match(albumPage, /if \(!project\) \{[\s\S]*resolveLegacyPublicSlug\("album", slug\)[\s\S]*notFound\(\)/);
+  const aliases = await readFile(new URL("../../lib/seo/legacy-slugs.ts", import.meta.url), "utf8");
+  assert.match(aliases, /formerSlugs: \{ has: formerSlug \}, publicVisible: true, status: \{ in: \["PUBLISHED", "IN_DEVELOPMENT"\] \}/);
   assert.match(sitemap, /listSitemapProjects\(\)/);
 });

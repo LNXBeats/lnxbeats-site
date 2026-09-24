@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { assertCreationPublishable } from "@/lib/creations/domain";
+import { availableSlug, nextFormerSlugs } from "@/lib/seo/slugs";
 import {
   CreationValidationError,
   parseCreationCollaboratorInput,
@@ -105,7 +106,11 @@ export async function createAdminCreation(input: Record<string, unknown>) {
   try {
     return await prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('creation-record-creation')) IS NULL AS locked`;
-      if (await transaction.creation.findUnique({ where: { slug: values.slug }, select: { id: true } })) {
+      const taken = (slug: string) => slug === "nouveau" ? Promise.resolve(true) : transaction.creation.findFirst({
+        where: { OR: [{ slug }, { formerSlugs: { has: slug } }] }, select: { id: true },
+      }).then(Boolean);
+      if (!input.slug) values.slug = await availableSlug(values.title, taken);
+      else if (await taken(values.slug)) {
         throw new CreationServiceError("Ce slug est déjà utilisé.", "SLUG_TAKEN");
       }
       return transaction.creation.create({
@@ -170,6 +175,16 @@ export async function updateAdminCreation(
       if (values.slug !== current.slug) {
         throw new CreationServiceError("Le slug d’une création existante est immuable.", "SLUG_IMMUTABLE");
       }
+      if (current.status === "DRAFT" && values.title !== current.title) {
+        const activeUpload = await transaction.creationMediaUploadSession.count({
+          where: { creationId, status: { in: ["UPLOADING", "QUARANTINE", "ANALYZING", "TRANSCODING", "VALIDATING"] } },
+        });
+        if (activeUpload) throw new CreationServiceError("Terminez l’upload média avant de modifier le titre.", "CONFLICT");
+        await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('creation-record-creation')) IS NULL AS locked`;
+        values.slug = await availableSlug(values.title, (slug) => slug === "nouveau" ? Promise.resolve(true) : transaction.creation.findFirst({
+          where: { id: { not: creationId }, OR: [{ slug }, { formerSlugs: { has: slug } }] }, select: { id: true },
+        }).then(Boolean));
+      }
       // A published row must stay publishable after every editorial update.
       // Lifecycle fields remain service-owned, while this check prevents an
       // Admin edit from silently exposing an incomplete or incoherent record.
@@ -183,7 +198,7 @@ export async function updateAdminCreation(
       }
       const update = await transaction.creation.updateMany({
         where: { id: creationId, lockVersion: expectedLockVersion, status: { not: "ARCHIVED" } },
-        data: { ...values, lockVersion: { increment: 1 } },
+        data: { ...values, formerSlugs: nextFormerSlugs(current.slug, current.formerSlugs, values.slug), lockVersion: { increment: 1 } },
       });
       if (update.count !== 1) throw new CreationServiceError("La fiche a changé. Rechargez la page.", "CONFLICT");
       return transaction.creation.findUniqueOrThrow({ where: { id: creationId } });

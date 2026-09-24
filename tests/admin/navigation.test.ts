@@ -38,14 +38,12 @@ test("Admin mobile and tablet navigation is an accessible grouped disclosure", (
   assert.match(navigation, /aria-expanded=\{navigationOpen\}/);
   assert.match(navigation, /event\.key !== "Escape"/);
   assert.match(navigation, /menuButtonRef\.current\?\.focus\(\)/);
-  assert.match(navigation, /adminNavigationGroups = \["Pilotage", "Commerce", "Finance", "Droits", "Contenu", "Comptes"\]/);
-  assert.match(navigation, /href: "\/admin\/nettoyage", label: "Nettoyage & archives", group: "Pilotage"/);
-  assert.match(navigation, /href: "\/admin\/boutique\/logistique", label: "Logistique", group: "Commerce"/);
-  assert.match(navigation, /href: "\/admin\/tarifs", label: "Tarifs", group: "Commerce"/);
-  assert.match(navigation, /href: "\/admin\/facturation", label: "Facturation", group: "Finance"/);
-  assert.match(navigation, /href: "\/admin\/droits", label: "Droits & contrats", group: "Droits"/);
-  assert.match(navigation, /href: "\/admin\/catalogue", label: "Catalogue", group: "Contenu"/);
-  assert.match(navigation, /href: "\/admin\/membres", label: "Membres", group: "Comptes"/);
+  assert.match(navigation, /adminNavigationGroups = \["Accueil", "Créations", "Boutique", "Clients & documents", "Réglages", "Avancé"\]/);
+  for (const path of ["/admin/nettoyage", "/admin/boutique/logistique", "/admin/tarifs", "/admin/facturation", "/admin/droits", "/admin/catalogue", "/admin/membres"]) {
+    assert.ok(navigation.includes(`href: "${path}"`), `${path} remains reachable`);
+  }
+  assert.match(navigation, /<details className="admin-header__subnav"/);
+  assert.match(navigation, /<summary aria-label=\{`Rubriques \$\{group\}`\}/);
   assert.match(navigation, /export type AdminNavigationActionCounts/);
   assert.match(navigation, /actionRequiredCounts\?: AdminNavigationActionCounts/);
   assert.match(navigation, /criticalActionRequiredCounts\?: AdminNavigationActionCounts/);

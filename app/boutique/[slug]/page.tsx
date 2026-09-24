@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
 import { ShopAddButton } from "@/components/shop-add-button";
 import { JsonLd } from "@/components/json-ld";
@@ -10,6 +10,7 @@ import { formatShopMoney } from "@/lib/shop/order-presentation";
 import { getPublicShopProduct } from "@/lib/shop/order-service";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildProductStructuredData } from "@/lib/seo/structured-data";
+import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ type Context = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Context): Promise<Metadata> {
   const { slug } = await params;
   const product = await getPublicShopProduct(slug);
-  if (!product) return { title: "Produit indisponible", robots: { index: false, follow: false } };
+  if (!product) return { title: "Produit indisponible", robots: { index: false, follow: false }, alternates: { canonical: null } };
   return createPublicPageMetadata({
     title: product.title,
     description: product.description.slice(0, 180),
@@ -33,7 +34,11 @@ export async function generateMetadata({ params }: Context): Promise<Metadata> {
 export default async function ShopProductPage({ params }: Context) {
   const { slug } = await params;
   const product = await getPublicShopProduct(slug);
-  if (!product) notFound();
+  if (!product) {
+    const replacement = await resolveLegacyPublicSlug("boutique", slug);
+    if (replacement && await getPublicShopProduct(replacement)) permanentRedirect(`/boutique/${replacement}`);
+    notFound();
+  }
   return (
     <div className="shop-commerce-shell shop-product-page">
       <JsonLd id="lnx-product-structured-data" data={buildProductStructuredData(product)} />

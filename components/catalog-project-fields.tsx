@@ -50,7 +50,7 @@ export function CatalogProjectFields({
   seoFallbacks?: { title: string; description: string };
 }) {
   return <div className="admin-form-grid">
-    {mode === "create" ? <label><span>Slug</span><input name="slug" defaultValue={values.slug ?? ""} maxLength={160} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="projet-a-venir" required /><small>Proposé depuis le titre, puis vérifié et normalisé par le serveur.</small></label> : <label><span>Slug (non modifiable)</span><input value={values.slug ?? ""} readOnly /><small>L’URL publique reste stable. La modification du slug n’est pas proposée.</small></label>}
+    {mode === "create" ? <label className="admin-advanced-slug"><span>Adresse personnalisée (facultatif)</span><input name="slug" defaultValue={values.slug ?? ""} maxLength={160} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="Créée depuis le titre si vide" /><small>Le serveur crée une adresse unique depuis le titre lorsque ce champ reste vide.</small></label> : <label><span>Adresse publique stable</span><input value={values.slug ?? ""} readOnly /><small>Le titre peut changer sans casser cette URL.</small></label>}
     <label><span>Titre</span><input name="title" defaultValue={values.title ?? ""} maxLength={240} required autoFocus={autoFocusTitle} /></label>
     <label><span>Sous-titre</span><input name="subtitle" defaultValue={values.subtitle ?? ""} maxLength={240} /></label>
     <label><span>Type</span><select name="type" defaultValue={projectType(values.type)}><option value="album">Album</option><option value="single">Single</option><option value="project">Projet</option></select></label>

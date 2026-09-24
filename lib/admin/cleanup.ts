@@ -180,7 +180,14 @@ export function parseAdminCleanupTargets(values: readonly string[]): ParsedTarge
     if (!["DELETE_SAFE", "ARCHIVE_REQUIRED", "KEEP_ACTION_REQUIRED"].includes(expected)) throw new Error("CLEANUP_TARGET_INVALID");
     unique.set(`${type}:${id}`, { type: type as AdminManagedRecordType, id, expected: expected as AdminCleanupClassification });
   }
-  return [...unique.values()];
+  const targets = [...unique.values()];
+  if (targets.length > 1 && targets.some((target) => target.type !== targets[0].type || target.expected !== targets[0].expected)) {
+    throw new Error("CLEANUP_MIXED_ACTIONS_FORBIDDEN");
+  }
+  if (targets.some((target) => target.expected === "KEEP_ACTION_REQUIRED")) {
+    throw new Error("CLEANUP_ACTION_REQUIRED");
+  }
+  return targets;
 }
 
 async function classifyTarget(transaction: Transaction, target: ParsedTarget) {

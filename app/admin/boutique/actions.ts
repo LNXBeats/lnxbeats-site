@@ -69,6 +69,7 @@ function refreshProduct(slug: string) {
   revalidatePath("/admin/boutique");
   revalidatePath(`/admin/boutique/${slug}`);
   revalidatePath("/boutique");
+  revalidatePath("/sitemap.xml");
 }
 
 function stateForError(error: unknown) {

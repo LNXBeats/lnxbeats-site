@@ -68,8 +68,9 @@ export async function deleteCatalogProjectAction(formData: FormData) {
 
 export async function saveCatalogProjectAction(formData: FormData) {
   const { projectId, slug } = validIdentity(formData); await authorize();
-  try { await updateCatalogProject(projectId, values(formData)); } catch { redirect(path(slug, "projet-refuse")); }
-  refresh(slug); redirect(path(slug, "projet-enregistre"));
+  let project;
+  try { project = await updateCatalogProject(projectId, values(formData)); } catch { redirect(path(slug, "projet-refuse")); }
+  refresh(slug); refresh(project.slug); redirect(path(project.slug, "projet-enregistre"));
 }
 export async function addCatalogTrackAction(formData: FormData) {
   const { projectId, slug } = validIdentity(formData); await authorize();

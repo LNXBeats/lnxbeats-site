@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
 import { CreationMediaStage } from "@/components/creations/creation-media-stage";
 import { CreationCollaborators } from "@/components/creations/creation-collaborators";
@@ -10,6 +10,7 @@ import { creationArtwork } from "@/lib/creations/types";
 import { getPublicCreation, listPublicCreations } from "@/lib/creations/queries";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildCreationStructuredData } from "@/lib/seo/structured-data";
+import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ function isoDuration(durationMs: number | null) {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const creation = await getPublicCreation(slug);
-  if (!creation) return {};
+  if (!creation) return { title: "Création introuvable", robots: { index: false, follow: false }, alternates: { canonical: null } };
   const image = creationArtwork(creation);
   return createPublicPageMetadata({
     title: creation.seo.title,
@@ -39,7 +40,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function CreationPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [creation, allCreations] = await Promise.all([getPublicCreation(slug), listPublicCreations()]);
-  if (!creation) notFound();
+  if (!creation) {
+    const replacement = await resolveLegacyPublicSlug("creations", slug);
+    if (replacement) permanentRedirect(`/creations/${replacement}`);
+    notFound();
+  }
   const artwork = creationArtwork(creation);
   const related = allCreations.filter((item) => item.slug !== creation.slug).slice(0, 3);
   const structuredData = buildCreationStructuredData({

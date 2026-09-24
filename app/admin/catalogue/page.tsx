@@ -32,6 +32,11 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
       <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
       <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue PostgreSQL</p><h1>La discographie, éditable.</h1></div><div className="admin-page-heading__actions"><p>Les pages publiques et cette administration lisent désormais la même source. Chaque enregistrement reste explicite et contrôlé.</p><Link className="admin-primary-action" href="/admin/catalogue/nouveau"><span aria-hidden="true">+</span> Nouveau projet</Link></div></header>
 
+      <nav className="admin-v2-section-hub" aria-label="Espaces de création">
+        <Link href="/admin/creations"><strong>Créations & collaborations</strong><span>Médias, collaborateurs et liens externes</span></Link>
+        <Link href="/admin/catalogue" aria-current="page"><strong>Catalogue & discographie</strong><span>{catalogue.total} projets · albums, singles et jukebox</span></Link>
+      </nav>
+
       {params.etat === "projet-supprime" ? <p className="admin-feedback" role="status">Projet supprimé définitivement.</p> : null}
       {params.etat === "projet-supprime-media-a-verifier" ? <p className="admin-feedback" role="alert">Projet supprimé. Un objet média orphelin devra être réconcilié par la procédure de stockage.</p> : null}
 

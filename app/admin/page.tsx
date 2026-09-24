@@ -46,31 +46,31 @@ export default async function AdminPage() {
       </header>
 
       <section className="admin-overview-grid" aria-label="Compteurs opérationnels">
-        <article className="admin-overview-card admin-overview-card--primary">
+        <article className="admin-overview-card admin-overview-card--primary" data-empty={cockpit.counts.commander === 0 || undefined}>
           <div><p>Commandes Commander</p><strong>{cockpit.counts.commander}</strong></div>
           <p>Étapes métier ou incidents financiers qui nécessitent une décision humaine.</p>
           <Link href="/admin/commandes?filtre=attention">Voir les commandes à examiner <span aria-hidden="true">→</span></Link>
         </article>
 
-        <article className="admin-overview-card">
+        <article className="admin-overview-card" data-empty={cockpit.counts.shopOrders === 0 || undefined}>
           <div><p>Commandes Boutique</p><strong>{cockpit.counts.shopOrders}</strong></div>
           <p>Paiements à vérifier, demandes client, préparation et expédition.</p>
           <Link href="/admin/boutique/commandes?filtre=attention">Voir les commandes à traiter <span aria-hidden="true">→</span></Link>
         </article>
 
-        <article className="admin-overview-card">
+        <article className="admin-overview-card" data-empty={cockpit.counts.rights === 0 || undefined}>
           <div><p>Droits & contrats</p><strong>{cockpit.counts.rights}</strong></div>
           <p>Dossiers actuellement placés à une étape de traitement Admin.</p>
           <Link href="/admin/droits">Examiner les dossiers <span aria-hidden="true">→</span></Link>
         </article>
 
-        <article className="admin-overview-card">
+        <article className="admin-overview-card" data-empty={cockpit.counts.notifications === 0 || undefined}>
           <div><p>Notifications</p><strong>{cockpit.counts.notifications}</strong></div>
           <p>Échecs, incidents de distribution ou traitements interrompus.</p>
           <Link href="/admin/notifications?filtre=attention">Voir les notifications à examiner <span aria-hidden="true">→</span></Link>
         </article>
 
-        <article className="admin-overview-card">
+        <article className="admin-overview-card" data-empty={cockpit.counts.shopReturns === 0 || undefined}>
           <div><p>SAV Boutique</p><strong>{cockpit.counts.shopReturns}</strong></div>
           <p>Revues, réceptions, inspections et réconciliations encore nécessaires.</p>
           <Link href={cockpit.shopReturnsHref}>Voir les dossiers SAV <span aria-hidden="true">→</span></Link>

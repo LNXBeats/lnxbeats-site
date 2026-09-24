@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { listAdminCreations } from "@/lib/creations/service";
+import { getAdminCatalogPage } from "@/lib/catalog/service";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Créations · Administration" };
@@ -20,7 +21,10 @@ export default async function AdminCreationsPage({
   const query = params.q ?? "";
   const status = params.statut ?? "all";
   const requestedPage = /^\d+$/.test(params.page ?? "") ? Number(params.page) : 1;
-  const catalogue = await listAdminCreations(query, status, requestedPage);
+  const [catalogue, discography] = await Promise.all([
+    listAdminCreations(query, status, requestedPage),
+    getAdminCatalogPage("", "all", 1),
+  ]);
 
   const pageHref = (page: number) => {
     const values = new URLSearchParams();
@@ -40,6 +44,11 @@ export default async function AdminCreationsPage({
         <Link className="admin-primary-action" href="/admin/creations/nouveau"><span aria-hidden="true">+</span> Nouvelle création</Link>
       </div>
     </header>
+
+    <nav className="admin-v2-section-hub" aria-label="Espaces de création">
+      <Link href="/admin/creations" aria-current="page"><strong>Créations & collaborations</strong><span>{catalogue.counts.PUBLISHED} publiées · {catalogue.counts.DRAFT} brouillons · médias et collaborateurs</span></Link>
+      <Link href="/admin/catalogue"><strong>Catalogue & discographie</strong><span>{discography.total} projets · albums, singles, tracklists et jukebox</span></Link>
+    </nav>
 
     {params.etat ? <p className="admin-feedback" role="alert">
       {params.etat === "conflit" ? "La fiche a changé dans un autre onglet. Rechargez-la avant de recommencer."

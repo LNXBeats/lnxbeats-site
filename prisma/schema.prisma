@@ -1094,6 +1094,7 @@ model Customer {
 model Project {
   id                    String                   @id @default(uuid()) @db.Uuid
   slug                  String                   @unique @db.VarChar(160)
+  formerSlugs           String[]                 @default([]) @map("formerSlugs")
   title                 String                   @db.VarChar(240)
   subtitle              String?                  @db.VarChar(240)
   type                  ProjectType
@@ -1252,6 +1253,7 @@ model ProjectAsset {
 model Creation {
   id                  String                       @id @default(uuid()) @db.Uuid
   slug                String                       @unique @db.VarChar(160)
+  formerSlugs         String[]                     @default([]) @map("formerSlugs")
   title               String                       @db.VarChar(240)
   summary             String?                      @db.VarChar(1000)
   description         String?                      @db.Text
@@ -2146,6 +2148,7 @@ model MusicPricingActivation {
 model Product {
   id                  String                   @id @default(uuid()) @db.Uuid
   slug                String                   @unique @db.VarChar(160)
+  formerSlugs         String[]                 @default([]) @map("formerSlugs")
   title               String                   @db.VarChar(240)
   description         String                   @db.Text
   status              ProductStatus            @default(DRAFT)

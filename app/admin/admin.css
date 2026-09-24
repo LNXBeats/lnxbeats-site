@@ -61,6 +61,43 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-header__nav-badge[data-priority="critical"] { border-color: rgba(234, 126, 109, 0.58); background: rgba(157, 63, 48, 0.24); color: #ffd0c4; }
 .admin-header__site-link .link-icon { width: 0.9rem; height: 0.9rem; }
 
+/* Admin V2: six destinations first, existing specialist routes one level below. */
+@media (min-width: 1121px) {
+  .admin-shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); align-items: start; }
+  .admin-header { position: sticky; top: 0; display: flex; height: 100svh; min-height: 0; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 1.6rem; padding: 1.6rem 1rem; border-right: 1px solid rgba(244,240,232,.12); border-bottom: 0; }
+  .admin-header__brand { display: grid; gap: .35rem; padding-inline: .75rem; }
+  .admin-header__brand p { padding: 0; border: 0; }
+  .admin-header__nav { display: grid; width: 100%; min-height: 0; align-content: start; justify-content: stretch; gap: .3rem; overflow-y: auto; }
+  .admin-header__nav-group { display: grid; min-width: 0; gap: .15rem; }
+  .admin-header__nav .admin-header__primary-link { min-height: 48px; color: #f4f0e8; font-size: .76rem; }
+  .admin-header__primary-link[data-group-active="true"] { background: rgba(214,179,106,.1); color: #f1d99f; }
+  .admin-header__nav .admin-header__site-link { margin: .75rem 0 0; }
+}
+.admin-header__subnav { min-width: 0; }
+.admin-header__subnav summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: .55rem .85rem; border-radius: 10px; color: #aaa59c; cursor: pointer; font-size: .68rem; list-style: none; }
+.admin-header__subnav summary::-webkit-details-marker { display: none; }
+.admin-header__subnav summary:is(:hover,:focus-visible) { background: rgba(255,255,255,.055); color: #fff; }
+.admin-header__subnav-links { display: grid; gap: .1rem; padding-left: .45rem; }
+.admin-header__subnav-links a { min-height: 44px; font-size: .68rem; }
+.admin-main:has(> .admin-overview-grid) { display: flex; flex-direction: column; gap: 1.4rem; }
+.admin-main:has(> .admin-overview-grid) .admin-hero { min-height: 0; padding-bottom: .5rem; }
+.admin-main:has(> .admin-overview-grid) .admin-hero h1 { font-size: clamp(2.6rem, 5vw, 5.4rem); }
+.admin-main:has(> .admin-overview-grid) .admin-list-window { order: 1; }
+.admin-main:has(> .admin-overview-grid) .admin-overview-grid { order: 2; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .8rem; }
+.admin-overview-card[data-empty="true"] { opacity: .58; }
+.admin-v2-section-hub { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin: 1.2rem 0; }
+.admin-v2-section-hub a { display: grid; min-width: 0; min-height: 72px; align-content: center; gap: .35rem; padding: 1rem; border: 1px solid rgba(214,179,106,.24); border-radius: 14px; background: rgba(255,255,255,.025); }
+.admin-v2-section-hub a[aria-current="page"] { border-color: rgba(214,179,106,.55); background: rgba(214,179,106,.08); }
+.admin-v2-section-hub a strong { color: #f1d99f; font-size: .78rem; }
+.admin-v2-section-hub a span { color: #aaa59c; font-size: .68rem; overflow-wrap: anywhere; }
+@media (max-width: 620px) { .admin-v2-section-hub { grid-template-columns: 1fr; } }
+@media (width <= 1120px) {
+  .admin-header__nav-group { display: grid; }
+  .admin-header__nav-group-label { display: none; }
+  .admin-header__nav .admin-header__primary-link { min-height: 48px; border-color: rgba(214,179,106,.2); color: #f1d99f; }
+  .admin-header__subnav-links { padding-left: 0; }
+}
+
 .admin-confirm-dialog {
   width: min(92vw, 560px);
   padding: clamp(1.4rem, 4vw, 2.4rem);

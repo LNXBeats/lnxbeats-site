@@ -56,6 +56,7 @@ function refreshCreation(slug: string) {
   revalidatePath(`/admin/creations/${slug}`);
   revalidatePath("/creations");
   revalidatePath(`/creations/${slug}`);
+  revalidatePath("/sitemap.xml");
 }
 
 function stateForError(error: unknown) {

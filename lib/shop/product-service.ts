@@ -10,6 +10,7 @@ import {
   ProductValidationError,
 } from "@/lib/shop/product-domain";
 import { getAvailableProductQuantity } from "@/lib/shop/order-domain";
+import { availableSlug, nextFormerSlugs } from "@/lib/seo/slugs";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -97,7 +98,11 @@ export async function createAdminProduct(input: Record<string, unknown>, actorUs
   try {
     return await prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('shop-product-creation')) IS NULL AS locked`;
-      if (await transaction.product.findUnique({ where: { slug: values.slug }, select: { id: true } })) {
+      const taken = (slug: string) => ["nouveau", "commandes"].includes(slug) ? Promise.resolve(true) : transaction.product.findFirst({
+        where: { OR: [{ slug }, { formerSlugs: { has: slug } }] }, select: { id: true },
+      }).then(Boolean);
+      if (!input.slug) values.slug = await availableSlug(values.title, taken);
+      else if (await taken(values.slug)) {
         throw new ProductServiceError("Ce slug produit est déjà utilisé.", "SLUG_TAKEN");
       }
       const product = await transaction.product.create({
@@ -156,6 +161,12 @@ export async function updateAdminProduct(
       if (values.slug !== current.slug) {
         throw new ProductServiceError("Le slug d’un produit existant est immuable.", "SLUG_IMMUTABLE");
       }
+      if (current.status === "DRAFT" && values.title !== current.title) {
+        await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('shop-product-creation')) IS NULL AS locked`;
+        values.slug = await availableSlug(values.title, (slug) => ["nouveau", "commandes"].includes(slug) ? Promise.resolve(true) : transaction.product.findFirst({
+          where: { id: { not: productId }, OR: [{ slug }, { formerSlugs: { has: slug } }] }, select: { id: true },
+        }).then(Boolean));
+      }
       const stockConfigurationChanged = values.trackInventory !== current.trackInventory
         || values.stock !== current.stock;
       if (stockConfigurationChanged && options.stockChangeConfirmed !== true) {
@@ -183,6 +194,7 @@ export async function updateAdminProduct(
         where: { id: productId, lockVersion: expectedLockVersion, status: { not: "ARCHIVED" } },
         data: {
           ...values,
+          formerSlugs: nextFormerSlugs(current.slug, current.formerSlugs, values.slug),
           lockVersion: { increment: 1 },
           updatedByAdminId: actorUserId,
         },

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Container } from "@/components/container";
 import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { JsonLd } from "@/components/json-ld";
@@ -17,6 +17,7 @@ import {
 import { getPublicProjectBySlug } from "@/lib/catalog/queries";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildProjectStructuredData } from "@/lib/seo/structured-data";
+import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
 
 type AlbumPageProps = {
   params: Promise<{ slug: string }>;
@@ -28,7 +29,7 @@ export async function generateMetadata({ params }: AlbumPageProps): Promise<Meta
   const { slug } = await params;
   const project = await getPublicProjectBySlug(slug);
 
-  if (!project) return {};
+  if (!project) return { title: "Projet introuvable", robots: { index: false, follow: false }, alternates: { canonical: null } };
 
   const canonical = `/album/${project.slug}`;
   const title = project.seo.title ?? project.title;
@@ -46,7 +47,11 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   const { slug } = await params;
   const project = await getPublicProjectBySlug(slug);
 
-  if (!project) notFound();
+  if (!project) {
+    const replacement = await resolveLegacyPublicSlug("album", slug);
+    if (replacement) permanentRedirect(`/album/${replacement}`);
+    notFound();
+  }
 
   const kind = getProjectKindLabel(project.type);
   const status = getProjectStatusLabel(project.status);

@@ -25,8 +25,8 @@ export function AdminProductFields({
       <span>Titre</span>
       <input name="title" defaultValue={values.title ?? ""} maxLength={240} required />
     </label>
-    <label>
-      <span>Slug</span>
+    <label className={slugReadOnly ? undefined : "admin-advanced-slug"}>
+      <span>{slugReadOnly ? "Adresse publique stable" : "Adresse personnalisée (facultatif)"}</span>
       <input
         name="slug"
         defaultValue={values.slug ?? ""}
@@ -34,8 +34,9 @@ export function AdminProductFields({
         pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
         readOnly={slugReadOnly}
         aria-readonly={slugReadOnly || undefined}
-        required
+        required={slugReadOnly}
       />
+      {!slugReadOnly ? <small>Vide : adresse créée automatiquement depuis le titre.</small> : null}
     </label>
     <label>
       <span>Position</span>

@@ -1,3 +1,5 @@
+import { generatedSlugCandidate, slugifyTitle } from "@/lib/seo/slugs";
+
 const PRODUCT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,158}[a-z0-9])?$/;
 const RESERVED_PRODUCT_SLUGS = new Set(["commandes", "nouveau"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -68,17 +70,7 @@ export class ProductValidationError extends Error {
 }
 
 export function normalizeProductSlug(value: unknown) {
-  if (typeof value !== "string") return "";
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[’']/g, "-")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 160)
-    .replace(/-$/g, "");
+  return slugifyTitle(value);
 }
 
 export function parseProductSlug(value: unknown) {
@@ -153,7 +145,7 @@ export function parseProductEditorInput(input: Record<string, unknown>): Product
     throw new ProductValidationError("Seule la devise EUR est autorisée pour cette fondation.", "INVALID_CURRENCY");
   }
   return {
-    slug: parseProductSlug(input.slug),
+    slug: parseProductSlug(input.slug || generatedSlugCandidate(input.title, RESERVED_PRODUCT_SLUGS)),
     title: text(input.title, "Le titre", 240),
     description: text(input.description, "La description", 10_000),
     priceCents,

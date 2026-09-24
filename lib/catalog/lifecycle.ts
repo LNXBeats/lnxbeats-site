@@ -1,4 +1,5 @@
 import { CatalogValidationError } from "@/lib/catalog/validation";
+import { slugifyTitle } from "@/lib/seo/slugs";
 
 const RESERVED_CATALOG_SLUGS = new Set(["nouveau"]);
 
@@ -14,17 +15,7 @@ export type CatalogDeletionEligibility = {
 };
 
 export function normalizeCatalogSlug(value: unknown) {
-  if (typeof value !== "string") return "";
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[’']/g, "-")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 160)
-    .replace(/-$/g, "");
+  return slugifyTitle(value);
 }
 
 export function parseCatalogSlug(value: unknown) {

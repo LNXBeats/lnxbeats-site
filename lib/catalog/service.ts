@@ -4,6 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { deleteMediaObject } from "@/lib/media/storage";
 import { getCatalogDeletionEligibility, parseCatalogSlug } from "@/lib/catalog/lifecycle";
+import { availableSlug, generatedSlugCandidate, nextFormerSlugs } from "@/lib/seo/slugs";
 import { platformLabelOverride } from "@/lib/catalog/platform-label";
 import { isEtsyCatalogLink, isEtsyCatalogUrl } from "@/lib/catalog/public-link-policy";
 import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
@@ -131,7 +132,7 @@ function createProjectValues(input: Record<string, unknown>) {
   if (effectivePlacement === "published" && status !== "published") throw new Error("Le jukebox des parutions exige un projet publié.");
   if (effectivePlacement === "development" && status !== "in-development") throw new Error("Le jukebox développement exige le statut correspondant.");
   return {
-    slug: parseCatalogSlug(input.slug),
+    slug: parseCatalogSlug(input.slug || generatedSlugCandidate(input.title, new Set(["nouveau"]))),
     title: requiredText(input.title, "Le titre", 240),
     subtitle: optionalText(input.subtitle, "Le sous-titre", 240),
     type: projectTypeDb[parseProjectType(input.type)],
@@ -152,7 +153,11 @@ export async function createCatalogProject(input: Record<string, unknown>) {
   try {
     return await prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('catalog-project-creation')) IS NULL AS locked`;
-      if (await transaction.project.findUnique({ where: { slug: values.slug }, select: { id: true } })) {
+      const taken = (slug: string) => slug === "nouveau" ? Promise.resolve(true) : transaction.project.findFirst({
+        where: { OR: [{ slug }, { formerSlugs: { has: slug } }] }, select: { id: true },
+      }).then(Boolean);
+      if (!input.slug) values.slug = await availableSlug(values.title, taken);
+      else if (await taken(values.slug)) {
         throw new CatalogLifecycleError("Ce slug est déjà utilisé.", "SLUG_TAKEN");
       }
       const maximum = await transaction.project.aggregate({ _max: { catalogPosition: true } });
@@ -308,14 +313,22 @@ export async function updateCatalogProject(projectId: string, input: Record<stri
   const publicVisible = status === "archive" ? false : requestedPublicVisible;
   const trackCount = boundedInteger(input.trackCount, "Le nombre de pistes", 0, 999, true);
   return withProjectLock(projectId, async (transaction) => {
-    const current = await transaction.project.findUnique({ where: { id: projectId }, select: { updatedAt: true, _count: { select: { tracks: true } } } });
+    const current = await transaction.project.findUnique({ where: { id: projectId }, select: { slug: true, formerSlugs: true, title: true, status: true, publicVisible: true, updatedAt: true, _count: { select: { tracks: true } } } });
     if (!current || current.updatedAt.getTime() !== updatedAt.getTime()) throw new CatalogConflictError();
     if (trackCount !== null && trackCount < current._count.tracks) throw new Error("Le nombre annoncé ne peut pas être inférieur au nombre de pistes nommées.");
+    const title = requiredText(input.title, "Le titre", 240);
+    let slug = current.slug;
+    if (current.status === "DRAFT" && title !== current.title) {
+      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('catalog-project-creation')) IS NULL AS locked`;
+      slug = await availableSlug(title, (candidate) => candidate === "nouveau" ? Promise.resolve(true) : transaction.project.findFirst({
+        where: { id: { not: projectId }, OR: [{ slug: candidate }, { formerSlugs: { has: candidate } }] }, select: { id: true },
+      }).then(Boolean));
+    }
     if (featured) await transaction.project.updateMany({ where: { featured: true, id: { not: projectId } }, data: { featured: false } });
     const result = await transaction.project.updateMany({
       where: { id: projectId, updatedAt },
       data: {
-        title: requiredText(input.title, "Le titre", 240),
+        title, slug, formerSlugs: nextFormerSlugs(current.slug, current.formerSlugs, slug),
         subtitle: optionalText(input.subtitle, "Le sous-titre", 240),
         type: projectTypeDb[type], status: projectStatusDb[status],
         shortDescription: optionalText(input.shortDescription, "La description courte", 1_000),

@@ -41,10 +41,15 @@ export function AdminCleanupForm({ candidates }: { candidates: readonly AdminCle
               name="targets"
               value={`${key}:${item.classification}`}
               checked={selected.has(key)}
+              disabled={item.classification === "KEEP_ACTION_REQUIRED"}
               onChange={(event) => {
                 setConfirmed(false);
                 setSelected((current) => {
                   const next = new Set(current);
+                  if (event.target.checked && current.size) {
+                    const selectedItem = candidates.find((candidate) => current.has(`${candidate.type}:${candidate.id}`));
+                    if (selectedItem && (selectedItem.type !== item.type || selectedItem.classification !== item.classification)) next.clear();
+                  }
                   if (event.target.checked) next.add(key); else next.delete(key);
                   return next;
                 });
@@ -68,7 +73,7 @@ export function AdminCleanupForm({ candidates }: { candidates: readonly AdminCle
           checked={confirmed}
           onChange={(event) => setConfirmed(event.target.checked)}
         />
-        <span>Je confirme ce plan exact. Le serveur recalculera chaque classification dans la transaction.</span>
+        <span>Je confirme ce lot homogène. Le serveur recalculera chaque classification dans la transaction.</span>
       </label>
       <button className="admin-button" type="submit" disabled={!confirmed}>APPLIQUER LE PLAN SÉLECTIONNÉ</button>
     </fieldset>

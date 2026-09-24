@@ -24,8 +24,8 @@ export function AdminCreationFields({
       <span>Titre</span>
       <input name="title" defaultValue={values.title ?? ""} maxLength={240} required />
     </label>
-    <label>
-      <span>Slug</span>
+    <label className={slugReadOnly ? undefined : "admin-advanced-slug"}>
+      <span>{slugReadOnly ? "Adresse publique stable" : "Adresse personnalisée (facultatif)"}</span>
       <input
         name="slug"
         defaultValue={values.slug ?? ""}
@@ -33,9 +33,9 @@ export function AdminCreationFields({
         pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
         readOnly={slugReadOnly}
         aria-readonly={slugReadOnly || undefined}
-        required
+        required={slugReadOnly}
       />
-      <small className="admin-field-help">Immuable après la création.</small>
+      <small className="admin-field-help">{slugReadOnly ? "Une création publiée conserve son adresse quand son titre change." : "Vide : adresse créée automatiquement depuis le titre."}</small>
     </label>
     <label>
       <span>Catégorie</span>

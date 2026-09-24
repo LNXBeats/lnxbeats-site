@@ -111,6 +111,9 @@ test("cleanup targets are typed, deduplicated and carry the preview classificati
   ]), [{ type: "MUSIC_ORDER", id, expected: "DELETE_SAFE" }]);
   assert.throws(() => parseAdminCleanupTargets([`SHOP_ORDER:${id}:DELETE_SAFE:extra`]));
   assert.throws(() => parseAdminCleanupTargets([`UNKNOWN:${id}:DELETE_SAFE`]));
+  assert.throws(() => parseAdminCleanupTargets([`MUSIC_ORDER:${id}:KEEP_ACTION_REQUIRED`]));
+  assert.throws(() => parseAdminCleanupTargets([`MUSIC_ORDER:${id}:DELETE_SAFE`, `SHOP_ORDER:20000000-0000-4000-8000-000000000002:DELETE_SAFE`]));
+  assert.throws(() => parseAdminCleanupTargets([`MUSIC_ORDER:${id}:DELETE_SAFE`, `MUSIC_ORDER:20000000-0000-4000-8000-000000000002:ARCHIVE_REQUIRED`]));
 });
 
 test("the archive migration is additive and never rewrites business or financial rows", async () => {

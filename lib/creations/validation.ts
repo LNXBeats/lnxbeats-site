@@ -1,3 +1,5 @@
+import { generatedSlugCandidate, slugifyTitle } from "@/lib/seo/slugs";
+
 const CREATION_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,158}[a-z0-9])?$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const RESERVED_CREATION_SLUGS = new Set(["nouveau"]);
@@ -75,17 +77,7 @@ export class CreationAdminFormError extends Error {
 }
 
 export function normalizeCreationSlug(value: unknown) {
-  if (typeof value !== "string") return "";
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[’']/g, "-")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 160)
-    .replace(/-$/g, "");
+  return slugifyTitle(value);
 }
 
 export function parseCreationSlug(value: unknown) {
@@ -151,7 +143,7 @@ function primaryMedia(value: unknown): CreationEditorInput["primaryMedia"] {
 export function parseCreationEditorInput(input: Record<string, unknown>): CreationEditorInput {
   assertClosedPayload(input, new Set(CREATION_EDITOR_FORM_FIELDS));
   return {
-    slug: parseCreationSlug(input.slug),
+    slug: parseCreationSlug(input.slug || generatedSlugCandidate(input.title, RESERVED_CREATION_SLUGS)),
     title: requiredText(input.title, "Le titre", 240),
     summary: optionalText(input.summary, "Le résumé", 1000),
     description: optionalText(input.description, "La description", 50_000),
