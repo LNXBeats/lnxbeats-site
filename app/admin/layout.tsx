@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./admin.css";
 
 import { AdminNavigation } from "@/components/admin-navigation";
+import { AdminTopbar } from "@/components/admin-topbar";
 import { getAdminActionSummary } from "@/lib/admin/cockpit";
 import { requireAdmin } from "@/lib/auth/session";
 import { qaAccessAvailable } from "@/lib/auth/qa-access";
@@ -26,7 +27,10 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
         actionRequiredCounts={actionSummary.actionRequiredCounts}
         criticalActionRequiredCounts={actionSummary.criticalActionRequiredCounts}
       />
-      {children}
+      <div className="admin-workspace">
+        <AdminTopbar displayName={session.user.name} notificationCount={actionSummary.counts.notifications} />
+        {children}
+      </div>
     </div>
   );
 }

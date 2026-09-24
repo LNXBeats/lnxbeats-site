@@ -178,19 +178,24 @@ test("Cockpit actions sort by priority, oldest first, then stable key", () => {
   assert.deepEqual(sortAdminActionItems(items).map((item) => item.key), ["c", "a", "b"]);
 });
 
-test("Cockpit queries are bounded and the overview exposes links without mutation controls", async () => {
-  const [cockpit, page, layout] = await Promise.all([
+test("Cockpit queries are bounded and the action center exposes only authorized navigation", async () => {
+  const [cockpit, page, layout, actionCenter] = await Promise.all([
     readFile(new URL("../../lib/admin/cockpit.ts", import.meta.url), "utf8"),
     readFile(new URL("../../app/admin/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../app/admin/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/admin-action-center.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(cockpit, /ACTION_CANDIDATE_LIMIT/);
   assert.ok((cockpit.match(/LIMIT \$\{ACTION_CANDIDATE_LIMIT\}/g) ?? []).length >= 5);
   assert.doesNotMatch(cockpit, /admin_record_archives/);
   assert.doesNotMatch(cockpit, /recipient: true|customerName: true|customerEmail: true|displayName: true/);
-  assert.match(page, /À traiter maintenant/);
+  assert.match(actionCenter, /À traiter maintenant/);
   assert.match(page, /cockpit\.actions\.map/);
-  assert.match(page, /data-priority=\{action\.priority\.toLowerCase\(\)\}/);
+  assert.match(page, /<AdminActionCenter/);
+  assert.match(actionCenter, /data-priority=\{action\.priority\.toLowerCase\(\)\}/);
+  assert.match(actionCenter, /selectedActions\.every\(\(action\) => action\.domain === selectedActions\[0\]\.domain && action\.label === selectedActions\[0\]\.label\)/);
+  assert.match(actionCenter, /Aucune décision métier n’est appliquée en lot/);
+  assert.doesNotMatch(actionCenter, /<form|fetch\(|action=|server action/i);
   assert.doesNotMatch(page, /<form|<button|action=/);
   assert.match(layout, /actionRequiredCounts=\{actionSummary\.actionRequiredCounts\}/);
   assert.match(layout, /criticalActionRequiredCounts=\{actionSummary\.criticalActionRequiredCounts\}/);

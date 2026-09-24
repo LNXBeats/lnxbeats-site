@@ -43,7 +43,9 @@ test("Admin mobile and tablet navigation is an accessible grouped disclosure", (
     assert.ok(navigation.includes(`href: "${path}"`), `${path} remains reachable`);
   }
   assert.match(navigation, /<details className="admin-header__subnav"/);
-  assert.match(navigation, /<summary aria-label=\{`Rubriques \$\{group\}`\}/);
+  assert.match(navigation, /<summary aria-label=\{`Afficher les sous-pages de \$\{group\}`\}/);
+  assert.doesNotMatch(navigation, />Rubriques </);
+  assert.match(navigation, /<AdminIcon name=\{groupPresentation\[group\]\.icon\}/);
   assert.match(navigation, /export type AdminNavigationActionCounts/);
   assert.match(navigation, /actionRequiredCounts\?: AdminNavigationActionCounts/);
   assert.match(navigation, /criticalActionRequiredCounts\?: AdminNavigationActionCounts/);
@@ -56,7 +58,7 @@ test("Admin mobile and tablet navigation is an accessible grouped disclosure", (
   assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.admin-header__menu-button \{[\s\S]*?min-height: 44px;/);
   assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.admin-header__nav \{[\s\S]*?display: none;/);
   assert.match(css, /\.admin-header__nav--open \{ display: grid; \}/);
-  assert.match(css, /\.admin-header__nav-group-label/);
+  assert.match(css, /\.admin-header__group-heading\[data-group-active="true"\]/);
   assert.match(css, /\.admin-header__nav a \{[\s\S]*?min-height: 44px;/);
 });
 

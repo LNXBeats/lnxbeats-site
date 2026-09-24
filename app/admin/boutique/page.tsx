@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import { AdminBackLink } from "@/components/admin-back-link";
+import { AdminIcon } from "@/components/admin-icons";
+import { AdminStatusBadge } from "@/components/admin-v21-ui";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatProductPrice } from "@/lib/shop/product-domain";
 import { listAdminProducts } from "@/lib/shop/product-service";
@@ -29,7 +32,7 @@ export default async function AdminShopPage({
   return <div className="admin-main">
     <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
     <header className="admin-page-heading">
-      <div><p className="admin-kicker">Boutique</p><h1>Les produits, sous contrôle.</h1></div>
+      <div><p className="admin-kicker">Boutique</p><h1>Produits & disponibilité</h1></div>
       <div className="admin-page-heading__actions">
         <p>Les produits naissent en brouillon. Leur publication alimente la Boutique publique lorsque les guards opérationnels sont prêts.</p>
         <Link className="admin-primary-action" href="/admin/boutique/nouveau"><span aria-hidden="true">+</span> Nouveau produit</Link>
@@ -38,14 +41,14 @@ export default async function AdminShopPage({
       </div>
     </header>
 
-    <section className="admin-operations-strip" aria-label="État opérationnel de la Boutique">
+    <details className="admin-v21-technical-disclosure"><summary>Voir les diagnostics logistiques et opérationnels</summary><section className="admin-operations-strip" aria-label="État opérationnel de la Boutique">
       <div><span>Boutique publique</span><strong>{shopAdminOperationalLabel[operations.shop]}</strong></div>
       <div><span>Paiements</span><strong>{shopAdminOperationalLabel[operations.payments]}</strong></div>
       <div><span>Livraison</span><strong>{shopAdminOperationalLabel[operations.shipping]}</strong></div>
       <div><span>SAV financier</span><strong>{shopAdminOperationalLabel[operations.afterSales]}</strong></div>
       <div><span>Suivi</span><strong>{shopAdminOperationalLabel[operations.tracking]}</strong></div>
       <div><span>API transporteur</span><strong>{shopAdminOperationalLabel[operations.carrierApi]}</strong></div>
-    </section>
+    </section></details>
 
     {params.etat ? <p className="admin-feedback" role="alert">
       {params.etat === "conflit" ? "La fiche a changé dans un autre onglet. Rechargez-la avant de recommencer."
@@ -67,16 +70,11 @@ export default async function AdminShopPage({
 
     <section className="admin-list-window" aria-labelledby="products-title">
       <div className="admin-list-window__heading"><h2 id="products-title">Produits</h2><span>{products.length} produit{products.length === 1 ? "" : "s"}</span></div>
-      {products.length ? <ul className="admin-catalogue-list">
-        {products.map((product) => <li key={product.id}>
-          <div><strong><Link href={`/admin/boutique/${product.slug}`}>{product.title}</Link></strong><small>{product.slug} · {STATUS_LABELS[product.status]}</small></div>
-          <dl>
-            <div><dt>Prix</dt><dd>{formatProductPrice(product.priceCents, product.currency)}</dd></div>
-            <div><dt>Stock</dt><dd>{product.trackInventory ? product.stock ?? 0 : "Non suivi"}</dd></div>
-            <div><dt>Images</dt><dd>{product._count.assets}</dd></div>
-            <div><dt>Expédition</dt><dd>{product.shippingRequired ? product.shippingWeightGrams ? `${product.shippingWeightGrams} g · devis serveur` : "Poids à renseigner" : "Non"}</dd></div>
-          </dl>
-          <Link className="admin-row-action" href={`/admin/boutique/${product.slug}`}>Modifier <span aria-hidden="true">→</span></Link>
+      {products.length ? <ul className="admin-v21-entity-grid">
+        {products.map((product) => <li key={product.id} className="admin-v21-entity-card">
+          <div className="admin-v21-entity-card__main"><div className="admin-v21-entity-card__art">{product._count.assets > 0 ? <Image unoptimized src={`/api/admin/boutique/products/${product.id}/image`} width={92} height={92} alt="" /> : <AdminIcon name="box" />}</div><div><span className="admin-v21-entity-card__eyebrow">Produit · {product.slug}</span><h3><Link href={`/admin/boutique/${product.slug}`}>{product.title}</Link></h3><AdminStatusBadge label={STATUS_LABELS[product.status]} tone={product.status === "PUBLISHED" ? "ok" : product.status === "DRAFT" ? "attention" : "neutral"} /></div></div>
+          <div className="admin-v21-product-facts"><strong>{formatProductPrice(product.priceCents, product.currency)}</strong><span>{product.trackInventory ? product.stock == null ? "Stock non renseigné" : `Stock enregistré : ${product.stock}` : "Stock non suivi"}</span><small>{product.shippingRequired ? product.shippingWeightGrams ? `Poids produit : ${product.shippingWeightGrams} g` : "Poids à renseigner" : "Sans expédition"}</small></div>
+          <Link className="admin-v21-entity-card__action" href={`/admin/boutique/${product.slug}`}>Voir ou modifier <AdminIcon name="arrow" /></Link>
         </li>)}
       </ul> : <div className="admin-empty"><h2>Aucun produit.</h2><p>Créez un brouillon ou modifiez les filtres.</p></div>}
     </section>

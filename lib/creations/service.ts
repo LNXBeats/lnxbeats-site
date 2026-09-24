@@ -68,7 +68,10 @@ export async function listAdminCreations(query = "", status = "all", requestedPa
   const [creations, groupedStatuses] = await Promise.all([
     prisma.creation.findMany({
       where,
-      include: { _count: { select: { assets: true, externalLinks: true, collaborators: true } } },
+      include: {
+        assets: { select: { role: true, assetId: true } },
+        _count: { select: { assets: true, externalLinks: true, collaborators: true } },
+      },
       orderBy: [{ position: "asc" }, { createdAt: "desc" }, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,

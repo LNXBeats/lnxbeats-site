@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { AdminIcon, type AdminIconName } from "@/components/admin-icons";
 import { ExternalLinkIcon } from "@/components/link-icons";
 
 const adminNavigation = [
@@ -24,6 +25,14 @@ const adminNavigation = [
 ] as const;
 
 const adminNavigationGroups = ["Accueil", "Créations", "Boutique", "Clients & documents", "Réglages", "Avancé"] as const;
+const groupPresentation: Record<(typeof adminNavigationGroups)[number], { icon: AdminIconName; subtitle: string }> = {
+  Accueil: { icon: "home", subtitle: "Vue d’ensemble" },
+  Créations: { icon: "music", subtitle: "Discographie · collaborations" },
+  Boutique: { icon: "shop", subtitle: "Produits · commandes · SAV" },
+  "Clients & documents": { icon: "users", subtitle: "Membres · factures · avoirs" },
+  Réglages: { icon: "settings", subtitle: "Tarifs · paramètres" },
+  Avancé: { icon: "tools", subtitle: "Nettoyage · diagnostics" },
+};
 
 type AdminNavigationHref = (typeof adminNavigation)[number]["href"];
 
@@ -77,8 +86,8 @@ export function AdminNavigation({
   return (
     <header className="admin-header">
       <div className="admin-header__brand">
-        <Link href="/admin" aria-label="LNX Admin — vue d’ensemble"><span>LNX</span> Admin</Link>
-        <p>{identity ? `${identity} · Administrateur` : "Administrateur"}</p>
+        <Link href="/admin" aria-label="LNX Admin — vue d’ensemble"><span>LNX</span><span>Admin</span></Link>
+        <p>{identity ? `${identity} · Administrateur` : "Administration privée"}</p>
       </div>
       <button
         ref={menuButtonRef}
@@ -102,9 +111,14 @@ export function AdminNavigation({
           const primary = items[0];
           const groupIsActive = items.some((item) => activeHref === item.href);
           return <div className="admin-header__nav-group" key={group}>
-          <Link className="admin-header__primary-link" href={primary.href} aria-current={activeHref === primary.href ? "page" : undefined} data-group-active={groupIsActive || undefined} onClick={closeNavigation}>{group}</Link>
+          <div className="admin-header__group-heading" data-group-active={groupIsActive || undefined}>
+            <Link className="admin-header__primary-link" href={primary.href} aria-current={activeHref === primary.href ? "page" : undefined} onClick={closeNavigation}>
+              <AdminIcon name={groupPresentation[group].icon} />
+              <span><strong>{group}</strong><small>{groupPresentation[group].subtitle}</small></span>
+            </Link>
+          </div>
           {items.length > 1 ? <details className="admin-header__subnav" open={groupIsActive}>
-            <summary aria-label={`Rubriques ${group}`}>Rubriques <span aria-hidden="true">⌄</span></summary>
+            <summary aria-label={`Afficher les sous-pages de ${group}`}><span>Explorer {group}</span><span aria-hidden="true">⌄</span></summary>
             <div className="admin-header__subnav-links">{items.slice(1).map((item) => {
             const active = activeHref === item.href;
             const requestedCount = actionRequiredCounts[item.href] ?? 0;

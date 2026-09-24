@@ -324,9 +324,14 @@ export async function getAdminOrder(orderNumber: string) {
   });
 }
 
-export async function listAdminMembers() {
+export async function listAdminMembers(query = "") {
   assertDatabaseConfigured();
+  const search = query.trim().slice(0, 120);
   return prisma.user.findMany({
+    where: search ? { OR: [
+      { displayName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+    ] } : undefined,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 200,
     select: {
@@ -337,6 +342,7 @@ export async function listAdminMembers() {
       status: true,
       emailVerified: true,
       createdAt: true,
+      _count: { select: { orders: true, shopOrders: true } },
     },
   });
 }

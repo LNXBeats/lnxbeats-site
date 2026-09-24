@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AdminActionCenter } from "@/components/admin-action-center";
+import { AdminIcon, type AdminIconName } from "@/components/admin-icons";
+import { AdminStatCard } from "@/components/admin-v21-ui";
 import { getAdminCockpit } from "@/lib/admin/cockpit";
 import { requireAdmin } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -19,88 +23,42 @@ const DOMAIN_LABELS = {
   SHOP_RETURN: "SAV Boutique",
   FINANCIAL_EVENT: "Événement financier",
 } as const;
-
-const PRIORITY_LABELS = {
-  CRITICAL: "Priorité critique",
-  HIGH: "Priorité haute",
-  NORMAL: "À planifier",
-} as const;
-
-const DATE_FORMAT = new Intl.DateTimeFormat("fr-FR", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Europe/Paris",
-});
+const quickAccess: readonly { href: string; label: string; detail: string; icon: AdminIconName }[] = [
+  { href: "/admin/creations", label: "Créations", detail: "Médias et collaborateurs", icon: "video" },
+  { href: "/admin/boutique", label: "Produits", detail: "Fiches et disponibilité", icon: "box" },
+  { href: "/admin/membres", label: "Membres", detail: "Comptes et accès", icon: "users" },
+  { href: "/admin/facturation", label: "Facturation", detail: "Factures et avoirs", icon: "file" },
+];
 
 export default async function AdminPage() {
-  const session = await requireAdmin();
-  const cockpit = await getAdminCockpit();
-  const displayName = session.user.name?.trim();
+  await requireAdmin();
+  const [cockpit, creationDrafts, invoiceCount, projectCount] = await Promise.all([
+    getAdminCockpit(),
+    prisma.creation.count({ where: { status: "DRAFT" } }),
+    prisma.invoice.count(),
+    prisma.project.count(),
+  ]);
 
   return (
-    <div className="admin-main">
-      <header className="admin-hero">
-        <p className="admin-kicker">LNX Admin Cockpit</p>
-        <h1>{displayName ? `Bonjour ${displayName}.` : "Bonjour."}</h1>
-        <p>{cockpit.total > 0 ? `${cockpit.total} élément${cockpit.total === 1 ? "" : "s"} demande${cockpit.total === 1 ? "" : "nt"} une intervention.` : "Aucune intervention opérationnelle n’est en attente."}</p>
+    <div className="admin-main admin-v21-home">
+      <header className="admin-v21-intro">
+        <div><p className="admin-kicker">LNX Admin · cockpit</p><h1>Bienvenue.</h1><p>Tout ce qui nécessite votre attention, en un coup d’œil.</p></div>
+        <span>{cockpit.total > 0 ? `${cockpit.total} dossier${cockpit.total === 1 ? "" : "s"} à examiner` : "Aucune intervention en attente"}</span>
       </header>
 
-      <section className="admin-overview-grid" aria-label="Compteurs opérationnels">
-        <article className="admin-overview-card admin-overview-card--primary" data-empty={cockpit.counts.commander === 0 || undefined}>
-          <div><p>Commandes Commander</p><strong>{cockpit.counts.commander}</strong></div>
-          <p>Étapes métier ou incidents financiers qui nécessitent une décision humaine.</p>
-          <Link href="/admin/commandes?filtre=attention">Voir les commandes à examiner <span aria-hidden="true">→</span></Link>
-        </article>
-
-        <article className="admin-overview-card" data-empty={cockpit.counts.shopOrders === 0 || undefined}>
-          <div><p>Commandes Boutique</p><strong>{cockpit.counts.shopOrders}</strong></div>
-          <p>Paiements à vérifier, demandes client, préparation et expédition.</p>
-          <Link href="/admin/boutique/commandes?filtre=attention">Voir les commandes à traiter <span aria-hidden="true">→</span></Link>
-        </article>
-
-        <article className="admin-overview-card" data-empty={cockpit.counts.rights === 0 || undefined}>
-          <div><p>Droits & contrats</p><strong>{cockpit.counts.rights}</strong></div>
-          <p>Dossiers actuellement placés à une étape de traitement Admin.</p>
-          <Link href="/admin/droits">Examiner les dossiers <span aria-hidden="true">→</span></Link>
-        </article>
-
-        <article className="admin-overview-card" data-empty={cockpit.counts.notifications === 0 || undefined}>
-          <div><p>Notifications</p><strong>{cockpit.counts.notifications}</strong></div>
-          <p>Échecs, incidents de distribution ou traitements interrompus.</p>
-          <Link href="/admin/notifications?filtre=attention">Voir les notifications à examiner <span aria-hidden="true">→</span></Link>
-        </article>
-
-        <article className="admin-overview-card" data-empty={cockpit.counts.shopReturns === 0 || undefined}>
-          <div><p>SAV Boutique</p><strong>{cockpit.counts.shopReturns}</strong></div>
-          <p>Revues, réceptions, inspections et réconciliations encore nécessaires.</p>
-          <Link href={cockpit.shopReturnsHref}>Voir les dossiers SAV <span aria-hidden="true">→</span></Link>
-        </article>
+      <section className="admin-v21-stats" aria-label="Indicateurs opérationnels">
+        <AdminStatCard icon="music" title="Commandes" count={cockpit.counts.commander} caption="à traiter" href="/admin/commandes?filtre=attention" tone="attention" />
+        <AdminStatCard icon="shop" title="Boutique" count={cockpit.counts.shopOrders} caption="à traiter" href="/admin/boutique/commandes?filtre=attention" tone="attention" />
+        <AdminStatCard icon="heart" title="SAV" count={cockpit.counts.shopReturns} caption="à examiner" href={cockpit.shopReturnsHref} tone="attention" />
+        <AdminStatCard icon="bell" title="Notifications" count={cockpit.counts.notifications} caption="à examiner" href="/admin/notifications?filtre=attention" tone="attention" />
+        <AdminStatCard icon="video" title="Créations" count={creationDrafts} caption="brouillons" href="/admin/creations?statut=DRAFT" />
+        <AdminStatCard icon="file" title="Contrats" count={cockpit.counts.rights} caption="à traiter" href="/admin/droits" tone="attention" />
+        <AdminStatCard icon="file" title="Factures" count={invoiceCount} caption="émises" href="/admin/facturation" />
+        <AdminStatCard icon="audio" title="Discographie" count={projectCount} caption="projets" href="/admin/catalogue" />
       </section>
 
-      <section className="admin-list-window" aria-labelledby="admin-actions-title">
-        <div className="admin-list-window__heading">
-          <h2 id="admin-actions-title">À traiter maintenant</h2>
-          <span>{cockpit.actions.length}{cockpit.total > cockpit.actions.length ? ` sur ${cockpit.total}` : ""}</span>
-        </div>
-        {cockpit.actions.length ? <ul className="admin-order-list">
-          {cockpit.actions.map((action) => <li key={action.key} data-priority={action.priority.toLowerCase()}>
-            <Link href={action.href}>
-              <span className="admin-order-list__identity">
-                <small>{DOMAIN_LABELS[action.domain]}</small>
-                <strong>{action.reference}</strong>
-                <em>{action.label}</em>
-              </span>
-              <span className="admin-order-list__facts">
-                <span>{PRIORITY_LABELS[action.priority]}</span>
-              </span>
-              <span className="admin-order-list__next">
-                <small>En attente depuis le {DATE_FORMAT.format(action.occurredAt)}</small>
-              </span>
-              <span className="admin-order-list__arrow" aria-hidden="true">→</span>
-            </Link>
-          </li>)}
-        </ul> : <div className="admin-empty"><h2>Rien à traiter.</h2><p>Les traitements automatiques et les dossiers archivés sans nouvelle action ne sont pas présentés comme des actions humaines.</p></div>}
-      </section>
+      <AdminActionCenter total={cockpit.total} actions={cockpit.actions.map((action) => ({ key: action.key, domain: action.domain, type: DOMAIN_LABELS[action.domain], reference: action.reference, label: action.label, priority: action.priority, date: action.occurredAt.toISOString(), href: action.href }))} />
+      <section className="admin-v21-quick" aria-labelledby="admin-quick-title"><div className="admin-v21-quick__heading"><p className="admin-kicker">Raccourcis</p><h2 id="admin-quick-title">Opérations quotidiennes</h2></div><div>{quickAccess.map((item) => <Link key={item.href} href={item.href}><AdminIcon name={item.icon} /><span><strong>{item.label}</strong><small>{item.detail}</small></span><AdminIcon name="arrow" /></Link>)}</div></section>
     </div>
   );
 }
