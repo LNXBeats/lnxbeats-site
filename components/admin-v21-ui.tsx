@@ -4,7 +4,7 @@ import { AdminIcon, type AdminIconName } from "@/components/admin-icons";
 
 export function AdminStatCard({ icon, title, count, caption, href, tone = "neutral" }: { icon: AdminIconName; title: string; count: number; caption: string; href: string; tone?: "neutral" | "attention" | "critical" }) {
   const effectiveTone = count === 0 ? "quiet" : tone;
-  return <Link className="admin-v21-stat" href={href} data-tone={effectiveTone}>
+  return <Link className="admin-v21-stat" href={href} data-tone={effectiveTone} data-actionable={count > 0 && (tone === "attention" || tone === "critical") || undefined}>
     <span className="admin-v21-stat__top"><AdminIcon name={icon} /><span>{title}</span><AdminIcon name="arrow" /></span>
     <strong>{count}</strong><small>{count === 0 ? "Aucun dossier" : caption}</small>
   </Link>;

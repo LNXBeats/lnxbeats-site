@@ -5,6 +5,7 @@ import { AdminActionCenter } from "@/components/admin-action-center";
 import { AdminIcon, type AdminIconName } from "@/components/admin-icons";
 import { AdminStatCard } from "@/components/admin-v21-ui";
 import { getAdminCockpit } from "@/lib/admin/cockpit";
+import { orderAdminKpis } from "@/lib/admin/kpi-presentation";
 import { requireAdmin } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -38,6 +39,17 @@ export default async function AdminPage() {
     prisma.invoice.count(),
     prisma.project.count(),
   ]);
+  const stats = [
+    { icon: "music", title: "Commandes", count: cockpit.counts.commander, caption: "à traiter", href: "/admin/commandes?filtre=attention", tone: "attention" },
+    { icon: "shop", title: "Boutique", count: cockpit.counts.shopOrders, caption: "à traiter", href: "/admin/boutique/commandes?filtre=attention", tone: "attention" },
+    { icon: "heart", title: "SAV", count: cockpit.counts.shopReturns, caption: "à examiner", href: cockpit.shopReturnsHref, tone: "attention" },
+    { icon: "bell", title: "Notifications", count: cockpit.counts.notifications, caption: "à examiner", href: "/admin/notifications?filtre=attention", tone: "attention" },
+    { icon: "video", title: "Créations", count: creationDrafts, caption: "brouillons", href: "/admin/creations?statut=DRAFT", tone: "neutral" },
+    { icon: "file", title: "Contrats", count: cockpit.counts.rights, caption: "à traiter", href: "/admin/droits", tone: "attention" },
+    { icon: "file", title: "Factures", count: invoiceCount, caption: "émises", href: "/admin/facturation", tone: "neutral" },
+    { icon: "audio", title: "Discographie", count: projectCount, caption: "projets", href: "/admin/catalogue", tone: "neutral" },
+  ] satisfies { icon: AdminIconName; title: string; count: number; caption: string; href: string; tone: "attention" | "neutral" }[];
+  const orderedStats = orderAdminKpis(stats);
 
   return (
     <div className="admin-main admin-v21-home">
@@ -47,14 +59,7 @@ export default async function AdminPage() {
       </header>
 
       <section className="admin-v21-stats" aria-label="Indicateurs opérationnels">
-        <AdminStatCard icon="music" title="Commandes" count={cockpit.counts.commander} caption="à traiter" href="/admin/commandes?filtre=attention" tone="attention" />
-        <AdminStatCard icon="shop" title="Boutique" count={cockpit.counts.shopOrders} caption="à traiter" href="/admin/boutique/commandes?filtre=attention" tone="attention" />
-        <AdminStatCard icon="heart" title="SAV" count={cockpit.counts.shopReturns} caption="à examiner" href={cockpit.shopReturnsHref} tone="attention" />
-        <AdminStatCard icon="bell" title="Notifications" count={cockpit.counts.notifications} caption="à examiner" href="/admin/notifications?filtre=attention" tone="attention" />
-        <AdminStatCard icon="video" title="Créations" count={creationDrafts} caption="brouillons" href="/admin/creations?statut=DRAFT" />
-        <AdminStatCard icon="file" title="Contrats" count={cockpit.counts.rights} caption="à traiter" href="/admin/droits" tone="attention" />
-        <AdminStatCard icon="file" title="Factures" count={invoiceCount} caption="émises" href="/admin/facturation" />
-        <AdminStatCard icon="audio" title="Discographie" count={projectCount} caption="projets" href="/admin/catalogue" />
+        {orderedStats.map((item) => <AdminStatCard key={item.title} {...item} />)}
       </section>
 
       <AdminActionCenter total={cockpit.total} actions={cockpit.actions.map((action) => ({ key: action.key, domain: action.domain, type: DOMAIN_LABELS[action.domain], reference: action.reference, label: action.label, priority: action.priority, date: action.occurredAt.toISOString(), href: action.href }))} />
