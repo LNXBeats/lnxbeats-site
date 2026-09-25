@@ -164,6 +164,10 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={`/api/orders/${encodeURIComponent(order.orderNumber)}/photos/${asset.id}`} alt={`Référence privée ${position + 1}`} />
                     <span>{asset.width && asset.height ? `${asset.width} × ${asset.height} px` : "Dimensions non documentées"}</span>
+                    <div className="admin-private-photos__actions">
+                      <a href={`/api/orders/${encodeURIComponent(order.orderNumber)}/photos/${asset.id}`} target="_blank" rel="noopener noreferrer" aria-label={`Voir la référence privée ${position + 1}`}>Voir</a>
+                      <a href={`/api/orders/${encodeURIComponent(order.orderNumber)}/photos/${asset.id}?download=1`} aria-label={`Télécharger la référence privée ${position + 1}`}>Télécharger</a>
+                    </div>
                   </li>
                 ))}
               </ul>

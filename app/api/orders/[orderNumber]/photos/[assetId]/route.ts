@@ -1,4 +1,5 @@
 import { orderErrorResponse, orderJson } from "@/lib/orders/http";
+import { adminOrderPhotoDownloadResponse } from "@/lib/orders/photo-download";
 import { isAllowedOrderMutation, orderActorFromHeaders } from "@/lib/orders/request";
 import { deleteOrderPhoto, enforceOrderRateLimit, getOrderPhotoForActor } from "@/lib/orders/service";
 
@@ -11,8 +12,15 @@ function validUuid(value: string) {
 }
 export async function GET(request: Request, context: RouteContext) {
   const actor = await orderActorFromHeaders(request.headers);
-  if (!actor) return orderJson({ error: "Authentification requise." }, 401);
   const { orderNumber, assetId } = await context.params;
+  if (new URL(request.url).searchParams.get("download") === "1") {
+    try {
+      return await adminOrderPhotoDownloadResponse(actor, orderNumber, assetId);
+    } catch (error) {
+      return orderErrorResponse(error);
+    }
+  }
+  if (!actor) return orderJson({ error: "Authentification requise." }, 401);
   if (!validUuid(assetId)) return orderJson({ error: "Photo introuvable." }, 404);
 
   try {

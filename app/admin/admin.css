@@ -433,6 +433,9 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-private-photos li { overflow: clip; border: 1px solid rgba(244, 240, 232, 0.12); border-radius: 16px; background: #090908; }
 .admin-private-photos img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .admin-private-photos span { display: block; padding: 0.7rem; color: #8f8a82; font-size: 0.65rem; }
+.admin-private-photos__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0 0.7rem 0.7rem; }
+.admin-private-photos__actions a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.55rem 0.8rem; border: 1px solid rgba(212, 174, 94, 0.5); border-radius: 8px; color: var(--admin-gold); font-size: 0.72rem; text-decoration: none; }
+.admin-private-photos__actions a:hover, .admin-private-photos__actions a:focus-visible { background: rgba(212, 174, 94, 0.12); }
 .admin-timeline { display: grid; margin: 0; padding: 0; list-style: none; }
 .admin-timeline li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 1rem; }
 .admin-timeline li > span { position: relative; width: 8px; height: 8px; margin-top: 0.65rem; border: 2px solid var(--admin-gold); border-radius: 50%; }
