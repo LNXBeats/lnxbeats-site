@@ -30,6 +30,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
   await requireAdmin();
   const params = await searchParams;
   const filter = parseAdminOrderFilter(params.filtre);
+  const selectable = filter !== "hidden" && filter !== "archives";
   const [orders, reviewEvents] = await Promise.all([
     listAdminOrders(filter),
     filter === "attention" ? listAdminPaymentReviewEvents() : Promise.resolve([]),
@@ -76,15 +77,15 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
         <div className="admin-list-window__heading"><h2 id="admin-order-list-title">{filterLabels[filter]}</h2><span>{orders.length} résultat{orders.length === 1 ? "" : "s"}</span></div>
         {orders.length ? (
           <form className="admin-order-bulk-form" action={hideSelectedOrdersFromCurrentViewsAction}>
-          {filter !== "hidden" && filter !== "archives" ? <fieldset className="admin-order-bulk-controls"><legend>Masquer la sélection</legend><label>Motif<select name="reason" required>{Object.entries(orderCurrentViewHiddenReasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Commentaire facultatif<input name="note" maxLength={240} /></label><button className="admin-button" type="submit">Masquer la sélection</button><small>Chaque commande est revalidée séparément côté serveur. Une obligation ouverte bloque uniquement la commande concernée.</small></fieldset> : null}
-          <ul className="admin-order-list admin-order-list--selectable">
+          {selectable ? <fieldset className="admin-order-bulk-controls"><legend>Masquer la sélection</legend><label>Motif<select name="reason" required>{Object.entries(orderCurrentViewHiddenReasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Commentaire facultatif<input name="note" maxLength={240} /></label><button className="admin-button" type="submit">Masquer la sélection</button><small>Chaque commande est revalidée séparément côté serveur. Une obligation ouverte bloque uniquement la commande concernée.</small></fieldset> : null}
+          <ul className={`admin-order-list ${selectable ? "admin-order-list--selectable" : "admin-order-list--non-selectable"}`}>
             {orders.map((order) => {
               const presentation = orderStatusPresentation[order.status];
               const options = [order.coverIncluded ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)})` : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Sans option";
               return (
                 <li key={order.orderNumber}>
-                  <div className="admin-order-list__selectable-row">
-                    {filter !== "hidden" && filter !== "archives" ? <label className="admin-order-select"><input type="checkbox" name="orderNumber" value={order.orderNumber} disabled={!order.visibilityEligibility.allowed} aria-label={`Sélectionner ${order.orderNumber}`} /></label> : null}
+                  <div className="admin-order-list__row">
+                    {selectable ? <label className="admin-order-select"><input type="checkbox" name="orderNumber" value={order.orderNumber} disabled={!order.visibilityEligibility.allowed} aria-label={`Sélectionner ${order.orderNumber}`} /></label> : null}
                   <Link href={`/admin/commandes/${encodeURIComponent(order.orderNumber)}`}>
                     <span className="admin-order-list__identity"><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><em>{order.customerName || order.customerEmail}</em></span>
                     <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{order.hiddenFromCurrentViewsAt ? <b>Masquée · {order.hiddenFromCurrentViewsReason ? orderCurrentViewHiddenReasonLabels[order.hiddenFromCurrentViewsReason] : "Motif non renseigné"}</b> : order.operation ? <b>{order.operation.label}</b> : null}{!order.visibilityEligibility.allowed && filter !== "hidden" && filter !== "archives" ? <small>{order.visibilityEligibility.reason}</small> : null}</span>

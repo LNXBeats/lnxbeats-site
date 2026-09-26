@@ -134,3 +134,16 @@ test("Admin pages expose hide, restore, hidden filter, explicit search inclusion
   assert.match(searchService, /includeHiddenOrders/);
   assert.match(searchService, /hiddenFromCurrentViewsAt: null/);
 });
+
+test("Admin order rows reserve a selection column only for selectable views", async () => {
+  const [list, css] = await Promise.all([
+    readFile("app/admin/commandes/page.tsx", "utf8"),
+    readFile("app/admin/admin.css", "utf8"),
+  ]);
+  assert.match(list, /const selectable = filter !== "hidden" && filter !== "archives"/);
+  assert.match(list, /selectable \? "admin-order-list--selectable" : "admin-order-list--non-selectable"/);
+  assert.match(list, /\{selectable \? <label className="admin-order-select"/);
+  assert.match(css, /\.admin-order-list--selectable \.admin-order-list__row \{ grid-template-columns: 52px minmax\(0, 1fr\); \}/);
+  assert.match(css, /\.admin-order-list--non-selectable \.admin-order-list__row \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  assert.doesNotMatch(css, /^\.admin-order-list__row \{[^}]*grid-template-columns:/m);
+});
