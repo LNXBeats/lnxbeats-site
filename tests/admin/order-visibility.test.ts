@@ -112,6 +112,7 @@ test("server mutations are Admin-only, same-origin, per-order locked and idempot
   assert.match(actions, /isSameOriginMutation/);
   assert.match(service, /withOrderLock\(orderNumber/);
   assert.match(service, /if \(order\.hiddenFromCurrentViewsAt\)[\s\S]*ALREADY_HIDDEN/);
+  assert.match(service, /adminRecordArchive\.findUnique[\s\S]*ORDER_ALREADY_ARCHIVED/);
   assert.match(service, /if \(!order\.hiddenFromCurrentViewsAt\)[\s\S]*ALREADY_VISIBLE/);
   assert.match(service, /for \(const orderNumber of uniqueOrderNumbers\)[\s\S]*hideAdminOrderFromCurrentViews/);
   assert.match(service, /orderCurrentViewVisibilityEvent\.create/);

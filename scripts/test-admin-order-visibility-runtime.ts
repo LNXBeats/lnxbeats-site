@@ -29,6 +29,7 @@ async function cleanup() {
   const orders = await prisma.order.findMany({ where: { orderNumber: { in: [...ORDER_NUMBERS] } }, select: { id: true } });
   const ids = orders.map(({ id }) => id);
   await prisma.$transaction([
+    prisma.adminRecordArchive.deleteMany({ where: { recordType: "MUSIC_ORDER", recordId: { in: ids } } }),
     prisma.orderCurrentViewVisibilityEvent.deleteMany({ where: { orderId: { in: ids } } }),
     prisma.payment.deleteMany({ where: { orderId: { in: ids } } }),
     prisma.orderEvent.deleteMany({ where: { orderId: { in: ids } } }),
@@ -86,6 +87,24 @@ async function run() {
     assert.equal((await listAdminOrders("completed")).some(({ id }) => id === resolved.id), true);
     assert.equal(await prisma.orderCurrentViewVisibilityEvent.count({ where: { orderId: resolved.id } }), 2);
     passed.push("restore returns the order to current views and preserves a separate audit");
+
+    await prisma.adminRecordArchive.create({
+      data: {
+        recordType: "MUSIC_ORDER",
+        recordId: resolved.id,
+        recordReference: resolved.orderNumber,
+        classification: "ARCHIVE_REQUIRED",
+        reason: "Archive métier locale de validation.",
+        archivedByUserId: admin.id,
+      },
+    });
+    await assert.rejects(
+      hideAdminOrderFromCurrentViews(resolved.orderNumber, "TEST", null, admin.id),
+      (error: unknown) => Boolean(error && typeof error === "object" && "code" in error && error.code === "ORDER_ALREADY_ARCHIVED"),
+    );
+    assert.equal((await prisma.order.findUniqueOrThrow({ where: { id: resolved.id } })).hiddenFromCurrentViewsAt, null);
+    await prisma.adminRecordArchive.delete({ where: { recordType_recordId: { recordType: "MUSIC_ORDER", recordId: resolved.id } } });
+    passed.push("cleanup archive and reversible hiding remain distinct");
 
     await assert.rejects(
       hideAdminOrderFromCurrentViews(refundDue.orderNumber, "TEST", null, admin.id),

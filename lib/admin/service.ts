@@ -465,6 +465,11 @@ export async function hideAdminOrderFromCurrentViews(
     if (order.hiddenFromCurrentViewsAt) {
       return { changed: false, orderNumber: order.orderNumber, status: "ALREADY_HIDDEN" as const };
     }
+    const existingArchive = await transaction.adminRecordArchive.findUnique({
+      where: { recordType_recordId: { recordType: "MUSIC_ORDER", recordId: order.id } },
+      select: { id: true },
+    });
+    if (existingArchive) throw new AdminServiceError("Cette commande est déjà archivée.", "ORDER_ALREADY_ARCHIVED");
     const eligibility = evaluateOrderCurrentViewVisibility(order);
     if (!eligibility.allowed) {
       throw new AdminServiceError(eligibility.reason ?? "Masquage refusé.", eligibility.code ?? "HIDE_BLOCKED");
