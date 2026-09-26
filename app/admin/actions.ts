@@ -4,7 +4,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-import { addInternalOrderNote, transitionOrderStatus } from "@/lib/admin/service";
+import {
+  addInternalOrderNote,
+  hideAdminOrderFromCurrentViews,
+  hideAdminOrdersFromCurrentViews,
+  restoreAdminOrderToCurrentViews,
+  transitionOrderStatus,
+} from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { expireCheckoutAfterCancellation } from "@/lib/payments/service";
@@ -67,6 +73,66 @@ export async function addInternalNoteAction(formData: FormData) {
   }
   revalidatePath(`/admin/commandes/${orderNumber}`);
   redirect(adminOrderPath(orderNumber, "note-ajoutee"));
+}
+
+function revalidateOrderVisibility(orderNumber?: string) {
+  revalidatePath("/admin");
+  revalidatePath("/admin/commandes");
+  revalidatePath("/admin/recherche");
+  if (orderNumber) revalidatePath(`/admin/commandes/${orderNumber}`);
+}
+
+export async function hideOrderFromCurrentViewsAction(formData: FormData) {
+  const orderNumber = String(formData.get("orderNumber") ?? "");
+  if (!/^LNX-\d{4}-\d{6}$/.test(orderNumber)) redirect("/admin/commandes?etat=invalide");
+  const session = await authorizeAdminAction();
+  try {
+    await hideAdminOrderFromCurrentViews(orderNumber, formData.get("reason"), formData.get("note"), session.user.id);
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    revalidateOrderVisibility(orderNumber);
+    redirect(adminOrderPath(orderNumber, "masquage-refuse"));
+  }
+  revalidateOrderVisibility(orderNumber);
+  redirect(adminOrderPath(orderNumber, "commande-masquee"));
+}
+
+export async function restoreOrderToCurrentViewsAction(formData: FormData) {
+  const orderNumber = String(formData.get("orderNumber") ?? "");
+  if (!/^LNX-\d{4}-\d{6}$/.test(orderNumber)) redirect("/admin/commandes?etat=invalide");
+  const session = await authorizeAdminAction();
+  try {
+    await restoreAdminOrderToCurrentViews(orderNumber, session.user.id);
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    redirect(adminOrderPath(orderNumber, "restauration-refusee"));
+  }
+  revalidateOrderVisibility(orderNumber);
+  redirect(adminOrderPath(orderNumber, "commande-restauree"));
+}
+
+export async function hideSelectedOrdersFromCurrentViewsAction(formData: FormData) {
+  const orderNumbers = formData.getAll("orderNumber").map(String)
+    .filter((value) => /^LNX-\d{4}-\d{6}$/.test(value));
+  const session = await authorizeAdminAction();
+  if (!orderNumbers.length) redirect("/admin/commandes?etat=selection-vide");
+  const results = await hideAdminOrdersFromCurrentViews(
+    orderNumbers,
+    formData.get("reason"),
+    formData.get("note"),
+    session.user.id,
+  );
+  revalidateOrderVisibility();
+  const hidden = results.filter((result) => result.ok).length;
+  const refused = results.filter((result) => !result.ok);
+  const details = refused.slice(0, 8).map((result) => `${result.orderNumber}: ${result.reason}`).join(" | ");
+  const query = new URLSearchParams({
+    etat: "masquage-lot",
+    masquees: String(hidden),
+    refusees: String(refused.length),
+    ...(details ? { details } : {}),
+  });
+  redirect(`/admin/commandes?${query.toString()}`);
 }
 
 function adminActor(session: Awaited<ReturnType<typeof requireAdmin>>) {

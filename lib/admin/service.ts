@@ -23,6 +23,12 @@ import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { ORDER_DELIVERY_MIME_TYPES } from "@/lib/orders/audio-request";
 import { MAXIMUM_ORDER_DELIVERIES } from "@/lib/orders/delivery";
 import { runSequentialDatabaseQueries } from "@/lib/database/sequential-queries";
+import {
+  evaluateOrderCurrentViewVisibility,
+  normalizeOrderCurrentViewHiddenNote,
+  parseOrderCurrentViewHiddenReason,
+  type OrderVisibilityGuardSnapshot,
+} from "@/lib/admin/order-visibility";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -66,16 +72,16 @@ export async function listAdminPaymentReviewEvents() {
   });
 }
 
-async function listUnarchivedCommanderOrderIds(filter: Exclude<AdminOrderFilter, "archives">) {
+async function listCurrentCommanderOrderIds(filter: Exclude<AdminOrderFilter, "archives" | "hidden">) {
   return prisma.$queryRaw<Array<{ id: string }>>`
     SELECT orders."id"
     FROM "orders" orders
     WHERE (
       ${filter}::text = 'attention'
-      OR NOT EXISTS (
+      OR (orders."hiddenFromCurrentViewsAt" IS NULL AND NOT EXISTS (
         SELECT 1 FROM "admin_record_archives" archive
         WHERE archive."recordType" = 'MUSIC_ORDER' AND archive."recordId" = orders."id"
-      )
+      ))
     ) AND (
       ${filter}::text = 'all'
       OR (${filter}::text = 'attention' AND (
@@ -144,10 +150,12 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
       })
     : [];
   const archivedAtById = new Map(archiveRows.map((row) => [row.recordId, row.archivedAt]));
-  const visibleIds = filter === "archives" ? [] : await listUnarchivedCommanderOrderIds(filter);
+  const visibleIds = filter === "archives" || filter === "hidden" ? [] : await listCurrentCommanderOrderIds(filter);
   const candidates = await prisma.order.findMany({
     where: filter === "archives"
       ? { id: { in: archiveRows.map((row) => row.recordId) } }
+      : filter === "hidden"
+        ? { hiddenFromCurrentViewsAt: { not: null } }
       : { id: { in: visibleIds.map((row) => row.id) } },
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: 200,
@@ -166,19 +174,28 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
       totalCents: true,
       createdAt: true,
       updatedAt: true,
+      hiddenFromCurrentViewsAt: true,
+      hiddenFromCurrentViewsReason: true,
+      hiddenFromCurrentViewsNote: true,
+      hiddenFromCurrentViewsBy: { select: { displayName: true } },
       rightsRequests: {
-        where: { status: { in: [...rightsAdminAttentionStatuses] } },
-        select: { id: true },
+        select: { id: true, status: true },
       },
       payments: {
         where: {
           OR: [
-            { status: { in: ["SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REQUIRES_REVIEW"] } },
+            { status: { in: ["CREATED", "PENDING", "SUCCEEDED", "REFUND_PENDING", "PARTIALLY_REFUNDED", "REQUIRES_REVIEW"] } },
             { incidents: { some: { requiresOperatorReview: true, status: { not: "RESOLVED" } } } },
           ],
         },
         select: {
           status: true,
+          events: { where: { outcome: "REQUIRES_REVIEW" }, select: { id: true }, take: 1 },
+          refundAttempts: {
+            where: { status: { in: ["PENDING", "PROCESSING", "REQUIRES_REVIEW"] } },
+            select: { status: true },
+            take: 1,
+          },
           incidents: {
             where: { requiresOperatorReview: true, status: { not: "RESOLVED" } },
             select: { id: true },
@@ -186,11 +203,18 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
           },
         },
       },
+      withdrawalRequests: { select: { status: true, refundStatus: true } },
+      notifications: {
+        where: { status: { in: ["PENDING", "PROCESSING", "FAILED", "FAILED_RETRYABLE", "FAILED_FINAL", "BOUNCED", "COMPLAINED", "SUPPRESSED"] } },
+        select: { status: true },
+      },
     },
   });
-  const withOperations = (rows: typeof candidates, archived: boolean) => rows.map((order) => ({
-    ...order,
-    operation: classifyCommanderOperation({
+  const withOperations = (rows: typeof candidates, archived: boolean) => rows.map((order) => {
+    const guardSnapshot: OrderVisibilityGuardSnapshot = order;
+    return {
+      ...order,
+      operation: classifyCommanderOperation({
       status: order.status,
       archived,
       hasPaymentReview: order.payments.some((payment) => payment.status === "REQUIRES_REVIEW"),
@@ -200,15 +224,22 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
         && order.payments.some((payment) => ["SUCCEEDED", "PARTIALLY_REFUNDED"].includes(payment.status)),
       hasRefundContradiction: order.status === "REFUNDED"
         && order.payments.some((payment) => ["SUCCEEDED", "PARTIALLY_REFUNDED"].includes(payment.status)),
-      hasRightsReview: order.rightsRequests.length > 0,
-    }),
-  }));
+      hasRightsReview: order.rightsRequests.some((request) => (rightsAdminAttentionStatuses as readonly string[]).includes(request.status)),
+      }),
+      visibilityEligibility: evaluateOrderCurrentViewVisibility(guardSnapshot),
+    };
+  });
   if (filter === "archives") {
     return withOperations(candidates.sort((left, right) => {
       const leftAt = archivedAtById.get(left.id)?.getTime() ?? 0;
       const rightAt = archivedAtById.get(right.id)?.getTime() ?? 0;
       return rightAt - leftAt || right.id.localeCompare(left.id);
     }), true);
+  }
+  if (filter === "hidden") {
+    return withOperations(candidates, false)
+      .sort((left, right) => (right.hiddenFromCurrentViewsAt?.getTime() ?? 0) - (left.hiddenFromCurrentViewsAt?.getTime() ?? 0)
+        || right.id.localeCompare(left.id));
   }
   return withOperations(candidates, false)
     .sort((left, right) => compareOperationClassifications(left.operation, right.operation)
@@ -320,6 +351,16 @@ export async function getAdminOrder(orderNumber: string) {
           updatedAt: true,
         },
       },
+      withdrawalRequests: {
+        orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
+        select: { id: true, status: true, refundStatus: true },
+      },
+      hiddenFromCurrentViewsBy: { select: { id: true, displayName: true } },
+      currentViewVisibilityEvents: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 50,
+        include: { actor: { select: { displayName: true } } },
+      },
     },
   });
 }
@@ -379,6 +420,127 @@ async function withOrderLock<T>(orderNumber: string, operation: (transaction: Tr
     }
   }
   throw lastError;
+}
+
+const orderVisibilityGuardSelect = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  hiddenFromCurrentViewsAt: true,
+  hiddenFromCurrentViewsReason: true,
+  hiddenFromCurrentViewsNote: true,
+  payments: {
+    select: {
+      status: true,
+      events: { where: { outcome: "REQUIRES_REVIEW" }, select: { id: true }, take: 1 },
+      incidents: {
+        where: { requiresOperatorReview: true, status: { not: "RESOLVED" } },
+        select: { id: true },
+        take: 1,
+      },
+      refundAttempts: {
+        where: { status: { in: ["PENDING", "PROCESSING", "REQUIRES_REVIEW"] } },
+        select: { status: true },
+        take: 1,
+      },
+    },
+  },
+      rightsRequests: { select: { status: true } },
+  withdrawalRequests: { select: { status: true, refundStatus: true } },
+  notifications: { select: { status: true } },
+} satisfies Prisma.OrderSelect;
+
+export async function hideAdminOrderFromCurrentViews(
+  orderNumber: string,
+  rawReason: unknown,
+  rawNote: unknown,
+  actorUserId: string,
+) {
+  assertDatabaseConfigured();
+  const reason = parseOrderCurrentViewHiddenReason(rawReason);
+  const note = normalizeOrderCurrentViewHiddenNote(rawNote);
+  return withOrderLock(orderNumber, async (transaction) => {
+    const order = await transaction.order.findUnique({ where: { orderNumber }, select: orderVisibilityGuardSelect });
+    if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");
+    if (order.hiddenFromCurrentViewsAt) {
+      return { changed: false, orderNumber: order.orderNumber, status: "ALREADY_HIDDEN" as const };
+    }
+    const eligibility = evaluateOrderCurrentViewVisibility(order);
+    if (!eligibility.allowed) {
+      throw new AdminServiceError(eligibility.reason ?? "Masquage refusé.", eligibility.code ?? "HIDE_BLOCKED");
+    }
+    const now = new Date();
+    const updated = await transaction.order.updateMany({
+      where: { id: order.id, hiddenFromCurrentViewsAt: null },
+      data: {
+        hiddenFromCurrentViewsAt: now,
+        hiddenFromCurrentViewsByUserId: actorUserId,
+        hiddenFromCurrentViewsReason: reason,
+        hiddenFromCurrentViewsNote: note,
+      },
+    });
+    if (updated.count !== 1) throw new AdminServiceError("La visibilité de la commande a changé entre-temps.", "ORDER_VISIBILITY_CONFLICT");
+    await transaction.orderCurrentViewVisibilityEvent.create({
+      data: { orderId: order.id, action: "HIDDEN", reason, note, actorUserId },
+    });
+    return { changed: true, orderNumber: order.orderNumber, status: "HIDDEN" as const };
+  });
+}
+
+export async function restoreAdminOrderToCurrentViews(orderNumber: string, actorUserId: string) {
+  assertDatabaseConfigured();
+  return withOrderLock(orderNumber, async (transaction) => {
+    const order = await transaction.order.findUnique({ where: { orderNumber }, select: orderVisibilityGuardSelect });
+    if (!order) throw new AdminServiceError("Commande introuvable.", "ORDER_NOT_FOUND");
+    if (!order.hiddenFromCurrentViewsAt) {
+      return { changed: false, orderNumber: order.orderNumber, status: "ALREADY_VISIBLE" as const };
+    }
+    const updated = await transaction.order.updateMany({
+      where: { id: order.id, hiddenFromCurrentViewsAt: { not: null } },
+      data: {
+        hiddenFromCurrentViewsAt: null,
+        hiddenFromCurrentViewsByUserId: null,
+        hiddenFromCurrentViewsReason: null,
+        hiddenFromCurrentViewsNote: null,
+      },
+    });
+    if (updated.count !== 1) throw new AdminServiceError("La visibilité de la commande a changé entre-temps.", "ORDER_VISIBILITY_CONFLICT");
+    await transaction.orderCurrentViewVisibilityEvent.create({
+      data: {
+        orderId: order.id,
+        action: "RESTORED",
+        reason: order.hiddenFromCurrentViewsReason,
+        note: order.hiddenFromCurrentViewsNote,
+        actorUserId,
+      },
+    });
+    return { changed: true, orderNumber: order.orderNumber, status: "RESTORED" as const };
+  });
+}
+
+export async function hideAdminOrdersFromCurrentViews(
+  orderNumbers: readonly string[],
+  rawReason: unknown,
+  rawNote: unknown,
+  actorUserId: string,
+) {
+  const uniqueOrderNumbers = [...new Set(orderNumbers)].slice(0, 50);
+  const results = [];
+  for (const orderNumber of uniqueOrderNumbers) {
+    try {
+      const result = await hideAdminOrderFromCurrentViews(orderNumber, rawReason, rawNote, actorUserId);
+      results.push({ orderNumber, ok: true as const, changed: result.changed, code: result.status });
+    } catch (error) {
+      results.push({
+        orderNumber,
+        ok: false as const,
+        changed: false,
+        code: error instanceof AdminServiceError ? error.code : "HIDE_FAILED",
+        reason: error instanceof Error ? error.message : "Masquage refusé.",
+      });
+    }
+  }
+  return results;
 }
 
 export async function transitionOrderStatus(orderNumber: string, requestedStatus: string, actorUserId: string) {

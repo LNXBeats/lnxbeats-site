@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { hideSelectedOrdersFromCurrentViewsAction } from "@/app/admin/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { orderIllustrationFormatLabel } from "@/data/order-illustration";
+import { orderCurrentViewHiddenReasonLabels } from "@/lib/admin/order-visibility";
 import { adminOrderFilters, listAdminOrders, listAdminPaymentReviewEvents, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
@@ -17,11 +19,12 @@ const filterLabels: Record<AdminOrderFilter, string> = {
   active: "En cours",
   pending: "Brouillons / paiement",
   completed: "Terminées",
+  hidden: "Masquées",
   archives: "Archivées",
   all: "Toutes (audit)",
 };
 
-type AdminOrdersPageProps = { searchParams: Promise<{ filtre?: string; etat?: string }> };
+type AdminOrdersPageProps = { searchParams: Promise<{ filtre?: string; etat?: string; masquees?: string; refusees?: string; details?: string }> };
 
 export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageProps) {
   await requireAdmin();
@@ -40,6 +43,8 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
         <p>Les commandes apparaîtront ici selon leur état d’avancement.</p>
       </header>
       {params.etat === "commande-supprimee" ? <p className="admin-feedback" role="status">La commande éligible, sa timeline et ses références privées ont été supprimées.</p> : params.etat === "suppression-invalide" ? <p className="admin-feedback" role="alert">La confirmation de suppression est invalide.</p> : null}
+      {params.etat === "selection-vide" ? <p className="admin-feedback" role="alert">Sélectionnez au moins une commande éligible.</p> : null}
+      {params.etat === "masquage-lot" ? <p className="admin-feedback" role={Number(params.refusees ?? 0) ? "alert" : "status"}>{params.masquees ?? "0"} commande(s) masquée(s), {params.refusees ?? "0"} refusée(s).{params.details ? ` ${params.details}` : ""}</p> : null}
 
       <nav className="admin-filters" aria-label="Filtrer les commandes">
         {adminOrderFilters.map((value) => (
@@ -70,22 +75,27 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
       <section className="admin-list-window" aria-labelledby="admin-order-list-title">
         <div className="admin-list-window__heading"><h2 id="admin-order-list-title">{filterLabels[filter]}</h2><span>{orders.length} résultat{orders.length === 1 ? "" : "s"}</span></div>
         {orders.length ? (
-          <ul className="admin-order-list">
+          <form className="admin-order-bulk-form" action={hideSelectedOrdersFromCurrentViewsAction}>
+          {filter !== "hidden" && filter !== "archives" ? <fieldset className="admin-order-bulk-controls"><legend>Masquer la sélection</legend><label>Motif<select name="reason" required>{Object.entries(orderCurrentViewHiddenReasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Commentaire facultatif<input name="note" maxLength={240} /></label><button className="admin-button" type="submit">Masquer la sélection</button><small>Chaque commande est revalidée séparément côté serveur. Une obligation ouverte bloque uniquement la commande concernée.</small></fieldset> : null}
+          <ul className="admin-order-list admin-order-list--selectable">
             {orders.map((order) => {
               const presentation = orderStatusPresentation[order.status];
               const options = [order.coverIncluded ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)})` : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Sans option";
               return (
                 <li key={order.orderNumber}>
+                  <div className="admin-order-list__selectable-row">
+                    {filter !== "hidden" && filter !== "archives" ? <label className="admin-order-select"><input type="checkbox" name="orderNumber" value={order.orderNumber} disabled={!order.visibilityEligibility.allowed} aria-label={`Sélectionner ${order.orderNumber}`} /></label> : null}
                   <Link href={`/admin/commandes/${encodeURIComponent(order.orderNumber)}`}>
                     <span className="admin-order-list__identity"><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><em>{order.customerName || order.customerEmail}</em></span>
-                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{order.operation ? <b>{order.operation.label}</b> : null}</span>
+                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{order.hiddenFromCurrentViewsAt ? <b>Masquée · {order.hiddenFromCurrentViewsReason ? orderCurrentViewHiddenReasonLabels[order.hiddenFromCurrentViewsReason] : "Motif non renseigné"}</b> : order.operation ? <b>{order.operation.label}</b> : null}{!order.visibilityEligibility.allowed && filter !== "hidden" && filter !== "archives" ? <small>{order.visibilityEligibility.reason}</small> : null}</span>
                     <span className="admin-order-list__next"><strong>{formatEuro(order.totalCents)}</strong><small>{presentation.next}</small></span>
                     <span className="admin-order-list__arrow" aria-hidden="true">→</span>
                   </Link>
+                  </div>
                 </li>
               );
             })}
-          </ul>
+          </ul></form>
         ) : <div className="admin-empty"><h2>Aucune commande dans cette vue.</h2><p>Aucune commande ne correspond actuellement à ce filtre.</p></div>}
       </section>
     </div>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addInternalNoteAction, reconcilePaymentRefundAction, requestPaymentRefundAction } from "@/app/admin/actions";
+import { addInternalNoteAction, hideOrderFromCurrentViewsAction, reconcilePaymentRefundAction, requestPaymentRefundAction, restoreOrderToCurrentViewsAction } from "@/app/admin/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { AdminOrderActions } from "@/components/admin-order-actions";
 import { AdminOrderDeliveryPanel } from "@/components/admin-order-delivery-panel";
@@ -10,6 +10,7 @@ import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
 import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { getAllowedOrderTransitions } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
+import { evaluateOrderCurrentViewVisibility, orderCurrentViewHiddenReasonLabels } from "@/lib/admin/order-visibility";
 import { requireAdmin } from "@/lib/auth/session";
 import { notificationKindPresentation } from "@/lib/notifications/admin-presentation";
 import { formatEuro } from "@/lib/orders/domain";
@@ -45,6 +46,10 @@ const stateMessages: Record<string, string> = {
   "remboursement-a-verifier": "Le remboursement nécessite une réconciliation opérateur avant toute nouvelle tentative.",
   "remboursement-facture-requise": "Remboursement bloqué avant tout appel au prestataire : la facture source doit d’abord être régularisée selon la procédure comptable validée.",
   "remboursement-refuse": "La demande de remboursement a été refusée par les garde-fous serveur.",
+  "commande-masquee": "Commande masquée des vues courantes. Son historique complet est conservé.",
+  "masquage-refuse": "Masquage refusé : une action obligatoire reste ouverte ou la commande n’est pas terminale.",
+  "commande-restauree": "Commande restaurée dans les vues courantes.",
+  "restauration-refusee": "La restauration n’a pas pu être enregistrée.",
 };
 
 const notificationStatusPresentation = {
@@ -127,6 +132,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
   const deliveryRequiredToPublish = order.status === "FINALIZING" && deliveries.length === 0;
   const transitions = getAllowedOrderTransitions(order.status)
     .filter(({ to }) => to !== "DELIVERED" || deliveries.length > 0);
+  const visibilityEligibility = evaluateOrderCurrentViewVisibility(order);
 
   return (
     <div className="admin-main admin-order-detail">
@@ -240,6 +246,16 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               emptyReason={deliveryRequiredToPublish ? "Ajoutez d’abord au moins un livrable privé valide. La publication sera ensuite disponible." : undefined}
             />
             <Link className="admin-action-reason" href="/admin/nettoyage">Les suppressions et archivages passent exclusivement par « Nettoyage & archives ».</Link>
+          </section>
+
+          <section className="admin-side-window admin-order-visibility" aria-labelledby="admin-visibility-title">
+            <p className="admin-section-label">Vues courantes</p><h2 id="admin-visibility-title">Visibilité opérationnelle.</h2>
+            {order.hiddenFromCurrentViewsAt ? <>
+              <p><strong>Masquée depuis le {order.hiddenFromCurrentViewsAt.toLocaleString("fr-FR")}.</strong> La commande, ses paiements, factures, contrats et journaux restent intacts.</p>
+              <dl><div><dt>Motif</dt><dd>{order.hiddenFromCurrentViewsReason ? orderCurrentViewHiddenReasonLabels[order.hiddenFromCurrentViewsReason] : "Non renseigné"}</dd></div><div><dt>Administrateur</dt><dd>{order.hiddenFromCurrentViewsBy?.displayName || "Administrateur"}</dd></div>{order.hiddenFromCurrentViewsNote ? <div><dt>Commentaire</dt><dd>{order.hiddenFromCurrentViewsNote}</dd></div> : null}</dl>
+              <form action={restoreOrderToCurrentViewsAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><button className="admin-button" type="submit">Restaurer dans les vues courantes</button></form>
+            </> : visibilityEligibility.allowed ? <details><summary>Masquer cette commande</summary><p>Le masquage retire uniquement cette commande des listes quotidiennes. Il est réversible et audité.</p><form className="admin-form" action={hideOrderFromCurrentViewsAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><label>Motif<select name="reason" required>{Object.entries(orderCurrentViewHiddenReasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Commentaire facultatif<textarea name="note" rows={3} maxLength={240} /></label><button className="admin-button" type="submit">Masquer</button></form></details> : <p className="admin-alert"><strong>Masquage indisponible.</strong> {visibilityEligibility.reason}</p>}
+            {order.currentViewVisibilityEvents.length ? <details className="admin-visibility-audit"><summary>Journal de visibilité ({order.currentViewVisibilityEvents.length})</summary><ul>{order.currentViewVisibilityEvents.map((event) => <li key={event.id}><strong>{event.action === "HIDDEN" ? "Commande masquée des vues courantes" : "Commande restaurée dans les vues courantes"}</strong><span>{event.createdAt.toLocaleString("fr-FR")} · {event.actor.displayName || "Administrateur"}</span>{event.action === "HIDDEN" && event.reason ? <span>Motif : {orderCurrentViewHiddenReasonLabels[event.reason]}</span> : null}{event.note ? <p>{event.note}</p> : null}</li>)}</ul></details> : null}
           </section>
 
           <details className="admin-side-window admin-note-panel">

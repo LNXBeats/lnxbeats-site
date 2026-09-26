@@ -1,6 +1,6 @@
 import type { KnownOrderStatus } from "@/lib/orders/status";
 
-export const adminOrderFilters = ["attention", "active", "pending", "completed", "archives", "all"] as const;
+export const adminOrderFilters = ["attention", "active", "pending", "completed", "hidden", "archives", "all"] as const;
 export type AdminOrderFilter = (typeof adminOrderFilters)[number];
 
 export const adminShopOrderFilters = [
@@ -72,6 +72,7 @@ export type OperationClassification = Readonly<{
 export type CommanderOperationSnapshot = Readonly<{
   status: KnownOrderStatus;
   archived?: boolean;
+  hidden?: boolean;
   hasPaymentReview?: boolean;
   hasUnresolvedFinancialIncident?: boolean;
   hasRefundPending?: boolean;
@@ -111,7 +112,8 @@ export function classifyCommanderOperation(snapshot: CommanderOperationSnapshot)
 export function commanderOrderMatchesFilter(snapshot: CommanderOperationSnapshot, filter: AdminOrderFilter) {
   if (filter === "archives") return snapshot.archived === true;
   if (filter === "attention") return classifyCommanderOperation(snapshot) !== null;
-  if (snapshot.archived) return false;
+  if (filter === "hidden") return snapshot.hidden === true;
+  if (snapshot.archived || snapshot.hidden) return false;
   if (filter === "all") return true;
   if (filter === "active") return (commanderActiveStatuses as readonly KnownOrderStatus[]).includes(snapshot.status);
   if (filter === "pending") return (commanderPendingStatuses as readonly KnownOrderStatus[]).includes(snapshot.status);

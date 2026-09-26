@@ -7,12 +7,12 @@ export function normalizeAdminSearchQuery(value: string | undefined) {
   return query.length >= 2 ? query : "";
 }
 
-export async function searchAdminRecords(query: string) {
+export async function searchAdminRecords(query: string, options: Readonly<{ includeHiddenOrders?: boolean }> = {}) {
   assertDatabaseConfigured();
   if (!query) return [];
   const text = { contains: query, mode: "insensitive" as const };
   const [orders, shopOrders, creations, projects, members, invoices, creditNotes] = await Promise.all([
-    prisma.order.findMany({ where: { OR: [{ orderNumber: text }, { title: text }, { customerName: text }, { customerEmail: text }] }, select: { id: true, orderNumber: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 6 }),
+    prisma.order.findMany({ where: { AND: [options.includeHiddenOrders ? {} : { hiddenFromCurrentViewsAt: null }, { OR: [{ orderNumber: text }, { title: text }, { customerName: text }, { customerEmail: text }] }] }, select: { id: true, orderNumber: true, title: true, status: true, hiddenFromCurrentViewsAt: true }, orderBy: { updatedAt: "desc" }, take: 6 }),
     prisma.shopOrder.findMany({ where: { OR: [{ orderNumber: text }, { user: { is: { OR: [{ email: text }, { displayName: text }] } } }] }, select: { id: true, orderNumber: true, status: true, paymentStatus: true }, orderBy: { updatedAt: "desc" }, take: 6 }),
     prisma.creation.findMany({ where: { OR: [{ title: text }, { slug: text }, { collaborator: text }] }, select: { id: true, title: true, slug: true, status: true }, orderBy: { updatedAt: "desc" }, take: 6 }),
     prisma.project.findMany({ where: { OR: [{ title: text }, { slug: text }] }, select: { id: true, title: true, slug: true, status: true }, orderBy: { updatedAt: "desc" }, take: 6 }),
@@ -21,7 +21,7 @@ export async function searchAdminRecords(query: string) {
     prisma.creditNote.findMany({ where: { creditNoteNumber: text }, select: { id: true, creditNoteNumber: true }, orderBy: { issuedAt: "desc" }, take: 6 }),
   ]);
   return [
-    ...orders.map((row) => ({ key: `order:${row.id}`, type: "Commande musicale", title: row.orderNumber, detail: row.title || row.status, href: `/admin/commandes/${encodeURIComponent(row.orderNumber)}` })),
+    ...orders.map((row) => ({ key: `order:${row.id}`, type: row.hiddenFromCurrentViewsAt ? "Commande musicale · Masquée" : "Commande musicale", title: row.orderNumber, detail: row.title || row.status, href: `/admin/commandes/${encodeURIComponent(row.orderNumber)}` })),
     ...shopOrders.map((row) => ({ key: `shop:${row.id}`, type: "Commande Boutique", title: row.orderNumber, detail: `${row.status} · ${row.paymentStatus}`, href: `/admin/boutique/commandes/${encodeURIComponent(row.orderNumber)}` })),
     ...creations.map((row) => ({ key: `creation:${row.id}`, type: "Création", title: row.title, detail: row.status, href: `/admin/creations/${encodeURIComponent(row.slug)}` })),
     ...projects.map((row) => ({ key: `project:${row.id}`, type: "Projet Discographie", title: row.title, detail: row.status, href: `/admin/catalogue/${encodeURIComponent(row.slug)}` })),

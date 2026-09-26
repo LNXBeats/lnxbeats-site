@@ -288,6 +288,17 @@ enum AdminCleanupOperation {
   HARD_DELETED
 }
 
+enum OrderCurrentViewHiddenReason {
+  TEST
+  DUPLICATE
+  OTHER
+}
+
+enum OrderCurrentViewVisibilityAction {
+  HIDDEN
+  RESTORED
+}
+
 enum OrderUsage {
   PERSONAL
   COMMERCIAL_EXTENDED
@@ -903,58 +914,60 @@ enum ProviderEventOutcome {
 }
 
 model User {
-  id                                 String                        @id @default(uuid()) @db.Uuid
-  email                              String                        @unique @db.VarChar(320)
-  emailVerified                      Boolean                       @default(false)
-  emailVerifiedAt                    DateTime?                     @db.Timestamptz(3)
-  displayName                        String                        @default("") @db.VarChar(120)
-  firstName                          String?                       @db.VarChar(100)
-  lastName                           String?                       @db.VarChar(100)
-  image                              String?                       @db.VarChar(500)
-  role                               UserRole                      @default(MEMBER)
-  status                             UserStatus                    @default(PENDING)
-  createdAt                          DateTime                      @default(now()) @db.Timestamptz(3)
-  updatedAt                          DateTime                      @updatedAt @db.Timestamptz(3)
+  id                                 String                            @id @default(uuid()) @db.Uuid
+  email                              String                            @unique @db.VarChar(320)
+  emailVerified                      Boolean                           @default(false)
+  emailVerifiedAt                    DateTime?                         @db.Timestamptz(3)
+  displayName                        String                            @default("") @db.VarChar(120)
+  firstName                          String?                           @db.VarChar(100)
+  lastName                           String?                           @db.VarChar(100)
+  image                              String?                           @db.VarChar(500)
+  role                               UserRole                          @default(MEMBER)
+  status                             UserStatus                        @default(PENDING)
+  createdAt                          DateTime                          @default(now()) @db.Timestamptz(3)
+  updatedAt                          DateTime                          @updatedAt @db.Timestamptz(3)
   customerProfile                    Customer?
-  orders                             Order[]                       @relation("OrderAccount")
-  orderEvents                        OrderEvent[]                  @relation("OrderEventActor")
-  confidenceReviews                  ConfidenceAnnotation[]        @relation("ConfidenceReviewer")
+  orders                             Order[]                           @relation("OrderAccount")
+  orderEvents                        OrderEvent[]                      @relation("OrderEventActor")
+  confidenceReviews                  ConfidenceAnnotation[]            @relation("ConfidenceReviewer")
   favorites                          Favorite[]
   sessions                           Session[]
   accounts                           Account[]
-  rightsRequests                     RightsRequest[]               @relation("RightsRequestOwner")
-  partyConfirmations                 ContractPartySnapshot[]       @relation("ContractPartyConfirmedBy")
-  rightsEvents                       RightsRequestEvent[]          @relation("RightsEventActor")
-  rightsMessages                     RightsMessage[]               @relation("RightsMessageAuthor")
-  templateApprovals                  ContractTemplate[]            @relation("ContractTemplateApprover")
-  contractAcceptances                ContractAcceptance[]          @relation("ContractAcceptanceActor")
-  splitProposals                     RightsSplitProposal[]         @relation("RightsSplitProposer")
-  notificationEvents                 NotificationEvent[]           @relation("NotificationEventActor")
-  refundRequests                     RefundAttempt[]               @relation("RefundRequestedBy")
-  paymentAuditEvents                 PaymentAuditEvent[]           @relation("PaymentAuditActor")
-  pricingVersionsCreated             MusicPricingVersion[]         @relation("MusicPricingVersionCreatedBy")
-  pricingConfigurationsUpdated       MusicPricingConfiguration[]   @relation("MusicPricingConfigurationUpdatedBy")
-  pricingActivations                 MusicPricingActivation[]      @relation("MusicPricingActivationActor")
-  productsCreated                    Product[]                     @relation("ProductCreatedBy")
-  productsUpdated                    Product[]                     @relation("ProductUpdatedBy")
-  productStockAdjustments            ProductStockAdjustment[]      @relation("ProductStockAdjustmentActor")
-  productAuditEvents                 ProductAuditEvent[]           @relation("ProductAuditEventActor")
-  shopOrders                         ShopOrder[]                   @relation("ShopOrderOwner")
-  shopOrderEvents                    ShopOrderEvent[]              @relation("ShopOrderEventActor")
-  shopOrderLifecycleEvents           ShopOrderLifecycleEvent[]     @relation("ShopOrderLifecycleEventActor")
-  shippingProviderAttemptsCreated    ShopShippingProviderAttempt[] @relation("ShopShippingProviderAttemptCreatedBy")
-  shippingProviderAttemptsReconciled ShopShippingProviderAttempt[] @relation("ShopShippingProviderAttemptReconciledBy")
-  legalDocumentApprovals             LegalDocumentVersion[]        @relation("LegalDocumentApprover")
-  withdrawalReviews                  ConsumerWithdrawalRequest[]   @relation("ConsumerWithdrawalReviewer")
-  rightsWithdrawalRequests           RightsWithdrawalRequest[]     @relation("RightsWithdrawalRequester")
-  rightsWithdrawalReviews            RightsWithdrawalRequest[]     @relation("RightsWithdrawalReviewer")
-  billingAuditEvents                 BillingAuditEvent[]           @relation("BillingAuditActor")
-  shopReturnRequests                 ShopReturnRequest[]           @relation("ShopReturnOwner")
-  shopReturnReviews                  ShopReturnRequest[]           @relation("ShopReturnReviewer")
-  shopReturnAuditEvents              ShopReturnAuditEvent[]        @relation("ShopReturnAuditActor")
-  adminRecordArchives                AdminRecordArchive[]          @relation("AdminRecordArchiveActor")
-  adminCleanupAuditEvents            AdminCleanupAuditEvent[]      @relation("AdminCleanupAuditActor")
-  creationMediaUploadSessions        CreationMediaUploadSession[]  @relation("CreationMediaUploadActor")
+  rightsRequests                     RightsRequest[]                   @relation("RightsRequestOwner")
+  partyConfirmations                 ContractPartySnapshot[]           @relation("ContractPartyConfirmedBy")
+  rightsEvents                       RightsRequestEvent[]              @relation("RightsEventActor")
+  rightsMessages                     RightsMessage[]                   @relation("RightsMessageAuthor")
+  templateApprovals                  ContractTemplate[]                @relation("ContractTemplateApprover")
+  contractAcceptances                ContractAcceptance[]              @relation("ContractAcceptanceActor")
+  splitProposals                     RightsSplitProposal[]             @relation("RightsSplitProposer")
+  notificationEvents                 NotificationEvent[]               @relation("NotificationEventActor")
+  refundRequests                     RefundAttempt[]                   @relation("RefundRequestedBy")
+  paymentAuditEvents                 PaymentAuditEvent[]               @relation("PaymentAuditActor")
+  pricingVersionsCreated             MusicPricingVersion[]             @relation("MusicPricingVersionCreatedBy")
+  pricingConfigurationsUpdated       MusicPricingConfiguration[]       @relation("MusicPricingConfigurationUpdatedBy")
+  pricingActivations                 MusicPricingActivation[]          @relation("MusicPricingActivationActor")
+  productsCreated                    Product[]                         @relation("ProductCreatedBy")
+  productsUpdated                    Product[]                         @relation("ProductUpdatedBy")
+  productStockAdjustments            ProductStockAdjustment[]          @relation("ProductStockAdjustmentActor")
+  productAuditEvents                 ProductAuditEvent[]               @relation("ProductAuditEventActor")
+  shopOrders                         ShopOrder[]                       @relation("ShopOrderOwner")
+  shopOrderEvents                    ShopOrderEvent[]                  @relation("ShopOrderEventActor")
+  shopOrderLifecycleEvents           ShopOrderLifecycleEvent[]         @relation("ShopOrderLifecycleEventActor")
+  shippingProviderAttemptsCreated    ShopShippingProviderAttempt[]     @relation("ShopShippingProviderAttemptCreatedBy")
+  shippingProviderAttemptsReconciled ShopShippingProviderAttempt[]     @relation("ShopShippingProviderAttemptReconciledBy")
+  legalDocumentApprovals             LegalDocumentVersion[]            @relation("LegalDocumentApprover")
+  withdrawalReviews                  ConsumerWithdrawalRequest[]       @relation("ConsumerWithdrawalReviewer")
+  rightsWithdrawalRequests           RightsWithdrawalRequest[]         @relation("RightsWithdrawalRequester")
+  rightsWithdrawalReviews            RightsWithdrawalRequest[]         @relation("RightsWithdrawalReviewer")
+  billingAuditEvents                 BillingAuditEvent[]               @relation("BillingAuditActor")
+  shopReturnRequests                 ShopReturnRequest[]               @relation("ShopReturnOwner")
+  shopReturnReviews                  ShopReturnRequest[]               @relation("ShopReturnReviewer")
+  shopReturnAuditEvents              ShopReturnAuditEvent[]            @relation("ShopReturnAuditActor")
+  adminRecordArchives                AdminRecordArchive[]              @relation("AdminRecordArchiveActor")
+  adminCleanupAuditEvents            AdminCleanupAuditEvent[]          @relation("AdminCleanupAuditActor")
+  ordersHiddenFromCurrentViews       Order[]                           @relation("OrderCurrentViewHiddenBy")
+  orderCurrentViewVisibilityEvents   OrderCurrentViewVisibilityEvent[] @relation("OrderCurrentViewVisibilityActor")
+  creationMediaUploadSessions        CreationMediaUploadSession[]      @relation("CreationMediaUploadActor")
 
   @@index([role, status])
   @@map("users")
@@ -1380,53 +1393,58 @@ model CreationCollaboratorLink {
 }
 
 model Order {
-  id                                String                      @id @default(uuid()) @db.Uuid
-  orderNumber                       String                      @unique @db.VarChar(32)
-  userId                            String?                     @db.Uuid
-  customerId                        String?                     @db.Uuid
-  customerEmail                     String                      @db.VarChar(320)
-  customerName                      String?                     @db.VarChar(200)
-  status                            OrderStatus                 @default(DRAFT)
-  title                             String?                     @db.VarChar(240)
-  recipient                         String?                     @db.VarChar(200)
-  occasion                          String?                     @db.VarChar(200)
-  brief                             String                      @db.Text
-  musicalDirection                  String?                     @db.Text
-  emotion                           String?                     @db.Text
-  importantDetails                  String?                     @db.Text
-  wordsToInclude                    String?                     @db.Text
-  avoid                             String?                     @db.Text
-  pronunciationNotes                String?                     @db.Text
+  id                                String                            @id @default(uuid()) @db.Uuid
+  orderNumber                       String                            @unique @db.VarChar(32)
+  userId                            String?                           @db.Uuid
+  customerId                        String?                           @db.Uuid
+  customerEmail                     String                            @db.VarChar(320)
+  customerName                      String?                           @db.VarChar(200)
+  status                            OrderStatus                       @default(DRAFT)
+  title                             String?                           @db.VarChar(240)
+  recipient                         String?                           @db.VarChar(200)
+  occasion                          String?                           @db.VarChar(200)
+  brief                             String                            @db.Text
+  musicalDirection                  String?                           @db.Text
+  emotion                           String?                           @db.Text
+  importantDetails                  String?                           @db.Text
+  wordsToInclude                    String?                           @db.Text
+  avoid                             String?                           @db.Text
+  pronunciationNotes                String?                           @db.Text
   illustrationFormat                OrderIllustrationFormat?
-  illustrationFormatCustom          String?                     @db.VarChar(240)
-  notes                             String?                     @db.Text
-  usage                             OrderUsage                  @default(PERSONAL)
-  coverIncluded                     Boolean                     @default(false)
-  priorityProcessing                Boolean                     @default(false)
-  basePriceCents                    Int                         @default(5000)
-  coverPriceCents                   Int                         @default(0)
-  priorityPriceCents                Int                         @default(0)
-  totalCents                        Int                         @default(5000)
-  currency                          String                      @default("EUR") @db.VarChar(3)
-  pricingVersion                    String                      @default("2026-08-v1") @db.VarChar(32)
-  personalUseTermsVersion           String?                     @db.VarChar(48)
-  personalUseTermsHashSha256        String?                     @db.VarChar(64)
-  personalUseTermsAcceptedAt        DateTime?                   @db.Timestamptz(3)
-  earlyPerformanceConsentVersion    String?                     @db.VarChar(48)
-  earlyPerformanceConsentHashSha256 String?                     @db.VarChar(64)
-  earlyPerformanceConsentAcceptedAt DateTime?                   @db.Timestamptz(3)
-  contractRequired                  Boolean                     @default(false)
-  revisionAllowance                 Int                         @default(1)
-  revisionUsed                      Int                         @default(0)
-  submittedAt                       DateTime?                   @db.Timestamptz(3)
-  serviceStartedAt                  DateTime?                   @db.Timestamptz(3)
-  deliveredAt                       DateTime?                   @db.Timestamptz(3)
-  downloadExpiresAt                 DateTime?                   @db.Timestamptz(3)
-  cancelledAt                       DateTime?                   @db.Timestamptz(3)
-  createdAt                         DateTime                    @default(now()) @db.Timestamptz(3)
-  updatedAt                         DateTime                    @updatedAt @db.Timestamptz(3)
-  account                           User?                       @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
-  customer                          Customer?                   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  illustrationFormatCustom          String?                           @db.VarChar(240)
+  notes                             String?                           @db.Text
+  usage                             OrderUsage                        @default(PERSONAL)
+  coverIncluded                     Boolean                           @default(false)
+  priorityProcessing                Boolean                           @default(false)
+  basePriceCents                    Int                               @default(5000)
+  coverPriceCents                   Int                               @default(0)
+  priorityPriceCents                Int                               @default(0)
+  totalCents                        Int                               @default(5000)
+  currency                          String                            @default("EUR") @db.VarChar(3)
+  pricingVersion                    String                            @default("2026-08-v1") @db.VarChar(32)
+  personalUseTermsVersion           String?                           @db.VarChar(48)
+  personalUseTermsHashSha256        String?                           @db.VarChar(64)
+  personalUseTermsAcceptedAt        DateTime?                         @db.Timestamptz(3)
+  earlyPerformanceConsentVersion    String?                           @db.VarChar(48)
+  earlyPerformanceConsentHashSha256 String?                           @db.VarChar(64)
+  earlyPerformanceConsentAcceptedAt DateTime?                         @db.Timestamptz(3)
+  contractRequired                  Boolean                           @default(false)
+  revisionAllowance                 Int                               @default(1)
+  revisionUsed                      Int                               @default(0)
+  submittedAt                       DateTime?                         @db.Timestamptz(3)
+  serviceStartedAt                  DateTime?                         @db.Timestamptz(3)
+  deliveredAt                       DateTime?                         @db.Timestamptz(3)
+  downloadExpiresAt                 DateTime?                         @db.Timestamptz(3)
+  cancelledAt                       DateTime?                         @db.Timestamptz(3)
+  createdAt                         DateTime                          @default(now()) @db.Timestamptz(3)
+  updatedAt                         DateTime                          @updatedAt @db.Timestamptz(3)
+  hiddenFromCurrentViewsAt          DateTime?                         @db.Timestamptz(3)
+  hiddenFromCurrentViewsByUserId    String?                           @db.Uuid
+  hiddenFromCurrentViewsReason      OrderCurrentViewHiddenReason?
+  hiddenFromCurrentViewsNote        String?                           @db.VarChar(240)
+  account                           User?                             @relation("OrderAccount", fields: [userId], references: [id], onDelete: SetNull)
+  hiddenFromCurrentViewsBy          User?                             @relation("OrderCurrentViewHiddenBy", fields: [hiddenFromCurrentViewsByUserId], references: [id], onDelete: Restrict)
+  customer                          Customer?                         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   events                            OrderEvent[]
   assets                            OrderAsset[]
   rightsRequests                    RightsRequest[]
@@ -1435,12 +1453,31 @@ model Order {
   notifications                     OrderNotification[]
   withdrawalRequests                ConsumerWithdrawalRequest[]
   invoices                          Invoice[]
+  currentViewVisibilityEvents       OrderCurrentViewVisibilityEvent[]
 
   @@index([status, createdAt])
   @@index([userId])
   @@index([userId, status, updatedAt])
   @@index([customerId])
+  @@index([hiddenFromCurrentViewsAt, updatedAt])
+  @@index([hiddenFromCurrentViewsByUserId])
   @@map("orders")
+}
+
+model OrderCurrentViewVisibilityEvent {
+  id          String                           @id @default(uuid()) @db.Uuid
+  orderId     String                           @db.Uuid
+  action      OrderCurrentViewVisibilityAction
+  reason      OrderCurrentViewHiddenReason?
+  note        String?                          @db.VarChar(240)
+  actorUserId String                           @db.Uuid
+  createdAt   DateTime                         @default(now()) @db.Timestamptz(3)
+  order       Order                            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actor       User                             @relation("OrderCurrentViewVisibilityActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("order_current_view_visibility_events")
 }
 
 model OrderNotification {
