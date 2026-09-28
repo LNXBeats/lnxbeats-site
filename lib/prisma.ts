@@ -8,6 +8,22 @@ const globalForPrisma = globalThis as typeof globalThis & {
 };
 
 const databaseUrl = process.env.DATABASE_URL;
+const railwayMemoryDiagnosticSymbol = Symbol.for("lnxbeats.railway-linux-memory.v1");
+
+type RailwayMemoryDiagnosticHook = Readonly<{
+  registerPrismaClient?: (client: object) => void;
+}>;
+
+function registerPrismaClientForRailwayMemoryDiagnostic(client: PrismaClient) {
+  try {
+    const diagnosticHook = (
+      globalThis as unknown as Record<symbol, RailwayMemoryDiagnosticHook | undefined>
+    )[railwayMemoryDiagnosticSymbol];
+    diagnosticHook?.registerPrismaClient?.(client);
+  } catch {
+    // The temporary diagnostic must never affect database initialization.
+  }
+}
 
 export function assertDatabaseConfigured() {
   if (!databaseUrl) {
@@ -22,7 +38,9 @@ function createPrismaClient() {
   const connectionString = databaseUrl ?? "postgresql://invalid:invalid@127.0.0.1:1/invalid";
 
   const adapter = new PrismaPg({ connectionString });
-  return new PrismaClient({ adapter });
+  const client = new PrismaClient({ adapter });
+  registerPrismaClientForRailwayMemoryDiagnostic(client);
+  return client;
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
