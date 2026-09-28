@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { Client } from "pg";
 
 export const CREATIONS_RUNTIME_GROUP = "lnx_creations_runtime";
+export const ADMIN_ORDER_VISIBILITY_AUDIT_TABLE = "order_current_view_visibility_events";
 
 const SQL_IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
 const CREATIONS_RELATION = /^(?:creations|creation_[a-z0-9_]+)$/;
@@ -136,4 +137,56 @@ export async function provisionCreationsRuntimePrivileges(client: Client, runtim
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
   }
+}
+
+/**
+ * Grants only the permissions the Admin needs for the reversible order
+ * visibility audit. This table is intentionally outside the Creations-prefix
+ * grant above: the web runtime may read its audit and append events, but does
+ * not receive UPDATE or DELETE privileges on the audit table.
+ */
+export async function provisionAdminOrderVisibilityAuditPrivileges(client: Client) {
+  const identity = await client.query<{ database: string; migration_role: string }>(
+    "SELECT current_database() AS database, current_user AS migration_role",
+  );
+  const { database, migration_role: migrationRole } = identity.rows[0];
+  assertSqlIdentifier(database, "Database");
+  assertSqlIdentifier(migrationRole, "Migration role");
+
+  const group = await loadRole(client, CREATIONS_RUNTIME_GROUP);
+  assert.ok(group, "Creations runtime group must be provisioned first.");
+  assert.equal(group.rolcanlogin, false, "Runtime group must remain NOLOGIN.");
+  assert.equal(group.rolinherit, true, "Runtime group must inherit member privileges.");
+  assert.equal(group.rolsuper, false, "Runtime group must not be SUPERUSER.");
+  assert.equal(group.rolcreatedb, false, "Runtime group must not have CREATEDB.");
+  assert.equal(group.rolcreaterole, false, "Runtime group must not have CREATEROLE.");
+  assert.equal(group.rolreplication, false, "Runtime group must not have REPLICATION.");
+  assert.equal(group.rolbypassrls, false, "Runtime group must not have BYPASSRLS.");
+
+  const relation = await client.query<{ owner: string }>(
+    `SELECT owner.rolname AS owner
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       JOIN pg_roles owner ON owner.oid = c.relowner
+      WHERE n.nspname = 'public'
+        AND c.relname = $1
+        AND c.relkind IN ('r', 'p')`,
+    [ADMIN_ORDER_VISIBILITY_AUDIT_TABLE],
+  );
+  const table = relation.rows[0];
+  assert.ok(table, "Order visibility audit table must exist before runtime grants.");
+  assert.equal(
+    table.owner,
+    migrationRole,
+    "Order visibility audit table must be owned by the migration role.",
+  );
+
+  await client.query(
+    `GRANT SELECT, INSERT ON TABLE public.${quoteSqlIdentifier(ADMIN_ORDER_VISIBILITY_AUDIT_TABLE, "Table")} TO ${quoteSqlIdentifier(CREATIONS_RUNTIME_GROUP, "Runtime group role")}`,
+  );
+
+  return {
+    table: ADMIN_ORDER_VISIBILITY_AUDIT_TABLE,
+    privileges: ["SELECT", "INSERT"] as const,
+  };
 }

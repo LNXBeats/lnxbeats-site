@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 
 import { Client } from "pg";
 
-import { provisionCreationsRuntimePrivileges } from "@/lib/database/creations-runtime-privileges";
+import {
+  provisionAdminOrderVisibilityAuditPrivileges,
+  provisionCreationsRuntimePrivileges,
+} from "@/lib/database/creations-runtime-privileges";
 
 function requiredPostgresUrl(value: string | undefined, label: string) {
   assert.ok(value, `${label} is required.`);
@@ -25,6 +28,7 @@ const client = new Client({
 try {
   await client.connect();
   const result = await provisionCreationsRuntimePrivileges(client, decodeURIComponent(runtime.username));
+  const orderVisibilityAudit = await provisionAdminOrderVisibilityAuditPrivileges(client);
   console.log(JSON.stringify({
     status: "ok",
     database: result.database,
@@ -33,7 +37,8 @@ try {
     groupRole: result.groupRole,
     tables: result.tables,
     sequences: result.sequences,
-    defaultPrivileges: "not used; post-migration provisioning is prefix-scoped",
+    orderVisibilityAudit,
+    defaultPrivileges: "not used; provisioning is prefix-scoped plus the exact order visibility audit table",
   }, null, 2));
 } finally {
   await client.end().catch(() => undefined);
