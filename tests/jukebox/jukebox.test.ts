@@ -86,7 +86,8 @@ test("discography renders one exhaustive scene with a compact crawlable director
   assert.match(discography, /sceneProjects\.map\(\(project\)/);
   assert.match(discography, /href=\{`\/album\/\$\{project\.slug\}`\}/);
   assert.doesNotMatch(discography, /developmentJukebox\.length \?/);
-  assert.match(discography, /const sceneProjects = discographyView\(projects\)/);
+  assert.match(discography, /const sceneProjects = visibleDiscographyProjects\(discographyView\(projects\), "all", "editorial"\)/);
+  assert.match(discography, /jukeboxPosition: project\.jukeboxPosition/);
   assert.doesNotMatch(discography, /eligibleSlugs|publishedJukeboxProjects|developmentJukeboxProjects/);
   assert.match(discography, /projects=\{sceneProjects\}/);
   assert.match(discography, /initialIndex=\{0\}/);

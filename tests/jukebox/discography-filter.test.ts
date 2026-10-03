@@ -14,6 +14,7 @@ type FixtureProject = {
   status: "published" | "in-development" | "draft" | "archive";
   releaseDate: string | null;
   catalogPosition: number;
+  jukeboxPosition?: number | null;
 };
 
 const projects: readonly FixtureProject[] = [
@@ -39,6 +40,38 @@ test("discography filters derive their counts from the same project collection",
 test("editorial sorting follows catalogPosition and remains deterministic", () => {
   const shuffled = [projects[4], projects[1], projects[3], projects[0], projects[2]];
   assert.deepEqual(sortDiscographyProjects(shuffled, "editorial").map(({ slug }) => slug), projects.map(({ slug }) => slug));
+});
+
+test("Vie de chien uses jukebox position 1 rather than catalogue position 26", () => {
+  const input: FixtureProject[] = [
+    { ...projects[1], slug: "legacy-first", catalogPosition: 1, jukeboxPosition: null },
+    { ...projects[1], slug: "explicit-second", catalogPosition: 2, jukeboxPosition: 2 },
+    { ...projects[1], slug: "vie-de-chien", catalogPosition: 26, jukeboxPosition: 1 },
+  ];
+  assert.deepEqual(visibleDiscographyProjects(input, "albums", "editorial").map(p => p.slug), ["vie-de-chien", "explicit-second", "legacy-first"]);
+  assert.equal(input[2].catalogPosition, 26);
+});
+
+test("jukebox null, zero and collisions have deterministic explicit precedence", () => {
+  const input: FixtureProject[] = [
+    { ...projects[1], slug: "legacy", catalogPosition: 1, jukeboxPosition: null },
+    { ...projects[1], slug: "b", catalogPosition: 3, jukeboxPosition: 2 },
+    { ...projects[1], slug: "a", catalogPosition: 3, jukeboxPosition: 2 },
+    { ...projects[1], slug: "earlier-catalogue", catalogPosition: 2, jukeboxPosition: 2 },
+    { ...projects[1], slug: "zero", catalogPosition: 30, jukeboxPosition: 0 },
+  ];
+  assert.deepEqual(sortDiscographyProjects(input, "editorial").map(p => p.slug), ["zero", "earlier-catalogue", "a", "b", "legacy"]);
+});
+
+test("drafts and archives remain excluded while public projects without audio remain discoverable", () => {
+  const input = [
+    { ...projects[1], slug: "draft", status: "draft" as const, jukeboxPosition: 0 },
+    { ...projects[1], slug: "archive", status: "archive" as const, jukeboxPosition: 0 },
+    { ...projects[1], slug: "published-without-audio", audioPreview: null, jukeboxPosition: 1 },
+    { ...projects[3], audioPreview: null },
+  ];
+  assert.deepEqual(visibleDiscographyProjects(input, "all", "editorial").map(p => p.slug), ["published-without-audio", "project-development"]);
+  assert.equal(discographyFilterCounts(input).all, 2);
 });
 
 test("date sorting keeps undated projects last and uses editorial order as its stable fallback", () => {

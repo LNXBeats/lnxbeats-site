@@ -47,6 +47,7 @@ export type JukeboxProject = {
   audioPreview: { url: string; durationMs: number } | null;
   featured: boolean;
   catalogPosition: number;
+  jukeboxPosition: number | null;
 };
 
 type ProjectJukeboxProps = {

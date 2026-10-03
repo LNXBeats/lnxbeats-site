@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Container } from "@/components/container";
 import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
+import { visibleDiscographyProjects } from "@/lib/catalog/jukebox";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import "../v064-discography.css";
 
@@ -30,12 +31,13 @@ function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProj
       : null,
     featured: project.featured,
     catalogPosition: project.catalogPosition,
+    jukeboxPosition: project.jukeboxPosition,
   }));
 }
 
 export default async function DiscographyPage() {
   const { projects } = await listDiscographyProjects();
-  const sceneProjects = discographyView(projects);
+  const sceneProjects = visibleDiscographyProjects(discographyView(projects), "all", "editorial");
 
   return (
     <section className="v064-discography-stage" aria-label="Discographie">

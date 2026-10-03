@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": [],
+    "noEmit": true
+  },
+  "include": [
+    "scripts/creation-media-worker.ts",
+    "scripts/creation-media-worker-preflight.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

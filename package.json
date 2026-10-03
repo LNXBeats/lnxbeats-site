@@ -142,6 +142,7 @@
     "media:migrate": "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/media-migrate.ts",
     "media:import:production": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/import-production-media.ts",
     "creations:media-worker": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/creation-media-worker.ts",
+    "creations:media-worker:build": "prisma generate && tsc --project tsconfig.media-worker.json && NODE_OPTIONS=--conditions=react-server node --import tsx scripts/creation-media-worker-preflight.ts",
     "database:provision-creations-runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/provision-creations-runtime-privileges.ts",
     "test:creations:runtime-roles": "NODE_ENV=test NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-creations-runtime-roles.ts",
     "test:creations:direct-upload-runtime": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-creation-direct-upload-runtime.ts",
