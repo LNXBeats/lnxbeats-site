@@ -1354,3 +1354,48 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-order-production dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
   .admin-order-production__format { grid-column: 1 / -1; }
 }
+.admin-order-glance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--admin-line, #35332d);
+}
+.admin-order-glance dt { font-size: .75rem; color: var(--admin-muted, #aaa69c); }
+.admin-order-glance dd { margin: .35rem 0 0; font-weight: 650; overflow-wrap: anywhere; }
+.admin-order-jumps { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+.admin-order-jumps a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: .6rem .85rem;
+  border: 1px solid var(--admin-line, #35332d); border-radius: .65rem;
+  color: var(--admin-gold, #dfbe74); text-decoration: none;
+}
+.admin-order-jumps a:hover { background: #dfbe7414; }
+.admin-order-jumps a:focus-visible, .admin-order-disclosure > summary:focus-visible {
+  outline: 2px solid #dfbe74; outline-offset: 3px;
+}
+.admin-order-attention {
+  padding: 1rem 1.25rem; margin-bottom: 1rem;
+  border: 1px solid #dfbe7480; border-left: 4px solid #dfbe74; border-radius: .75rem;
+  background: #dfbe740c;
+}
+.admin-order-attention p { margin: .5rem 0 0; }
+.admin-order-attention a { text-underline-offset: .2em; }
+.admin-order-detail :is(h2, summary)[id] { scroll-margin-top: 1.5rem; }
+.admin-order-detail .admin-detail-window,
+.admin-order-detail .admin-side-window { padding: clamp(1rem, 2vw, 1.5rem); min-width: 0; }
+.admin-order-detail .admin-detail-window h2,
+.admin-order-detail .admin-side-window h2 { font-size: 1.2rem; margin-bottom: 1rem; }
+.admin-order-detail .admin-order-disclosure > summary {
+  min-height: 44px; padding: .6rem 0; cursor: pointer; font-weight: 650; overflow-wrap: anywhere;
+}
+.admin-order-detail .admin-order-disclosure[open] > summary { margin-bottom: 1rem; border-bottom: 1px solid #35332d; }
+.admin-order-detail .admin-order-next > .admin-action-reason { display: block; margin: 1rem 0 1.5rem; }
+@media (max-width: 680px) {
+  .admin-order-glance { grid-template-columns: 1fr; gap: .65rem; }
+  .admin-order-glance > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; }
+  .admin-order-glance dd { margin: 0; }
+  .admin-order-jumps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-order-jumps a { min-width: 0; overflow-wrap: anywhere; }
+}

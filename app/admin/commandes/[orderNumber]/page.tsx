@@ -16,6 +16,7 @@ import { notificationKindPresentation } from "@/lib/notifications/admin-presenta
 import { formatEuro } from "@/lib/orders/domain";
 import { orderAcceptsDeliveryUpload } from "@/lib/orders/delivery";
 import { getOrderProductionSummary } from "@/lib/orders/production-summary";
+import { getOrderDetailAttention } from "@/lib/admin/order-detail-presentation";
 import { assertPaymentServerEnvironment, parsePaymentsConfiguration } from "@/lib/payments/config";
 import { paymentMethodPresentation, paymentStatusPresentation } from "@/lib/payments/presentation";
 import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-policy";
@@ -135,6 +136,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
     .filter(({ to }) => to !== "DELIVERED" || deliveries.length > 0);
   const visibilityEligibility = evaluateOrderCurrentViewVisibility(order);
   const production = getOrderProductionSummary(order);
+  const attention = getOrderDetailAttention(order);
   const referencePhotos = order.assets.filter(({ role, asset }) => role === "REFERENCE" && asset.type === "IMAGE");
 
   return (
@@ -145,10 +147,46 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
         <div><p className="admin-kicker">{order.orderNumber}</p><h1>{order.title || order.recipient || "Histoire sans titre"}</h1><p>{order.customerName || "Client"} · {order.customerEmail}</p></div>
         <div className="admin-order-hero__status"><span>Statut actuel</span><strong>{currentStatus.label}</strong><small>Créée le {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small></div>
         <AdminOrderProductionSummary order={order} referencePhotoCount={referencePhotos.length} />
+        <dl className="admin-order-glance">
+          <div><dt>Montant enregistré</dt><dd>{formatEuro(order.totalCents)}</dd></div>
+          <div><dt>Traitement prioritaire</dt><dd>{order.priorityProcessing ? "Oui" : "Non"}</dd></div>
+          <div><dt>Dernier état de paiement</dt><dd>{order.payments[0] ? paymentStatusPresentation[order.payments[0].status] : "Aucun paiement"}</dd></div>
+        </dl>
       </header>
+
+      <nav className="admin-order-jumps" aria-label="Sections de la commande">
+        <a href="#admin-actions-title">Actions & livrables</a>
+        <a href="#admin-brief-title">Brief</a>
+        <a href="#admin-photos-title">Références ({referencePhotos.length})</a>
+        <a href="#admin-payments-title">Paiements</a>
+        <a href="#admin-timeline-title">Historique</a>
+      </nav>
+      {attention.finance || attention.rights || attention.notifications ? <section className="admin-order-attention" aria-label="Points à examiner">
+        <strong>À examiner avant de poursuivre</strong>
+        {attention.finance ? <p><a href="#admin-payments-title">Paiement, remboursement ou incident financier à examiner.</a></p> : null}
+        {attention.withdrawal ? <p>Une rétractation ou son remboursement reste ouvert. <Link href="/admin/commandes">Consulter les commandes à examiner.</Link></p> : null}
+        {attention.rights ? <p><a href="#admin-rights-title">Une décision contractuelle reste ouverte.</a></p> : null}
+        {attention.notifications ? <p><a href="#admin-notifications-title">Une notification reste à traiter.</a></p> : null}
+      </section> : null}
 
       <div className="admin-order-detail__grid">
         <div className="admin-order-detail__main">
+          <section className="admin-detail-window admin-order-next" aria-labelledby="admin-actions-title">
+            <p className="admin-section-label">Prochaine étape</p><h2 id="admin-actions-title">Actions autorisées.</h2>
+            <AdminOrderActions
+              orderNumber={order.orderNumber}
+              transitions={transitions}
+              emptyReason={deliveryRequiredToPublish ? "Ajoutez d’abord au moins un livrable privé valide. La publication sera ensuite disponible." : undefined}
+            />
+            <Link className="admin-action-reason" href="/admin/nettoyage">Les suppressions et archivages passent exclusivement par « Nettoyage & archives ».</Link>
+            <AdminOrderDeliveryPanel
+              orderNumber={order.orderNumber}
+              deliveries={deliveries}
+              canUpload={orderAcceptsDeliveryUpload(order.status, hasSuccessfulPayment)}
+              published={order.status === "DELIVERED"}
+              publishedAt={order.deliveredAt?.toISOString() ?? null}
+            />
+          </section>
           <section className="admin-detail-window" aria-labelledby="admin-brief-title">
             <p className="admin-section-label">Brief complet</p><h2 id="admin-brief-title">Ce qui a été confié.</h2>
             <dl className="admin-detail-facts">
@@ -160,6 +198,10 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               {production.formatLabel ? <div><dt>Format demandé pour l’illustration</dt><dd>{production.formatLabel}</dd></div> : null}
               <div className="admin-detail-facts__wide"><dt>Histoire</dt><dd>{order.brief || "Non renseignée"}</dd></div>
               {order.importantDetails ? <div className="admin-detail-facts__wide"><dt>Détails importants</dt><dd>{order.importantDetails}</dd></div> : null}
+              {order.wordsToInclude ? <div className="admin-detail-facts__wide"><dt>Mots à inclure</dt><dd>{order.wordsToInclude}</dd></div> : null}
+              {order.avoid ? <div className="admin-detail-facts__wide"><dt>À éviter</dt><dd>{order.avoid}</dd></div> : null}
+              {order.pronunciationNotes ? <div className="admin-detail-facts__wide"><dt>Prononciation</dt><dd>{order.pronunciationNotes}</dd></div> : null}
+              {order.notes ? <div className="admin-detail-facts__wide"><dt>Précisions complémentaires</dt><dd>{order.notes}</dd></div> : null}
             </dl>
           </section>
 
@@ -198,7 +240,8 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
             <small>Tarif {order.pricingVersion}. Le montant du navigateur n’est jamais utilisé comme source de vérité.</small>
           </section>
 
-          <section className="admin-side-window" aria-labelledby="admin-early-performance-title">
+          <details className="admin-side-window admin-order-disclosure" open={!(order.earlyPerformanceConsentVersion && order.earlyPerformanceConsentHashSha256 && order.earlyPerformanceConsentAcceptedAt)}>
+            <summary>Consentement et preuve contractuelle</summary>
             <p className="admin-section-label">Preuve contractuelle</p><h2 id="admin-early-performance-title">Commencement anticipé</h2>
             {order.earlyPerformanceConsentVersion && order.earlyPerformanceConsentHashSha256 && order.earlyPerformanceConsentAcceptedAt ? (
               <dl>
@@ -208,10 +251,11 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
                 <div><dt>Empreinte</dt><dd><code>{order.earlyPerformanceConsentHashSha256}</code></dd></div>
               </dl>
             ) : <p><strong>Preuve absente.</strong> Aucun nouveau paiement ne doit être préparé avant une confirmation distincte dans Commander.</p>}
-          </section>
+          </details>
 
-          <section className="admin-side-window" aria-labelledby="admin-payments-title">
-            <p className="admin-section-label">Paiements</p><h2 id="admin-payments-title">{order.payments.length ? `${order.payments.length} tentative${order.payments.length > 1 ? "s" : ""}` : "Aucune tentative"}</h2>
+          <details className="admin-side-window admin-order-disclosure" open={attention.finance || canRunStripeTest}>
+            <summary id="admin-payments-title">Paiements et remboursements{attention.finance ? " — à examiner" : ""}</summary>
+            <p className="admin-section-label">Paiements</p><h2>{order.payments.length ? `${order.payments.length} tentative${order.payments.length > 1 ? "s" : ""}` : "Aucune tentative"}</h2>
             {order.payments.map((payment) => (
               <div key={payment.id} className="admin-payment-record">
               <dl>
@@ -239,17 +283,7 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
             ))}
             {canRunStripeTest ? <AdminPaymentTestAction orderNumber={order.orderNumber} amountCents={order.totalCents} /> : null}
             <small>Résumé PostgreSQL en lecture seule. Seul l’identifiant externe utile à la réconciliation est affiché ; aucun secret ni donnée carte ne l’est.</small>
-          </section>
-
-          <section className="admin-side-window" aria-labelledby="admin-actions-title">
-            <p className="admin-section-label">Prochaine étape</p><h2 id="admin-actions-title">Actions autorisées.</h2>
-            <AdminOrderActions
-              orderNumber={order.orderNumber}
-              transitions={transitions}
-              emptyReason={deliveryRequiredToPublish ? "Ajoutez d’abord au moins un livrable privé valide. La publication sera ensuite disponible." : undefined}
-            />
-            <Link className="admin-action-reason" href="/admin/nettoyage">Les suppressions et archivages passent exclusivement par « Nettoyage & archives ».</Link>
-          </section>
+          </details>
 
           <section className="admin-side-window admin-order-visibility" aria-labelledby="admin-visibility-title">
             <p className="admin-section-label">Vues courantes</p><h2 id="admin-visibility-title">Visibilité opérationnelle.</h2>
@@ -266,19 +300,10 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
             <form action={addInternalNoteAction}><input type="hidden" name="orderNumber" value={order.orderNumber} /><label htmlFor="internal-note">Note</label><textarea id="internal-note" name="note" rows={5} maxLength={1000} required /><button type="submit">Enregistrer la note</button></form>
           </details>
 
-          <section className="admin-side-window">
-            <AdminOrderDeliveryPanel
-              orderNumber={order.orderNumber}
-              deliveries={deliveries}
-              canUpload={orderAcceptsDeliveryUpload(order.status, hasSuccessfulPayment)}
-              published={order.status === "DELIVERED"}
-              publishedAt={order.deliveredAt?.toISOString() ?? null}
-            />
-          </section>
-
-          <section className="admin-side-window" aria-labelledby="admin-notifications-title">
+          <details className="admin-side-window admin-order-disclosure" open={attention.notifications}>
+            <summary id="admin-notifications-title">Notifications{attention.notifications ? " — à examiner" : ""}</summary>
             <p className="admin-section-label">Notifications</p>
-            <h2 id="admin-notifications-title">{order.notifications.length ? `${order.notifications.length} message${order.notifications.length > 1 ? "s" : ""}` : "Aucun message"}</h2>
+            <h2>{order.notifications.length ? `${order.notifications.length} message${order.notifications.length > 1 ? "s" : ""}` : "Aucun message"}</h2>
             {order.notifications.map((notification) => (
               <dl key={notification.id}>
                 <div><dt>Objet</dt><dd>{notificationKindPresentation[notification.kind]}</dd></div>
@@ -291,13 +316,14 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               </dl>
             ))}
             <small>Aucun secret, payload fournisseur, lien R2 ou contenu de master n’est affiché.</small>
-          </section>
+          </details>
 
-          <section className="admin-side-window" aria-labelledby="admin-rights-title">
-            <p className="admin-section-label">Droits & contrats</p><h2 id="admin-rights-title">{order.rightsRequests.length ? `${order.rightsRequests.length} demande${order.rightsRequests.length > 1 ? "s" : ""}` : "Aucune demande"}</h2>
+          <details className="admin-side-window admin-order-disclosure" open={attention.rights}>
+            <summary id="admin-rights-title">Droits et contrats{attention.rights ? " — à examiner" : ""}</summary>
+            <p className="admin-section-label">Droits & contrats</p><h2>{order.rightsRequests.length ? `${order.rightsRequests.length} demande${order.rightsRequests.length > 1 ? "s" : ""}` : "Aucune demande"}</h2>
             {order.rightsRequests.map((rights) => <dl key={rights.id}><div><dt>Référence</dt><dd><Link href={`/admin/droits/${rights.requestNumber}`}>{rights.requestNumber}</Link></dd></div><div><dt>Offre</dt><dd>{rights.type === "PUBLICATION_LICENSE" ? "Licence 150 €" : "Partenariat historique · non proposé"}</dd></div><div><dt>Statut</dt><dd>{rightsStatusPresentation[rights.status].label}</dd></div><div><dt>Paiement</dt><dd>Désactivé</dd></div></dl>)}
             {order.rightsRequests.length ? <p>Ouvrir la rubrique Droits & contrats pour la revue, les documents et l’historique.</p> : null}
-          </section>
+          </details>
         </aside>
       </div>
     </div>
