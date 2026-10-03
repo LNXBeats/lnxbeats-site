@@ -166,7 +166,7 @@
     "busboy": "^1.6.0",
     "dotenv": "17.4.2",
     "ffmpeg-static": "^5.3.0",
-    "next": "16.3.4",
+    "next": "16.3.8",
     "pdfkit": "^0.17.2",
     "pg": "8.23.0",
     "react": "19.2.8",
@@ -186,7 +186,7 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.3.8",
     "prisma": "7.9.1",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.12",
@@ -198,7 +198,7 @@
   "packageManager": "npm@11.16.0",
   "overrides": {
     "deepmerge-ts": "8.0.2",
-    "fast-uri": "3.1.6",
+    "fast-uri": "3.1.8",
     "mysql2": "3.23.1"
   }
 }

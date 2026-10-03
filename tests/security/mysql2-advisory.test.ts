@@ -23,9 +23,9 @@ test("the Prisma CLI fast-uri dependency resolves to the patched compatible rele
   const lock = json<{ packages?: Record<string, { version?: string }> }>("package-lock.json");
   const installed = json<{ version?: string }>("node_modules/fast-uri/package.json");
 
-  assert.equal(manifest.overrides?.["fast-uri"], "3.1.6");
-  assert.equal(lock.packages?.["node_modules/fast-uri"]?.version, "3.1.6");
-  assert.equal(installed.version, "3.1.6");
+  assert.equal(manifest.overrides?.["fast-uri"], "3.1.8");
+  assert.equal(lock.packages?.["node_modules/fast-uri"]?.version, "3.1.8");
+  assert.equal(installed.version, "3.1.8");
 });
 
 test("the application remains PostgreSQL-only and has no direct mysql2 dependency", () => {
