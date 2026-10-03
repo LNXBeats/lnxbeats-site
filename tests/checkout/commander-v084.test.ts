@@ -75,7 +75,7 @@ test("Commander carries the illustration choice through draft, recap and finaliz
   assert.match(form, /illustrationFormatCustom: order\.illustrationFormatCustom/);
   assert.match(form, /name="illustrationFormat"/);
   assert.match(form, /orderIllustrationFormatOptions\.map/);
-  assert.match(form, /orderIllustrationFormatLabel\(form\.illustrationFormat\)/);
+  assert.match(form, /getOrderProductionSummary\(form\)\.formatLabel/);
   assert.match(form, /body: JSON\.stringify\(form\)/);
   assert.match(form, /personalUseTermsAccepted: true/);
   assert.match(form, /earlyPerformanceConsentAccepted: true/);
@@ -91,6 +91,8 @@ test("Commander links validation errors and exposes a keyboard-safe premium uplo
   assert.match(form, /<fieldset className="form-step" disabled=\{busy\} key=\{step\}>/);
   assert.match(form, /const errorFieldSteps/);
   assert.match(form, /if \(targetStep !== undefined && targetStep !== step\) moveToStep\(targetStep\)/);
+  const invalidSubmission = form.slice(form.indexOf("if (!validation.ok)"), form.indexOf("if (!summaryConfirmed"));
+  assert.ok(invalidSubmission.indexOf("moveToStep(targetStep)") < invalidSubmission.indexOf("setError(validation.message)"), "navigation must not erase the destination field error");
   assert.match(form, /requestAnimationFrame/);
   assert.match(form, /aria-invalid=\{errorField === "recipient"\}/);
   assert.match(form, /order-brief-counter order-brief-error/);
@@ -127,5 +129,6 @@ test("Compte, confirmation and Admin use Illustration terminology and expose the
   assert.match(surfaces[1], /Format demandé/);
   assert.match(surfaces[1], /order\.illustrationFormat === "CUSTOM" \? <div><dt>Précision/);
   assert.match(surfaces[4], /Format demandé/);
-  assert.match(surfaces[4], /order\.illustrationFormat === "CUSTOM" \? <div><dt>Précision/);
+  assert.match(surfaces[4], /getOrderProductionSummary\(order\)/);
+  assert.match(surfaces[4], /production\.formatLabel/);
 });

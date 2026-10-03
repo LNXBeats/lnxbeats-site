@@ -131,6 +131,28 @@ export type OrderImageSource = {
 
 export type PersistedOrderImage<TStored extends object> = Omit<NormalizedOrderImage, "buffer"> & TStored;
 
+export function planOrderPhotoAppend<TPhoto extends { checksum: string }>(
+  existing: readonly { checksum: string | null; position: number }[],
+  incoming: readonly TPhoto[],
+) {
+  const knownChecksums = new Set(existing.flatMap(({ checksum }) => checksum ? [checksum] : []));
+  const newPhotos: TPhoto[] = [];
+  const duplicatePhotos: TPhoto[] = [];
+  for (const photo of incoming) {
+    if (knownChecksums.has(photo.checksum)) {
+      duplicatePhotos.push(photo);
+    } else {
+      knownChecksums.add(photo.checksum);
+      newPhotos.push(photo);
+    }
+  }
+  return {
+    newPhotos,
+    duplicatePhotos,
+    nextPosition: existing.reduce((position, photo) => Math.max(position, photo.position + 1), 0),
+  };
+}
+
 type OrderImageBatchDependencies<TStored extends object> = {
   persist(normalized: NormalizedOrderImage, index: number): Promise<TStored>;
   cleanup(persisted: PersistedOrderImage<TStored>, index: number): Promise<void>;
@@ -181,6 +203,25 @@ export async function cleanupPersistedOrderImages<TStored extends object>(
     }
   }
   return { attemptedObjectCount: persisted.length, failedObjectCount } as const;
+}
+
+export function cleanupUnattachedOrderImages<TStored extends { storageKey: string }>(
+  pending: readonly PersistedOrderImage<TStored>[],
+  dependencies: {
+    retainedStorageKeys(storageKeys: readonly string[]): Promise<ReadonlySet<string>>;
+    cleanup(photo: PersistedOrderImage<TStored>, index: number): Promise<void>;
+    reportCleanupFailure?(diagnostic: OrderPhotoCleanupDiagnostic): void;
+  },
+) {
+  // One shared reconciliation, not one database lookup per photo. A rejected
+  // read causes every cleanup attempt to fail closed: preserve uncertain objects
+  // and report the fixed, non-sensitive diagnostic without masking the error.
+  const retained = pending.length
+    ? Promise.resolve().then(() => dependencies.retainedStorageKeys(pending.map(({ storageKey }) => storageKey)))
+    : Promise.resolve(new Set<string>());
+  return cleanupPersistedOrderImages(pending, async (photo, index) => {
+    if (!(await retained).has(photo.storageKey)) await dependencies.cleanup(photo, index);
+  }, dependencies.reportCleanupFailure);
 }
 
 export type ValidatedOrderAudioIdentity = {
@@ -287,7 +328,7 @@ async function normalizeOrderImageWithoutConcurrencyLimit(input: {
 }): Promise<NormalizedOrderImage> {
   if (input.buffer.length === 0) throw new OrderUploadError("Le fichier est vide.", "EMPTY_FILE");
   if (input.buffer.length > orderOffer.maxPhotoBytes) {
-    throw new OrderUploadError("Chaque photo doit peser au maximum 10 Mo.", "FILE_TOO_LARGE");
+    throw new OrderUploadError("Chaque photo doit peser au maximum 10 Mio (10 485 760 octets).", "FILE_TOO_LARGE");
   }
 
   const detectedType = detectImageType(input.buffer);
@@ -327,7 +368,7 @@ async function normalizeOrderImageWithoutConcurrencyLimit(input: {
       .webp({ quality: 88, effort: 4 })
       .toBuffer({ resolveWithObject: true });
     if (normalized.data.length > orderOffer.maxPhotoBytes) {
-      throw new OrderUploadError("L’image normalisée dépasse la limite de 10 Mo.", "NORMALIZED_FILE_TOO_LARGE");
+      throw new OrderUploadError("L’image normalisée dépasse la limite de 10 Mio.", "NORMALIZED_FILE_TOO_LARGE");
     }
 
     return {

@@ -3,11 +3,11 @@ import Link from "next/link";
 
 import { hideSelectedOrdersFromCurrentViewsAction } from "@/app/admin/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
-import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { orderCurrentViewHiddenReasonLabels } from "@/lib/admin/order-visibility";
 import { adminOrderFilters, listAdminOrders, listAdminPaymentReviewEvents, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
+import { getOrderProductionSummary } from "@/lib/orders/production-summary";
 import { orderStatusPresentation } from "@/lib/orders/status";
 
 export const dynamic = "force-dynamic";
@@ -81,14 +81,15 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
           <ul className={`admin-order-list ${selectable ? "admin-order-list--selectable" : "admin-order-list--non-selectable"}`}>
             {orders.map((order) => {
               const presentation = orderStatusPresentation[order.status];
-              const options = [order.coverIncluded ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)})` : null, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Sans option";
+              const production = getOrderProductionSummary(order);
+              const options = [order.coverIncluded ? "Illustration demandée" : "Illustration non demandée", order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ");
               return (
                 <li key={order.orderNumber}>
                   <div className="admin-order-list__row">
                     {selectable ? <label className="admin-order-select"><input type="checkbox" name="orderNumber" value={order.orderNumber} disabled={!order.visibilityEligibility.allowed} aria-label={`Sélectionner ${order.orderNumber}`} /></label> : null}
                   <Link href={`/admin/commandes/${encodeURIComponent(order.orderNumber)}`}>
                     <span className="admin-order-list__identity"><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><em>{order.customerName || order.customerEmail}</em></span>
-                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{order.hiddenFromCurrentViewsAt ? <b>Masquée · {order.hiddenFromCurrentViewsReason ? orderCurrentViewHiddenReasonLabels[order.hiddenFromCurrentViewsReason] : "Motif non renseigné"}</b> : order.operation ? <b>{order.operation.label}</b> : null}{!order.visibilityEligibility.allowed && filter !== "hidden" && filter !== "archives" ? <small>{order.visibilityEligibility.reason}</small> : null}</span>
+                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{production.formatLabel ? <small className="admin-order-list__format">Format de l’illustration : {production.formatLabel}</small> : null}{order.hiddenFromCurrentViewsAt ? <b>Masquée · {order.hiddenFromCurrentViewsReason ? orderCurrentViewHiddenReasonLabels[order.hiddenFromCurrentViewsReason] : "Motif non renseigné"}</b> : order.operation ? <b>{order.operation.label}</b> : null}{!order.visibilityEligibility.allowed && filter !== "hidden" && filter !== "archives" ? <small>{order.visibilityEligibility.reason}</small> : null}</span>
                     <span className="admin-order-list__next"><strong>{formatEuro(order.totalCents)}</strong><small>{presentation.next}</small></span>
                     <span className="admin-order-list__arrow" aria-hidden="true">→</span>
                   </Link>

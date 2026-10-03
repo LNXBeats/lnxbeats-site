@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 import { directUploadConnectOrigin, publicMediaOrigin } from "./lib/media/storage/csp";
+import { ORDER_PHOTO_MULTIPART_MAX_BYTES } from "./data/order-photo-upload";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const directUploadOrigin = directUploadConnectOrigin();
@@ -27,6 +28,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   experimental: {
+    // One 10 MiB photo plus a bounded 64 KiB multipart envelope. The route
+    // independently enforces both the received body and the decoded file.
+    proxyClientMaxBodySize: ORDER_PHOTO_MULTIPART_MAX_BYTES,
     // Sharp's operation cache retains decoded/intermediate image data between
     // requests. The filesystem result cache remains enabled by Next.js.
     imgOptOperationCache: false,

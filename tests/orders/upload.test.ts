@@ -6,6 +6,10 @@ import test from "node:test";
 import sharp from "sharp";
 
 import { orderOffer } from "@/data/order-offer";
+import {
+  ORDER_PHOTO_MULTIPART_MAX_BYTES,
+  ORDER_PHOTO_MULTIPART_OVERHEAD_BYTES,
+} from "@/data/order-photo-upload";
 import { getMemoryDiagnosticCounters } from "@/lib/memory-diagnostics";
 import {
   getOrderPhotoMultipartAdmissionState,
@@ -18,6 +22,7 @@ import {
   readOrderPhotoMultipartFormData,
 } from "@/lib/orders/photo-upload-request";
 import {
+  cleanupUnattachedOrderImages,
   detectImageType,
   detectOrderAudioType,
   getOrderPhotoTransformState,
@@ -26,6 +31,7 @@ import {
   ORDER_PHOTO_TRANSFORM_CONCURRENCY,
   ORDER_PHOTO_TRANSFORM_QUEUE_LIMIT,
   OrderUploadError,
+  planOrderPhotoAppend,
   processOrderImageBatch,
   validateOrderAudioIdentity,
   withOrderPhotoTransformSlot,
@@ -34,6 +40,17 @@ import {
 async function raster(format: "jpeg" | "png" | "webp", width = 24, height = 18) {
   const image = sharp({ create: { width, height, channels: 3, background: { r: 25, g: 50, b: 75 } } });
   return image[format]().toBuffer();
+}
+
+async function multipartRequest(file: Uint8Array, rightsConfirmed = "true") {
+  const body = new FormData();
+  body.set("files", new File([Uint8Array.from(file)], "reference.jpg", { type: "image/jpeg" }));
+  body.set("rightsConfirmed", rightsConfirmed);
+  const encoded = new Request("http://127.0.0.1/api/orders/test/photos", { method: "POST", body });
+  const bytes = await encoded.arrayBuffer();
+  const headers = new Headers(encoded.headers);
+  headers.set("content-length", String(bytes.byteLength));
+  return new Request(encoded.url, { method: "POST", headers, body: bytes });
 }
 
 async function expectUploadCode(operation: Promise<unknown>, code: string) {
@@ -95,6 +112,34 @@ test("refuse le poids et les dimensions excessifs", async () => {
 
   const tooWide = await raster("png", orderOffer.maxImageWidth + 1, 1);
   await expectUploadCode(normalizeOrderImage({ buffer: tooWide, originalFilename: "wide.png", declaredMimeType: "image/png" }), "DIMENSIONS_TOO_LARGE");
+});
+
+test("déduplique le contenu normalisé et ajoute après la dernière position, même après suppression", () => {
+  const existing = [
+    { checksum: "saved-first", position: 0 },
+    { checksum: "saved-last", position: 4 },
+    { checksum: null, position: 5 },
+  ];
+  const incoming = [
+    { checksum: "saved-first", key: "retry" },
+    { checksum: "new-photo", key: "new" },
+    { checksum: "new-photo", key: "duplicate-new" },
+    { checksum: "saved-last", key: "retry-last" },
+    { checksum: "another-photo", key: "another" },
+  ];
+  const append = planOrderPhotoAppend(existing, incoming);
+  assert.deepEqual(append.newPhotos.map(({ key }) => key), ["new", "another"]);
+  assert.deepEqual(append.duplicatePhotos.map(({ key }) => key), ["retry", "duplicate-new", "retry-last"]);
+  assert.equal(append.nextPosition, 6);
+  assert.equal(planOrderPhotoAppend([], incoming).nextPosition, 0);
+});
+
+test("un retry au quota complet ne consomme aucun nouvel emplacement", () => {
+  const existing = Array.from({ length: orderOffer.maxPhotos }, (_, position) => ({ checksum: `saved-${position}`, position }));
+  const append = planOrderPhotoAppend(existing, [{ checksum: "saved-9", key: "new-attempt-only" }]);
+  assert.equal(append.newPhotos.length, 0);
+  assert.deepEqual(append.duplicatePhotos.map(({ key }) => key), ["new-attempt-only"]);
+  assert.equal(existing.length, orderOffer.maxPhotos);
 });
 
 test("traite le lot maximal dans l’ordre sans conserver les buffers normalisés", async () => {
@@ -339,13 +384,14 @@ test("expire une admission multipart en attente sans lire son corps", async () =
 });
 
 test("contrôle un multipart invalide et libère toujours l’admission", async () => {
+  const body = "multipart-invalide";
   const request = new Request("http://127.0.0.1/api/orders/test/photos", {
     method: "POST",
     headers: {
-      "content-length": "16",
+      "content-length": String(Buffer.byteLength(body)),
       "content-type": "multipart/form-data; boundary=phase2-test",
     },
-    body: "multipart-invalide",
+    body,
   });
   assertOrderPhotoMultipartHeaders(request);
 
@@ -361,6 +407,60 @@ test("contrôle un multipart invalide et libère toujours l’admission", async 
     concurrency: ORDER_PHOTO_MULTIPART_CONCURRENCY,
     queueLimit: ORDER_PHOTO_MULTIPART_QUEUE_LIMIT,
   });
+});
+
+test("accepte une image décodable de 10 Mio et son enveloppe multipart", async () => {
+  const jpeg = await raster("jpeg");
+  const boundaryPhoto = Buffer.concat([jpeg, Buffer.alloc(orderOffer.maxPhotoBytes - jpeg.length)]);
+  const request = await multipartRequest(boundaryPhoto);
+  const declaredBytes = Number(request.headers.get("content-length"));
+  assert.ok(declaredBytes > orderOffer.maxPhotoBytes);
+  assert.ok(declaredBytes <= ORDER_PHOTO_MULTIPART_MAX_BYTES);
+  const formData = await readOrderPhotoMultipartFormData(request);
+  const file = formData.get("files");
+  assert.ok(file instanceof File);
+  assert.equal(file.size, 10_485_760);
+  const normalized = await normalizeOrderImage({
+    buffer: Buffer.from(await file.arrayBuffer()),
+    originalFilename: file.name,
+    declaredMimeType: file.type,
+  });
+  assert.equal(normalized.mimeType, "image/webp");
+  assert.equal(normalized.width, 24);
+});
+
+test("compte les octets réels même si la taille déclarée sous-estime le corps", async () => {
+  const request = new Request("http://127.0.0.1/api/orders/test/photos", {
+    method: "POST",
+    headers: {
+      "content-length": "1",
+      "content-type": "multipart/form-data; boundary=bounded-test",
+    },
+    body: new Uint8Array(ORDER_PHOTO_MULTIPART_MAX_BYTES + 1),
+  });
+  await expectUploadCode(readOrderPhotoMultipartFormData(request), "TRANSPORT_TOO_LARGE");
+});
+
+test("refuse une enveloppe excessive et un corps interrompu", async () => {
+  const jpeg = await raster("jpeg");
+  await expectUploadCode(readOrderPhotoMultipartFormData(await multipartRequest(
+    jpeg,
+    "x".repeat(ORDER_PHOTO_MULTIPART_OVERHEAD_BYTES + 1),
+  )), "MULTIPART_FIELDS_TOO_LARGE");
+  const incomplete = await multipartRequest(jpeg);
+  incomplete.headers.set("content-length", String(Number(incomplete.headers.get("content-length")) + 1));
+  await expectUploadCode(readOrderPhotoMultipartFormData(incomplete), "INCOMPLETE_MULTIPART");
+});
+
+test("refuse une taille sous-déclarée et une lecture multipart annulée", async () => {
+  const jpeg = await raster("jpeg");
+  const understated = await multipartRequest(jpeg);
+  understated.headers.set("content-length", "1");
+  await expectUploadCode(readOrderPhotoMultipartFormData(understated), "INCOMPLETE_MULTIPART");
+  const controller = new AbortController();
+  const aborted = new Request(await multipartRequest(jpeg), { signal: controller.signal });
+  controller.abort();
+  await expectUploadCode(readOrderPhotoMultipartFormData(aborted), "UPLOAD_ABORTED");
 });
 
 test("refuse les headers multipart absents, mal formés ou trop volumineux avant admission", () => {
@@ -379,6 +479,7 @@ test("refuse les headers multipart absents, mal formés ou trop volumineux avant
 
   expectHeaderError({}, "INVALID_MULTIPART", 400);
   expectHeaderError({ "content-type": "multipart/form-data", "content-length": "16" }, "INVALID_MULTIPART", 400);
+  expectHeaderError({ "content-type": `multipart/form-data; boundary=${"a".repeat(71)}`, "content-length": "16" }, "INVALID_MULTIPART", 400);
   expectHeaderError({ "content-type": "multipart/form-data; boundary=phase2-test" }, "CONTENT_LENGTH_REQUIRED", 411);
   expectHeaderError({
     "content-type": "multipart/form-data; boundary=phase2-test",
@@ -386,12 +487,12 @@ test("refuse les headers multipart absents, mal formés ou trop volumineux avant
   }, "INVALID_MULTIPART", 400);
   expectHeaderError({
     "content-type": "multipart/form-data; boundary=phase2-test",
-    "content-length": String((orderOffer.maxPhotoBytes * orderOffer.maxPhotos) + (1024 * 1024) + 1),
+    "content-length": String(ORDER_PHOTO_MULTIPART_MAX_BYTES + 1),
   }, "TRANSPORT_TOO_LARGE", 413);
 
   assert.doesNotThrow(() => assertOrderPhotoMultipartHeaders(requestWith({
     "content-type": "multipart/form-data; boundary=phase2-test",
-    "content-length": String((orderOffer.maxPhotoBytes * orderOffer.maxPhotos) + (1024 * 1024)),
+    "content-length": String(ORDER_PHOTO_MULTIPART_MAX_BYTES),
   })));
 });
 
@@ -422,7 +523,7 @@ test("place ownership et éditabilité avant admission, puis revalide avant écr
   const preflightSource = serviceSource.slice(preflightStart, addStart);
   assert.match(preflightSource, /userId: actor\.id/);
   assert.match(preflightSource, /assertOrderEditableForPayment\(transaction, current\)/);
-  assert.match(preflightSource, /assertPhotoCapacity\(existingCount, 1\)/);
+  assert.doesNotMatch(preflightSource, /assertPhotoCapacity|PHOTO_LIMIT_REACHED/);
 
   const addEnd = serviceSource.indexOf("export async function getOrderPhotoForActor", addStart);
   const addSource = serviceSource.slice(addStart, addEnd);
@@ -430,7 +531,102 @@ test("place ownership et éditabilité avant admission, puis revalide avant écr
   assert.ok(transformStart >= 0);
   assert.ok(addSource.lastIndexOf("userId: actor.id") > transformStart);
   assert.ok(addSource.lastIndexOf("assertOrderEditableForPayment(transaction, current)") > transformStart);
-  assert.ok(addSource.lastIndexOf("assertPhotoCapacity(count, pending.length)") > transformStart);
+  const deduplication = addSource.indexOf("const append = planOrderPhotoAppend(");
+  const capacityCheck = addSource.indexOf("assertPhotoCapacity(existing.length, append.newPhotos.length)");
+  assert.ok(deduplication > transformStart && capacityCheck > deduplication);
+  assert.match(addSource, /append\.newPhotos\.length && !assertPhotoCapacity/);
+  assert.match(addSource, /position: append\.nextPosition \+ index/);
+  assert.match(addSource, /cleanupPersistedOrderImages\(duplicatePhotos,/);
+  assert.match(addSource, /cleanupUnattachedOrderImages\(pending,/);
+  assert.match(addSource, /retainedStorageKeys: \(storageKeys\) => withOrderPhotoLock\(orderNumber,/);
+  assert.match(addSource, /transaction\.asset\.findMany/);
+  assert.match(addSource, /storageKey: \{ in: \[\.\.\.storageKeys\] \}/);
+  assert.match(routeSource, /entries\.length !== 1/);
+});
+
+test("fixe ReadCommitted uniquement pour les opérations photos sous leur verrou partagé", async () => {
+  const serviceSource = await readFile(path.join(process.cwd(), "lib/orders/service.ts"), "utf8");
+  const sharedStart = serviceSource.indexOf("async function withOrderLock<");
+  const photoStart = serviceSource.indexOf("function withOrderPhotoLock<");
+  const photoEnd = serviceSource.indexOf("async function nextOrderNumber", photoStart);
+  assert.match(serviceSource.slice(sharedStart, photoStart), /options\?: \{ isolationLevel: "ReadCommitted" \}/);
+  assert.match(serviceSource.slice(sharedStart, photoStart), /\}, options\)/);
+  assert.match(serviceSource.slice(photoStart, photoEnd), /withOrderLock\(`payments:order:\$\{orderNumber\}`, operation, \{ isolationLevel: "ReadCommitted" \}\)/);
+  for (const name of ["preflightOrderPhotoUpload", "addOrderPhotos", "deleteOrderPhoto"]) {
+    const start = serviceSource.indexOf(`export async function ${name}`);
+    const end = serviceSource.indexOf("export async function ", start + 1);
+    assert.match(serviceSource.slice(start, end < 0 ? undefined : end), /withOrderPhotoLock\(orderNumber,/);
+  }
+  for (const name of ["saveDraftOrder", "finalizeOrder"]) {
+    const start = serviceSource.indexOf(`export async function ${name}`);
+    const end = serviceSource.indexOf("export async function ", start + 1);
+    assert.doesNotMatch(serviceSource.slice(start, end < 0 ? undefined : end), /withOrderPhotoLock|isolationLevel/);
+  }
+});
+
+test("un COMMIT ambigu protège les objets attachés avant tout nettoyage de la tentative", async () => {
+  const jpeg = await raster("jpeg");
+  const pending = await processOrderImageBatch([
+    { buffer: jpeg, originalFilename: "committed.jpg", declaredMimeType: "image/jpeg" },
+    { buffer: jpeg, originalFilename: "unattached.jpg", declaredMimeType: "image/jpeg" },
+  ], {
+    persist: async (_photo, index) => ({ storageKey: `new-attempt/${index}` }),
+    cleanup: async () => assert.fail("la préparation ne doit pas échouer"),
+  });
+  const proof = deferred<ReadonlySet<string>>();
+  const cleaned: string[] = [];
+  let reads = 0;
+  const cleanup = cleanupUnattachedOrderImages(pending, {
+    retainedStorageKeys: async (storageKeys) => {
+      reads += 1;
+      assert.deepEqual(storageKeys, ["new-attempt/0", "new-attempt/1"]);
+      return proof.promise;
+    },
+    cleanup: async ({ storageKey }) => { cleaned.push(storageKey); },
+  });
+  await Promise.resolve();
+  assert.deepEqual(cleaned, []);
+  proof.resolve(new Set(["new-attempt/0"]));
+  assert.equal((await cleanup).failedObjectCount, 0);
+  assert.equal(reads, 1);
+  assert.deepEqual(cleaned, ["new-attempt/1"]);
+});
+
+test("une DB indisponible préserve tous les objets incertains et l’erreur primaire", async () => {
+  const jpeg = await raster("jpeg");
+  const pending = await processOrderImageBatch([
+    { buffer: jpeg, originalFilename: "private-photo.jpg", declaredMimeType: "image/jpeg" },
+  ], {
+    persist: async () => ({ storageKey: "new-attempt/private-object" }),
+    cleanup: async () => assert.fail("la préparation ne doit pas échouer"),
+  });
+  const diagnostics: ReturnType<typeof orderPhotoCleanupDiagnostic>[] = [];
+  const primary = new Error("lost commit acknowledgement");
+  await assert.rejects(async () => {
+    try {
+      throw primary;
+    } catch (error) {
+      const result = await cleanupUnattachedOrderImages(pending, {
+        retainedStorageKeys: async () => { throw new Error("private database failure"); },
+        cleanup: async () => assert.fail("aucun objet incertain ne doit être supprimé"),
+        reportCleanupFailure: (diagnostic) => diagnostics.push(diagnostic),
+      });
+      assert.equal(result.failedObjectCount, 1);
+      throw error;
+    }
+  }, (error: unknown) => error === primary);
+  assert.deepEqual(diagnostics, [{
+    event: "order.photo.cleanup.failed",
+    cleanupOutcome: "failed",
+    attemptedObjectCount: 1,
+    failedObjectCount: 1,
+  }]);
+  assert.doesNotMatch(JSON.stringify(diagnostics), /private|database|object|commit acknowledgement/);
+  const empty = await cleanupUnattachedOrderImages([], {
+    retainedStorageKeys: async () => assert.fail("aucune lecture DB sans objet"),
+    cleanup: async () => assert.fail("aucun objet à supprimer"),
+  });
+  assert.deepEqual(empty, { attemptedObjectCount: 0, failedObjectCount: 0 });
 });
 
 test("nettoie les fichiers déjà persistés et remet les compteurs à zéro après échec", async () => {

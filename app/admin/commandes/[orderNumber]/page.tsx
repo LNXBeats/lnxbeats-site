@@ -6,8 +6,8 @@ import { addInternalNoteAction, hideOrderFromCurrentViewsAction, reconcilePaymen
 import { AdminBackLink } from "@/components/admin-back-link";
 import { AdminOrderActions } from "@/components/admin-order-actions";
 import { AdminOrderDeliveryPanel } from "@/components/admin-order-delivery-panel";
+import { AdminOrderProductionSummary } from "@/components/admin-order-production-summary";
 import { AdminPaymentTestAction } from "@/components/admin-payment-test-action";
-import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { getAllowedOrderTransitions } from "@/lib/admin/order-machine";
 import { getAdminOrder } from "@/lib/admin/service";
 import { evaluateOrderCurrentViewVisibility, orderCurrentViewHiddenReasonLabels } from "@/lib/admin/order-visibility";
@@ -15,6 +15,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { notificationKindPresentation } from "@/lib/notifications/admin-presentation";
 import { formatEuro } from "@/lib/orders/domain";
 import { orderAcceptsDeliveryUpload } from "@/lib/orders/delivery";
+import { getOrderProductionSummary } from "@/lib/orders/production-summary";
 import { assertPaymentServerEnvironment, parsePaymentsConfiguration } from "@/lib/payments/config";
 import { paymentMethodPresentation, paymentStatusPresentation } from "@/lib/payments/presentation";
 import { evaluateLiveRefundProductionPolicy } from "@/lib/payments/live-refund-policy";
@@ -133,14 +134,17 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
   const transitions = getAllowedOrderTransitions(order.status)
     .filter(({ to }) => to !== "DELIVERED" || deliveries.length > 0);
   const visibilityEligibility = evaluateOrderCurrentViewVisibility(order);
+  const production = getOrderProductionSummary(order);
+  const referencePhotos = order.assets.filter(({ role, asset }) => role === "REFERENCE" && asset.type === "IMAGE");
 
   return (
     <div className="admin-main admin-order-detail">
       <AdminBackLink href="/admin/commandes">Retour aux commandes</AdminBackLink>
       {message ? <p className="admin-feedback" role="status">{message}</p> : null}
-      <header className="admin-order-hero">
+      <header className="admin-order-hero admin-order-hero--production">
         <div><p className="admin-kicker">{order.orderNumber}</p><h1>{order.title || order.recipient || "Histoire sans titre"}</h1><p>{order.customerName || "Client"} · {order.customerEmail}</p></div>
-        <div><span>Statut actuel</span><strong>{currentStatus.label}</strong><small>Créée le {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small></div>
+        <div className="admin-order-hero__status"><span>Statut actuel</span><strong>{currentStatus.label}</strong><small>Créée le {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small></div>
+        <AdminOrderProductionSummary order={order} referencePhotoCount={referencePhotos.length} />
       </header>
 
       <div className="admin-order-detail__grid">
@@ -152,9 +156,8 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
               <div><dt>Contexte</dt><dd>{order.occasion || "Non renseigné"}</dd></div>
               <div><dt>Direction musicale</dt><dd>{order.musicalDirection || "Non renseignée"}</dd></div>
               <div><dt>Émotion</dt><dd>{order.emotion || "Non renseignée"}</dd></div>
-              {order.coverIncluded ? <div><dt>Illustration</dt><dd>Demandée</dd></div> : null}
-              {order.coverIncluded ? <div><dt>Format demandé</dt><dd>{orderIllustrationFormatLabel(order.illustrationFormat)}</dd></div> : null}
-              {order.coverIncluded && order.illustrationFormat === "CUSTOM" ? <div><dt>Précision</dt><dd>{order.illustrationFormatCustom}</dd></div> : null}
+              <div><dt>Illustration</dt><dd>{production.illustrationLabel}</dd></div>
+              {production.formatLabel ? <div><dt>Format demandé pour l’illustration</dt><dd>{production.formatLabel}</dd></div> : null}
               <div className="admin-detail-facts__wide"><dt>Histoire</dt><dd>{order.brief || "Non renseignée"}</dd></div>
               {order.importantDetails ? <div className="admin-detail-facts__wide"><dt>Détails importants</dt><dd>{order.importantDetails}</dd></div> : null}
             </dl>
@@ -162,9 +165,9 @@ export default async function AdminOrderPage({ params, searchParams }: AdminOrde
 
           <section className="admin-detail-window" aria-labelledby="admin-photos-title">
             <p className="admin-section-label">Références privées</p><h2 id="admin-photos-title">Médias fournis par le client.</h2>
-            {order.assets.some(({ role, asset }) => role === "REFERENCE" && asset.type === "IMAGE") ? (
+            {referencePhotos.length ? (
               <ul className="admin-private-photos">
-                {order.assets.filter(({ role, asset }) => role === "REFERENCE" && asset.type === "IMAGE").map(({ asset, position }) => (
+                {referencePhotos.map(({ asset, position }) => (
                   <li key={asset.id}>
                     {/* Private authenticated response: bypassing the public image optimizer is intentional. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}

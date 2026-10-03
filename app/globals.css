@@ -1408,6 +1408,18 @@ a {
 .order-photo-list img { width: 100%; height: 100%; object-fit: cover; }
 .order-photo-list button { position: absolute; right: 0.3rem; bottom: 0.3rem; min-height: 32px; padding: 0.35rem 0.55rem; border: 1px solid var(--line-strong); background: rgba(8, 8, 8, 0.92); color: var(--text); cursor: pointer; font-size: 0.62rem; }
 .order-photo-list button:hover { border-color: var(--gold); }
+.order-photo-queue li { min-width: 0; overflow-wrap: anywhere; }
+.order-photo-queue li > strong { display: block; }
+.order-photo-queue li > p { color: #efb8b0; font-size: 0.85rem; }
+.order-photo-queue li[data-state="saved"] > span[role="status"] { color: #abd6b8; }
+.order-photo-recovery { margin-block: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: 0.75rem; }
+.order-photo-recovery p { color: var(--text-soft); font-size: 0.85rem; }
+.order-photo-confirmed { overflow-wrap: anywhere; font-size: .875rem; }
+.order-photo-panel .form-button { min-height: 44px; max-width: 100%; white-space: normal; }
+.order-photo-panel .order-photo-list li { aspect-ratio: auto; display: flex; flex-direction: column; }
+.order-photo-panel .order-photo-list img { aspect-ratio: 1; height: auto; }
+.order-photo-panel .order-photo-list__meta { padding: 0.5rem; font-size: 0.75rem; overflow-wrap: anywhere; }
+.order-photo-panel .order-photo-list button { position: static; min-height: 44px; margin: auto 0.35rem 0.35rem; }
 .admin-delivery-panel { display: grid; gap: 1rem; }
 .admin-delivery-panel h2, .admin-delivery-panel p { margin: 0; }
 .admin-delivery-panel dl { display: grid; gap: 0.55rem; margin: 0; }

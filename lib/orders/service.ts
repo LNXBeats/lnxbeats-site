@@ -24,6 +24,8 @@ import {
 import type { SerializedOrder } from "@/lib/orders/types";
 import {
   cleanupPersistedOrderImages,
+  cleanupUnattachedOrderImages,
+  planOrderPhotoAppend,
   processOrderImageBatch,
   type OrderImageSource,
   type PersistedOrderImage,
@@ -272,20 +274,31 @@ export function serializeOrder(order: OrderWithRelations): SerializedOrder {
   };
 }
 
-async function withOrderLock<T>(lockKey: string, operation: (transaction: Transaction) => Promise<T>) {
+async function withOrderLock<T>(
+  lockKey: string,
+  operation: (transaction: Transaction) => Promise<T>,
+  options?: { isolationLevel: "ReadCommitted" },
+) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (transaction) => {
         await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey})) IS NULL AS locked`;
         return operation(transaction);
-      });
+      }, options);
     } catch (error) {
       lastError = error;
       if (!error || typeof error !== "object" || !("code" in error) || error.code !== "P2034") throw error;
     }
   }
   throw lastError;
+}
+
+function withOrderPhotoLock<T>(orderNumber: string, operation: (transaction: Transaction) => Promise<T>) {
+  // A fresh snapshot after the advisory-lock wait is required for both quota
+  // and retry reconciliation, regardless of the database's default isolation.
+  // Other order operations keep their existing transaction configuration.
+  return withOrderLock(`payments:order:${orderNumber}`, operation, { isolationLevel: "ReadCommitted" });
 }
 
 async function nextOrderNumber(transaction: Transaction) {
@@ -550,23 +563,15 @@ type PendingPhoto = PersistedOrderImage<{
 
 export async function preflightOrderPhotoUpload(actor: OrderActor, orderNumber: string) {
   assertDatabaseConfigured();
-  await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+  await withOrderPhotoLock(orderNumber, async (transaction) => {
     const current = await transaction.order.findFirst({
       where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
       select: { id: true, status: true },
     });
     if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     await assertOrderEditableForPayment(transaction, current);
-    const existingCount = await transaction.orderAsset.count({
-      where: { orderId: current.id, role: "REFERENCE", asset: { type: "IMAGE" } },
-    });
-    if (!assertPhotoCapacity(existingCount, 1)) {
-      throw new OrderServiceError(
-        "Une commande peut contenir au maximum dix photos.",
-        400,
-        "PHOTO_LIMIT_REACHED",
-      );
-    }
+    // A full order must still admit a retry of its last confirmed photo.
+    // Capacity is checked under this same order lock after content deduplication.
   });
 }
 
@@ -576,25 +581,18 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
     throw new OrderServiceError("Sélectionnez entre une et dix photos.", 400, "INVALID_PHOTO_COUNT");
   }
 
-  const { order, existingCount } = await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+  const order = await withOrderPhotoLock(orderNumber, async (transaction) => {
     const current = await transaction.order.findFirst({
       where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
       select: { id: true, status: true },
     });
     if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
     await assertOrderEditableForPayment(transaction, current);
-    return {
-      order: current,
-      existingCount: await transaction.orderAsset.count({
-        where: { orderId: current.id, role: "REFERENCE", asset: { type: "IMAGE" } },
-      }),
-    };
+    return current;
   });
-  if (!assertPhotoCapacity(existingCount, files.length)) {
-    throw new OrderServiceError("Une commande peut contenir au maximum dix photos.", 400, "PHOTO_LIMIT_REACHED");
-  }
 
   let pending: PendingPhoto[] = [];
+  let duplicatePhotos: PendingPhoto[] = [];
   try {
     pending = await processOrderImageBatch(files, {
       persist: async (normalized) => {
@@ -610,20 +608,27 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
       cleanup: (photo) => deletePrivateOrderFile(photo),
     });
 
-    await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+    duplicatePhotos = await withOrderPhotoLock(orderNumber, async (transaction) => {
       const current = await transaction.order.findFirst({
         where: { id: order.id, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
         select: { id: true, status: true },
       });
       if (!current) throw new OrderServiceError("Cette commande est introuvable.", 404, "ORDER_NOT_FOUND");
       await assertOrderEditableForPayment(transaction, current);
-      const count = await transaction.orderAsset.count({
+      const existing = await transaction.orderAsset.findMany({
         where: { orderId: order.id, role: "REFERENCE", asset: { type: "IMAGE" } },
+        select: { position: true, asset: { select: { checksumSha256: true, visibility: true } } },
       });
-      if (!assertPhotoCapacity(count, pending.length)) {
+      // The normalized checksum is computed by the server, never trusted from
+      // the browser. Match within this order only, before applying its quota.
+      const append = planOrderPhotoAppend(existing.map(({ position, asset }) => ({
+        position,
+        checksum: asset.visibility === "PRIVATE" ? asset.checksumSha256 : null,
+      })), pending);
+      if (append.newPhotos.length && !assertPhotoCapacity(existing.length, append.newPhotos.length)) {
         throw new OrderServiceError("Une commande peut contenir au maximum dix photos.", 400, "PHOTO_LIMIT_REACHED");
       }
-      for (const [index, photo] of pending.entries()) {
+      for (const [index, photo] of append.newPhotos.entries()) {
         const asset = await transaction.asset.create({
           data: {
             type: "IMAGE",
@@ -643,18 +648,31 @@ export async function addOrderPhotos(actor: OrderActor, orderNumber: string, fil
           },
         });
         await transaction.orderAsset.create({
-          data: { orderId: order.id, assetId: asset.id, role: "REFERENCE", position: count + index },
+          data: { orderId: order.id, assetId: asset.id, role: "REFERENCE", position: append.nextPosition + index },
         });
       }
+      return append.duplicatePhotos;
     });
   } catch (error) {
-    await cleanupPersistedOrderImages(
-      pending,
-      (photo) => deletePrivateOrderFile(photo),
-    );
+    // A lost COMMIT acknowledgement is ambiguous: the fresh object may already
+    // be attached. Reacquiring the same lock waits for that transaction to end;
+    // only a successful, fresh DB read can authorize object cleanup afterwards.
+    await cleanupUnattachedOrderImages(pending, {
+      retainedStorageKeys: (storageKeys) => withOrderPhotoLock(orderNumber, async (transaction) => {
+        const retained = await transaction.asset.findMany({
+          where: { storageKey: { in: [...storageKeys] } },
+          select: { storageKey: true },
+        });
+        return new Set(retained.map(({ storageKey }) => storageKey));
+      }),
+      cleanup: (photo) => deletePrivateOrderFile(photo),
+    });
     throw error;
   }
 
+  // These are fresh per-attempt object keys, never the key of the persisted
+  // reference that won a concurrent request or an earlier response-lost retry.
+  await cleanupPersistedOrderImages(duplicatePhotos, (photo) => deletePrivateOrderFile(photo));
   const refreshed = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
   return serializeOrder(refreshed);
 }
@@ -679,7 +697,7 @@ export async function getOrderPhotoForActor(actor: OrderActor, orderNumber: stri
 
 export async function deleteOrderPhoto(actor: OrderActor, orderNumber: string, assetId: string) {
   assertDatabaseConfigured();
-  const mediaReference = await withOrderLock(`payments:order:${orderNumber}`, async (transaction) => {
+  const mediaReference = await withOrderPhotoLock(orderNumber, async (transaction) => {
     const order = await transaction.order.findFirst({
       where: { orderNumber, userId: actor.id, status: { in: ["DRAFT", "AWAITING_PAYMENT"] } },
       select: { id: true, status: true },

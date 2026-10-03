@@ -31,23 +31,27 @@ export async function POST(request: Request, context: RouteContext) {
 
       return withOrderPhotoMultipartAdmission(async () => {
         const formData = await readOrderPhotoMultipartFormData(request);
-        if (formData.get("rightsConfirmed") !== "true") {
+        if (formData.getAll("rightsConfirmed").length !== 1 || formData.get("rightsConfirmed") !== "true") {
           return orderJson({ error: "Confirmez que vous pouvez communiquer ces photos." }, 400);
         }
-        const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
-        if (!files.length || files.length > orderOffer.maxPhotos) {
-          return orderJson({ error: "Sélectionnez entre une et dix photos." }, 400);
+        const entries = formData.getAll("files");
+        if (entries.length !== 1 || !(entries[0] instanceof File)) {
+          return orderJson({ error: "Envoyez une seule photo à la fois.", code: "INVALID_PHOTO_COUNT" }, 400);
         }
-        if (files.some((file) => file.size > orderOffer.maxPhotoBytes)) {
-          return orderJson({ error: "Chaque photo doit peser au maximum 10 Mo." }, 413);
+        if ([...formData.keys()].some((key) => key !== "files" && key !== "rightsConfirmed")) {
+          return orderJson({ error: "La sélection de photos est invalide.", code: "INVALID_MULTIPART" }, 400);
+        }
+        const file = entries[0];
+        if (file.size > orderOffer.maxPhotoBytes) {
+          return orderJson({ error: "Chaque photo doit peser au maximum 10 Mio (10 485 760 octets).", code: "FILE_TOO_LARGE" }, 413);
         }
 
-        const order = await addOrderPhotos(actor, orderNumber, files.map((file) => ({
+        const order = await addOrderPhotos(actor, orderNumber, [{
           buffer: async () => Buffer.from(await file.arrayBuffer()),
           originalFilename: file.name,
           declaredMimeType: file.type,
           signal: request.signal,
-        })));
+        }]);
         return orderJson({ order }, 201);
       }, request.signal);
     });

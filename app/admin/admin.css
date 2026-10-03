@@ -1328,3 +1328,29 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-v21-stat, .admin-header__subnav > summary span:last-child { transition: none; }
   .admin-v21-stat:is(:hover,:focus-visible) { transform: none; }
 }
+
+/* Saved production choices stay beside the order identity, before the long brief. */
+.admin-order-hero--production { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; align-items: start; gap: 1rem 1.5rem; padding: 1.25rem; }
+.admin-order-hero--production > div { min-width: 0; overflow-wrap: anywhere; }
+.admin-order-hero--production > div:first-child > p:last-child { margin-bottom: 0; font-size: .78rem; }
+.admin-order-hero__status { display: grid; gap: .25rem; padding: .75rem 1rem; border: 1px solid rgba(214,179,106,.34); border-radius: 12px; }
+.admin-order-hero__status :is(span, small) { color: #aaa59c; font-size: .7rem; }
+.admin-order-hero__status strong { color: #e5c982; font-size: .85rem; }
+.admin-order-production { grid-column: 1 / -1; min-width: 0; padding-top: .85rem; border-top: 1px solid rgba(214,179,106,.24); }
+.admin-order-production h2 { margin: 0 0 .65rem; color: #e5c982; font-size: .72rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.admin-order-production dl { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, .8fr) minmax(0, 1.8fr); gap: .65rem 1.25rem; margin: 0; }
+.admin-order-production dl > div { min-width: 0; }
+.admin-order-production dt { color: #aaa59c; font-size: .72rem; }
+.admin-order-production dd { margin: .2rem 0 0; color: #f4f0e8; font-size: .86rem; line-height: 1.5; overflow-wrap: anywhere; }
+.admin-order-production__format dd { color: #f1d99f; font-weight: 650; }
+.admin-order-production__history { margin-top: .6rem; color: #aaa59c; font-size: .75rem; }
+.admin-order-production__history summary { min-height: 44px; align-content: center; cursor: pointer; }
+.admin-order-production__history summary:focus-visible { outline: 2px solid var(--admin-gold); outline-offset: 2px; }
+.admin-order-production__history p { margin: .25rem 0; overflow-wrap: anywhere; }
+.admin-order-list .admin-order-list__format { color: #ded6c5; font-size: .75rem; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .admin-order-hero--production { grid-template-columns: minmax(0, 1fr); gap: .8rem; padding: 1rem; }
+  .admin-order-hero__status { gap: .2rem; padding: .65rem .8rem; }
+  .admin-order-production dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+  .admin-order-production__format { grid-column: 1 / -1; }
+}

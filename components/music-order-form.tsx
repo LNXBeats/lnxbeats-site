@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react";
 import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
 import { useOrderJourneyMemory } from "@/components/order-journey-provider";
 import {
-  orderIllustrationFormatLabel,
   orderIllustrationFormatOptions,
 } from "@/data/order-illustration";
 import { earlyPerformanceConsentWording, orderOffer, orderPricingForVersion } from "@/data/order-offer";
@@ -20,6 +19,8 @@ import {
   validateOrderForSubmission,
 } from "@/lib/orders/domain";
 import type { SerializedOrder, SerializedOrderPhoto } from "@/lib/orders/types";
+import { photoSelectionError, uploadOrderPhoto, uploadPhotoQueue, type PhotoUploadState } from "@/lib/orders/photo-upload-client";
+import { getOrderProductionSummary } from "@/lib/orders/production-summary";
 import type { PaymentProviderAvailability } from "@/lib/payments/availability";
 
 const musicalDirections = [
@@ -139,6 +140,11 @@ export function MusicOrderForm({
   const [orderStatus, setOrderStatus] = useState<SerializedOrder["status"] | null>(persistedDraft?.status ?? null);
   const [photos, setPhotos] = useState<SerializedOrderPhoto[]>(persistedDraft?.photos ?? []);
   const [pendingFiles, setPendingFiles] = useState<File[]>(() => restoringJourney ? remembered.pendingFiles : []);
+  const [photoStates, setPhotoStates] = useState<Map<File, PhotoUploadState>>(() => new Map());
+  const [confirmedPhotoNames, setConfirmedPhotoNames] = useState<string[]>([]);
+  const [photoError, setPhotoError] = useState("");
+  const [photoNotice, setPhotoNotice] = useState("");
+  const [photoDecisionRequired, setPhotoDecisionRequired] = useState(false);
   const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(restoringJourney ? remembered.photoRightsConfirmed : false);
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
   const [contentConfirmed, setContentConfirmed] = useState(false);
@@ -157,6 +163,8 @@ export function MusicOrderForm({
   const photoRightsRef = useRef<HTMLInputElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const previousStep = useRef(step);
+  const photoUploadActive = useRef(false);
+  const navigationActive = useRef(false);
   const pricing = calculateOrderPrice(form, activePricingVersion);
   const pricingConfiguration = orderPricingForVersion(activePricingVersion) ?? orderOffer;
   const maximumPriceCents = pricingConfiguration.personalBaseCents
@@ -170,7 +178,7 @@ export function MusicOrderForm({
       <dl className="order-aside__summary">
         <div><dt>Création personnelle</dt><dd>{formatEuro(pricing.basePriceCents)}</dd></div>
         <div><dt>Illustration personnalisée</dt><dd>{form.coverIncluded ? `+ ${formatEuro(pricing.coverPriceCents)}` : "Non sélectionnée"}</dd></div>
-        {form.coverIncluded && form.illustrationFormat ? <div><dt>Format</dt><dd>{orderIllustrationFormatLabel(form.illustrationFormat)}</dd></div> : null}
+        {form.coverIncluded ? <div><dt>Format de l’illustration</dt><dd>{getOrderProductionSummary(form).formatLabel}</dd></div> : null}
         <div><dt>Traitement prioritaire</dt><dd>{form.priorityProcessing ? `+ ${formatEuro(pricing.priorityPriceCents)}` : "Non sélectionné"}</dd></div>
       </dl>
       <div className="order-aside__total"><span>Total actualisé</span><strong>{formatEuro(pricing.totalCents)}</strong></div>
@@ -229,6 +237,7 @@ export function MusicOrderForm({
     setMessage("");
     setError("");
     setErrorField(null);
+    setPhotoError("");
   }
 
   function setIllustrationFormat(value: OrderDraftInput["illustrationFormat"]) {
@@ -266,8 +275,12 @@ export function MusicOrderForm({
   }
 
   function moveToStep(next: number, persistedOrderNumber = orderNumber) {
+    if (photoUploadActive.current) return;
     const bounded = Math.min(Math.max(next, 0), steps.length - 1);
     setStep(bounded);
+    if (bounded !== 3) setConfirmedPhotoNames([]);
+    setError("");
+    setErrorField(null);
     if (persistedOrderNumber) {
       router.replace(
         `/commander?brouillon=${encodeURIComponent(persistedOrderNumber)}&etape=${stepQueryValues[bounded]}`,
@@ -292,11 +305,6 @@ export function MusicOrderForm({
     if (step === 2 && form.coverIncluded && form.illustrationFormat === "CUSTOM" && !form.illustrationFormatCustom.trim()) {
       return showFieldError("illustrationFormatCustom", "Précisez le format personnalisé attendu.");
     }
-    if (step === 3 && pendingFiles.length && !photoRightsConfirmed) {
-      setError("Confirmez que vous avez le droit de communiquer les photos sélectionnées.");
-      setErrorField("photoRights");
-      return false;
-    }
     if (step === 4 && !account.authenticated) {
       setError("Connectez-vous ou créez un compte vérifié pour conserver et payer cette commande.");
       setErrorField("account");
@@ -308,18 +316,27 @@ export function MusicOrderForm({
   }
 
   async function nextStep() {
+    if (photoUploadActive.current || navigationActive.current) return;
     if (!validateCurrentStep()) return;
+    navigationActive.current = true;
+    try {
     let persistedOrderNumber = orderNumber;
+    if (step === 3 && pendingFiles.length && account.authenticated) {
+      const uploaded = await uploadPhotos();
+      if (!uploaded) { setPhotoDecisionRequired(true); return; }
+      persistedOrderNumber = uploaded;
+    }
     if (step === 4 && account.authenticated) {
       const saved = await saveDraft();
       if (!saved) return;
       persistedOrderNumber = saved.orderNumber;
       if (pendingFiles.length) {
         const uploaded = await uploadPhotos(saved.orderNumber);
-        if (!uploaded) return;
+        if (!uploaded) { moveToStep(3, saved.orderNumber); setPhotoDecisionRequired(true); return; }
       }
     }
     moveToStep(step + 1, persistedOrderNumber);
+    } finally { navigationActive.current = false; }
   }
 
   async function saveDraft() {
@@ -346,6 +363,11 @@ export function MusicOrderForm({
       setPhotos(payload.order.photos);
       setSaveState("saved");
       setMessage("");
+      if (!orderNumber) {
+        // Pin the first persisted draft before clearing the pre-login journey.
+        // Reloading ?reprendre=1 must not discard its brief or saved inventory.
+        router.replace(`/commander?brouillon=${encodeURIComponent(payload.order.orderNumber)}&etape=${stepQueryValues[step]}`, { scroll: false });
+      }
       journey.clear();
       router.refresh();
       return payload.order;
@@ -359,50 +381,111 @@ export function MusicOrderForm({
     }
   }
 
-  async function uploadPhotos(targetOrderNumber?: string) {
-    if (!pendingFiles.length) {
-      setErrorField(null);
-      setError("Choisissez au moins une photo.");
+  async function uploadPhotos(targetOrderNumber?: string, onlyFile?: File) {
+    if (photoUploadActive.current) return null;
+    const selected = onlyFile ? pendingFiles.filter((file) => file === onlyFile) : pendingFiles;
+    if (!selected.length) {
+      setPhotoError("Choisissez au moins une photo.");
       return null;
     }
     if (!photoRightsConfirmed) {
-      showFieldError("photoRights", "Confirmez que vous avez le droit de communiquer ces photos.");
+      setPhotoError("Confirmez que vous avez le droit de communiquer ces photos, ou continuez sans les fichiers non enregistrés.");
+      photoRightsRef.current?.focus();
       return null;
     }
-    const current = targetOrderNumber ? { orderNumber: targetOrderNumber } : orderNumber ? { orderNumber } : await saveDraft();
-    if (!current) return null;
-
+    photoUploadActive.current = true;
     setBusy(true);
-    setError("");
-    setMessage("Normalisation et enregistrement des photos…");
+    setPhotoError("");
+    setPhotoNotice("Envoi des photos une par une. Vous pouvez réessayer chaque échec sans renvoyer les réussites.");
     try {
-      const body = new FormData();
-      pendingFiles.forEach((file) => body.append("files", file));
-      body.set("rightsConfirmed", "true");
-      const response = await fetch(`/api/orders/${encodeURIComponent(current.orderNumber)}/photos`, { method: "POST", body });
-      const payload = await responsePayload(response);
-      if (!response.ok || !payload.order) throw new Error(payload.error ?? "Les photos n’ont pas pu être ajoutées.");
-      setPhotos(payload.order.photos);
-      setPendingFiles([]);
-      setPhotoRightsConfirmed(false);
-      setMessage("Photos privées enregistrées et métadonnées retirées.");
+      const current = targetOrderNumber ? { orderNumber: targetOrderNumber } : orderNumber ? { orderNumber } : await saveDraft();
+      if (!current) return null;
+      setBusy(true);
+      const result = await uploadPhotoQueue(selected, {
+        upload: (file, onStage) => uploadOrderPhoto(current.orderNumber, file, onStage),
+        reconcile: () => reconcilePhotos(current.orderNumber),
+        onOrder: (order) => setPhotos(order.photos),
+        onState: (file, state) => setPhotoStates((states) => new Map(states).set(file, state)),
+        onSaved: (file) => {
+          setPendingFiles((files) => files.filter((entry) => entry !== file));
+          // Confirmed files no longer need a potentially 10 MiB browser Blob.
+          setPhotoStates((states) => { const next = new Map(states); next.delete(file); return next; });
+          setConfirmedPhotoNames((names) => [...names, file.name].slice(-orderOffer.maxPhotos));
+        },
+      });
+      setPhotoDecisionRequired(!result.complete);
+      setPhotoNotice(result.complete
+        ? "Photos privées enregistrées. Les fichiers déjà confirmés ne seront pas renvoyés."
+        : "Les réussites sont conservées. Réessayez les échecs ou continuez explicitement sans les fichiers non confirmés.");
       const input = document.getElementById("order-photos");
       if (input instanceof HTMLInputElement) input.value = "";
-      return payload.order;
+      return result.complete ? current.orderNumber : null;
     } catch (caught) {
-      setErrorField(null);
-      setError(caught instanceof Error ? caught.message : "Les photos n’ont pas pu être ajoutées.");
-      setMessage("");
+      setPhotoError(caught instanceof Error ? caught.message : "Envoi interrompu. Réessayez les photos restantes.");
       return null;
     } finally {
+      photoUploadActive.current = false;
       setBusy(false);
     }
+  }
+
+  async function reconcilePhotos(targetOrderNumber = orderNumber) {
+    if (!targetOrderNumber) return null;
+    const response = await fetch(`/api/orders/${encodeURIComponent(targetOrderNumber)}`, { cache: "no-store" });
+    const payload = await responsePayload(response);
+    if (!response.ok || !payload.order) throw new Error("Impossible de vérifier les photos enregistrées. Reconnectez-vous puis réessayez.");
+    setPhotos(payload.order.photos);
+    return payload.order;
+  }
+
+  async function continueWithoutPendingPhotos() {
+    if (photoUploadActive.current || navigationActive.current) return;
+    navigationActive.current = true;
+    setBusy(true);
+    try {
+      // Reconcile even if a POST response was lost. No DELETE is ever sent here.
+      if (orderNumber) await reconcilePhotos();
+      setPendingFiles([]);
+      setPhotoStates(new Map());
+      setConfirmedPhotoNames([]);
+      setPhotoError("");
+      setPhotoNotice("");
+      setPhotoDecisionRequired(false);
+      setPhotoRightsConfirmed(false);
+      moveToStep(step + 1);
+    } catch (caught) {
+      setPhotoError(caught instanceof Error ? caught.message : "Vérification interrompue. Réessayez.");
+    } finally {
+      navigationActive.current = false;
+      setBusy(false);
+    }
+  }
+
+  function selectPhotos(selected: File[]) {
+    if (photoUploadActive.current) return;
+    if (selected.length + pendingFiles.length > orderOffer.maxPhotos) {
+      setPhotoError("Sélectionnez au maximum dix photos en attente. Les photos déjà enregistrées comptent aussi dans la limite de la commande.");
+      return;
+    }
+    setPendingFiles((files) => [...files, ...selected]);
+    setConfirmedPhotoNames([]);
+    setPhotoStates((states) => {
+      const next = new Map(states);
+      selected.forEach((file) => {
+        const error = photoSelectionError(file);
+        next.set(file, error ? { stage: "failed", error } : { stage: "waiting" });
+      });
+      return next;
+    });
+    setPhotoError("");
+    setPhotoNotice("");
+    setPhotoDecisionRequired(false);
   }
 
   async function removePhoto(assetId: string) {
     if (!orderNumber) return;
     setBusy(true);
-    setError("");
+    setPhotoError("");
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/photos/${encodeURIComponent(assetId)}`, { method: "DELETE" });
       if (!response.ok) {
@@ -410,22 +493,24 @@ export function MusicOrderForm({
         throw new Error(payload.error ?? "La photo n’a pas pu être supprimée.");
       }
       setPhotos((current) => current.filter((photo) => photo.id !== assetId));
-      setMessage("Photo supprimée de la commande.");
+      setPhotoStates(new Map());
+      setConfirmedPhotoNames([]);
+      setPhotoNotice("Photo supprimée de la commande.");
     } catch (caught) {
-      setErrorField(null);
-      setError(caught instanceof Error ? caught.message : "La photo n’a pas pu être supprimée.");
+      setPhotoError(caught instanceof Error ? caught.message : "La photo n’a pas pu être supprimée.");
     } finally {
       setBusy(false);
     }
   }
 
   async function finalize() {
+    if (photoUploadActive.current || navigationActive.current) return;
     const validation = validateOrderForSubmission(form, { allowLegacyMissingIllustrationFormat });
     if (!validation.ok) {
-      setError(validation.message);
-      setErrorField(validation.field);
       const targetStep = errorFieldSteps[validation.field];
       if (targetStep !== undefined && targetStep !== step) moveToStep(targetStep);
+      setError(validation.message);
+      setErrorField(validation.field);
       return;
     }
     if (!summaryConfirmed || !contentConfirmed || !personalUseTermsConfirmed || !earlyPerformanceConsentConfirmed) {
@@ -449,7 +534,7 @@ export function MusicOrderForm({
     if (!current) return;
     if (pendingFiles.length) {
       const uploaded = await uploadPhotos(current.orderNumber);
-      if (!uploaded) return;
+      if (!uploaded) { moveToStep(3); setPhotoDecisionRequired(true); return; }
     }
     setBusy(true);
     setError("");
@@ -502,6 +587,10 @@ export function MusicOrderForm({
       setAllowLegacyMissingIllustrationFormat(false);
       setPhotos([]);
       setPendingFiles([]);
+      setPhotoStates(new Map());
+      setConfirmedPhotoNames([]);
+      setPhotoError("");
+      setPhotoNotice("");
       setStep(0);
       setSaveState("idle");
       setMessage("Brouillon supprimé.");
@@ -749,35 +838,53 @@ export function MusicOrderForm({
               <div className="order-photo-panel__intro">
                 <p className="auth-panel__label">Espace strictement privé</p>
                 <h3 id="order-photo-title">Quelques images suffisent.</h3>
-                <p>JPEG, PNG ou WebP · 10 Mo maximum par image · 10 images maximum. Chaque fichier est vérifié, réencodé et débarrassé de ses métadonnées avant stockage.</p>
+                <p>JPEG, PNG ou WebP · 10 Mio (10 485 760 octets) maximum par image · 10 images maximum. Chaque fichier est vérifié, réencodé et débarrassé de ses métadonnées avant stockage.</p>
+                <p>Après un rechargement, les photos enregistrées restent disponibles. Resélectionnez uniquement les fichiers manquants : le navigateur ne conserve pas les fichiers non envoyés.</p>
               </div>
               <div className="field order-upload-field">
                 <label className="order-upload-zone" htmlFor="order-photos">
                   <span className="order-upload-zone__title">Choisir des images</span>
-                  <span className="order-upload-zone__meta">JPEG, PNG ou WebP · jusqu’à 10 Mo chacune</span>
+                  <span className="order-upload-zone__meta">JPEG, PNG ou WebP · jusqu’à 10 Mio chacune</span>
                   <span className="form-button">Parcourir mes fichiers</span>
                 </label>
-                <input className="order-upload-input" id="order-photos" type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => { setPendingFiles(Array.from(event.target.files ?? [])); setError(""); setErrorField(null); }} />
+                <input className="order-upload-input" id="order-photos" type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => { selectPhotos(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
               </div>
               <label className="choice choice--full order-reference-confirmation">
-                <input ref={photoRightsRef} id="order-photo-rights" aria-invalid={errorField === "photoRights"} aria-describedby={errorField === "photoRights" ? "order-photo-rights-error" : undefined} type="checkbox" checked={photoRightsConfirmed} onChange={(event) => { setPhotoRightsConfirmed(event.target.checked); setError(""); setErrorField(null); }} />
+                <input ref={photoRightsRef} id="order-photo-rights" aria-invalid={Boolean(photoError) && !photoRightsConfirmed} aria-describedby={photoError ? "order-photo-error" : undefined} type="checkbox" checked={photoRightsConfirmed} onChange={(event) => { setPhotoRightsConfirmed(event.target.checked); setPhotoError(""); }} />
                 <span>Je dispose du droit de communiquer ces photos à LNX Beats pour cette commande.</span>
               </label>
-              {errorField === "photoRights" ? <span className="field__error" id="order-photo-rights-error" role="alert">{error}</span> : null}
-              {account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>Enregistrer les photos</button> : <p className="field__hint">Les photos sélectionnées restent uniquement en mémoire jusqu’à votre connexion.</p>}
-              {pendingFiles.length ? (
-                <div className="order-pending-files">
-                  <strong role="status">{pendingFiles.length} image{pendingFiles.length === 1 ? "" : "s"} sélectionnée{pendingFiles.length === 1 ? "" : "s"}</strong>
-                  <ul>{pendingFiles.map((file) => <li key={`${file.name}-${file.lastModified}`}>{file.name}<span>{file.type ? file.type.replace("image/", "").toUpperCase() : "FICHIER"} · {Math.ceil(file.size / 1024)} Ko</span></li>)}</ul>
+              {photoError ? <p className="field__error" id="order-photo-error" role="alert">{photoError}</p> : null}
+              {account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>{photoDecisionRequired ? "Réessayer les photos restantes" : "Enregistrer les photos"}</button> : <p className="field__hint">Les fichiers sélectionnés seront conservés en mémoire pendant la connexion depuis ce parcours. Aucun envoi avant votre connexion et votre confirmation des droits.</p>}
+              {pendingFiles.length || photoStates.size ? (
+                <div className="order-pending-files order-photo-queue">
+                  <strong role="status">{photos.length} photo{photos.length === 1 ? "" : "s"} enregistrée{photos.length === 1 ? "" : "s"} · {pendingFiles.length} à confirmer</strong>
+                  <ul>{Array.from(new Set([...photoStates.keys(), ...pendingFiles])).map((file, index) => {
+                    const state = photoStates.get(file) ?? { stage: "waiting" };
+                    const labels = { waiting: "En attente", uploading: "Envoi en cours", processing: "Traitement et enregistrement", saved: "Enregistré", failed: "Échec ou confirmation interrompue" };
+                    return <li key={index} data-state={state.stage}>
+                      <strong>{file.name}</strong>
+                      <span>{(file.size / 1024 / 1024).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} Mio</span>
+                      <span role="status">{labels[state.stage]}</span>
+                      {state.stage === "uploading" && state.progress ? <span>{state.progress.sent.toLocaleString("fr-FR")} / {state.progress.total.toLocaleString("fr-FR")} octets envoyés</span> : null}
+                      {state.error ? <p>{state.error}</p> : null}
+                      {state.stage === "failed" && account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos(undefined, file)} disabled={busy}>Réessayer cette photo</button> : null}
+                    </li>;
+                  })}</ul>
                 </div>
               ) : null}
+              {photoNotice ? <p className="field__hint" role="status">{photoNotice}</p> : null}
+              {confirmedPhotoNames.length ? <ul className="order-photo-confirmed">{confirmedPhotoNames.map((name, index) => <li key={index}>{name} — Enregistrée</li>)}</ul> : null}
+              {pendingFiles.length ? <div className="order-photo-recovery">
+                <p>Les photos sont facultatives. Continuer sans les fichiers non enregistrés conserve toutes les photos déjà sauvegardées ; leur état sera vérifié avant de poursuivre.</p>
+                <button type="button" className="form-button" onClick={() => void continueWithoutPendingPhotos()} disabled={busy}>Continuer sans les photos non enregistrées</button>
+              </div> : null}
               {photos.length ? (
                 <ul className="order-photo-list">
                   {photos.map((photo) => (
                     <li key={photo.id}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={`/api/orders/${encodeURIComponent(orderNumber)}/photos/${photo.id}`} alt={`Photo de référence ${photo.position + 1}`} />
-                      <span className="order-photo-list__meta">{photo.width} × {photo.height} · {Math.ceil(photo.sizeBytes / 1024)} Ko</span>
+                      <span className="order-photo-list__meta">Enregistrée · {photo.width} × {photo.height} · {Math.ceil(photo.sizeBytes / 1024)} Kio</span>
                       <button type="button" aria-label={`Supprimer la photo de référence ${photo.position + 1}`} onClick={() => void removePhoto(photo.id)} disabled={busy}>Supprimer</button>
                     </li>
                   ))}
@@ -850,8 +957,7 @@ export function MusicOrderForm({
                 <h3 className="order-review-card__label">Options & références</h3>
                 <dl className="summary order-summary">
                   <div><dt>Illustration personnalisée</dt><dd>{form.coverIncluded ? "Oui" : "Non"}</dd></div>
-                  {form.coverIncluded ? <div><dt>Format demandé</dt><dd>{orderIllustrationFormatLabel(form.illustrationFormat)}</dd></div> : null}
-                  {form.coverIncluded && form.illustrationFormat === "CUSTOM" ? <div><dt>Précision</dt><dd>{form.illustrationFormatCustom}</dd></div> : null}
+                  {form.coverIncluded ? <div><dt>Format de l’illustration</dt><dd>{getOrderProductionSummary(form).formatLabel}</dd></div> : null}
                   <div><dt>Traitement prioritaire</dt><dd>{form.priorityProcessing ? "Oui" : "Non"}</dd></div>
                   <div><dt>Références privées</dt><dd>{photos.length + pendingFiles.length}{pendingFiles.length ? " sélectionnée(s), en attente d’enregistrement" : " enregistrée(s)"}</dd></div>
                 </dl>
