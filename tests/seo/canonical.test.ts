@@ -9,12 +9,12 @@ import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildPublicSitemap } from "@/lib/seo/sitemap";
 import { config, proxy } from "@/proxy";
 
-test("canonical proxy excludes API bodies without changing any public-page host policy", () => {
-  for (const url of ["/api", "/api/health", "/api/admin/catalogue/audio", "/api/admin/creations/media", "/api/admin/orders/QA/delivery", "/api/orders/QA/photos", "/api/auth/session", "/api/payments/stripe/webhook"]) {
+test("canonical proxy bypass is limited to the bounded catalogue audio upload route", () => {
+  for (const url of ["/api/admin/catalogue/audio", "/api/admin/catalogue/audio/", "/api/admin/catalogue/audio?qa=1"]) {
     assert.equal(unstable_doesMiddlewareMatch({ config, url }), false, url);
     assert.deepEqual(resolvePublicOriginPolicy({ method: "POST", host: "www.lnxbeats.fr", pathname: url }), { action: "none" });
   }
-  for (const url of ["/", "/discographie", "/apiculture", "/admin", "/boutique", "/album/test?x=1"]) {
+  for (const url of ["/", "/discographie", "/apiculture", "/admin", "/boutique", "/album/test?x=1", "/api", "/api/health", "/api/admin/creations/media", "/api/admin/orders/QA/delivery", "/api/orders/QA/photos", "/api/auth/session", "/api/payments/stripe/webhook", "/api/admin/catalogue/audio/asset-id", "/api/admin/catalogue/audio-other"]) {
     assert.equal(unstable_doesMiddlewareMatch({ config, url }), true, url);
   }
 });

@@ -137,10 +137,11 @@ retourné 400 : le proxy avait tronqué son multipart à 10,06 Mio alors que le
 handler audio accepte 80 Mio. Cette limite globale était déjà dans le main de
 départ `ee7fb06`, pas introduite par le correctif d'allocateur.
 
-Le correctif local suivant exclut les API du proxy de canonicalisation. Celui-ci
-retournait déjà `none` pour ces routes : aucune authentification ni règle d'origine
-n'est retirée. Les handlers gardent leurs limites autoritaires (photos 10 Mio,
-audio catalogue 80 Mio), leur streaming et leur contrôle Admin/same-origin.
+Le correctif local exclut uniquement `/api/admin/catalogue/audio` du proxy de
+canonicalisation. Celui-ci retournait déjà `none` pour cette route : aucune
+authentification ni règle d'origine n'est retirée. Le handler garde sa limite
+autoritaire 80 Mio, son streaming et son contrôle Admin/same-origin. Les autres
+API, notamment Photos, auth et webhooks, gardent leur comportement proxy existant.
 Le parseur catalogue observe immédiatement ses erreurs de flux, attend la fin de
 l'écriture avant nettoyage et ne laisse plus de promesse rejetée non traitée.
 

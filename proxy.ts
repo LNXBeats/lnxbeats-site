@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { resolvePublicOriginPolicy } from "@/lib/seo/canonical";
 
-// This proxy only implements public-page canonical/noindex policy. API routes
-// already return policy "none" and enforce their own authentication, origin and
-// streaming size limits. Do not clone/cap their multipart bodies in the proxy.
+// This one streaming upload already enforces Admin/origin and 80 MiB limits.
+// Canonical policy returns "none" for it; do not clone/truncate its multipart
+// body at the photo cap. All other routes retain their existing proxy behavior.
 export const config = {
-  matcher: ["/((?!api(?:/|$)).*)"],
+  matcher: ["/((?!api/admin/catalogue/audio/?$).*)"],
 };
 
 export function proxy(request: NextRequest) {
