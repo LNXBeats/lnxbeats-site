@@ -127,3 +127,38 @@ Le rollback applicatif rétablit aussi l'ancienne commande `npm start`, sans
 restauration de DB ni down migration. Aucun changement de plan ou de limite RAM
 n'est nécessaire pour ce correctif. Les résultats finaux du soak, du backup et
 de la promotion doivent être consignés séparément avec leurs timestamps réels.
+
+## Incident préexistant découvert pendant l'observation après promotion
+
+Le Web a effectivement atteint `SUCCESS` sur `655f41e` le 3 octobre à
+19:56:32 UTC, après tous les gates préalables, 72 minutes de soak et une nouvelle
+restauration complète. À 20:12, un POST Admin catalogue audio réel a cependant
+retourné 400 : le proxy avait tronqué son multipart à 10,06 Mio alors que le
+handler audio accepte 80 Mio. Cette limite globale était déjà dans le main de
+départ `ee7fb06`, pas introduite par le correctif d'allocateur.
+
+Le correctif local suivant exclut les API du proxy de canonicalisation. Celui-ci
+retournait déjà `none` pour ces routes : aucune authentification ni règle d'origine
+n'est retirée. Les handlers gardent leurs limites autoritaires (photos 10 Mio,
+audio catalogue 80 Mio), leur streaming et leur contrôle Admin/same-origin.
+Le parseur catalogue observe immédiatement ses erreurs de flux, attend la fin de
+l'écriture avant nettoyage et ne laisse plus de promesse rejetée non traitée.
+
+Un test synthétique reproduit `Unexpected end of form` et l'unhandled rejection
+avant correction ; il passe après. La recette HTTP locale isolée accepte des WAV
+de 17 199 102 et 83 613 702 octets, produit un extrait MP3 de 60 secondes, refuse
+l'accès public au brouillon, sert un Range authentifié 206 et nettoie ses fichiers.
+Cette preuve locale n'est pas présentée comme une nouvelle recette R2 Production.
+
+Un build automatique du worker sur `655f41e` a échoué après être resté à
+« Collecting page data using 31 workers » ; les logs retournés ne donnent pas sa
+cause finale. L'ancien worker est resté RUNNING/SUCCESS, sans OOM observé. Aucun
+réglage worker n'est changé et aucun redéploiement manuel improvisé n'est lancé.
+Une nouvelle promotion reste suspendue à la clarification de ce build et à la
+validation Preview du correctif audio. Le rapport final doit distinguer le SHA
+Web réellement déployé du commit correctif local non promu.
+
+La demande supplémentaire concernant « VIE DE CHIEN » a été auditée en lecture
+seule : la position jukebox 1 est bien persistée, mais la page discographie omet
+ce champ de sa projection et trie par `catalogPosition` (26). Aucun classement
+Production n'a été modifié dans cette investigation.

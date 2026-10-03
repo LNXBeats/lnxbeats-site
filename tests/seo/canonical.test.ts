@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 
 import robots from "@/app/robots";
 import { CANONICAL_SITE_ORIGIN, PRODUCTION_RAILWAY_PUBLIC_HOST, PRODUCTION_RAILWAY_PUBLIC_HOSTS, canonicalPublicUrl, resolvePublicOriginPolicy } from "@/lib/seo/canonical";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildPublicSitemap } from "@/lib/seo/sitemap";
-import { proxy } from "@/proxy";
+import { config, proxy } from "@/proxy";
+
+test("canonical proxy excludes API bodies without changing any public-page host policy", () => {
+  for (const url of ["/api", "/api/health", "/api/admin/catalogue/audio", "/api/admin/creations/media", "/api/admin/orders/QA/delivery", "/api/orders/QA/photos", "/api/auth/session", "/api/payments/stripe/webhook"]) {
+    assert.equal(unstable_doesMiddlewareMatch({ config, url }), false, url);
+    assert.deepEqual(resolvePublicOriginPolicy({ method: "POST", host: "www.lnxbeats.fr", pathname: url }), { action: "none" });
+  }
+  for (const url of ["/", "/discographie", "/apiculture", "/admin", "/boutique", "/album/test?x=1"]) {
+    assert.equal(unstable_doesMiddlewareMatch({ config, url }), true, url);
+  }
+});
 
 test("public SEO identity is fixed to the canonical www HTTPS origin", () => {
   assert.equal(CANONICAL_SITE_ORIGIN, "https://www.lnxbeats.fr");

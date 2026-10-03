@@ -95,6 +95,9 @@ export async function readCatalogAudioUpload(request: Request): Promise<CatalogA
     else fields.set(name, value);
   });
   parser.on("file", (name, file, info) => {
+    // Even a discarded file can emit an error if its multipart body is cut.
+    let earlyFileError: Error | null = null;
+    file.on("error", (error: Error) => { earlyFileError = error; });
     if (name !== "audio" || source || filePromise) {
       parserError = new CatalogAudioRequestError("INVALID_MULTIPART");
       file.resume();
@@ -107,8 +110,11 @@ export async function readCatalogAudioUpload(request: Request): Promise<CatalogA
       file.resume();
       return;
     }
+    // The parser can reject a truncated body while the temporary directory is
+    // still being created. Observe the stream error before the first await.
     filePromise = (async () => {
       sourcePath = await createAudioSourceTempPath(extension);
+      if (earlyFileError) throw earlyFileError;
       let sizeBytes = 0;
       file.on("data", (chunk: Buffer) => { sizeBytes += chunk.length; });
       file.once("limit", () => { parserError = new CatalogAudioRequestError("FILE_TOO_LARGE"); });
@@ -117,6 +123,9 @@ export async function readCatalogAudioUpload(request: Request): Promise<CatalogA
       if (sizeBytes > CATALOG_AUDIO_SOURCE_MAXIMUM_BYTES) throw new CatalogAudioRequestError("FILE_TOO_LARGE");
       source = { path: sourcePath, originalFilename: path.basename(info.filename), mimeType: info.mimeType, sizeBytes, extension };
     })();
+    // Keep the rejection observable by the awaited promise, without leaving it
+    // unhandled while the outer multipart pipeline is still settling.
+    void filePromise.catch(() => undefined);
   });
   parser.once("filesLimit", () => { parserError = new CatalogAudioRequestError("INVALID_MULTIPART"); });
   parser.once("fieldsLimit", () => { parserError = new CatalogAudioRequestError("INVALID_MULTIPART"); });
@@ -148,6 +157,7 @@ export async function readCatalogAudioUpload(request: Request): Promise<CatalogA
       source: completedSource,
     };
   } catch (error) {
+    await (filePromise as Promise<void> | null)?.catch(() => undefined);
     if (sourcePath) await rm(sourcePath, { force: true }).catch(() => undefined);
     if (error instanceof CatalogAudioRequestError) throw error;
     throw new CatalogAudioRequestError("INVALID_MULTIPART");
