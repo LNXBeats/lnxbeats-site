@@ -15,8 +15,12 @@ Railpack build unnecessarily invoked Next static page generation. Its last log
 was `Collecting page data using 31 workers`; the provider did not return a
 termination diagnosis. Do not infer OOM from that log.
 
-Select `/railway.media-worker.toml` **only on the two media worker services**.
-It runs `npm ci --include=dev` (locked dependencies, no reused node_modules),
+Set the build override **only on the two media worker services** to
+`npm ci --include=dev && npm run creations:media-worker:build`.
+Railway now rejects selecting a new legacy TOML config file; do not migrate
+global infrastructure configuration just for this fix. `railway.media-worker.toml`
+is a versioned recipe/reference, NOT an active config path on either service.
+The supported service build override runs `npm ci --include=dev` (locked dependencies, no reused node_modules),
 then `creations:media-worker:build`: Prisma generation, a no-emit typecheck rooted
 in the worker, and a real import/FFmpeg encoder preflight. It does not poll jobs,
 connect to DB/R2, generate Next pages or run migrations.
