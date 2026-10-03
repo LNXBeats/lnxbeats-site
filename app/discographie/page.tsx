@@ -46,7 +46,7 @@ export default async function DiscographyPage() {
           projects={sceneProjects}
           initialIndex={0}
           eyebrow="LNX Beats · Discographie"
-          heading="Chaque projet, une histoire."
+          heading="Discographie"
           eager
         />
         <details className="discography-directory">

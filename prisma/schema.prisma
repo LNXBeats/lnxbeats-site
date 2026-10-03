@@ -968,9 +968,63 @@ model User {
   ordersHiddenFromCurrentViews       Order[]                           @relation("OrderCurrentViewHiddenBy")
   orderCurrentViewVisibilityEvents   OrderCurrentViewVisibilityEvent[] @relation("OrderCurrentViewVisibilityActor")
   creationMediaUploadSessions        CreationMediaUploadSession[]      @relation("CreationMediaUploadActor")
+  supportContributions               SupportContribution[]
 
   @@index([role, status])
   @@map("users")
+}
+
+// Independent voluntary support: never an Order, invoice, entitlement or credit.
+model SupportContribution {
+  id                String                       @id @default(uuid()) @db.Uuid
+  ownerHash         String                       @db.Char(64)
+  userId            String?                      @db.Uuid
+  user              User?                        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  amountCents       Int
+  currency          String                       @default("EUR") @db.Char(3)
+  provider          String                       @db.VarChar(10)
+  mode              String                       @default("TEST") @db.VarChar(4)
+  status            String                       @default("CREATED") @db.VarChar(24)
+  idempotencyKey    String                       @unique @db.Char(64)
+  providerReference String?                      @unique @db.VarChar(255)
+  paymentReference  String?                      @unique @db.VarChar(255)
+  refundReference   String?                      @unique @db.VarChar(255)
+  checkoutUrl       String?                      @db.VarChar(2048)
+  createdAt         DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                     @updatedAt @db.Timestamptz(3)
+  attempts          SupportContributionAttempt[]
+  events            SupportContributionEvent[]
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@map("support_contributions")
+}
+
+model SupportContributionAttempt {
+  id             String              @id @default(uuid()) @db.Uuid
+  contributionId String              @db.Uuid
+  contribution   SupportContribution @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  operation      String              @db.VarChar(16)
+  idempotencyKey String              @unique @db.VarChar(100)
+  status         String              @default("REQUESTED") @db.VarChar(24)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@unique([contributionId, operation])
+  @@map("support_contribution_attempts")
+}
+
+model SupportContributionEvent {
+  id             String              @id @default(uuid()) @db.Uuid
+  contributionId String              @db.Uuid
+  contribution   SupportContribution @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+  eventKey       String              @unique @db.VarChar(255)
+  type           String              @db.VarChar(64)
+  actorId        String?             @db.Uuid
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@index([contributionId, createdAt])
+  @@map("support_contribution_events")
 }
 
 model AdminRecordArchive {

@@ -43,7 +43,7 @@ test("V2 reshapes every approved page without changing its business actions", as
   assert.match(commander, /commander-hero-v2__backdrop/);
   assert.match(shop, /shop-commerce-hero__backdrop/);
   assert.match(about, /about-final-cta/);
-  assert.match(discography, /Chaque projet, une histoire\./);
+  assert.match(discography, /heading="Discographie"/);
   assert.match(product, /Livraison Colissimo à domicile avec signature/);
   assert.match(product, /France métropolitaine uniquement · frais calculés selon le poids du panier\./);
   assert.match(css, /\.discography-jukebox \.home-jukebox__item\.is-previous/);

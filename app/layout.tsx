@@ -22,6 +22,7 @@ import "./v120-ui-conformance-v2.css";
 import "./v120-ui-conformance-v2-reference.css";
 import "./v130-ui-refinement.css";
 import "./v132-fluid-motion.css";
+import "./premium-public-vfinal.css";
 
 const siteUrl = CANONICAL_SITE_ORIGIN;
 const socialImage = new URL("/og.png", siteUrl).toString();

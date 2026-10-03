@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Container } from "@/components/container";
 import { ExternalLinkIcon } from "@/components/link-icons";
 import { navigation, siteConfig } from "@/data/site";
+import { isSupportEnabled } from "@/lib/support/config";
 
 export function SiteFooter() {
   return (
@@ -45,6 +46,7 @@ export function SiteFooter() {
                   </a>
                 ))}
                 <a href={`mailto:${siteConfig.email}`}>E-mail</a>
+                {isSupportEnabled() ? <Link href="/soutenir">Soutenir LNX Beats</Link> : null}
               </div>
             </div>
             <div className="site-footer__columns site-footer__columns--mobile">
@@ -79,6 +81,7 @@ export function SiteFooter() {
                     </a>
                   ))}
                   <a href={`mailto:${siteConfig.email}`}>E-mail</a>
+                  {isSupportEnabled() ? <Link href="/soutenir">Soutenir LNX Beats</Link> : null}
                 </div>
               </details>
             </div>

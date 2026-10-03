@@ -19,7 +19,7 @@ export default function AboutPage() {
         <Container className="about-hero__grid">
           <div className="about-hero__copy about-hero__copy--editorial" data-motion-layer="copy">
             <p className="eyebrow">Derrière LNX Beats</p>
-            <h1>Ludovic<br /> <em>Mathon.</em></h1>
+            <h1>Ludovic Mathon</h1>
             <p>{artistBiography.short}</p>
           </div>
           <div className="about-hero__portrait about-hero__portrait--editorial" data-motion-layer="media">

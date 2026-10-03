@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Client } from "pg";
+import { provisionSupportRuntimePrivileges } from "@/lib/support/runtime-privileges";
 
 import {
   provisionAdminOrderVisibilityAuditPrivileges,
@@ -29,6 +30,7 @@ try {
   await client.connect();
   const result = await provisionCreationsRuntimePrivileges(client, decodeURIComponent(runtime.username));
   const orderVisibilityAudit = await provisionAdminOrderVisibilityAuditPrivileges(client);
+  const support = await provisionSupportRuntimePrivileges(client);
   console.log(JSON.stringify({
     status: "ok",
     database: result.database,
@@ -38,6 +40,7 @@ try {
     tables: result.tables,
     sequences: result.sequences,
     orderVisibilityAudit,
+    support,
     defaultPrivileges: "not used; provisioning is prefix-scoped plus the exact order visibility audit table",
   }, null, 2));
 } finally {

@@ -72,8 +72,13 @@ test("V3 drives the shared public identity while retaining V2 as the lower style
   for (const [name, fileSource] of [["Home", home], ["header", header], ["footer", footer]] as const) {
     assert.match(fileSource, /\/assets\/v3\/lnx-beats-signature-transparent\.png/, `${name} must use the transparent Apple Artist wordmark`);
     assert.doesNotMatch(fileSource, /lnx-beats-signature-user-transparent/, `${name} must not retain the rejected replacement signature`);
-    assert.doesNotMatch(fileSource, /lnx-beats-signature-source-apple-artist/, `${name} must not render the white source rectangle directly`);
+    if (name !== "Home") {
+      assert.doesNotMatch(fileSource, /lnx-beats-signature-source-apple-artist/, `${name} keeps the transparent shared navigation identity`);
+    }
   }
+  // VFinal explicitly reuses the exact supplied JPEG in an editorial signature,
+  // not in the hero or the navigation. No regeneration or image transform.
+  assert.match(home, /home-platforms-vfinal__intro[\s\S]*signature-source-apple-artist\.jpg[^>]+unoptimized/);
 });
 
 test("V3 follows the page rules without inventing catalogue or Commander behavior", async () => {

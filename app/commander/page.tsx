@@ -68,7 +68,7 @@ export default async function OrderPage({ searchParams }: OrderPageProps) {
         <Container className="page-hero__grid">
           <div>
             <p className="eyebrow">Une histoire à confier</p>
-            <h1>Ce qui compte pour vous peut devenir musique.</h1>
+            <h1>Commander<br /><em>une création.</em></h1>
           </div>
           <div>
             <p className="page-hero__intro">Vous apportez l’histoire, les intentions et les repères. LNX Beats l’interprète, écrit et construit la création musicale.</p>

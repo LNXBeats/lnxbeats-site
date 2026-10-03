@@ -124,7 +124,7 @@ export default async function ShopPage() {
                   <ShopProductMedia
                     image={product.image}
                     productTitle={product.title}
-                    sizes="(max-width: 620px) calc(100vw - 40px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 430px"
+                    sizes="(max-width: 620px) calc(50vw - 28px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 340px"
                   />
                 </Link>
                 <div className="shop-product-card__body">
