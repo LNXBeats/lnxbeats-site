@@ -237,7 +237,7 @@ test("la configuration Railway racine ne force aucun déploiement sur les servic
   assert.doesNotMatch(rootConfiguration, /\[deploy\]|startCommand|healthcheck|cronSchedule|preDeployCommand|restartPolicy/i);
 
   const packageConfiguration = JSON.parse(packageSource) as { scripts: Record<string, string> };
-  assert.equal(packageConfiguration.scripts.start, "next start");
+  assert.equal(packageConfiguration.scripts.start, "MALLOC_ARENA_MAX=2 next start");
   assert.equal(
     packageConfiguration.scripts["notifications:scheduler:run"],
     "NODE_OPTIONS=--conditions=react-server node --env-file-if-exists=.env.local --import tsx scripts/notifications-scheduler.ts",

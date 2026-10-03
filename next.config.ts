@@ -34,6 +34,9 @@ const nextConfig: NextConfig = {
     // Sharp's operation cache retains decoded/intermediate image data between
     // requests. The filesystem result cache remains enabled by Next.js.
     imgOptOperationCache: false,
+    // MALLOC_ARENA_MAX enables Sharp's CPU-based default on Linux/glibc.
+    // Keep cold Next/Image requests at the application's existing concurrency.
+    imgOptConcurrency: 1,
   },
   // FFmpeg is spawned as a real executable and PDFKit reads its bundled AFM
   // font data at runtime. Keeping both packages external prevents the server

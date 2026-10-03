@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("Next image optimization bounds operation memory without changing concurrency", async () => {
+test("Next image optimization keeps a cold allocator-configured process at concurrency one", async () => {
   const config = await readFile(new URL("../../next.config.ts", import.meta.url), "utf8");
 
   assert.match(config, /experimental:\s*\{[\s\S]*imgOptOperationCache:\s*false/);
-  assert.doesNotMatch(config, /imgOptConcurrency/);
+  assert.match(config, /imgOptConcurrency:\s*1/);
 });
 
 test("shop and catalogue images publish layout-accurate responsive sizes", async () => {
