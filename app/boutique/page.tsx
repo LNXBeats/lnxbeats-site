@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { Fragment } from "react";
 import Link from "next/link";
 import { UiIcon } from "@/components/ui-icon";
 
 import { ButtonLink } from "@/components/button";
 import { ShopAddButton } from "@/components/shop-add-button";
 import { ShopProductMedia } from "@/components/shop-product-media";
+import { ShopSupportCard } from "@/components/shop-support-card";
 import { Container } from "@/components/container";
 import { siteConfig } from "@/data/site";
 import { parseShopConfiguration } from "@/lib/shop/config";
@@ -119,8 +121,9 @@ export default async function ShopPage() {
             <Link className="text-link" href="/boutique/panier">Voir le panier <span aria-hidden="true"><UiIcon name="arrow-right" /></span></Link>
           </div>
           <div className="shop-product-grid">
-            {products.map((product) => (
-              <article className="shop-product-card" data-motion-tilt="shop-product" key={product.id}>
+            {products.map((product, index) => (
+              <Fragment key={product.id}>
+              <article className="shop-product-card" data-motion-tilt="shop-product">
                 <Link className="shop-product-card__image" href={`/boutique/${encodeURIComponent(product.slug)}`}>
                   <ShopProductMedia
                     image={product.image}
@@ -151,7 +154,10 @@ export default async function ShopPage() {
                   </div>
                 </div>
               </article>
+              {index === 1 ? <ShopSupportCard /> : null}
+              </Fragment>
             ))}
+            {products.length < 2 ? <ShopSupportCard /> : null}
           </div>
         </Container>
       </section>
