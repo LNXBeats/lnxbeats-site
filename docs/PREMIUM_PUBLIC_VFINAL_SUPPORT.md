@@ -49,8 +49,11 @@ nets inventés. Vue/export bornés aux 200 dernières écritures, explicitement 
 
 Architecture, variables et webhooks dédiés : `lib/support/README.md`.
 Migration additive unique : `20261004010000_support_contributions` (trois tables).
-Les anciennes migrations ne changent pas. Les grants runtime sont limités aux
-trois tables, sans DELETE, avec événements append-only SELECT/INSERT.
+Les anciennes migrations ne changent pas. Pour la release fermée, le groupe
+dédié `lnx_support_readonly` reçoit seulement SELECT sur le registre et ses
+événements ; aucun droit sur les tentatives, aucune écriture. Le groupe Créations
+ne porte aucun privilège soutien. Une future ouverture TEST exige son propre
+provisionnement revu ; le provisionneur de release n'ouvre aucun encaissement.
 
 ## Preuves et réserves
 

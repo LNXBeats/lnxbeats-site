@@ -30,7 +30,7 @@ try {
   await client.connect();
   const result = await provisionCreationsRuntimePrivileges(client, decodeURIComponent(runtime.username));
   const orderVisibilityAudit = await provisionAdminOrderVisibilityAuditPrivileges(client);
-  const support = await provisionSupportRuntimePrivileges(client);
+  const support = await provisionSupportRuntimePrivileges(client, decodeURIComponent(runtime.username));
   console.log(JSON.stringify({
     status: "ok",
     database: result.database,

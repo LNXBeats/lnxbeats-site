@@ -111,14 +111,20 @@ test("bounded webhook/request reader rejects declared and chunked oversize", asy
   assert.equal(await boundedSupportText(new Request("https://example.test", { method: "POST", body: "{}" }), 10), "{}");
 });
 
-test("support runtime grants exact ledger tables, append-only events, no delete or DDL", async () => {
+test("closed support grants only Admin reads in a separate group, never attempts or writes", async () => {
   const queries: string[] = [];
-  const fake = { async query(sql: string) { queries.push(sql); return { rows: sql.includes("FROM pg_roles") ? [{ safe: true }] : sql.includes("FROM pg_class") ? ["support_contributions", "support_contribution_attempts", "support_contribution_events"].map((name) => ({ name, owned: true })) : [] }; } };
-  await provisionSupportRuntimePrivileges(fake as never);
-  const grants = queries.filter((sql) => sql.startsWith("GRANT"));
-  assert.equal(grants.length, 3);
-  assert.equal(grants.some((sql) => /DELETE|TRUNCATE|OWNERSHIP|TRIGGER|REFERENCES/.test(sql)), false);
-  assert.match(grants[2], /^GRANT SELECT, INSERT ON TABLE/);
+  const fake = { async query(sql: string, values?: string[]) {
+    queries.push(sql);
+    return { rows: sql.includes("FROM pg_roles") ? [{ safe: true }]
+      : sql.includes("FROM pg_class") ? ["support_contributions", "support_contribution_attempts", "support_contribution_events"].map((name) => ({ name, owned: true }))
+      : sql.includes("has_table_privilege") ? [{ readable: !values?.[1].endsWith("support_contribution_attempts"), excessive: false }] : [] };
+  } };
+  await provisionSupportRuntimePrivileges(fake as never, "runtime_rotation_test");
+  const grants = queries.filter((sql) => sql.startsWith("GRANT SELECT"));
+  assert.equal(grants.length, 2);
+  assert.ok(grants.every((sql) => sql.endsWith('TO "lnx_support_readonly"')));
+  assert.ok(queries.includes('GRANT "lnx_support_readonly" TO "runtime_rotation_test" WITH ADMIN FALSE, INHERIT TRUE, SET FALSE'));
+  assert.equal(queries.some((sql) => /^GRANT (?:INSERT|SELECT,)/.test(sql)), false);
 });
 
 test("support schema/migration are additive and have no order, financial or Rights changes", () => {

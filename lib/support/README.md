@@ -54,6 +54,32 @@ Aucun remboursement Live n'est possible ni testé.
 
 ## Preuves et réserves
 
+### Release V4 fermée — permissions minimales
+
+Le provisionnement de release utilise le groupe NOLOGIN `lnx_support_readonly`,
+distinct de Créations. Seules les lectures Admin réellement utilisées sont
+accordées : SELECT sur `support_contributions` et `support_contribution_events`.
+`support_contribution_attempts` n'est pas accessible. Aucun INSERT/UPDATE/DELETE,
+TRUNCATE, maintenance, DDL ou GRANT OPTION ; aucun accès ajouté à l'historique
+Prisma ni aux tables financières existantes. Les propriétaires restent les rôles
+de migration et le LOGIN runtime est fourni dynamiquement, pas codé en dur.
+
+Le provisionneur normalise uniquement les trois tables soutien, retire leurs
+anciens grants au groupe Créations et vérifie les privilèges effectifs runtime.
+Il échoue si un autre héritage donne encore des droits excessifs. Le mécanisme
+Créations/audit commandes reste inchangé. Ce provisionneur fermé n'est pas un
+provisionneur pour une ouverture TEST/LIVE ultérieure.
+
+Test réel local : `MIGRATION_DATABASE_URL=<base locale *_test>` puis
+`node --conditions=react-server --import tsx scripts/test-support-closed-runtime.ts`.
+Deux LOGIN distincts du propriétaire, quatre appels de provisioning, lectures
+Prisma représentatives, refus 42501 des écritures et conservation des ACL
+historiques. Ne jamais lancer ce script sur une base non jetable.
+
+`tests/support/disabled-release.test.ts` exerce directement les routes fermées :
+503 avant DB, rate-limit écrit, cookie ou fournisseur. Les endpoints de paiement
+Commander/Boutique ne sont pas modifiés.
+
 Tests unitaires et HTTP local : configuration, montant, signatures Stripe SDK,
 CSRF, lecteurs bornés, scope grants, transitions et séparation comptable.
 `scripts/test-support-runtime.ts` utilise exclusivement PostgreSQL local jetable
