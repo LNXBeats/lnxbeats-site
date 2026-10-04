@@ -19,7 +19,7 @@ test("shop and catalogue images publish layout-accurate responsive sizes", async
 
   assert.match(
     catalogue,
-    /sizes="\(max-width: 620px\) calc\(50vw - 28px\), \(max-width: 900px\) calc\(50vw - 40px\), \(max-width: 1440px\) calc\(33vw - 48px\), 340px"/,
+    /sizes="\(max-width: 429px\) calc\(100vw - 32px\), \(max-width: 900px\) calc\(50vw - 40px\), \(max-width: 1440px\) calc\(33vw - 48px\), 340px"/,
   );
   assert.match(
     product,

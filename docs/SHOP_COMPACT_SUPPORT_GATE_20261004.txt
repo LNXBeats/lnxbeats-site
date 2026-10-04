@@ -1,0 +1,128 @@
+Boutique compacte / soutien — revue du 04/10/2026
+
+PÉRIMÈTRE LIVRABLE SÉPARÉ
+Base : 9d5f2db099068d3c53ba1a3905ea34c821d55d3c.
+La livraison Boutique ne change ni données, ni prix, ni panier/paiements,
+ni assets, ni migration, ni ACL. Le soutien reste fermé en Production.
+
+DISCOVERY
+DONE : V4, worker dédié, optimisation mémoire, Photos/Format, audio, jukebox ;
+aucune modification de ces fonctions dans ce candidat.
+DONE : migration support_contributions déjà appliquée parmi 40 migrations.
+PARTIAL : soutien TEST existant (trois tables, registre Admin, tentatives,
+événements, routes et adaptateurs), réutilisé comme base, pas remplacé.
+TODO avant ouverture : prise en charge LIVE revue, ACL d'écriture ciblées,
+interrupteur nouvelles contributions distinct des opérations engagées,
+réconciliation après timeout avant recapture, verrouillage inter-prestataires,
+export exhaustif/paginé et ventilation TEST/LIVE.
+BLOCKED : recette réelle prestataires faute d'accès sandbox vérifiés ; état
+du compte Stripe non lisible avec la clé existante (GET /v1/account : 403).
+Cela ne prouve PAS que le compte est restreint. Aucun élargissement de clé.
+
+BOUTIQUE
+Cause : description avec max-height hérité, puis overflow visible en mobile.
+Son texte pouvait dépasser la boîte et rejoindre le prix et les actions.
+Suppression du nœud description uniquement dans la collection ; description
+de fiche et métadonnées inchangées. Suppression des règles V4 de description.
+Carte en flux normal sans hauteur fixe ; titres non tronqués. Align-self:start
+évite que le titre très long d'une voisine crée un grand vide dans les autres.
+Actions 44/48px minimum ; police bouton corrigée (ancienne cascade 9,28px).
+Le sizes de l'image reflète désormais une colonne sous 430px.
+
+SOUTIEN : PREUVES ET ÉCARTS, PAS D'ACTIVATION PAR SIMPLE FLAG
+Production : SUPPORT_ENABLED et SUPPORT_TEST_MODE absents, donc fermé ;
+trois tables vides. SELECT sur contributions et événements uniquement ;
+aucun accès aux tentatives, aucun droit d'écriture. Ces ACL sont conservées.
+Preview : flags TEST actifs, mais aucune clé Stripe, aucun client/secret
+PayPal ni webhook dédié soutien. Les paiements existants LIVE ne sont pas
+copiés en Preview. Authentification Stripe CLI présente, mais rattachement
+au compte LIVE non vérifiable après le 403 : elle n'est pas une preuve de
+configuration sandbox utilisable et pérenne pour ce projet.
+
+Le CHECK support_test_only impose mode=TEST. Il faudrait une migration
+distincte pour LIVE ; l'historique existant n'est ni modifié ni recréé ici.
+Les appels getSupportStatus/capture/refund exigent encore requireSupportEnabled.
+Les webhooks restent réconciliables dans un contexte TEST correctement
+configuré, mais le kill switch n'est PAS encore celui demandé pour les
+opérations déjà engagées. La clé de tentative navigateur est provider+montant :
+elle ne démontre pas une garantie inter-prestataires en cas d'ambiguïté.
+La capture réutilise une clé idempotente mais n'effectue pas de lecture du
+résultat réel avant renvoi après timeout. Ne pas qualifier ces gates PASS.
+Le registre/export actuel est borné à 200 écritures, conçu TEST seulement.
+Il n'est pas encore un export comptable exhaustif LIVE. Les frais nets ne
+sont pas inventés. Pas de reçu fiscal ni de fausse facture de prestation.
+
+QUALIFICATION ET SOURCES OFFICIELLES CONSULTÉES LE 04/10/2026
+Cas déclaré dans les mentions existantes : entrepreneur individuel, activité
+libérale de création musicale, régime spécial BNC et franchise TVA.
+Cette qualification provient du dossier existant, pas d'une vérification
+nouvelle de l'immatriculation ou d'un avis comptable.
+
+Stripe distingue les pourboires portant sur un contenu déjà fourni des dons
+à finalité caritative. Le premier est une piste cohérente pour des musiques
+déjà accessibles, sans avantage nouveau ; pas une collecte caritative ou
+une transmission d'argent entre particuliers. Le créateur distribuant son
+propre contenu n'a pas à obtenir l'agrément réservé aux plateformes de tiers.
+Ne pas inventer une obligation générale de pré-agrément ; il reste nécessaire
+de vérifier l'état du compte et la catégorie réelle déclarée.
+https://support.stripe.com/questions/requirements-for-accepting-tips-or-donations?locale=en-GB
+https://support.stripe.com/questions/prohibited-and-restricted-businesses-list-faqs?locale=en-GB
+
+PayPal documente le soutien d'une entreprise, y compris lucrative, avec un
+lien de don d'un compte Professionnel et frais habituels. Cela n'est pas une
+preuve d'acceptation de notre mécanisme Orders API existant ni du compte réel.
+Pas de paiement entre proches ni de tarif/statut caritatif.
+https://www.paypal.com/fr/cshelp/article/comment-obtenir-une-aide-financi%C3%A8re-pour-mon-entreprise%C2%A0-help241
+
+Le nom « soutien » n'exonère pas les recettes. Le BOFiP BNC inclut notamment
+gratifications et recettes professionnelles : l'hypothèse prudente est de
+les enregistrer comme recettes de l'activité, avec justificatif et références
+prestataire, puis rapprochement des frais/remboursements, pas comme don privé.
+https://bofip.impots.gouv.fr/bofip/4650-PGP.html/identifiant=BOI-BNC-BASE-20-20-20260819
+
+La TVA dépend du lien direct et immédiat avec une prestation/prix. L'absence
+effective de contrepartie peut conduire hors champ ; elle ne découle pas
+automatiquement du libellé. Ne pas confondre cela avec la franchise en base.
+Question fiscale précise à confirmer pour ce flux : gratification sur œuvres
+gratuites déjà diffusées ou subvention/don sans lien direct, et justification
+à inscrire au livre des recettes sous le régime réel de l'exploitant.
+https://bofip.impots.gouv.fr/bofip/13552-PGP.html/identifiant=BOI-TVA-BASE-10-10-50-20241211
+
+Les conditions d'organisme éligible à une réduction d'impôt ne sont pas
+établies pour LNX Beats : aucun reçu fiscal ni réduction d'impôt promis.
+https://www.service-public.gouv.fr/particuliers/vosdroits/F426
+
+QUESTIONS EXACTES / ACCÈS NÉCESSAIRES POUR LE PROCHAIN GATE
+Stripe : « Notre entreprise individuelle française diffuse ses propres
+musiques gratuitement sur lnxbeats.fr et souhaite recevoir des versements
+ponctuels EUR pour ce contenu déjà fourni, sans avantage, tiers ou finalité
+caritative. Notre compte et sa catégorie actuelle permettent-ils ce flux de
+pourboire via Checkout ? Existe-t-il une restriction à lever ? » Une preuve
+Dashboard lisible peut suffire si aucune restriction/ambiguïté n'est indiquée.
+PayPal : « Notre compte Professionnel français peut-il accepter ce soutien
+ponctuel sans contrepartie via Orders v2 / CAPTURE et webhooks, ou le mécanisme
+officiel de lien de don est-il requis ? Aucun tarif caritatif n'est demandé. »
+Fournir les accès TEST/SANDBOX dans le stockage sécurisé/variables Preview,
+jamais dans le chat. Ne pas lancer de transaction réelle pour lever ce gate.
+
+SÉCURITÉ / DÉPENDANCES
+0 vulnérabilité Production. Les 5 HIGH dev sont exactement les alertes connues
+braces -> micromatch -> fast-glob -> plugin/config ESLint Next. Risque réel de
+déni de service de l'outillage sur motifs glob hostiles ; ne pas lint du code
+non fiable avec des secrets accessibles. Pas de chemin requête public relevé.
+braces dernier registre : 3.0.3, encore affecté. npm propose eslint-config-next
+14.2.35 (recul majeur incompatible avec Next16) ; non appliqué. Pas de force.
+
+SAUVEGARDE ET RETOUR ARRIÈRE
+Pour ce patch visuel sans changement DB, réutilisation de la sauvegarde fraîche
+du même jour à 11:07:10Z, chiffrée age, réellement restaurée en PG18.6 isolé,
+upgrade support testé 39->40 migrations, 78->81 tables, données historiques
+inchangées et 47 contrôles de rôle runtime. Empreinte revérifiée :
+06bad39ae646831b218e2d3dcb894da074eefc153420d0a0a513d9a7fee81c93.
+La structure et les 20 canaris métier Production ont été revérifiés ; aucun
+écart, tables soutien toujours vides. Pas de nouvel export redondant.
+Limite documentée : locale système macOS en_US.UTF-8 vs Linux en_US.utf8 ;
+aucune collation métier/index explicite. Restaurer la Production sur Linux
+avec sa locale d'origine ; aucune restauration Production automatique.
+Rollback applicatif vers 9d5f2db compatible : schéma et configuration inchangés.
+Ne supprimer aucun paiement/événement/table ; soutien demeure OFF.

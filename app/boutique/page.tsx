@@ -125,7 +125,7 @@ export default async function ShopPage() {
                   <ShopProductMedia
                     image={product.image}
                     productTitle={product.title}
-                    sizes="(max-width: 620px) calc(50vw - 28px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 340px"
+                    sizes="(max-width: 429px) calc(100vw - 32px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 340px"
                   />
                 </Link>
                 <div className="shop-product-card__body">
@@ -137,7 +137,6 @@ export default async function ShopPage() {
                         : "Disponible"}
                   </p>
                   <h3><Link href={`/boutique/${encodeURIComponent(product.slug)}`}>{product.title}</Link></h3>
-                  <p>{product.description}</p>
                   <div className="shop-product-card__footer">
                     <strong>{formatShopMoney(product.priceCents)}</strong>
                     <div className="shop-product-card__actions">
