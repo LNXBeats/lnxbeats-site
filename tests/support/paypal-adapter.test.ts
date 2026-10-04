@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { captureProviderSupport, createProviderCheckout, verifySupportPaypalWebhook } from "@/lib/support/providers";
+import { captureProviderSupport, createProviderCheckout, inspectBoundPaypalOrder, refundProviderSupport, verifySupportPaypalWebhook } from "@/lib/support/providers";
 
 test("PayPal support reuses sandbox transport, immutable EUR amount and stable request keys (mock transport)", async () => {
   const originalEnv = { ...process.env }; const originalFetch = globalThis.fetch;
@@ -42,6 +42,54 @@ test("PayPal support reuses sandbox transport, immutable EUR amount and stable r
     assert.ok(calls.at(-1)!.body.endsWith(`"webhook_event":${raw}}`), "exact raw event bytes survive postback envelope");
     process.env.PAYPAL_ENVIRONMENT = "live";
     await assert.rejects(createProviderCheckout(value, "https://preview.example.test", "never-live"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const key of Object.keys(process.env)) if (!(key in originalEnv)) delete process.env[key];
+    Object.assign(process.env, originalEnv);
+  }
+});
+
+test("LIVE PayPal transport binds merchant/mode before capture; closed checkout preserves settlement (all network mocked)", async () => {
+  const originalEnv = { ...process.env }; const originalFetch = globalThis.fetch;
+  Object.assign(process.env, { SUPPORT_ENABLED: "true", SUPPORT_TEST_MODE: "false", SITE_URL: "https://www.lnxbeats.fr",
+    PAYMENT_DEPLOYMENT_ENV: "production", RAILWAY_ENVIRONMENT_NAME: "production", PAYPAL_ENVIRONMENT: "live",
+    PAYPAL_CLIENT_ID: "synthetic_client", PAYPAL_CLIENT_SECRET: "synthetic_secret", SUPPORT_PAYPAL_WEBHOOK_ID: "synthetic_webhook",
+    SUPPORT_PAYPAL_ENABLED: "true", SUPPORT_PAYPAL_LIVE_APPROVED: "true", SUPPORT_PAYPAL_MERCHANT_ID: "MERCHANTFIXTURE" });
+  delete process.env.SUPPORT_LIVE_REFUNDS_ENABLED;
+  const value = { id: "fixture-contribution", amountCents: 500, provider: "PAYPAL", mode: "LIVE", providerReference: "ORDER_FIXTURE", paymentReference: null };
+  let merchant = "MERCHANTFIXTURE"; let capturePosts = 0; let refundPosts = 0; let checkoutPosts = 0;
+  const capture = { id: "CAPTURE_FIXTURE", status: "COMPLETED", final_capture: true, update_time: "2026-10-04T12:00:00Z", amount: { value: "5.00", currency_code: "EUR" } };
+  globalThis.fetch = async (input, init) => {
+    const url = String(input); assert.ok(url.startsWith("https://api-m.paypal.com/"));
+    if (url.endsWith("/v1/oauth2/token")) return Response.json({ access_token: "synthetic_access", token_type: "Bearer" });
+    if (url.endsWith("/v2/checkout/orders")) {
+      checkoutPosts++;
+      assert.equal(JSON.parse(String(init?.body)).purchase_units[0].payee.merchant_id, "MERCHANTFIXTURE");
+      return Response.json({ id: value.providerReference, status: "CREATED", links: [{ rel: "approve", href: "https://www.paypal.com/checkoutnow" }] });
+    }
+    if (url.endsWith("/capture")) capturePosts++;
+    else if (url.endsWith("/refund")) { refundPosts++; throw new Error("Refund must remain unarmed"); }
+    else assert.equal(init?.method ?? "GET", "GET");
+    return Response.json({ id: value.providerReference, status: "COMPLETED", purchase_units: [{ custom_id: value.id, reference_id: value.id,
+      amount: { value: "5.00", currency_code: "EUR" }, payee: { merchant_id: merchant }, payments: { captures: [capture] } }] });
+  };
+  try {
+    await createProviderCheckout(value, "https://www.lnxbeats.fr", "fixture-key");
+    process.env.SUPPORT_ENABLED = "false";
+    await assert.rejects(createProviderCheckout(value, "https://www.lnxbeats.fr", "fixture-key"));
+    assert.equal(checkoutPosts, 1);
+    merchant = "WRONGMERCHANT";
+    await assert.rejects(captureProviderSupport(value, "fixture-capture"));
+    assert.equal(capturePosts, 0, "wrong merchant rejected before financial POST");
+    merchant = "MERCHANTFIXTURE";
+    assert.equal((await captureProviderSupport(value, "fixture-capture")).mode, "LIVE");
+    assert.equal(capturePosts, 1, "existing payment settles despite closed new contributions");
+    await assert.rejects(captureProviderSupport({ ...value, mode: "TEST" }, "fixture-capture"));
+    assert.equal(capturePosts, 1);
+    await assert.rejects(inspectBoundPaypalOrder({ ...value, paymentReference: "WRONG_CAPTURE" }));
+    await inspectBoundPaypalOrder({ ...value, paymentReference: capture.id });
+    await assert.rejects(refundProviderSupport({ ...value, paymentReference: capture.id }, "fixture-refund"));
+    assert.equal(refundPosts, 0);
   } finally {
     globalThis.fetch = originalFetch;
     for (const key of Object.keys(process.env)) if (!(key in originalEnv)) delete process.env[key];

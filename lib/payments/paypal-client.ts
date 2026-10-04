@@ -46,6 +46,8 @@ export type PaypalCreateOrderRequest = Readonly<{
   description: string;
   returnUrl: string;
   cancelUrl: string;
+  /** Optional explicit payee binding for the isolated support domain. */
+  payeeMerchantId?: string;
 }> & PaypalCreateOrderSource;
 
 export type PaypalOrderSession = Readonly<{
@@ -197,6 +199,7 @@ export function paypalCreateOrderBody(request: PaypalCreateOrderRequest) {
       },
     },
     purchase_units: [{
+      ...(request.payeeMerchantId ? { payee: { merchant_id: request.payeeMerchantId } } : {}),
       reference_id: sourceId,
       custom_id: request.paymentId,
       invoice_id: `${request.orderNumber}:${request.paymentId}`,
@@ -568,3 +571,7 @@ export function createTestPaypalGateway(
 ) {
   return createPaypalGatewayWithConfiguration(configuration, fetchImplementation, liveRefundsArmed);
 }
+
+/** A domain with its own environment and refund policy can reuse the bounded
+ * transport without changing the existing music/shop switches. */
+export const createScopedPaypalGateway = createTestPaypalGateway;

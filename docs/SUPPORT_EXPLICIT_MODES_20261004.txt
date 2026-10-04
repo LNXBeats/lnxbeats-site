@@ -1,0 +1,64 @@
+Soutien — séparation explicite TEST / LIVE, 04/10/2026
+
+Le contexte de règlement est indépendant de l'ouverture des nouvelles
+contributions. SUPPORT_ENABLED=false ferme seulement les nouveaux soutiens ;
+conserver mode, clés, webhooks et accès DB pour régler les opérations engagées.
+Ne pas utiliser SUPPORT_TEST_MODE pour fermer le module.
+
+TEST : SUPPORT_TEST_MODE=true, environnement hors Production et URL hors
+lnxbeats.fr ; clés Stripe TEST / PayPal SANDBOX exclusivement.
+LIVE : SUPPORT_TEST_MODE=false, PAYMENT_DEPLOYMENT_ENV=production,
+RAILWAY_ENVIRONMENT_NAME=production et SITE_URL HTTPS lnxbeats.fr/www requis.
+Chaque prestataire exige ensuite SUPPORT_<STRIPE|PAYPAL>_ENABLED=true ET
+SUPPORT_<STRIPE|PAYPAL>_LIVE_APPROVED=true. Ces décisions de déploiement doivent
+être étayées par les gates externes ; les flags ne prouvent aucune éligibilité.
+
+Stripe : STRIPE_MODE et préfixe de clé concordants, webhook dédié signé,
+event/session livemode concordants, événements Connect refusés. En LIVE,
+SUPPORT_STRIPE_ACCOUNT_ID obligatoire ; GET du compte propre avant opération,
+identité identique et charges_enabled avant nouveau checkout. Une erreur 403
+reste un blocage d'accès, pas une preuve de restriction du compte.
+PayPal : PAYPAL_ENVIRONMENT concordant ; SUPPORT_PAYPAL_MERCHANT_ID obligatoire
+en LIVE ; payee explicite à la création. Lecture du bon Order, contribution,
+montant EUR, payee et capture avant règlement/refund et pour preuve webhook.
+Hôtes de redirection et de certificat séparés par environnement.
+Les deux identifiants marchands peuvent aussi être fixés en Preview afin de
+tester ces mêmes liaisons ; aucune clé LIVE ne doit y être injectée.
+
+SUPPORT_LIVE_REFUNDS_ENABLED doit être explicitement true pour demander un
+NOUVEAU remboursement LIVE depuis l'Admin. Cela ne bloque pas la lecture ou
+réconciliation d'un remboursement déjà engagé. Aucun remboursement réel QA.
+
+Migration nouvelle 20261004180000_support_explicit_payment_modes : remplace
+uniquement le CHECK support_test_only par TEST/LIVE sur support_contributions.
+Aucun changement de défaut, données, tables ou migration historique.
+Avec 20261004160000_support_reconciliation, candidat = 42 migrations ;
+Production connue = 40, Preview avant ce lot = 41. Revérifier avant release.
+Les ACL colonne-spécifiques du lot précédent empêchent le rôle runtime de
+changer le mode ou le montant existant ; événements append-only.
+
+Preuves externes PayPal sur le candidat 9ec3214 en Preview : 5 EUR capturés,
+webhook authentifié, deux demandes de rejeu, un seul événement de succès,
+remboursement Sandbox COMPLETED ; annulation 4,50 EUR sans capture ; 4,25 EUR
+réponse navigateur perdue, retries concurrents sans duplication, changement
+prestataire refusé et capture non approuvée refusée. Ce dernier cas n'est pas
+une preuve de refus de carte bancaire. Timeout réseau prestataire/arrêt de
+processus et ordonnancement exhaustif sont testés par doubles, pas revendiqués
+comme pannes provoquées chez PayPal.
+
+Validation locale : scénario de mode LIVE synthétique avec transport simulé,
+vrai PostgreSQL isolé et rôles non propriétaires. Jamais de paiement LIVE.
+Upgrade synthétique 40->42 conserve checksums/canaris historiques. Cela ne
+remplace pas le restore de sauvegarde Production exigé avant promotion.
+
+Gates restant avant LIVE : recette Preview du candidat final ; accès compte
+Stripe propre lisible et catégorie réelle ; confirmation du mécanisme PayPal
+professionnel adapté (Orders v2 ou lien officiel), compte LIVE et webhooks ;
+qualification comptable précise du flux selon l'analyse précédente ; backup
+récupérable et restore/upgrade/ACL ; main réconcilié et Web/worker même SHA.
+Les paiements Commander/Boutique et leurs webhooks ne sont jamais reconfigurés.
+Référence d'analyse officielle : SHOP_COMPACT_SUPPORT_GATE_20261004.txt.
+
+Rollback : refermer uniquement SUPPORT_ENABLED. Ne supprimer aucune table,
+tentative ni événement. Ne revenir à un code TEST-only après contributions
+LIVE qu'avec un chemin de règlement/réconciliation LIVE maintenu et validé.

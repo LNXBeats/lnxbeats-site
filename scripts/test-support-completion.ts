@@ -176,5 +176,30 @@ try {
     await provisionSupportRuntimePrivileges(owner, roles[1], true);
     assert.deepEqual(await historical(), before);
   });
+  await check("LIVE ledger mode is explicit; TEST evidence and cross-mode reads rejected; kill switch preserves settlement", async () => {
+    const previous = { ...process.env };
+    try {
+      Object.assign(process.env, { SUPPORT_TEST_MODE: "false", PAYMENT_DEPLOYMENT_ENV: "production", RAILWAY_ENVIRONMENT_NAME: "production", SITE_URL: "https://www.lnxbeats.fr", SUPPORT_STRIPE_ENABLED: "true", SUPPORT_STRIPE_LIVE_APPROVED: "true" });
+      const i = input(), r = await createSupportCheckout(i, gateway);
+      const row = await prisma.supportContribution.findUniqueOrThrow({ where: { id: r.contributionId } });
+      assert.equal(row.mode, "LIVE");
+      const e: SupportEvidence = { mode: "TEST", contributionId: row.id, provider: "STRIPE", providerReference: row.providerReference!, paymentReference: `qa_live_${row.id}`, amountCents: 500, currency: "EUR", status: "SUCCEEDED" };
+      await assert.rejects(reconcileSupportEvidence(e, "qa:wrongmode"), { code: "INVALID" });
+      process.env.SUPPORT_ENABLED = "false";
+      await assert.rejects(createSupportCheckout(input(), gateway), { code: "DISABLED" });
+      await reconcileSupportEvidence({ ...e, mode: "LIVE" }, "qa:live-settled-closed");
+      assert.equal((await getSupportStatus(row.id, i.ownerToken)).status, "SUCCEEDED");
+      await assert.rejects(runSupportOperation(row.id, "REFUND", gateway), { code: "DISABLED" });
+      assert.equal(await prisma.supportContributionAttempt.count({ where: { contributionId: row.id, operation: "REFUND" } }), 0);
+      Object.assign(process.env, { SUPPORT_TEST_MODE: "true", PAYMENT_DEPLOYMENT_ENV: "development", SITE_URL: "http://127.0.0.1:3117" });
+      delete process.env.RAILWAY_ENVIRONMENT_NAME;
+      await assert.rejects(getSupportStatus(row.id, i.ownerToken), { code: "DISABLED" });
+      await assert.rejects(reconcileSupportContribution(row.id, gateway), { code: "DISABLED" });
+      await assert.rejects(prisma.supportContribution.update({ where: { id: row.id }, data: { mode: "TEST" } }));
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+      Object.assign(process.env, previous);
+    }
+  });
   console.log(JSON.stringify({ status: "PASS", checks, scenarios: results, providerPOSTs: posts, reconciliationGETs: reads, realProviderCalls: 0, runtimeRoles: 2, provisioningRuns: 6 }));
 } finally { await prisma.$disconnect(); await owner.end(); }

@@ -18,7 +18,7 @@ test("new-payment switch is independent of the safe TEST settlement context", ()
   assert.equal(isSupportTestEnvironment({ SUPPORT_ENABLED: "false", SUPPORT_TEST_MODE: "true", SITE_URL: "http://127.0.0.1:3117" }), true);
   const service = readFileSync("lib/support/service.ts", "utf8");
   for (const name of ["captureSupportContribution", "refundSupportContribution", "getSupportStatus", "reconcileSupportContribution"]) {
-    assert.match(service.slice(service.indexOf(`export async function ${name}`), service.indexOf(`export async function ${name}`) + 250), /requireSupportTestEnvironment/);
+    assert.match(service.slice(service.indexOf(`export async function ${name}`), service.indexOf(`export async function ${name}`) + 250), /requireSupportEnvironment/);
   }
 });
 test("new migration only adds recovery/audit metadata; historic support migration unchanged", () => {

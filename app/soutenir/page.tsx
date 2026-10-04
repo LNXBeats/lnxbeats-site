@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
 import { SupportForm } from "@/components/support-form";
 import styles from "@/components/support.module.css";
-import { isSupportEnabled, supportLimits } from "@/lib/support/config";
+import { isSupportEnabled, supportLimits, supportMode } from "@/lib/support/config";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { supportProviderPresentation } from "./provider-presentation";
 
@@ -27,8 +27,8 @@ export default function SupportPage() {
         <p className={styles.legal}><strong>Ce soutien n’ouvre droit à aucun reçu fiscal ni à aucune réduction d’impôt.</strong><br />Il reste indépendant de toute commande musicale et de tout achat dans la Boutique.</p>
       </div>
       <div className={styles.panel}>
-        <span className={styles.test}>Préversion · paiements de test uniquement</span>
-        <SupportForm {...supportLimits()} {...supportProviderPresentation()} />
+        {supportMode() === "TEST" ? <span className={styles.test}>Préversion · paiements de test uniquement</span> : null}
+        <SupportForm {...supportLimits()} {...supportProviderPresentation()} mode={supportMode() ?? "TEST"} />
         <p className={styles.legal}>Une question ou une demande de remboursement volontaire ? <Link href="/contact">Contactez LNX Beats.</Link> Aucune promesse de non-remboursement absolu.</p>
       </div>
     </div>

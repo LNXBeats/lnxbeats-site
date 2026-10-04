@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { requireSupportEnabled, requireSupportTestEnvironment, SupportError, supportBaseUrl, validateSupportAmount } from "@/lib/support/config";
+import { requireSupportEnabled, requireSupportEnvironment, SupportError, supportBaseUrl, validateSupportAmount } from "@/lib/support/config";
 import { captureProviderSupport, createProviderCheckout, refundProviderSupport, recoverProviderSupport, type SupportRecovery, type SupportEvidence } from "@/lib/support/providers";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -22,6 +22,7 @@ async function owned(id: string, token: string) {
   if (!validSupportId(id)) throw new SupportError("NOT_FOUND");
   const value = await prisma.supportContribution.findUnique({ where: { id } });
   if (!value || !ownerMatches(value.ownerHash, token)) throw new SupportError("NOT_FOUND");
+  requireSupportEnvironment(value.mode);
   return value;
 }
 
@@ -51,8 +52,9 @@ async function attempt(id: string, operation: Operation, actorId?: string, recov
   return prisma.$transaction(async tx => {
     await lock(tx, id);
     const value = await tx.supportContribution.findUniqueOrThrow({ where: { id } });
-    if (value.mode !== "TEST") throw new SupportError("DISABLED");
+    requireSupportEnvironment(value.mode);
     const old = await tx.supportContributionAttempt.findUnique({ where: { contributionId_operation: { contributionId: id, operation } } });
+    if (operation === "REFUND" && !old && value.mode === "LIVE" && process.env.SUPPORT_LIVE_REFUNDS_ENABLED !== "true") throw new SupportError("DISABLED");
     if (old && ((operation === "CAPTURE" && value.status === "SUCCEEDED") || (operation === "REFUND" && value.status === "REFUNDED"))) return null;
     if (!recoveryOnly) assertSupportAttemptAllowed(value, operation, old);
     if (old?.leaseUntil && old.leaseUntil > new Date()) return null;
@@ -105,7 +107,7 @@ async function finish(id: string, operation: NonNullable<Awaited<ReturnType<type
 /** Initial POST once. Every subsequent call is GET-only. No network inside a
  * transaction. A crashed process leaves a recoverable, fenced persistent lease. */
 export async function runSupportOperation(id: string, kind: Operation, gateway = providerOperations, actorId?: string, recoveryOnly = false, referenceHint?: string) {
-  requireSupportTestEnvironment();
+  requireSupportEnvironment();
   const operation = await attempt(id, kind, actorId, recoveryOnly);
   if (!operation) return;
   const value = await prisma.supportContribution.findUniqueOrThrow({ where: { id } });
@@ -131,9 +133,10 @@ export async function runSupportOperation(id: string, kind: Operation, gateway =
   }
 }
 export async function reconcileSupportContribution(id: string, gateway = providerOperations) {
-  requireSupportTestEnvironment();
+  requireSupportEnvironment();
   if (!validSupportId(id)) throw new SupportError("INVALID");
   const value = await prisma.supportContribution.findUniqueOrThrow({ where: { id }, include: { attempts: true } });
+  requireSupportEnvironment(value.mode);
   for (const a of value.attempts) {
     if (a.operation === "REFUND" && ["REFUNDED", "REQUIRES_REVIEW"].includes(value.status)) continue;
     if (a.operation !== "REFUND" && ["SUCCEEDED", "REFUNDED", "REFUND_PENDING", "REQUIRES_REVIEW"].includes(value.status)) continue;
@@ -145,11 +148,14 @@ export async function createSupportCheckout(input: { provider: unknown; amountCe
   const amountCents = validateSupportAmount(input.amountCents);
   if (!validSupportId(input.idempotencyKey) || !["STRIPE", "PAYPAL"].includes(String(input.provider)) || !/^[0-9a-f]{64}$/.test(input.ownerToken)) throw new SupportError("INVALID");
   const provider = String(input.provider), ownerHash = supportHash(input.ownerToken), key = supportHash(`${ownerHash}:${input.idempotencyKey}`);
+  requireSupportEnabled(provider as "STRIPE" | "PAYPAL");
+  const mode = requireSupportEnvironment();
   const value = await prisma.$transaction(async tx => {
     await lock(tx, ownerHash);
     const old = await tx.supportContribution.findUnique({ where: { idempotencyKey: key } });
-    if (!old && !input.newContribution && await tx.supportContribution.findFirst({ where: { ownerHash, status: { in: ["CREATED", "PENDING", "REFUND_PENDING", "REQUIRES_REVIEW"] } } })) throw new SupportError("CONFLICT");
-    return old ?? tx.supportContribution.create({ data: { ownerHash, idempotencyKey: key, amountCents, provider, userId: input.userId } });
+    if (old && old.mode !== mode) throw new SupportError("CONFLICT");
+    if (!old && !input.newContribution && await tx.supportContribution.findFirst({ where: { ownerHash, mode, status: { in: ["CREATED", "PENDING", "REFUND_PENDING", "REQUIRES_REVIEW"] } } })) throw new SupportError("CONFLICT");
+    return old ?? tx.supportContribution.create({ data: { ownerHash, idempotencyKey: key, amountCents, provider, mode, userId: input.userId } });
   });
   if (value.amountCents !== amountCents || value.provider !== provider) throw new SupportError("CONFLICT");
   if (!value.checkoutUrl) {
@@ -161,14 +167,15 @@ export async function createSupportCheckout(input: { provider: unknown; amountCe
 }
 
 export async function getSupportStatus(id: string, ownerToken: string) {
-  requireSupportTestEnvironment();
+  requireSupportEnvironment();
   const value = await owned(id, ownerToken);
   const unresolved = await prisma.supportContributionAttempt.count({ where: { contributionId: id, status: "REQUESTED" } });
   return { id: value.id, amountCents: value.amountCents, currency: value.currency, provider: value.provider, status: value.status, needsReconciliation: unresolved > 0 };
 }
 
-export function supportEvidenceMatches(value: { id: string; provider: string; providerReference: string | null; amountCents: number; currency: string }, evidence: SupportEvidence) {
+export function supportEvidenceMatches(value: { id: string; provider: string; providerReference: string | null; amountCents: number; currency: string; mode?: string }, evidence: SupportEvidence) {
   return value.id === evidence.contributionId && value.provider === evidence.provider
+    && (value.mode ?? "TEST") === (evidence.mode ?? "TEST")
     && value.providerReference === evidence.providerReference && value.amountCents === evidence.amountCents
     && value.currency === evidence.currency;
 }
@@ -182,13 +189,15 @@ export function nextSupportStatus(current: string, incoming: SupportEvidence["st
 }
 
 export async function reconcileSupportEvidence(evidence: SupportEvidence, eventKey: string) {
-  requireSupportTestEnvironment();
+  const mode = requireSupportEnvironment();
+  if ((evidence.mode ?? "TEST") !== mode) throw new SupportError("INVALID");
   if (!validSupportId(evidence.contributionId) || eventKey.length > 255) throw new SupportError("INVALID");
   return prisma.$transaction(async (tx) => {
     await lock(tx, evidence.contributionId);
     if (evidence.paymentReference) await lock(tx, `payment:${evidence.provider}:${evidence.paymentReference}`);
     const value = await tx.supportContribution.findUnique({ where: { id: evidence.contributionId } });
     if (!value) throw new SupportError("NOT_FOUND");
+    requireSupportEnvironment(value.mode);
     if (await tx.supportContributionEvent.findUnique({ where: { eventKey } })) return value.status;
     // A webhook can win the race with checkout persistence. Ask the provider
     // to retry; never consume an event against an unbound checkout reference.
@@ -205,7 +214,7 @@ export async function reconcileSupportEvidence(evidence: SupportEvidence, eventK
 }
 
 export async function captureSupportContribution(id: string, ownerToken: string, gateway = providerOperations) {
-  requireSupportTestEnvironment();
+  requireSupportEnvironment();
   const value = await owned(id, ownerToken);
   if (value.status !== "SUCCEEDED") await runSupportOperation(id, "CAPTURE", gateway);
   return getSupportStatus(id, ownerToken);
@@ -224,7 +233,7 @@ export async function reconcileAdminSupportReference(id: string, operation: "CHE
   await runSupportOperation(id, operation, providerOperations, session.user.id, true, reference);
 }
 export async function refundSupportContribution(input: { contributionId: string; adminId: string; confirmation: string }) {
-  requireSupportTestEnvironment();
+  requireSupportEnvironment();
   if (!validSupportId(input.contributionId) || input.confirmation !== `REMBOURSER ${input.contributionId}`) throw new SupportError("INVALID");
   const { requireAdmin } = await import("@/lib/auth/session");
   if ((await requireAdmin()).user.id !== input.adminId) throw new SupportError("INVALID");

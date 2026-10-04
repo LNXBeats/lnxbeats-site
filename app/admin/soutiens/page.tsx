@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
-import { isSupportEnabled } from "@/lib/support/config";
+import { isSupportEnabled, supportMode } from "@/lib/support/config";
 import { listAdminSupportContributions } from "@/lib/support/service";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export default async function AdminSupportPage({ searchParams }: { searchParams:
   return <main className="admin-main">
     <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
     <header className="admin-page-heading"><div><p className="admin-section-label">Clients & documents</p><h1>Soutiens libres.</h1></div><p>Registre séparé des commandes, factures et droits. Aucun reçu fiscal ni avantage associé.</p></header>
-    <section className="admin-panel"><p>{isSupportEnabled() ? "Préversion active — paiements TEST uniquement." : "Collecte désactivée. L’historique reste consultable."}</p><p>Les écritures TEST ne constituent pas des encaissements réels.</p><nav aria-label="Mode du registre"><Link href="/admin/soutiens?mode=TEST">TEST</Link>{" · "}<Link href="/admin/soutiens?mode=LIVE">LIVE</Link></nav><a className="admin-button admin-button--secondary" href={`/api/admin/support/export?mode=${mode}`}>Exporter tout le registre {mode} CSV</a></section>
+    <section className="admin-panel"><p>{isSupportEnabled() ? (supportMode() === "TEST" ? "Préversion active — paiements TEST uniquement." : "Soutiens ouverts pour les prestataires validés.") : "Collecte désactivée. L’historique reste consultable."}</p><p>Les écritures TEST ne constituent pas des encaissements réels.</p><nav aria-label="Mode du registre"><Link href="/admin/soutiens?mode=TEST">TEST</Link>{" · "}<Link href="/admin/soutiens?mode=LIVE">LIVE</Link></nav><a className="admin-button admin-button--secondary" href={`/api/admin/support/export?mode=${mode}`}>Exporter tout le registre {mode} CSV</a></section>
     <section className="admin-panel"><div className="admin-panel__heading"><p className="admin-section-label">Registre récent</p><h2>{entries.length} soutien{entries.length === 1 ? "" : "s"}</h2></div>
       <p>Page de 200 écritures maximum, ordonnée par identifiant. Export complet séparé par mode. Frais et net non connus restent vides.</p>
       <p>Totaux de cette page {mode} : confirmés non remboursés {formatEuro(confirmed)} · remboursés {formatEuro(refunded)}. Les opérations en attente ou à vérifier ne sont pas comptées comme confirmées.</p>

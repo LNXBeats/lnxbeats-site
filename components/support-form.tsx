@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { UiIcon } from "@/components/ui-icon";
 import styles from "@/components/support.module.css";
 
-export function SupportForm({ minCents, maxCents, stripeConfigured = false, paypalConfigured = false }: {
-  minCents: number; maxCents: number; stripeConfigured?: boolean; paypalConfigured?: boolean;
+export function SupportForm({ minCents, maxCents, stripeConfigured = false, paypalConfigured = false, mode = "TEST" }: {
+  minCents: number; maxCents: number; stripeConfigured?: boolean; paypalConfigured?: boolean; mode?: "TEST" | "LIVE";
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState("5");
@@ -47,7 +47,7 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
         return;
       }
       const destination = new URL(result.checkoutUrl);
-      const allowed = provider === "STRIPE" ? ["checkout.stripe.com"] : ["www.sandbox.paypal.com"];
+      const allowed = provider === "STRIPE" ? ["checkout.stripe.com"] : [mode === "TEST" ? "www.sandbox.paypal.com" : "www.paypal.com"];
       if (destination.protocol !== "https:" || !allowed.includes(destination.hostname) || destination.username || destination.password) throw new Error("destination");
       window.location.assign(destination.href);
     } catch {
@@ -57,7 +57,7 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
   }
 
   return <div className={styles.form}>
-    {!providerConfigured ? <p className={styles.unavailable}>Les moyens de paiement de test ne sont pas encore disponibles. Aucun versement n’est possible depuis cette préversion.</p> : null}
+    {!providerConfigured ? <p className={styles.unavailable}>Les moyens de paiement ne sont pas disponibles actuellement. Aucun versement n’est possible.</p> : null}
     <fieldset disabled={pending || !providerConfigured}>
       <legend>Choisissez votre montant</legend>
       <div className={styles.presets}>{[3, 5, 10, 20].map((value) => <button type="button" key={value} aria-pressed={cents === value * 100} onClick={() => { setAmount(String(value)); setError(""); }}>{value} €</button>)}</div>

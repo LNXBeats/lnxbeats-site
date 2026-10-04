@@ -7,7 +7,7 @@ import { POST as checkoutPost } from "@/app/api/support/checkout/route";
 import { POST as capturePost } from "@/app/api/support/[id]/capture/route";
 import { NextRequest } from "next/server";
 
-test("Stripe webhook signature verified using raw bytes; altered/live payload refused even after checkout flag OFF", () => {
+test("Stripe webhook signature verified using raw bytes; altered/live payload refused even after checkout flag OFF", async () => {
   const snapshot = { ...process.env };
   Object.assign(process.env, { SUPPORT_ENABLED: "false", SUPPORT_TEST_MODE: "true", SITE_URL: "https://preview.example.test",
     PAYMENT_DEPLOYMENT_ENV: "staging", STRIPE_MODE: "test", STRIPE_SECRET_KEY: "sk_test_synthetic_fixture_only",
@@ -17,12 +17,12 @@ test("Stripe webhook signature verified using raw bytes; altered/live payload re
     const stripe = new Stripe("sk_test_synthetic_fixture_only");
     const payload = JSON.stringify({ id: "evt_synthetic", type: "checkout.session.completed", livemode: false, data: { object: {} } });
     const signature = stripe.webhooks.generateTestHeaderString({ payload, secret: process.env.SUPPORT_STRIPE_WEBHOOK_SECRET! });
-    assert.equal(verifySupportStripeWebhook(payload, signature).id, "evt_synthetic");
-    assert.throws(() => verifySupportStripeWebhook(`${payload} `, signature));
-    assert.throws(() => verifySupportStripeWebhook(payload, "invalid"));
+    assert.equal((await verifySupportStripeWebhook(payload, signature)).id, "evt_synthetic");
+    await assert.rejects(verifySupportStripeWebhook(`${payload} `, signature));
+    await assert.rejects(verifySupportStripeWebhook(payload, "invalid"));
     const live = payload.replace('"livemode":false', '"livemode":true');
     const liveSignature = stripe.webhooks.generateTestHeaderString({ payload: live, secret: process.env.SUPPORT_STRIPE_WEBHOOK_SECRET! });
-    assert.throws(() => verifySupportStripeWebhook(live, liveSignature));
+    await assert.rejects(verifySupportStripeWebhook(live, liveSignature));
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in snapshot)) delete process.env[key];
     Object.assign(process.env, snapshot);
