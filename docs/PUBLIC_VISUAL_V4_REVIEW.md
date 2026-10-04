@@ -77,10 +77,10 @@ Captures originales, mesures et comparaisons référence/avant/après hors Git a
 - npm ci standard ; Prisma format/validate/generate : PASS. Aucun delta schema/migration/lockfile.
 - Canonique : 1 336 tests exécutés, 1 334 PASS, 1 ancienne assertion CSS devenue obsolète, 1 SKIP préexistant. L'assertion a été corrigée pour contrôler la même garantie de cover entière sur le CSS module V4, puis repassée.
 - Après les finitions mineures : 113 tests Jukebox/Soutien/couverture PASS, 112 Créations/Audio PASS, 181 Jukebox/Orders PASS. Ces périmètres se recouvrent : **ne pas les additionner**.
-- Cinq tests supplémentaires ont été ajoutés après le run canonique et ont passé dans ces groupes : configuration de présentation Soutien (3), média joué vs sélection (1), absence de doublon jukebox (1). Couverture consolidée : **1 340 tests distincts PASS, 1 SKIP préexistant** ; ce n'est pas un nouveau run canonique complet de 1 341 tests.
+- Cinq tests supplémentaires ont été ajoutés après le premier run : configuration de présentation Soutien (3), média joué vs sélection (1), absence de doublon jukebox (1). Un nouveau run complet a alors relevé deux assertions de présentation du jukebox, dont le libellé accessible « Relire l’extrait » disparu lors du retrait du doublon. Le libellé de fin et la présentation `playbackState` ont été restaurés sans modifier les handlers ni les tests. **Run canonique final complet : 1 341 tests, 1 340 PASS, 0 FAIL, 1 SKIP préexistant.** Lint, typecheck et build ont été repassés après cette finition.
 - Lint, TypeScript et build de Production finaux : PASS. Aucun affaiblissement d'assertion métier ni contournement d'authentification.
 - Audit Production : 0 vulnérabilité. Audit complet : cinq HIGH dev-only déjà connues (`@next/eslint-plugin-next`, `eslint-config-next`, `fast-glob`, `micromatch`, `braces`), dépendances inchangées. Pas de nouvelle dépendance visuelle.
-- npm ls --all et git diff --check : PASS. Scan du delta et des nouveaux fichiers : à inclure dans le reçu final.
+- npm ls --all et git diff --check : PASS. Scan du delta et des nouveaux fichiers : aucun secret ni artefact QA binaire ; résultat final dans le reçu externe.
 
 ## Limites honnêtes et gate humain
 

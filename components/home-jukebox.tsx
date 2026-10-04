@@ -397,6 +397,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   if (!active || !playerProject) return null;
 
   const selectedHasEnded = !playing && playerMetadataSlug === active.slug && ended;
+  const playbackState: StudioVinylControlState = playing ? "pause" : selectedHasEnded ? "replay" : "play";
   const leftArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-line" /><span className="home-jukebox__arrow-symbol" /></span>;
   const rightArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-symbol" /><span className="home-jukebox__arrow-line" /></span>;
   const currentVisibleIndex = visibleActiveIndex >= 0 ? visibleActiveIndex : 0;
@@ -515,11 +516,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       <button
         type="button"
         className="discography-jukebox__player-toggle"
-        aria-label={playing ? `Mettre en pause l’extrait de ${playerProject.title}` : `Lire l’extrait de ${playerProject.title}`}
+        aria-label={playing ? `Mettre en pause l’extrait de ${playerProject.title}` : selectedHasEnded ? `Relire l’extrait de ${playerProject.title}` : `Lire l’extrait de ${playerProject.title}`}
         disabled={!playerProject.audioPreview}
         onClick={() => { if (playing) pauseCurrent(); else void togglePlay(); }}
       >
-        <StudioVinylControl state={(playing ? "pause" : selectedHasEnded ? "replay" : "play") satisfies StudioVinylControlState} />
+        <StudioVinylControl state={playbackState} />
       </button>
       <span className="discography-jukebox__player-progress" aria-hidden="true"><span style={{ transform: `scaleX(${progress})` }} /></span>
     </div>
