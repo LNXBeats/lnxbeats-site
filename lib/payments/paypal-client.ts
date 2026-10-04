@@ -103,6 +103,8 @@ export type PaypalWebhookHeaders = Readonly<{
 }>;
 
 export interface PaypalGateway {
+  /** Read-only support reconciliation; existing payment paths are unchanged. */
+  inspectOrder?(providerOrderId: string): Promise<unknown>;
   createOrder(request: PaypalCreateOrderRequest, idempotencyKey: string): Promise<PaypalOrderSession>;
   retrieveOrder(providerOrderId: string): Promise<PaypalOrderSession>;
   captureOrder(providerOrderId: string, idempotencyKey: string): Promise<PaypalCaptureResponseEvidence>;
@@ -452,6 +454,9 @@ function createPaypalGatewayWithConfiguration(
   }
 
   return {
+    async inspectOrder(providerOrderId) {
+      return api(`/v2/checkout/orders/${encodeURIComponent(providerOrderId)}`, { method: "GET" });
+    },
     async createOrder(request, idempotencyKey) {
       return paypalOrderSession(await api("/v2/checkout/orders", {
         method: "POST",

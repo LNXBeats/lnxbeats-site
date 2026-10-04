@@ -1,0 +1,69 @@
+SOUTIEN — REPRISE CIBLÉE, 4 OCTOBRE 2026
+
+Base: f732e6fb3228567120663ee64d41033391917492. Aucun rendu Boutique modifié.
+
+Corrections
+1. Tentative durable + clé stable + bail 120 s clôturé par jeton propriétaire.
+   Un POST prestataire initial seulement. Reprises GET-only, y compris après
+   SIGKILL. Aucun appel réseau dans une transaction. Inconnu != échec.
+   Stripe: recherche bornée par métadonnées opaques. PayPal ne fournit pas de
+   GET par request-id: sans référence retournée, état à vérifier; l'Admin peut
+   fournir une référence de Dashboard, validée par GET avant rattachement.
+2. Verrou transactionnel propriétaire pour les nouveaux engagements, verrou
+   contribution pour les tentatives. Changement de prestataire concurrent refusé.
+   Un soutien supplémentaire est une intention explicite distincte. Paiement
+   supplémentaire/incohérent: REQUIRES_REVIEW, preuve auditée, aucun auto-refund.
+3. SUPPORT_ENABLED bloque seulement les nouvelles contributions. Le contexte
+   TEST sûr reste requis pour suivi, capture engagée, webhooks, réconciliation
+   et remboursement Admin. Le mode LIVE reste fermé, sans activation implicite.
+4. SUPPORT_RUNTIME_WRITES_ENABLED=true autorise INSERT sur les trois tables et
+   UPDATE seulement des colonnes d'état/références/bail. Journal append-only.
+   Aucun DELETE/TRUNCATE/DDL/ownership. Groupe historique stable conservé.
+   Le provisionneur vérifie le propriétaire migration distinct du runtime.
+5. Admin TEST/LIVE séparés, tentatives et audit visibles. Export streaming par
+   pages bornées, sans limite silencieuse à 200. Montant brut une fois seulement
+   par contribution, frais/net vides tant que non vérifiés. CSV neutralisé.
+   Registre opérationnel, pas reçu fiscal ni facture de prestation fictive.
+
+Exécution indépendante du navigateur
+npm run support:reconcile
+Contexte TEST exclusivement, 50 contributions maximum par passage, contrôles
+espacés d'au moins 5 min, GET prestataires seulement. Peut être lancé comme job
+interne avec les variables Preview. Aucun cron Production ajouté. Les cas sans
+référence PayPal nécessitent une vérification Dashboard; ne jamais rejouer POST.
+
+Migration additive nouvelle: 20261004160000_support_reconciliation.
+Trois colonnes de reprise sur attempts, une preuve JSON sur events, un index.
+Aucun historique de migration modifié; aucune table supplémentaire.
+Upgrade synthétique réel PostgreSQL 18.6: 40 -> 41, checksums historiques et
+canaris conservés. Ce test n'est pas un restore de données Production.
+
+Preuves locales
+Suite canonique: 1348 PASS, 0 FAIL, 1 SKIP préexistant.
+Prisma, lint, typecheck, builds Web et worker: PASS.
+Audit Production: 0; audit complet: 5 HIGH dev-only inchangées.
+test:support:completion: 16 scénarios PostgreSQL réel, deux rôles runtime,
+six provisionnements dont retrait/rétablissement des droits colonne.
+Fournisseurs doubles uniquement: aucune certification sandbox implicite.
+SIGKILL réel d'un enfant après succès simulé puis récupération sans second POST.
+Export >200 contributions, isolation TEST/LIVE, injection CSV et domaines métier
+inchangés. Ancien point d'entrée runtime redirigé vers cette suite renforcée.
+
+Accès/configuration test — aucune valeur secrète ici
+SUPPORT_ENABLED=true; SUPPORT_TEST_MODE=true; SUPPORT_RUNTIME_WRITES_ENABLED=true
+STRIPE_MODE=test; STRIPE_SECRET_KEY; SUPPORT_STRIPE_WEBHOOK_SECRET
+PAYPAL_ENVIRONMENT=sandbox; PAYPAL_CLIENT_ID; PAYPAL_CLIENT_SECRET;
+SUPPORT_PAYPAL_WEBHOOK_ID
+Webhooks dédiés /api/support/webhooks/stripe et /api/support/webhooks/paypal.
+Stripe: checkout.session.completed, checkout.session.async_payment_succeeded,
+checkout.session.async_payment_failed, checkout.session.expired.
+PayPal: PAYMENT.CAPTURE.COMPLETED, PAYMENT.CAPTURE.PENDING, PAYMENT.CAPTURE.DENIED.
+Les remboursements sont suivis par réconciliation serveur vérifiée.
+Ne jamais remplacer les destinations des commandes ou Boutique.
+
+Limites de release
+Les preuves locales ne remplacent pas la recette prestataire réelle, l'accord
+de cas d'usage LIVE et la qualification professionnelle documentée. Les gardes
+TEST-only historiques du serveur et de la DB restent en place dans ce candidat.
+Une ouverture LIVE exige leur évolution explicite testée, pas un simple flag.
+Aucune mutation Production ni promotion tant que les gates ne sont pas levés.

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type SupportStatus = { status: string; amountCents: number; provider: string };
+type SupportStatus = { status: string; amountCents: number; provider: string; needsReconciliation?: boolean };
 const labels: Record<string, string> = { PAID: "Soutien confirmé", SUCCEEDED: "Soutien confirmé", PENDING: "Confirmation en attente", CREATED: "Paiement à confirmer", REFUND_PENDING: "Remboursement en cours", REFUNDED: "Soutien remboursé", FAILED: "Paiement non confirmé", REQUIRES_REVIEW: "Vérification en cours" };
 
 export function SupportConfirmation({ id }: { id: string }) {
@@ -39,9 +39,17 @@ export function SupportConfirmation({ id }: { id: string }) {
 
   return <div aria-live="polite">
     {status ? <><h2>{labels[status.status] ?? "Vérification du soutien"}</h2><p>{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(status.amountCents / 100)} · {status.provider}</p>
+      {status.needsReconciliation ? <p>Résultat à vérifier. Ne recommencez pas un paiement chez un autre prestataire.</p> : null}
       {["PAID", "SUCCEEDED"].includes(status.status) ? <p>Merci pour votre soutien libre. Cette confirmation n’est ni une facture de vente ni un reçu fiscal. Aucun avantage ou droit ne découle de ce versement.</p> : <p>Seule la confirmation serveur du prestataire fait foi. Le retour sur cette page ne prouve pas un paiement réussi.</p>}
       {status.provider === "PAYPAL" && ["CREATED", "PENDING"].includes(status.status) ? <button className="button button--primary" type="button" disabled={busy} onClick={() => void capture()}>Confirmer mon soutien PayPal</button> : null}
       <button className="button button--secondary" type="button" disabled={busy} onClick={() => { setError(""); void refresh().catch(() => setError("Statut temporairement indisponible.")); }}>Actualiser le statut</button>
+      <button className="button button--secondary" type="button" disabled={busy} onClick={() => {
+        setBusy(true); setError("");
+        void fetch(`/api/support/${encodeURIComponent(id)}/reconcile`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+          .then(r => { if (!r.ok) throw new Error("pending"); return refresh(); })
+          .catch(() => setError("Vérification en attente. Aucun nouveau paiement n’a été demandé."))
+          .finally(() => setBusy(false));
+      }}>Vérifier auprès du prestataire</button>
     </> : <p>Lecture de la confirmation sécurisée…</p>}
     {error ? <p role="alert">{error}</p> : null}
   </div>;

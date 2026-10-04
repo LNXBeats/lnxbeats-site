@@ -37,8 +37,7 @@ try {
         userId: true, events: { select: { id: true, type: true, createdAt: true, actorId: true }, orderBy: { createdAt: "asc" } },
       }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: 200 }), []); checks++;
       for (const table of SUPPORT_RUNTIME_TABLES) {
-        if (table !== "support_contribution_attempts") { await runtime.query(`SELECT * FROM "${table}" LIMIT 0`); checks++; }
-        else await denied(`SELECT * FROM "${table}" LIMIT 0`);
+        await runtime.query(`SELECT * FROM "${table}" LIMIT 0`); checks++;
         for (const sql of [`INSERT INTO "${table}" DEFAULT VALUES`, `UPDATE "${table}" SET id=id WHERE false`, `DELETE FROM "${table}" WHERE false`, `TRUNCATE "${table}"`]) await denied(sql);
       }
       await denied("SELECT * FROM _prisma_migrations LIMIT 0");

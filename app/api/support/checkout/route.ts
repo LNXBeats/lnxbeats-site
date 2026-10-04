@@ -10,6 +10,6 @@ export async function POST(request: NextRequest) {
     const { getAuthSession } = await import("@/lib/auth/session");
     const session = await getAuthSession();
     return supportJson(await createSupportCheckout({ provider: body.provider, amountCents: body.amountCents,
-      idempotencyKey: body.idempotencyKey, ownerToken, userId: session?.user.id }));
+      idempotencyKey: body.idempotencyKey, ownerToken, userId: session?.user.id, newContribution: body.newContribution === true }));
   } catch (error) { return supportHttpError(error); }
 }

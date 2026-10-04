@@ -41,7 +41,9 @@ test("support Admin views and export require Admin; refund action rechecks origi
   const detail = await read("app/admin/soutiens/[id]/page.tsx");
   assert.match(detail, /REMBOURSER \{entry.id\}/);
   const exportRoute = await read("app/api/admin/support/export/route.ts");
-  assert.match(exportRoute, /private, no-store/);
-  assert.match(exportRoute, /Content-Disposition/);
-  assert.match(exportRoute, /replaceAll/);
+  assert.match(exportRoute, /return createSupportExport/);
+  const implementation = await read("lib/support/export.ts");
+  assert.match(implementation, /private, no-store/);
+  assert.match(implementation, /Content-Disposition/);
+  assert.match(await read("lib/support/accounting.ts"), /replaceAll/);
 });

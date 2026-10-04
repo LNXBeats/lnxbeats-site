@@ -111,17 +111,17 @@ test("bounded webhook/request reader rejects declared and chunked oversize", asy
   assert.equal(await boundedSupportText(new Request("https://example.test", { method: "POST", body: "{}" }), 10), "{}");
 });
 
-test("closed support grants only Admin reads in a separate group, never attempts or writes", async () => {
+test("closed support grants register/attempt audit reads, never writes", async () => {
   const queries: string[] = [];
-  const fake = { async query(sql: string, values?: string[]) {
+  const fake = { async query(sql: string) {
     queries.push(sql);
     return { rows: sql.includes("FROM pg_roles") ? [{ safe: true }]
       : sql.includes("FROM pg_class") ? ["support_contributions", "support_contribution_attempts", "support_contribution_events"].map((name) => ({ name, owned: true }))
-      : sql.includes("has_table_privilege") ? [{ readable: !values?.[1].endsWith("support_contribution_attempts"), excessive: false }] : [] };
+      : sql.includes("has_table_privilege") ? [{ readable: true, excessive: false, allowed: false }] : [] };
   } };
   await provisionSupportRuntimePrivileges(fake as never, "runtime_rotation_test");
   const grants = queries.filter((sql) => sql.startsWith("GRANT SELECT"));
-  assert.equal(grants.length, 2);
+  assert.equal(grants.length, 3);
   assert.ok(grants.every((sql) => sql.endsWith('TO "lnx_support_readonly"')));
   assert.ok(queries.includes('GRANT "lnx_support_readonly" TO "runtime_rotation_test" WITH ADMIN FALSE, INHERIT TRUE, SET FALSE'));
   assert.equal(queries.some((sql) => /^GRANT (?:INSERT|SELECT,)/.test(sql)), false);

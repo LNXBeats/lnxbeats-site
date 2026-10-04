@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { prisma } from "@/lib/prisma";
-import { requireSupportEnabled, SupportError, supportBaseUrl } from "@/lib/support/config";
+import { requireSupportEnabled, requireSupportTestEnvironment, SupportError, supportBaseUrl } from "@/lib/support/config";
 
 export const SUPPORT_COOKIE = "lnx_support_access";
 export function supportOwnerToken(request: NextRequest, create = false) {
@@ -32,8 +32,8 @@ export async function boundedSupportText(request: Request, max = 8192) {
   } finally { reader.releaseLock(); }
   return Buffer.concat(chunks).toString("utf8");
 }
-export async function supportMutation(request: Request) {
-  requireSupportEnabled();
+export async function supportMutation(request: Request, existing = false) {
+  if (existing) requireSupportTestEnvironment(); else requireSupportEnabled();
   if (!isSameOriginMutation(request, supportBaseUrl())) return false;
   // Shared persistent fixed-window counter, atomic under concurrent requests.
   const address = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim().slice(0, 128) ?? "unknown";

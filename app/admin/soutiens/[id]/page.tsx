@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
-import { isSupportEnabled } from "@/lib/support/config";
+import { isSupportTestEnvironment } from "@/lib/support/config";
 import { getAdminSupportContribution } from "@/lib/support/service";
-import { refundSupportAction } from "@/app/admin/soutiens/actions";
+import { refundSupportAction, reconcileSupportAction } from "@/app/admin/soutiens/actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Détail du soutien", robots: { index: false, follow: false } };
@@ -27,8 +27,9 @@ export default async function AdminSupportDetail({ params, searchParams }: { par
       <dt>Référence du paiement</dt><dd>{entry.paymentReference ?? "—"}</dd>
       <dt>Référence du remboursement</dt><dd>{entry.refundReference ?? "—"}</dd>
     </dl><p>Soutien sans contrepartie. Aucune facture de vente, aucun reçu fiscal, aucune commande ni droit créés.</p></section>
-    <section className="admin-panel"><h2>Piste d’audit</h2><ol>{entry.events.map((event) => <li key={event.id}>{event.createdAt.toLocaleString("fr-FR")} · {event.type}{event.actorId ? " · Action Admin" : ""}</li>)}</ol></section>
-    {["SUCCEEDED", "REFUND_PENDING"].includes(entry.status) && isSupportEnabled() ? <section className="admin-panel"><h2>Remboursement volontaire</h2><p>Remboursement intégral TEST uniquement. Action explicite, journalisée et idempotente. Ne la déclenchez pas pour vérifier un paiement réel.</p>
+    <section className="admin-panel"><h2>Tentatives</h2><ul>{entry.attempts.map(a => <li key={a.id}>{a.id} · {a.operation} · {a.status} · {a.lastCheckedAt?.toLocaleString("fr-FR") ?? "À vérifier"}</li>)}</ul><h2>Piste d’audit</h2><ol>{entry.events.map((event) => <li key={event.id}>{event.createdAt.toLocaleString("fr-FR")} · {event.type}{event.actorId ? " · Action Admin" : ""}{event.type === "EVIDENCE_MISMATCH" ? <pre>{JSON.stringify(event.evidence, null, 2)}</pre> : null}</li>)}</ol></section>
+    {entry.attempts.some(a => a.status === "REQUESTED") && isSupportTestEnvironment() ? <section className="admin-panel"><h2>Retrouver un résultat inconnu</h2><p>Référence copiée depuis le Dashboard TEST du prestataire. Une lecture serveur valide le montant et le rattachement ; elle ne déclenche aucun paiement.</p><form action={reconcileSupportAction}><input type="hidden" name="contributionId" value={entry.id} /><label>Opération<select name="operation"><option value="CHECKOUT">Préparation du paiement</option><option value="REFUND">Remboursement déjà demandé</option></select></label><label>Référence prestataire<input name="reference" required maxLength={255} /></label><button className="admin-button admin-button--secondary">Vérifier la référence</button></form></section> : null}
+    {["SUCCEEDED", "REFUND_PENDING"].includes(entry.status) && isSupportTestEnvironment() ? <section className="admin-panel"><h2>Remboursement volontaire</h2><p>Remboursement intégral TEST uniquement de {formatEuro(entry.amountCents)} via {entry.provider}. Action explicite, journalisée et idempotente. Ne la déclenchez pas pour vérifier un paiement réel.</p>
       <form action={refundSupportAction} className="admin-form"><input type="hidden" name="contributionId" value={entry.id} /><label htmlFor="support-refund-confirm">Saisissez exactement : REMBOURSER {entry.id}</label><input id="support-refund-confirm" name="confirmation" required maxLength={80} autoComplete="off" /><button className="admin-button admin-button--secondary" type="submit">Demander le remboursement TEST</button></form>
     </section> : null}
   </main>;

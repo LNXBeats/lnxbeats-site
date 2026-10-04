@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { UiIcon } from "@/components/ui-icon";
 import styles from "@/components/support.module.css";
 
 export function SupportForm({ minCents, maxCents, stripeConfigured = false, paypalConfigured = false }: {
   minCents: number; maxCents: number; stripeConfigured?: boolean; paypalConfigured?: boolean;
 }) {
+  const router = useRouter();
   const [amount, setAmount] = useState("5");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [newContribution, setNewContribution] = useState(false);
   const providerConfigured = stripeConfigured || paypalConfigured;
   const cents = /^\d+(?:[.,]\d{1,2})?$/.test(amount) ? Math.round(Number(amount.replace(",", ".")) * 100) : NaN;
 
@@ -26,7 +29,7 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
       if (!session.ok) throw new Error("session");
       // This is a retry identifier, never a credential. Keep it across reloads
       // so a lost provider response does not create another contribution.
-      const storageKey = `lnx-support-attempt:${provider}:${cents}`;
+      const storageKey = "lnx-support-attempt";
       let idempotencyKey = sessionStorage.getItem(storageKey);
       if (!idempotencyKey) {
         idempotencyKey = crypto.randomUUID();
@@ -34,16 +37,21 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
       }
       const response = await fetch("/api/support/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, amountCents: cents, idempotencyKey }),
+        body: JSON.stringify({ provider, amountCents: cents, idempotencyKey, newContribution }),
       });
       const result = await response.json();
-      if (!response.ok || typeof result.checkoutUrl !== "string") throw new Error("unavailable");
+      if (!response.ok) throw new Error("unavailable");
+      if (typeof result.contributionId === "string") sessionStorage.setItem("lnx-support-contribution", result.contributionId);
+      if (typeof result.checkoutUrl !== "string") {
+        router.push(`/soutenir/confirmation/${encodeURIComponent(result.contributionId)}`);
+        return;
+      }
       const destination = new URL(result.checkoutUrl);
       const allowed = provider === "STRIPE" ? ["checkout.stripe.com"] : ["www.sandbox.paypal.com"];
       if (destination.protocol !== "https:" || !allowed.includes(destination.hostname) || destination.username || destination.password) throw new Error("destination");
       window.location.assign(destination.href);
     } catch {
-      setError("La préparation du soutien n’a pas abouti. Réessayez : une tentative déjà créée sera réutilisée, sans double paiement.");
+      setError("La préparation du soutien n’a pas abouti. Une tentative existante sera vérifiée avant toute reprise. Ne créez pas un soutien supplémentaire pour réessayer un paiement en attente.");
       setPending(false);
     }
   }
@@ -62,6 +70,10 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
       </div>
     </fieldset>
     <p role="status" aria-live="polite">{pending ? "Préparation du paiement sécurisé…" : error}</p>
+    <label><input type="checkbox" disabled={pending} checked={newContribution} onChange={event => {
+      setNewContribution(event.target.checked);
+      if (event.target.checked) sessionStorage.setItem("lnx-support-attempt", crypto.randomUUID());
+    }} /> Je souhaite effectuer un soutien distinct supplémentaire, pas réessayer un paiement en attente.</label>
     <small>Aucune donnée de carte n’est saisie ni conservée par LNX Beats.</small>
   </div>;
 }

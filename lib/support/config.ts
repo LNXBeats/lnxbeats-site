@@ -48,6 +48,6 @@ export function validateSupportAmount(value: unknown) {
 }
 
 export function supportBaseUrl() {
-  requireSupportEnabled();
+  requireSupportTestEnvironment();
   return new URL(process.env.SITE_URL ?? process.env.AUTH_URL!).origin;
 }

@@ -1007,10 +1007,14 @@ model SupportContributionAttempt {
   operation      String              @db.VarChar(16)
   idempotencyKey String              @unique @db.VarChar(100)
   status         String              @default("REQUESTED") @db.VarChar(24)
+  leaseToken     String?             @db.Uuid
+  leaseUntil     DateTime?           @db.Timestamptz(3)
+  lastCheckedAt  DateTime?           @db.Timestamptz(3)
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
 
   @@unique([contributionId, operation])
+  @@index([status, lastCheckedAt], map: "support_attempt_recovery_idx")
   @@map("support_contribution_attempts")
 }
 
@@ -1021,6 +1025,7 @@ model SupportContributionEvent {
   eventKey       String              @unique @db.VarChar(255)
   type           String              @db.VarChar(64)
   actorId        String?             @db.Uuid
+  evidence       Json?
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
 
   @@index([contributionId, createdAt])

@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "support:reconcile": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/support-reconcile.ts",
+    "test:support:completion": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-support-completion.ts",
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "MALLOC_ARENA_MAX=2 next start",
