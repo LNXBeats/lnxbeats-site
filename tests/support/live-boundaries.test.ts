@@ -6,8 +6,21 @@ import { supportProviderPresentation } from "@/app/soutenir/provider-presentatio
 import { supportEvidenceMatches } from "@/lib/support/service";
 import { stripeSupportEvidence, validateSupportCheckoutUrl } from "@/lib/support/providers";
 import type Stripe from "stripe";
+import { supportMutation } from "@/lib/support/http";
 
 const live = { SUPPORT_ENABLED: "true", SUPPORT_TEST_MODE: "false", PAYMENT_DEPLOYMENT_ENV: "production", RAILWAY_ENVIRONMENT_NAME: "production", SITE_URL: "https://www.lnxbeats.fr" };
+test("existing LIVE HTTP mutations reach same-origin guard after closure, without an obsolete TEST-only gate", async () => {
+  const previous = { ...process.env };
+  try {
+    Object.assign(process.env, { ...live, SUPPORT_ENABLED: "false" });
+    const request = new Request("https://www.lnxbeats.fr/api/support/fixture/capture", { method: "POST", headers: { Origin: "https://foreign.example.test" } });
+    assert.equal(await supportMutation(request, true), false, "cross-origin remains refused before DB/provider calls");
+    await assert.rejects(supportMutation(request, false), "new contributions remain closed");
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+  }
+});
 test("LIVE context requires explicit mode plus exact Production deployment and origin", () => {
   assert.equal(supportMode(live), "LIVE");
   for (const change of [{ SUPPORT_TEST_MODE: undefined }, { SUPPORT_TEST_MODE: "true" }, { PAYMENT_DEPLOYMENT_ENV: "staging" }, { RAILWAY_ENVIRONMENT_NAME: "preview" }, { SITE_URL: "https://preview.example.test" }, { SITE_URL: "http://www.lnxbeats.fr" }, { SITE_URL: "https://user:pass@www.lnxbeats.fr" }]) assert.equal(supportMode({ ...live, ...change }), null);
