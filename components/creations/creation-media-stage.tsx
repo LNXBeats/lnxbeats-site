@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -31,6 +32,7 @@ import {
   type CreationMediaKind,
   type CreationPrimaryMedia,
   type PublicCreation,
+  type PublicCreationAsset,
 } from "@/lib/creations/types";
 import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
 
@@ -83,12 +85,14 @@ function CreationArtwork({
   creation,
   priority = false,
   className = "",
+  asset,
 }: {
   creation: PublicCreation;
   priority?: boolean;
   className?: string;
+  asset?: PublicCreationAsset | null;
 }) {
-  const artwork = creationArtwork(creation);
+  const artwork = asset ?? creationArtwork(creation);
   return (
     <div className={`creation-artwork ${className}`} data-has-artwork={Boolean(artwork)}>
       {artwork ? (
@@ -112,9 +116,20 @@ function CreationArtwork({
 }
 
 function mediaLabel(kind: CreationPrimaryMedia) {
-  if (kind === "audio") return "Écouter l’audio";
-  if (kind === "video") return "Voir la vidéo";
-  return "Voir le visuel";
+  if (kind === "audio") return "Audio";
+  if (kind === "video") return "Vidéo";
+  return "Visuel";
+}
+
+function presentationMedia(creation: PublicCreation) {
+  // A video poster is already visible in video mode, not a second medium.
+  return creationPresentationMedia(creation).filter((kind) => kind !== "cover"
+    || !creation.video || Boolean(creation.cover && creation.cover.id !== creation.poster?.id));
+}
+
+function primaryPresentationMedia(creation: PublicCreation) {
+  const primary = resolvedCreationPrimaryMedia(creation);
+  return primary === "cover" && !presentationMedia(creation).includes("cover") ? "video" : primary;
 }
 
 function selectionFromAction(
@@ -133,7 +148,7 @@ export function CreationMediaStage({
 }: CreationMediaStageProps) {
   const safeInitialIndex = Math.max(0, creations.findIndex((creation) => creation.slug === initialSlug));
   const initialCreation = creations[safeInitialIndex] ?? creations[0];
-  const initialMode = initialCreation ? resolvedCreationPrimaryMedia(initialCreation) : "cover";
+  const initialMode = initialCreation ? primaryPresentationMedia(initialCreation) : "cover";
   const [state, dispatch] = useReducer(
     selectionFromAction,
     initialCreation
@@ -164,7 +179,7 @@ export function CreationMediaStage({
   const activeCreation = state.activeMedia
     ? creations.find((creation) => creation.slug === state.activeMedia?.creationSlug) ?? null
     : null;
-  const selectedMediaKinds = selected ? creationPresentationMedia(selected) : [];
+  const selectedMediaKinds = selected ? presentationMedia(selected) : [];
   const filteredCreations = useMemo(
     () => creations.filter((creation) => matchesCreationFilter(creation, creationFilter)),
     [creationFilter, creations],
@@ -286,7 +301,7 @@ export function CreationMediaStage({
   }, [elementFor, load, pauseKind, sourceFor, transition]);
 
   const selectCreation = useCallback((creation: PublicCreation) => {
-    const primaryMedia = resolvedCreationPrimaryMedia(creation);
+    const primaryMedia = primaryPresentationMedia(creation);
     transition({
       type: "select-creation",
       slug: creation.slug,
@@ -365,20 +380,25 @@ export function CreationMediaStage({
   const artwork = creationArtwork(selected);
   const videoVisible = state.selectedMedia === "video" && loadedMedia.video === selected.slug;
   const videoOrientation = creationVideoOrientation(selected.video);
-  const selectedAudioActive = state.activeMedia?.creationSlug === selected.slug && state.activeMedia.kind === "audio";
-  const selectedVideoActive = state.activeMedia?.creationSlug === selected.slug && state.activeMedia.kind === "video";
-  const selectedAudioKey = mediaKey(selected.slug, "audio");
-  const visibleProgress = progress.key === selectedAudioKey ? progress : {
-    key: selectedAudioKey,
+  const frameAsset = state.selectedMedia === "video" ? selected.video : artwork;
+  const frameRatio = frameAsset?.width && frameAsset?.height && frameAsset.width > 0 && frameAsset.height > 0
+    ? frameAsset.width / frameAsset.height
+    : state.selectedMedia === "video" ? 16 / 9 : 1;
+  // Browsing another creation must not relabel the sound that is still playing.
+  const displayedAudio = state.activeMedia?.kind === "audio" && activeCreation?.audio ? activeCreation : selected;
+  const displayedAudioActive = state.activeMedia?.creationSlug === displayedAudio.slug && state.activeMedia.kind === "audio";
+  const displayedAudioKey = mediaKey(displayedAudio.slug, "audio");
+  const visibleProgress = progress.key === displayedAudioKey ? progress : {
+    key: displayedAudioKey,
     current: 0,
-    duration: (selected.audio?.durationMs ?? 0) / 1_000,
+    duration: (displayedAudio.audio?.durationMs ?? 0) / 1_000,
   };
 
   function updateAudioPosition(event: ChangeEvent<HTMLInputElement>) {
     const next = Number(event.currentTarget.value);
-    if (!Number.isFinite(next) || loadedRef.current.audio !== selected.slug || !audioRef.current) return;
+    if (!Number.isFinite(next) || loadedRef.current.audio !== displayedAudio.slug || !audioRef.current) return;
     audioRef.current.currentTime = next;
-    positionsRef.current.set(selectedAudioKey, next);
+    positionsRef.current.set(displayedAudioKey, next);
     setProgress((current) => ({ ...current, current: next }));
   }
 
@@ -397,14 +417,14 @@ export function CreationMediaStage({
   return (
     <section className="creation-experience" aria-labelledby={headingId} data-selected-creation={selected.slug} data-active-media={state.activeMedia ? `${state.activeMedia.creationSlug}:${state.activeMedia.kind}` : ""}>
       <div className="creation-stage" data-primary-media={state.selectedMedia}>
-        {artwork ? <div className="creation-stage__ambient" aria-hidden="true"><Image src={artwork.url} alt="" fill unoptimized sizes="1px" /></div> : null}
         <div className="creation-stage__media">
           <div
             className="creation-stage__frame"
             data-video-visible={videoVisible || undefined}
             data-video-orientation={videoOrientation}
+            style={{ aspectRatio: frameRatio, maxWidth: `min(100%, calc(68svh * ${frameRatio}))` }}
           >
-            {!videoVisible ? <CreationArtwork creation={selected} priority /> : null}
+            {!videoVisible ? <CreationArtwork creation={selected} priority asset={state.selectedMedia === "video" ? selected.poster ?? selected.cover : artwork} /> : null}
             {videoMounted ? (
               <video
                 ref={videoRef}
@@ -456,21 +476,8 @@ export function CreationMediaStage({
                 aria-label={`Lire la vidéo de ${selected.title}`}
                 onClick={() => void play("video", selected)}
               >
-                <span aria-hidden="true">▶</span>
-                Lire la vidéo
+                <UiIcon name="play" />
               </button>
-            ) : null}
-            {state.selectedMedia === "audio" && selected.audio ? (
-              <div className="creation-stage__audio-overlay">
-                <button type="button" onClick={() => void play("audio", selected)} aria-label={selectedAudioActive ? `Mettre en pause ${selected.title}` : `Lire ${selected.title}`}>
-                  <span aria-hidden="true">{selectedAudioActive ? "Ⅱ" : "▶"}</span>
-                  {selectedAudioActive ? "Pause" : "Écouter"}
-                </button>
-                <div>
-                  <strong>{selected.title}</strong>
-                  <span>{creationCollaboratorNames(selected).length ? `avec ${creationCollaboratorNames(selected).join(", ")}` : "Création LNX Beats"}</span>
-                </div>
-              </div>
             ) : null}
           </div>
 
@@ -490,21 +497,34 @@ export function CreationMediaStage({
           ) : null}
 
           {state.selectedMedia === "audio" && selected.audio ? (
-            <div className="creation-stage__audio-progress">
-              <label>
-                <span className="visually-hidden">Position dans l’audio de {selected.title}</span>
+            <div className="creation-stage__audio-player">
+              <button className="creation-stage__audio-toggle" type="button" onClick={() => void play("audio", displayedAudio)} aria-label={displayedAudioActive ? `Mettre en pause ${displayedAudio.title}` : `Lire ${displayedAudio.title}`}>
+                <UiIcon name={displayedAudioActive ? "pause" : "play"} />
+              </button>
+              <div className="creation-stage__audio-metadata">
+                <strong>{displayedAudio.title}</strong>
+                <span>{creationCollaboratorNames(displayedAudio).length ? `avec ${creationCollaboratorNames(displayedAudio).join(", ")}` : "LNX Beats"}</span>
+              </div>
+              <div className="creation-stage__audio-progress"><label>
+                <span className="visually-hidden">Position dans l’audio de {displayedAudio.title}</span>
                 <input
                   type="range"
                   min="0"
                   max={Math.max(visibleProgress.duration, 0)}
                   step="0.1"
                   value={Math.min(visibleProgress.current, Math.max(visibleProgress.duration, 0))}
-                  disabled={loadedMedia.audio !== selected.slug || !visibleProgress.duration}
+                  disabled={loadedMedia.audio !== displayedAudio.slug || !visibleProgress.duration}
                   onChange={updateAudioPosition}
                 />
               </label>
               <output>{timeLabel(visibleProgress.current)} / {timeLabel(visibleProgress.duration)}</output>
+              </div>
             </div>
+          ) : null}
+          {state.selectedMedia === "audio" && selected.audio && displayedAudio.slug !== selected.slug ? (
+            <button className="creation-stage__play-selection" type="button" onClick={() => void play("audio", selected)}>
+              Lire la sélection : {selected.title} <UiIcon name="play" />
+            </button>
           ) : null}
           {(state.selectedMedia === "audio" || state.selectedMedia === "video")
             && failedMedia === mediaKey(selected.slug, state.selectedMedia)
@@ -517,7 +537,7 @@ export function CreationMediaStage({
           <Heading id={headingId}>{selected.title}</Heading>
           {creationCollaboratorNames(selected).length ? <p className="creation-stage__collaborator">Avec <strong>{creationCollaboratorNames(selected).join(" · ")}</strong></p> : null}
           <p className="creation-stage__summary">{selected.summary}</p>
-          <p className="creation-stage__playing-state" aria-live="polite">
+          <p className={state.activeMedia ? "creation-stage__playing-state" : "visually-hidden"} aria-live="polite">
             <span aria-hidden="true" data-playing={Boolean(state.activeMedia)} />
             {mediaStateLabel}
           </p>
@@ -526,9 +546,7 @@ export function CreationMediaStage({
           ) : null}
           {showGrid ? (
             <div className="creation-stage__actions">
-              {selected.audio ? <button type="button" data-active={selectedAudioActive || undefined} onClick={() => void play("audio", selected)}>{selectedAudioActive ? "Mettre en pause" : "Écouter l’audio"}</button> : null}
-              {selected.video ? <button type="button" data-active={selectedVideoActive || undefined} onClick={() => void play("video", selected)}>{selectedVideoActive ? "Mettre en pause" : "Voir la vidéo"}</button> : null}
-              <Link href={`/creations/${selected.slug}`}>Découvrir la création <span aria-hidden="true">→</span></Link>
+              <Link href={`/creations/${selected.slug}`}>Découvrir la création <UiIcon name="arrow-right" /></Link>
             </div>
           ) : null}
         </div>
@@ -615,7 +633,7 @@ export function CreationMediaStage({
                   {itemArtwork ? <Image src={itemArtwork.url} alt="" fill unoptimized sizes="160px" /> : <span>LNX</span>}
                 </span>
                 <span className="creation-rail__copy"><strong>{creation.title}</strong><small>{creation.category || "Création"}</small></span>
-                <span className="creation-rail__media" aria-label={[creation.audio ? "audio" : null, creation.video ? "vidéo" : null].filter(Boolean).join(" et ")}>{creation.audio ? "♪" : ""}{creation.video ? "▶" : ""}</span>
+                <span className="creation-rail__media" aria-label={[creation.audio ? "audio" : null, creation.video ? "vidéo" : null].filter(Boolean).join(" et ")}>{creation.audio ? <UiIcon name="music" /> : null}{creation.video ? <UiIcon name="play" /> : null}</span>
               </button>
             );
           })}

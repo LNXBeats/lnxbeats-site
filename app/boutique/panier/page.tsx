@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 import { notFound } from "next/navigation";
 
 import { ShopCart } from "@/components/shop-cart";
@@ -27,7 +28,7 @@ export default async function ShopCartPage() {
   return (
     <div className="shop-commerce-shell shop-cart-page">
       <Container>
-        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true">←</span> Continuer mes achats</Link>
+        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Continuer mes achats</Link>
         <header className="shop-cart-page__heading">
           <p className="eyebrow">Boutique LNX Beats</p>
           <h1>Votre panier.</h1>

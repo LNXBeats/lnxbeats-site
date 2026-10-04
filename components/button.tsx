@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ExternalLinkIcon } from "@/components/link-icons";
+import { UiIcon } from "@/components/ui-icon";
 
 type ButtonLinkProps = {
   href: string;
@@ -34,7 +35,7 @@ export function ButtonLink({
           {children}
           {opensNewTab ? <span className="visually-hidden"> — nouvel onglet</span> : null}
         </span>
-        {opensNewTab ? <ExternalLinkIcon /> : <span aria-hidden="true">→</span>}
+        {opensNewTab ? <ExternalLinkIcon /> : <UiIcon name="arrow-right" />}
       </a>
     );
   }
@@ -42,7 +43,7 @@ export function ButtonLink({
   return (
     <Link className={classes} href={href}>
       <span>{children}</span>
-      <span aria-hidden="true">→</span>
+      <UiIcon name="arrow-right" />
     </Link>
   );
 }

@@ -46,9 +46,10 @@ test("initial SSR renders every media combination without mounting or fetching a
     const audioOnly = render(creation("audio", "audio", true, false));
     const videoOnly = render(creation("video", "video", false, true));
     const combined = render(creation("combined", "video", true, true));
+    const portrait = render({ ...creation("portrait", "video", false, true), video: { ...asset("video"), width: 1080, height: 1440 } });
     console.log(JSON.stringify({
       audioOnly: {
-        audioControl: audioOnly.includes("creation-stage__audio-overlay"),
+        audioControl: audioOnly.includes("creation-stage__audio-player"),
         videoLaunch: audioOnly.includes("Lire la vidéo"),
       },
       videoOnly: {
@@ -58,8 +59,14 @@ test("initial SSR renders every media combination without mounting or fetching a
       },
       combined: {
         videoMounted: combined.includes("<video"),
-        audioChoice: combined.includes("Écouter l’audio"),
-        videoChoice: combined.includes("Voir la vidéo"),
+        audioChoice: combined.includes(">Audio</button>"),
+        videoChoice: combined.includes(">Vidéo</button>"),
+      },
+      presentation: {
+        exactPortraitRatioBeforePlay: portrait.includes("aspect-ratio:0.75"),
+        svgLaunch: videoOnly.includes("<svg"),
+        visibleVideoPill: videoOnly.includes(">Lire la vidéo<"),
+        audioOverlay: audioOnly.includes("creation-stage__audio-overlay"),
       },
     }));
   `;
@@ -72,5 +79,6 @@ test("initial SSR renders every media combination without mounting or fetching a
     audioOnly: { audioControl: true, videoLaunch: false },
     videoOnly: { videoMounted: false, sourcePresent: false, videoLaunch: true },
     combined: { videoMounted: false, audioChoice: true, videoChoice: true },
+    presentation: { exactPortraitRatioBeforePlay: true, svgLaunch: true, visibleVideoPill: false, audioOverlay: false },
   });
 });

@@ -34,7 +34,7 @@ test("support discovery is flag-gated and outside Commander and Shop", async () 
   const [home, footer, commander, shop] = await Promise.all([
     source("app/page.tsx"), source("components/site-footer.tsx"), source("app/commander/page.tsx"), source("app/boutique/page.tsx"),
   ]);
-  assert.match(home, /isSupportEnabled\(\) \? <section className="home-support-vfinal"/);
+  assert.match(home, /isSupportEnabled\(\) \? <section className=\{styles.section\} aria-labelledby="home-support-title"/);
   assert.match(home, /Un soutien libre, sans contrepartie/);
   assert.equal((footer.match(/isSupportEnabled\(\) \? <Link href="\/soutenir"/g) ?? []).length, 2);
   assert.doesNotMatch(commander, /\/soutenir|SupportContribution/);

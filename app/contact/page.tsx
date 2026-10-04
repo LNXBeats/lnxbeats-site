@@ -5,6 +5,7 @@ import { Container } from "@/components/container";
 import { PlatformLink } from "@/components/platform-link";
 import { quickAccessPlatforms, siteConfig } from "@/data/site";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
+import styles from "./contact.module.css";
 
 export const metadata: Metadata = createPublicPageMetadata({
   title: "Contact",
@@ -20,14 +21,14 @@ const contactPlatforms = [
 export default function ContactPage() {
   return (
     <>
-      <header className="contact-hero contact-hero--v3" data-motion-scene="contact">
-        <Image src="/assets/v3/hero-main-ludovic-dog-exact.jpg" alt="" fill loading="eager" sizes="100vw" data-motion-layer="media" />
-        <Container className="contact-hero__inner">
+      <header className={styles.hero}>
+        <Container className={styles.heroGrid}>
           <div>
             <p className="eyebrow">Entrer en conversation</p>
             <h1>Une idée mérite parfois d’être entendue avant d’être écrite.</h1>
             <p>Collaboration musicale, demande professionnelle, adaptation, droits ou autre échange : écrivez directement à LNX Beats. Pour confier une histoire destinée à une création personnalisée, le parcours Commander reste le meilleur point de départ.</p>
           </div>
+          <Image className={styles.portrait} src="/assets/v3/hero-main-ludovic-dog-exact.jpg" alt="Ludovic et son chien" width={1254} height={1254} loading="eager" sizes="(max-width: 760px) calc(100vw - 36px), 40vw" />
         </Container>
       </header>
       <section className="section contact-section--v3">
@@ -49,14 +50,15 @@ export default function ContactPage() {
           </div>
         </Container>
       </section>
-      <section className="section section--soft contact-platforms-section">
+      <section id="plateformes" className={styles.platformSection}>
         <Container>
-          <div className="contact-platforms motion-reveal">
-            <div className="contact-platforms__intro">
-              <p className="content-columns__label">Le dialogue continue</p>
+          <div className={styles.platforms}>
+            <div className={styles.intro}>
+              <p className={styles.eyebrow}>Le dialogue continue</p>
               <h2>Écouter et suivre LNX Beats.</h2>
+              <p>La musique, les clips et les coulisses, sur vos plateformes.</p>
             </div>
-            <ul className="contact-platforms__list" aria-label="Plateformes officielles de LNX Beats">
+            <ul className={styles.list} aria-label="Plateformes officielles de LNX Beats">
               {contactPlatforms.map(({ icon, name, tone, url }) => {
                 const isFeatured = name === "YouTube";
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -395,13 +396,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
 
   if (!active || !playerProject) return null;
 
-  const selectedIsPlaying = playingSlug === active.slug;
   const selectedHasEnded = !playing && playerMetadataSlug === active.slug && ended;
-  const playbackState = (selectedIsPlaying ? "pause" : selectedHasEnded ? "replay" : "play") satisfies StudioVinylControlState;
-  const playBadge = active.audioPreview ? <>
-    <StudioVinylControl state={playbackState} />
-    {!selectedIsPlaying && !selectedHasEnded && !audioUnlocked ? <span className="home-jukebox__play-label">Écouter</span> : null}
-  </> : null;
   const leftArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-line" /><span className="home-jukebox__arrow-symbol" /></span>;
   const rightArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-symbol" /><span className="home-jukebox__arrow-line" /></span>;
   const currentVisibleIndex = visibleActiveIndex >= 0 ? visibleActiveIndex : 0;
@@ -484,19 +479,6 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
             <article className="discography-card" data-active={distance === 0 || undefined} aria-current={distance === 0 ? "true" : undefined}>
               <div className="discography-card__art">
                 {artwork}
-                {distance === 0 && project.audioPreview ? <button
-                  className="discography-card__play-hit"
-                  type="button"
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onClick={() => handleCoverClick(globalIndex)}
-                  aria-label={selectedIsPlaying
-                    ? `Mettre en pause l’extrait de ${project.title}`
-                    : selectedHasEnded
-                      ? `Relire l’extrait de ${project.title}`
-                      : `Lire l’extrait de ${project.title}`}
-                  data-active-control="true"
-                ><span className="home-jukebox__play" aria-hidden="true">{playBadge}</span></button> : null}
                 {playingSlug === project.slug && project.audioPreview ? <>
                   <span className="discography-card__playing" aria-hidden="true">En lecture</span>
                   <span className="home-jukebox__progress" style={{ transform: `scaleX(${progress})` }} aria-hidden="true" />
@@ -505,7 +487,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
               <div className="discography-card__body">
                 <p>{projectMeta(project)}</p>
                 <h3>{project.title}</h3>
-                {distance === 0 ? <Link className="discography-card__link" href={`/album/${project.slug}`} aria-label={`Entrer dans le projet ${project.title}`} data-active-control="true">Entrer <span aria-hidden="true">→</span></Link> : null}
+                {distance === 0 ? <Link className="discography-card__link" href={`/album/${project.slug}`} aria-label={`Entrer dans le projet ${project.title}`} data-active-control="true">Entrer <span aria-hidden="true"><UiIcon name="arrow-right" /></span></Link> : null}
               </div>
               {distance !== 0 ? <button
                 className="discography-card__select-hit"
@@ -522,7 +504,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </ul>
       {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--next" type="button" onClick={() => selectVisible(currentVisibleIndex + 1)} disabled={currentVisibleIndex === visibleProjects.length - 1} aria-label="Projet suivant">{rightArrow}</button> : null}
     </div>
-    {visibleProjects.length > 1 ? <p className="home-jukebox__navigation-hint" aria-hidden="true"><span>← Faites défiler les projets →</span><span>Glissez pour parcourir</span></p> : null}
+    {visibleProjects.length > 1 ? <p className="home-jukebox__navigation-hint" aria-hidden="true"><span><UiIcon name="arrow-left" /> Faites défiler les projets <UiIcon name="arrow-right" /></span><span>Glissez pour parcourir</span></p> : null}
     <div className="discography-jukebox__player-context" data-player-context>
       <div className="discography-jukebox__player-copy">
         <span>{playing ? "En lecture" : "Extrait sélectionné"}</span>
@@ -541,6 +523,9 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </button>
       <span className="discography-jukebox__player-progress" aria-hidden="true"><span style={{ transform: `scaleX(${progress})` }} /></span>
     </div>
+    {playingProject && playingProject.slug !== active.slug && active.audioPreview ? <button className="discography-jukebox__play-selection" type="button" onClick={() => void togglePlay()}>
+      Lire la sélection : {active.title} <UiIcon name="play" />
+    </button> : null}
     <audio
       ref={audioRef}
       preload="metadata"

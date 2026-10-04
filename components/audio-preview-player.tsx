@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
 import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
+import styles from "./audio-preview-player.module.css";
 
 function timeLabel(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -56,7 +57,7 @@ export function AudioPreviewPlayer({
   }
 
   return (
-    <div className={`audio-preview-player${compact ? " audio-preview-player--compact" : ""}`} data-audio-player={title}>
+    <div className={`${styles.player} audio-preview-player${compact ? ` ${styles.compact} audio-preview-player--compact` : ""}`} data-audio-player={title}>
       <audio
         ref={audioRef}
         src={src}
@@ -88,7 +89,7 @@ export function AudioPreviewPlayer({
         onError={() => { setFailed(true); setLoading(false); setPlaying(false); }}
       />
       <button
-        className="audio-preview-player__toggle"
+        className={styles.toggle}
         type="button"
         aria-label={playing
           ? `Mettre en pause l’extrait de ${title}`
@@ -100,9 +101,11 @@ export function AudioPreviewPlayer({
       >
         <StudioVinylControl state={(loading ? "loading" : playing ? "pause" : ended ? "replay" : "play") satisfies StudioVinylControlState} />
       </button>
-      <div className="audio-preview-player__body">
+      <div className={styles.body}>
         <strong>{title}</strong>
-        <span>Extrait audio · {timeLabel(duration)}</span>
+        <span>Extrait audio</span>
+      </div>
+      <div className={styles.progress}>
         <label>
           <span className="sr-only">Position dans l’extrait de {title}</span>
           <input
@@ -122,10 +125,10 @@ export function AudioPreviewPlayer({
             }}
           />
         </label>
+        <output className={styles.time} aria-live="off">{timeLabel(currentTime)} / {timeLabel(duration)}</output>
       </div>
-      <output className="audio-preview-player__time" aria-live="off">{timeLabel(currentTime)} / {timeLabel(duration)}</output>
-      {loading ? <span className="audio-preview-player__status">Chargement…</span> : null}
-      {failed ? <span className="audio-preview-player__error" role="status">Impossible de lire cet extrait.</span> : null}
+      {loading ? <span className={styles.status}>Chargement…</span> : null}
+      {failed ? <span className={styles.error} role="status">Impossible de lire cet extrait.</span> : null}
     </div>
   );
 }

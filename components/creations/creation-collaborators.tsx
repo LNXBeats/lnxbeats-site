@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { ExternalLinkIcon } from "@/components/link-icons";
+import { UiIcon } from "@/components/ui-icon";
 import type { PublicCreationCollaborator } from "@/lib/creations/types";
 
 const PLATFORM_PRESENTATION: Record<string, { label: string; icon?: string }> = {
@@ -34,7 +35,7 @@ export function CreationCollaborators({ collaborators }: { collaborators: readon
             return <li key={link.id}><a href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`${label} — ${collaborator.displayName}, nouvel onglet`}>
               <span className="creation-collaborator__icon" aria-hidden="true">{platform.icon
                 ? <Image src={platform.icon} alt="" width={20} height={20} sizes="20px" />
-                : <span>↗</span>}</span>
+                : <UiIcon name="arrow-up-right" />}</span>
               <span>{label}</span>
               <ExternalLinkIcon />
             </a></li>;

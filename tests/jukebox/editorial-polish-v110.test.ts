@@ -7,18 +7,19 @@ const source = (path: string) => readFile(new URL(`../../${path}`, import.meta.u
 test("Home mounts the isolated editorial layer without changing its copy or destinations", async () => {
   const [page, css] = await Promise.all([
     source("app/page.tsx"),
-    source("app/v110-editorial-polish.css"),
+    source("app/home-v4.module.css"),
   ]);
 
-  assert.match(page, /import "\.\/v110-editorial-polish\.css"/);
-  assert.match(page, /home-hero home-hero--editorial/);
-  assert.match(page, /home-featured home-featured--editorial/);
+  assert.match(page, /import styles from "\.\/home-v4\.module\.css"/);
+  assert.match(page, /data-v4-hero/);
+  assert.match(page, /data-v4-featured/);
   assert.doesNotMatch(page, /home-perspectives/);
   assert.doesNotMatch(page, /Une musique qui prend le réel au sérieux/);
   assert.match(page, /href="\/discographie"/);
   assert.match(page, /href="\/commander"/);
-  assert.match(page, /href="\/contact"/);
-  assert.match(css, /\.home-featured--editorial \.home-project-lead__copy h3 \{[\s\S]*?max-width: min\(12ch, 100%\);[\s\S]*?overflow-wrap: break-word;[\s\S]*?word-break: normal;/);
+  assert.match(page, /href="\/contact#plateformes"/);
+  assert.match(css, /\.featuredCopy \{ min-width: 0;/);
+  assert.doesNotMatch(css, /line-clamp|!important/);
   assert.doesNotMatch(css, /url\(/);
 });
 

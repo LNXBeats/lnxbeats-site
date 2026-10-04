@@ -6,6 +6,7 @@ import { SupportForm } from "@/components/support-form";
 import styles from "@/components/support.module.css";
 import { isSupportEnabled, supportLimits } from "@/lib/support/config";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
+import { supportProviderPresentation } from "./provider-presentation";
 
 export const dynamic = "force-dynamic";
 export function generateMetadata(): Metadata {
@@ -27,7 +28,7 @@ export default function SupportPage() {
       </div>
       <div className={styles.panel}>
         <span className={styles.test}>Préversion · paiements de test uniquement</span>
-        <SupportForm {...supportLimits()} />
+        <SupportForm {...supportLimits()} {...supportProviderPresentation()} />
         <p className={styles.legal}>Une question ou une demande de remboursement volontaire ? <Link href="/contact">Contactez LNX Beats.</Link> Aucune promesse de non-remboursement absolu.</p>
       </div>
     </div>

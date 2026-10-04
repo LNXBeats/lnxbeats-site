@@ -51,7 +51,9 @@ test("cinematic depth follows existing artwork tones and keeps mobile transforms
     source("app/v120-ui-motion-polish.css"),
   ]);
 
-  assert.match(home, /data-motion-scene="home"/);
+  // V4 keeps the exact portrait static: no parallax over faces or text.
+  assert.match(home, /data-v4-hero/);
+  assert.doesNotMatch(home, /data-motion-layer/);
   assert.match(album, /data-motion-scene="album"/);
   assert.match(about, /data-motion-scene="about"/);
   assert.match(jukebox, /data-active-tone=\{active\.artworkTone\}/);

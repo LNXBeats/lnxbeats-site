@@ -15,7 +15,7 @@ test("the mobile menu keeps its accessible navigation without decorative numberi
   assert.match(header, /aria-expanded=\{open\}/);
   assert.match(header, /aria-controls="mobile-navigation"/);
   assert.match(header, /aria-current=\{isActive\(item\.href\) \? "page" : undefined\}/);
-  assert.match(header, /ref=\{lastLinkRef\}[\s\S]*?>[\s\S]*?Compte/);
+  assert.match(header, /className=\{styles\.account\}[\s\S]*?href="\/compte"[\s\S]*?Mon compte/);
   assert.match(css, /\.menu-button \{[\s\S]*?width: auto;[\s\S]*?min-width: 76px;[\s\S]*?flex: 0 0 auto;/);
   assert.match(css, /\.menu-button__icon \{[\s\S]*?flex: 0 0 22px;/);
   assert.doesNotMatch(css, /\.mobile-navigation nav a span\s*\{/);
@@ -47,12 +47,12 @@ test("shared mobile polish groups the Home promise and keeps the global rails co
     source("components/quick-access-bar.tsx"),
   ]);
 
-  assert.match(homepage, /home-hero__eyebrow-story">Des histoires, des personnages, des morceaux qui restent\.<\/span>/);
-  assert.match(homepage, /home-hero__slogan">Les histoires deviennent musique\.<\/p>/);
+  assert.match(homepage, /Des histoires\. Des personnages\.<br \/>Des morceaux qui restent\./);
+  assert.match(homepage, /Les histoires <br \/>deviennent musique\./);
   assert.doesNotMatch(homepage, /home-hero__eyebrow-brand|home-hero__eyebrow-separator/);
   assert.ok(
-    homepage.indexOf('id="home-hero-title"') < homepage.indexOf("home-hero__eyebrow-story"),
-    "la promesse éditoriale doit suivre la marque principale dans l’ordre DOM",
+    homepage.indexOf('id="home-hero-title"') < homepage.indexOf("styles.slogan"),
+    "la promesse éditoriale suit la marque principale dans l’ordre DOM",
   );
   assert.match(css, /\.home-hero__eyebrow-story-key \{ white-space: nowrap; \}/);
   assert.match(css, /@media \(min-width: 601px\) and \(max-width: 820px\)[\s\S]*?\.home-hero h1 \{[\s\S]*?font-size: clamp\(4\.65rem, 12\.8vw, 6\.6rem\);/);

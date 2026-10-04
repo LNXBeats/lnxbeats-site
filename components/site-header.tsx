@@ -4,19 +4,26 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { navigation } from "@/data/site";
+import { navigation, quickAccessPlatforms } from "@/data/site";
 import { Container } from "@/components/container";
+import { UiIcon } from "@/components/ui-icon";
+import styles from "./site-header.module.css";
 
 const HEADER_COMPACT_SCROLL_THRESHOLD = 72;
 
-export function SiteHeader() {
+const routeIcons = {
+  "/": "home", "/discographie": "disc", "/creations": "music",
+  "/commander": "pen", "/boutique": "bag", "/a-propos": "info", "/contact": "mail",
+} as const;
+
+export function SiteHeader({ supportAvailable = false }: { supportAvailable?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const desktopNavigationRef = useRef<HTMLElement>(null);
-  const firstLinkRef = useRef<HTMLAnchorElement>(null);
-  const lastLinkRef = useRef<HTMLAnchorElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let animationFrame = 0;
@@ -41,37 +48,35 @@ export function SiteHeader() {
   useEffect(() => {
     if (!open) return;
 
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const menuButton = menuButtonRef.current;
     const previousOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
     const desktopMedia = window.matchMedia("(min-width: 821px)");
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    // The native modal puts the complete background in the inert top-layer state.
+    dialog.showModal();
+    closeButtonRef.current?.focus({ preventScroll: true });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         setOpen(false);
-        menuButtonRef.current?.focus();
         return;
       }
 
       if (event.key !== "Tab") return;
-
-      const button = menuButtonRef.current;
-      const firstLink = firstLinkRef.current;
-      const lastLink = lastLinkRef.current;
-
-      if (!button || !firstLink || !lastLink) return;
-
-      if (event.shiftKey && document.activeElement === firstLink) {
+      const controls = Array.from(dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex="0"]'));
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
         event.preventDefault();
-        button.focus();
-      } else if (event.shiftKey && document.activeElement === button) {
+        last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
         event.preventDefault();
-        lastLink.focus();
-      } else if (!event.shiftKey && document.activeElement === lastLink) {
-        event.preventDefault();
-        button.focus();
-      } else if (!event.shiftKey && document.activeElement === button) {
-        event.preventDefault();
-        firstLink.focus();
+        first?.focus();
       }
     };
     const closeAfterHistoryNavigation = () => setOpen(false);
@@ -84,7 +89,10 @@ export function SiteHeader() {
     desktopMedia.addEventListener("change", closeAtDesktopWidth);
 
     return () => {
+      dialog.close();
       document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+      menuButton?.focus();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("popstate", closeAfterHistoryNavigation);
       desktopMedia.removeEventListener("change", closeAtDesktopWidth);
@@ -122,13 +130,12 @@ export function SiteHeader() {
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
-  const toggleMenu = () => {
-    const nextOpen = !open;
-    setOpen(nextOpen);
-    if (nextOpen) {
-      window.requestAnimationFrame(() => firstLinkRef.current?.focus({ preventScroll: true }));
-    }
-  };
+  const closeMenu = () => setOpen(false);
+  const groups = [
+    { label: "Découvrir", items: navigation.filter(({ href }) => ["/", "/discographie", "/creations"].includes(href)) },
+    { label: "Créer et acheter", items: navigation.filter(({ href }) => ["/commander", "/boutique"].includes(href)) },
+    { label: "Autour du projet", items: navigation.filter(({ href }) => ["/a-propos", "/contact"].includes(href)) },
+  ];
 
   if (pathname.startsWith("/admin")) return null;
 
@@ -140,7 +147,7 @@ export function SiteHeader() {
         </Link>
 
         <Link className="mobile-account-link" href="/compte" aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}>
-          <span aria-hidden="true">♙</span>
+          <UiIcon name="user" className={styles.accountIcon} />
           <span>Compte</span>
         </Link>
 
@@ -174,7 +181,7 @@ export function SiteHeader() {
           aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={open}
           aria-controls="mobile-navigation"
-          onClick={toggleMenu}
+          onClick={() => setOpen(true)}
         >
           <span className="menu-button__label">Menu</span>
           <span className={`menu-button__icon ${open ? "is-open" : ""}`} aria-hidden="true">
@@ -184,45 +191,55 @@ export function SiteHeader() {
         </button>
       </Container>
 
-      <div
+      <dialog
+        ref={dialogRef}
         id="mobile-navigation"
-        className={`mobile-navigation ${open ? "is-open" : ""}`}
-        aria-hidden={!open}
-        inert={!open}
+        className={styles.dialog}
+        aria-label="Menu principal"
+        aria-modal="true"
+        onCancel={(event) => { event.preventDefault(); closeMenu(); }}
       >
-        <Container className="mobile-navigation__inner">
-          <nav aria-label="Navigation mobile">
-            {navigation.map((item, index) => (
-              <Link
-                key={item.href}
-                ref={index === 0 ? firstLinkRef : undefined}
-                href={item.href}
-                tabIndex={open ? 0 : -1}
-                aria-current={isActive(item.href) ? "page" : undefined}
-                onClick={() => {
-                  setOpen(false);
-                  menuButtonRef.current?.focus();
-                }}
-              >
-                {item.label}
-              </Link>
+        <div className={styles.dialogHeader}>
+          <button ref={closeButtonRef} className={styles.closeButton} type="button" aria-label="Fermer le menu" onClick={closeMenu}>
+            <UiIcon name="close" />
+          </button>
+          <Link className={styles.dialogBrand} href="/" aria-label="LNX Beats — accueil" onClick={closeMenu}>
+            <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} sizes="148px" />
+          </Link>
+        </div>
+        <div className={styles.dialogBody}>
+          <nav className={styles.navigation} aria-label="Navigation mobile">
+            {groups.map((group) => (
+              <section className={styles.group} key={group.label} aria-label={group.label}>
+                <p className={styles.groupLabel}>{group.label}</p>
+                {group.label === "Autour du projet" && supportAvailable ? (
+                  <Link className={styles.menuLink} href="/soutenir" aria-current={isActive("/soutenir") ? "page" : undefined} onClick={closeMenu}>
+                    <UiIcon name="heart" /><span>Soutenir LNX Beats</span><UiIcon name="chevron-right" />
+                  </Link>
+                ) : null}
+                {group.items.map((item) => (
+                  <Link key={item.href} className={styles.menuLink} href={item.href} aria-current={isActive(item.href) ? "page" : undefined} onClick={closeMenu}>
+                    <UiIcon name={routeIcons[item.href]} /><span>{item.label}</span><UiIcon name="chevron-right" />
+                  </Link>
+                ))}
+              </section>
             ))}
-            <Link
-              ref={lastLinkRef}
-              href="/compte"
-              tabIndex={open ? 0 : -1}
-              aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}
-              onClick={() => {
-                setOpen(false);
-                menuButtonRef.current?.focus();
-              }}
-            >
-              Compte
-            </Link>
           </nav>
-          <p>Chaque histoire mérite sa musique.</p>
-        </Container>
-      </div>
+          <div className={styles.account}>
+            <Link className={styles.menuLink} href="/compte" aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined} onClick={closeMenu}>
+              <UiIcon name="user" /><span>Mon compte</span><UiIcon name="chevron-right" />
+            </Link>
+          </div>
+          <div className={styles.socials} aria-label="Plateformes officielles">
+            {quickAccessPlatforms.map(({ name, url, icon }) => (
+              <a key={name} href={url} target="_blank" rel="noopener noreferrer" aria-label={`${name} — nouvel onglet`}>
+                <Image src={icon} alt="" width={22} height={22} />
+              </a>
+            ))}
+          </div>
+          <p className={styles.signature}>Chaque histoire mérite sa musique.</p>
+        </div>
+      </dialog>
     </header>
   );
 }

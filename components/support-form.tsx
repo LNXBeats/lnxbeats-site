@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { UiIcon } from "@/components/ui-icon";
 import styles from "@/components/support.module.css";
 
-export function SupportForm({ minCents, maxCents }: { minCents: number; maxCents: number }) {
+export function SupportForm({ minCents, maxCents, stripeConfigured = false, paypalConfigured = false }: {
+  minCents: number; maxCents: number; stripeConfigured?: boolean; paypalConfigured?: boolean;
+}) {
   const [amount, setAmount] = useState("5");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const providerConfigured = stripeConfigured || paypalConfigured;
   const cents = /^\d+(?:[.,]\d{1,2})?$/.test(amount) ? Math.round(Number(amount.replace(",", ".")) * 100) : NaN;
 
   async function checkout(provider: "STRIPE" | "PAYPAL") {
@@ -45,15 +49,16 @@ export function SupportForm({ minCents, maxCents }: { minCents: number; maxCents
   }
 
   return <div className={styles.form}>
-    <fieldset disabled={pending}>
+    {!providerConfigured ? <p className={styles.unavailable}>Les moyens de paiement de test ne sont pas encore disponibles. Aucun versement n’est possible depuis cette préversion.</p> : null}
+    <fieldset disabled={pending || !providerConfigured}>
       <legend>Choisissez votre montant</legend>
       <div className={styles.presets}>{[3, 5, 10, 20].map((value) => <button type="button" key={value} aria-pressed={cents === value * 100} onClick={() => { setAmount(String(value)); setError(""); }}>{value} €</button>)}</div>
       <label htmlFor="support-amount">Ou un montant libre en euros</label>
       <div className={styles.amount}><input id="support-amount" inputMode="decimal" type="text" maxLength={9} value={amount} onChange={(event) => { setAmount(event.target.value); setError(""); }} aria-describedby="support-amount-help" /><span aria-hidden="true">€</span></div>
       <small id="support-amount-help">De {minCents / 100} € à {maxCents / 100} €. Un versement ponctuel, jamais un abonnement.</small>
       <div className={styles.providers}>
-        <button type="button" className="button button--primary" onClick={() => void checkout("STRIPE")}>Soutenir avec Stripe <span aria-hidden="true">↗</span></button>
-        <button type="button" className="button button--secondary" onClick={() => void checkout("PAYPAL")}>Soutenir avec PayPal <span aria-hidden="true">↗</span></button>
+        {stripeConfigured ? <button type="button" className="button button--primary" onClick={() => void checkout("STRIPE")}>Soutenir avec Stripe <span aria-hidden="true"><UiIcon name="arrow-up-right" /></span></button> : null}
+        {paypalConfigured ? <button type="button" className="button button--secondary" onClick={() => void checkout("PAYPAL")}>Soutenir avec PayPal <span aria-hidden="true"><UiIcon name="arrow-up-right" /></span></button> : null}
       </div>
     </fieldset>
     <p role="status" aria-live="polite">{pending ? "Préparation du paiement sécurisé…" : error}</p>

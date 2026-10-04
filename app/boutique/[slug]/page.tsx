@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { ShopAddButton } from "@/components/shop-add-button";
@@ -43,7 +44,7 @@ export default async function ShopProductPage({ params }: Context) {
     <div className="shop-commerce-shell shop-product-page">
       <JsonLd id="lnx-product-structured-data" data={buildProductStructuredData(product)} />
       <Container>
-        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true">←</span> Retour à la Boutique</Link>
+        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Retour à la Boutique</Link>
         <article className="shop-product-detail">
           <div className="shop-product-detail__image">
             <ShopProductMedia

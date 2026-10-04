@@ -27,7 +27,7 @@ test("the public stage performs no eager or automatic media playback", async () 
   assert.match(recoveryBody, /element\.load\(\)/);
   assert.doesNotMatch(recoveryBody, /\.play\(\)/);
   assert.match(source, /onClick=\{\(\) => void play\("video", selected\)\}/);
-  assert.equal(source.match(/\bunoptimized\b/g)?.length, 3, "redirected private R2 artwork must bypass the Next image optimizer");
+  assert.equal(source.match(/\bunoptimized\b/g)?.length, 2, "redirected private R2 artwork must bypass the Next image optimizer");
 });
 
 test("selection, active media, saved positions and the global playback claim remain separate", async () => {
@@ -63,11 +63,22 @@ test("hidden native video controls are not keyboard traps and public controls ar
   assert.match(source, /tabIndex=\{videoVisible \? 0 : -1\}/);
   assert.match(source, /aria-hidden=\{!videoVisible\}/);
   assert.match(source, /aria-label=\{`Vidéo de/);
-  assert.match(source, /aria-label=\{selectedAudioActive \?/);
+  assert.match(source, /aria-label=\{displayedAudioActive \?/);
   assert.match(source, /role="group" aria-label=\{`Médias de/);
   assert.match(source, /<span className="visually-hidden">Position dans l’audio/);
   assert.match(source, /aria-live="polite"/);
   assert.match(styles, /min-height: 48px/);
+});
+
+test("audio strip metadata, pause and seek target the playing creation independently from selection", async () => {
+  const source = await read("components/creations/creation-media-stage.tsx");
+  assert.match(source, /state\.activeMedia\?\.kind === "audio" && activeCreation\?\.audio \? activeCreation : selected/);
+  assert.match(source, /<strong>\{displayedAudio\.title\}<\/strong>/);
+  assert.match(source, /onClick=\{\(\) => void play\("audio", displayedAudio\)\}/);
+  assert.match(source, /loadedRef\.current\.audio !== displayedAudio\.slug/);
+  assert.match(source, /progress\.key === displayedAudioKey/);
+  assert.match(source, /displayedAudio\.slug !== selected\.slug \? \(/);
+  assert.match(source, /Lire la sélection : \{selected\.title\}/);
 });
 
 test("mobile media choices stay complete, tactile and contained without a horizontal carousel", async () => {
@@ -77,16 +88,19 @@ test("mobile media choices stay complete, tactile and contained without a horizo
   ]);
   const mobile = styles.match(/@media \(max-width: 540px\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-  assert.match(source, /return "Voir le visuel"/);
-  assert.match(source, /return "Écouter l’audio"/);
-  assert.match(source, /return "Voir la vidéo"/);
-  assert.match(styles, /\.creation-stage__media-tabs \{[\s\S]*?flex-wrap: wrap;[\s\S]*?overflow: visible;/);
-  assert.match(mobile, /\.creation-stage__media-tabs \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*overflow: visible;/);
-  assert.match(mobile, /\.creation-stage__media-tabs button \{[^}]*width: 100%;[^}]*min-width: 0;[^}]*min-height: 48px;[^}]*white-space: normal;/);
-  assert.match(mobile, /button:nth-child\(3\):last-child \{ grid-column: 1 \/ -1; \}/);
+  assert.match(source, /return "Visuel"/);
+  assert.match(source, /return "Audio"/);
+  assert.match(source, /return "Vidéo"/);
+  assert.match(source, /creation\.cover\.id !== creation\.poster\?\.id/);
+  assert.match(source, /!presentationMedia\(creation\)\.includes\("cover"\) \? "video" : primary/);
+  assert.match(source, /onClick=\{\(\) => selectMedia\(kind, selected\)\}/);
+  const selection = source.match(/const selectMedia = useCallback\([\s\S]*?\n  \}, \[/)?.[0] ?? "";
+  assert.doesNotMatch(selection, /\bplay\(/);
+  assert.match(styles, /\.creation-stage__media-tabs \{[\s\S]*?grid-auto-flow: column;[\s\S]*?overflow: visible;/);
+  assert.match(mobile, /\.creation-stage__media-tabs button \{[^}]*width: 100%;[^}]*min-width: 0;[^}]*min-height: 44px;[^}]*white-space: normal;/);
 });
 
-test("catalogue cards clamp exceptional labels and titles without mutating their accessible text", async () => {
+test("catalogue cards reflow exceptional labels and titles without truncation", async () => {
   const [source, styles] = await Promise.all([
     read("components/creations/creation-media-stage.tsx"),
     read("app/creations/creations.css"),
@@ -95,8 +109,11 @@ test("catalogue cards clamp exceptional labels and titles without mutating their
   assert.match(source, /<small>\{creation\.category \|\| "Création"\}/);
   assert.match(source, /<strong>\{creation\.title\}<\/strong>/);
   assert.doesNotMatch(source, /creation\.title\.(?:slice|substring)\(/);
-  assert.match(styles, /\.creation-card__body small \{[\s\S]*?max-height: 2\.7em;[\s\S]*?overflow: hidden;[\s\S]*?overflow-wrap: anywhere;[\s\S]*?-webkit-line-clamp: 2;/);
-  assert.match(styles, /\.creation-card__body strong \{[\s\S]*?max-height: 3\.15em;[\s\S]*?overflow: hidden;[\s\S]*?overflow-wrap: anywhere;[\s\S]*?-webkit-line-clamp: 3;/);
+  for (const selector of ["small", "strong"]) {
+    const rule = styles.match(new RegExp(`\\.creation-card__body ${selector} \\{([^}]+)\\}`))?.[1] ?? "";
+    assert.match(rule, /overflow-wrap: anywhere/);
+    assert.doesNotMatch(rule, /max-height:|line-clamp:|overflow: hidden/);
+  }
 });
 
 test("public catalogue filters are data-driven, accessible and keep mixed media in both media filters", async () => {
@@ -123,6 +140,10 @@ test("detail pages rely on the stage controls without duplicating catalogue acti
 
   assert.match(source, /\{showGrid \? \(\s*<div className="creation-stage__actions">/);
   assert.match(source, /<Link href=\{`\/creations\/\$\{selected\.slug\}`\}>Découvrir la création/);
+  const actions = source.match(/<div className="creation-stage__actions">([\s\S]*?)<\/div>/)?.[1] ?? "";
+  assert.doesNotMatch(actions, /<button|\bplay\(/);
+  assert.doesNotMatch(source, /▶|Ⅱ|♪|→/);
+  assert.match(source, /className="creation-stage__launch"[\s\S]*?<UiIcon name="play" \/>/);
 });
 
 test("the stage keeps 16:9, 9:16 and 1:1 media contained at all responsive tiers", async () => {
@@ -133,11 +154,15 @@ test("the stage keeps 16:9, 9:16 and 1:1 media contained at all responsive tiers
 
   assert.match(source, /creationVideoOrientation\(selected\.video\)/);
   assert.match(source, /data-video-orientation=\{videoOrientation\}/);
-  assert.match(styles, /data-video-orientation="landscape"[^}]*\{[^}]*aspect-ratio: 16 \/ 9/s);
-  assert.match(styles, /data-video-orientation="portrait"[^}]*\{[^}]*aspect-ratio: 9 \/ 16/s);
-  assert.match(styles, /data-video-orientation="square"[^}]*\{[^}]*aspect-ratio: 1;/s);
+  assert.match(source, /frameAsset\.width \/ frameAsset\.height/);
+  assert.match(source, /style=\{\{ aspectRatio: frameRatio/);
+  assert.match(source, /asset=\{state\.selectedMedia === "video" \? selected\.poster \?\? selected\.cover : artwork\}/);
+  assert.doesNotMatch(styles, /data-video-visible="true"\]\[data-video-orientation/);
+  assert.match(styles, /\.creation-stage__launch \{[^}]*width: 52px;[^}]*height: 52px;/s);
   assert.match(styles, /\.creation-stage__video\.is-visible[\s\S]*?object-fit: contain/);
   assert.match(styles, /\.creation-artwork img \{ object-fit: contain; \}/);
+  assert.doesNotMatch(styles, /object-fit: cover/);
+  assert.doesNotMatch(source, /creation-stage__audio-overlay|creation-stage__ambient/);
   assert.doesNotMatch(styles, /aspect-ratio:\s*min\(/);
   assert.match(styles, /@media \(max-width: 1120px\)/);
   assert.match(styles, /@media \(max-width: 820px\)/);

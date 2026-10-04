@@ -30,4 +30,5 @@
 .confirmation button { min-height: 48px; }
 .form button:focus-visible, .form input:focus-visible { outline: 2px solid #ffe09a; outline-offset: 4px; }
 .form fieldset:disabled { opacity: .65; }
+.unavailable { padding: 1rem; margin: 0 0 1.5rem; border: 1px solid #ddb45c44; border-radius: .7rem; color: #e9dcc0; font-size: 1rem; line-height: 1.6; }
 @media (max-width: 767px) { .layout { grid-template-columns: 1fr; gap: 2rem; } .hero { padding: calc(var(--header-height, 64px) + 2rem) 0 3rem; } .notes { grid-template-columns: 1fr; gap: 1rem; margin-top: 2.5rem; } .intro h1 { font-size: 2.7rem; } }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 import type { Project } from "@/lib/catalog/types";
 import { getProjectKindLabel, getProjectStatusLabel } from "@/lib/catalog/types";
 import { ProjectArtwork } from "@/components/project-artwork";
@@ -24,7 +25,7 @@ export function AlbumCard({ project, priority = false, compact = false }: AlbumC
             </p>
             <h3>{project.title}</h3>
           </div>
-          <span className="release-card__action" aria-hidden="true"><small>Entrer</small> →</span>
+          <span className="release-card__action" aria-hidden="true"><small>Entrer</small> <UiIcon name="arrow-right" /></span>
         </div>
       </Link>
     </article>

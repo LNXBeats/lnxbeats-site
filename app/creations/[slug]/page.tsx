@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import { CreationMediaStage } from "@/components/creations/creation-media-stage";
@@ -86,7 +87,7 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
           {creation.credits || creation.links.length ? (
             <aside>
               {creation.credits ? <div><p className="creation-detail-content__label">Crédits</p><p className="creation-detail-content__credits">{creation.credits}</p></div> : null}
-              {creation.links.length ? <div><p className="creation-detail-content__label">Prolonger</p><ul>{creation.links.map((link) => <li key={link.id}><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}<span aria-hidden="true">↗</span></a></li>)}</ul></div> : null}
+              {creation.links.length ? <div><p className="creation-detail-content__label">Prolonger</p><ul>{creation.links.map((link) => <li key={link.id}><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}<span aria-hidden="true"><UiIcon name="arrow-up-right" /></span></a></li>)}</ul></div> : null}
             </aside>
           ) : null}
         </div>
@@ -96,7 +97,7 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
         {related.length ? (
           <section className="creation-related" aria-labelledby="creation-related-title">
             <div><p className="creation-detail-content__label">À suivre</p><h2 id="creation-related-title">D’autres rencontres.</h2></div>
-            <div>{related.map((item) => <Link href={`/creations/${item.slug}`} key={item.slug}><span>{item.category || "Création"}</span><strong>{item.title}</strong><small>Découvrir <span aria-hidden="true">→</span></small></Link>)}</div>
+            <div>{related.map((item) => <Link href={`/creations/${item.slug}`} key={item.slug}><span>{item.category || "Création"}</span><strong>{item.title}</strong><small>Découvrir <span aria-hidden="true"><UiIcon name="arrow-right" /></span></small></Link>)}</div>
           </section>
         ) : null}
       </Container>

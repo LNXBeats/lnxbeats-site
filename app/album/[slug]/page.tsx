@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Container } from "@/components/container";
 import { AudioPreviewPlayer } from "@/components/audio-preview-player";
@@ -66,7 +67,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
       <header className="album-hero" data-motion-scene="album">
         <div className="album-hero__backdrop" aria-hidden="true" />
         <Container className="album-hero__inner">
-          <Link className="back-link" href="/discographie"><span aria-hidden="true">←</span> Retour à la discographie</Link>
+          <Link className="back-link" href="/discographie"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Retour à la discographie</Link>
           <div className="album-hero__grid">
             <div data-motion-layer="media"><ProjectArtwork project={project} priority sizes="(max-width: 820px) 100vw, 48vw" className="album-hero__art" /></div>
             <div className="album-hero__content" data-motion-layer="copy">

@@ -43,10 +43,11 @@ test("the mobile menu keeps focus, scroll lock and viewport changes fail-safe", 
 
   assert.match(header, /aria-expanded=\{open\}/);
   assert.match(header, /aria-controls="mobile-navigation"/);
-  assert.match(header, /aria-hidden=\{!open\}/);
-  assert.match(header, /inert=\{!open\}/);
-  assert.match(header, /event\.key === "Escape"[\s\S]*?menuButtonRef\.current\?\.focus\(\)/);
-  assert.match(header, /firstLinkRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(header, /<dialog[\s\S]*?aria-modal="true"/);
+  assert.match(header, /dialog\.showModal\(\)/);
+  assert.match(header, /dialog\.close\(\)/);
+  assert.match(header, /event\.key === "Escape"[\s\S]*?menuButton\?\.focus\(\)/);
+  assert.match(header, /closeButtonRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(header, /const previousOverflow = document\.body\.style\.overflow;/);
   assert.match(header, /document\.body\.style\.overflow = previousOverflow;/);
   assert.match(header, /window\.matchMedia\("\(min-width: 821px\)"\)/);

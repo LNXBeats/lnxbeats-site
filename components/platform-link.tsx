@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { ExternalLinkIcon } from "@/components/link-icons";
+import styles from "./platform-link.module.css";
 
 type PlatformLinkProps = {
   icon?: string;
@@ -16,31 +17,38 @@ function platformAction(name: string) {
   return `Écouter LNX Beats sur ${name}`;
 }
 
+function platformDescription(name: string) {
+  if (name === "YouTube") return "Clips, morceaux et coulisses";
+  if (name === "TikTok") return "Extraits et découvertes";
+  if (name === "Instagram") return "Actualités et coulisses";
+  return "Écouter la musique";
+}
+
 export function PlatformLink({ icon, name, url, compact = false, featured = false }: PlatformLinkProps) {
   const tone = name.toLowerCase().replaceAll(" ", "-");
   const action = platformAction(name);
   const className = [
-    "platform-link",
-    compact ? "platform-link--compact" : null,
-    featured ? "platform-link--featured" : null,
+    styles.link,
+    compact ? styles.compact : null,
+    featured ? styles.featured : null,
   ].filter(Boolean).join(" ");
 
   return (
     <a
       className={className}
+      data-platform-link
       data-platform={tone}
       data-featured={featured ? "true" : undefined}
-      data-motion-tilt={compact ? undefined : "contact-card"}
       href={url}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`${action} — nouvel onglet`}
     >
-      <span className={`platform-link__mark${icon ? " platform-link__mark--brand" : ""}`} aria-hidden="true">
-        {icon ? <Image src={icon} alt="" width={24} height={24} sizes="24px" /> : <><i /><i /><i /></>}
+      <span className={styles.mark} aria-hidden="true">
+        {icon ? <Image src={icon} alt="" width={32} height={32} sizes="32px" /> : <><i /><i /><i /></>}
       </span>
-      <span><strong>{name}</strong>{compact ? null : <small>{action}</small>}</span>
-      <ExternalLinkIcon className="platform-link__arrow link-icon" />
+      <span className={styles.copy}><strong>{name}</strong>{compact ? null : <small>{platformDescription(name)}</small>}</span>
+      <span className={styles.termination}><ExternalLinkIcon className={styles.arrow} /></span>
     </a>
   );
 }

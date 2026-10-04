@@ -78,7 +78,7 @@ test("V3 drives the shared public identity while retaining V2 as the lower style
   }
   // VFinal explicitly reuses the exact supplied JPEG in an editorial signature,
   // not in the hero or the navigation. No regeneration or image transform.
-  assert.match(home, /home-platforms-vfinal__intro[\s\S]*signature-source-apple-artist\.jpg[^>]+unoptimized/);
+  assert.match(home, /styles.signature[\s\S]*signature-source-apple-artist\.jpg[^>]+unoptimized/);
 });
 
 test("V3 follows the page rules without inventing catalogue or Commander behavior", async () => {
@@ -115,7 +115,7 @@ test("V3 follows the page rules without inventing catalogue or Commander behavio
   assert.match(about, /artistBiography\.principal\.map/);
   assert.match(about, /href="\/discographie"/);
   assert.match(about, /\/assets\/v3\/hero-main-ludovic-dog-exact\.jpg/);
-  assert.match(contact, /contact-hero contact-hero--v3/);
+  assert.match(contact, /className=\{styles.hero\}/);
   assert.match(contact, /\/assets\/v3\/hero-main-ludovic-dog-exact\.jpg/);
 });
 
@@ -153,7 +153,7 @@ test("V3 keeps responsive, low-height and reduced-motion safeguards explicit", a
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
 
   assert.match(header, /event\.key === "Escape"/);
-  assert.match(header, /menuButtonRef\.current\?\.focus\(\)/);
+  assert.match(header, /menuButton\?\.focus\(\)/);
   assert.match(header, /aria-expanded=\{open\}/);
   assert.match(header, /aria-controls="mobile-navigation"/);
 });

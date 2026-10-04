@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { UiIcon } from "@/components/ui-icon";
 
 import { ButtonLink } from "@/components/button";
 import { ShopAddButton } from "@/components/shop-add-button";
@@ -115,7 +116,7 @@ export default async function ShopPage() {
               <p className="eyebrow">Sélection disponible</p>
               <h2 id="shop-products-title">La collection.</h2>
             </div>
-            <Link className="text-link" href="/boutique/panier">Voir le panier <span aria-hidden="true">→</span></Link>
+            <Link className="text-link" href="/boutique/panier">Voir le panier <span aria-hidden="true"><UiIcon name="arrow-right" /></span></Link>
           </div>
           <div className="shop-product-grid">
             {products.map((product) => (

@@ -69,7 +69,8 @@ test("responsive and motion safeguards remain explicit", async () => {
   assert.match(motion, /requestAnimationFrame/);
   assert.match(header, /HEADER_COMPACT_SCROLL_THRESHOLD = 72/);
   assert.match(header, /event\.key === "Escape"/);
-  assert.match(header, /menuButtonRef\.current\?\.focus\(\)/);
+  assert.match(header, /const menuButton = menuButtonRef\.current;/);
+  assert.match(header, /return \(\) => \{\s*dialog\.close\(\);[\s\S]*?menuButton\?\.focus\(\)/);
 });
 
 test("the public shop remains qualitative and DistroKid remains distinct", async () => {

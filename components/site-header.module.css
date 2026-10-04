@@ -1,0 +1,84 @@
+.accountIcon { width: 20px; height: 20px; }
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #f4f1e8;
+  background: #090b0c;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dialog::backdrop { background: #090b0c; }
+
+.dialogHeader {
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  align-items: center;
+  min-height: calc(64px + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid #ffffff14;
+}
+
+.closeButton {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  color: #f4f1e8;
+  background: transparent;
+  cursor: pointer;
+}
+
+.closeButton svg { width: 22px; height: 22px; }
+.dialogBrand { display: grid; place-items: center; min-height: 48px; justify-self: center; width: 148px; }
+.dialogBrand img { width: 100%; height: auto; }
+.dialogBody { width: min(100%, 560px); margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.navigation { display: grid; gap: 12px; }
+.group { min-width: 0; }
+.groupLabel { margin: 0 12px 4px; color: #b8b6ad; font-size: 12px; font-weight: 600; line-height: 1.5; letter-spacing: .08em; text-transform: uppercase; }
+
+.menuLink {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 18px;
+  gap: 14px;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #f4f1e8;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.menuLink > svg { width: 22px; height: 22px; color: #d5ae58; }
+.menuLink > svg:last-child { width: 18px; height: 18px; color: #b8b6ad; }
+.menuLink[aria-current="page"] { color: #f1ce83; background: #d5ae5812; }
+.menuLink[aria-current="page"] > svg:last-child { color: inherit; }
+.menuLink:hover, .closeButton:hover { background: #ffffff0a; }
+.dialog :is(a, button):focus-visible { outline: 2px solid #edca7d; outline-offset: 2px; }
+.account { margin-top: 16px; padding-block: 8px; border-block: 1px solid #ffffff20; }
+.socials { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; margin-top: 12px; }
+.socials a { display: grid; place-items: center; min-width: 44px; min-height: 44px; border-radius: 10px; }
+.socials img { width: 22px; height: 22px; object-fit: contain; }
+.signature { margin: 12px 0 0; color: #b8b6ad; text-align: center; font-size: 13px; line-height: 1.5; }
+
+@media (max-width: 350px) {
+  .socials { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
+  .dialogHeader { grid-template-columns: 48px minmax(0, 1fr); }
+  .dialogBrand { width: min(148px, 100%); }
+}

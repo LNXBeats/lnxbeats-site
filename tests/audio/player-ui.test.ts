@@ -88,3 +88,17 @@ test("studio-vinyl CSS remains compact, responsive and motion-safe", async () =>
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?animation: none !important;/);
   assert.match(css, /input\[type="range"\][\s\S]*?::-webkit-slider-runnable-track/);
 });
+
+test("standalone strip uses an owned compact layout without truncating the played title", async () => {
+  const [component, css] = await Promise.all([
+    source("components/audio-preview-player.tsx"),
+    source("components/audio-preview-player.module.css"),
+  ]);
+  assert.match(component, /import styles from "\.\/audio-preview-player\.module\.css"/);
+  assert.match(component, /className=\{styles\.progress\}/);
+  assert.match(component, /timeLabel\(currentTime\).*timeLabel\(duration\)/);
+  assert.match(css, /grid-template-columns: 48px minmax\(0, 1fr\)/);
+  assert.match(css, /\.body strong[^}]*overflow-wrap: anywhere/);
+  assert.match(css, /\.progress input[^}]*min-height: 44px/);
+  assert.doesNotMatch(css, /text-overflow: ellipsis|max-height:|!important/);
+});

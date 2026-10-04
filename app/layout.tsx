@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteMotion } from "@/components/site-motion";
 import { CANONICAL_SITE_ORIGIN } from "@/lib/seo/canonical";
 import { buildSiteStructuredData } from "@/lib/seo/structured-data";
+import { isSupportEnabled } from "@/lib/support/config";
 import "./globals.css";
 import "./visual-phase2.css";
 import "./visual-phase3.css";
@@ -66,7 +67,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <a className="skip-link" href="#contenu">Aller au contenu</a>
         <OrderJourneyProvider>
-          <SiteHeader />
+          <SiteHeader supportAvailable={isSupportEnabled()} />
           <QuickAccessBar />
           <main id="contenu">{children}</main>
           <SiteFooter />
