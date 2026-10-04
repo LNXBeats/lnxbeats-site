@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { Client } from "pg";
 import { provisionSupportRuntimePrivileges } from "@/lib/support/runtime-privileges";
+import { provisionExternalProductRuntimePrivileges } from "@/lib/shop/external-product-runtime-privileges";
 
 import {
   provisionAdminOrderVisibilityAuditPrivileges,
@@ -31,6 +32,7 @@ try {
   const result = await provisionCreationsRuntimePrivileges(client, decodeURIComponent(runtime.username));
   const orderVisibilityAudit = await provisionAdminOrderVisibilityAuditPrivileges(client);
   const support = await provisionSupportRuntimePrivileges(client, decodeURIComponent(runtime.username));
+  const externalShopProducts = await provisionExternalProductRuntimePrivileges(client, decodeURIComponent(runtime.username));
   console.log(JSON.stringify({
     status: "ok",
     database: result.database,
@@ -41,6 +43,7 @@ try {
     sequences: result.sequences,
     orderVisibilityAudit,
     support,
+    externalShopProducts,
     defaultPrivileges: "not used; provisioning is prefix-scoped plus the exact order visibility audit table",
   }, null, 2));
 } finally {

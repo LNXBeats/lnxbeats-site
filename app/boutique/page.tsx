@@ -5,12 +5,14 @@ import { UiIcon } from "@/components/ui-icon";
 
 import { ButtonLink } from "@/components/button";
 import { ShopAddButton } from "@/components/shop-add-button";
+import { ShopExternalProductCard } from "@/components/shop-external-product-card";
 import { ShopProductMedia } from "@/components/shop-product-media";
 import { ShopSupportCard } from "@/components/shop-support-card";
 import { Container } from "@/components/container";
 import { siteConfig } from "@/data/site";
 import { parseShopConfiguration } from "@/lib/shop/config";
 import { formatShopMoney } from "@/lib/shop/order-presentation";
+import { listPublicExternalProducts } from "@/lib/shop/external-product-service";
 import { listPublicShopProducts } from "@/lib/shop/order-service";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 
@@ -98,8 +100,12 @@ export default async function ShopPage() {
   }
   if (!shopEnabled) return <ShopTeaser />;
 
-  const products = await listPublicShopProducts();
-  if (!products.length) return <ShopEmptyState />;
+  const [products, externalProducts] = await Promise.all([listPublicShopProducts(), listPublicExternalProducts()]);
+  if (!products.length && !externalProducts.length) return <ShopEmptyState />;
+  const collection = [
+    ...products.map((product) => ({ kind: "internal" as const, id: product.id, position: product.position, product })),
+    ...externalProducts.map((product) => ({ kind: "external" as const, id: product.id, position: product.position, product })),
+  ].sort((left, right) => left.position - right.position || left.kind.localeCompare(right.kind) || left.id.localeCompare(right.id));
 
   return (
     <div className="shop-commerce-shell">
@@ -121,44 +127,44 @@ export default async function ShopPage() {
             <Link className="text-link" href="/boutique/panier">Voir le panier <span aria-hidden="true"><UiIcon name="arrow-right" /></span></Link>
           </div>
           <div className="shop-product-grid">
-            {products.map((product, index) => (
-              <Fragment key={product.id}>
+            {collection.map((item) => item.kind === "internal" ? (
+              <Fragment key={`internal:${item.id}`}>
               <article className="shop-product-card" data-motion-tilt="shop-product">
-                <Link className="shop-product-card__image" href={`/boutique/${encodeURIComponent(product.slug)}`}>
+                <Link className="shop-product-card__image" href={`/boutique/${encodeURIComponent(item.product.slug)}`}>
                   <ShopProductMedia
-                    image={product.image}
-                    productTitle={product.title}
+                    image={item.product.image}
+                    productTitle={item.product.title}
                     sizes="(max-width: 429px) calc(100vw - 32px), (max-width: 900px) calc(50vw - 40px), (max-width: 1440px) calc(33vw - 48px), 340px"
                   />
                 </Link>
                 <div className="shop-product-card__body">
                   <p className="shop-product-card__status">
-                    {product.availabilityState === "SOLD_OUT"
+                    {item.product.availabilityState === "SOLD_OUT"
                       ? "Épuisé"
-                      : product.availabilityState === "TEMPORARILY_UNAVAILABLE"
+                      : item.product.availabilityState === "TEMPORARILY_UNAVAILABLE"
                         ? "Temporairement indisponible"
                         : "Disponible"}
                   </p>
-                  <h3><Link href={`/boutique/${encodeURIComponent(product.slug)}`}>{product.title}</Link></h3>
+                  <h3><Link href={`/boutique/${encodeURIComponent(item.product.slug)}`}>{item.product.title}</Link></h3>
                   <div className="shop-product-card__footer">
-                    <strong>{formatShopMoney(product.priceCents)}</strong>
+                    <strong>{formatShopMoney(item.product.priceCents)}</strong>
                     <div className="shop-product-card__actions">
-                      <Link className="text-link" href={`/boutique/${encodeURIComponent(product.slug)}`}>Voir le produit</Link>
+                      <Link className="text-link" href={`/boutique/${encodeURIComponent(item.product.slug)}`}>Voir le produit</Link>
                       <ShopAddButton
-                        disabled={product.soldOut}
-                        maxQuantity={product.availableQuantity}
-                        productId={product.id}
-                        unavailableLabel={product.availabilityState === "TEMPORARILY_UNAVAILABLE" ? "Temporairement indisponible" : "Épuisé"}
+                        disabled={item.product.soldOut}
+                        maxQuantity={item.product.availableQuantity}
+                        productId={item.product.id}
+                        unavailableLabel={item.product.availabilityState === "TEMPORARILY_UNAVAILABLE" ? "Temporairement indisponible" : "Épuisé"}
                       />
                     </div>
                   </div>
                 </div>
               </article>
-              {index === 1 ? <ShopSupportCard /> : null}
               </Fragment>
-            ))}
-            {products.length < 2 ? <ShopSupportCard /> : null}
+            ) : <ShopExternalProductCard key={`external:${item.id}`} product={item.product} />)}
+            <ShopSupportCard />
           </div>
+          {externalProducts.length ? <p className="shop-external-product-disclosure">Pour les produits externes, prix et conditions définitifs affichés sur DistroKid.</p> : null}
         </Container>
       </section>
       <DistroKidMerchSection soft />

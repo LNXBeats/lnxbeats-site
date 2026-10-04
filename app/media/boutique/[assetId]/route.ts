@@ -27,9 +27,10 @@ async function serve(request: Request, params: Promise<{ assetId: string }>, hea
       mimeType: "image/webp",
       visibility: "PUBLIC",
       rightsStatus: "CLEARED",
-      products: {
-        some: { position: 0, product: { status: "PUBLISHED", priceCents: { not: null } } },
-      },
+      OR: [
+        { products: { some: { position: 0, product: { status: "PUBLISHED", priceCents: { not: null } } } } },
+        { externalShopProduct: { is: { status: "PUBLISHED" } } },
+      ],
     },
     select: {
       storageKey: true,

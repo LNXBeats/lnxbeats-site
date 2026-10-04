@@ -247,6 +247,7 @@ export async function deleteCatalogProject(projectId: string, rawConfirmation: u
         projects: { none: {} },
         orders: { none: {} },
         products: { none: {} },
+        externalShopProduct: null,
         contractDocuments: { none: {} },
       },
       select: { id: true, storageKey: true, storageBackend: true, storageProvider: true, visibility: true },
@@ -262,6 +263,7 @@ export async function deleteCatalogProject(projectId: string, rawConfirmation: u
           projects: { none: {} },
           orders: { none: {} },
           products: { none: {} },
+          externalShopProduct: null,
           contractDocuments: { none: {} },
         },
       });
@@ -273,6 +275,7 @@ export async function deleteCatalogProject(projectId: string, rawConfirmation: u
           projects: { none: {} },
           orders: { none: {} },
           products: { none: {} },
+          externalShopProduct: null,
           contractDocuments: { none: {} },
         },
       });

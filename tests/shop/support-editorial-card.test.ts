@@ -18,12 +18,11 @@ test("support editorial card links only to the existing support module", async (
   assert.match(card, /<\/Link>\s*<div className="shop-product-card__body">/);
 });
 
-test("editorial card follows the second product without filtering or mutating products", async () => {
+test("editorial card remains last after the ordered internal and external collection", async () => {
   const page = await read("app/boutique/page.tsx");
-  assert.match(page, /products\.map\(\(product, index\)/);
-  assert.match(page, /<\/article>\s*\{index === 1 \? <ShopSupportCard \/> : null\}/);
-  assert.match(page, /products.length < 2 \? <ShopSupportCard \/> : null/);
-  assert.doesNotMatch(page, /products\.(sort|splice|push|filter)\(/);
+  assert.match(page, /collection\.map/);
+  assert.match(page, /<ShopExternalProductCard[\s\S]*<ShopSupportCard \/>/);
+  assert.doesNotMatch(page, /products\.(splice|push|filter)\(/);
 });
 
 test("support card keeps supplied square asset and accessible flow-based CTA", async () => {

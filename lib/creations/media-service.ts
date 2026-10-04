@@ -177,6 +177,7 @@ function orphanWhere(id: string) {
     creations: { none: {} },
     projects: { none: {} },
     products: { none: {} },
+    externalShopProduct: null,
     orders: { none: {} },
     contractDocuments: { none: {} },
   } satisfies Prisma.AssetWhereInput;

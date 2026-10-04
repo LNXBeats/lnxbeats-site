@@ -164,6 +164,7 @@ async function removeNewObjectAfterFailure(candidate: ProductImageCleanupCandida
         where: {
           id: candidate.id,
           products: { none: {} },
+          externalShopProduct: null,
           projects: { none: {} },
           orders: { none: {} },
           contractDocuments: { none: {} },
@@ -176,6 +177,7 @@ async function removeNewObjectAfterFailure(candidate: ProductImageCleanupCandida
       where: {
         id: candidate.id,
         products: { none: {} },
+        externalShopProduct: null,
         projects: { none: {} },
         orders: { none: {} },
         contractDocuments: { none: {} },
@@ -192,6 +194,7 @@ async function removeObsoleteObject(candidate: ProductImageCleanupCandidate) {
       where: {
         id: candidate.id,
         products: { none: {} },
+        externalShopProduct: null,
         projects: { none: {} },
         orders: { none: {} },
         contractDocuments: { none: {} },
@@ -203,6 +206,7 @@ async function removeObsoleteObject(candidate: ProductImageCleanupCandidate) {
       where: {
         id: candidate.id,
         products: { none: {} },
+        externalShopProduct: null,
         projects: { none: {} },
         orders: { none: {} },
         contractDocuments: { none: {} },
@@ -217,6 +221,7 @@ async function assertDedicatedProductImageAsset(transaction: Transaction, assetI
   const asset = await transaction.asset.findUnique({
     where: { id: assetId },
     select: {
+      externalShopProduct: { select: { id: true } },
       _count: { select: { products: true, projects: true, orders: true, contractDocuments: true } },
     },
   });
@@ -226,6 +231,7 @@ async function assertDedicatedProductImageAsset(transaction: Transaction, assetI
     || asset._count.projects !== 0
     || asset._count.orders !== 0
     || asset._count.contractDocuments !== 0
+    || asset.externalShopProduct !== null
   ) {
     throw new ProductImageError(
       "SHARED_ASSET",

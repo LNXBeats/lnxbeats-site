@@ -7,6 +7,8 @@ import { AdminIcon } from "@/components/admin-icons";
 import { AdminStatusBadge } from "@/components/admin-v21-ui";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatProductPrice } from "@/lib/shop/product-domain";
+import { formatExternalProductPrice } from "@/lib/shop/external-product-domain";
+import { listAdminExternalProducts } from "@/lib/shop/external-product-service";
 import { listAdminProducts } from "@/lib/shop/product-service";
 import { getShopAdminOperationalStatus, shopAdminOperationalLabel } from "@/lib/shop/admin-operational-status";
 
@@ -24,8 +26,9 @@ export default async function AdminShopPage({
   const params = await searchParams;
   const query = params.q ?? "";
   const status = params.statut ?? "all";
-  const [products, operations] = await Promise.all([
+  const [products, externalProducts, operations] = await Promise.all([
     listAdminProducts(query, status),
+    listAdminExternalProducts(query, status),
     Promise.resolve(getShopAdminOperationalStatus()),
   ]);
 
@@ -36,6 +39,7 @@ export default async function AdminShopPage({
       <div className="admin-page-heading__actions">
         <p>Les produits naissent en brouillon. Leur publication alimente la Boutique publique lorsque les guards opérationnels sont prêts.</p>
         <Link className="admin-primary-action" href="/admin/boutique/nouveau"><span aria-hidden="true">+</span> Nouveau produit</Link>
+        <Link className="admin-primary-action" href="/admin/boutique/externe/nouveau"><span aria-hidden="true">+</span> Produit externe DistroKid</Link>
         <Link className="admin-row-action" href="/admin/boutique/logistique">Consulter la logistique <span aria-hidden="true">→</span></Link>
         {process.env.SHOP_AFTER_SALES_ENABLED === "true" ? <Link className="admin-row-action" href="/admin/boutique/retours">Consulter le SAV <span aria-hidden="true">→</span></Link> : null}
       </div>
@@ -77,6 +81,10 @@ export default async function AdminShopPage({
           <Link className="admin-v21-entity-card__action" href={`/admin/boutique/${product.slug}`}>Voir ou modifier <AdminIcon name="arrow" /></Link>
         </li>)}
       </ul> : <div className="admin-empty"><h2>Aucun produit.</h2><p>Créez un brouillon ou modifiez les filtres.</p></div>}
+    </section>
+    <section className="admin-list-window" aria-labelledby="external-products-title">
+      <div className="admin-list-window__heading"><h2 id="external-products-title">Produits externes DistroKid</h2><span>{externalProducts.length} produit{externalProducts.length === 1 ? "" : "s"}</span></div>
+      {externalProducts.length ? <ul className="admin-v21-entity-grid">{externalProducts.map((product) => <li key={product.id} className="admin-v21-entity-card"><div className="admin-v21-entity-card__main"><div className="admin-v21-entity-card__art">{product.image ? <Image unoptimized src={`/api/admin/boutique/external-products/${product.id}/image`} width={92} height={92} alt="" /> : <AdminIcon name="box" />}</div><div><span className="admin-v21-entity-card__eyebrow">TYPE · Produit externe DistroKid</span><h3><Link href={`/admin/boutique/externe/${product.id}`}>{product.title}</Link></h3><AdminStatusBadge label={STATUS_LABELS[product.status]} tone={product.status === "PUBLISHED" ? "ok" : product.status === "DRAFT" ? "attention" : "neutral"} /></div></div><div className="admin-v21-product-facts"><strong>{formatExternalProductPrice(product.priceCents, product.currency)}</strong><span>Aucun stock LNX</span><small>Position {product.position} · vente chez DistroKid</small></div><Link className="admin-v21-entity-card__action" href={`/admin/boutique/externe/${product.id}`}>Voir ou modifier <AdminIcon name="arrow" /></Link></li>)}</ul> : <div className="admin-empty"><h2>Aucun produit externe.</h2><p>Ajoutez une mise en avant DistroKid lorsque nécessaire.</p></div>}
     </section>
   </div>;
 }

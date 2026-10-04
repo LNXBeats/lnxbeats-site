@@ -28,7 +28,7 @@ test("product detail exposes a bounded accessible quantity selector without chan
   ]);
 
   assert.match(productPage, /maxQuantity=\{product\.availableQuantity\}/);
-  assert.match(cataloguePage, /maxQuantity=\{product\.availableQuantity\}/);
+  assert.match(cataloguePage, /maxQuantity=\{item\.product\.availableQuantity\}/);
   assert.match(productPage, /showQuantity/);
   assert.doesNotMatch(cataloguePage, /showQuantity/);
   assert.match(button, /<span>Quantité<\/span>[\s\S]*<select/);
@@ -51,8 +51,8 @@ test("public shop presentation distinguishes unavailable reservations from sold 
     readFile(new URL("../../app/boutique/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../components/shop-cart.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(cataloguePage, /availabilityState === "SOLD_OUT"[\s\S]*"Épuisé"[\s\S]*availabilityState === "TEMPORARILY_UNAVAILABLE"[\s\S]*"Temporairement indisponible"/);
-  assert.match(cataloguePage, /unavailableLabel=\{product\.availabilityState === "TEMPORARILY_UNAVAILABLE"/);
+  assert.match(cataloguePage, /item\.product\.availabilityState === "SOLD_OUT"[\s\S]*"Épuisé"[\s\S]*item\.product\.availabilityState === "TEMPORARILY_UNAVAILABLE"[\s\S]*"Temporairement indisponible"/);
+  assert.match(cataloguePage, /unavailableLabel=\{item\.product\.availabilityState === "TEMPORARILY_UNAVAILABLE"/);
   assert.match(productPage, /Indisponible temporairement : les derniers exemplaires sont réservés/);
   assert.match(productPage, /: "Disponible\."/);
   assert.doesNotMatch(productPage, /`\$\{product\.availableQuantity\} exemplaire/);
@@ -68,8 +68,8 @@ test("shop page distinguishes a closed gate from an enabled empty catalogue", as
   const page = await readFile(new URL("../../app/boutique/page.tsx", import.meta.url), "utf8");
 
   const disabledBranch = page.indexOf("if (!shopEnabled) return <ShopTeaser />");
-  const productQuery = page.indexOf("await listPublicShopProducts()");
-  const emptyBranch = page.indexOf("if (!products.length) return <ShopEmptyState />");
+  const productQuery = page.indexOf("listPublicShopProducts(), listPublicExternalProducts()");
+  const emptyBranch = page.indexOf("if (!products.length && !externalProducts.length) return <ShopEmptyState />");
   assert.ok(disabledBranch >= 0 && productQuery > disabledBranch && emptyBranch > productQuery);
   assert.match(page, /shopEnabled = parseShopConfiguration\(\)\.enabled/);
   assert.match(page, /La Boutique est activée, mais aucun produit publié n’est disponible/);

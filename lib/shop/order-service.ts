@@ -218,6 +218,7 @@ function presentProduct(product: PublicProductRecord, activeReserved: number) {
     slug: product.slug,
     title: product.title,
     description: product.description,
+    position: product.position,
     priceCents: product.priceCents!,
     currency: "EUR" as const,
     trackInventory: product.trackInventory,

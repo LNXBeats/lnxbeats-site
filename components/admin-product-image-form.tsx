@@ -65,6 +65,7 @@ export function AdminProductImageForm({
   currentImage,
   status,
   initialState,
+  endpoint: endpointOverride,
 }: {
   productId: string;
   lockVersion: number;
@@ -72,6 +73,7 @@ export function AdminProductImageForm({
   currentImage: CurrentImage | null;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   initialState?: string;
+  endpoint?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,7 +82,7 @@ export function AdminProductImageForm({
   const [state, setState] = useState(initialState);
   const [alt, setAlt] = useState(currentImage?.alt || productTitle);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
-  const endpoint = `/api/admin/boutique/products/${encodeURIComponent(productId)}/image`;
+  const endpoint = endpointOverride ?? `/api/admin/boutique/products/${encodeURIComponent(productId)}/image`;
   const editable = status === "DRAFT";
 
   useEffect(() => () => {

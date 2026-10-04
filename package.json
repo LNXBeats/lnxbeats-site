@@ -64,6 +64,8 @@
     "test:security": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/security/*.test.ts",
     "test:pricing": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/pricing/*.test.ts",
     "test:shop": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/shop/*.test.ts",
+    "test:shop:external-runtime": "NODE_ENV=test NODE_OPTIONS=--conditions=react-server node --import tsx scripts/test-external-product-runtime.ts",
+    "shop:external:review-fixture": "NODE_OPTIONS=--conditions=react-server node --import tsx scripts/external-shop-review-fixture.ts",
     "test:legal": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/legal/*.test.ts",
     "test:seo": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/seo/*.test.ts",
     "test:merchant": "NODE_OPTIONS=--conditions=react-server node --import tsx --test tests/merchant/*.test.ts",

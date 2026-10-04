@@ -950,6 +950,9 @@ model User {
   productsUpdated                    Product[]                         @relation("ProductUpdatedBy")
   productStockAdjustments            ProductStockAdjustment[]          @relation("ProductStockAdjustmentActor")
   productAuditEvents                 ProductAuditEvent[]               @relation("ProductAuditEventActor")
+  externalShopProductsCreated        ExternalShopProduct[]             @relation("ExternalShopProductCreatedBy")
+  externalShopProductsUpdated        ExternalShopProduct[]             @relation("ExternalShopProductUpdatedBy")
+  externalShopProductAuditEvents     ExternalShopProductAuditEvent[]   @relation("ExternalShopProductAuditActor")
   shopOrders                         ShopOrder[]                       @relation("ShopOrderOwner")
   shopOrderEvents                    ShopOrderEvent[]                  @relation("ShopOrderEventActor")
   shopOrderLifecycleEvents           ShopOrderLifecycleEvent[]         @relation("ShopOrderLifecycleEventActor")
@@ -1277,30 +1280,31 @@ model ConfidenceAnnotation {
 }
 
 model Asset {
-  id                String              @id @default(uuid()) @db.Uuid
-  type              AssetType
-  storageKey        String              @unique @db.VarChar(500)
-  storageBackend    MediaStorageBackend @default(LOCAL)
-  storageProvider   String              @default("local") @db.VarChar(80)
-  visibility        MediaVisibility     @default(PRIVATE)
-  checksumSha256    String?             @db.VarChar(64)
-  filename          String              @db.VarChar(255)
-  mimeType          String              @db.VarChar(160)
-  sizeBytes         BigInt
-  width             Int?
-  height            Int?
-  durationMs        Int?                @map("duration_ms")
-  alt               String?             @db.VarChar(500)
-  rightsStatus      RightsStatus        @default(UNKNOWN)
-  rightsNote        String?             @db.Text
-  confidence        DataConfidence      @default(UNKNOWN)
-  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
-  projects          ProjectAsset[]
-  orders            OrderAsset[]
-  contractDocuments ContractDocument[]
-  products          ProductAsset[]
-  creations         CreationAsset[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  type                AssetType
+  storageKey          String               @unique @db.VarChar(500)
+  storageBackend      MediaStorageBackend  @default(LOCAL)
+  storageProvider     String               @default("local") @db.VarChar(80)
+  visibility          MediaVisibility      @default(PRIVATE)
+  checksumSha256      String?              @db.VarChar(64)
+  filename            String               @db.VarChar(255)
+  mimeType            String               @db.VarChar(160)
+  sizeBytes           BigInt
+  width               Int?
+  height              Int?
+  durationMs          Int?                 @map("duration_ms")
+  alt                 String?              @db.VarChar(500)
+  rightsStatus        RightsStatus         @default(UNKNOWN)
+  rightsNote          String?              @db.Text
+  confidence          DataConfidence       @default(UNKNOWN)
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
+  projects            ProjectAsset[]
+  orders              OrderAsset[]
+  contractDocuments   ContractDocument[]
+  products            ProductAsset[]
+  externalShopProduct ExternalShopProduct?
+  creations           CreationAsset[]
 
   @@index([type, rightsStatus])
   @@index([storageBackend, visibility])
@@ -2274,6 +2278,50 @@ model Product {
   @@index([createdByAdminId])
   @@index([updatedByAdminId])
   @@map("products")
+}
+
+model ExternalShopProduct {
+  id               String                          @id @default(uuid()) @db.Uuid
+  title            String                          @db.VarChar(240)
+  provider         String                          @default("DISTROKID") @db.VarChar(40)
+  providerLabel    String                          @default("PRODUIT DÉRIVÉ · DISTROKID") @db.VarChar(80)
+  externalUrl      String                          @db.Text
+  priceCents       Int?
+  currency         String                          @default("EUR") @db.VarChar(3)
+  position         Int                             @default(0)
+  status           ProductStatus                   @default(DRAFT)
+  imageAssetId     String?                         @unique @db.Uuid
+  publishedAt      DateTime?                       @db.Timestamptz(3)
+  archivedAt       DateTime?                       @db.Timestamptz(3)
+  lockVersion      Int                             @default(1)
+  createdByAdminId String?                         @db.Uuid
+  updatedByAdminId String?                         @db.Uuid
+  createdAt        DateTime                        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                        @updatedAt @db.Timestamptz(3)
+  image            Asset?                          @relation(fields: [imageAssetId], references: [id], onDelete: Restrict)
+  createdByAdmin   User?                           @relation("ExternalShopProductCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  updatedByAdmin   User?                           @relation("ExternalShopProductUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+  auditEvents      ExternalShopProductAuditEvent[]
+
+  @@index([status, position, createdAt])
+  @@index([createdByAdminId])
+  @@index([updatedByAdminId])
+  @@map("external_shop_products")
+}
+
+model ExternalShopProductAuditEvent {
+  id                    String              @id @default(uuid()) @db.Uuid
+  externalShopProductId String              @db.Uuid
+  action                ProductAuditAction
+  actorAdminId          String?             @db.Uuid
+  metadata              Json                @default("{}")
+  occurredAt            DateTime            @default(now()) @db.Timestamptz(3)
+  externalShopProduct   ExternalShopProduct @relation(fields: [externalShopProductId], references: [id], onDelete: Restrict)
+  actorAdmin            User?               @relation("ExternalShopProductAuditActor", fields: [actorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([externalShopProductId, occurredAt])
+  @@index([actorAdminId])
+  @@map("external_shop_product_audit_events")
 }
 
 model PackagingProfile {

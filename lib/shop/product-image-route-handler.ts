@@ -30,6 +30,7 @@ export type ProductImageMutationDependencies = Readonly<{
 
 export function createProductImageMutationDependencies(
   admin: ProductImageMutationDependencies["admin"],
+  overrides: Partial<Pick<ProductImageMutationDependencies, "replace" | "updateAlt" | "remove">> = {},
 ): ProductImageMutationDependencies {
   return {
     baseUrl: () => process.env.AUTH_URL ?? process.env.SITE_URL ?? "http://127.0.0.1:3000",
@@ -37,9 +38,9 @@ export function createProductImageMutationDependencies(
     admin,
     readForm: readProductImageFormData,
     readJson: readProductImageJson,
-    replace: replaceAdminProductImage,
-    updateAlt: updateAdminProductImageAlt,
-    remove: deleteAdminProductImage,
+    replace: overrides.replace ?? replaceAdminProductImage,
+    updateAlt: overrides.updateAlt ?? updateAdminProductImageAlt,
+    remove: overrides.remove ?? deleteAdminProductImage,
   };
 }
 
@@ -130,6 +131,7 @@ export async function handleProductImageUpload(
   request: Request,
   productId: string,
   dependencies: ProductImageMutationDependencies,
+  locationFor: (baseUrl: string, slug: string, state: string) => string = location,
 ) {
   const authorization = await authorizeMutation(request, dependencies);
   if (!authorization) return json({ ok: false }, 403);
@@ -149,7 +151,7 @@ export async function handleProductImageUpload(
       ok: true,
       state: "image-enregistree",
       assetId: result.assetId,
-      location: location(authorization.baseUrl, result.slug, "image-enregistree"),
+      location: locationFor(authorization.baseUrl, result.slug, "image-enregistree"),
     });
   } catch (error) {
     return errorResponse(error);
@@ -160,6 +162,7 @@ export async function handleProductImageAltUpdate(
   request: Request,
   productId: string,
   dependencies: ProductImageMutationDependencies,
+  locationFor: (baseUrl: string, slug: string, state: string) => string = location,
 ) {
   const authorization = await authorizeMutation(request, dependencies);
   if (!authorization) return json({ ok: false }, 403);
@@ -185,7 +188,7 @@ export async function handleProductImageAltUpdate(
       ok: true,
       state: "image-alt-enregistre",
       assetId: result.assetId,
-      location: location(authorization.baseUrl, result.slug, "image-alt-enregistre"),
+      location: locationFor(authorization.baseUrl, result.slug, "image-alt-enregistre"),
     });
   } catch (error) {
     return errorResponse(error);
@@ -196,6 +199,7 @@ export async function handleProductImageDelete(
   request: Request,
   productId: string,
   dependencies: ProductImageMutationDependencies,
+  locationFor: (baseUrl: string, slug: string, state: string) => string = location,
 ) {
   const authorization = await authorizeMutation(request, dependencies);
   if (!authorization) return json({ ok: false }, 403);
@@ -217,7 +221,7 @@ export async function handleProductImageDelete(
     return json({
       ok: true,
       state: "image-supprimee",
-      location: location(authorization.baseUrl, result.slug, "image-supprimee"),
+      location: locationFor(authorization.baseUrl, result.slug, "image-supprimee"),
     });
   } catch (error) {
     return errorResponse(error);

@@ -6,9 +6,9 @@ const read = (path: string) => readFile(new URL(`../../${path}`, import.meta.url
 
 test("collection cards omit descriptions but preserve price, availability and independent actions", async () => {
   const page = await read("app/boutique/page.tsx");
-  const cards = page.slice(page.indexOf("products.map"));
+  const cards = page.slice(page.indexOf("collection.map"));
   assert.doesNotMatch(cards, /product\.description/);
-  for (const field of ["product.image", "product.title", "product.priceCents", "product.soldOut", "product.availableQuantity"]) assert.ok(cards.includes(field), field);
+  for (const field of ["item.product.image", "item.product.title", "item.product.priceCents", "item.product.soldOut", "item.product.availableQuantity"]) assert.ok(cards.includes(field), field);
   assert.match(cards, /Voir le produit/);
   assert.match(cards, /<\/Link>\s*<ShopAddButton/);
   assert.doesNotMatch(cards, /stock\}/);
