@@ -1,5 +1,6 @@
 import { siteConfig } from "@/data/site";
 import { canonicalPublicUrl } from "@/lib/seo/canonical";
+import { isValidGtin, type MerchantMetadata } from "@/lib/merchant/metadata";
 
 export const MERCHANT_CENTER_FEED_PATH = "/merchant-center.xml" as const;
 export const MERCHANT_CENTER_FEED_CONTENT_TYPE = "application/xml; charset=utf-8" as const;
@@ -17,7 +18,7 @@ if (new Set(merchantMpns).size !== merchantMpns.length) {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,158}[a-z0-9])?$/;
 
-export type MerchantFeedProduct = Readonly<{
+export type MerchantFeedProduct = Readonly<MerchantMetadata & {
   id: string;
   slug: string;
   title: string;
@@ -45,7 +46,10 @@ export type MerchantFeedItem = Readonly<{
   price: string;
   condition: "new";
   brand: string;
-  mpn: string;
+  mpn: string | null;
+  gtin: string | null;
+  color: string | null;
+  identifiersAbsent: boolean;
   shippingWeight: string;
 }>;
 
@@ -77,7 +81,8 @@ export function escapeMerchantXml(value: string) {
 export function toMerchantFeedItem(product: MerchantFeedProduct): MerchantFeedItem | null {
   const title = product.title.trim();
   const description = product.description.trim();
-  const mpn = merchantMpnForProductSlug(product.slug);
+  const mpn = merchantMpnForProductSlug(product.slug) ?? product.merchantMpn?.trim() ?? null;
+  const gtin = product.merchantGtin?.trim() || null;
   if (
     !product.shippingRequired
     || !UUID_PATTERN.test(product.id)
@@ -94,7 +99,9 @@ export function toMerchantFeedItem(product: MerchantFeedProduct): MerchantFeedIt
     || product.shippingWeightGrams <= 0
     || !product.image
     || !UUID_PATTERN.test(product.image.id)
-    || !mpn
+    || (gtin !== null && !isValidGtin(gtin))
+    || (!mpn && !gtin && product.merchantIdentifiersAbsent !== true)
+    || (product.merchantIdentifiersAbsent === true && Boolean(mpn || gtin))
   ) return null;
 
   return {
@@ -108,6 +115,9 @@ export function toMerchantFeedItem(product: MerchantFeedProduct): MerchantFeedIt
     condition: "new",
     brand: siteConfig.name,
     mpn,
+    gtin,
+    color: product.merchantColor?.trim() || null,
+    identifiersAbsent: product.merchantIdentifiersAbsent === true,
     shippingWeight: `${product.shippingWeightGrams} g`,
   };
 }
@@ -128,7 +138,10 @@ function serializeItem(item: MerchantFeedItem) {
     element("g:price", item.price),
     element("g:condition", item.condition),
     element("g:brand", item.brand),
-    element("g:mpn", item.mpn),
+    ...(item.mpn ? [element("g:mpn", item.mpn)] : []),
+    ...(item.gtin ? [element("g:gtin", item.gtin)] : []),
+    ...(item.color ? [element("g:color", item.color)] : []),
+    ...(item.identifiersAbsent ? [element("g:identifier_exists", "no")] : []),
     element("g:shipping_weight", item.shippingWeight),
     "  </item>",
   ].join("\n");

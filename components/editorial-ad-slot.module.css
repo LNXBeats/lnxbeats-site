@@ -1,0 +1,25 @@
+.section { margin-block: 4rem; }
+.placeholder {
+  box-sizing: border-box;
+  max-width: 728px;
+  min-height: 100px;
+  margin-inline: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 8px;
+  background: rgb(9 12 14 / 72%);
+  color: #c9c9c4;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.label { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: #d5c38a; }
+.placeholder small { font-size: 12px; }
+@media (max-width: 760px) {
+  .section { margin-block: 3rem; }
+  .placeholder { min-height: 120px; padding: 16px; }
+}

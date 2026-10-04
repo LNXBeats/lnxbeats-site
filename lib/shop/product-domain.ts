@@ -1,4 +1,6 @@
 import { generatedSlugCandidate, slugifyTitle } from "@/lib/seo/slugs";
+import { parseMerchantMetadata, type MerchantMetadata } from "@/lib/merchant/metadata";
+import { merchantMpnForProductSlug } from "@/lib/merchant/product-feed";
 
 const PRODUCT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,158}[a-z0-9])?$/;
 const RESERVED_PRODUCT_SLUGS = new Set(["commandes", "nouveau"]);
@@ -25,9 +27,10 @@ const CREATE_UPDATE_FIELDS = new Set([
   "shippingPriceCents",
   "shippingWeightGrams",
   "position",
+  "merchantMpn", "merchantGtin", "merchantColor", "merchantIdentifiersAbsent",
 ]);
 
-export type ProductEditorInput = {
+export type ProductEditorInput = MerchantMetadata & {
   slug: string;
   title: string;
   description: string;
@@ -144,7 +147,18 @@ export function parseProductEditorInput(input: Record<string, unknown>): Product
   if ((input.currency ?? "EUR") !== "EUR") {
     throw new ProductValidationError("Seule la devise EUR est autorisée pour cette fondation.", "INVALID_CURRENCY");
   }
+  let merchant: MerchantMetadata;
+  try {
+    merchant = parseMerchantMetadata(input);
+    const historicalMpn = merchantMpnForProductSlug(String(input.slug));
+    if (historicalMpn && (merchant.merchantIdentifiersAbsent || (merchant.merchantMpn && merchant.merchantMpn !== historicalMpn))) {
+      throw new Error("L’identifiant fabricant historique doit être conservé.");
+    }
+  } catch (error) {
+    throw new ProductValidationError(error instanceof Error ? error.message : "Attribut Merchant invalide.", "INVALID_MERCHANT_METADATA");
+  }
   return {
+    ...merchant,
     slug: parseProductSlug(input.slug || generatedSlugCandidate(input.title, RESERVED_PRODUCT_SLUGS)),
     title: text(input.title, "Le titre", 240),
     description: text(input.description, "La description", 10_000),

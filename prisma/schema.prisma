@@ -2246,33 +2246,37 @@ model MusicPricingActivation {
 }
 
 model Product {
-  id                  String                   @id @default(uuid()) @db.Uuid
-  slug                String                   @unique @db.VarChar(160)
-  formerSlugs         String[]                 @default([]) @map("formerSlugs")
-  title               String                   @db.VarChar(240)
-  description         String                   @db.Text
-  status              ProductStatus            @default(DRAFT)
-  priceCents          Int?
-  currency            String                   @default("EUR") @db.VarChar(3)
-  trackInventory      Boolean                  @default(false)
-  stock               Int?
-  shippingRequired    Boolean                  @default(false)
-  shippingPriceCents  Int                      @default(0)
-  shippingWeightGrams Int?
-  position            Int                      @default(0)
-  publishedAt         DateTime?                @db.Timestamptz(3)
-  archivedAt          DateTime?                @db.Timestamptz(3)
-  lockVersion         Int                      @default(1)
-  createdByAdminId    String?                  @db.Uuid
-  updatedByAdminId    String?                  @db.Uuid
-  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime                 @updatedAt @db.Timestamptz(3)
-  createdByAdmin      User?                    @relation("ProductCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
-  updatedByAdmin      User?                    @relation("ProductUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
-  assets              ProductAsset[]
-  stockAdjustments    ProductStockAdjustment[]
-  auditEvents         ProductAuditEvent[]
-  shopOrderItems      ShopOrderItem[]
+  id                        String                   @id @default(uuid()) @db.Uuid
+  slug                      String                   @unique @db.VarChar(160)
+  formerSlugs               String[]                 @default([]) @map("formerSlugs")
+  title                     String                   @db.VarChar(240)
+  description               String                   @db.Text
+  status                    ProductStatus            @default(DRAFT)
+  priceCents                Int?
+  currency                  String                   @default("EUR") @db.VarChar(3)
+  trackInventory            Boolean                  @default(false)
+  stock                     Int?
+  shippingRequired          Boolean                  @default(false)
+  shippingPriceCents        Int                      @default(0)
+  shippingWeightGrams       Int?
+  position                  Int                      @default(0)
+  merchantMpn               String?                  @db.VarChar(70)
+  merchantGtin              String?                  @db.VarChar(14)
+  merchantColor             String?                  @db.VarChar(100)
+  merchantIdentifiersAbsent Boolean                  @default(false)
+  publishedAt               DateTime?                @db.Timestamptz(3)
+  archivedAt                DateTime?                @db.Timestamptz(3)
+  lockVersion               Int                      @default(1)
+  createdByAdminId          String?                  @db.Uuid
+  updatedByAdminId          String?                  @db.Uuid
+  createdAt                 DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                 @updatedAt @db.Timestamptz(3)
+  createdByAdmin            User?                    @relation("ProductCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  updatedByAdmin            User?                    @relation("ProductUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+  assets                    ProductAsset[]
+  stockAdjustments          ProductStockAdjustment[]
+  auditEvents               ProductAuditEvent[]
+  shopOrderItems            ShopOrderItem[]
 
   @@index([status, position, createdAt])
   @@index([createdByAdminId])

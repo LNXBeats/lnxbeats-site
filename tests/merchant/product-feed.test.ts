@@ -207,6 +207,21 @@ test("a future product without an explicit Merchant MPN fails closed", () => {
   assert.doesNotMatch(buildMerchantCenterFeed([future]), /<item>/);
 });
 
+test("new internal product uses saved metadata without a code registry change", () => {
+  const newProduct = product({ slug: "nouvelle-edition", merchantMpn: "LNX-EDITION-QA", merchantColor: "Noir / Blanc" });
+  const xml = buildMerchantCenterFeed([newProduct]);
+  assert.match(xml, /<g:mpn>LNX-EDITION-QA<\/g:mpn>/);
+  assert.match(xml, /<g:color>Noir \/ Blanc<\/g:color>/);
+  assert.match(JSON.stringify(buildProductStructuredData(newProduct)), /"color":"Noir \/ Blanc"/);
+});
+
+test("GTIN only and explicitly confirmed absence are supported, never inferred", () => {
+  assert.ok(toMerchantFeedItem(product({ slug: "qa-gtin", merchantGtin: "4006381333931" })));
+  assert.equal(toMerchantFeedItem(product({ slug: "qa-gtin", merchantGtin: "4006381333932" })), null);
+  assert.match(buildMerchantCenterFeed([product({ slug: "qa-artisan", merchantIdentifiersAbsent: true })]), /<g:identifier_exists>no<\/g:identifier_exists>/);
+  assert.equal(toMerchantFeedItem(product({ merchantIdentifiersAbsent: true })), null);
+});
+
 test("services and non-physical catalogue entries are excluded", () => {
   const xml = buildMerchantCenterFeed([product({ shippingRequired: false })]);
   assert.doesNotMatch(xml, /<item>/);

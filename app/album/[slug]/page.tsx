@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EditorialAdSlot } from "@/components/editorial-ad-slot";
 import Link from "next/link";
 import { UiIcon } from "@/components/ui-icon";
 import { notFound, permanentRedirect } from "next/navigation";
@@ -33,7 +34,7 @@ export async function generateMetadata({ params }: AlbumPageProps): Promise<Meta
   if (!project) return { title: "Projet introuvable", robots: { index: false, follow: false }, alternates: { canonical: null } };
 
   const canonical = `/album/${project.slug}`;
-  const title = project.seo.title ?? project.title;
+  const title = project.seo.title?.trim() || `${project.title} · ${getProjectKindLabel(project.type)}`;
 
   return createPublicPageMetadata({
     title,
@@ -112,6 +113,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
           <Tracklist project={project} />
         </Container>
       </section>
+      <EditorialAdSlot pathname={`/album/${project.slug}`} slot="content" />
     </>
   );
 }

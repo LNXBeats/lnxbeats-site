@@ -1,3 +1,5 @@
+import { automaticSeoSummary } from "@/lib/seo/summary";
+
 type CatalogSeoInput = {
   title: string;
   shortDescription: string | null;
@@ -12,9 +14,7 @@ export function effectiveCatalogSeoTitle(project: CatalogSeoInput) {
 
 export function effectiveCatalogSeoDescription(project: CatalogSeoInput) {
   return project.seoDescription?.trim()
-    || project.description?.trim()
-    || project.shortDescription?.trim()
-    || `${project.title.trim()} — LNX Beats`;
+    || automaticSeoSummary(project.description?.trim() || project.shortDescription?.trim() || `${project.title.trim()} — LNX Beats`);
 }
 
 export function catalogSeoMode(project: CatalogSeoInput) {

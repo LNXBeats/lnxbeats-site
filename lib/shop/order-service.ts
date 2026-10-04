@@ -122,6 +122,11 @@ const orderProductSelect = {
 
 const publicProductSelect = {
   ...orderProductSelect,
+  updatedAt: true,
+  merchantMpn: true,
+  merchantGtin: true,
+  merchantColor: true,
+  merchantIdentifiersAbsent: true,
   assets: {
     where: productImageWhere,
     orderBy: { position: "asc" as const },
@@ -219,6 +224,11 @@ function presentProduct(product: PublicProductRecord, activeReserved: number) {
     title: product.title,
     description: product.description,
     position: product.position,
+    updatedAt: product.updatedAt,
+    merchantMpn: product.merchantMpn,
+    merchantGtin: product.merchantGtin,
+    merchantColor: product.merchantColor,
+    merchantIdentifiersAbsent: product.merchantIdentifiersAbsent,
     priceCents: product.priceCents!,
     currency: "EUR" as const,
     trackInventory: product.trackInventory,

@@ -14,6 +14,7 @@ export const ADMIN_PRODUCT_EDITOR_FORM_FIELDS = [
   "shippingPrice",
   "shippingWeightGrams",
   "position",
+  "merchantMpn", "merchantGtin", "merchantColor", "merchantIdentifiersAbsent",
 ] as const;
 
 const PRODUCT_EDITOR_PASSTHROUGH_FIELDS = [
@@ -26,6 +27,7 @@ const PRODUCT_EDITOR_PASSTHROUGH_FIELDS = [
   "shippingRequired",
   "shippingWeightGrams",
   "position",
+  "merchantMpn", "merchantGtin", "merchantColor", "merchantIdentifiersAbsent",
 ] as const;
 
 const PRODUCT_PRICE_MAXIMUM_CENTS = 10_000_000;

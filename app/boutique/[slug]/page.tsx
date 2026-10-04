@@ -12,6 +12,7 @@ import { getPublicShopProduct } from "@/lib/shop/order-service";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildProductStructuredData } from "@/lib/seo/structured-data";
 import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
+import { automaticSeoSummary } from "@/lib/seo/summary";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: Context): Promise<Metadata> {
   if (!product) return { title: "Produit indisponible", robots: { index: false, follow: false }, alternates: { canonical: null } };
   return createPublicPageMetadata({
     title: product.title,
-    description: product.description.slice(0, 180),
+    description: automaticSeoSummary(product.description),
     pathname: `/boutique/${product.slug}`,
     image: product.image ? `/media/boutique/${product.image.id}` : "/og.png",
     imageAlt: product.image?.alt ?? `${product.title} — LNX Beats`,
@@ -58,6 +59,7 @@ export default async function ShopProductPage({ params }: Context) {
             <p className="eyebrow">Édition LNX Beats</p>
             <h1>{product.title}</h1>
             <p className="shop-product-detail__description">{product.description}</p>
+            {product.merchantColor ? <p>Couleur : {product.merchantColor}</p> : null}
             <strong className="shop-product-detail__price">{formatShopMoney(product.priceCents)}</strong>
             <p className="shop-product-detail__availability">
               {product.availabilityState === "SOLD_OUT"

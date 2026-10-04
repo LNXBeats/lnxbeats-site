@@ -1,6 +1,8 @@
 import { siteConfig } from "@/data/site";
 import type { PublicProject } from "@/lib/catalog/types";
 import { canonicalPublicUrl } from "@/lib/seo/canonical";
+import { merchantMpnForProductSlug } from "@/lib/merchant/product-feed";
+import { isValidGtin, type MerchantMetadata } from "@/lib/merchant/metadata";
 
 export const LNX_ARTIST_ID = `${canonicalPublicUrl()}#artist`;
 export const LNX_WEBSITE_ID = `${canonicalPublicUrl()}#website`;
@@ -210,7 +212,7 @@ export function buildProjectStructuredData(project: PublicProject) {
   };
 }
 
-type StructuredProduct = Readonly<{
+type StructuredProduct = Readonly<MerchantMetadata & {
   slug: string;
   title: string;
   description: string;
@@ -244,12 +246,16 @@ export function buildProductStructuredData(product: StructuredProduct) {
           image: canonicalPublicUrl(`/media/boutique/${product.image.id}`),
         } : {}),
         brand: { "@type": "Brand", name: siteConfig.name },
+        ...((merchantMpnForProductSlug(product.slug) ?? product.merchantMpn) ? { mpn: merchantMpnForProductSlug(product.slug) ?? product.merchantMpn } : {}),
+        ...(product.merchantGtin && isValidGtin(product.merchantGtin) ? { gtin: product.merchantGtin } : {}),
+        ...(product.merchantColor ? { color: product.merchantColor } : {}),
         offers: {
           "@type": "Offer",
           url,
           price: (product.priceCents / 100).toFixed(2),
           priceCurrency: product.currency,
           availability,
+          itemCondition: "https://schema.org/NewCondition",
         },
       },
     ],

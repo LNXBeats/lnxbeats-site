@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EditorialAdSlot } from "@/components/editorial-ad-slot";
 import Image from "next/image";
 import Link from "next/link";
 import { AudioPreviewPlayer } from "@/components/audio-preview-player";
@@ -68,5 +69,6 @@ export default async function HomePage() {
       <ul className={styles.platformIcons} aria-label="Écouter et suivre LNX Beats">{quickAccessPlatforms.map(({ name, url, icon }) => <li key={name}><a href={url} target="_blank" rel="noopener noreferrer" aria-label={`${name} — nouvel onglet`} title={name}><Image src={icon} alt="" width={28} height={28} /><span className="visually-hidden">{name}</span></a></li>)}</ul>
       <div className={styles.signature}><p>Merci à tous ceux qui écoutent, partagent et soutiennent.<br />Vous faites vivre cette aventure.</p><Image src="/assets/v3/lnx-beats-signature-source-apple-artist.jpg" alt="LNX Beats — signature officielle" width={1536} height={614} unoptimized /></div>
     </Container></section>
+    <EditorialAdSlot pathname="/" slot="footer" />
   </div>;
 }

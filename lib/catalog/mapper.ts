@@ -3,6 +3,7 @@ import { deriveCatalogConfidence } from "@/lib/catalog/confidence";
 import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import { automaticPlatformLabel, resolvePlatformLabel } from "@/lib/catalog/platform-label";
 import { isPublicCatalogLink } from "@/lib/catalog/public-link-policy";
+import { effectiveCatalogSeoDescription } from "@/lib/catalog/seo";
 import type {
   ArtworkTone,
   CreditRole,
@@ -154,7 +155,7 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
     platforms: [...directPlatforms, ...(project.status === "PUBLISHED" ? artistPlatforms : [])],
     seo: {
       title: project.seoTitle ?? undefined,
-      description: project.seoDescription ?? project.description ?? project.shortDescription ?? `${project.title} — LNX Beats`,
+      description: effectiveCatalogSeoDescription(project),
     },
     artworkTone: (["gold", "wine", "graphite", "bronze", "ivory"].includes(project.artworkTone) ? project.artworkTone : "graphite") as ArtworkTone,
     dataConfidence,

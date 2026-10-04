@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EditorialAdSlot } from "@/components/editorial-ad-slot";
 import { Fragment } from "react";
 import Link from "next/link";
 import { UiIcon } from "@/components/ui-icon";
@@ -87,6 +88,7 @@ function ShopEmptyState() {
         </Container>
       </section>
       <DistroKidMerchSection soft />
+      <EditorialAdSlot pathname="/boutique" slot="footer" />
     </div>
   );
 }
@@ -168,6 +170,7 @@ export default async function ShopPage() {
         </Container>
       </section>
       <DistroKidMerchSection soft />
+      <EditorialAdSlot pathname="/boutique" slot="footer" />
     </div>
   );
 }

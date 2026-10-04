@@ -13,3 +13,4 @@ tmp/pdfs/
 output/pdf/*.pdf
 .private/
 .local-media/
+output/google-review/

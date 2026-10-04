@@ -17,7 +17,7 @@ test("collection cards omit descriptions but preserve price, availability and in
 test("product detail and SEO retain the stored description unchanged", async () => {
   const page = await read("app/boutique/[slug]/page.tsx");
   assert.match(page, /shop-product-detail__description">\{product.description\}/);
-  assert.match(page, /description: product.description.slice\(0, 180\)/);
+  assert.match(page, /description: automaticSeoSummary\(product.description\)/);
 });
 
 test("compact collection keeps flow-based layout and accessible mobile actions", async () => {
