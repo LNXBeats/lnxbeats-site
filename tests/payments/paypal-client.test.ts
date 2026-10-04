@@ -42,6 +42,26 @@ test("builds the PayPal order exclusively from the server snapshot", () => {
   assert.equal(body.payment_source.paypal.experience_context.shipping_preference, "NO_SHIPPING");
   assert.equal(body.payment_source.paypal.experience_context.return_url, request.returnUrl);
   assert.equal("amountCents" in body, false);
+  assert.equal("items" in body.purchase_units[0], false);
+  assert.equal("breakdown" in body.purchase_units[0].amount, false);
+});
+
+test("support DONATION carries an exact item total without changing historical payment bodies", () => {
+  const body = paypalCreateOrderBody({ ...request, itemCategory: "DONATION", amountCents: 325,
+    description: "Soutien libre sans contrepartie", payeeMerchantId: "MERCHANTFIXTURE" });
+  const unit = body.purchase_units[0];
+  assert.deepEqual(unit.items, [{ name: "Soutien libre sans contrepartie", category: "DONATION",
+    quantity: "1", unit_amount: { currency_code: "EUR", value: "3.25" } }]);
+  assert.deepEqual(unit.amount.breakdown, { item_total: { currency_code: "EUR", value: "3.25" } });
+  assert.equal(unit.amount.value, "3.25");
+  assert.equal(unit.payee?.merchant_id, "MERCHANTFIXTURE");
+  assert.equal(body.payment_source.paypal.experience_context.shipping_preference, "NO_SHIPPING");
+  const { orderId, ...shopRequest } = request;
+  for (const historical of [request, { ...shopRequest, paymentSource: "SHOP_ORDER" as const, shopOrderId: orderId }]) {
+    const original = paypalCreateOrderBody(historical);
+    assert.equal("items" in original.purchase_units[0], false);
+    assert.equal("breakdown" in original.purchase_units[0].amount, false);
+  }
 });
 
 test("converts fixed EUR amounts without floating-point trust", () => {

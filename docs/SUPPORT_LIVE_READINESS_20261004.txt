@@ -1,0 +1,49 @@
+Soutien — reprise ciblée du 04/10/2026
+
+Provenance : réponses fiscales et PayPal favorables USER_CONFIRMED par Ludovic.
+Correspondances complètes non lues ; aucune affirmation de rescrit formel.
+Précisions utilisateur : PayPal « donation » ; recettes déclarées annuellement.
+Cela ne démontre ni activation d'une permission API, ni exonération TVA,
+ni dispense d'enregistrement des recettes. Registre brut/frais/net connus,
+séparation TEST/LIVE et confirmation de paiement distincte restent conservés.
+Pas de reçu fiscal, de facture de prestation fictive ni de nouvelle promesse.
+
+Adaptation ciblée : le soutien émet items.category=DONATION, quantité 1,
+unit_amount égal au montant serveur EUR et breakdown.item_total identique.
+Commander/Boutique ne renseignent pas cette option : leurs corps historiques
+restent identiques. Aucun changement de tarif, de données ou de visuel.
+La catégorie n'est jamais remplacée pour contourner une permission.
+Les captures/refunds et les preuves déjà acquises gardent leurs contrôles.
+Création Orders v2 DONATION réellement acceptée en Sandbox : nouveau corps,
+montant 3,25 EUR, lien Sandbox valide. Aucune approbation ni capture effectuée
+pour ce contrôle ciblé. Les anciens paiements capturés/remboursés et les tests
+locaux couvrent le règlement ; ils ne sont pas présentés comme une nouvelle
+capture réelle de cette catégorie.
+
+Accès LIVE observés en lecture uniquement : compte Stripe propre lisible par
+le connecteur, charges/payouts actifs, card_payments active, aucune échéance ni
+disabled_reason. La clé serveur restreinte renvoie HTTP403
+more_permissions_required sur GET /v1/account ET GET /v1/accounts/{id}.
+Ce défaut d'accès n'est pas une restriction du compte. Ne pas désactiver la
+liaison marchande et ne pas remplacer la clé par une clé générale.
+Permission minimale de lecture du compte propre à fournir/vérifier avant
+ouverture Stripe. Le webhook soutien dédié LIVE n'est pas encore configuré.
+
+PayPal OAuth LIVE existant et lecture webhooks : HTTP200, un webhook historique
+préservé, aucun webhook soutien LIVE, aucune liaison marchand/webhook soutien.
+Le jeton ne prouve pas la permission DONATION. Aucune commande/capture/refund
+LIVE créée pour tester. Après reconnexion utilisateur, application LIVE
+LNX Studio et compte Business lus ; webhook historique vérifié intact.
+Les écrans application/éligibilité n'exposent aucun contrôle DONATION.
+Cette absence ne prouve ni un refus ni une activation technique particulière.
+Appliquer l'accord utilisateur, sans prétendre avoir relu la réponse PayPal.
+
+Validation adaptation : test nouveau échoue avant correctif puis passe.
+42 tests ciblés PASS ; canonique 1358 PASS, 0 FAIL, 1 SKIP préexistant.
+Installation standard, lint/typecheck, builds Web/worker, Prisma PASS.
+Audit Production 0 ; 5 HIGH dev connues inchangées (braces/glob ESLint).
+
+Tant qu'aucun prestataire n'est complètement prêt : pas de push main, pas de
+migration/ACL Production et pas d'ouverture. Backup final/upgrade à réaliser
+après levée des accès, une seule sauvegarde récente démontrée suffit.
+Préserver main réel, pre-deploy, worker dédié, mémoire et paiements historiques.

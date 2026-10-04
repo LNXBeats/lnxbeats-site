@@ -32,6 +32,10 @@ test("PayPal support reuses sandbox transport, immutable EUR amount and stable r
     assert.equal(payload.purchase_units[0].amount.value, "5.00");
     assert.equal(payload.purchase_units[0].custom_id, id);
     assert.equal(payload.purchase_units[0].reference_id, id);
+    assert.equal(payload.purchase_units[0].items[0].category, "DONATION");
+    assert.equal(payload.purchase_units[0].items[0].quantity, "1");
+    assert.deepEqual(payload.purchase_units[0].items[0].unit_amount, { currency_code: "EUR", value: "5.00" });
+    assert.deepEqual(payload.purchase_units[0].amount.breakdown.item_total, { currency_code: "EUR", value: "5.00" });
     assert.match(payload.purchase_units[0].invoice_id, /^SUPPORT_LNX_BEATS:/);
     assert.equal(payload.payment_source.paypal.experience_context.shipping_preference, "NO_SHIPPING");
     assert.equal((await captureProviderSupport(value, "support-capture-test")).status, "SUCCEEDED");
@@ -64,7 +68,9 @@ test("LIVE PayPal transport binds merchant/mode before capture; closed checkout 
     if (url.endsWith("/v1/oauth2/token")) return Response.json({ access_token: "synthetic_access", token_type: "Bearer" });
     if (url.endsWith("/v2/checkout/orders")) {
       checkoutPosts++;
-      assert.equal(JSON.parse(String(init?.body)).purchase_units[0].payee.merchant_id, "MERCHANTFIXTURE");
+      const unit = JSON.parse(String(init?.body)).purchase_units[0];
+      assert.equal(unit.payee.merchant_id, "MERCHANTFIXTURE");
+      assert.equal(unit.items[0].category, "DONATION");
       return Response.json({ id: value.providerReference, status: "CREATED", links: [{ rel: "approve", href: "https://www.paypal.com/checkoutnow" }] });
     }
     if (url.endsWith("/capture")) capturePosts++;

@@ -89,6 +89,7 @@ export async function createProviderCheckout(value: SupportSnapshot, base: strin
     returnUrl: `${base}/soutenir/confirmation/${value.id}`,
     cancelUrl: `${base}/soutenir/confirmation/${value.id}?annule=1`,
     payeeMerchantId: process.env.SUPPORT_PAYPAL_MERCHANT_ID,
+    itemCategory: "DONATION",
   }, key);
   if (!session.approvalUrl) throw new SupportError("UNAVAILABLE");
   return { id: session.id, url: validateSupportCheckoutUrl(session.approvalUrl, "PAYPAL", mode) };
