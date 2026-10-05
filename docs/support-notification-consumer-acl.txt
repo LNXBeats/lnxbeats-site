@@ -1,0 +1,20 @@
+Addendum ACL uniquement — base approuvée ca71aa7.
+Enqueue : Web uniquement, INSERT existant préservé.
+Consommateur : SELECT support_notifications/support_contributions ; UPDATE uniquement
+status, recipient, attempts, firstAttemptAt, availableAt, leaseToken, leaseUntil,
+providerMessageId, sentAt. Pas de séquence utilisée : identifiants UUID.
+notification_suppressions SELECT relève déjà du consommateur notifications existant.
+Aucun INSERT/DELETE/UPDATE contribution ; aucun DDL ou ownership.
+Groupe stable NOLOGIN : lnx_support_notification_consumer.
+Le rôle rotatif est fourni explicitement via NOTIFICATIONS_RUNTIME_ROLE (non secret),
+obligatoire dans le pre-deploy Web, dérivé du DATABASE_URL du service notifications.
+Mettre à jour cette identification lors d'une rotation ; ne pas coder un nom rotatif.
+Provisionnement idempotent, ownership migration et privilèges effectifs contrôlés.
+Pas de troisième migration : les deux migrations approuvées restent inchangées.
+Le consommateur est déployé au candidat final, sans changement de cron/transport.
+Tests sur copie restaurée, connexion du vrai rôle, transport exclusivement injecté :
+lecture, concurrence, état SENT, timeout/retry/idempotence, refus effectifs.
+Aucun email artificiel ou rétroactif envoyé, aucune opération Stripe.
+Preuve restore Production frais -> upgrade 44/46 -> double provisioning -> tests
+du vrai rôle notifications : PASS. Tous les canaris historiques conservés après
+nettoyage des fixtures exclusivement locales, clair et cluster supprimés.

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { Client } from "pg";
 import { provisionFinancialReviewPrivileges } from "@/lib/admin/financial-event-runtime-privileges";
+import { provisionSupportNotificationConsumer } from "@/lib/support/notification-runtime-privileges";
 import { provisionSupportRuntimePrivileges } from "@/lib/support/runtime-privileges";
 import { provisionExternalProductRuntimePrivileges } from "@/lib/shop/external-product-runtime-privileges";
 
@@ -21,6 +22,8 @@ function requiredPostgresUrl(value: string | undefined, label: string) {
 
 const migration = requiredPostgresUrl(process.env.MIGRATION_DATABASE_URL, "MIGRATION_DATABASE_URL");
 const runtime = requiredPostgresUrl(process.env.RUNTIME_DATABASE_URL ?? process.env.DATABASE_URL, "RUNTIME_DATABASE_URL");
+const notificationsRole = process.env.NOTIFICATIONS_RUNTIME_ROLE?.trim();
+assert.ok(notificationsRole, "NOTIFICATIONS_RUNTIME_ROLE is required for the dedicated consumer ACL.");
 assert.equal(runtime.pathname, migration.pathname, "Runtime and migration URLs must target the same database.");
 
 const client = new Client({
@@ -34,6 +37,7 @@ try {
   const orderVisibilityAudit = await provisionAdminOrderVisibilityAuditPrivileges(client);
   const financialReviewAudit = await provisionFinancialReviewPrivileges(client, decodeURIComponent(runtime.username));
   const support = await provisionSupportRuntimePrivileges(client, decodeURIComponent(runtime.username));
+  const supportNotificationConsumer = await provisionSupportNotificationConsumer(client, notificationsRole, decodeURIComponent(runtime.username));
   const externalShopProducts = await provisionExternalProductRuntimePrivileges(client, decodeURIComponent(runtime.username));
   console.log(JSON.stringify({
     status: "ok",
@@ -46,6 +50,7 @@ try {
     orderVisibilityAudit,
     financialReviewAudit,
     support,
+    supportNotificationConsumer,
     externalShopProducts,
     defaultPrivileges: "not used; provisioning is prefix-scoped plus the exact order visibility audit table",
   }, null, 2));
