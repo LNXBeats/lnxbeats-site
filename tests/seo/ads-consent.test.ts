@@ -1,12 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { createConsentGate, googleConsentState, mayRequestAd, type ConsentState, type TcfData } from "@/lib/ads/consent";
+import { createConsentGate, googleConsentState, googlePreferencesAvailable, mayRequestAd, type ConsentState, type TcfData } from "@/lib/ads/consent";
 import { googleCmpConfigured, liveAdsEnabled, liveAdSlotId } from "@/lib/ads/policy";
 import { approvedPrivacyNotice } from "@/data/legal";
 
 // Provider doubles only. These are not real consent strings or a certified CMP.
 const accepted: TcfData = { cmpStatus: "loaded", eventStatus: "useractioncomplete", tcString: "unit-test-only", vendor: { consents: { 755: true } }, purpose: { consents: { 1: true, 3: true, 4: true } } };
+test("observed Production inactive runtime must not expose a nonfunctional preferences button", () => {
+  const observed = { cmpStatus: "loaded", gdprApplies: true };
+  assert.equal(googlePreferencesAvailable(observed, true), false);
+  assert.equal(googleConsentState(observed, true), "unknown");
+  assert.equal(mayRequestAd("/", "footer", false, "unknown"), false);
+});
+test("preferences require an active European message or a valid retained choice", () => {
+  assert.equal(googlePreferencesAvailable({ cmpStatus: "loaded", gdprApplies: true, eventStatus: "cmpuishown" }, true), true);
+  const choice = { ...accepted, gdprApplies: true };
+  assert.equal(googlePreferencesAvailable(choice, true), true);
+  assert.equal(googlePreferencesAvailable({ ...choice, vendor: { consents: {} } }, true), true);
+  for (const data of [undefined, {}, { ...choice, gdprApplies: false }, { ...choice, gdprApplies: undefined }, { ...choice, cmpStatus: "error" }, { ...choice, tcString: "" }, { ...choice, eventStatus: undefined }]) assert.equal(googlePreferencesAvailable(data, true), false);
+  assert.equal(googlePreferencesAvailable(choice, false), false);
+});
+test("message availability, refusal, acceptance and revocation never open the closed advertising gate", () => {
+  for (const state of ["unknown", "denied", "granted"] as const) assert.equal(mayRequestAd("/", "footer", false, state), false);
+  assert.equal(googlePreferencesAvailable({ ...accepted, gdprApplies: true }, true), true);
+  assert.equal(liveAdsEnabled({ ADS_ENABLED: "true", ADSENSE_SITE_APPROVED: "true" }), false);
+});
 test("absent, failed, loading and open consent UI fail closed", () => {
   for (const data of [undefined, {}, { ...accepted, tcString: "" }, { ...accepted, cmpStatus: "error" }, { ...accepted, eventStatus: "cmpuishown" }]) assert.equal(googleConsentState(data, true), "unknown");
   assert.equal(googleConsentState(accepted, false), "unknown");

@@ -1,5 +1,79 @@
 # CMP / nonce — revue ciblée du 5 octobre 2026
 
+## Incident Production — cette section prévaut sur les conclusions historiques
+
+La recette humaine Safari privée démontre un échec, pas une propagation
+supposée. Message absent, bouton inopérant ; refus/acceptation/retrait non
+exécutables. Le main observé est `8c1b73a774acf3d837a5f73ac3a8228bafc2e48c`.
+
+Observations complémentaires réelles (Safari et navigateur Codex) :
+
+- Le tag `/i/pub-2056594730161751?ers=1` est bien inséré et répond 200.
+  Son script `/f/…` répond aussi 200 ; les requêtes envoient bien le referer
+  `https://www.lnxbeats.fr/`. Google reconnaît `lnxbeats.fr` dans sa réponse.
+- La réponse `/f/…` contient uniquement `cookie_refresh_executable`, pas
+  l'interface européenne. Les marqueurs `__tcfapiLocator`, `googlefcInactive`
+  et `googlefcLoaded` sont présents. Ce marqueur seul n'est PAS un diagnostic
+  de cause ; il est créé lors du bootstrap Google.
+- `__tcfapi` et `googlefc.showRevocationMessage` sont des fonctions. Ping :
+  `cmpLoaded=true`, `cmpStatus=loaded`, `gdprApplies=true`. Le listener renvoie
+  `success=true`, mais aucun `eventStatus` ni chaîne de consentement.
+- Un clic réel sur le bouton déclenche une deuxième requête `/f/…` : son
+  handler n'est pas absent. Les deux réponses sont 200 et ne contiennent
+  que `cookie_refresh_executable` (2926 puis 2973 octets), sans message.
+- Le nonce du script Google est effectivement présent dans Safari. Aucun
+  slot `<ins class=adsbygoogle>` ni chargeur AdSense n'est présent. Pas
+  d'erreur JS/CSP relevée sur ce chargement. Aucune directive n'est donc
+  élargie pour faire disparaître arbitrairement une erreur.
+- Dans AdSense, le message européen est Publié, site `lnxbeats.fr` coché,
+  français, Autoriser/Refuser/Gérer les options activés. Aucun réglage du
+  compte ou de la CMP n'a été modifié.
+
+Défaut d'intégration identifié : le tag de récupération anti-blocage est
+utilisé comme bootstrap autonome AdSense for Content (AFC), sans le tag
+AdSense. La source Google précédemment invoquée pour ce tag concerne les
+éditeurs AdSense for Search (AFS), pas cette intégration AFC. Google exige
+le code AdSense pour déployer le message européen AFC. Le signal
+CONSENT_API_READY a par ailleurs été confondu avec un message opérationnel,
+ce qui explique le bouton visible malgré l'absence d'interface.
+
+Candidat minimal : remplacer le bootstrap anti-blocage par le tag AdSense
+officiel, initialiser `pauseAdRequests=1` AVANT son insertion noncée,
+conserver le verrou logiciel indépendant de diffusion, ne créer ni
+demander aucun slot lorsque les Ads sont OFF, et n'afficher l'entrée de
+révocation qu'après un signal TCF européen actif. Le tag AdSense utilise
+son attribut CORS officiel ; le marqueur anti-blocage artificiel est retiré.
+
+La CSP, ses origines, le proxy, ses nonces cryptographiques, les exclusions,
+les flags, ads.txt, Merchant et les identifiants publics restent inchangés.
+Le style inline historique n'est pas une permission nouvelle de script.
+Tout éventuel besoin supplémentaire de connect/frame/img devra être
+démontré par le vrai runtime, pas ajouté par anticipation.
+
+Limite de preuve : ce changement corrige un prérequis documenté et le faux
+état prêt, mais le retour d'une véritable interface Google, sa CSP interne
+et la révocation restent à tester sur le domaine publié. La Preview Railway
+n'est pas couverte par le message. Pas de spoofing du domaine, pas d'ajout
+de domaine à AdSense, pas de simulation présentée comme recette Google.
+Aucun déploiement Production ni push main de ce correctif.
+
+Validation du candidat local : 32 tests CMP/runtime, consentement,
+exclusions Ads et CSP PASS (0 FAIL, 0 SKIP), lint PASS, typecheck PASS,
+build Web Production PASS, diff-check PASS. Aucun test d'interaction
+Google réelle du candidat n'est acquis. Les exports réseau temporaires
+privés sont supprimés après analyse ; seuls les constats expurgés restent.
+
+Sources officielles consultées le 05/10/2026 :
+
+- https://developers.google.com/funding-choices/fc-api-docs : déploiement
+  via tag AdSense/GPT, portée de CONSENT_API_READY et événements TCF.
+- https://support.google.com/adsense/answer/10960768?hl=en : le code AdSense
+  est un prérequis des messages européens AFC.
+- https://support.google.com/adsense/answer/14325056?hl=en : consignes AFS,
+  non transposables à une CMP autonome AFC.
+- https://support.google.com/adsense/answer/7670312?hl=en : pauseAdRequests=1
+  empêche les demandes d'annonces ; sans reprise aucune annonce n'apparaît.
+
 ## Reprise après publication humaine — runtime consentement seul
 
 Cette section remplace les restrictions historiques de publication ci-dessous.

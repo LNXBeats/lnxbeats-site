@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ADSENSE_CLIENT_ID } from "@/data/adsense";
 import { GOOGLE_CMP_SCRIPT_URL } from "@/data/google-cmp";
-import { createConsentGate, mayRequestAd, type ConsentState, type TcfData } from "@/lib/ads/consent";
+import { createConsentGate, googlePreferencesAvailable, mayRequestAd, type ConsentState, type TcfData } from "@/lib/ads/consent";
 import { allowsAdSlot, type AdSlot } from "@/lib/ads/policy";
 import { isScriptNonce } from "@/lib/security/csp-nonce";
 import styles from "./editorial-ad-slot.module.css";
@@ -20,7 +20,7 @@ type GoogleWindow = Window & {
   };
 };
 
-/** Consent-only bootstrap; advertising retains its independent release lock. */
+/** Paused AFC bootstrap for consent; advertising retains its independent lock. */
 export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
   pathname: string; slot: AdSlot; slotId: string | null; enabled: boolean;
 }) {
@@ -48,35 +48,28 @@ export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
     fc.controlledMessagingFunction = message => message.proceed(allowsAdSlot(location.pathname, slot));
     const subscribe = () => {
       if (disposed) return;
-      setReady(true);
       win.__tcfapi?.("addEventListener", 2, (data, success) => {
         listenerId = data?.listenerId;
         if (disposed) {
           if (listenerId !== undefined) win.__tcfapi?.("removeEventListener", 2, () => {}, listenerId);
           return;
         }
+        setReady(googlePreferencesAvailable(data, success) && typeof fc.showRevocationMessage === "function");
         gate.update(data, success);
       });
     };
     fc.callbackQueue.push({ CONSENT_API_READY: subscribe });
     revoke.current = () => {
       gate.revoke(); // Pause first; Google clears/recollects its own consent record.
+      setReady(false);
       fc.callbackQueue?.push({ CONSENT_API_READY: () => fc.showRevocationMessage?.() });
     };
     if (!document.getElementById("lnx-google-cmp")) {
-      // Presence marker from Google's generated messaging tag. No ad slot.
-      if (!document.querySelector('iframe[name="googlefcPresent"]')) {
-        const marker = document.createElement("iframe");
-        marker.name = "googlefcPresent";
-        marker.hidden = true;
-        marker.tabIndex = -1;
-        marker.setAttribute("aria-hidden", "true");
-        document.body.append(marker);
-      }
       const script = document.createElement("script");
       script.id = "lnx-google-cmp";
       script.async = true;
       script.nonce = nonce;
+      script.crossOrigin = "anonymous"; // Official AdSense tag supports CORS.
       script.src = GOOGLE_CMP_SCRIPT_URL;
       document.head.append(script);
     }

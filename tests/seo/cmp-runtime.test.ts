@@ -21,9 +21,9 @@ test("missing/invalid configuration, wrong site, QA and unpublished CMP fail clo
   }
   for (const overrides of [{ SITE_URL: "https://lnxbeats.fr" }, { SITE_URL: "https://www.lnxbeats.fr.evil.example" }, { SITE_URL: "http://www.lnxbeats.fr" }, { ADS_QA_PLACEHOLDERS: "true" }, { RAILWAY_ENVIRONMENT_NAME: "preview-v33-media" }]) assert.equal(googleCmpConfigured({ ...configured, ...overrides }), false);
 });
-test("only messaging bootstrap is authorized; no ad loader or invented publisher", () => {
-  assert.equal(GOOGLE_CMP_SCRIPT_URL, "https://fundingchoicesmessages.google.com/i/pub-2056594730161751?ers=1");
-  assert.doesNotMatch(GOOGLE_CMP_SCRIPT_URL, /adsbygoogle|pagead|doubleclick/);
+test("AFC uses the official publisher tag, not the AFS/ad-blocking recovery tag", () => {
+  assert.equal(GOOGLE_CMP_SCRIPT_URL, "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2056594730161751");
+  assert.doesNotMatch(GOOGLE_CMP_SCRIPT_URL, /fundingchoicesmessages.*\/i\//);
 });
 test("CMP adds only its exact connect/frame origin to a nonced eligible document", () => {
   const nonce = randomBytes(32).toString("base64");
@@ -38,16 +38,16 @@ test("CMP adds only its exact connect/frame origin to a nonced eligible document
 test("private, support and transaction routes still reject CMP/Ads slots", () => {
   for (const path of ["/admin", "/admin/commandes/x", "/compte", "/commander", "/soutenir", "/boutique/panier", "/boutique/checkout", "/api/support", "/media/private/x", "/confidentialite"]) for (const slot of ["footer", "content"] as const) assert.equal(allowsAdSlot(path, slot), false);
 });
-test("component loads messaging only, pauses first, and routes through explicit origin/nonce checks", async () => {
+test("component pauses before AFC bootstrap and keeps explicit origin/nonce/route checks", async () => {
   const source = await readFile(new URL("../../components/google-consent-ad.tsx", import.meta.url), "utf8");
   assert.match(source, /script.src = GOOGLE_CMP_SCRIPT_URL/);
-  assert.doesNotMatch(source, /ADSENSE_SCRIPT_URL|pagead2|enable_page_level_ads/);
-  // Google's messaging tag is a classic script, without CORS opt-in.
-  // Its response does not grant Access-Control-Allow-Origin.
-  assert.doesNotMatch(source, /script\.crossOrigin/);
+  assert.doesNotMatch(source, /enable_page_level_ads|googlefcPresent/);
+  assert.match(source, /script\.crossOrigin = "anonymous"/);
   assert.ok(source.indexOf("queue.pauseAdRequests = 1") < source.indexOf("document.head.append(script)"));
   assert.match(source, /location.origin !== "https:\/\/www.lnxbeats.fr"/);
   assert.match(source, /data-google-cmp-state=\{consent\}/);
+  assert.doesNotMatch(source, /setReady\(true\)/);
+  assert.match(source, /setReady\(googlePreferencesAvailable\(data, success\)/);
   const boundary = await readFile(new URL("../../components/google-cmp-navigation-boundary.tsx", import.meta.url), "utf8");
   assert.match(boundary, /documentEligible.current !== eligible/);
   assert.match(boundary, /window.location.replace/);

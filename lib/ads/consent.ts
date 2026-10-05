@@ -5,10 +5,19 @@ export type TcfData = {
   eventStatus?: string;
   tcString?: string;
   listenerId?: number;
+  gdprApplies?: boolean;
   purpose?: { consents?: Record<number, boolean> };
   vendor?: { consents?: Record<number, boolean> };
 };
 export type ConsentState = "unknown" | "denied" | "granted";
+
+// CONSENT_API_READY also fires for an inactive Google runtime. A callable
+// revocation API alone is not proof that it can display a European message.
+export function googlePreferencesAvailable(data: TcfData | undefined, success: boolean) {
+  return success && data?.cmpStatus === "loaded" && data.gdprApplies === true
+    && (data.eventStatus === "cmpuishown"
+      || (Boolean(data.tcString) && ["tcloaded", "useractioncomplete"].includes(data.eventStatus ?? "")));
+}
 
 // This is a conservative gate, NOT a CMP or a TCF string generator.
 // Google still validates the full TC string and its own vendor requirements.
