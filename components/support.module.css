@@ -28,6 +28,21 @@
 .confirmation h1 { font-size: clamp(2rem, 5vw, 3.5rem); }
 .confirmation p { line-height: 1.8; }
 .confirmation button { min-height: 48px; }
+.contactFields { display: grid; gap: .65rem; margin-top: 1.5rem; }
+.contactFields label { margin-top: .5rem; color: #f0e7d2; }
+.contactFields input, .contactFields textarea { width: 100%; min-width: 0; border: 1px solid #e1c77e55; border-radius: .7rem; padding: .9rem; background: #0e1010; color: #fff7e6; font: inherit; font-size: 16px; }
+.contactFields input { min-height: 48px; }
+.contactFields textarea { resize: vertical; line-height: 1.6; }
+.thanks { text-align: center; }
+.thanks h1 { display: flex; align-items: center; justify-content: center; gap: .7rem; color: #e4c572; margin: 1.5rem 0; font-size: clamp(3rem, 8vw, 5rem); }
+.thanks h1 svg { width: .8em; height: .8em; }
+.thanks h2 { font-size: clamp(1.3rem, 4vw, 1.8rem); }
+.confirmedAmount { padding: .8rem; border: 1px solid #daba6e55; border-radius: .75rem; color: #f6d788; }
+.acknowledgements { padding: 0; list-style: none; color: #c9d7c2; font-size: .95rem; }
+.acknowledgements li { margin: .75rem 0; }
+.returnActions { display: grid; gap: .8rem; margin-top: 2rem; }
+.returnActions a { min-height: 48px; white-space: normal; }
+.form textarea:focus-visible { outline: 2px solid #ffe09a; outline-offset: 4px; }
 .form button:focus-visible, .form input:focus-visible { outline: 2px solid #ffe09a; outline-offset: 4px; }
 .form fieldset:disabled { opacity: .65; }
 .unavailable { padding: 1rem; margin: 0 0 1.5rem; border: 1px solid #ddb45c44; border-radius: .7rem; color: #e9dcc0; font-size: 1rem; line-height: 1.6; }

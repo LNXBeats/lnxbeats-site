@@ -993,14 +993,40 @@ model SupportContribution {
   paymentReference  String?                      @unique @db.VarChar(255)
   refundReference   String?                      @unique @db.VarChar(255)
   checkoutUrl       String?                      @db.VarChar(2048)
+  supporterEmail    String?                      @db.VarChar(254)
+  supporterMessage  String?                      @db.VarChar(500)
   createdAt         DateTime                     @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime                     @updatedAt @db.Timestamptz(3)
   attempts          SupportContributionAttempt[]
   events            SupportContributionEvent[]
+  notifications     SupportNotification[]
 
   @@index([createdAt])
   @@index([status, createdAt])
   @@map("support_contributions")
+}
+
+model SupportNotification {
+  id                String              @id @default(uuid()) @db.Uuid
+  contributionId    String              @db.Uuid
+  audience          String              @db.VarChar(12)
+  mode              String              @db.VarChar(4)
+  status            String              @default("PENDING") @db.VarChar(24)
+  recipient         String?             @db.VarChar(254)
+  idempotencyKey    String              @unique @db.VarChar(255)
+  attempts          Int                 @default(0)
+  firstAttemptAt    DateTime?           @db.Timestamptz(3)
+  availableAt       DateTime            @default(now()) @db.Timestamptz(3)
+  leaseToken        String?             @db.Uuid
+  leaseUntil        DateTime?           @db.Timestamptz(3)
+  providerMessageId String?             @unique @db.VarChar(255)
+  sentAt            DateTime?           @db.Timestamptz(3)
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+  contribution      SupportContribution @relation(fields: [contributionId], references: [id], onDelete: Restrict)
+
+  @@unique([contributionId, audience])
+  @@index([mode, status, availableAt])
+  @@map("support_notifications")
 }
 
 model SupportContributionAttempt {

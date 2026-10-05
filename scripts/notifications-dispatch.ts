@@ -1,5 +1,5 @@
 import { parseNotificationConfiguration } from "@/lib/notifications/config";
-import { dispatchPendingOrderNotifications } from "@/lib/notifications/service";
+import { dispatchPendingNotifications as dispatchPendingOrderNotifications } from "@/lib/notifications/combined-dispatch";
 import { prisma } from "@/lib/prisma";
 
 try {

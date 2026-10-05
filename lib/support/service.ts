@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { parseSupportContact } from "@/lib/support/contact";
+import { enqueueSupportNotifications } from "@/lib/support/notifications";
 import type { Prisma } from "@/generated/prisma/client";
 import { requireSupportEnabled, requireSupportEnvironment, SupportError, supportBaseUrl, validateSupportAmount } from "@/lib/support/config";
 import { captureProviderSupport, createProviderCheckout, refundProviderSupport, recoverProviderSupport, type SupportRecovery, type SupportEvidence } from "@/lib/support/providers";
@@ -88,10 +90,12 @@ async function finish(id: string, operation: NonNullable<Awaited<ReturnType<type
         && (!current.paymentReference || !evidence.paymentReference || current.paymentReference === evidence.paymentReference);
       const other = evidence.paymentReference ? await tx.supportContribution.findUnique({ where: { paymentReference: evidence.paymentReference } }) : null;
       const matches = safe && (!other || other.id === id);
-      await tx.supportContribution.update({ where: { id }, data: { status: matches ? nextSupportStatus(current.status, evidence.status) : "REQUIRES_REVIEW",
+      const nextStatus = matches ? nextSupportStatus(current.status, evidence.status) : "REQUIRES_REVIEW";
+      await tx.supportContribution.update({ where: { id }, data: { status: nextStatus,
         ...(matches ? { providerReference: evidence.providerReference, ...(evidence.paymentReference ? { paymentReference: evidence.paymentReference } : {}) } : {}) } });
       await tx.supportContributionEvent.create({ data: { contributionId: id, eventKey: `recover:${operation.id}:${operation.leaseToken}`,
         type: matches ? `RECOVERED_${evidence.status}` : "EVIDENCE_MISMATCH", evidence: { ...evidence } } });
+      if (nextStatus === "SUCCEEDED" && current.status !== "SUCCEEDED") await enqueueSupportNotifications(tx, current);
       resolved = true;
     }
     if (result?.refund) {
@@ -143,9 +147,11 @@ export async function reconcileSupportContribution(id: string, gateway = provide
     await runSupportOperation(id, a.operation as Operation, gateway, undefined, true);
   }
 }
-export async function createSupportCheckout(input: { provider: unknown; amountCents: unknown; idempotencyKey: unknown; ownerToken: string; userId?: string; newContribution?: boolean }, gateway = providerOperations) {
+export async function createSupportCheckout(input: { provider: unknown; amountCents: unknown; idempotencyKey: unknown; ownerToken: string; userId?: string; newContribution?: boolean; email?: unknown; message?: unknown }, gateway = providerOperations) {
   requireSupportEnabled();
   const amountCents = validateSupportAmount(input.amountCents);
+  let contact: ReturnType<typeof parseSupportContact>;
+  try { contact = parseSupportContact(input); } catch { throw new SupportError("INVALID"); }
   if (!validSupportId(input.idempotencyKey) || !["STRIPE", "PAYPAL"].includes(String(input.provider)) || !/^[0-9a-f]{64}$/.test(input.ownerToken)) throw new SupportError("INVALID");
   const provider = String(input.provider), ownerHash = supportHash(input.ownerToken), key = supportHash(`${ownerHash}:${input.idempotencyKey}`);
   requireSupportEnabled(provider as "STRIPE" | "PAYPAL");
@@ -154,8 +160,9 @@ export async function createSupportCheckout(input: { provider: unknown; amountCe
     await lock(tx, ownerHash);
     const old = await tx.supportContribution.findUnique({ where: { idempotencyKey: key } });
     if (old && old.mode !== mode) throw new SupportError("CONFLICT");
+    if (old && (old.supporterEmail !== contact.supporterEmail || old.supporterMessage !== contact.supporterMessage)) throw new SupportError("CONFLICT");
     if (!old && !input.newContribution && await tx.supportContribution.findFirst({ where: { ownerHash, mode, status: { in: ["CREATED", "PENDING", "REFUND_PENDING", "REQUIRES_REVIEW"] } } })) throw new SupportError("CONFLICT");
-    return old ?? tx.supportContribution.create({ data: { ownerHash, idempotencyKey: key, amountCents, provider, mode, userId: input.userId } });
+    return old ?? tx.supportContribution.create({ data: { ownerHash, idempotencyKey: key, amountCents, provider, mode, userId: input.userId, ...contact } });
   });
   if (value.amountCents !== amountCents || value.provider !== provider) throw new SupportError("CONFLICT");
   if (!value.checkoutUrl) {
@@ -170,7 +177,9 @@ export async function getSupportStatus(id: string, ownerToken: string) {
   requireSupportEnvironment();
   const value = await owned(id, ownerToken);
   const unresolved = await prisma.supportContributionAttempt.count({ where: { contributionId: id, status: "REQUESTED" } });
-  return { id: value.id, amountCents: value.amountCents, currency: value.currency, provider: value.provider, status: value.status, needsReconciliation: unresolved > 0 };
+  const notification = await prisma.supportNotification.findUnique({ where: { contributionId_audience: { contributionId: id, audience: "SUPPORTER" } }, select: { status: true } });
+  return { id: value.id, amountCents: value.amountCents, currency: value.currency, provider: value.provider, mode: value.mode, status: value.status, needsReconciliation: unresolved > 0,
+    emailProvided: !!value.supporterEmail, messageProvided: !!value.supporterMessage, confirmationEmailStatus: notification?.status ?? null };
 }
 
 export function supportEvidenceMatches(value: { id: string; provider: string; providerReference: string | null; amountCents: number; currency: string; mode?: string }, evidence: SupportEvidence) {
@@ -209,6 +218,7 @@ export async function reconcileSupportEvidence(evidence: SupportEvidence, eventK
     await tx.supportContribution.update({ where: { id: value.id }, data: { status,
       ...(matches && evidence.paymentReference ? { paymentReference: evidence.paymentReference } : {}) } });
     await tx.supportContributionEvent.create({ data: { contributionId: value.id, eventKey, type: matches ? `PROVIDER_${evidence.status}` : "EVIDENCE_MISMATCH", evidence: { ...evidence } } });
+    if (status === "SUCCEEDED" && value.status !== "SUCCEEDED") await enqueueSupportNotifications(tx, value);
     return status;
   });
 }
@@ -243,6 +253,7 @@ export async function refundSupportContribution(input: { contributionId: string;
 }
 
 const adminSelect = { id: true, amountCents: true, currency: true, provider: true, mode: true, status: true,
+  supporterEmail: true, supporterMessage: true, notifications: { select: { audience: true, status: true, attempts: true, sentAt: true } },
   createdAt: true, providerReference: true, paymentReference: true, refundReference: true,
   attempts: { select: { id: true, operation: true, status: true, createdAt: true, lastCheckedAt: true }, orderBy: { createdAt: "asc" as const } },
   userId: true, events: { select: { id: true, type: true, createdAt: true, actorId: true, evidence: true }, orderBy: { createdAt: "asc" as const } } };

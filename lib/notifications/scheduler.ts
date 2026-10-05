@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NOTIFICATION_SCHEDULER_MODE, parseNotificationConfiguration } from "@/lib/notifications/config";
-import { dispatchPendingOrderNotifications } from "@/lib/notifications/service";
+import { dispatchPendingNotifications as dispatchPendingOrderNotifications } from "@/lib/notifications/combined-dispatch";
 
 export const NOTIFICATION_SCHEDULER_BATCH_SIZE = 25;
 export type NotificationSchedulerResult = Readonly<{

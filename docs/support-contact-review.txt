@@ -1,0 +1,115 @@
+LNX Beats — revue locale consolidée du 06/10/2026
+Base : f7377acd53458a4f4f77fa0dd006e0c566a6658b
+Branche : feature/admin-financial-event-review
+Périmètres indépendants : A événement financier ; B soutien/contact/notifications.
+Aucune promotion, configuration Railway ou mutation Production.
+
+A — ÉVÉNEMENT FINANCIER
+Diagnostic Production en transaction READ ONLY et lectures Stripe non financières.
+Événement evt_1UNHB6Rtnn45F3iUolZqjPa7 : checkout.session.expired.
+Montant de session 20,00 EUR ; session expired/unpaid ; PaymentIntent NULL.
+Soutien lié FAILED, aucune référence de paiement/remboursement, aucune commande attendue.
+Le webhook historique commande ne dispatchait pas SUPPORT_LNX_BEATS vers le domaine
+soutien : le normaliseur commande conservait ce reçu non corrélé en REQUIRES_REVIEW.
+Le webhook soutien dédié avait correctement enregistré l'expiration.
+Pas d'obligation financière démontrée sur ce cas, pas de remboursement nécessaire.
+
+Correctif A : cockpit/Examiner pointent vers le reçu exact, détail et historique Admin.
+Classement technique uniquement après lecture Stripe fraîche, identité du compte,
+mode, montant, référence, métadonnées, expired/unpaid/PaymentIntent NULL concordants.
+Paiement capturé, preuve absente ou état ambigu : refus ; aucun classement.
+Action authentifiée, same-origin, confirmation explicite et audit append-only unique.
+Ne modifie ni reçu historique, ni Payment, ni Order, ni prestataire.
+Le compteur exclut seulement l'orphelin classé ; une obligation corrélée reste visible.
+Le dispatch historique des webhooks n'est PAS modifié dans ce lot.
+Commit A : d9776ca (fix: add safe audited admin financial event review).
+
+B — SOUTIEN UX / E-MAIL / MESSAGE
+Soutien réel vérifié : 36f0b5b6-65dc-4673-8aee-f4b5dc1b9cc7.
+300 centimes EUR, STRIPE LIVE, SUCCEEDED ; session complete/paid concordante.
+Webhook confirmé : evt_1UNJllRtnn45F3iUBsDDlm7R, PROVIDER_SUCCEEDED.
+Aucun e-mail LNX n'était programmé par le code déployé : absence des champs de
+contact et du mécanisme de notification soutien. Ce n'est pas un échec transport.
+Ce soutien n'est ni modifié, ni remboursé, ni destinataire d'un envoi rétroactif.
+
+Champs facultatifs : e-mail normalisé/validé 254 caractères ; message texte brut
+500 caractères, NFC, contrôles/bidi problématiques rejetés. HTML jamais exécuté.
+Les champs sont persistés avant Checkout, non transmis aux prestataires et privés.
+Historique : champs NULL ; migration sans backfill de contacts ou notifications.
+Confirmation : MERCI + cœur SVG, montant, CTA accueil/discographie, mention légale.
+SUCCEEDED/PAID : aucun contrôle de réconciliation visiteur, même si flag stale.
+Pending/Unknown/Review : contrôles utiles conservés ; aucune fausse confirmation.
+« Envoyée » seulement après acceptation du transport ; sinon état honnête en attente.
+SENT ne garantit PAS la réception finale en boîte e-mail.
+Admin : e-mail, message lisible, états séparés supporter/LNX, accès Admin existant.
+Confidentialité : finalité transactionnelle, aucune newsletter ; politique existante
+de conservation applicable, pas de durée fiscale nouvelle inventée.
+
+File persistante : une entrée unique contribution/audience, deux clés stables.
+Enqueue transactionnel seulement au premier état payé fiable, sans scan historique.
+Dispatcher réutilise le transport Resend/capture et les flags/destinataire owner
+existants. Il est intégré aux points de dispatch versionnés déjà présents.
+Pas de nouvel intervalle ni de service/configuration Railway.
+Concurrence : advisory lock, lease 120 s et fencing ; pas d'appel réseau en transaction.
+Retry : même clé fournisseur, borné à 5 tentatives et fenêtre sûre de 22 heures.
+Après résultat ambigu hors fenêtre : REQUIRES_REVIEW, jamais renvoi aveugle.
+Suppression transactionnelle existante consultée avant envoi.
+Transport capture interdit en Production ; TEST/LIVE filtrés séparément.
+Tests d'envoi : doubles locaux uniquement ; AUCUN e-mail réel délivré.
+
+VALIDATION
+73 tests ciblés finaux PASS, 0 FAIL, 0 SKIP ; pas de suite globale répétée.
+PostgreSQL 18 local isolé UTC, données synthétiques :
+- A : 12 contrôles, dont 6 actions concurrentes / un audit, refus ACL et canaris.
+- B : 9 groupes de contrôles runtime PASS, ci-dessous.
+Prisma format/validate/generate PASS ; lint/typecheck PASS ; build Web PASS.
+Build worker dédié PASS (graphe TS/Prisma/FFmpeg, sans DB/R2 externe).
+git diff --check PASS.
+
+Matrice des 18 demandes B :
+1-4 contact absent/e-mail/message/deux : tests unitaires + persistance runtime PASS.
+5 e-mail invalide/header injection : PASS ; 6 message long/contrôles : PASS.
+7 confirmation premium : navigateur réel local desktop/mobile PASS.
+8 aucun bouton confirmé : navigateur + policy PASS.
+9 pending boutons pertinents : navigateur réel PASS.
+10 unknown/review : policy ciblée PASS (pas de capture d'un prestataire réel).
+11-12 webhook six fois : une notification par audience, dispatcher concurrent PASS.
+13 timeout après acceptation : même clé stable/reprise/fenêtre expirée PASS.
+14 non confirmé : aucun e-mail en file PASS.
+15 historique NULL/pas de backfill : PostgreSQL PASS.
+16 Admin message/e-mail : navigateur réel local authentifié PASS.
+17 propriétaire incorrect refusé, DTO public sans contact, HTML échappé : PASS.
+18 Stripe/PayPal : suites soutien existantes PASS, paramètres provider inchangés.
+Les recettes financières Sandbox antérieures ne sont pas rejouées ni additionnées.
+
+MIGRATIONS LOCALES UNIQUEMENT
+20261005230000_provider_event_technical_reviews : audit append-only A.
+20261005233000_support_contact_notifications : deux colonnes NULL + outbox B.
+Schéma local final : 46 migrations. Aucune de ces deux nouvelles migrations n'est
+appliquée en Production par cette exécution. Avant promotion : backup/restore frais,
+upgrade sur copie et revue finale ACL nécessaires ; ne pas déployer implicitement.
+Runtime non propriétaire : SELECT/INSERT ciblés ; UPDATE colonnes d'état seulement
+pour outbox ; contact et clé immuables ; DELETE/DDL/audit UPDATE refusés réellement.
+Privilèges Créations et audit visibilité commandes préservés.
+
+CAPTURES SYNTHÉTIQUES — REVUE HUMAINE PENDING
+Dossier : /private/tmp/lnx-admin-financial-event-review-captures
+support-form-desktop.jpg / support-form-mobile.jpg
+support-confirmed-desktop.jpg / support-confirmed-mobile.jpg
+support-pending-desktop.jpg / support-pending-mobile.jpg
+support-admin-desktop.jpg / support-admin-mobile.jpg
+Desktop 1440 x 1000, mobile 390 x 844. Confirmation, formulaire et Admin inspectés.
+Formulaire/Admin : clientWidth = scrollWidth = 390, sans débordement horizontal.
+SENT et paiement confirmé dans les captures sont des fixtures TEST visuelles,
+pas la preuve d'un e-mail réel ni d'une transaction prestataire.
+Preview locale GET/HEAD uniquement : http://127.0.0.1:4184/qa-confirmed.
+Autres pages : /soutenir, /qa-pending, /qa-admin-support.
+Le harness est borné au localhost et à la base QA nominative ; aucune route de
+contournement d'auth n'est ajoutée à l'application. POST refusé par le proxy de revue.
+
+RÉSERVES
+Validation visuelle humaine encore attendue, aucune promotion autorisée ici.
+Réception réelle d'e-mails externes : NOT_RUN (intentionnel).
+Webhooks historiques non refactorés ; d'autres reçus soutien orphelins peuvent
+encore arriver. La nouvelle revue ne les cache pas automatiquement.
+Aucun test financier LIVE, aucune fixture importée en Production.

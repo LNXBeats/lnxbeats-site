@@ -3,12 +3,13 @@ import type { Client } from "pg";
 import { assertSqlIdentifier, CREATIONS_RUNTIME_GROUP, quoteSqlIdentifier } from "@/lib/database/creations-runtime-privileges";
 
 export const SUPPORT_RUNTIME_GROUP = "lnx_support_readonly";
-export const SUPPORT_RUNTIME_TABLES = ["support_contributions", "support_contribution_attempts", "support_contribution_events"] as const;
+export const SUPPORT_RUNTIME_TABLES = ["support_contributions", "support_contribution_attempts", "support_contribution_events", "support_notifications"] as const;
 // The closed Admin register also displays the attempt/reconciliation history.
 export const SUPPORT_RUNTIME_READ_TABLES = SUPPORT_RUNTIME_TABLES;
 export const SUPPORT_UPDATE_COLUMNS = {
   support_contributions: ["status", "providerReference", "paymentReference", "refundReference", "checkoutUrl", "updatedAt"],
   support_contribution_attempts: ["status", "leaseToken", "leaseUntil", "lastCheckedAt", "updatedAt"],
+  support_notifications: ["status", "recipient", "attempts", "firstAttemptAt", "availableAt", "leaseToken", "leaseUntil", "providerMessageId", "sentAt"],
 } as const;
 
 /** Separate stable domain group; writes are opt-in and limited to state columns.

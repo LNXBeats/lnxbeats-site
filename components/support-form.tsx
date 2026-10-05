@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UiIcon } from "@/components/ui-icon";
+import { parseSupportContact, SUPPORT_EMAIL_MAX, SUPPORT_MESSAGE_MAX } from "@/lib/support/contact";
 import styles from "@/components/support.module.css";
 
 export function SupportForm({ minCents, maxCents, stripeConfigured = false, paypalConfigured = false, mode = "TEST" }: {
@@ -13,11 +14,14 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [newContribution, setNewContribution] = useState(false);
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
   const providerConfigured = stripeConfigured || paypalConfigured;
   const cents = /^\d+(?:[.,]\d{1,2})?$/.test(amount) ? Math.round(Number(amount.replace(",", ".")) * 100) : NaN;
 
   async function checkout(provider: "STRIPE" | "PAYPAL") {
     if (pending) return;
+    try { parseSupportContact({ email, message }); } catch { setError("Vérifiez votre e-mail et votre message (500 caractères maximum)."); return; }
     if (!Number.isSafeInteger(cents) || cents < minCents || cents > maxCents) {
       setError(`Choisissez un montant entre ${minCents / 100} € et ${maxCents / 100} €.`);
       return;
@@ -37,7 +41,7 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
       }
       const response = await fetch("/api/support/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, amountCents: cents, idempotencyKey, newContribution }),
+        body: JSON.stringify({ provider, amountCents: cents, idempotencyKey, newContribution, email, message }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error("unavailable");
@@ -64,6 +68,13 @@ export function SupportForm({ minCents, maxCents, stripeConfigured = false, payp
       <label htmlFor="support-amount">Ou un montant libre en euros</label>
       <div className={styles.amount}><input id="support-amount" inputMode="decimal" type="text" maxLength={9} value={amount} onChange={(event) => { setAmount(event.target.value); setError(""); }} aria-describedby="support-amount-help" /><span aria-hidden="true">€</span></div>
       <small id="support-amount-help">De {minCents / 100} € à {maxCents / 100} €. Un versement ponctuel, jamais un abonnement.</small>
+      <div className={styles.contactFields}>
+        <label htmlFor="support-email">Votre e-mail <small>Facultatif · Pour recevoir une confirmation de votre soutien.</small></label>
+        <input id="support-email" type="email" autoComplete="email" maxLength={SUPPORT_EMAIL_MAX} value={email} onChange={event => setEmail(event.target.value)} aria-describedby="support-contact-help" />
+        <label htmlFor="support-message">Un petit mot pour LNX Beats <small>Facultatif</small></label>
+        <textarea id="support-message" rows={4} maxLength={SUPPORT_MESSAGE_MAX} placeholder="Votre message de soutien…" value={message} onChange={event => setMessage(event.target.value)} />
+        <small id="support-contact-help">500 caractères maximum. Pas d’inscription newsletter ni d’utilisation marketing. Votre message reste chez LNX Beats.</small>
+      </div>
       <div className={styles.providers}>
         {stripeConfigured ? <button type="button" className="button button--primary" onClick={() => void checkout("STRIPE")}>Soutenir avec Stripe <span aria-hidden="true"><UiIcon name="arrow-up-right" /></span></button> : null}
         {paypalConfigured ? <button type="button" className="button button--secondary" onClick={() => void checkout("PAYPAL")}>Soutenir avec PayPal <span aria-hidden="true"><UiIcon name="arrow-up-right" /></span></button> : null}

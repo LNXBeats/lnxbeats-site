@@ -1,7 +1,7 @@
 import "server-only";
 
 import { parseNotificationConfiguration } from "@/lib/notifications/config";
-import { dispatchPendingOrderNotifications } from "@/lib/notifications/service";
+import { dispatchPendingNotifications as dispatchPendingOrderNotifications } from "@/lib/notifications/combined-dispatch";
 import { notificationWorkerAuthorized } from "@/lib/notifications/worker-auth";
 
 export type NotificationDispatchRouteDependencies = Readonly<{
