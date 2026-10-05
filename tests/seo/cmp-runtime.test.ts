@@ -42,6 +42,9 @@ test("component loads messaging only, pauses first, and routes through explicit 
   const source = await readFile(new URL("../../components/google-consent-ad.tsx", import.meta.url), "utf8");
   assert.match(source, /script.src = GOOGLE_CMP_SCRIPT_URL/);
   assert.doesNotMatch(source, /ADSENSE_SCRIPT_URL|pagead2|enable_page_level_ads/);
+  // Google's messaging tag is a classic script, without CORS opt-in.
+  // Its response does not grant Access-Control-Allow-Origin.
+  assert.doesNotMatch(source, /script\.crossOrigin/);
   assert.ok(source.indexOf("queue.pauseAdRequests = 1") < source.indexOf("document.head.append(script)"));
   assert.match(source, /location.origin !== "https:\/\/www.lnxbeats.fr"/);
   assert.match(source, /data-google-cmp-state=\{consent\}/);

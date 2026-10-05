@@ -22,6 +22,8 @@ décisions séparées :
   Ni une publication CMP, ni une acceptation TCF, ni ses flags ne l'ouvrent.
 
 Le bootstrap charge uniquement la messagerie Google, pas `adsbygoogle.js`.
+Il conserve le mode script classique du tag Google (sans crossorigin : la
+réponse du tag de messagerie ne fournit pas Access-Control-Allow-Origin).
 Il utilise le nonce du document et le marqueur iframe caché fourni par
 Google. La CSP conserve `script-src 'nonce-…' 'strict-dynamic'`, sans
 unsafe-inline/eval dans cette directive. Seule l'origine exacte

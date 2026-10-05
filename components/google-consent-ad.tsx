@@ -76,7 +76,6 @@ export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
       const script = document.createElement("script");
       script.id = "lnx-google-cmp";
       script.async = true;
-      script.crossOrigin = "anonymous";
       script.nonce = nonce;
       script.src = GOOGLE_CMP_SCRIPT_URL;
       document.head.append(script);
