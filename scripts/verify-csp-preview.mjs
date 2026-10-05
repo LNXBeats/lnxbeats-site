@@ -9,7 +9,9 @@ const seen = new Set();
 for (const path of ["/", "/", "/boutique", `/album/${album}`, "/soutenir", "/commander", "/compte", "/admin", "/boutique/panier"]) {
   const response = await fetch(new URL(path, origin), { headers: { "x-lnx-csp-nonce": "untrusted-probe", "content-security-policy": "script-src *" } });
   const html = await response.text();
-  assert.equal(response.status, 200, path);
+  // The existing Preview commerce kill switch legitimately returns 404 here.
+  // It is not changed for a CSP test; the exclusion must still be verified.
+  assert.ok(response.status === 200 || (path === "/boutique/panier" && response.status === 404), `${path}: unexpected HTTP ${response.status}`);
   const csp = response.headers.get("content-security-policy") ?? "";
   const nonce = csp.match(/'nonce-([A-Za-z0-9+/]{43}=)'/)?.[1];
   const eligible = path === "/" || path === "/boutique" || path.startsWith("/album/");

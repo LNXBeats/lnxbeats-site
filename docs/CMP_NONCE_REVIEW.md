@@ -31,7 +31,7 @@ reste en place : publier la CMP ou changer un flag ne peut ouvrir les pubs.
 
 ## Preuves et limite
 
-- 25 tests CSP/consentement/Ads/R2, dont génération et unicité de 32 nonces,
+- 34 tests CSP/consentement/Ads/R2 et routage canonique du proxy, dont génération et unicité de 32 nonces,
   correspondance requête/réponse, absence de cache, spoofing d'en-têtes,
   exclusion POST/routes privées et signaux TCF simulés.
 - Les tests TCF couvrent absence, refus, acceptation, retrait et callback
@@ -41,6 +41,10 @@ reste en place : publier la CMP ou changer un flag ne peut ouvrir les pubs.
   une cible Production. Aucune donnée personnelle n'est collectée.
 - Lint, typecheck et build Web requis ; aucun rebuild worker nécessaire,
   aucun code de worker modifié.
+- Fixture navigateur locale utilisant cette même CSP : nonce valide exécuté ;
+  script sans nonce, script avec mauvais nonce et handler inline bloqués.
+- Preview : le panier répond 404 lorsque son interrupteur commerce déjà
+  existant est fermé. Ce comportement est conservé, pas contourné pour la QA.
 
 La compatibilité réelle des iframes/connexions internes Google n'est PAS
 prouvée par une CSP qui ne charge pas Google. Aucune liste de domaines
