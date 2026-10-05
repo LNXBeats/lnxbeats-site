@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { financialEventDetailPath } from "@/lib/admin/financial-event-policy";
 
 import { hideSelectedOrdersFromCurrentViewsAction } from "@/app/admin/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
@@ -65,13 +66,14 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
                     <span className="admin-order-list__next"><small>Événement signé nécessitant une revue</small></span><span className="admin-order-list__arrow" aria-hidden="true">→</span>
                   </Link>
                 ) : (
-                  <div className="admin-order-list__orphan"><strong>Paiement sans commande corrélée</strong><small>{event.processedAt.toLocaleString("fr-FR")} · revue technique requise</small></div>
+                  <Link href={financialEventDetailPath(event.id)}><span className="admin-order-list__identity"><strong>Événement sans commande corrélée</strong><small>{event.processedAt.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })} · revue technique requise</small></span><span>Examiner →</span></Link>
                 )}
               </li>
             ))}
           </ul>
         </section>
       ) : null}
+      <Link href="/admin/evenements-financiers">Historique des événements financiers</Link>
 
       <section className="admin-list-window" aria-labelledby="admin-order-list-title">
         <div className="admin-list-window__heading"><h2 id="admin-order-list-title">{filterLabels[filter]}</h2><span>{orders.length} résultat{orders.length === 1 ? "" : "s"}</span></div>

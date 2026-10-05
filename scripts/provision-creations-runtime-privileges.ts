@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Client } from "pg";
+import { provisionFinancialReviewPrivileges } from "@/lib/admin/financial-event-runtime-privileges";
 import { provisionSupportRuntimePrivileges } from "@/lib/support/runtime-privileges";
 import { provisionExternalProductRuntimePrivileges } from "@/lib/shop/external-product-runtime-privileges";
 
@@ -31,6 +32,7 @@ try {
   await client.connect();
   const result = await provisionCreationsRuntimePrivileges(client, decodeURIComponent(runtime.username));
   const orderVisibilityAudit = await provisionAdminOrderVisibilityAuditPrivileges(client);
+  const financialReviewAudit = await provisionFinancialReviewPrivileges(client, decodeURIComponent(runtime.username));
   const support = await provisionSupportRuntimePrivileges(client, decodeURIComponent(runtime.username));
   const externalShopProducts = await provisionExternalProductRuntimePrivileges(client, decodeURIComponent(runtime.username));
   console.log(JSON.stringify({
@@ -42,6 +44,7 @@ try {
     tables: result.tables,
     sequences: result.sequences,
     orderVisibilityAudit,
+    financialReviewAudit,
     support,
     externalShopProducts,
     defaultPrivileges: "not used; provisioning is prefix-scoped plus the exact order visibility audit table",

@@ -1,13 +1,11 @@
 import type { Prisma } from "@/generated/prisma/client";
 
-// `outcome` is the only durable resolution marker for a receipt that could not
-// be correlated to any local financial record. Keep such receipts visible while
-// they remain REQUIRES_REVIEW; reconciliation can remove them from this view by
-// explicitly advancing the outcome to PROCESSED or IGNORED.
+// An audited technical review excludes only an uncorrelated orphan. A payment
+// or incident needing financial review remains visible even if a review exists.
 export const adminPaymentReviewEventWhere = {
   outcome: "REQUIRES_REVIEW",
   OR: [
-    { paymentId: null, refundAttemptId: null, incidentId: null },
+    { paymentId: null, refundAttemptId: null, incidentId: null, technicalReview: { is: null } },
     { payment: { is: { status: "REQUIRES_REVIEW" } } },
     { incident: { is: { requiresOperatorReview: true, status: { not: "RESOLVED" } } } },
   ],
@@ -18,6 +16,7 @@ export const adminUncorrelatedPaymentReviewEventWhere = {
   paymentId: null,
   refundAttemptId: null,
   incidentId: null,
+  technicalReview: { is: null },
 } satisfies Prisma.ProviderEventWhereInput;
 
 export function adminNotificationAttentionWhere(now: Date): Prisma.OrderNotificationWhereInput {

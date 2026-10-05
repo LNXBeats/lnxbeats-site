@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { financialEventDetailPath } from "@/lib/admin/financial-event-policy";
 import type { Prisma } from "@/generated/prisma/client";
 
 import {
@@ -336,6 +337,7 @@ async function loadActionCandidateIds(now: Date) {
         AND events."paymentId" IS NULL
         AND events."refundAttemptId" IS NULL
         AND events."incidentId" IS NULL
+        AND NOT EXISTS (SELECT 1 FROM "provider_event_technical_reviews" review WHERE review."eventId" = events."id")
       ORDER BY events."processedAt" ASC, events."id" ASC
       LIMIT ${ACTION_CANDIDATE_LIMIT}
     `,
@@ -643,7 +645,7 @@ async function loadAdminCockpit() {
           row.id,
           `${row.provider} · ${row.type}`,
           candidateOccurredAt.financialEvents.get(row.id) ?? row.processedAt,
-          "/admin/commandes?filtre=attention#admin-payment-review-title",
+          financialEventDetailPath(row.id),
           classification,
         )]
       : [];

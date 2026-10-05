@@ -104,7 +104,7 @@ test("Admin review queries preserve uncorrelated financial receipts and interrup
   assert.deepEqual(adminPaymentReviewEventWhere, {
     outcome: "REQUIRES_REVIEW",
     OR: [
-      { paymentId: null, refundAttemptId: null, incidentId: null },
+      { paymentId: null, refundAttemptId: null, incidentId: null, technicalReview: { is: null } },
       { payment: { is: { status: "REQUIRES_REVIEW" } } },
       { incident: { is: { requiresOperatorReview: true, status: { not: "RESOLVED" } } } },
     ],
@@ -127,6 +127,7 @@ test("Admin review queries preserve uncorrelated financial receipts and interrup
     paymentId: null,
     refundAttemptId: null,
     incidentId: null,
+    technicalReview: { is: null },
   });
   assert.equal(classifyUncorrelatedFinancialEventOperation({
     outcome: "REQUIRES_REVIEW",

@@ -1766,21 +1766,22 @@ model PaymentAuditEvent {
 }
 
 model ProviderEvent {
-  id              String               @id @default(uuid()) @db.Uuid
+  id              String                        @id @default(uuid()) @db.Uuid
   provider        PaymentProvider
-  providerEventId String               @db.VarChar(255)
-  type            String               @db.VarChar(160)
+  providerEventId String                        @db.VarChar(255)
+  type            String                        @db.VarChar(160)
   livemode        Boolean
-  objectId        String?              @db.VarChar(255)
+  objectId        String?                       @db.VarChar(255)
   outcome         ProviderEventOutcome
-  paymentId       String?              @db.Uuid
-  refundAttemptId String?              @db.Uuid
-  incidentId      String?              @db.Uuid
-  processedAt     DateTime             @db.Timestamptz(3)
-  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
-  payment         Payment?             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  refundAttempt   RefundAttempt?       @relation(fields: [refundAttemptId], references: [id], onDelete: Restrict)
-  incident        PaymentIncident?     @relation(fields: [incidentId], references: [id], onDelete: Restrict)
+  paymentId       String?                       @db.Uuid
+  refundAttemptId String?                       @db.Uuid
+  incidentId      String?                       @db.Uuid
+  processedAt     DateTime                      @db.Timestamptz(3)
+  createdAt       DateTime                      @default(now()) @db.Timestamptz(3)
+  payment         Payment?                      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  refundAttempt   RefundAttempt?                @relation(fields: [refundAttemptId], references: [id], onDelete: Restrict)
+  incident        PaymentIncident?              @relation(fields: [incidentId], references: [id], onDelete: Restrict)
+  technicalReview ProviderEventTechnicalReview?
 
   @@unique([provider, providerEventId])
   @@index([paymentId, createdAt])
@@ -1788,6 +1789,19 @@ model ProviderEvent {
   @@index([incidentId, createdAt])
   @@index([provider, livemode, createdAt])
   @@map("provider_events")
+}
+
+// Append-only Admin classification. The signed provider receipt is never rewritten.
+model ProviderEventTechnicalReview {
+  id        String        @id @default(uuid()) @db.Uuid
+  eventId   String        @unique @db.Uuid
+  actorId   String        @db.Uuid
+  reason    String        @db.VarChar(80)
+  evidence  Json
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  event     ProviderEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  @@map("provider_event_technical_reviews")
 }
 
 model RightsRequest {
