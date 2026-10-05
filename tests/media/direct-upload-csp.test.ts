@@ -24,7 +24,7 @@ test("R2 CSP permits only the exact configured bucket origins", () => {
 });
 
 test("validated public R2 media is allowed for images and audio/video without widening origins", async () => {
-  const config = await readFile(new URL("../../next.config.ts", import.meta.url), "utf8");
+  const config = await readFile(new URL("../../lib/security/content-security-policy.ts", import.meta.url), "utf8");
 
   assert.match(config, /img-src 'self' data: blob:\$\{playbackOrigin \? ` \$\{playbackOrigin\}` : ""\}/);
   assert.match(config, /media-src 'self' blob:\$\{playbackOrigin \? ` \$\{playbackOrigin\}` : ""\}/);

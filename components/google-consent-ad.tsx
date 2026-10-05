@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ADSENSE_CLIENT_ID, ADSENSE_SCRIPT_URL } from "@/data/adsense";
 import { createConsentGate, mayRequestAd, type ConsentState, type TcfData } from "@/lib/ads/consent";
 import { allowsAdSlot, type AdSlot } from "@/lib/ads/policy";
+import { isScriptNonce } from "@/lib/security/csp-nonce";
 import styles from "./editorial-ad-slot.module.css";
 
 type TcfApi = (command: string, version: number, callback: (data: TcfData, success: boolean) => void, parameter?: number) => void;
@@ -31,6 +32,10 @@ export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
     const win = window as GoogleWindow;
     const queue = win.adsbygoogle ??= [] as AdQueue;
     queue.pauseAdRequests = 1; // Before the network script, not after its execution.
+    // Use the nonce of the current HTML document, never that of a later RSC
+    // response. Only Next's nonced runtime script is a trusted source.
+    const nonce = document.querySelector<HTMLScriptElement>('script[nonce][src^="/_next/"]')?.nonce;
+    if (!isScriptNonce(nonce) || !allowsAdSlot(location.pathname, slot)) return;
     const gate = createConsentGate(state => {
       queue.pauseAdRequests = state === "granted" && enabled && slotId && allowsAdSlot(location.pathname, slot) ? 0 : 1;
       setConsent(state);
@@ -62,6 +67,7 @@ export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
       script.id = "lnx-google-cmp";
       script.async = true;
       script.crossOrigin = "anonymous";
+      script.nonce = nonce;
       script.src = ADSENSE_SCRIPT_URL;
       document.head.append(script);
     }

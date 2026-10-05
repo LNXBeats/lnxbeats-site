@@ -1,27 +1,7 @@
 import type { NextConfig } from "next";
 
-import { directUploadConnectOrigin, publicMediaOrigin } from "./lib/media/storage/csp";
+import { contentSecurityPolicy } from "./lib/security/content-security-policy";
 import { ORDER_PHOTO_MULTIPART_MAX_BYTES } from "./data/order-photo-upload";
-
-const isDevelopment = process.env.NODE_ENV === "development";
-const directUploadOrigin = directUploadConnectOrigin();
-const playbackOrigin = publicMediaOrigin();
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  `img-src 'self' data: blob:${playbackOrigin ? ` ${playbackOrigin}` : ""}`,
-  "font-src 'self' data:",
-  `connect-src 'self'${directUploadOrigin ? ` ${directUploadOrigin}` : ""}${isDevelopment ? " ws: wss:" : ""}`,
-  // Admin previews use local object URLs; validated public object media follows
-  // a same-origin route that redirects only to this exact R2 bucket origin.
-  `media-src 'self' blob:${playbackOrigin ? ` ${playbackOrigin}` : ""}`,
-  "manifest-src 'self'",
-].join("; ");
 
 const nextConfig: NextConfig = {
   agentRules: false,
@@ -50,7 +30,7 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
-          { key: "Content-Security-Policy", value: contentSecurityPolicy },
+          { key: "Content-Security-Policy", value: contentSecurityPolicy(process.env) },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

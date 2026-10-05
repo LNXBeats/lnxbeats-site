@@ -9,6 +9,14 @@ type Environment = AdsEnvironment;
 // require a separate verified activation. Do not loosen the site's CSP silently.
 export const GOOGLE_CMP_RUNTIME_VERIFIED = false;
 
+// Only explicitly isolated QA or the canonical production deployment can opt in.
+// This enables CSP enforcement, NOT Google scripts, consent publication or ads.
+export function nonceCspEnabled(pathname: string, env: Environment) {
+  return env.ADS_CSP_NONCE_ENABLED === "true"
+    && (allowsAdSlot(pathname, "footer") || allowsAdSlot(pathname, "content"))
+    && (isQaAdsEnvironment(env) || (env.RAILWAY_ENVIRONMENT_NAME === "production" && env.SITE_URL === "https://www.lnxbeats.fr"));
+}
+
 // Explicit allowlist: unknown routes, subroutes and all transactional/private pages fail closed.
 export function allowsAdSlot(pathname: string, slot: AdSlot) {
   if (slot === "footer") return pathname === "/" || pathname === "/boutique";
@@ -35,6 +43,7 @@ export function isQaAdsEnvironment(env: Environment) {
 export function googleCmpConfigured(env: Environment) {
   // Never bootstrap Google's advertising tag in Preview, including when a flag is wrong.
   return GOOGLE_CMP_RUNTIME_VERIFIED && env.RAILWAY_ENVIRONMENT_NAME === "production"
+    && env.ADS_CSP_NONCE_ENABLED === "true"
     && env.SITE_URL === "https://www.lnxbeats.fr"
     && env.ADS_QA_PLACEHOLDERS !== "true"
     && env.ADS_GOOGLE_CMP_ENABLED === "true"
