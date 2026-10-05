@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ADSENSE_CLIENT_ID } from "@/data/adsense";
+import { googleCmpConfigured } from "@/lib/ads/policy";
+import { GoogleCmpNavigationBoundary } from "@/components/google-cmp-navigation-boundary";
 import { QuickAccessBar } from "@/components/quick-access-bar";
 import { JsonLd } from "@/components/json-ld";
 import { OrderJourneyProvider } from "@/components/order-journey-provider";
@@ -67,6 +69,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="fr">
       <body>
+        <GoogleCmpNavigationBoundary enabled={googleCmpConfigured(process.env)} />
         <a className="skip-link" href="#contenu">Aller au contenu</a>
         <OrderJourneyProvider>
           <SiteHeader supportAvailable={isSupportEnabled()} />

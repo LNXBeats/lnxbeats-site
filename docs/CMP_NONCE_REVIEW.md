@@ -1,5 +1,48 @@
 # CMP / nonce — revue ciblée du 5 octobre 2026
 
+## Reprise après publication humaine — runtime consentement seul
+
+Cette section remplace les restrictions historiques de publication ci-dessous.
+La publication humaine a été confirmée puis l'état « Publié » observé dans
+AdSense. Le tag exact proposé par le compte dans « Confidentialité et
+messages → Incitation à réautoriser les annonces → Ajout de tags » est
+`https://fundingchoicesmessages.google.com/i/pub-2056594730161751?ers=1`.
+Aucun message de récupération publicitaire n'a été créé ou publié.
+
+Le verrou unique `GOOGLE_CMP_RUNTIME_VERIFIED=false` bloquait à la fois
+la collecte de consentement et la diffusion. Il est remplacé par deux
+décisions séparées :
+
+- CMP : environnement `production`, `SITE_URL=https://www.lnxbeats.fr`,
+  `ADS_CSP_NONCE_ENABLED=true`, `ADS_GOOGLE_CMP_ENABLED=true` et
+  `ADS_GOOGLE_CMP_PUBLISHED=true`, sans mode placeholder QA ; nonce du
+  document et origine canonique revérifiés dans le navigateur.
+- Publicité : `GOOGLE_AD_SERVING_VERIFIED=false` demeure un verrou logiciel
+  indépendant. `ADS_ENABLED=false` reste imposé pour cette release.
+  Ni une publication CMP, ni une acceptation TCF, ni ses flags ne l'ouvrent.
+
+Le bootstrap charge uniquement la messagerie Google, pas `adsbygoogle.js`.
+Il utilise le nonce du document et le marqueur iframe caché fourni par
+Google. La CSP conserve `script-src 'nonce-…' 'strict-dynamic'`, sans
+unsafe-inline/eval dans cette directive. Seule l'origine exacte
+`https://fundingchoicesmessages.google.com` est ajoutée à connect-src et
+frame-src, uniquement sur une réponse noncée avec CMP configurée.
+Le style inline historique n'est ni ajouté ni élargi. Un changement de
+catégorie de route force un nouveau document pour ne pas conserver la CMP
+sur une route exclue, y compris après navigation applicative.
+
+La Preview n'est pas un domaine déclaré du message : aucun ajout de domaine,
+spoofing ou PASS Google simulé. Les tests locaux couvrent le fail-closed,
+la séparation CMP/Ads, les exclusions et la CSP ; la recette Google réelle
+doit être effectuée après déploiement sur le domaine publié, annonces OFF.
+
+Sources supplémentaires consultées le 05/10/2026 :
+- https://support.google.com/adsense/answer/14325056?hl=en : le tag de
+  messagerie peut servir le consentement sans créer de message anti-adblock.
+- https://support.google.com/adsense/answer/11575177 : emplacement du tag.
+
+## Historique du candidat précédent (avant publication)
+
 Base validée : `976b39723a21a7f56c704c3d95aec71e43bb5aef`.
 Le lot ne modifie ni les contenus SEO/Merchant, ni les slots, ni les données,
 ni les paiements, ni les migrations. Aucun script Google réel en Preview.

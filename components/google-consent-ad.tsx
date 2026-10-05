@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ADSENSE_CLIENT_ID, ADSENSE_SCRIPT_URL } from "@/data/adsense";
+import { ADSENSE_CLIENT_ID } from "@/data/adsense";
+import { GOOGLE_CMP_SCRIPT_URL } from "@/data/google-cmp";
 import { createConsentGate, mayRequestAd, type ConsentState, type TcfData } from "@/lib/ads/consent";
 import { allowsAdSlot, type AdSlot } from "@/lib/ads/policy";
 import { isScriptNonce } from "@/lib/security/csp-nonce";
@@ -19,7 +20,7 @@ type GoogleWindow = Window & {
   };
 };
 
-/** Prepared adapter; policy hard-lock keeps it unmounted until real CMP/CSP QA. */
+/** Consent-only bootstrap; advertising retains its independent release lock. */
 export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
   pathname: string; slot: AdSlot; slotId: string | null; enabled: boolean;
 }) {
@@ -35,7 +36,7 @@ export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
     // Use the nonce of the current HTML document, never that of a later RSC
     // response. Only Next's nonced runtime script is a trusted source.
     const nonce = document.querySelector<HTMLScriptElement>('script[nonce][src^="/_next/"]')?.nonce;
-    if (!isScriptNonce(nonce) || !allowsAdSlot(location.pathname, slot)) return;
+    if (!isScriptNonce(nonce) || location.origin !== "https://www.lnxbeats.fr" || !allowsAdSlot(location.pathname, slot)) return;
     const gate = createConsentGate(state => {
       queue.pauseAdRequests = state === "granted" && enabled && slotId && allowsAdSlot(location.pathname, slot) ? 0 : 1;
       setConsent(state);
@@ -63,12 +64,21 @@ export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
       fc.callbackQueue?.push({ CONSENT_API_READY: () => fc.showRevocationMessage?.() });
     };
     if (!document.getElementById("lnx-google-cmp")) {
+      // Presence marker from Google's generated messaging tag. No ad slot.
+      if (!document.querySelector('iframe[name="googlefcPresent"]')) {
+        const marker = document.createElement("iframe");
+        marker.name = "googlefcPresent";
+        marker.hidden = true;
+        marker.tabIndex = -1;
+        marker.setAttribute("aria-hidden", "true");
+        document.body.append(marker);
+      }
       const script = document.createElement("script");
       script.id = "lnx-google-cmp";
       script.async = true;
       script.crossOrigin = "anonymous";
       script.nonce = nonce;
-      script.src = ADSENSE_SCRIPT_URL;
+      script.src = GOOGLE_CMP_SCRIPT_URL;
       document.head.append(script);
     }
     // Leave the advertising document entirely before entering an excluded route.
@@ -99,7 +109,7 @@ export function GoogleConsentAd({ pathname, slot, slotId, enabled }: {
     ((window as GoogleWindow).adsbygoogle ??= [] as AdQueue).push({});
   }, [canShow]);
   if (!ready && !canShow) return null;
-  return <div>
+  return <div data-google-cmp-state={consent} data-google-cmp-ready={String(ready)}>
     {canShow ? <aside className={`${styles.section} ${styles.placeholder} ${styles.liveSlot}`} aria-label="Publicité">
       <span className={styles.label}>Publicité</span>
       <ins ref={element} className="adsbygoogle" style={{ display: "block", minHeight: 100 }} data-ad-client={ADSENSE_CLIENT_ID} data-ad-slot={slotId!} data-ad-format="horizontal" data-full-width-responsive="true" />

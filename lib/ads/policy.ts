@@ -1,13 +1,12 @@
-import { ADSENSE_SELLER_LINE } from "@/data/adsense";
+import { ADSENSE_SELLER_LINE } from "../../data/adsense";
 
 export type AdSlot = "content" | "footer";
 export type AdsEnvironment = Readonly<Record<string, string | undefined>>;
 type Environment = AdsEnvironment;
 
-// Release guard, not an environment override. The Google draft is not published.
-// Google's supported nonce/strict-CSP integration and real CMP lifecycle still
-// require a separate verified activation. Do not loosen the site's CSP silently.
-export const GOOGLE_CMP_RUNTIME_VERIFIED = false;
+// CMP publication/loading is independent of permission to serve advertisements.
+// This release authorizes consent-only operation, not advertising activation.
+export const GOOGLE_AD_SERVING_VERIFIED = false;
 
 // Only explicitly isolated QA or the canonical production deployment can opt in.
 // This enables CSP enforcement, NOT Google scripts, consent publication or ads.
@@ -41,8 +40,8 @@ export function isQaAdsEnvironment(env: Environment) {
 }
 
 export function googleCmpConfigured(env: Environment) {
-  // Never bootstrap Google's advertising tag in Preview, including when a flag is wrong.
-  return GOOGLE_CMP_RUNTIME_VERIFIED && env.RAILWAY_ENVIRONMENT_NAME === "production"
+  // The published message covers this canonical site, NOT Railway Preview.
+  return env.RAILWAY_ENVIRONMENT_NAME === "production"
     && env.ADS_CSP_NONCE_ENABLED === "true"
     && env.SITE_URL === "https://www.lnxbeats.fr"
     && env.ADS_QA_PLACEHOLDERS !== "true"
@@ -56,7 +55,7 @@ export function liveAdSlotId(slot: AdSlot, env: Environment) {
 }
 
 export function liveAdsEnabled(env: Environment = {}) {
-  return googleCmpConfigured(env) && env.ADS_ENABLED === "true" && env.ADSENSE_SITE_APPROVED === "true";
+  return GOOGLE_AD_SERVING_VERIFIED && googleCmpConfigured(env) && env.ADS_ENABLED === "true" && env.ADSENSE_SITE_APPROVED === "true";
 }
 
 export function validatedAdsTxt(env: Environment) {
