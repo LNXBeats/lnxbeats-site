@@ -12,9 +12,25 @@ import {
   type MerchantFeedProduct,
 } from "@/lib/merchant/product-feed";
 import { buildProductStructuredData } from "@/lib/seo/structured-data";
+import { resolvedMerchantColor } from "@/lib/merchant/approved-product-facts";
 import { buildPublicSitemap, PUBLIC_SITEMAP_PATHS } from "@/lib/seo/sitemap";
 
 const root = new URL("../../", import.meta.url);
+
+test("human-confirmed badge color is consistent in feed and JSON-LD without commerce mutation", () => {
+  const badge = product({ slug: "badge-lnx-beats", merchantColor: null });
+  const before = structuredClone(badge);
+  assert.equal(resolvedMerchantColor(badge), "Multicolore");
+  assert.match(buildMerchantCenterFeed([badge]), /<g:color>Multicolore<\/g:color>/);
+  assert.match(JSON.stringify(buildProductStructuredData(badge)), /"color":"Multicolore"/);
+  assert.deepEqual(badge, before);
+});
+test("badge approval never invents a color for the CD or a new product; stored values win", () => {
+  assert.equal(resolvedMerchantColor(product()), null);
+  assert.equal(resolvedMerchantColor(product({ slug: "future-badge" })), null);
+  assert.equal(resolvedMerchantColor(product({ slug: "badge-lnx-beats", merchantColor: "Rouge" })), "Rouge");
+  assert.doesNotMatch(buildMerchantCenterFeed([product()]), /<g:color>/);
+});
 
 function product(overrides: Partial<MerchantFeedProduct> = {}): MerchantFeedProduct {
   return {

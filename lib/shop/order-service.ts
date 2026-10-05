@@ -1,4 +1,5 @@
 import "server-only";
+import { resolvedMerchantColor } from "@/lib/merchant/approved-product-facts";
 
 import { Prisma } from "@/generated/prisma/client";
 import {
@@ -227,7 +228,7 @@ function presentProduct(product: PublicProductRecord, activeReserved: number) {
     updatedAt: product.updatedAt,
     merchantMpn: product.merchantMpn,
     merchantGtin: product.merchantGtin,
-    merchantColor: product.merchantColor,
+    merchantColor: resolvedMerchantColor(product),
     merchantIdentifiersAbsent: product.merchantIdentifiersAbsent,
     priceCents: product.priceCents!,
     currency: "EUR" as const,

@@ -378,7 +378,9 @@ export const privacyCandidate = candidate({
     {
       title: "Cookies et services tiers",
       paragraphs: [
-        "Le site utilise des cookies strictement nécessaires à l’authentification, à la session et à la sécurité. Aucun traceur d’audience ou marketing n’a été identifié dans le code audité ; une bannière de consentement ne doit pas être ajoutée sans traceur non essentiel.",
+        "Le site utilise des cookies strictement nécessaires à l’authentification, à la session et à la sécurité. La publicité Google AdSense est en préparation et reste désactivée ; les emplacements de démonstration ne chargent aucune annonce ni aucun suivi publicitaire.",
+        "Si la publicité est ultérieurement ouverte, la CMP certifiée Google présentera les finalités, les partenaires et leurs conditions avant les traitements soumis au consentement : cookies ou identifiants publicitaires, personnalisation et mesure des annonces. Vous pourrez accepter, refuser ou gérer vos choix. Sans consentement approprié, le site ne demandera pas d’annonce. La liste des partenaires et leurs informations de confidentialité seront accessibles dans ce message.",
+        "Après activation, un accès « Gérer mes choix de confidentialité » permettra de modifier ou retirer le consentement. Le refus n’empêchera ni la consultation, ni la commande, ni le soutien. Aucun emplacement publicitaire n’est prévu dans Commander, le panier, le paiement, Soutenir, les comptes, l’Admin, les médias privés ou les pages juridiques. Les pratiques de Google sont décrites sur https://policies.google.com/technologies/partner-sites et https://policies.google.com/privacy.",
         "Les plateformes musicales et réseaux sociaux sont liés par des liens sortants. Aucun iframe ou lecteur tiers déposant des traceurs n’a été identifié dans les pages auditées.",
       ],
     },

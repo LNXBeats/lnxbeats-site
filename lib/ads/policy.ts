@@ -1,5 +1,13 @@
+import { ADSENSE_SELLER_LINE } from "@/data/adsense";
+
 export type AdSlot = "content" | "footer";
-type Environment = Readonly<Record<string, string | undefined>>;
+export type AdsEnvironment = Readonly<Record<string, string | undefined>>;
+type Environment = AdsEnvironment;
+
+// Release guard, not an environment override. The Google draft is not published.
+// Google's supported nonce/strict-CSP integration and real CMP lifecycle still
+// require a separate verified activation. Do not loosen the site's CSP silently.
+export const GOOGLE_CMP_RUNTIME_VERIFIED = false;
 
 // Explicit allowlist: unknown routes, subroutes and all transactional/private pages fail closed.
 export function allowsAdSlot(pathname: string, slot: AdSlot) {
@@ -24,12 +32,27 @@ export function isQaAdsEnvironment(env: Environment) {
   } catch { return false; }
 }
 
-// Live loading intentionally unavailable until a real publisher, Google-certified CMP,
-// consent lifecycle and human visual review are validated. A flag alone cannot bypass it.
-export function liveAdsEnabled() { return false; }
+export function googleCmpConfigured(env: Environment) {
+  // Never bootstrap Google's advertising tag in Preview, including when a flag is wrong.
+  return GOOGLE_CMP_RUNTIME_VERIFIED && env.RAILWAY_ENVIRONMENT_NAME === "production"
+    && env.SITE_URL === "https://www.lnxbeats.fr"
+    && env.ADS_QA_PLACEHOLDERS !== "true"
+    && env.ADS_GOOGLE_CMP_ENABLED === "true"
+    && env.ADS_GOOGLE_CMP_PUBLISHED === "true";
+}
+
+export function liveAdSlotId(slot: AdSlot, env: Environment) {
+  const value = env[slot === "footer" ? "ADSENSE_FOOTER_SLOT_ID" : "ADSENSE_CONTENT_SLOT_ID"];
+  return value && /^[0-9]{10}$/.test(value) ? value : null;
+}
+
+export function liveAdsEnabled(env: Environment = {}) {
+  return googleCmpConfigured(env) && env.ADS_ENABLED === "true" && env.ADSENSE_SITE_APPROVED === "true";
+}
 
 export function validatedAdsTxt(env: Environment) {
-  const line = env.ADSENSE_AUTHORIZED_SELLER_LINE?.trim();
-  if (!line || !/^google\.com, pub-[0-9]{16}, DIRECT, f08c47fec0942fa0$/.test(line)) return null;
+  const line = env.ADSENSE_AUTHORIZED_SELLER_LINE?.trim() ?? ADSENSE_SELLER_LINE;
+  // Do not silently switch the declared seller away from the verified account.
+  if (line !== ADSENSE_SELLER_LINE) return null;
   return `${line}\n`;
 }

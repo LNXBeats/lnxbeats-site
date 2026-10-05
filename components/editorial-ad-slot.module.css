@@ -18,6 +18,8 @@
   line-height: 1.5;
 }
 .label { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: #d5c38a; }
+.preferences { display: block; margin: 1rem auto 0; min-height: 44px; padding: 10px 16px; color: #d5c38a; background: transparent; border: 1px solid currentColor; border-radius: 4px; }
+.liveSlot:has(ins[data-ad-status="unfilled"]) { display: none; }
 .placeholder small { font-size: 12px; }
 @media (max-width: 760px) {
   .section { margin-block: 3rem; }

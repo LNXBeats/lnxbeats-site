@@ -1,5 +1,7 @@
 # Revue Google Search, Merchant et préparation AdSense — 5 octobre 2026
 
+> Rapport historique de la première phase. Voir `GOOGLE_FINAL_REVIEW.md` pour la reprise : les demandes humaines de couleur, compte et validation visuelle sont désormais levées.
+
 Base vérifiée : `6876ba222d28e0b122fc6eb6fe95c9a0605725f8`, tree `4185ec0aa654b0080e45794cdac31903c145b009`. Web et worker Railway SUCCESS sur cette release. Ce lot est exclusivement feature/Preview ; aucune promotion Production autorisée avant revue.
 
 ## Inventaire avant code

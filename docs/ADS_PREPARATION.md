@@ -1,5 +1,7 @@
 # Publicité : préparation fermée, revue obligatoire
 
+> Historique de la première phase b891b8a. Les informations désormais acquises (compte, couleur, balise Meta, ads.txt et brouillon CMP) sont mises à jour dans `GOOGLE_FINAL_REVIEW.md`, qui fait foi pour la reprise du 5 octobre. Les emplacements et exclusions ci-dessous restent inchangés.
+
 Aucun réseau publicitaire n'est intégré ou chargé par ce candidat. `ADS_ENABLED=false` est l'état par défaut. Même `ADS_ENABLED=true` ne peut pas activer une annonce : le compte, le Publisher ID réel, la CMP Google certifiée/TCF et la revue humaine ne sont pas encore acquis.
 
 ## Deux types d'emplacement manuels

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ADSENSE_CLIENT_ID } from "@/data/adsense";
 import { QuickAccessBar } from "@/components/quick-access-bar";
 import { JsonLd } from "@/components/json-ld";
 import { OrderJourneyProvider } from "@/components/order-journey-provider";
@@ -36,6 +37,7 @@ export const metadata: Metadata = {
   },
   description: "LNX Beats transforme les scènes ordinaires, les souvenirs et les émotions en récits musicaux.",
   applicationName: "LNX Studio",
+  other: { "google-adsense-account": ADSENSE_CLIENT_ID },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",

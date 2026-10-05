@@ -1,6 +1,7 @@
 import { centsToAdminInput } from "@/lib/pricing/domain";
 import { merchantMpnForProductSlug } from "@/lib/merchant/product-feed";
 import type { MerchantMetadata } from "@/lib/merchant/metadata";
+import { resolvedMerchantColor } from "@/lib/merchant/approved-product-facts";
 
 type ProductFieldValues = MerchantMetadata & {
   slug?: string;
@@ -28,7 +29,7 @@ export function AdminProductFields({
       <p>Les produits physiques publiés et renseignés rejoignent automatiquement le flux. Utilisez uniquement les références réelles du fabricant ; aucun code n’est inventé.</p>
       <label><span>Référence fabricant (MPN)</span><input name="merchantMpn" maxLength={70} defaultValue={values.merchantMpn ?? merchantMpnForProductSlug(values.slug ?? "") ?? ""} readOnly={Boolean(merchantMpnForProductSlug(values.slug ?? ""))} /></label>
       <label><span>GTIN / EAN réel (facultatif)</span><input name="merchantGtin" inputMode="numeric" maxLength={14} defaultValue={values.merchantGtin ?? ""} /></label>
-      <label><span>Couleur commerciale réelle</span><input name="merchantColor" maxLength={100} defaultValue={values.merchantColor ?? ""} /></label>
+      <label><span>Couleur commerciale réelle</span><input name="merchantColor" maxLength={100} defaultValue={resolvedMerchantColor({ ...values, slug: values.slug ?? "" }) ?? ""} /></label>
       <label><span>Existence d’identifiants fabricant</span><select name="merchantIdentifiersAbsent" defaultValue={values.merchantIdentifiersAbsent ? "on" : "false"} disabled={Boolean(merchantMpnForProductSlug(values.slug ?? ""))}>
         <option value="false">Identifiants renseignés ci-dessus, ou à vérifier</option>
         <option value="on">Je confirme qu’aucun identifiant fabricant n’existe</option>

@@ -1,6 +1,7 @@
 import { siteConfig } from "@/data/site";
 import { canonicalPublicUrl } from "@/lib/seo/canonical";
 import { isValidGtin, type MerchantMetadata } from "@/lib/merchant/metadata";
+import { resolvedMerchantColor } from "@/lib/merchant/approved-product-facts";
 
 export const MERCHANT_CENTER_FEED_PATH = "/merchant-center.xml" as const;
 export const MERCHANT_CENTER_FEED_CONTENT_TYPE = "application/xml; charset=utf-8" as const;
@@ -116,7 +117,7 @@ export function toMerchantFeedItem(product: MerchantFeedProduct): MerchantFeedIt
     brand: siteConfig.name,
     mpn,
     gtin,
-    color: product.merchantColor?.trim() || null,
+    color: resolvedMerchantColor(product),
     identifiersAbsent: product.merchantIdentifiersAbsent === true,
     shippingWeight: `${product.shippingWeightGrams} g`,
   };
