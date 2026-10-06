@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
 import { getFinancialEventReview } from "@/lib/admin/financial-event-review";
-import { resolveExpiredCheckoutAction } from "../actions";
+import { resolveExpiredCheckoutAction, reconcileSupportPaymentAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Revue de l’événement financier", robots: { index: false, follow: false } };
@@ -39,6 +39,7 @@ export default async function FinancialEventPage({ params, searchParams }: {
     </dl></section>
     {row.technicalReview ? <section className="admin-list-window"><h2>Audit du classement</h2><p>{date(row.technicalReview.createdAt)} · {row.technicalReview.reason}</p><p>Administrateur : {row.technicalReview.actorId}</p><p>Preuve conservée à la date du classement. Aucun paiement, commande ou contribution modifié.</p></section>
       : classification.eligible ? <form action={resolveExpiredCheckoutAction}><input type="hidden" name="eventId" value={row.id} /><label><input type="checkbox" name="confirmation" value="expired-unpaid" required /> Je confirme le classement technique seul, sans paiement ni commande attendue.</label><button className="admin-button" type="submit">Classer comme checkout expiré sans paiement</button><p>La preuve prestataire et les états internes seront revérifiés avant toute écriture d’audit.</p></form>
-        : <p>Action recommandée : conserver REQUIRES_REVIEW et examiner les workflows financiers existants. Aucun rapprochement arbitraire ni remboursement automatique. {row.support ? <Link href="/admin/soutiens">Registre des soutiens</Link> : <Link href="/admin/commandes">Commandes</Link>}</p>}
+        : classification.reconciliationEligible ? <form action={reconcileSupportPaymentAction}><input type="hidden" name="eventId" value={row.id} /><label><input type="checkbox" name="confirmation" value="support-reconciled" required /> Je confirme le rapprochement avec la contribution Soutien existante, sans mouvement financier.</label><button className="admin-button" type="submit">Rapprocher le paiement Soutien confirmé</button><p>Preuve Stripe fraîche et concordance locale revérifiées ; audit append-only. Aucun checkout capturé n’est classé comme expiré.</p></form>
+          : <p>Action recommandée : conserver REQUIRES_REVIEW et examiner les workflows financiers existants. Aucun rapprochement arbitraire ni remboursement automatique. {row.support ? <Link href="/admin/soutiens">Registre des soutiens</Link> : <Link href="/admin/commandes">Commandes</Link>}</p>}
   </div>;
 }

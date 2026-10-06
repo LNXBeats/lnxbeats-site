@@ -22,6 +22,7 @@ import {
   type VerifiedStripeWebhookEvent,
 } from "@/lib/payments/webhook";
 import { isRightsStripeWebhookEvent, processVerifiedRightsStripeWebhookEvent } from "@/lib/rights/payment-webhooks";
+import { isSupportFinancialEvent, processVerifiedSupportFinancialEvent } from "@/lib/support/financial-events";
 
 export const STRIPE_WEBHOOK_MAX_BYTES = 256 * 1024;
 
@@ -86,7 +87,7 @@ export function constructStripeWebhookEvent(
   if (event.api_version !== STRIPE_API_VERSION) {
     throw new Error("The Stripe webhook API version is not supported.");
   }
-  return { id: event.id, type: event.type, livemode: event.livemode, created: event.created, data: { object: event.data.object } };
+  return { id: event.id, type: event.type, livemode: event.livemode, created: event.created, data: { object: event.data.object }, ...(event.account ? { account: event.account } : {}) };
 }
 
 function objectRecord(value: unknown): Record<string, unknown> | null {
@@ -214,6 +215,7 @@ const routeDependencies: StripeWebhookRouteDependencies = {
   configuration: () => assertStripeReconciliationServerEnvironment().stripe,
   constructEvent: constructStripeWebhookEvent,
   enrichEvent: async (event, configuration) => {
+    if (isSupportFinancialEvent(event)) return event;
     const sourced = await resolveShopStripePaymentSource(event);
     return isShopStripeWebhookEvent(sourced)
       ? enrichShopStripeWebhookEvent(sourced, configuration)
@@ -221,6 +223,7 @@ const routeDependencies: StripeWebhookRouteDependencies = {
   },
   findDuplicateEvent: findProcessedStripeWebhookEvent,
   processEvent: (event) => {
+    if (isSupportFinancialEvent(event)) return processVerifiedSupportFinancialEvent(event);
     if (isStripeFinancialEvent(event.type)) return processVerifiedStripeFinancialEvent(event);
     if (isRightsStripeWebhookEvent(event)) return processVerifiedRightsStripeWebhookEvent(event);
     return isShopStripeWebhookEvent(event)

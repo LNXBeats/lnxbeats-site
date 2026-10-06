@@ -24,7 +24,12 @@ async function snapshot(db: Db, id: string) {
     } }),
     db.payment.count({ where: { providerCheckoutId: row.objectId } }),
   ]) : [null, 0] as const;
-  return { ...row, support, matchingPayments, reviewed: !!row.technicalReview };
+  const supportCandidates = support ? await db.supportContribution.count({ where: { OR: [
+    { id: support.id }, { providerReference: row.objectId },
+    ...(support.paymentReference ? [{ paymentReference: support.paymentReference }] : []),
+  ] } }) : 0;
+  const intentPayments = support?.paymentReference ? await db.payment.count({ where: { providerPaymentId: support.paymentReference } }) : 0;
+  return { ...row, support, supportCandidates, matchingPayments: matchingPayments + intentPayments, reviewed: !!row.technicalReview };
 }
 
 export async function getFinancialEventReview(id: string,
@@ -39,7 +44,8 @@ export async function getFinancialEventReview(id: string,
 /** Provider reads finish before the transaction. No payment/order/support write.
  * Serializable + event lock + unique audit key make retries/double-clicks safe. */
 export async function resolveFinancialEventReview(id: string, actorId: string,
-  readProof: (id: string, live: boolean) => Promise<CheckoutReviewEvidence | null> = readFinancialCheckout) {
+  readProof: (id: string, live: boolean) => Promise<CheckoutReviewEvidence | null> = readFinancialCheckout,
+  reason: "EXPIRED_UNPAID_SUPPORT_CHECKOUT" | "SUPPORT_PAYMENT_RECONCILED" = "EXPIRED_UNPAID_SUPPORT_CHECKOUT") {
   assertDatabaseConfigured();
   if (!uuid.test(id) || !uuid.test(actorId)) throw new Error("Revue refusée.");
   const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { role: true, status: true } });
@@ -57,12 +63,14 @@ export async function resolveFinancialEventReview(id: string, actorId: string,
         const currentActor = await tx.user.findUnique({ where: { id: actorId }, select: { role: true, status: true } });
         if (currentActor?.role !== "ADMIN" || currentActor.status !== "ACTIVE") throw new Error("Revue refusée.");
         if (current.technicalReview) return "ALREADY_REVIEWED";
-        if (!classifyFinancialReview(current, proof).eligible || !proof) throw new Error("Revue refusée.");
+        const classification = classifyFinancialReview(current, proof);
+        if (!(reason === "SUPPORT_PAYMENT_RECONCILED" ? classification.reconciliationEligible : classification.eligible) || !proof) throw new Error("Revue refusée.");
         await tx.providerEventTechnicalReview.create({ data: {
-          eventId: id, actorId, reason: "EXPIRED_UNPAID_SUPPORT_CHECKOUT",
+          eventId: id, actorId, reason,
           evidence: { sessionId: proof.sessionId, livemode: proof.livemode, status: proof.status,
             paymentStatus: proof.paymentStatus, paymentIntentId: proof.paymentIntentId,
-            amountCents: proof.amountCents, currency: proof.currency, contributionId: current.support!.id },
+            amountCents: proof.amountCents, currency: proof.currency, contributionId: current.support!.id,
+            ...(reason === "SUPPORT_PAYMENT_RECONCILED" ? { payment: proof.payment, checkedAt: new Date().toISOString() } : {}) },
         } });
         return "REVIEWED";
       }, { isolationLevel: "Serializable" });

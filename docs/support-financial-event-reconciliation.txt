@@ -1,0 +1,46 @@
+Targeted fix — Stripe Support financial receipts
+
+Root cause: the general Stripe webhook dispatches Rights/Shop/Order but not Support.
+normalizeCheckoutEvent expects paymentId/orderId/pricingVersion; Support deliberately
+provides purpose/contributionId instead. Its signed completed event was therefore
+recorded REQUIRES_REVIEW while the dedicated Support endpoint correctly confirmed
+the contribution. The previous Admin policy could classify expired/unpaid only.
+
+New path: signed Support checkout -> fresh GET evidence under expected merchant ->
+locked local unique SUCCEEDED contribution -> PROCESSED immutable receipt plus
+SUPPORT_PAYMENT_RECONCILED append-only Support audit. No Order normalization,
+capture/refund, fulfillment, contribution update or notification is performed here.
+Missing/ambiguous/mismatched evidence remains REQUIRES_REVIEW. Capture, amounts,
+currencies, mode, session, PaymentIntent, both metadata bindings, no Order,
+no incompatible refund and a <=30-second fresh proof are all required.
+
+Historical REQUIRES_REVIEW receipts are never rewritten by webhook replay.
+An explicit Admin checkbox enables a separate SUPPORT_PAYMENT_RECONCILED audit,
+after fresh provider reads and a transaction-local recheck with Admin authorization.
+The original receipt remains unchanged. Existing alert queries exclude only the
+append-only reviewed receipt; correlated financial incidents remain visible.
+The expired/unpaid workflow and its reason code remain unchanged.
+
+The existing audit CHECK allowed only EXPIRED_UNPAID_SUPPORT_CHECKOUT. Migration
+20261006010000_support_payment_reconciled_review extends it atomically to the two
+explicit reasons, with no row rewrite, new table or ACL change. Historical migration
+files remain unchanged. No Railway or provider configuration change.
+Synthetic PostgreSQL runtime test covers 8 concurrent deliveries, 4 concurrent
+Admin approvals, reversed arrival, replay, append-only audit and absence of any
+new Order/refund/retroactive notification. No real provider write or email is used.
+Deployment and historical LIVE reconciliation require separate human approval.
+
+Changed files (all relative to this isolated worktree):
+app/admin/evenements-financiers/[id]/page.tsx
+app/admin/evenements-financiers/actions.ts
+lib/admin/financial-event-policy.ts
+lib/admin/financial-event-review.ts
+lib/admin/financial-event-stripe.ts
+lib/payments/webhook-route-handler.ts
+lib/payments/webhook.ts
+lib/support/financial-events.ts
+prisma/migrations/20261006010000_support_payment_reconciled_review/migration.sql
+scripts/test-support-financial-events-runtime.ts
+tests/support/financial-events-fixture.ts
+tests/support/financial-events.test.ts
+docs/support-financial-event-reconciliation.txt

@@ -23,6 +23,7 @@ export type VerifiedStripeWebhookEvent = Readonly<{
   type: string;
   livemode: boolean;
   created: number;
+  account?: string;
   data: Readonly<{ object: unknown }>;
   paymentIntentEvidence?: StripePaymentIntentEvidence;
 }>;
