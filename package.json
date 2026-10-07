@@ -178,7 +178,7 @@
     "react-dom": "19.2.8",
     "resend": "6.19.0",
     "server-only": "0.0.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "stripe": "22.5.0"
   },
   "devDependencies": {
