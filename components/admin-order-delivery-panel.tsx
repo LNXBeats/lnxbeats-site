@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 
 import { deliveryFileSizeLabel, validateDeliveryFileSelection } from "@/lib/orders/delivery-file-selection";
+import { clearDeliverySession, deliveryRequest, uploadOrderDeliveryDirect } from "@/lib/orders/delivery-direct-client";
+import { DirectMultipartUploadError, isUploadAbort, type MultipartProgress } from "@/lib/creations/direct-multipart-upload";
 
 type DeliverySummary = {
   id: string;
@@ -51,25 +53,42 @@ export function AdminOrderDeliveryPanel({ orderNumber, deliveries, canUpload, pu
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState<MultipartProgress | null>(null);
+  const transfer = useRef<AbortController | null>(null);
+  const uploadToken = useRef<string | null>(null);
 
   async function upload() {
     if (!file || !canUpload) return;
     const validation = validateDeliveryFileSelection(file);
     if (!validation.ok) { setError(validation.message); return; }
-    setBusy(true); setError(""); setMessage("Vérification et stockage privé en cours…");
+    const controller = new AbortController(); transfer.current = controller; uploadToken.current = null;
+    setBusy(true); setError(""); setMessage("Préparation du transfert R2 privé…");
     try {
-      const body = new FormData();
-      body.set("delivery", file, file.name);
-      const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderNumber)}/delivery`, { method: "POST", body });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(payload.error ?? "Le livrable n’a pas pu être enregistré.");
+      await uploadOrderDeliveryDirect({ orderNumber, file, signal: controller.signal,
+        onToken: (token) => { uploadToken.current = token; }, onProgress: (value) => { setProgress(value); setMessage(""); } });
       setFile(null);
       setMessage("Livrable privé enregistré. Vous pouvez en ajouter un autre ou publier l’ensemble depuis l’action de statut.");
       if (inputRef.current) inputRef.current.value = "";
       router.refresh();
     } catch (caught) {
-      setMessage(""); setError(caught instanceof Error ? caught.message : "Le livrable n’a pas pu être enregistré.");
-    } finally { setBusy(false); }
+      controller.abort();
+      const text = isUploadAbort(caught) ? "Le transfert a été interrompu. Vous pouvez le reprendre avec le même fichier."
+        : caught instanceof DirectMultipartUploadError ? caught.state === "media-expire" ? "La session d’envoi a expiré. Relancez le transfert."
+          : caught.state === "media-illisible" ? "Le format ou le contenu du livrable n’a pas pu être validé."
+            : "Une partie du transfert a échoué. Réessayez avec le même fichier ; les parties confirmées sont conservées."
+          : caught instanceof Error ? caught.message : "Le livrable n’a pas pu être enregistré.";
+      if (caught instanceof DirectMultipartUploadError && !caught.recoverable) clearDeliverySession(orderNumber);
+      setMessage(""); setError(text);
+    } finally { transfer.current = null; setBusy(false); setProgress(null); }
+  }
+
+  async function cancelTransfer() {
+    transfer.current?.abort();
+    if (!uploadToken.current) return;
+    try {
+      const result = await deliveryRequest<{ status: string }>(orderNumber, "abort", { sessionToken: uploadToken.current }, new AbortController().signal);
+      if (result.status === "ABORTED") { clearDeliverySession(orderNumber); setError(""); setMessage("Transfert annulé. Aucun livrable publié."); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "La finalisation est en cours de vérification."); }
   }
 
   async function remove(assetId: string) {
@@ -137,6 +156,12 @@ export function AdminOrderDeliveryPanel({ orderNumber, deliveries, canUpload, pu
           {file ? <dl className="admin-delivery-selection" aria-live="polite"><div><dt>Nom</dt><dd>{file.name}</dd></div><div><dt>Format</dt><dd>{selection?.ok ? selection.format : "Non pris en charge"}</dd></div><div><dt>Taille</dt><dd>{deliveryFileSizeLabel(file.size)}</dd></div></dl> : null}
           <p>Chaque fichier est vérifié côté serveur avant stockage R2 privé. Le dépôt n’envoie aucune notification ; la publication de l’ensemble reste une action séparée.</p>
           <button className="form-button form-button--primary" type="button" disabled={!file || selection?.ok !== true || busy || removingId !== null} onClick={() => void upload()}>{busy ? "Enregistrement…" : "Enregistrer ce livrable"}</button>
+          {progress ? <div role="status" aria-live="polite">
+            <p>{["initializing"].includes(progress.phase) ? "Préparation…" : ["finalizing", "analyzing", "validating"].includes(progress.phase) ? "Envoi terminé · validation privée en cours…"
+              : `${progress.phase === "retrying" ? "Reprise d’une partie" : "Envoi direct R2"} · ${Math.min(99, progress.percent)} % · ${deliveryFileSizeLabel(progress.uploadedBytes)} / ${deliveryFileSizeLabel(progress.totalBytes)}`}</p>
+            <progress max={100} value={Math.min(99, progress.percent)} aria-label="Progression du transfert privé" />
+            <button className="form-button" type="button" onClick={() => void cancelTransfer()}>Annuler le transfert</button>
+          </div> : null}
         </div>
       ) : published ? <p>La livraison publiée est immuable dans ce workflow.</p> : capacityReached ? <p>La limite de huit livrables est atteinte. Retirez un fichier avant publication pour en ajouter un autre.</p> : <p>Une commande payée et encore en cours est requise.</p>}
       {message ? <p className="form-message" role="status">{message}</p> : null}

@@ -120,13 +120,21 @@ export async function downloadCreationVideoToTemporary(
   session: QuarantineDownloadSession,
   options: { storage?: MediaStorage; temporaryRoot?: string } = {},
 ) {
+  return downloadPrivateMultipartToTemporary({ ...session, ownerId: session.creationId, ownerMetadataKey: "lnx-creation-id" }, options);
+}
+
+/** Shared bounded disk spool for the media worker, never a Web upload path. */
+export async function downloadPrivateMultipartToTemporary(
+  session: Omit<QuarantineDownloadSession, "creationId"> & { ownerId: string; ownerMetadataKey: string },
+  options: { storage?: MediaStorage; temporaryRoot?: string; signal?: AbortSignal } = {},
+) {
   const storage = objectStorageForSession(session, options.storage);
   const metadata = await storage.head(quarantineInput(session));
   if (
     metadata.contentLength !== Number(session.declaredSizeBytes)
     || metadata.contentType !== session.declaredMimeType
     || metadata.customMetadata?.["lnx-session-id"] !== session.id
-    || metadata.customMetadata?.["lnx-creation-id"] !== session.creationId
+    || metadata.customMetadata?.[session.ownerMetadataKey] !== session.ownerId
     || metadata.customMetadata?.["lnx-declared-size"] !== String(session.declaredSizeBytes)
   ) throw new MediaStorageError("INTEGRITY", "Quarantine metadata does not match the upload session.");
 
@@ -153,6 +161,7 @@ export async function downloadCreationVideoToTemporary(
       Readable.fromWeb(object.body as never),
       meter,
       createWriteStream(target, { flags: "wx", mode: 0o600 }),
+      { signal: options.signal },
     );
     if (received !== Number(session.declaredSizeBytes)) throw new MediaStorageError("INTEGRITY");
     return { directory, target, checksumSha256: hash.digest("hex") };

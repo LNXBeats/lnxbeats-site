@@ -16,9 +16,9 @@ export class OrderRequestError extends Error {
   }
 }
 
-export async function readOrderJson(request: Request): Promise<unknown> {
+export async function readOrderJson(request: Request, maximumBytes = maxOrderJsonBytes): Promise<unknown> {
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
-  if (!Number.isFinite(declaredLength) || declaredLength < 0 || declaredLength > maxOrderJsonBytes) {
+  if (!Number.isFinite(declaredLength) || declaredLength < 0 || declaredLength > maximumBytes) {
     throw new OrderRequestError("Le brief transmis est trop volumineux.", 413, "PAYLOAD_TOO_LARGE");
   }
   if (!request.body) throw new OrderRequestError("Le brief transmis est invalide.", 400, "INVALID_JSON");
@@ -30,7 +30,7 @@ export async function readOrderJson(request: Request): Promise<unknown> {
     const { done, value } = await reader.read();
     if (done) break;
     received += value.byteLength;
-    if (received > maxOrderJsonBytes) {
+    if (received > maximumBytes) {
       await reader.cancel();
       throw new OrderRequestError("Le brief transmis est trop volumineux.", 413, "PAYLOAD_TOO_LARGE");
     }

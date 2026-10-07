@@ -120,7 +120,7 @@ export function orderAcceptsDeliveryUpload(status: string, hasSuccessfulPayment:
   return hasSuccessfulPayment && deliveryPreparationStatuses.has(status);
 }
 
-async function withDeliveryOrderLock<T>(
+export async function withDeliveryOrderLock<T>(
   orderNumber: string,
   operation: (transaction: Transaction) => Promise<T>,
 ) {
@@ -141,7 +141,7 @@ async function withDeliveryOrderLock<T>(
   throw lastError;
 }
 
-async function paidOrderForDelivery(transaction: Transaction, orderNumber: string, requireCapacity = true) {
+export async function paidOrderForDelivery(transaction: Transaction, orderNumber: string, requireCapacity = true) {
   const order = await transaction.order.findUnique({
     where: { orderNumber },
   });

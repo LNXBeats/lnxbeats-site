@@ -115,6 +115,42 @@ function imageIdentity(input: {
   return null;
 }
 
+/** Shared complete-file validation. Only the media worker calls this for R2
+ * direct uploads; no source bytes are fetched by a Web completion request. */
+export async function inspectOrderDeliveryFile(target: string, file: {
+  filename: string; mimeType: string; sizeBytes: number; checksumSha256: string;
+}): Promise<OrderDeliveryUpload> {
+  if (!Number.isSafeInteger(file.sizeBytes) || file.sizeBytes <= 0 || file.sizeBytes > orderOffer.maxDeliveryBytes) {
+    throw new OrderUploadError("Le fichier de livraison dépasse la limite de 200 Mo.", "FILE_TOO_LARGE");
+  }
+  const bytes = await signature(target);
+  const audio = detectOrderAudioType(bytes);
+  const identity: DeliveryIdentity = audio
+    ? { assetType: "AUDIO", ...validateOrderAudioIdentity({ signature: bytes,
+      originalFilename: file.filename, declaredMimeType: file.mimeType, sizeBytes: file.sizeBytes }) }
+    : documentIdentity({ bytes, originalFilename: file.filename, declaredMimeType: file.mimeType })
+      ?? imageIdentity({ bytes, originalFilename: file.filename, declaredMimeType: file.mimeType })
+      ?? (() => { throw new OrderUploadError("Le format du livrable n’est pas autorisé.", "UNSUPPORTED_SIGNATURE"); })();
+  let durationMs: number | null = null;
+  let width: number | null = null;
+  let height: number | null = null;
+  if (identity.assetType === "AUDIO") {
+    try { durationMs = (await validateCompleteAudioSource(target)).durationMs; }
+    catch { throw new OrderUploadError("Le fichier audio ne peut pas être analysé de façon sûre.", "DECODE_FAILED"); }
+  }
+  if (identity.assetType === "IMAGE") {
+    try {
+      const metadata = await sharp(target, { failOn: "warning", limitInputPixels: orderOffer.maxImagePixels, sequentialRead: true }).metadata();
+      if (!metadata.width || !metadata.height || metadata.width > orderOffer.maxImageWidth
+        || metadata.height > orderOffer.maxImageHeight || metadata.width * metadata.height > orderOffer.maxImagePixels) throw new Error("dimensions");
+      width = metadata.width; height = metadata.height;
+    } catch { throw new OrderUploadError("L’image ne peut pas être décodée de façon sûre.", "DECODE_FAILED"); }
+  }
+  return { path: target, originalFilename: identity.originalFilename, assetType: identity.assetType,
+    mimeType: identity.mimeType, extension: identity.extension, sizeBytes: file.sizeBytes,
+    checksumSha256: file.checksumSha256, durationMs, width, height, cleanup: async () => undefined };
+}
+
 export async function readOrderDeliveryUpload(request: Request): Promise<OrderDeliveryUpload> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^multipart\/form-data\s*;/i.test(contentType) || !/boundary\s*=/i.test(contentType)) {
@@ -206,65 +242,9 @@ export async function readOrderDeliveryUpload(request: Request): Promise<OrderDe
     if (parserError) throw parserError;
     if (!fileInfo) throw new OrderUploadError("Sélectionnez un livrable.", "EMPTY_FILE");
     const completedFile = fileInfo as PendingAudioFile;
-    const detectedSignature = await signature(target);
-    const detectedAudio = detectOrderAudioType(detectedSignature);
-    let identity: DeliveryIdentity;
-    let durationMs: number | null = null;
-    let width: number | null = null;
-    let height: number | null = null;
-    if (detectedAudio) {
-      identity = { assetType: "AUDIO", ...validateOrderAudioIdentity({
-        signature: detectedSignature,
-        originalFilename: completedFile.filename,
-        declaredMimeType: completedFile.mimeType,
-        sizeBytes: completedFile.sizeBytes,
-      }) };
-      try {
-        durationMs = (await validateCompleteAudioSource(target)).durationMs;
-      } catch {
-        throw new OrderUploadError("Le fichier audio ne peut pas être analysé de façon sûre.", "DECODE_FAILED");
-      }
-    } else {
-      identity = documentIdentity({
-        bytes: detectedSignature,
-        originalFilename: completedFile.filename,
-        declaredMimeType: completedFile.mimeType,
-      }) ?? imageIdentity({
-        bytes: detectedSignature,
-        originalFilename: completedFile.filename,
-        declaredMimeType: completedFile.mimeType,
-      }) ?? (() => { throw new OrderUploadError("Le format du livrable n’est pas autorisé.", "UNSUPPORTED_SIGNATURE"); })();
-      if (identity.assetType === "IMAGE") {
-        try {
-          const metadata = await sharp(target, {
-            failOn: "warning",
-            limitInputPixels: orderOffer.maxImagePixels,
-            sequentialRead: true,
-          }).metadata();
-          if (!metadata.width || !metadata.height
-            || metadata.width > orderOffer.maxImageWidth
-            || metadata.height > orderOffer.maxImageHeight
-            || metadata.width * metadata.height > orderOffer.maxImagePixels) {
-            throw new Error("invalid image dimensions");
-          }
-          width = metadata.width;
-          height = metadata.height;
-        } catch {
-          throw new OrderUploadError("L’image ne peut pas être décodée de façon sûre.", "DECODE_FAILED");
-        }
-      }
-    }
+    const inspected = await inspectOrderDeliveryFile(target, completedFile);
     return {
-      path: target,
-      assetType: identity.assetType,
-      originalFilename: identity.originalFilename,
-      mimeType: identity.mimeType,
-      extension: identity.extension,
-      sizeBytes: completedFile.sizeBytes,
-      durationMs,
-      width,
-      height,
-      checksumSha256: completedFile.checksumSha256,
+      ...inspected,
       cleanup: () => rm(temporaryDirectory, { recursive: true, force: true }),
     };
   } catch (error) {

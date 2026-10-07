@@ -39,7 +39,7 @@ export function validateDeliveryFileSelection(file: DeliveryFileCandidate): Deli
   // Safari may leave File.type empty for a local audio file. The extension is
   // sufficient for this advisory UI check; the server still verifies MIME,
   // signature and a complete FFmpeg decode before any R2/DB persistence.
-  if (mimeType && !definition.mimeTypes.has(mimeType as never)) {
+  if (mimeType && mimeType !== "application/octet-stream" && !definition.mimeTypes.has(mimeType as never)) {
     return { ok: false, message: "Le type du fichier ne correspond pas à son extension." };
   }
   return { ok: true, format: definition.format };

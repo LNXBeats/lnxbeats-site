@@ -5,6 +5,7 @@ import { provisionFinancialReviewPrivileges } from "@/lib/admin/financial-event-
 import { provisionSupportNotificationConsumer } from "@/lib/support/notification-runtime-privileges";
 import { provisionSupportRuntimePrivileges } from "@/lib/support/runtime-privileges";
 import { provisionExternalProductRuntimePrivileges } from "@/lib/shop/external-product-runtime-privileges";
+import { provisionDeliveryUploadPrivileges } from "@/lib/orders/delivery-runtime-privileges";
 
 import {
   provisionAdminOrderVisibilityAuditPrivileges,
@@ -39,6 +40,7 @@ try {
   const support = await provisionSupportRuntimePrivileges(client, decodeURIComponent(runtime.username));
   const supportNotificationConsumer = await provisionSupportNotificationConsumer(client, notificationsRole, decodeURIComponent(runtime.username));
   const externalShopProducts = await provisionExternalProductRuntimePrivileges(client, decodeURIComponent(runtime.username));
+  const deliveryUploads = await provisionDeliveryUploadPrivileges(client, decodeURIComponent(runtime.username));
   console.log(JSON.stringify({
     status: "ok",
     database: result.database,
@@ -52,6 +54,7 @@ try {
     support,
     supportNotificationConsumer,
     externalShopProducts,
+    deliveryUploads,
     defaultPrivileges: "not used; provisioning is prefix-scoped plus the exact order visibility audit table",
   }, null, 2));
 } finally {

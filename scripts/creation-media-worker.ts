@@ -5,6 +5,7 @@ import {
   processNextCreationVideoValidation,
 } from "@/lib/creations/direct-upload-worker";
 import { expireAbandonedCreationVideoUploads } from "@/lib/creations/direct-upload-service";
+import { cleanupDeliveryUploadSessions, processNextDeliveryValidation } from "@/lib/orders/delivery-direct-worker";
 
 const pollMs = 3_000;
 let stopping = false;
@@ -37,9 +38,11 @@ function waitForNextPoll() {
 while (!stopping) {
   try {
     const result = await processNextCreationVideoValidation(new Date(), { signal: shutdown.signal });
+    const delivery = await processNextDeliveryValidation({ signal: shutdown.signal });
+    await cleanupDeliveryUploadSessions();
     await cleanupTerminalCreationVideoQuarantine();
     await expireAbandonedCreationVideoUploads();
-    if (!result.processed) await waitForNextPoll();
+    if (!result.processed && !delivery.processed) await waitForNextPoll();
   } catch (error) {
     // Web and worker deployments can overlap. In particular, the worker may
     // briefly start before the Web pre-deploy has applied an additive schema

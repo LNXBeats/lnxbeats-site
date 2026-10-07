@@ -914,6 +914,7 @@ enum ProviderEventOutcome {
 }
 
 model User {
+  deliveryUploadSessions             OrderDeliveryUploadSession[]
   id                                 String                            @id @default(uuid()) @db.Uuid
   email                              String                            @unique @db.VarChar(320)
   emailVerified                      Boolean                           @default(false)
@@ -1482,6 +1483,7 @@ model CreationCollaboratorLink {
 }
 
 model Order {
+  deliveryUploadSessions            OrderDeliveryUploadSession[]
   id                                String                            @id @default(uuid()) @db.Uuid
   orderNumber                       String                            @unique @db.VarChar(32)
   userId                            String?                           @db.Uuid
@@ -2215,6 +2217,32 @@ model OrderAsset {
   @@id([orderId, assetId, role])
   @@index([assetId])
   @@map("order_assets")
+}
+
+model OrderDeliveryUploadSession {
+  id                String    @id @db.Uuid
+  tokenHash         String    @unique @db.Char(64)
+  actorUserId       String    @db.Uuid
+  orderId           String    @db.Uuid
+  status            String    @default("PREPARING") @db.VarChar(24)
+  originalFilename  String    @db.VarChar(255)
+  declaredMimeType  String    @db.VarChar(160)
+  declaredSizeBytes BigInt
+  storageKey        String    @unique @db.VarChar(500)
+  providerUploadId  String?   @unique @db.Text
+  expiresAt         DateTime  @db.Timestamptz(3)
+  leaseToken        String?   @db.Uuid
+  leaseExpiresAt    DateTime? @db.Timestamptz(3)
+  attempts          Int       @default(0)
+  lastErrorCode     String?   @db.VarChar(80)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+  actor             User      @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, status, expiresAt])
+  @@index([status, leaseExpiresAt, createdAt], map: "delivery_upload_status_lease_created_idx")
+  @@map("order_delivery_upload_sessions")
 }
 
 model Favorite {

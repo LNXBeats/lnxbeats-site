@@ -66,8 +66,8 @@ export type StoredMultipartSession = {
 };
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-type Dependencies = {
-  init(input: MultipartInit, signal: AbortSignal): Promise<MultipartSession>;
+export type MultipartDependencies<T = MultipartInit> = {
+  init(input: T, signal: AbortSignal): Promise<MultipartSession>;
   partUrl(token: string, partNumber: number, signal: AbortSignal): Promise<{ url: string }>;
   status(token: string, signal: AbortSignal): Promise<MultipartStatusResponse>;
   complete(token: string, parts: Array<Pick<MultipartPart, "partNumber" | "etag">>, signal: AbortSignal): Promise<MultipartStatusResponse>;
@@ -75,6 +75,7 @@ type Dependencies = {
   wait(ms: number, signal: AbortSignal): Promise<void>;
   waitUntilVisible(signal: AbortSignal): Promise<void>;
 };
+type Dependencies = MultipartDependencies;
 
 export class DirectMultipartUploadError extends Error {
   constructor(readonly state: string, readonly recoverable = false) {
@@ -209,7 +210,7 @@ async function wait(ms: number, signal: AbortSignal) {
     signal.addEventListener("abort", () => { window.clearTimeout(timer); reject(abortError()); }, { once: true });
   });
 }
-async function waitUntilVisible(signal: AbortSignal) {
+export async function waitUntilVisible(signal: AbortSignal) {
   assertActive(signal);
   if (typeof document === "undefined" || !document.hidden) return;
   await new Promise<void>((resolve, reject) => {
@@ -262,6 +263,18 @@ export async function runDirectMultipartVideoUpload(input: {
   dependencies?: Partial<Dependencies>;
 }) {
   const dependencies = { ...browser, ...input.dependencies };
+  return runDirectMultipartUpload({ ...input, dependencies });
+}
+
+/** Domain-neutral engine: the existing Creations transport and delivery
+ * transport supply their own authenticated metadata endpoints. */
+export async function runDirectMultipartUpload<T extends { sizeBytes: number }>(input: {
+  file?: File; init: T; resumeSessionToken?: string; signal: AbortSignal;
+  onSession?(session: MultipartSession): void;
+  onProgress?(progress: MultipartProgress): void;
+  dependencies: MultipartDependencies<T>;
+}) {
+  const dependencies = input.dependencies;
   let retries = 0;
   const emit = (
     phase: UploadPhase,
