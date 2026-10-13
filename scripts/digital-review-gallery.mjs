@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 const screenshots="/Users/lnxbeats/.codex/visualizations/2026/08/09/019fe533-ab67-7791-9ed5-4a0c521aef42/dcn-1-1";
 const output=path.resolve("output/dcn-1-1");await mkdir(output,{recursive:true});
 // Earlier full-page bridge captures are retained on disk, but not offered as final visual evidence.
-const names=(await readdir(screenshots)).filter(n=>/^[a-z0-9-]+\.jpg$/.test(n)&&!n.includes("avant-reception")&&!n.includes("-viewport")).sort();
+const names=(await readdir(screenshots)).filter(n=>/^[a-z0-9-]+\.jpg$/.test(n)&&!n.includes("avant-reception")&&!n.includes("-viewport")&&!n.includes("album-possedes")&&!n.includes("-desktop-1440")).sort();
 for(const n of names)await copyFile(path.join(screenshots,n),path.join(output,n));
 const samples=(await readdir("output/pdf")).filter(n=>/^dcn-qa-[a-z0-9_-]+\.(pdf|html|txt)$/.test(n));
 for(const n of samples)await copyFile(path.join("output/pdf",n),path.join(output,n));
@@ -21,5 +21,5 @@ const allowed=new Set(["index.html","release.json",...names,...samples]);
 createServer(async(req,res)=>{try{const u=new URL(req.url??"/","http://127.0.0.1:3141"),name=u.pathname==="/"?"index.html":decodeURIComponent(u.pathname.slice(1));
   if(!["GET","HEAD"].includes(req.method??"")||!allowed.has(name)){res.writeHead(404);res.end();return;}
   const type=name.endsWith(".jpg")?"image/jpeg":name.endsWith(".pdf")?"application/pdf":name.endsWith(".html")?"text/html; charset=utf-8":"text/plain; charset=utf-8";
-  const bytes=await readFile(path.join(output,name));res.writeHead(200,{"Content-Type":type,"Content-Length":bytes.length,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","Content-Security-Policy":`default-src 'none'; img-src 'self'; style-src 'sha256-${styleHash}'; base-uri 'none'; frame-ancestors 'none'`});res.end(req.method==="HEAD"?undefined:bytes);
+  const bytes=await readFile(path.join(output,name));res.writeHead(200,{"Content-Type":type,"Content-Length":bytes.length,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff",...(name.endsWith(".html")&&name!=="index.html"?{"Content-Disposition":`attachment; filename="${name}"`}:{}),"Content-Security-Policy":`default-src 'none'; img-src 'self'; style-src 'sha256-${styleHash}'; base-uri 'none'; frame-ancestors 'none'`});res.end(req.method==="HEAD"?undefined:bytes);
 }catch{res.writeHead(404);res.end();}}).listen(3141,"127.0.0.1",()=>console.log("Local DCN evidence: http://127.0.0.1:3141 — screenshots and synthetic QA documents only."));
