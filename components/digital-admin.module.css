@@ -1,0 +1,29 @@
+.workflow { min-width:0; }
+.banner { padding:1rem; color:#f2d18a; background:#d6b06114; border:1px solid #d6b06155; border-radius:12px; margin:1rem 0; }
+.toolbar { display:flex; flex-wrap:wrap; gap:.7rem; align-items:center; margin:1rem 0; }
+.summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:.8rem; margin:1rem 0; }
+.summary div { border:1px solid #ffffff20; border-radius:10px; padding:.8rem; display:grid; gap:.3rem; }
+.summary strong { font-size:1.1rem; color:#f2d18a; }
+.track { border:1px solid #d6b06140; border-radius:14px; padding:1rem; margin:1rem 0; }
+.track h2 { margin:0; font-size:1.15rem; overflow-wrap:anywhere; }
+.track audio { display:block; width:min(100%,420px); max-width:100%; }
+.track p { overflow-wrap:anywhere; }
+.trackHeader { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.6rem; align-items:start; }
+.trackHeader span { font-size:.85rem; color:#d7ccb4; }
+.fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:1rem; align-items:start; }
+.offer { min-width:0; }
+.offer h3 { margin:.5rem 0; }
+.upload { border:1px solid #ffffff22; border-radius:12px; padding:1rem; margin:.8rem 0; min-width:0; }
+.upload strong { overflow-wrap:anywhere; }
+.upload[data-state=error] { border-color:#e1a283; }
+.upload[data-state=ready] { border-color:#87be8d; }
+.status { display:flex; flex-wrap:wrap; gap:.5rem; justify-content:space-between; margin:.5rem 0; }
+.details { margin:1rem 0; }
+.details summary { cursor:pointer; min-height:44px; padding:.7rem 0; font-weight:600; }
+.advisory { color:#f6d99a; border-left:3px solid #dfb85b; padding:.7rem 1rem; background:#dfb85b12; }
+.compact { min-width:0; }
+.compact :is(input,select,button) { min-width:0; }
+.pagination { display:flex; flex-wrap:wrap; gap:.8rem; align-items:center; margin:1rem 0; }
+.workflow :is(a,button,input,select,summary):focus-visible { outline:3px solid #f0ce7a; outline-offset:3px; }
+@media (max-width:600px) { .fields { grid-template-columns:1fr; } .toolbar > button { flex:1 1 auto; } }
+@media (prefers-reduced-motion:reduce) { .workflow * { animation:none!important; transition:none!important; } }

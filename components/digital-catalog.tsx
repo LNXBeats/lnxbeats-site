@@ -1,22 +1,44 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
-import { AudioPreviewPlayer } from "@/components/audio-preview-player";
+import { useEffect, useId, useRef, useState } from "react";
+import { StudioVinylControl } from "@/components/studio-vinyl-control";
+import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
+import { digitalTimeLabel } from "@/lib/digital/presentation";
 import styles from "./digital.module.css";
-export const DIGITAL_CART_KEY="lnx:dcn:cart:v1";
-export function readDigitalCart():string[]{try{const v=JSON.parse(localStorage.getItem(DIGITAL_CART_KEY)??"[]");return Array.isArray(v)?v.filter((x):x is string=>typeof x==="string").slice(0,50):[];}catch{return[];}}
-export function writeDigitalCart(ids:string[]){localStorage.setItem(DIGITAL_CART_KEY,JSON.stringify([...new Set(ids)]));window.dispatchEvent(new Event("dcn-cart"));}
-export const digitalMoney=(c:number)=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(c/100);
-export function AddDigitalOffer({id,priceCents,label="Ajouter au panier"}:{id:string;priceCents:number;label?:string}){const[added,setAdded]=useState(false),[error,setError]=useState(false);
-  return <div className={styles.actions}><strong>{digitalMoney(priceCents)}</strong><button type="button" onClick={()=>{try{writeDigitalCart([...readDigitalCart(),id]);setAdded(true);}catch{setError(true);}}}>{added?"Ajouté au panier":label}</button>{added?<Link className={styles.quiet} href="/musique/panier">Voir le panier numérique</Link>:null}{error?<span role="status">Le navigateur n’a pas pu enregistrer le panier.</span>:null}</div>;}
-export type DigitalProjectView={album:{id:string;priceCents:number;version:number;trackCount:number}|null;tracks:Array<{id:string;title:string;position:number;publication:string;previewUrl:string|null;previewDurationMs:number|null;offer:{id:string;priceCents:number;version:number}|null}>};
-export function DigitalTracklist({view}:{view:DigitalProjectView}){return <section className={styles.panel} aria-labelledby="digital-tracks-title">
-  <div className={styles.heading}><div><p className="eyebrow">Musique numérique</p><h2 id="digital-tracks-title">Écouter. Choisir. Retrouver.</h2></div><Link className="text-link" href="/musique/panier">Panier numérique</Link></div>
-  <p className={styles.note}>Version locale de revue · prix QA uniquement · aucun paiement LIVE</p>
-  {view.album?<div className={styles.panel}><strong>Album · {view.album.trackCount} pistes incluses</strong><p className={styles.muted}>L’offre album est indépendante des titres unitaires. La liste des pistes incluses est figée à l’achat ; les titres annoncés ne sont pas vendus.</p><AddDigitalOffer {...view.album} label="Ajouter l’album"/></div>:<p className={styles.muted}>Vente de l’album non disponible.</p>}
-  <ol className={styles.rows}>{view.tracks.map(t=><li className={styles.row} key={t.id}><span>{String(t.position).padStart(2,"0")}</span><strong>{t.title}</strong>
-    <div className={styles.actions}>{t.offer?<AddDigitalOffer {...t.offer}/>:<span className={styles.muted}>{t.publication==="ANNOUNCED"?"Titre annoncé · non commercialisé":"Achat indisponible"}</span>}</div>
-    <div className={styles.preview}>{t.previewUrl?<AudioPreviewPlayer src={t.previewUrl} title={t.title} durationMs={t.previewDurationMs} compact/>:<span className={styles.muted}>Extrait non disponible</span>}</div>
-  </li>)}</ol>{!view.tracks.length?<p>Aucune piste publiée pour ce projet.</p>:null}
-  <p className={styles.muted}>Extraits autonomes de 60 secondes maximum. Les fichiers complets ne sont jamais publics.</p>
-</section>;}
+export const DIGITAL_CART_KEY = "lnx:dcn:cart:v1";
+export function readDigitalCart(): string[] { try { const v = JSON.parse(localStorage.getItem(DIGITAL_CART_KEY) ?? "[]"); return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string"))].slice(0, 50) : []; } catch { return []; } }
+export function writeDigitalCart(ids: string[]) { localStorage.setItem(DIGITAL_CART_KEY, JSON.stringify([...new Set(ids)])); window.dispatchEvent(new Event("dcn-cart")); }
+export const digitalMoney = (c: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(c / 100);
+export function AddDigitalOffer({ id, priceCents, label = "Ajouter au panier", title, owned = false, partiallyOwned = false }: { id: string; priceCents: number; label?: string; title?: string; owned?: boolean; partiallyOwned?: boolean }) {
+  const [added, setAdded] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState(false);
+  useEffect(() => { const update = () => setAdded(readDigitalCart().includes(id)); update(); window.addEventListener("dcn-cart", update); window.addEventListener("storage", update); return () => { window.removeEventListener("dcn-cart", update); window.removeEventListener("storage", update); }; }, [id]);
+  return <div className={styles.offerActions}><strong className={styles.price}>{digitalMoney(priceCents)}</strong>{owned || partiallyOwned ? <Link className={styles.ownedLink} href="/compte/musique">{owned ? "Déjà dans votre musique" : "Titres déjà acquis — Ma musique"}</Link> : <button className={styles.button} type="button" aria-label={title ? `${added ? "Dans le panier" : label} — ${title}` : undefined} disabled={added} onClick={() => { setError(false); try { writeDigitalCart([...readDigitalCart(), id]); setMessage(`${title ?? "Sélection"} ajouté au panier numérique.`); } catch { setError(true); setMessage("Le navigateur n’a pas pu enregistrer le panier."); } }}>{added ? "Dans le panier" : label}</button>}<span className={error ? styles.playError : "sr-only"} role="status" aria-live="polite">{message}</span></div>;
+}
+export type DigitalProjectView = {
+  album: { id: string; priceCents: number; version: number; trackCount: number; owned?: boolean; partiallyOwned?: boolean } | null;
+  tracks: Array<{ id: string; title: string; position: number; publication: string; previewUrl: string | null; previewDurationMs: number | null; fullDurationMs?: number | null; owned?: boolean; offer: { id: string; priceCents: number; version: number } | null }>;
+};
+export function DigitalAlbumOffer({ album }: { album: DigitalProjectView["album"] }) {
+  return <div className={styles.albumOffer}>{album ? <><p className="eyebrow">L’album numérique</p><strong>{album.trackCount} {album.trackCount === 1 ? "piste incluse" : "pistes incluses"}</strong><AddDigitalOffer {...album} title="l’album" label="Ajouter l’album au panier"/><p className={styles.muted}>Téléchargements privés de chaque piste et de l’album ZIP.</p>{album.partiallyOwned ? <p className={styles.muted}>L’achat de cet album est provisoirement bloqué pour éviter un rachat de titres. Les autres pistes restent proposées individuellement.</p> : null}</> : <p className={styles.muted}>Album indisponible à l’achat. Consultez les pistes ci-dessous.</p>}</div>;
+}
+/** Uses the existing site-wide coordinator. Audio loads only after user play. */
+function DigitalTrackRow({ track }: { track: DigitalProjectView["tracks"][number] }) {
+  const playerId = `digital-${useId()}`, audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false), [loading, setLoading] = useState(false), [failed, setFailed] = useState(false), [ended, setEnded] = useState(false), [current, setCurrent] = useState(0), [duration, setDuration] = useState((track.previewDurationMs ?? 0) / 1000);
+  useEffect(() => listenForOtherMediaPlayback(playerId, () => audio.current?.pause()), [playerId]);
+  async function toggle() { if (!audio.current) return; setFailed(false); if (!audio.current.paused) { audio.current.pause(); return; } setLoading(true); try { await audio.current.play(); } catch { setFailed(true); } finally { setLoading(false); } }
+  return <li className={styles.trackRow} data-digital-preview={track.id} data-playing={playing ? "true" : "false"}>
+    <audio ref={audio} src={track.previewUrl ?? undefined} preload="none" controlsList="nodownload noplaybackrate" onPlay={() => { setPlaying(true); setEnded(false); announceMediaPlayback({ ownerId: playerId, kind: "audio" }); }} onPause={() => setPlaying(false)} onLoadedMetadata={e => { if (Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration); }} onTimeUpdate={e => setCurrent(e.currentTarget.currentTime)} onEnded={e => { e.currentTarget.currentTime = 0; setPlaying(false); setEnded(true); setCurrent(0); }} onError={() => { setFailed(true); setPlaying(false); setLoading(false); }}/>
+    <span className={styles.trackNumber}>{String(track.position).padStart(2, "0")}</span><div className={styles.trackIdentity}><strong>{track.title}</strong><span className={styles.muted}>{track.fullDurationMs != null ? `${digitalTimeLabel(track.fullDurationMs)} · piste complète` : "Durée complète non documentée"}</span></div><div className={styles.trackPlayback}>
+    <button className={styles.trackPlay} type="button" onClick={() => void toggle()} disabled={loading || !track.previewUrl} aria-label={`${playing ? "Mettre en pause" : ended ? "Relire" : "Lire"} l’extrait de ${track.title}`}><StudioVinylControl state={loading ? "loading" : playing ? "pause" : ended ? "replay" : "play"}/></button>
+    <span className={styles.previewCaption}>{track.previewUrl ? `Extrait ${digitalTimeLabel(duration * 1000) ?? "durée non documentée"}` : "Extrait indisponible"}</span></div><div className={styles.trackPurchase}>{track.offer ? <AddDigitalOffer {...track.offer} title={track.title} owned={track.owned}/> : <span className={styles.muted}>{track.publication === "ANNOUNCED" ? "Titre annoncé — indisponible à l’achat" : "Indisponible à l’achat"}</span>}</div>
+    {(playing || current > 0) && track.previewUrl ? <div className={styles.trackProgress}><label><span className="sr-only">Position dans l’extrait de {track.title}</span><input type="range" min={0} max={Math.max(duration, 0)} step="0.1" value={Math.min(current, duration)} disabled={!duration || failed} onChange={e => { const next = Number(e.currentTarget.value); if (audio.current && Number.isFinite(next)) { audio.current.currentTime = next; setCurrent(next); setEnded(false); } }}/></label><output>{digitalTimeLabel(current * 1000)} / {digitalTimeLabel(duration * 1000)}</output></div> : null}
+    {failed ? <span className={styles.playError} role="status">Lecture indisponible. Réessayez cet extrait.</span> : null}
+  </li>;
+}
+export function DigitalTracklist({ view }: { view: DigitalProjectView }) {
+  return <section className={styles.tracklist} aria-labelledby="digital-tracks-title"><div className={styles.heading}><div><p className="eyebrow">Écouter et choisir</p><h2 id="digital-tracks-title">Les pistes.</h2></div><Link className="text-link" href="/musique/panier">Ouvrir le panier numérique</Link></div>
+    <ol className={styles.trackRows}>{view.tracks.map(t => <DigitalTrackRow track={t} key={t.id}/>)}</ol>{!view.tracks.length ? <p>Aucune piste publiée pour ce projet.</p> : null}
+    <details className={styles.qaDetails}><summary>À propos de cette démonstration</summary><p>Prix fictifs, panier numérique séparé et offres vérifiées côté serveur. Chaque extrait est un fichier autonome de 60 secondes maximum. Le master complet reste privé ; aucune licence de publication n’est accordée par cette démo.</p><p>Le nombre de pistes de l’offre album correspond uniquement aux fichiers inclus à l’achat. Les titres annoncés ne sont pas vendus.</p></details>
+  </section>;
+}

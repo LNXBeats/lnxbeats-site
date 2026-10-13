@@ -73,7 +73,7 @@ export async function prepareDigitalCreditNote(tx: Tx, refundId: string) {
 function invoiceRecord(s: Record<string, unknown>, hash: string): InvoicePdfRecord {
   return { ...s, issuedAt: new Date(s.issuedAt as string), paidAt: new Date(s.paidAt as string), snapshotHashSha256: hash } as unknown as InvoicePdfRecord;
 }
-async function contractPdf(snapshot: Record<string, unknown>, number: string) {
+export async function generateDigitalContractPdf(snapshot: Record<string, unknown>, number: string) {
   const p = new PDFDocument({ size: "A4", margin: 48, info: { Title: `Confirmation ${number}` } });
   const chunks: Buffer[] = []; let size = 0;
   const result = new Promise<Buffer>((resolve, reject) => { p.on("data", b => { size += b.length; if (size > 2097152) (p as unknown as import("node:stream").Readable).destroy(new DigitalError("PDF_TOO_LARGE")); else chunks.push(b); }); p.on("error", reject); p.on("end", () => resolve(Buffer.concat(chunks))); });
@@ -105,7 +105,7 @@ export async function processDigitalDocuments(limit = 10, renderer?: (kind: stri
       const pdf = renderer ? await renderer(row.kind, s, row.snapshotHash, row.number) : row.kind === "INVOICE"
         ? (await generateInvoicePdf(invoiceRecord(s, row.snapshotHash), "TEST",{digital:true})).bytes : row.kind === "CREDIT_NOTE"
           ? (await generateCreditNotePdf({ ...s, issuedAt: new Date(s.issuedAt as string), snapshotHashSha256: row.snapshotHash,
-            invoice: invoiceRecord(s.invoice as Record<string, unknown>, billingSnapshotHash(s.invoice)) } as CreditNotePdfRecord, "TEST",{digital:true})).bytes : await contractPdf(s, row.number);
+            invoice: invoiceRecord(s.invoice as Record<string, unknown>, billingSnapshotHash(s.invoice)) } as CreditNotePdfRecord, "TEST",{digital:true})).bytes : await generateDigitalContractPdf(s, row.number);
       if (!pdf.length || pdf.length > 2097152 || !pdf.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new DigitalError("INVALID_PDF");
       const changed = await prisma.digitalDocument.updateMany({ where: { id: row.id, leaseToken: token, status: "PROCESSING", leaseUntil: { gt: new Date() } }, data: { status: "READY", pdf: new Uint8Array(pdf), pdfHash: createHash("sha256").update(pdf).digest("hex"), leaseUntil: null, leaseToken: null, errorCode: null } });
       ready += changed.count;

@@ -10,7 +10,7 @@ assert.equal(config.DCN_MODE, "TEST"); assert.equal(config.DCN_NEW_PAYMENTS_ENAB
 for (const key of Object.keys(config)) assert.ok(!/(STRIPE|PAYPAL|RESEND|LIVE)/i.test(key), "This local review profile contains no provider credentials.");
 const command = process.argv[2] ?? "web";
 assert.ok(["web", "web-built", "worker"].includes(command));
-const env:NodeJS.ProcessEnv = { PATH: process.env.PATH!, HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR ?? "/private/tmp", NODE_ENV:command==="web-built"?"production":"development", ...config };
+const env:NodeJS.ProcessEnv = { PATH: process.env.PATH!, HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR ?? "/private/tmp", NODE_ENV:command==="web-built"?"production":"development", ...config, DCN_LOCAL_REVIEW_AUTHORIZED:"true" };
 const child = command === "worker"
   ? spawn(process.execPath, ["--conditions=react-server", "--import", "tsx", "scripts/digital-media-worker.ts"], { env, stdio: "inherit" })
   : spawn(process.execPath, ["node_modules/next/dist/bin/next", ...(command==="web-built"?["start"]:["dev","--webpack"]), "--hostname", "127.0.0.1", "--port", "3140"], { env, stdio: "inherit" });

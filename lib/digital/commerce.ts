@@ -8,6 +8,7 @@ import { DigitalError, DIGITAL_TERMS_TEXT, DIGITAL_TERMS_VERSION, assertDigitalU
 import { digitalGateway, type DigitalGateway, type DigitalProviderOrder } from "./providers";
 import { digitalContractSnapshot } from "./fulfillment-policy";
 import { enqueueDigitalEmail, prepareDigitalDocuments } from "./documents";
+import { localDigitalReviewCheckoutAllowed } from "./local-review-policy";
 
 function user(actor: OrderActor) { if (actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("VERIFIED_ACCOUNT_REQUIRED", 403); }
 async function lock(tx: Prisma.TransactionClient, id: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${id}`})) IS NULL AS locked`; }
@@ -19,9 +20,9 @@ function presentOrder(order: { id: string; status: string; totalCents: number; m
     checkoutUrl: order.status === "PENDING" && attempt?.status === "OPEN" ? attempt.checkoutUrl : null,
     needsReconciliation: order.status === "REQUIRES_REVIEW" || attempt?.status === "UNKNOWN" };
 }
-export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; earlyDelivery: boolean; withdrawalAcknowledged: boolean }, suppliedGateway?: DigitalGateway) {
+export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; earlyDelivery: boolean; withdrawalAcknowledged: boolean }, suppliedGateway?: DigitalGateway, options?:{localReview:true}) {
   user(actor); requireDigitalEnvironment();
-  if (process.env.DCN_NEW_PAYMENTS_ENABLED !== "true") throw new DigitalError("NEW_DIGITAL_PAYMENTS_CLOSED", 503);
+  if (process.env.DCN_NEW_PAYMENTS_ENABLED !== "true" && !localDigitalReviewCheckoutAllowed(actor.email,suppliedGateway?.merchantId??"",options?.localReview===true)) throw new DigitalError("NEW_DIGITAL_PAYMENTS_CLOSED", 503);
   if(!suppliedGateway&&process.env.DCN_EXTERNAL_TEST_AUTHORIZED!=="true")throw new DigitalError("EXTERNAL_QA_AUTHORIZATION_REQUIRED",503);
   assertDigitalUuid(input.idempotencyKey);
   if (!Number.isSafeInteger(input.revision) || input.revision < 1 || !["STRIPE", "PAYPAL"].includes(input.provider)
@@ -32,6 +33,7 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
     await lock(tx, actor.id);
     const currentUser = await tx.user.findUnique({ where: { id: actor.id }, select: { status: true, emailVerified: true, email: true, displayName: true } });
     if (currentUser?.status !== "ACTIVE" || !currentUser.emailVerified) throw new DigitalError("VERIFIED_ACCOUNT_REQUIRED", 403);
+    if(options?.localReview&&!localDigitalReviewCheckoutAllowed(currentUser.email,suppliedGateway?.merchantId??"",true))throw new DigitalError("NOT_FOUND",404);
     const previous = await tx.digitalOrder.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: { user: true, lines: true, attempts: { orderBy: { createdAt: "desc" } } } });
     if (previous) {
       if (previous.userId !== actor.id || previous.cartRevision !== input.revision || previous.attempts[0]?.provider !== input.provider) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);

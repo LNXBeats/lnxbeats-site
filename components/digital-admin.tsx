@@ -1,39 +1,134 @@
 "use client";
-import { useEffect,useRef,useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { runDirectMultipartUpload,uploadPartWithProgress,multipartFileSignature,waitUntilVisible,type MultipartDependencies,type MultipartProgress } from "@/lib/creations/direct-multipart-upload";
+import { runDirectMultipartUpload, uploadPartWithProgress, multipartFileSignature, waitUntilVisible, type MultipartDependencies, type MultipartProgress } from "@/lib/creations/direct-multipart-upload";
 import { parseEuroCents } from "@/lib/digital/domain";
+import { DIGITAL_BATCH_FILE_LIMIT, runDigitalBatch } from "@/lib/digital/admin";
+import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
 import { digitalRequest } from "./digital-cart";
 import styles from "./digital.module.css";
-type Offer={priceCents:number|null;version:number;active:boolean;rightsConfirmed:boolean;distribution:string};
-export type DigitalAdminTrack={id:string;title:string;position:number;version:number;previewDurationMs:number|null;offer:Offer|null};
-export function DigitalOfferForm({projectId,trackId,offer,label}:{projectId:string;trackId:string|null;offer:Offer|null;label:string}){const router=useRouter();const[price,setPrice]=useState(offer?.priceCents?String(offer.priceCents/100):""),[active,setActive]=useState(offer?.active??false),[rights,setRights]=useState(offer?.rightsConfirmed??false),[distribution,setDistribution]=useState(offer?.distribution??"UNRELEASED"),[state,setState]=useState(""),[busy,setBusy]=useState(false);
-  return <form className={styles.form} onSubmit={async e=>{e.preventDefault();setBusy(true);try{await digitalRequest("/api/admin/digital/offers",{projectId,trackId,priceCents:price.trim()?parseEuroCents(price):null,active,rightsConfirmed:rights,distribution,expectedVersion:offer?.version??0});setState("Offre enregistrée. Aucun prix n’est appliqué par supposition.");router.refresh();}catch(e){setState(e instanceof Error?e.message:"Enregistrement refusé.");}finally{setBusy(false);}}}>
-    <h3>{label}</h3><label>Prix indépendant (EUR)<input inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)} placeholder="À définir" aria-describedby={`price-${trackId??projectId}`} maxLength={10}/></label><small id={`price-${trackId??projectId}`} className={styles.note}>Aucun prix par défaut. Un prix et les droits vérifiés sont obligatoires pour activer la vente.</small>
-    <label>Distribution externe<select value={distribution} onChange={e=>setDistribution(e.target.value)}><option value="UNRELEASED">Inédit / non distribué</option><option value="DISTRIBUTED">Distribué sur plateformes</option></select></label>
-    <label className={styles.checkbox}><input type="checkbox" checked={rights} onChange={e=>setRights(e.target.checked)}/><span>J’ai vérifié les droits de vente et d’extrait, y compris co-auteurs, featurings et distribution. Reconnaissance enregistrée dans l’audit.</span></label>
-    <label className={styles.checkbox}><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)}/><span>Autoriser la vente en TEST (publication et médias prêts restent obligatoires).</span></label>
-    <div className={styles.actions}><button type="submit" disabled={busy}>{busy?"Enregistrement…":"Enregistrer l’offre"}</button></div><p role="status">{state}</p>
-  </form>;}
-type Init={filename:string;mimeType:string;sizeBytes:number;expectedVersion:number;previewStartMs:number;replaceConfirmed:boolean};
-function UploadFile({file,tracks}:{file:File;tracks:DigitalAdminTrack[]}){const[trackId,setTrackId]=useState(""),[offset,setOffset]=useState("0"),[confirmed,setConfirmed]=useState(false),[progress,setProgress]=useState<MultipartProgress|null>(null),[state,setState]=useState(""),[busy,setBusy]=useState(false);const controller=useRef<AbortController|null>(null);const router=useRouter();
-  useEffect(()=>()=>controller.current?.abort(),[]);
-  async function upload(){const track=tracks.find(t=>t.id===trackId);if(!track)return;const c=new AbortController();controller.current=c;setBusy(true);setState("");let token="";
-    const key=`lnx:dcn:upload:${trackId}`;let saved;try{saved=JSON.parse(localStorage.getItem(key)??"null");}catch{}
-    const api=async<T,>(op:string,b:unknown)=>{const r=await fetch(`/api/admin/digital/tracks/${trackId}/${op}`,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(b),signal:c.signal});const v=await r.json();if(!r.ok)throw Error(v.error??"Transfert refusé.");return v as T;};
-    const deps:MultipartDependencies<Init>={init:b=>api("init",b),partUrl:(sessionToken,partNumber)=>api("part-url",{sessionToken,partNumber}),status:sessionToken=>api("status",{sessionToken}),complete:sessionToken=>api("complete",{sessionToken}),
-      uploadPart:input=>{if(!input.url.startsWith("/api/admin/digital/"))return uploadPartWithProgress(input);
-        return new Promise((resolve,reject)=>{const x=new XMLHttpRequest();const abort=()=>x.abort();const clean=()=>input.signal.removeEventListener("abort",abort);x.open("PUT",input.url,true);x.setRequestHeader("x-dcn-upload-token",token);x.upload.onprogress=e=>input.onProgress(Math.min(file.size,e.loaded));x.onload=()=>{clean();const etag=x.getResponseHeader("etag");if(x.status>=200&&x.status<300&&etag)resolve({etag});else reject(Error("Partie refusée."));};x.onerror=()=>{clean();reject(Error("Réseau interrompu."));};x.onabort=()=>{clean();reject(new DOMException("Transfert suspendu","AbortError"));};input.signal.addEventListener("abort",abort,{once:true});x.send(input.body);});},
-      wait:(ms,signal)=>new Promise((resolve,reject)=>{const timer=setTimeout(done,ms);function done(){signal.removeEventListener("abort",abort);resolve();}function abort(){clearTimeout(timer);signal.removeEventListener("abort",abort);reject(new DOMException("Pause","AbortError"));}signal.addEventListener("abort",abort,{once:true});}),waitUntilVisible};
-    try{await runDirectMultipartUpload({file,init:{filename:file.name,mimeType:file.type,sizeBytes:file.size,expectedVersion:track.version,previewStartMs:Math.round(Number(offset)*1000),replaceConfirmed:confirmed},signal:c.signal,
-      resumeSessionToken:saved?.signature===multipartFileSignature(file)&&Date.parse(saved.expiresAt)>Date.now()?saved.token:undefined,dependencies:deps,
-      onSession:s=>{token=s.sessionToken;localStorage.setItem(key,JSON.stringify({token,signature:multipartFileSignature(file),expiresAt:s.expiresAt}));},onProgress:setProgress});
-      localStorage.removeItem(key);setState("Master privé validé, extrait généré. Les droits et l’offre restent à vérifier avant vente.");router.refresh();
-    }catch(e){setState(e instanceof Error?e.message:"Transfert interrompu. Reprendre avec le même fichier.");}finally{setBusy(false);}}
-  const track=tracks.find(t=>t.id===trackId);
-  return <div className={styles.panel}><strong>{file.name}</strong><p>{(file.size/1024/1024).toFixed(1)} Mio · master privé</p><div className={styles.form}><label>Associer explicitement à une piste<select disabled={busy} value={trackId} onChange={e=>setTrackId(e.target.value)}><option value="">Choisir une piste</option>{tracks.map(t=><option key={t.id} value={t.id}>{t.position}. {t.title}</option>)}</select></label><label>Début de l’extrait (secondes)<input type="number" min="0" step=".1" value={offset} disabled={busy} onChange={e=>setOffset(e.target.value)}/></label>
-    {track?.version?<label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/><span>Créer une nouvelle version. Les masters déjà acquis sont conservés ; aucun ancien fichier acheté n’est supprimé.</span></label>:null}
-    <div className={styles.actions}><button type="button" disabled={busy||!track||!!track.version&&!confirmed} onClick={()=>void upload()}>{busy?"Envoi…":"Envoyer / reprendre"}</button>{busy?<button type="button" className={styles.quiet} onClick={()=>controller.current?.abort()}>Suspendre</button>:null}</div>
-    {progress?<><progress className={styles.progress} aria-label={`Envoi de ${file.name}`} max={100} value={progress.percent}/><span role="status">{({initializing:"Préparation",uploading:"Envoi",validating:"Validation",ready:"Prêt",paused:"En pause",retrying:"Reprise"} as Record<string,string>)[progress.phase]??"Traitement"} · {Math.round(progress.percent)} %</span></>:null}<p role="status">{state}</p></div></div>;
+import admin from "./digital-admin.module.css";
+
+type Offer = { priceCents: number | null; version: number; active: boolean; rightsConfirmed: boolean; distribution: string };
+export type DigitalAdminTrack = { id: string; title: string; position: number; publication: string; durationSeconds: number | null; version: number; previewStartMs: number; previewDurationMs: number | null; previewUrl: string | null; offer: Offer | null };
+export function DigitalAdminPreview({ src, title }: { src: string; title: string }) {
+  const id = `dcn-admin-${useId()}`, audio = useRef<HTMLAudioElement>(null);
+  useEffect(() => listenForOtherMediaPlayback(id, () => audio.current?.pause()), [id]);
+  return <audio ref={audio} controls preload="none" src={src} aria-label={`Contrôler l’extrait de ${title}`} onPlay={() => announceMediaPlayback({ ownerId: id, kind: "audio" })} />;
 }
-export function DigitalBatchUpload({tracks}:{tracks:DigitalAdminTrack[]}){const[files,setFiles]=useState<File[]>([]);return <section className={styles.panel}><h2>Masters et extraits par piste.</h2><p className={styles.muted}>WAV, MP3, FLAC · 512 Mio maximum par fichier · extraits physiques ≤ 60 s · quarantaine puis validation complète. Aucun fichier client existant utilisé.</p><div className={styles.form}><label>Choisir un ou plusieurs masters<input type="file" multiple accept=".wav,.mp3,.flac" onChange={e=>setFiles(Array.from(e.target.files??[]).slice(0,50))}/></label></div>{files.map((f,i)=><UploadFile key={`${multipartFileSignature(f)}:${i}`} file={f} tracks={tracks}/>)}</section>;}
+export function DigitalOfferForm({ projectId, trackId, offer, label }: { projectId: string; trackId: string | null; offer: Offer | null; label: string }) {
+  const router = useRouter();
+  const [price, setPrice] = useState(offer?.priceCents ? String(offer.priceCents / 100) : ""), [active, setActive] = useState(offer?.active ?? false), [rights, setRights] = useState(offer?.rightsConfirmed ?? false), [distribution, setDistribution] = useState(offer?.distribution ?? "UNRELEASED"), [state, setState] = useState(""), [busy, setBusy] = useState(false);
+  return <form className={`${styles.form} ${admin.offer}`} onSubmit={async e => {
+    e.preventDefault(); setBusy(true);
+    try { await digitalRequest("/api/admin/digital/offers", { projectId, trackId, priceCents: price.trim() ? parseEuroCents(price) : null, active, rightsConfirmed: rights, distribution, expectedVersion: offer?.version ?? 0 }); setState("Offre de démonstration enregistrée. Vérifiez le diagnostic de préparation."); router.refresh(); }
+    catch (e) { setState(e instanceof Error ? e.message : "Enregistrement refusé."); } finally { setBusy(false); }
+  }}>
+    <h3>{label}</h3>
+    <div className={admin.fields}><label>Prix indépendant QA (EUR)<input inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="À définir" aria-describedby={`price-${trackId ?? projectId}`} maxLength={10} /></label>
+      <label>Distribution externe<select value={distribution} onChange={e => setDistribution(e.target.value)}><option value="UNRELEASED">Inédit / non distribué</option><option value="DISTRIBUTED">Distribué sur plateformes</option></select></label></div>
+    <small id={`price-${trackId ?? projectId}`} className={styles.note}>Prix fictif de démonstration, aucun tarif de lancement. Prix et droits vérifiés requis avant vente TEST.</small>
+    <label className={styles.checkbox}><input type="checkbox" checked={rights} onChange={e => setRights(e.target.checked)} /><span>J’ai vérifié les droits de vente et d’extrait, y compris co-auteurs, featurings et distribution. Cette déclaration est auditée.</span></label>
+    <label className={styles.checkbox}><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>Autoriser la vente en TEST. Publication et médias prêts restent obligatoires.</span></label>
+    <div className={styles.actions}><button type="submit" disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer l’offre"}</button></div><p role="status">{state}</p>
+  </form>;
+}
+
+export function DigitalTrackEditor({ projectId, track }: { projectId: string; track: DigitalAdminTrack }) {
+  const router = useRouter();
+  const [title, setTitle] = useState(track.title), [publication, setPublication] = useState(track.publication === "RELEASED" ? "released" : track.publication === "ANNOUNCED" ? "announced" : "unlisted"), [state, setState] = useState(""), [busy, setBusy] = useState(false);
+  async function mutate(operation: "save" | "up" | "down") {
+    setBusy(true);
+    try { await digitalRequest(`/api/admin/digital/projects/${projectId}/tracks`, { trackId: track.id, operation, title, publication, durationSeconds: track.durationSeconds }); setState(operation === "save" ? "Titre et publication enregistrés. Les acquisitions historiques restent figées." : "Ordre enregistré. Les anciennes acquisitions conservent leur ordre acheté."); router.refresh(); }
+    catch (e) { setState(e instanceof Error ? e.message : "Modification refusée."); } finally { setBusy(false); }
+  }
+  return <form className={`${styles.form} ${admin.compact}`} onSubmit={e => { e.preventDefault(); void mutate("save"); }}>
+    <div className={admin.fields}><label>Titre de la piste<input value={title} maxLength={240} required onChange={e => setTitle(e.target.value)} /></label><label>Publication de la piste<select value={publication} onChange={e => setPublication(e.target.value)}><option value="released">Publiée</option><option value="announced">Annoncée — non vendue</option><option value="unlisted">Non listée — non vendue</option></select></label></div>
+    <div className={styles.actions}><button disabled={busy}>Enregistrer la piste</button><button type="button" className={styles.quiet} disabled={busy || track.position <= 1} onClick={() => void mutate("up")}>Monter</button><button type="button" className={styles.quiet} disabled={busy} onClick={() => void mutate("down")}>Descendre</button></div><p role="status">{state}</p>
+  </form>;
+}
+
+type Init = { filename: string; mimeType: string; sizeBytes: number; expectedVersion: number; previewStartMs: number; replaceConfirmed: boolean };
+type UploadState = "waiting" | "busy" | "ready" | "paused" | "error";
+type RegisteredUpload = { start: () => Promise<void>; stop: () => void; valid: boolean; state: UploadState; trackId: string };
+type BatchEntry = { id: string; file: File };
+type SavedUpload = { token: string; signature: string; expiresAt: string; previewStartMs: number; expectedVersion: number };
+function UploadFile({ entry, tracks, register, report, batchBusy }: { entry: BatchEntry; tracks: DigitalAdminTrack[]; register: (id: string, row: RegisteredUpload | null) => void; report: (id: string, state: UploadState) => void; batchBusy: boolean }) {
+  const file = entry.file;
+  const [trackId, setTrackId] = useState(""), [offset, setOffset] = useState("0"), [confirmed, setConfirmed] = useState(false), [progress, setProgress] = useState<MultipartProgress | null>(null), [message, setMessage] = useState(""), [state, setState] = useState<UploadState>("waiting"), [hasSession, setHasSession] = useState(false);
+  const controller = useRef<AbortController | null>(null), inFlight = useRef(false), memorySession = useRef<SavedUpload | null>(null), router = useRouter();
+  const track = tracks.find(t => t.id === trackId), valid = !!track && (hasSession || !track.version || confirmed) && Number.isFinite(Number(offset)) && Number(offset) >= 0;
+  const api = useCallback(async <T,>(id: string, op: string, b: unknown, signal?: AbortSignal) => {
+    const r = await fetch(`/api/admin/digital/tracks/${id}/${op}`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(b), signal });
+    const v = await r.json(); if (!r.ok) throw Error(v.error ?? "Transfert refusé."); return v as T;
+  }, []);
+  function changeState(s: UploadState) { setState(s); report(entry.id, s); }
+  async function upload() {
+    if (!track || !valid || inFlight.current || state === "ready") return;
+    const c = new AbortController(); controller.current = c; inFlight.current = true; changeState("busy"); setMessage(""); let token = "";
+    const key = `lnx:dcn:upload:${trackId}`; let saved = memorySession.current;
+    try { saved ??= JSON.parse(localStorage.getItem(key) ?? "null"); } catch { /* optional resume aid */ }
+    const startMs = Math.round(Number(offset) * 1000);
+    const deps: MultipartDependencies<Init> = {
+      init: b => api(trackId, "init", b, c.signal), partUrl: (sessionToken, partNumber) => api(trackId, "part-url", { sessionToken, partNumber }, c.signal), status: sessionToken => api(trackId, "status", { sessionToken }, c.signal), complete: sessionToken => api(trackId, "complete", { sessionToken }, c.signal),
+      uploadPart: input => {
+        if (!input.url.startsWith("/api/admin/digital/")) return uploadPartWithProgress(input);
+        return new Promise((resolve, reject) => {
+          const x = new XMLHttpRequest(), abort = () => x.abort(), clean = () => input.signal.removeEventListener("abort", abort);
+          x.open("PUT", input.url, true); x.setRequestHeader("x-dcn-upload-token", token);
+          x.upload.onprogress = e => input.onProgress(Math.min(input.body.size, e.loaded));
+          x.onload = () => { clean(); const etag = x.getResponseHeader("etag"); if (x.status >= 200 && x.status < 300 && etag) resolve({ etag }); else reject(Error("Partie refusée.")); };
+          x.onerror = () => { clean(); reject(Error("Réseau interrompu.")); }; x.onabort = () => { clean(); reject(new DOMException("Transfert suspendu", "AbortError")); }; input.signal.addEventListener("abort", abort, { once: true }); x.send(input.body);
+        });
+      },
+      wait: (ms, signal) => new Promise((resolve, reject) => { const timer = setTimeout(done, ms); function done() { signal.removeEventListener("abort", abort); resolve(); } function abort() { clearTimeout(timer); signal.removeEventListener("abort", abort); reject(new DOMException("Pause", "AbortError")); } signal.addEventListener("abort", abort, { once: true }); }), waitUntilVisible,
+    };
+    try {
+      // Resume binds the exact file, track and excerpt settings, never another association.
+      const resume = saved?.signature === multipartFileSignature(file) && saved.previewStartMs === startMs && Number.isSafeInteger(saved.expectedVersion) && Date.parse(saved.expiresAt) > Date.now() ? saved.token : undefined;
+      const expectedVersion = resume && saved ? saved.expectedVersion : track.version;
+      await runDirectMultipartUpload({ file, init: { filename: file.name, mimeType: file.type, sizeBytes: file.size, expectedVersion, previewStartMs: startMs, replaceConfirmed: confirmed }, signal: c.signal, resumeSessionToken: resume, dependencies: deps,
+        onSession: s => { token = s.sessionToken; setHasSession(true); memorySession.current = { token, signature: multipartFileSignature(file), expiresAt: s.expiresAt, previewStartMs: startMs, expectedVersion }; try { localStorage.setItem(key, JSON.stringify(memorySession.current)); } catch { /* Same-page resume remains available when storage is disabled. */ } }, onProgress: setProgress });
+      try { localStorage.removeItem(key); } catch { /* optional browser aid */ } memorySession.current = null; setHasSession(false); changeState("ready"); setMessage("Master privé validé et extrait généré. Prix, droits et publication restent indépendants."); router.refresh();
+    } catch (e) {
+      changeState(c.signal.aborted ? "paused" : "error"); setMessage(c.signal.aborted ? "Transfert suspendu. Reprendre conserve les parties reçues et ne relance pas les autres fichiers." : e instanceof Error ? e.message : "Transfert interrompu.");
+      if (token && !c.signal.aborted) {
+        try { const result = await api<{ status: string; errorCode?: string }>(trackId, "status", { sessionToken: token }); if (["REJECTED", "ABORTED", "EXPIRED"].includes(result.status)) { try { localStorage.removeItem(key); } catch { /* optional browser aid */ } memorySession.current = null; setHasSession(false); setMessage(`Fichier refusé (${result.errorCode ?? result.status}). Les autres fichiers sont conservés. Choisissez un fichier valide pour cette piste, ou réessayez ce fichier.`); } } catch { /* Unknown stays resumable, never blindly abandon it. */ }
+      }
+    } finally { inFlight.current = false; }
+  }
+  useEffect(() => { register(entry.id, { start: upload, stop: () => controller.current?.abort(), valid, state, trackId }); return () => register(entry.id, null); });
+  useEffect(() => () => controller.current?.abort(), []);
+  return <article className={admin.upload} data-state={state} aria-label={`Import ${file.name}`}>
+    <div className={admin.status}><strong>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(1)} Mio · {({ waiting: "À associer", busy: "Traitement", ready: "Prêt", paused: "Suspendu", error: "À reprendre" })[state]}</span></div>
+    <div className={styles.form}><div className={admin.fields}><label>Associer ce fichier à une piste<select disabled={state === "busy" || hasSession || state === "ready"} value={trackId} onChange={e => { setTrackId(e.target.value); setConfirmed(false); }}><option value="">Choisir explicitement</option>{tracks.map(t => <option key={t.id} value={t.id}>{t.position}. {t.title}</option>)}</select></label><label>Début d’extrait (secondes)<input type="number" min="0" step=".1" value={offset} disabled={state === "busy" || hasSession || state === "ready"} onChange={e => setOffset(e.target.value)} /></label></div>
+      {track?.version ? <label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={state === "busy" || state === "ready"} onChange={e => setConfirmed(e.target.checked)} /><span>Créer une nouvelle version. Les fichiers et extraits acquis antérieurement sont conservés.</span></label> : null}
+      <div className={styles.actions}><button type="button" disabled={!valid || state === "busy" || state === "ready" || batchBusy} onClick={() => void upload()}>{state === "paused" || state === "error" ? "Reprendre ce fichier" : state === "ready" ? "Fichier prêt" : "Envoyer ce fichier"}</button>{state === "busy" ? <button type="button" className={styles.quiet} onClick={() => controller.current?.abort()}>Suspendre ce fichier</button> : null}</div>
+      {progress ? <><progress className={styles.progress} aria-label={`Envoi de ${file.name}`} max={100} value={progress.percent} /><span role="status">{({ initializing: "Préparation", uploading: "Envoi", finalizing: "Finalisation", validating: "Validation", analyzing: "Analyse", transcoding: "Extrait", ready: "Prêt", paused: "En pause", retrying: "Reprise" } as Record<string, string>)[progress.phase] ?? "Traitement"} · {Math.round(progress.percent)} %</span></> : null}
+      <p role="status">{message}</p>
+    </div>
+  </article>;
+}
+export function DigitalBatchUpload({ tracks }: { tracks: DigitalAdminTrack[] }) {
+  const [entries, setEntries] = useState<BatchEntry[]>([]), [states, setStates] = useState<Record<string, UploadState>>({}), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const rows = useRef(new Map<string, RegisteredUpload>()), stop = useRef(false);
+  const register = useCallback((id: string, row: RegisteredUpload | null) => { if (row) rows.current.set(id, row); else rows.current.delete(id); }, []);
+  const report = useCallback((id: string, state: UploadState) => setStates(previous => ({ ...previous, [id]: state })), []);
+  async function batch() {
+    const pending = [...rows.current.values()].filter(row => row.state !== "ready" && row.valid);
+    if (!pending.length) { setMessage("Associez explicitement au moins un fichier et confirmez les remplacements avant l’envoi."); return; }
+    if (new Set(pending.map(row => row.trackId)).size !== pending.length) { setMessage("Deux fichiers sont associés à la même piste. Corrigez cette association avant le lot."); return; }
+    stop.current = false; setBusy(true); setMessage("Import groupé : deux fichiers maximum en traitement. Chaque résultat reste indépendant.");
+    await runDigitalBatch(pending, row => row.start(), () => stop.current); setBusy(false); setMessage("Lot arrêté ou terminé. Les fichiers prêts sont conservés ; reprenez seulement les lignes en erreur/suspendues.");
+  }
+  const ready = Object.values(states).filter(s => s === "ready").length, errors = Object.values(states).filter(s => s === "error").length;
+  return <section className={`${styles.panel} ${admin.workflow}`}><h2>Import des masters et extraits</h2><p className={styles.muted}>Associez chaque fichier explicitement. Vous pouvez corriger la piste et le début d’extrait avant l’envoi. Un nouveau choix de fichiers conserve ce lot et ses résultats.</p>
+    <div className={styles.form}><label>Ajouter un ou plusieurs masters au lot<input type="file" multiple accept=".wav,.mp3,.flac" disabled={busy} onChange={e => {
+      const incoming = Array.from(e.target.files ?? []); setEntries(old => { const signatures = new Set(old.map(row => multipartFileSignature(row.file))); const unique = incoming.filter(file => !signatures.has(multipartFileSignature(file))); if (old.length + unique.length > DIGITAL_BATCH_FILE_LIMIT) { setMessage("Limite de 50 fichiers sélectionnés. Les fichiers déjà présents sont conservés."); return old; } return [...old, ...unique.map(file => ({ id: crypto.randomUUID(), file }))]; }); e.target.value = "";
+    }} /></label></div>
+    <div className={admin.summary}><div><span>Dans le lot</span><strong>{entries.length} fichier(s)</strong></div><div><span>Validés</span><strong>{ready} prêt(s)</strong></div><div><span>Reprise ciblée</span><strong>{errors} erreur(s)</strong></div></div>
+    <div className={styles.actions}><button type="button" disabled={busy || !entries.length} onClick={() => void batch()}>{busy ? "Lot en cours…" : "Envoyer / reprendre le lot associé"}</button>{busy ? <button type="button" className={styles.quiet} onClick={() => { stop.current = true; for (const row of rows.current.values()) row.stop(); }}>Suspendre le lot</button> : null}</div><p role="status">{message}</p>
+    {entries.map(entry => <UploadFile key={entry.id} entry={entry} tracks={tracks} register={register} report={report} batchBusy={busy} />)}
+    <details className={admin.details}><summary>Limites et diagnostics techniques QA</summary><p>WAV, MP3, FLAC · 512 Mio par master · 50 fichiers sélectionnés · 2 traitements au maximum · extraits physiques ≤60 s. Le début d’extrait après import se modifie par une nouvelle version du master, jamais en altérant une acquisition. Les associations déjà validées sont immuables ; une correction après import passe également par une nouvelle version.</p></details>
+  </section>;
+}

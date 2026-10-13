@@ -3,7 +3,9 @@ import { initDigitalUpload,digitalPartUrl,digitalUploadStatus,completeDigitalUpl
 import { DigitalError } from "@/lib/digital/domain";
 export const dynamic="force-dynamic";
 export async function POST(request:Request,{params}:{params:Promise<{id:string;operation:string}>}){try{const actor=await digitalActor(request,true);const{id,operation}=await params;
-  const limits:Record<string,number>={init:10,"part-url":180,status:120,complete:20,abort:20};
+  // The selected batch is bounded at 50 files / two active browser workers.
+  // Ten init requests per minute prevented the required twelve-track album.
+  const limits:Record<string,number>={init:50,"part-url":180,status:120,complete:50,abort:20};
   if(!Object.hasOwn(limits,operation))throw new DigitalError("NOT_FOUND",404);
   await digitalRateLimit(actor.id,`upload-${operation}`,limits[operation]);
   if(operation==="init")return digitalJson(await initDigitalUpload(actor,id,await digitalBody(request,["filename","mimeType","sizeBytes","expectedVersion","previewStartMs","replaceConfirmed"])));

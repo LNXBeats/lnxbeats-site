@@ -8,6 +8,7 @@ import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { digitalEnabled } from "@/lib/digital/domain";
 import { publicDigitalProject } from "@/lib/digital/catalog";
 import { AddDigitalOffer } from "@/components/digital-catalog";
+import { DigitalCartNavigation, DigitalDemoBanner } from "@/components/digital-navigation";
 import { ProjectArtwork } from "@/components/project-artwork";
 import digitalStyles from "@/components/digital.module.css";
 import "../v064-discography.css";
@@ -49,6 +50,7 @@ export default async function DiscographyPage() {
   return (
     <section className="v064-discography-stage" aria-label="Discographie">
       <Container className="v064-discography-container">
+        {digitalEnabled() ? <><DigitalCartNavigation/><DigitalDemoBanner/></> : null}
         <ProjectJukebox
           projects={sceneProjects}
           initialIndex={0}

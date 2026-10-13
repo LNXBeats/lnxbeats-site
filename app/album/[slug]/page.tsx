@@ -9,7 +9,10 @@ import { JsonLd } from "@/components/json-ld";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { ProjectPlatforms } from "@/components/project-platforms";
 import { Tracklist } from "@/components/tracklist";
-import { DigitalTracklist } from "@/components/digital-catalog";
+import { DigitalAlbumOffer, DigitalTracklist } from "@/components/digital-catalog";
+import { DigitalCartNavigation, DigitalDemoBanner } from "@/components/digital-navigation";
+import { getAuthSession } from "@/lib/auth/session";
+import digitalStyles from "@/components/digital.module.css";
 import { publicDigitalProject } from "@/lib/digital/catalog";
 import { digitalEnabled } from "@/lib/digital/domain";
 import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
@@ -59,7 +62,8 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   }
 
   const kind = getProjectKindLabel(project.type);
-  const digital = digitalEnabled() ? await publicDigitalProject(project.slug) : null;
+  const session = digitalEnabled() ? await getAuthSession() : null;
+  const digital = digitalEnabled() ? await publicDigitalProject(project.slug, session?.user.status === "ACTIVE" && session.user.emailVerified ? session.user.id : undefined) : null;
   const status = getProjectStatusLabel(project.status);
   const confidence = getProjectConfidenceLabel(project.dataConfidence.overall);
   const documentedDate = project.releaseDate
@@ -69,18 +73,20 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   return (
     <>
       <JsonLd id="lnx-project-structured-data" data={buildProjectStructuredData(project)} />
-      <header className="album-hero" data-motion-scene="album">
+      <header className={`album-hero${digital ? ` ${digitalStyles.albumHero}` : ""}`} data-motion-scene="album">
         <div className="album-hero__backdrop" aria-hidden="true" />
         <Container className="album-hero__inner">
           <Link className="back-link" href="/discographie"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Retour à la discographie</Link>
-          <div className="album-hero__grid">
-            <div data-motion-layer="media"><ProjectArtwork project={project} priority sizes="(max-width: 820px) 100vw, 48vw" className="album-hero__art" /></div>
+          {digital ? <><DigitalDemoBanner/><DigitalCartNavigation/></> : null}
+          <div className={`album-hero__grid${digital ? ` ${digitalStyles.albumHeroGrid}` : ""}`}>
+            <div data-motion-layer="media"><ProjectArtwork project={project} priority sizes={digital ? "(max-width: 620px) 60vw, 280px" : "(max-width: 820px) 100vw, 48vw"} className="album-hero__art" /></div>
             <div className="album-hero__content" data-motion-layer="copy">
               <p className="album-status"><span>{kind}</span><span>{status}</span></p>
               <h1>{project.title}</h1>
               {project.subtitle ? <p className="album-hero__subtitle">{project.subtitle}</p> : null}
-              <p className="album-hero__description">{project.shortDescription || project.description}</p>
-              <dl className="album-facts">
+              {digital ? project.shortDescription ? <p className="album-hero__description">{project.shortDescription}</p> : null : <p className="album-hero__description">{project.shortDescription || project.description}</p>}
+              {digital ? <DigitalAlbumOffer album={digital.album}/> : null}
+              <dl className={`album-facts${digital ? ` ${digitalStyles.albumFacts}` : ""}`}>
                 <div><dt>Type</dt><dd>{kind}</dd></div>
                 <div><dt>Date</dt><dd>{documentedDate ?? "Non documentée"}</dd></div>
                 <div><dt>Statut</dt><dd>{status}</dd></div>
@@ -108,13 +114,14 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
       </header>
 
       <section className="section album-details">
-        <Container className="album-details__grid motion-reveal motion-reveal--soft">
-          <aside className="album-editorial-note">
+        <Container className={`${digital ? digitalStyles.albumDetails : "album-details__grid"} motion-reveal motion-reveal--soft`}>
+          {digital ? <DigitalTracklist view={digital} /> : null}
+          <aside className={`album-editorial-note${digital ? ` ${digitalStyles.albumEditorial}` : ""}`}>
             <p className="eyebrow">Derrière le projet</p>
             <h2>{project.description ? "L’histoire qui ouvre la musique." : "Le récit viendra trouver sa place."}</h2>
             <p>{project.description || "Aucun récit éditorial n’est publié pour ce projet à ce jour."}</p>
           </aside>
-          {digital ? <DigitalTracklist view={digital} /> : <Tracklist project={project} />}
+          {!digital ? <Tracklist project={project} /> : null}
         </Container>
       </section>
       <EditorialAdSlot pathname={`/album/${project.slug}`} slot="content" />

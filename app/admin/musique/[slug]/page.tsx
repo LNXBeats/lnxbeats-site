@@ -4,13 +4,43 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { requireDigitalEnvironment } from "@/lib/digital/domain";
-import { DigitalOfferForm,DigitalBatchUpload } from "@/components/digital-admin";
+import { digitalSalesReadiness } from "@/lib/digital/admin";
+import { DigitalOfferForm, DigitalBatchUpload, DigitalTrackEditor, DigitalAdminPreview } from "@/components/digital-admin";
 import styles from "@/components/digital.module.css";
-export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Offres et pistes numériques",robots:{index:false,follow:false}};
-export default async function Page({params}:{params:Promise<{slug:string}>}){try{requireDigitalEnvironment();}catch{notFound();}await requireAdmin();const{slug}=await params;
-  const p=await prisma.project.findUnique({where:{slug},include:{digitalOffers:true,tracks:{orderBy:{position:"asc"},include:{digitalMasters:{orderBy:{version:"desc"},take:1,select:{version:true,status:true,previewDurationMs:true}}}}}});if(!p)notFound();
-  const tracks=p.tracks.map(t=>({id:t.id,title:t.title,position:t.position,version:t.digitalMasters[0]?.version??0,previewDurationMs:t.digitalMasters[0]?.previewDurationMs??null,offer:p.digitalOffers.find(o=>o.trackId===t.id)??null}));
-  return <div className="admin-main"><Link className="admin-row-action" href="/admin/musique">Retour musique numérique</Link><header className="admin-page-heading"><div><p className="admin-kicker">Médias, prix, vente · TEST</p><h1>{p.title}</h1></div><Link className="admin-row-action" href={`/admin/catalogue/${slug}`}>Identité et publication Catalogue</Link></header><p className={styles.note}>Publication éditoriale, distribution, extrait et commercialisation restent distincts. Aucun prix de maquette importé.</p>
-  <div className={styles.panel}><DigitalOfferForm projectId={p.id} trackId={null} offer={p.digitalOffers.find(o=>o.scope==="ALBUM")??null} label="Offre album indépendante"/></div><DigitalBatchUpload tracks={tracks}/>
-  <section className={styles.grid}>{tracks.map(t=><div className={styles.panel} key={t.id}><h2>{t.position}. {t.title}</h2><p>Master : {t.version?`version ${t.version} privée`:"à importer"} · Extrait : {t.previewDurationMs?`${(t.previewDurationMs/1000).toFixed(2)} s`:"non disponible"}</p><DigitalOfferForm projectId={p.id} trackId={t.id} offer={t.offer} label="Offre titre individuel"/></div>)}</section></div>;}
+import admin from "@/components/digital-admin.module.css";
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Offres et pistes numériques", robots: { index: false, follow: false } };
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  try { requireDigitalEnvironment(); } catch { notFound(); }
+  await requireAdmin(); const { slug } = await params;
+  const p = await prisma.project.findUnique({ where: { slug }, include: { digitalOffers: true, tracks: { orderBy: [{ position: "asc" }, { id: "asc" }], include: { digitalMasters: { where: { status: "READY", previewAssetId: { not: null } }, orderBy: { version: "desc" }, take: 1, include: { masterAsset: true, previewAsset: true } } } } } });
+  if (!p) notFound();
+  const tracks = p.tracks.map(t => {
+    const m = t.digitalMasters[0];
+    return { id: t.id, title: t.title, position: t.position, publication: t.status, durationSeconds: t.durationSeconds, version: m?.version ?? 0, previewStartMs: m?.previewStartMs ?? 0, previewDurationMs: m?.previewDurationMs ?? null,
+      previewUrl: t.status === "RELEASED" && m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED" ? `/media/digital/previews/${m.previewAsset.id}` : null,
+      masterReady: !!m && m.masterAsset.visibility === "PRIVATE", mediaCleared: m?.masterAsset.rightsStatus === "CLEARED" && m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED",
+      offer: p.digitalOffers.find(o => o.trackId === t.id) ?? null };
+  });
+  const albumOffer = p.digitalOffers.find(o => o.scope === "ALBUM") ?? null;
+  const readiness = digitalSalesReadiness(p, tracks, albumOffer);
+  const money = (value: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value / 100);
+  return <div className={`admin-main ${admin.workflow}`}><Link className="admin-row-action" href="/admin/musique">Retour musique numérique</Link>
+    <header className="admin-page-heading"><div><p className="admin-kicker">DCN‑1.2 · TEST</p><h1>{p.title}</h1></div><div className={admin.toolbar}><Link className="admin-row-action" href={`/admin/catalogue/${slug}`}>Identité, cover et publication Catalogue</Link>{p.publicVisible && p.status === "PUBLISHED" ? <Link className="admin-row-action" href={`/album/${slug}`} target="_blank" rel="noreferrer">Prévisualiser la fiche publique</Link> : <span>Fiche publique masquée</span>}</div></header>
+    <p className={admin.banner}>Démonstration — aucun paiement réel. Prix fictifs, aucune ouverture LIVE. Les versions et compositions déjà acquises restent inchangées.</p>
+    <section className={styles.panel} aria-labelledby="readiness"><h2 id="readiness">Préparation à la vente</h2><div className={admin.summary}><div><span>Publication projet</span><strong>{p.status === "PUBLISHED" && p.publicVisible ? "Publié et visible" : "Non public"}</strong></div><div><span>Pistes publiées / nommées</span><strong>{readiness.releasedTrackCount} / {tracks.length}</strong></div><div><span>Masters + extraits prêts</span><strong>{readiness.preparedTrackCount} / {readiness.releasedTrackCount}</strong></div><div><span>Offre album vendable TEST</span><strong>{readiness.albumReady ? `${readiness.includedTrackCount} pistes incluses` : "À compléter"}</strong></div></div>
+      <p className={styles.muted}>L’offre album contient exactement les pistes publiées disposant des médias requis. Une piste annoncée ou non listée n’augmente pas le contenu vendu. La distribution sur Spotify ou Apple Music n’est pas une condition de vente.</p>
+      {readiness.albumMoreExpensive ? <p className={admin.advisory} role="status">Attention : l’album ({money(albumOffer!.priceCents!)}) dépasse la somme des mêmes pistes vendables séparément ({money(readiness.individualTotalCents!)}). Le prix reste indépendant : aucune remise automatique et aucune interdiction.</p> : null}
+    </section>
+    <div className={styles.panel}><DigitalOfferForm key={albumOffer?.version ?? 0} projectId={p.id} trackId={null} offer={albumOffer} label="Offre album indépendante" /></div>
+    <DigitalBatchUpload tracks={tracks} />
+    <section className={styles.panel} aria-labelledby="tracks"><h2 id="tracks">Pistes, extraits et offres individuelles</h2><p className={styles.muted}>Importez puis vérifiez chaque piste. Les pistes non publiées et les offres incomplètes ne deviennent pas achetables.</p>
+      {tracks.map(t => { const diagnostic = readiness.items.find(i => i.id === t.id)!; return <article className={admin.track} key={t.id}><div className={admin.trackHeader}><h2>{t.position}. {t.title}</h2><span>{diagnostic.ready ? "Prête à la vente TEST" : "À compléter"}</span></div><p>Master : {t.version ? `version ${t.version} privée` : "à importer"} · Début d’extrait : {(t.previewStartMs / 1000).toFixed(1)} s · Extrait : {t.previewDurationMs ? `${(t.previewDurationMs / 1000).toFixed(2)} s` : "indisponible"}</p>
+        {!diagnostic.ready ? <p className={styles.note}>{diagnostic.blockers.join(" · ")}</p> : null}
+        {t.previewUrl ? <DigitalAdminPreview src={t.previewUrl} title={t.title} /> : null}
+        <details className={admin.details}><summary>Modifier titre, publication ou ordre</summary><DigitalTrackEditor projectId={p.id} track={t} /></details>
+        <DigitalOfferForm key={t.offer?.version ?? 0} projectId={p.id} trackId={t.id} offer={t.offer} label="Offre de cette piste" />
+      </article>; })}
+    </section>
+  </div>;
+}

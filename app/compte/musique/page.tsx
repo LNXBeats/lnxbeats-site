@@ -3,20 +3,14 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { library } from "@/lib/digital/library";
-import { digitalLibraryPaymentLabel, digitalLibraryBlockedMessage } from "@/lib/digital/library-policy";
 import { requireDigitalEnvironment } from "@/lib/digital/domain";
 import { Container } from "@/components/container";
-import { DigitalDownloadButton } from "@/components/digital-library";
-import { DigitalDocuments } from "@/components/digital-documents";
-const digitalMoney=(c:number)=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(c/100);
+import { DigitalLibraryOrders } from "@/components/digital-library";
+import { DigitalCartNavigation, DigitalDemoBanner } from "@/components/digital-navigation";
+import { parseDigitalLibraryPage } from "@/lib/digital/presentation";
 import styles from "@/components/digital.module.css";
 export const dynamic="force-dynamic";
 export const metadata:Metadata={title:"Ma musique",robots:{index:false,follow:false}};
-export default async function Page(){try{requireDigitalEnvironment();}catch{notFound();}const s=await requireVerifiedUser("/compte/musique"),orders=await library(s.user.id);
-  return <section className={styles.shell}><Container><div className={styles.heading}><div><p className="eyebrow">Bibliothèque personnelle</p><h1>Ma musique.</h1></div><Link className="text-link" href="/discographie">Explorer la discographie</Link></div><p className={styles.note}>Revue locale · achats QA, aucun paiement LIVE.</p>
-  {!orders.length?<div className={styles.panel}><h2>Votre bibliothèque est encore vide.</h2><p>Les achats apparaîtront après confirmation serveur du paiement.</p></div>:orders.map(o=><section className={styles.panel} key={o.id}><div className={styles.heading}><h2>{o.lines.map(l=>l.title).join(" · ")}</h2><span>{digitalMoney(o.totalCents)} · {o.mode}</span></div><p>{new Date(o.createdAt).toLocaleDateString("fr-FR")} · {digitalLibraryPaymentLabel(o.status,o.lines.some(l=>l.entitlements.some(e=>e.status==="ACTIVE")))}</p>
-    <DigitalDocuments orderId={o.id} documents={o.documents} accessReady={o.accessReady} legacy={o.legacy}/>
-    {o.lines.map(l=><div className={styles.panel} key={l.id}><strong>{l.title}</strong>{o.accessReady&&["PAID","PARTIALLY_REFUNDED","REFUNDED"].includes(o.status)&&l.entitlements.some(e=>e.status==="ACTIVE")?<>
-      {l.scope==="ALBUM"&&l.entitlements.every(e=>e.status==="ACTIVE")?<DigitalDownloadButton lineId={l.id} masterId={null} label="Télécharger l’album ZIP"/>:null}
-      <ul className={styles.rows}>{l.entitlements.map(e=><li className={styles.row} key={e.id}><span aria-hidden="true">♪</span><div><strong>{e.master.track.title}</strong><p className={styles.muted}>Version acquise {e.master.version}</p></div>{e.status==="ACTIVE"?<DigitalDownloadButton lineId={l.id} masterId={e.masterId} label="Télécharger la piste"/>:<span>Accès {e.status==="REVOKED"?"retiré":"suspendu"}</span>}</li>)}</ul></>:<p className={styles.muted}>{digitalLibraryBlockedMessage(o.status,o.accessReady)}</p>}</div>)}
-    <p className={styles.muted}>Versions acquises conservées. Factures et avoirs QA privés ; aucun document comptable réel ni licence de publication émis.</p><Link className="text-link" href={`/musique/confirmation/${o.id}`}>Voir le statut de la commande</Link></section>)}</Container></section>;}
+export default async function Page({searchParams}:{searchParams:Promise<{page?:string|string[]}>}){try{requireDigitalEnvironment();}catch{notFound();}const query=await searchParams,page=parseDigitalLibraryPage(query.page),s=await requireVerifiedUser(`/compte/musique${page>1?`?page=${page}`:""}`),{orders,pagination}=await library(s.user.id,page);
+  return <section className={styles.shell}><Container><div className={styles.heading}><div><p className="eyebrow">Bibliothèque personnelle</p><h1>Ma musique.</h1></div><Link className="text-link" href="/discographie">Explorer la discographie</Link></div><DigitalDemoBanner/><DigitalCartNavigation/>
+  {!orders.length?<div className={styles.panel}><h2>Votre bibliothèque est encore vide.</h2><p>Les achats apparaîtront après confirmation serveur du paiement.</p></div>:<DigitalLibraryOrders orders={orders}/>}<nav className={styles.libraryPagination} aria-label="Pages de votre bibliothèque"><span>Page {pagination.page} sur {pagination.totalPages} · {pagination.total} {pagination.total===1?"achat":"achats"}</span><div className={styles.actions}>{pagination.hasPrevious?<Link className={styles.quiet} href={`/compte/musique?page=${pagination.page-1}`}>Achats plus récents</Link>:null}{pagination.hasNext?<Link className={styles.quiet} href={`/compte/musique?page=${pagination.page+1}`}>Achats précédents</Link>:null}</div></nav></Container></section>;}

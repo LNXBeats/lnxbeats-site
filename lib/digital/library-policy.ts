@@ -1,4 +1,10 @@
 /** Public labels describe verified state, never manufacture payment or access evidence. */
+// A full price reduction can be REFUNDED while its source entitlement remains ACTIVE.
+// A resolution revokes that entitlement; the financial label alone does not revoke rights.
+export const DIGITAL_ACTIVE_RIGHTS_ORDER_STATES = ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] as const;
+export function digitalCountsOwnedRights(orderStatus: string, entitlementStatus: string) {
+  return entitlementStatus === "ACTIVE" && DIGITAL_ACTIVE_RIGHTS_ORDER_STATES.some(status => status === orderStatus);
+}
 export function digitalLibraryPaymentLabel(status: string, activeRights: boolean) {
   if (status === "PAID") return "Paiement confirmé";
   if (status === "REFUNDED") return activeRights ? "Remboursé — droits conservés selon les lignes" : "Remboursé — accès retiré";

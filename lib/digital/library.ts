@@ -5,6 +5,7 @@ import { getMediaObject, headMediaObject, type MediaStorageReference } from "@/l
 import { DigitalError, assertDigitalUuid, requireDigitalEnvironment, type DigitalSelection } from "./domain";
 import { ensureDigitalArchive } from "./archive-worker";
 import { digitalAttachment, digitalByteRange, DIGITAL_DOWNLOAD_TTL_MS } from "./download-policy";
+import { digitalLibraryPagination } from "./presentation";
 async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
   const line = await prisma.digitalOrderLine.findFirst({
     where: { id, order: { userId, status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] } } },
@@ -15,11 +16,21 @@ async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
   if(!line||!line.entitlements.length)throw new DigitalError("NOT_FOUND",404);
   if(line.order.contractSnapshot&&!line.order.fulfillment?.accessReadyAt)throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);return line;
 }
-export async function library(userId:string){requireDigitalEnvironment();
-  const rows=await prisma.digitalOrder.findMany({where:{userId},orderBy:{createdAt:"desc"},take:100,select:{id:true,status:true,totalCents:true,mode:true,createdAt:true,contractSnapshot:true,fulfillment:{select:{accessReadyAt:true,confirmationStatus:true}},documents:{select:{id:true,number:true,kind:true,status:true,snapshotHash:true}},lines:{select:{id:true,title:true,scope:true,priceCents:true,trackSnapshot:true,entitlements:{select:{id:true,masterId:true,status:true,master:{select:{version:true,track:{select:{title:true}}}}}}}}}});
-  return rows.map(({contractSnapshot,...o})=>({...o,legacy:!contractSnapshot,accessReady:!contractSnapshot||!!o.fulfillment?.accessReadyAt,createdAt:o.createdAt.toISOString(),lines:o.lines.map(line=>{const snapshot=line.trackSnapshot as unknown as DigitalSelection["tracks"];
-    return{...line,entitlements:line.entitlements.map(e=>({...e,master:{...e.master,track:{title:snapshot.find(t=>t.masterId===e.masterId)?.title??e.master.track.title}}}))};})}));
+export async function library(userId:string,requestedPage=1){requireDigitalEnvironment();assertDigitalUuid(userId);
+  const pagination=digitalLibraryPagination(requestedPage,await prisma.digitalOrder.count({where:{userId}}));
+  const rows=await prisma.digitalOrder.findMany({where:{userId},orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(pagination.page-1)*pagination.pageSize,take:pagination.pageSize,select:{id:true,status:true,totalCents:true,mode:true,createdAt:true,contractSnapshot:true,fulfillment:{select:{accessReadyAt:true,confirmationStatus:true}},documents:{select:{id:true,number:true,kind:true,status:true,snapshotHash:true}},lines:{select:{id:true,title:true,scope:true,priceCents:true,trackSnapshot:true,
+    offer:{select:{project:{select:{title:true,assets:{where:{role:"COVER",asset:{visibility:"PUBLIC"}},orderBy:[{position:"asc"},{createdAt:"desc"}],take:1,select:{asset:{select:{id:true,alt:true}}}}}}}},
+    archive:{select:{status:true,sizeBytes:true}},
+    entitlements:{select:{id:true,masterId:true,status:true,master:{select:{version:true,masterAsset:{select:{mimeType:true,sizeBytes:true,durationMs:true}},track:{select:{title:true}}}}}}}}}});
+  return {pagination,orders:rows.map(({contractSnapshot,...o})=>({...o,legacy:!contractSnapshot,accessReady:!contractSnapshot||!!o.fulfillment?.accessReadyAt,createdAt:o.createdAt.toISOString(),lines:o.lines.map(line=>{const snapshot=line.trackSnapshot as unknown as DigitalSelection["tracks"];
+    const {offer,archive,...safeLine}=line,cover=offer.project.assets[0]?.asset;
+    return{...safeLine,acquiredTrackCount:snapshot.length,coverUrl:cover?`/media/catalog/${cover.id}`:null,coverAlt:cover?.alt??null,
+      archive:archive?{status:archive.status,sizeBytes:archive.sizeBytes!=null&&archive.sizeBytes<=BigInt(Number.MAX_SAFE_INTEGER)?Number(archive.sizeBytes):null}:null,
+      entitlements:line.entitlements.map(e=>({...e,acquiredPosition:snapshot.findIndex(t=>t.masterId===e.masterId)+1,master:{...e.master,
+        masterAsset:{...e.master.masterAsset,sizeBytes:e.master.masterAsset.sizeBytes<=BigInt(Number.MAX_SAFE_INTEGER)?Number(e.master.masterAsset.sizeBytes):null},
+        track:{title:snapshot.find(t=>t.masterId===e.masterId)?.title??e.master.track.title}}})).sort((a,b)=>a.acquiredPosition-b.acquiredPosition)};})}))};
 }
+export type DigitalLibraryOrder = Awaited<ReturnType<typeof library>>["orders"][number];
 export async function createDigitalDownload(userId:string,lineId:string,masterId:string|null){requireDigitalEnvironment();
   if(!await prisma.user.findFirst({where:{id:userId,status:"ACTIVE",emailVerified:true}}))throw new DigitalError("NOT_FOUND",404);
   const line=await ownedLine(userId,lineId);

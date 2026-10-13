@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import type { OrderActor } from "@/lib/orders/domain";
 import { DigitalError, assertDigitalUuid, digitalPrice, normalizeDigitalCart, requireDigitalEnvironment, type DigitalSelection } from "./domain";
+import { DIGITAL_ACTIVE_RIGHTS_ORDER_STATES } from "./library-policy";
 type DB = Prisma.TransactionClient;
 export function selectionFingerprint(offer:DigitalSelection){return createHash("sha256").update(JSON.stringify([offer.id,offer.scope,offer.title,offer.version,offer.priceCents,offer.tracks.map(t=>[t.trackId,t.masterId,t.title,t.position])])).digest("hex");}
 
@@ -27,7 +28,7 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
   });
 }
 export async function ownedTrackIds(userId: string, db: DB = prisma) {
-  const rows = await db.digitalEntitlement.findMany({ where: { userId, status: "ACTIVE", line: { order: { status: { in: ["PAID", "PARTIALLY_REFUNDED"] } } } }, select: { master: { select: { trackId: true } } } });
+  const rows = await db.digitalEntitlement.findMany({ where: { userId, status: "ACTIVE", line: { order: { status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } } }, select: { master: { select: { trackId: true } } } });
   return new Set(rows.map(r => r.master.trackId));
 }
 export async function quote(ids: string[], userId?: string) {
@@ -37,11 +38,11 @@ export async function quote(ids: string[], userId?: string) {
 export function publicQuote(value: Awaited<ReturnType<typeof quote>>) {
   return { totalCents: value.totalCents, removed: value.removed, lines: value.lines.map(l => ({ id: l.id, scope: l.scope, title: l.title, priceCents: l.priceCents, version: l.version, trackCount: l.tracks.length })) };
 }
-export async function publicDigitalProject(slug: string) {
+export async function publicDigitalProject(slug: string, userId?: string) {
   const project = await prisma.project.findFirst({ where: { slug, publicVisible: true, status: "PUBLISHED" }, select: {
     id: true, digitalOffers: { select: { id: true, scope: true, trackId: true } }, tracks: { where: { status: {in:["RELEASED","ANNOUNCED"]} }, orderBy: [{position:"asc"},{id:"asc"}], select: {
-      id: true, title: true, position: true, status:true, digitalMasters: { where: { status: "READY" }, orderBy: { version: "desc" }, take: 1, select: {
-        previewDurationMs: true, previewAsset: { select: { id: true, visibility: true, rightsStatus: true } },
+      id: true, title: true, position: true, status:true, durationSeconds: true, digitalMasters: { where: { status: "READY" }, orderBy: { version: "desc" }, take: 1, select: {
+        previewDurationMs: true, masterAsset: { select: { durationMs: true } }, previewAsset: { select: { id: true, visibility: true, rightsStatus: true } },
       } },
     } },
   } });
@@ -50,10 +51,15 @@ export async function publicDigitalProject(slug: string) {
   for (const entry of project.digitalOffers) { try { offers.push((await selections([entry.id]))[0]); } catch (e) { if (!(e instanceof DigitalError)) throw e; } }
   if(!offers.length&&!project.tracks.some(t=>t.status==="RELEASED"&&t.digitalMasters[0]?.previewAsset?.visibility==="PUBLIC"&&t.digitalMasters[0]?.previewAsset?.rightsStatus==="CLEARED"))return null;
   const album = offers.find(o => o.scope === "ALBUM");
-  return { album: album ? { id: album.id, priceCents: album.priceCents, version: album.version,trackCount:album.tracks.length } : null,
+  const owned = userId ? await ownedTrackIds(userId) : new Set<string>();
+  const albumOwnedCount = album?.tracks.filter(t => owned.has(t.trackId)).length ?? 0;
+  return { album: album ? { id: album.id, priceCents: album.priceCents, version: album.version,trackCount:album.tracks.length,
+    owned: albumOwnedCount === album.tracks.length, partiallyOwned: albumOwnedCount > 0 && albumOwnedCount < album.tracks.length } : null,
     tracks: project.tracks.map(t => { const media = t.digitalMasters[0], offer = offers.find(o => o.tracks.length === 1 && o.scope === "TRACK" && o.tracks[0].trackId === t.id);
       return { id: t.id, title: t.title, position: t.position, publication:t.status, previewUrl: t.status==="RELEASED"&&media?.previewAsset?.visibility === "PUBLIC" && media.previewAsset.rightsStatus === "CLEARED" ? `/media/digital/previews/${media.previewAsset.id}` : null,
-        previewDurationMs: t.status==="RELEASED"?media?.previewDurationMs??null:null, offer: offer ? { id: offer.id, priceCents: offer.priceCents, version: offer.version } : null }; }) };
+        previewDurationMs: t.status==="RELEASED"?media?.previewDurationMs??null:null,
+        fullDurationMs: media?.masterAsset.durationMs ?? (t.durationSeconds == null ? null : t.durationSeconds * 1000), owned: owned.has(t.id),
+        offer: offer ? { id: offer.id, priceCents: offer.priceCents, version: offer.version } : null }; }) };
 }
 
 export async function saveOffer(actor: OrderActor, input: { projectId: string; trackId?: string | null; priceCents: number | null; active: boolean; rightsConfirmed: boolean; expectedVersion: number; distribution: string }) {
