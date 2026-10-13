@@ -10,7 +10,8 @@ export function assertMediaStorageKey(scope: MediaScope, key: string) {
     throw new MediaStorageError("INVALID_KEY", "Invalid media storage key.");
   }
   const accepted = scope === "public" ? publicKey : privateKey;
-  if (!accepted.test(key)) throw new MediaStorageError("INVALID_KEY", "Invalid media storage key.");
+  const digitalPrivate = scope === "private" && /^digital\/masters\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(?:wav|mp3|flac)$/i.test(key);
+  if (!accepted.test(key) && !digitalPrivate) throw new MediaStorageError("INVALID_KEY", "Invalid media storage key.");
 }
 
 export function mediaScopeForVisibility(visibility: "PUBLIC" | "PRIVATE"): MediaScope {

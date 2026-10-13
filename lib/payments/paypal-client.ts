@@ -46,10 +46,10 @@ export type PaypalCreateOrderRequest = Readonly<{
   description: string;
   returnUrl: string;
   cancelUrl: string;
-  /** Optional explicit payee binding for the isolated support domain. */
+  /** Optional explicit payee binding for isolated Support/digital domains. */
   payeeMerchantId?: string;
-  /** Only the support caller opts in; historical Orders/Shop bodies stay unchanged. */
-  itemCategory?: "DONATION";
+  /** Explicit opt-in only; historical Orders/Shop bodies stay unchanged. */
+  itemCategory?: "DONATION" | "DIGITAL_GOODS";
 }> & PaypalCreateOrderSource;
 
 export type PaypalOrderSession = Readonly<{
@@ -206,16 +206,16 @@ export function paypalCreateOrderBody(request: PaypalCreateOrderRequest) {
       custom_id: request.paymentId,
       invoice_id: `${request.orderNumber}:${request.paymentId}`,
       description: request.description,
-      ...(request.itemCategory === "DONATION" ? { items: [{
+      ...(request.itemCategory ? { items: [{
         name: request.description,
-        category: "DONATION" as const,
+        category: request.itemCategory,
         quantity: "1",
         unit_amount: { currency_code: request.currency, value: paypalAmountFromCents(request.amountCents) },
       }] } : {}),
       amount: {
         currency_code: request.currency,
         value: paypalAmountFromCents(request.amountCents),
-        ...(request.itemCategory === "DONATION" ? { breakdown: {
+        ...(request.itemCategory ? { breakdown: {
           item_total: { currency_code: request.currency, value: paypalAmountFromCents(request.amountCents) },
         } } : {}),
       },

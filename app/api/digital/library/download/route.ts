@@ -1,0 +1,6 @@
+import { createDigitalDownload } from "@/lib/digital/library";
+import { digitalBody,digitalJson,withDigitalApi } from "@/lib/digital/http";
+import { DigitalError } from "@/lib/digital/domain";
+export const dynamic="force-dynamic";
+export async function POST(request:Request){return withDigitalApi(request,async actor=>{const b=await digitalBody(request,["lineId","masterId"]);if(typeof b.lineId!=="string"||b.masterId!==null&&typeof b.masterId!=="string")throw new DigitalError("INVALID_DOWNLOAD");
+  const t=await createDigitalDownload(actor.id,b.lineId,b.masterId as string|null);const response=digitalJson({url:t.url});response.cookies.set(`dcn_download_${t.ticketId}`,t.token,{httpOnly:true,sameSite:"strict",secure:new URL(request.url).protocol==="https:",maxAge:120,path:t.url});return response;});}

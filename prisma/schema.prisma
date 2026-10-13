@@ -8,6 +8,209 @@ datasource db {
   provider = "postgresql"
 }
 
+// DCN is an independent commerce domain. Historical orders and stock are untouched.
+model DigitalOffer {
+  id              String             @id @default(uuid()) @db.Uuid
+  scope           String             @db.VarChar(10)
+  projectId       String             @db.Uuid
+  trackId         String?            @unique @db.Uuid
+  priceCents      Int?
+  currency        String             @default("EUR") @db.VarChar(3)
+  active          Boolean            @default(false)
+  rightsConfirmed Boolean            @default(false)
+  distribution    String             @default("UNRELEASED") @db.VarChar(20)
+  version         Int                @default(1)
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  track           Track?             @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  cartLines       DigitalCartLine[]
+  orderLines      DigitalOrderLine[]
+
+  @@index([projectId, scope])
+  @@map("digital_offers")
+}
+
+model DigitalMaster {
+  id                String               @id @default(uuid()) @db.Uuid
+  trackId           String               @db.Uuid
+  version           Int
+  masterAssetId     String               @unique @db.Uuid
+  previewAssetId    String?              @unique @db.Uuid
+  previewStartMs    Int                  @default(0)
+  previewDurationMs Int?
+  codec             String               @db.VarChar(40)
+  status            String               @default("QUARANTINED") @db.VarChar(20)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  track             Track                @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  masterAsset       Asset                @relation("DigitalMasterAsset", fields: [masterAssetId], references: [id], onDelete: Restrict)
+  previewAsset      Asset?               @relation("DigitalPreviewAsset", fields: [previewAssetId], references: [id], onDelete: Restrict)
+  entitlements      DigitalEntitlement[]
+
+  @@unique([trackId, version])
+  @@index([trackId, status, version])
+  @@map("digital_masters")
+}
+
+model DigitalUpload {
+  id               String    @id @default(uuid()) @db.Uuid
+  actorId          String    @db.Uuid
+  trackId          String    @db.Uuid
+  tokenHash        String    @db.VarChar(64)
+  filename         String    @db.VarChar(255)
+  mimeType         String    @db.VarChar(100)
+  sizeBytes        BigInt
+  storageKey       String    @unique @db.VarChar(500)
+  providerUploadId String?   @db.VarChar(1000)
+  expectedVersion  Int       @default(0)
+  previewStartMs   Int       @default(0)
+  status           String    @default("PREPARING") @db.VarChar(20)
+  errorCode        String?   @db.VarChar(80)
+  leaseUntil       DateTime? @db.Timestamptz(3)
+  expiresAt        DateTime  @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+  actor            User      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  track            Track     @relation(fields: [trackId], references: [id], onDelete: Restrict)
+
+  @@index([status, leaseUntil])
+  @@map("digital_uploads")
+}
+
+model DigitalCart {
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String            @unique @db.Uuid
+  revision  Int               @default(0)
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime          @updatedAt @db.Timestamptz(3)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  lines     DigitalCartLine[]
+
+  @@map("digital_carts")
+}
+
+model DigitalCartLine {
+  id            String       @id @default(uuid()) @db.Uuid
+  cartId        String       @db.Uuid
+  offerId       String       @db.Uuid
+  offerVersion  Int
+  selectionHash String?      @db.Char(64)
+  priceCents    Int
+  removed       Boolean      @default(false)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  cart          DigitalCart  @relation(fields: [cartId], references: [id], onDelete: Restrict)
+  offer         DigitalOffer @relation(fields: [offerId], references: [id], onDelete: Restrict)
+
+  @@unique([cartId, offerId])
+  @@map("digital_cart_lines")
+}
+
+model DigitalOrder {
+  id                     String                  @id @default(uuid()) @db.Uuid
+  userId                 String                  @db.Uuid
+  idempotencyKey         String                  @unique @db.Uuid
+  cartRevision           Int
+  mode                   String                  @default("TEST") @db.VarChar(8)
+  status                 String                  @default("PENDING") @db.VarChar(24)
+  totalCents             Int
+  currency               String                  @default("EUR") @db.VarChar(3)
+  termsVersion           String                  @db.VarChar(80)
+  termsHash              String                  @db.VarChar(64)
+  earlyDelivery          Boolean                 @default(false)
+  withdrawalAcknowledged Boolean                 @default(false)
+  createdAt              DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                @updatedAt @db.Timestamptz(3)
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  lines                  DigitalOrderLine[]
+  attempts               DigitalPaymentAttempt[]
+  events                 DigitalEvent[]
+
+  @@index([userId, createdAt])
+  @@map("digital_orders")
+}
+
+model DigitalOrderLine {
+  id            String                  @id @default(uuid()) @db.Uuid
+  orderId       String                  @db.Uuid
+  offerId       String                  @db.Uuid
+  scope         String                  @db.VarChar(10)
+  title         String                  @db.VarChar(500)
+  priceCents    Int
+  offerVersion  Int
+  trackSnapshot Json
+  taxSnapshot   Json
+  order         DigitalOrder            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  offer         DigitalOffer            @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  entitlements  DigitalEntitlement[]
+  tickets       DigitalDownloadTicket[]
+
+  @@unique([orderId, offerId])
+  @@map("digital_order_lines")
+}
+
+model DigitalPaymentAttempt {
+  operation         String       @default("CHECKOUT") @db.VarChar(12)
+  id                String       @id @default(uuid()) @db.Uuid
+  orderId           String       @db.Uuid
+  provider          String       @db.VarChar(10)
+  idempotencyKey    String       @unique @db.VarChar(180)
+  status            String       @default("CREATING") @db.VarChar(20)
+  providerReference String?      @unique @db.VarChar(255)
+  paymentReference  String?      @unique @db.VarChar(255)
+  checkoutUrl       String?      @db.Text
+  leaseUntil        DateTime?    @db.Timestamptz(3)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime     @updatedAt @db.Timestamptz(3)
+  order             DigitalOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, status])
+  @@map("digital_payment_attempts")
+}
+
+model DigitalEntitlement {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  lineId    String           @db.Uuid
+  masterId  String           @db.Uuid
+  status    String           @default("ACTIVE") @db.VarChar(20)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  line      DigitalOrderLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  master    DigitalMaster    @relation(fields: [masterId], references: [id], onDelete: Restrict)
+
+  @@unique([lineId, masterId])
+  @@index([userId, status])
+  @@map("digital_entitlements")
+}
+
+model DigitalEvent {
+  id          String        @id @default(uuid()) @db.Uuid
+  orderId     String?       @db.Uuid
+  actorId     String?       @db.Uuid
+  externalKey String?       @unique @db.VarChar(255)
+  kind        String        @db.VarChar(60)
+  details     Json
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  order       DigitalOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@map("digital_events")
+}
+
+model DigitalDownloadTicket {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  lineId    String           @db.Uuid
+  masterId  String?          @db.Uuid
+  tokenHash String           @unique @db.VarChar(64)
+  usesLeft  Int              @default(3)
+  expiresAt DateTime         @db.Timestamptz(3)
+  line      DigitalOrderLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
+
+  @@index([expiresAt])
+  @@map("digital_download_tickets")
+}
+
 enum UserRole {
   ADMIN
   MEMBER
@@ -914,6 +1117,10 @@ enum ProviderEventOutcome {
 }
 
 model User {
+  digitalOrders                      DigitalOrder[]
+  digitalCart                        DigitalCart?
+  digitalEntitlements                DigitalEntitlement[]
+  digitalUploads                     DigitalUpload[]
   deliveryUploadSessions             OrderDeliveryUploadSession[]
   id                                 String                            @id @default(uuid()) @db.Uuid
   email                              String                            @unique @db.VarChar(320)
@@ -1194,6 +1401,7 @@ model Customer {
 }
 
 model Project {
+  digitalOffers         DigitalOffer[]
   id                    String                   @id @default(uuid()) @db.Uuid
   slug                  String                   @unique @db.VarChar(160)
   formerSlugs           String[]                 @default([]) @map("formerSlugs")
@@ -1233,16 +1441,19 @@ model Project {
 }
 
 model Track {
-  id              String         @id @default(uuid()) @db.Uuid
-  projectId       String         @db.Uuid
+  digitalOffers   DigitalOffer[]
+  digitalMasters  DigitalMaster[]
+  digitalUploads  DigitalUpload[]
+  id              String          @id @default(uuid()) @db.Uuid
+  projectId       String          @db.Uuid
   position        Int
-  title           String         @db.VarChar(240)
+  title           String          @db.VarChar(240)
   durationSeconds Int?
-  status          TrackStatus    @default(DRAFT)
-  confidence      DataConfidence @default(UNKNOWN)
-  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
-  project         Project        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  status          TrackStatus     @default(DRAFT)
+  confidence      DataConfidence  @default(UNKNOWN)
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(3)
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Restrict)
   credits         Credit[]
 
   @@unique([projectId, position])
@@ -1307,6 +1518,8 @@ model ConfidenceAnnotation {
 }
 
 model Asset {
+  digitalMasters      DigitalMaster[]      @relation("DigitalMasterAsset")
+  digitalPreviews     DigitalMaster[]      @relation("DigitalPreviewAsset")
   id                  String               @id @default(uuid()) @db.Uuid
   type                AssetType
   storageKey          String               @unique @db.VarChar(500)
