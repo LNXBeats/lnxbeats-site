@@ -7,6 +7,7 @@ import { AdminTopbar } from "@/components/admin-topbar";
 import { getAdminActionSummary } from "@/lib/admin/cockpit";
 import { requireAdmin } from "@/lib/auth/session";
 import { qaAccessAvailable } from "@/lib/auth/qa-access";
+import { digitalEnabled } from "@/lib/digital/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
       <AdminNavigation
         displayName={session.user.name}
         qaProfileSwitchAvailable={qaProfileSwitchAvailable}
+        digitalMusicAvailable={digitalEnabled()}
         actionRequiredCounts={actionSummary.actionRequiredCounts}
         criticalActionRequiredCounts={actionSummary.criticalActionRequiredCounts}
       />

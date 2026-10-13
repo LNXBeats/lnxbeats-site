@@ -11,6 +11,7 @@ const adminNavigation = [
   { href: "/admin", label: "Accueil", group: "Accueil" },
   { href: "/admin/creations", label: "Créations & collaborations", group: "Créations" },
   { href: "/admin/catalogue", label: "Catalogue & discographie", group: "Créations" },
+  { href: "/admin/musique", label: "Musique numérique · TEST", group: "Créations" },
   { href: "/admin/commandes", label: "Commandes musicales", group: "Créations" },
   { href: "/admin/boutique", label: "Produits", group: "Boutique" },
   { href: "/admin/boutique/commandes", label: "Commandes Boutique", group: "Boutique" },
@@ -48,11 +49,13 @@ function matchesAdminRoute(pathname: string, href: string) {
 export function AdminNavigation({
   displayName,
   qaProfileSwitchAvailable = false,
+  digitalMusicAvailable = false,
   actionRequiredCounts = {},
   criticalActionRequiredCounts = {},
 }: {
   displayName?: string | null;
   qaProfileSwitchAvailable?: boolean;
+  digitalMusicAvailable?: boolean;
   actionRequiredCounts?: AdminNavigationActionCounts;
   criticalActionRequiredCounts?: AdminNavigationActionCounts;
 }) {
@@ -60,7 +63,8 @@ export function AdminNavigation({
   const [navigationOpen, setNavigationOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const identity = displayName?.trim();
-  const activeHref = adminNavigation
+  const visibleNavigation = adminNavigation.filter(item => item.href !== "/admin/musique" || digitalMusicAvailable);
+  const activeHref = visibleNavigation
     .filter((item) => matchesAdminRoute(pathname, item.href))
     .reduce<string | null>(
       (longest, item) => !longest || item.href.length > longest.length ? item.href : longest,
@@ -108,7 +112,7 @@ export function AdminNavigation({
         aria-label="Navigation de l’administration"
       >
         {adminNavigationGroups.map((group) => {
-          const items = adminNavigation.filter((item) => item.group === group);
+          const items = visibleNavigation.filter((item) => item.group === group);
           const primary = items[0];
           const groupIsActive = items.some((item) => activeHref === item.href);
           return <div className="admin-header__nav-group" key={group}>

@@ -5,6 +5,11 @@ import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
 import { visibleDiscographyProjects } from "@/lib/catalog/jukebox";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
+import { digitalEnabled } from "@/lib/digital/domain";
+import { publicDigitalProject } from "@/lib/digital/catalog";
+import { AddDigitalOffer } from "@/components/digital-catalog";
+import { ProjectArtwork } from "@/components/project-artwork";
+import digitalStyles from "@/components/digital.module.css";
 import "../v064-discography.css";
 
 export const metadata: Metadata = createPublicPageMetadata({
@@ -38,6 +43,8 @@ function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProj
 export default async function DiscographyPage() {
   const { projects } = await listDiscographyProjects();
   const sceneProjects = visibleDiscographyProjects(discographyView(projects), "all", "editorial");
+  const digitalProjects = digitalEnabled() ? await Promise.all(projects.filter(p => p.status === "published")
+    .map(async project => ({ project, view: await publicDigitalProject(project.slug) }))) : [];
 
   return (
     <section className="v064-discography-stage" aria-label="Discographie">
@@ -49,6 +56,16 @@ export default async function DiscographyPage() {
           heading="Discographie"
           eager
         />
+        {digitalEnabled() ? <section className={digitalStyles.panel} aria-labelledby="digital-catalogue-title">
+          <div className={digitalStyles.heading}><div><p className="eyebrow">DCN-1.0 · revue locale</p><h2 id="digital-catalogue-title">La musique vous accompagne.</h2></div>
+            <nav className={digitalStyles.tabs} aria-label="Achats numériques"><Link className="text-link" href="/musique/panier">Panier numérique</Link><Link className="text-link" href="/compte/musique">Ma musique</Link></nav></div>
+          <p className={digitalStyles.note}>Albums et pistes à télécharger · tarifs QA uniquement · aucune vente LIVE.</p>
+          <div className={digitalStyles.catalogueGrid}>{digitalProjects.filter(p => p.view?.album || p.view?.tracks.some(t=>t.offer)).map(({project,view}) => <article className={digitalStyles.panel} key={project.slug}>
+            <Link href={`/album/${project.slug}`} className={digitalStyles.coverLink}><ProjectArtwork project={project} sizes="(max-width: 768px) 45vw, 25vw" /><h3>{project.title}</h3></Link>
+            <p className={digitalStyles.muted}>{view?.tracks.length} pistes · extraits de 60 secondes maximum</p>
+            {view?.album ? <AddDigitalOffer id={view.album.id} priceCents={view.album.priceCents} label="Ajouter l’album" /> : <Link className="text-link" href={`/album/${project.slug}`}>Choisir les pistes</Link>}
+          </article>)}</div>
+        </section> : null}
         <details className="discography-directory">
           <summary>
             <span>Accès direct aux projets</span>

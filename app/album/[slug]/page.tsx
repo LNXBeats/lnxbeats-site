@@ -9,6 +9,9 @@ import { JsonLd } from "@/components/json-ld";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { ProjectPlatforms } from "@/components/project-platforms";
 import { Tracklist } from "@/components/tracklist";
+import { DigitalTracklist } from "@/components/digital-catalog";
+import { publicDigitalProject } from "@/lib/digital/catalog";
+import { digitalEnabled } from "@/lib/digital/domain";
 import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import {
   getProjectConfidenceLabel,
@@ -56,6 +59,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   }
 
   const kind = getProjectKindLabel(project.type);
+  const digital = digitalEnabled() ? await publicDigitalProject(project.slug) : null;
   const status = getProjectStatusLabel(project.status);
   const confidence = getProjectConfidenceLabel(project.dataConfidence.overall);
   const documentedDate = project.releaseDate
@@ -89,7 +93,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                   </div>
                 ) : null}
               </dl>
-              {project.audioPreview ? <div className="album-audio-preview">
+              {project.audioPreview && !digital?.tracks.some(t => t.previewUrl) ? <div className="album-audio-preview">
                 <AudioPreviewPlayer
                   src={project.audioPreview.url}
                   title={project.title}
@@ -110,7 +114,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
             <h2>{project.description ? "L’histoire qui ouvre la musique." : "Le récit viendra trouver sa place."}</h2>
             <p>{project.description || "Aucun récit éditorial n’est publié pour ce projet à ce jour."}</p>
           </aside>
-          <Tracklist project={project} />
+          {digital ? <DigitalTracklist view={digital} /> : <Tracklist project={project} />}
         </Container>
       </section>
       <EditorialAdSlot pathname={`/album/${project.slug}`} slot="content" />

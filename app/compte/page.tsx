@@ -19,6 +19,7 @@ import { rightsStatusPresentation } from "@/lib/rights/domain";
 import { listRightsRequestsForActor } from "@/lib/rights/service";
 import { effectiveShopOrderStatus, formatShopMoney, shopFulfillmentLabel } from "@/lib/shop/order-presentation";
 import { listMemberShopOrders } from "@/lib/shop/order-service";
+import { digitalEnabled } from "@/lib/digital/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,7 @@ export default async function AccountPage() {
           </div>
         </div>
         <div className="auth-account-stack">
+          {digitalEnabled() ? <section className="member-orders"><h2>Ma musique.</h2><p>Vos albums et titres numériques, distincts des commandes Boutique et des créations sur mesure.</p><Link className="button button--quiet" href="/compte/musique">Ouvrir ma bibliothèque</Link></section> : null}
           <section className="member-orders" aria-labelledby="member-orders-title">
             <div className="member-orders__heading">
               <div>
