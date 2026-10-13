@@ -37,8 +37,11 @@ test("V3.1 renders the complete public Shop source without product hardcoding or
   assert.match(listFunction, /prisma\.product\.findMany\(/);
   assert.doesNotMatch(listFunction, /\b(?:take|skip|cursor)\s*:/);
   assert.match(listFunction, /return products\.map\(/);
-  assert.match(page, /const products = await listPublicShopProducts\(\)/);
-  assert.match(page, /\{products\.map\(\(product\) => \(/);
+  // The already-deployed DistroKid release combines both real product sources.
+  assert.match(page, /const \[products, externalProducts\] = await Promise\.all\(\[listPublicShopProducts\(\), listPublicExternalProducts\(\)\]\)/);
+  assert.match(page, /\.\.\.products\.map\(\(product\) => \(/);
+  assert.match(page, /\{collection\.map\(\(item\) => item\.kind === "internal"/);
+  assert.match(page, /productId=\{item\.product\.id\}/);
   assert.doesNotMatch(page, /products\.(?:filter|slice)\(/);
   assert.doesNotMatch(page, /lnx-v110-phase2-qa-product|j-ai-adopte-un-humain-cd/);
   assert.match(refinementCss, /\.shop-product-grid:not\(:has\(> :only-child\)\) \{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);

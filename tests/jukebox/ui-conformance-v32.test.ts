@@ -92,8 +92,10 @@ test("V3.2 keeps Shop source-driven and defines exhaustive one, two, three and f
     source("app/v132-fluid-motion.css"),
   ]);
 
-  assert.match(page, /const products = await listPublicShopProducts\(\);/);
-  assert.match(page, /\{products\.map\(\(product\) => \(/);
+  assert.match(page, /const \[products, externalProducts\] = await Promise\.all\(\[listPublicShopProducts\(\), listPublicExternalProducts\(\)\]\)/);
+  assert.match(page, /\.\.\.products\.map\(\(product\) => \(/);
+  assert.match(page, /\{collection\.map\(\(item\) => item\.kind === "internal"/);
+  assert.match(page, /productId=\{item\.product\.id\}/);
   assert.doesNotMatch(page, /products\.(?:filter|slice|splice|sort)\(/);
   assert.doesNotMatch(page, /const products\s*=\s*\[/);
 

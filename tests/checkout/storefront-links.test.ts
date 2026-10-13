@@ -33,7 +33,7 @@ test("the public Boutique keeps its internal commerce journey and exposes the ex
   assert.match(shop, /const distroKidMerchShop = siteConfig\.shops\[0\]/);
   assert.equal((shop.match(/<DistroKidMerchSection(?: soft)? \/>/g) ?? []).length, 3);
   assert.match(shop, /href="\/boutique\/panier"/);
-  assert.match(shop, /href=\{`\/boutique\/\$\{encodeURIComponent\(product\.slug\)\}`\}/);
+  assert.match(shop, /href=\{`\/boutique\/\$\{encodeURIComponent\((?:item\.)?product\.slug\)\}`\}/);
   assert.match(shop, /distincte de la Boutique LNX/);
   assert.doesNotMatch(shop, /etsy/i);
 });
