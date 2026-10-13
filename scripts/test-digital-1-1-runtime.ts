@@ -111,6 +111,8 @@ try {
   await test("durable confirmation QA: HEAD is not receipt; owner-only bytes and explicit acknowledgement", async () => {
     const d = await prisma.digitalDocument.findFirstOrThrow({ where: { orderId, kind: "CONTRACT", status: "READY" } });
     const other = await member(); await assert.rejects(digitalDocumentResponse(actor(other), d.id), { code: "NOT_FOUND" });
+    await assert.rejects(digitalDocumentResponse({...actor(other),role:"ADMIN"},d.id),{code:"NOT_FOUND"},"An old/forged actor role cannot override the current database role");
+    await assert.rejects(digitalDocumentResponse(actor(u),"../invalid-document"),{code:"INVALID_ID"});
     await digitalDocumentResponse(actor(u), d.id, "HEAD"); await assert.rejects(acknowledgeDigitalContract(u.id, orderId, d.id, d.snapshotHash), { code: "CONTRACT_RECEIPT_REQUIRED" });
     const response = await digitalDocumentResponse(actor(u), d.id); const bytes = Buffer.from(await response.arrayBuffer()); await writeFile("output/pdf/dcn-qa-confirmation.pdf", bytes);
     await acknowledgeDigitalContract(u.id, orderId, d.id, d.snapshotHash); await acknowledgeDigitalContract(u.id, orderId, d.id, d.snapshotHash); assert.equal(await prisma.digitalEvent.count({ where: { orderId, kind: "CONTRACT_RECEIPT_ACKNOWLEDGED" } }), 1);
@@ -177,6 +179,11 @@ try {
     const pending:DigitalFinanceGateway={...finance,async refund(r){const e=await finance.refund(r);e.status="PENDING";financeRemote.set(r.id,e);return e;}};
     await processDigitalRefund(r.id,pending);assert.equal(await prisma.digitalDocument.count({where:{orderId:id,kind:"CREDIT_NOTE"}}),0);const e=financeRemote.get(r.id)!;e.status="FAILED";await processDigitalRefund(r.id,pending);assert.equal((await prisma.digitalRefund.findUniqueOrThrow({where:{id:r.id}})).status,"FAILED");
     assert.equal(await prisma.digitalEntitlement.count({where:{lineId:l.id,status:"ACTIVE"}}),1);
+    const reducedBuyer=await member(),reducedId=await checkout(reducedBuyer,[singles[7].id]),reducedLine=await prisma.digitalOrderLine.findFirstOrThrow({where:{orderId:reducedId},include:{entitlements:true}});
+    const fullReduction=await requestDigitalRefund(actor(admin),reducedId,{idempotencyKey:randomUUID(),targets:[{lineId:reducedLine.id,amountCents:reducedLine.priceCents}],purpose:"PRICE_REDUCTION",confirmedAmountCents:reducedLine.priceCents});
+    await processDigitalRefund(fullReduction.id,finance);assert.equal((await prisma.digitalOrder.findUniqueOrThrow({where:{id:reducedId}})).status,"REFUNDED");assert.equal(await prisma.digitalEntitlement.count({where:{lineId:reducedLine.id,status:"ACTIVE"}}),1);
+    await assert.rejects(createDigitalDownload(reducedBuyer.id,reducedLine.id,reducedLine.entitlements[0].masterId),{code:"CONTRACT_RECEIPT_REQUIRED"});await receipt(reducedBuyer,reducedId);
+    assert.ok((await createDigitalDownload(reducedBuyer.id,reducedLine.id,reducedLine.entitlements[0].masterId)).ticketId,"Full price reduction preserves rights without bypassing prior contract receipt");
   });
   await test("two genuinely distinct successful attempts trace the second capture without losing first payment or issuing another invoice",async()=>{
     const buyer=await member(),id=await checkout(buyer,[singles[5].id]),first=remote.get(id)!;

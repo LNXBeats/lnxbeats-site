@@ -7,6 +7,7 @@ import { refundTargets, stripeRefundStatus, stripeDisputeStatus, paypalDisputeSt
 import { digitalByteRange, digitalAttachment } from "@/lib/digital/download-policy";
 import { validateDigitalZip } from "@/lib/digital/zip";
 import { verifiedDigitalStream } from "@/lib/digital/stream-integrity";
+import { digitalLibraryPaymentLabel, digitalLibraryBlockedMessage,digitalConfirmationMessage } from "@/lib/digital/library-policy";
 const hash = createHash("sha256").update(DIGITAL_TERMS_TEXT).digest("hex");
 test("DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval", () => {
   const s = digitalContractSnapshot({ name: "QA", email: "qa@example.invalid" }, new Date("2026-10-13T12:00:00Z"));
@@ -54,4 +55,9 @@ test("DCN ZIP source verifier rejects truncated, enlarged and corrupt bytes befo
   for (const b of [bytes.subarray(1), Buffer.concat([bytes, bytes]), Buffer.alloc(bytes.length)]) {
     await assert.rejects(new Response(verifiedDigitalStream(stream(b), bytes.length, hash)).arrayBuffer(), { code: "ARCHIVE_INTEGRITY" });
   }
+});
+test("DCN library never claims an unpaid order paid, or retained price-reduction rights revoked",()=>{
+  for(const state of ["PENDING","REQUIRES_REVIEW","FAILED"]){assert.ok(!digitalLibraryPaymentLabel(state,false).includes("confirmé"));assert.ok(!digitalLibraryBlockedMessage(state,false).includes("Paiement confirmé"));}
+  assert.ok(digitalLibraryPaymentLabel("REFUNDED",true).includes("droits conservés"));assert.ok(digitalLibraryPaymentLabel("REFUNDED",false).includes("accès retiré"));
+  for(const state of ["REFUNDED","PARTIALLY_REFUNDED","DISPUTED"])assert.ok(!digitalConfirmationMessage(state,false).includes("En attente de confirmation prestataire"));
 });

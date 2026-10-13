@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { sellerSnapshot } from "@/lib/billing/service";
 import { billingSnapshotHash, invoiceNumber, creditNoteNumber } from "@/lib/billing/domain";
 import { generateInvoicePdf, generateCreditNotePdf, type InvoicePdfRecord, type CreditNotePdfRecord } from "@/lib/billing/pdf";
-import { DigitalError, requireDigitalEnvironment } from "./domain";
+import { DigitalError, requireDigitalEnvironment, assertDigitalUuid } from "./domain";
 import { DIGITAL_FISCAL_REVIEW_NOTICE, digitalEmailTemplate, verifyContractSnapshot } from "./fulfillment-policy";
 type Tx = Prisma.TransactionClient;
 const json = (v: unknown) => v as Prisma.InputJsonValue;
@@ -117,9 +117,11 @@ export async function acknowledgeDigitalContract(userId: string, orderId: string
   requireDigitalEnvironment();
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${userId}`})) IS NULL AS locked`;
-    const o = await tx.digitalOrder.findFirst({ where: { id: orderId, userId, status: { in: ["PAID", "PARTIALLY_REFUNDED"] }, user: { status: "ACTIVE", emailVerified: true } } });
+    const o = await tx.digitalOrder.findFirst({ where: { id: orderId, userId, status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] }, user: { status: "ACTIVE", emailVerified: true } } });
     const d = await tx.digitalDocument.findFirst({ where: { id: documentId, orderId, kind: "CONTRACT", status: "READY", snapshotHash: hash } });
     if (!o || !d || !o.contractSnapshot || !await tx.digitalEvent.findFirst({ where: { orderId, actorId: userId, kind: "DOCUMENT_TRANSFER_FINISHED", details: { path: ["documentId"], equals: documentId } } })) throw new DigitalError("CONTRACT_RECEIPT_REQUIRED", 409);
+    // A full price reduction may retain rights; a resolution must never restore them.
+    if(o.status==="REFUNDED"&&!await tx.digitalEntitlement.findFirst({where:{userId,status:"ACTIVE",line:{orderId}}}))throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);
     const current = await tx.digitalFulfillment.findUniqueOrThrow({ where: { orderId } });
     if (current.confirmationAt) return { acknowledged: true };
     const at = new Date();
@@ -131,9 +133,10 @@ export async function acknowledgeDigitalContract(userId: string, orderId: string
   });
 }
 export async function digitalDocumentResponse(actor: { id: string; role: string }, id: string, method = "GET") {
-  requireDigitalEnvironment();
-  const d = await prisma.digitalDocument.findFirst({ where: { id, order: actor.role === "ADMIN" ? {} : { userId: actor.id } }, include: { order: true } });
-  if (!d || d.status !== "READY" || !d.pdf || !await prisma.user.findFirst({ where: { id: actor.id, status: "ACTIVE", emailVerified: true } })) throw new DigitalError("NOT_FOUND", 404);
+  requireDigitalEnvironment();assertDigitalUuid(id);
+  const currentUser=await prisma.user.findFirst({where:{id:actor.id,status:"ACTIVE",emailVerified:true},select:{role:true}});if(!currentUser)throw new DigitalError("NOT_FOUND",404);
+  const d = await prisma.digitalDocument.findFirst({ where: { id, order: currentUser.role === "ADMIN" ? {} : { userId: actor.id } }, include: { order: true } });
+  if (!d || d.status !== "READY" || !d.pdf) throw new DigitalError("NOT_FOUND", 404);
   const bytes = Buffer.from(d.pdf);
   if (billingSnapshotHash(d.snapshot) !== d.snapshotHash || createHash("sha256").update(bytes).digest("hex") !== d.pdfHash) throw new DigitalError("DOCUMENT_HASH_MISMATCH", 503);
   const headers = { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${d.number}.pdf"`, "Content-Length": String(bytes.length), "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex", "X-Content-Type-Options": "nosniff" };

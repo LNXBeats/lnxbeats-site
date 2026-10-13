@@ -17,7 +17,7 @@ async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
 }
 export async function library(userId:string){requireDigitalEnvironment();
   const rows=await prisma.digitalOrder.findMany({where:{userId},orderBy:{createdAt:"desc"},take:100,select:{id:true,status:true,totalCents:true,mode:true,createdAt:true,contractSnapshot:true,fulfillment:{select:{accessReadyAt:true,confirmationStatus:true}},documents:{select:{id:true,number:true,kind:true,status:true,snapshotHash:true}},lines:{select:{id:true,title:true,scope:true,priceCents:true,trackSnapshot:true,entitlements:{select:{id:true,masterId:true,status:true,master:{select:{version:true,track:{select:{title:true}}}}}}}}}});
-  return rows.map(({contractSnapshot,...o})=>({...o,accessReady:!contractSnapshot||!!o.fulfillment?.accessReadyAt,createdAt:o.createdAt.toISOString(),lines:o.lines.map(line=>{const snapshot=line.trackSnapshot as unknown as DigitalSelection["tracks"];
+  return rows.map(({contractSnapshot,...o})=>({...o,legacy:!contractSnapshot,accessReady:!contractSnapshot||!!o.fulfillment?.accessReadyAt,createdAt:o.createdAt.toISOString(),lines:o.lines.map(line=>{const snapshot=line.trackSnapshot as unknown as DigitalSelection["tracks"];
     return{...line,entitlements:line.entitlements.map(e=>({...e,master:{...e.master,track:{title:snapshot.find(t=>t.masterId===e.masterId)?.title??e.master.track.title}}}))};})}));
 }
 export async function createDigitalDownload(userId:string,lineId:string,masterId:string|null){requireDigitalEnvironment();

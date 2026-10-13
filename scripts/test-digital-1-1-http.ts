@@ -32,4 +32,4 @@ try{
   assert.equal(terminal.filter(e=>e.kind==="DOWNLOAD_TRANSFER_FINISHED").length,2,"Range and full response are distinct successful transfers.");assert.equal(terminal.filter(e=>e.kind==="DOWNLOAD_INTERRUPTED").length,0);
   const anonymous=await fetch(`${config.AUTH_URL}${url}`,{redirect:"manual"});assert.equal(anonymous.status,404);await anonymous.body?.cancel();
   console.log(JSON.stringify({environment:"LOCAL_LOOPBACK_ONLY",signIn:200,head:200,range:206,fullFile:200,bytes,checksum:"PASS",anonymous:404,contradictoryTerminalAudit:false,deviceStorage:"NOT_RUN",externalProviderCalls:0}));
-}finally{await call("/api/auth/sign-out",{method:"POST"}).then(r=>r.body?.cancel()).catch(()=>undefined);cookies.clear();credentials.password="";await prisma.$disconnect();}
+}finally{try{const signOut=await call("/api/auth/sign-out",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});assert.equal(signOut.status,200,"Only this HTTP test session must close normally.");await signOut.body?.cancel();}finally{cookies.clear();credentials.password="";await prisma.$disconnect();}}
