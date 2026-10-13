@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { StudioVinylControl } from "@/components/studio-vinyl-control";
 import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
-import { digitalTimeLabel } from "@/lib/digital/presentation";
+import { digitalTimeLabel, isDigitalIntentionalPlaybackAbort } from "@/lib/digital/presentation";
 import styles from "./digital.module.css";
 export const DIGITAL_CART_KEY = "lnx:dcn:cart:v1";
 export function readDigitalCart(): string[] { try { const v = JSON.parse(localStorage.getItem(DIGITAL_CART_KEY) ?? "[]"); return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string"))].slice(0, 50) : []; } catch { return []; } }
@@ -24,9 +24,23 @@ export function DigitalAlbumOffer({ album }: { album: DigitalProjectView["album"
 /** Uses the existing site-wide coordinator. Audio loads only after user play. */
 function DigitalTrackRow({ track }: { track: DigitalProjectView["tracks"][number] }) {
   const playerId = `digital-${useId()}`, audio = useRef<HTMLAudioElement>(null);
+  const playbackIntent = useRef({ pending: false, intentionallyPaused: false });
   const [playing, setPlaying] = useState(false), [loading, setLoading] = useState(false), [failed, setFailed] = useState(false), [ended, setEnded] = useState(false), [current, setCurrent] = useState(0), [duration, setDuration] = useState((track.previewDurationMs ?? 0) / 1000);
-  useEffect(() => listenForOtherMediaPlayback(playerId, () => audio.current?.pause()), [playerId]);
-  async function toggle() { if (!audio.current) return; setFailed(false); if (!audio.current.paused) { audio.current.pause(); return; } setLoading(true); try { await audio.current.play(); } catch { setFailed(true); } finally { setLoading(false); } }
+  useEffect(() => listenForOtherMediaPlayback(playerId, () => {
+    const element = audio.current; if (!element) return;
+    playbackIntent.current.intentionallyPaused = playbackIntent.current.pending || !element.paused;
+    element.pause();
+  }), [playerId]);
+  async function toggle() {
+    const element = audio.current; if (!element) return;
+    setFailed(false);
+    if (!element.paused) { playbackIntent.current.intentionallyPaused = true; element.pause(); return; }
+    playbackIntent.current.pending = true; playbackIntent.current.intentionallyPaused = false; setLoading(true);
+    try { await element.play(); }
+    catch (error) {
+      if (!isDigitalIntentionalPlaybackAbort(error, playbackIntent.current.intentionallyPaused, element.paused, !!element.error)) setFailed(true);
+    } finally { playbackIntent.current.pending = false; setLoading(false); }
+  }
   return <li className={styles.trackRow} data-digital-preview={track.id} data-playing={playing ? "true" : "false"}>
     <audio ref={audio} src={track.previewUrl ?? undefined} preload="none" controlsList="nodownload noplaybackrate" onPlay={() => { setPlaying(true); setEnded(false); announceMediaPlayback({ ownerId: playerId, kind: "audio" }); }} onPause={() => setPlaying(false)} onLoadedMetadata={e => { if (Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration); }} onTimeUpdate={e => setCurrent(e.currentTarget.currentTime)} onEnded={e => { e.currentTarget.currentTime = 0; setPlaying(false); setEnded(true); setCurrent(0); }} onError={() => { setFailed(true); setPlaying(false); setLoading(false); }}/>
     <span className={styles.trackNumber}>{String(track.position).padStart(2, "0")}</span><div className={styles.trackIdentity}><strong>{track.title}</strong><span className={styles.muted}>{track.fullDurationMs != null ? `${digitalTimeLabel(track.fullDurationMs)} · piste complète` : "Durée complète non documentée"}</span></div><div className={styles.trackPlayback}>

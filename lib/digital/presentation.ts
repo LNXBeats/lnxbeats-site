@@ -14,6 +14,11 @@ export function digitalTimeLabel(milliseconds: number | null | undefined) {
   const seconds = Math.floor(milliseconds / 1000);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
+/** A coordinated pause may reject a pending play() promise; real resource errors remain visible. */
+export function isDigitalIntentionalPlaybackAbort(error: unknown, intentionallyPaused: boolean, paused: boolean, hasMediaError: boolean) {
+  return intentionallyPaused && paused && !hasMediaError && error !== null && typeof error === "object"
+    && "name" in error && error.name === "AbortError";
+}
 export function digitalFileFormat(mimeType: string | null | undefined) {
   if (["audio/wav", "audio/x-wav", "audio/wave"].includes(mimeType ?? "")) return "WAV";
   if (mimeType === "audio/mpeg") return "MP3";

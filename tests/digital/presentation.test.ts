@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { digitalArchiveLabel, digitalFileFormat, digitalSizeLabel, digitalTimeLabel, digitalLibraryPagination, parseDigitalLibraryPage } from "@/lib/digital/presentation";
+import { digitalArchiveLabel, digitalFileFormat, digitalSizeLabel, digitalTimeLabel, digitalLibraryPagination, parseDigitalLibraryPage, isDigitalIntentionalPlaybackAbort } from "@/lib/digital/presentation";
 import { DIGITAL_ACTIVE_RIGHTS_ORDER_STATES, digitalCountsOwnedRights } from "@/lib/digital/library-policy";
 
 test("DCN display keeps exact short preview duration and never invents unknown seconds", () => {
@@ -9,6 +9,16 @@ test("DCN display keeps exact short preview duration and never invents unknown s
   assert.equal(digitalTimeLabel(12345), "0:12");
   assert.equal(digitalTimeLabel(183000), "3:03");
   for (const v of [null, undefined, NaN, Infinity, -1]) assert.equal(digitalTimeLabel(v), null);
+});
+test("DCN coordinated pause of pending play ignores only the intentional AbortError, not real playback failures", () => {
+  const abort = new DOMException("The play request was interrupted by a pause", "AbortError");
+  assert.equal(isDigitalIntentionalPlaybackAbort(abort, true, true, false), true);
+  assert.equal(isDigitalIntentionalPlaybackAbort(abort, false, true, false), false);
+  assert.equal(isDigitalIntentionalPlaybackAbort(abort, true, false, false), false);
+  assert.equal(isDigitalIntentionalPlaybackAbort(abort, true, true, true), false);
+  assert.equal(isDigitalIntentionalPlaybackAbort(new DOMException("Unsupported audio", "NotSupportedError"), true, true, false), false);
+  assert.equal(isDigitalIntentionalPlaybackAbort(new Error("Network failure"), true, true, false), false);
+  assert.equal(isDigitalIntentionalPlaybackAbort(null, true, true, false), false);
 });
 test("DCN file labels describe only an existing source format, not an invented derived bundle", () => {
   assert.equal(digitalFileFormat("audio/wav"), "WAV");
