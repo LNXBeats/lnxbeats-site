@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { authClient } from "@/lib/auth/client";
 
@@ -11,6 +11,8 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,7 +40,7 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   }
 
   return (
-    <form className="auth-form" onSubmit={handleSubmit} aria-describedby={error ? "login-error" : undefined}>
+    <form method="post" className="auth-form" onSubmit={handleSubmit} aria-describedby={error ? "login-error" : undefined}>
       <div className="auth-field">
         <label htmlFor="email">Adresse email</label>
         <input id="email" name="email" type="email" autoComplete="username" required maxLength={320} />
@@ -48,7 +50,7 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
         <input id="password" name="password" type="password" autoComplete="current-password" required minLength={12} maxLength={128} />
       </div>
       {error ? <p className="auth-form__error" id="login-error" role="alert">{error}</p> : null}
-      <button className="auth-submit" type="submit" disabled={pending}>
+      <button className="auth-submit" type="submit" disabled={pending || !hydrated}>
         <span>{pending ? "Connexion…" : "Entrer dans mon espace"}</span>
         <span aria-hidden="true">→</span>
       </button>
