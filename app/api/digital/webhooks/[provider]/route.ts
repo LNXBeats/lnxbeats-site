@@ -1,25 +1,38 @@
-import Stripe from "stripe";
+import type Stripe from "stripe";
+import { createHash } from "node:crypto";
 import { boundedSupportText } from "@/lib/support/http";
 import { prisma } from "@/lib/prisma";
 import { digitalHttpError,digitalJson } from "@/lib/digital/http";
 import { DigitalError,requireDigitalEnvironment } from "@/lib/digital/domain";
-import { verifiedDigitalStripeEvent,stripeDigitalEvidence,verifyDigitalPaypalEvent } from "@/lib/digital/providers";
-import { reconcileDigitalEvidence,reconcileDigitalOrder } from "@/lib/digital/commerce";
+import { verifiedDigitalStripeEvent,verifyDigitalPaypalEvent } from "@/lib/digital/providers";
+import { receiveDigitalEvent,DIGITAL_STRIPE_EVENTS,DIGITAL_PAYPAL_EVENTS,type DigitalInboxPayload } from "@/lib/digital/inbox";
 export const dynamic="force-dynamic";
-export async function POST(request:Request,{params}:{params:Promise<{provider:string}>}){try{requireDigitalEnvironment();const{provider}=await params;const raw=await boundedSupportText(request,65536);
-  if(provider==="stripe"){const{event,merchantId}=await verifiedDigitalStripeEvent(raw,request.headers.get("stripe-signature")??"");
-    if(!["checkout.session.completed","checkout.session.async_payment_succeeded","checkout.session.async_payment_failed","checkout.session.expired"].includes(event.type))return digitalJson({received:true});
-    const s=event.data.object as Stripe.Checkout.Session;const attempt=await prisma.digitalPaymentAttempt.findUnique({where:{providerReference:s.id}});
+export async function POST(request:Request,{params}:{params:Promise<{provider:string}>}){try{requireDigitalEnvironment();const{provider}=await params;const raw=await boundedSupportText(request,65536);const bodyHash=createHash("sha256").update(raw).digest("hex");
+  if(provider==="stripe"){const{event}=await verifiedDigitalStripeEvent(raw,request.headers.get("stripe-signature")??"");
+    if(!DIGITAL_STRIPE_EVENTS.includes(event.type))return digitalJson({received:true});
+    const s=event.data.object as Stripe.Checkout.Session & {refunds?:{data:Array<{id:string}>}};
+    if(!event.type.startsWith("checkout.session.")) {
+      const pi=typeof s.payment_intent==="string"?s.payment_intent:s.payment_intent?.id;
+      const attempt=pi?await prisma.digitalPaymentAttempt.findUnique({where:{paymentReference:pi}}):null;
+      if(!attempt)return digitalJson({received:true,processed:false});
+      const payload:DigitalInboxPayload={paymentReference:pi,resourceReference:s.id,...(s.refunds?{refundReferences:s.refunds.data.map(r=>r.id)}:{})};
+      return digitalJson(await receiveDigitalEvent({provider:"STRIPE",eventId:event.id,eventType:event.type,orderId:attempt.orderId,bodyHash,payload}));
+    }
+    const attempt=s.metadata?.digitalAttemptId?await prisma.digitalPaymentAttempt.findUnique({where:{id:s.metadata.digitalAttemptId}}):null;
     if(!attempt&&s.metadata?.paymentSource!=="DIGITAL_MUSIC")return digitalJson({received:true,processed:false});
     if(!attempt||attempt.id!==s.metadata?.digitalAttemptId||attempt.orderId!==s.metadata?.digitalOrderId)throw new DigitalError("INVALID_WEBHOOK");
-    return digitalJson(await reconcileDigitalEvidence(stripeDigitalEvidence(s,event.id,merchantId,event.type),merchantId));}
+    return digitalJson(await receiveDigitalEvent({provider:"STRIPE",eventId:event.id,eventType:event.type,orderId:attempt.orderId,bodyHash,payload:{providerReference:s.id,attemptId:attempt.id}}));}
   if(provider!=="paypal")throw new DigitalError("NOT_FOUND",404);
   const headers={transmissionId:request.headers.get("paypal-transmission-id")??"",transmissionTime:request.headers.get("paypal-transmission-time")??"",
     certUrl:request.headers.get("paypal-cert-url")??"",authAlgo:request.headers.get("paypal-auth-algo")??"",transmissionSignature:request.headers.get("paypal-transmission-sig")??""};
   if(!await verifyDigitalPaypalEvent(raw,headers))throw new DigitalError("INVALID_WEBHOOK");
-  const event=JSON.parse(raw) as {event_type?:string;resource?:{supplementary_data?:{related_ids?:{order_id?:string}}}};
-  if(!["PAYMENT.CAPTURE.COMPLETED","PAYMENT.CAPTURE.PENDING","PAYMENT.CAPTURE.DENIED"].includes(event.event_type??""))return digitalJson({received:true});
-  const id=event.resource?.supplementary_data?.related_ids?.order_id;if(!id)throw new DigitalError("INVALID_WEBHOOK");
-  const attempt=await prisma.digitalPaymentAttempt.findUnique({where:{providerReference:id}});if(!attempt)return digitalJson({received:true,processed:false});if(attempt.provider!=="PAYPAL")throw new DigitalError("INVALID_WEBHOOK");
-  await reconcileDigitalOrder(attempt.orderId);return digitalJson({received:true});
+  const event=JSON.parse(raw) as {id?:string;event_type?:string;resource?:{id?:string;dispute_id?:string;custom_id?:string;supplementary_data?:{related_ids?:{order_id?:string;capture_id?:string}};disputed_transactions?:Array<{seller_transaction_id?:string}>}};
+  if(!event.id||!event.event_type)throw new DigitalError("INVALID_WEBHOOK");
+  if(!DIGITAL_PAYPAL_EVENTS.includes(event.event_type))return digitalJson({received:true});
+  const r=event.resource??{},related=r.supplementary_data?.related_ids;
+  const captureId=related?.capture_id??r.disputed_transactions?.[0]?.seller_transaction_id??(event.event_type.endsWith("REVERSED")?r.id:undefined);
+  const attempt=related?.order_id?await prisma.digitalPaymentAttempt.findUnique({where:{providerReference:related.order_id}}):captureId?await prisma.digitalPaymentAttempt.findUnique({where:{paymentReference:captureId}}):r.custom_id?await prisma.digitalPaymentAttempt.findUnique({where:{id:r.custom_id}}):null;
+  if(!attempt)return digitalJson({received:true,processed:false});if(attempt.provider!=="PAYPAL")throw new DigitalError("INVALID_WEBHOOK");
+  const payload:DigitalInboxPayload={...(related?.order_id?{providerReference:related.order_id}:{}),...(captureId?{paymentReference:captureId}:{}),attemptId:attempt.id,...(r.id||r.dispute_id?{resourceReference:event.event_type.endsWith("REVERSED")?`reversal:${r.id}`:r.dispute_id??r.id}:{})};
+  return digitalJson(await receiveDigitalEvent({provider:"PAYPAL",eventId:event.id,eventType:event.event_type,orderId:attempt.orderId,bodyHash,payload}));
 }catch(e){return digitalHttpError(e);}}

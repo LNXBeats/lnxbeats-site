@@ -99,7 +99,9 @@ export class LocalMediaStorage implements MediaStorage {
     const options = input.range ? { start: input.range.start, end: input.range.end } : undefined;
     const body = createReadStream(this.resolve(input.scope, input.key), options);
     const contentLength = input.range ? input.range.end - input.range.start + 1 : metadata.contentLength;
-    return { ...metadata, contentLength, body: Readable.toWeb(body) as ReadableStream<Uint8Array> };
+    // Count bytes, not chunks: the default Node->Web queue can otherwise prefetch
+    // an entire large master while its consumer is still validating the request.
+    return { ...metadata, contentLength, body: Readable.toWeb(body, { strategy: { highWaterMark: 64 * 1024, size: chunk => chunk.byteLength } }) as ReadableStream<Uint8Array> };
   }
 
   async delete(input: { scope: MediaScope; key: string }) {

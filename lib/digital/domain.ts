@@ -1,10 +1,12 @@
 export class DigitalError extends Error {
-  constructor(readonly code: string, readonly status = 400) { super(code); this.name = "DigitalError"; }
+  constructor(readonly code: string, readonly status = 400, readonly publicDetails?:{ownedTitles:string[]}) { super(code); this.name = "DigitalError"; }
 }
 export const DIGITAL_PREVIEW_LIMIT_MS = 60_000;
 export const DIGITAL_MASTER_LIMIT_BYTES = 512 * 1024 * 1024;
 export const DIGITAL_TERMS_VERSION = "DCN-1.0-LOCAL-REVIEW";
 export const DIGITAL_TERMS_TEXT = "Licence personnelle d'écoute et de téléchargement. Aucune cession de droits d'exploitation. Conditions de test uniquement, à valider avant LIVE.";
+export const DIGITAL_EARLY_DELIVERY_TEXT = "Je demande expressément la fourniture immédiate du contenu numérique.";
+export const DIGITAL_WITHDRAWAL_TEXT = "Je reconnais la perte du droit de rétractation après confirmation sur support durable et commencement de la fourniture.";
 export const digitalUuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 export function assertDigitalUuid(v: unknown): asserts v is string { if (!digitalUuid(v)) throw new DigitalError("INVALID_ID"); }
 export function digitalPrice(v: unknown) {
@@ -34,7 +36,7 @@ export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: 
     digitalPrice(s.priceCents);
     if (!s.tracks.length) throw new DigitalError("NO_MASTER", 409);
     if (s.scope === "TRACK" && covered.has(s.tracks[0].trackId)) { removed.push(s.id); return false; }
-    if (s.tracks.some(t => ownedTracks.has(t.trackId))) throw new DigitalError(s.scope === "ALBUM" ? "ALBUM_PARTIALLY_OWNED" : "ALREADY_OWNED", 409);
+    if (s.tracks.some(t => ownedTracks.has(t.trackId))) throw new DigitalError(s.scope === "ALBUM" ? "ALBUM_PARTIALLY_OWNED" : "ALREADY_OWNED", 409,{ownedTitles:s.tracks.filter(t=>ownedTracks.has(t.trackId)).map(t=>t.title)});
     return true;
   });
   const seen = new Set<string>();

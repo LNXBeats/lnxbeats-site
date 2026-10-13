@@ -67,6 +67,8 @@ model DigitalUpload {
   status           String    @default("PREPARING") @db.VarChar(20)
   errorCode        String?   @db.VarChar(80)
   leaseUntil       DateTime? @db.Timestamptz(3)
+  leaseToken       String?   @db.Uuid
+  cleanupAt        DateTime? @db.Timestamptz(3)
   expiresAt        DateTime  @db.Timestamptz(3)
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
@@ -118,12 +120,19 @@ model DigitalOrder {
   termsHash              String                  @db.VarChar(64)
   earlyDelivery          Boolean                 @default(false)
   withdrawalAcknowledged Boolean                 @default(false)
+  contractSnapshot       Json?
   createdAt              DateTime                @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime                @updatedAt @db.Timestamptz(3)
   user                   User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
   lines                  DigitalOrderLine[]
   attempts               DigitalPaymentAttempt[]
   events                 DigitalEvent[]
+  documents              DigitalDocument[]
+  fulfillment            DigitalFulfillment?
+  notifications          DigitalNotification[]
+  refunds                DigitalRefund[]
+  disputes               DigitalDispute[]
+  inbox                  DigitalInbox[]
 
   @@index([userId, createdAt])
   @@map("digital_orders")
@@ -143,6 +152,7 @@ model DigitalOrderLine {
   offer         DigitalOffer            @relation(fields: [offerId], references: [id], onDelete: Restrict)
   entitlements  DigitalEntitlement[]
   tickets       DigitalDownloadTicket[]
+  archive       DigitalArchive?
 
   @@unique([orderId, offerId])
   @@map("digital_order_lines")
@@ -203,12 +213,163 @@ model DigitalDownloadTicket {
   lineId    String           @db.Uuid
   masterId  String?          @db.Uuid
   tokenHash String           @unique @db.VarChar(64)
-  usesLeft  Int              @default(3)
+  usesLeft  Int              @default(32)
   expiresAt DateTime         @db.Timestamptz(3)
   line      DigitalOrderLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
 
   @@index([expiresAt])
   @@map("digital_download_tickets")
+}
+
+// DCN-1.1: immutable TEST documents and independent durable jobs. No fake Order/Payment.
+model DigitalDocument {
+  id           String       @id @default(uuid()) @db.Uuid
+  orderId      String       @db.Uuid
+  kind         String       @db.VarChar(20)
+  businessKey  String       @unique @db.VarChar(255)
+  number       String       @unique @db.VarChar(80)
+  snapshot     Json
+  snapshotHash String       @db.Char(64)
+  status       String       @default("PENDING") @db.VarChar(20)
+  pdf          Bytes?
+  pdfHash      String?      @db.Char(64)
+  attempts     Int          @default(0)
+  availableAt  DateTime     @default(now()) @db.Timestamptz(3)
+  leaseUntil   DateTime?    @db.Timestamptz(3)
+  leaseToken   String?      @db.Uuid
+  errorCode    String?      @db.VarChar(80)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  order        DigitalOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([status, availableAt], map: "digital_documents_status_availableat_idx")
+  @@map("digital_documents")
+}
+
+model DigitalFulfillment {
+  orderId              String       @id @db.Uuid
+  confirmationStatus   String       @default("WAITING") @db.VarChar(24)
+  confirmationAt       DateTime?    @db.Timestamptz(3)
+  confirmationEvidence Json?
+  accessReadyAt        DateTime?    @db.Timestamptz(3)
+  order                DigitalOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@map("digital_fulfillments")
+}
+
+model DigitalNotification {
+  id             String       @id @default(uuid()) @db.Uuid
+  orderId        String       @db.Uuid
+  businessKey    String       @unique @db.VarChar(255)
+  kind           String       @db.VarChar(30)
+  recipient      String       @db.VarChar(320)
+  template       Json
+  status         String       @default("PENDING") @db.VarChar(24)
+  attempts       Int          @default(0)
+  availableAt    DateTime     @default(now()) @db.Timestamptz(3)
+  firstAttemptAt DateTime?    @db.Timestamptz(3)
+  leaseToken     String?      @db.Uuid
+  leaseUntil     DateTime?    @db.Timestamptz(3)
+  transportId    String?      @db.VarChar(180)
+  capturedAt     DateTime?    @db.Timestamptz(3)
+  sentAt         DateTime?    @db.Timestamptz(3)
+  deliveredAt    DateTime?    @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  order          DigitalOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([status, availableAt], map: "digital_notifications_status_availableat_idx")
+  @@map("digital_notifications")
+}
+
+model DigitalRefund {
+  id                String       @id @default(uuid()) @db.Uuid
+  orderId           String       @db.Uuid
+  actorId           String?      @db.Uuid
+  provider          String       @db.VarChar(10)
+  paymentReference  String       @db.VarChar(255)
+  idempotencyKey    String       @unique @db.VarChar(180)
+  providerReference String?      @unique @db.VarChar(255)
+  amountCents       Int
+  currency          String       @default("EUR") @db.VarChar(3)
+  targets           Json
+  purpose           String       @db.VarChar(20)
+  status            String       @default("REQUESTED") @db.VarChar(24)
+  allocationStatus  String       @default("MATCHED") @db.VarChar(20)
+  leaseUntil        DateTime?    @db.Timestamptz(3)
+  confirmedAt       DateTime?    @db.Timestamptz(3)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  order             DigitalOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([orderId, status], map: "digital_refunds_orderid_status_idx")
+  @@map("digital_refunds")
+}
+
+model DigitalDispute {
+  id                String       @id @default(uuid()) @db.Uuid
+  orderId           String       @db.Uuid
+  provider          String       @db.VarChar(10)
+  providerReference String       @unique @db.VarChar(255)
+  paymentReference  String       @db.VarChar(255)
+  amountCents       Int
+  currency          String       @default("EUR") @db.VarChar(3)
+  status            String       @db.VarChar(24)
+  evidenceHash      String       @db.Char(64)
+  updatedAt         DateTime     @updatedAt @db.Timestamptz(3)
+  order             DigitalOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([orderId, status], map: "digital_disputes_orderid_status_idx")
+  @@map("digital_disputes")
+}
+
+model DigitalInbox {
+  id          String        @id @default(uuid()) @db.Uuid
+  orderId     String?       @db.Uuid
+  provider    String        @db.VarChar(10)
+  eventId     String        @db.VarChar(180)
+  eventType   String        @db.VarChar(100)
+  payload     Json
+  bodyHash    String        @db.Char(64)
+  status      String        @default("PENDING") @db.VarChar(24)
+  attempts    Int           @default(0)
+  availableAt DateTime      @default(now()) @db.Timestamptz(3)
+  leaseUntil  DateTime?     @db.Timestamptz(3)
+  leaseToken  String?       @db.Uuid
+  errorCode   String?       @db.VarChar(80)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  order       DigitalOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([provider, eventId])
+  @@index([status, availableAt], map: "digital_inbox_status_availableat_idx")
+  @@map("digital_inbox")
+}
+
+model DigitalWorkSlot {
+  id         String    @id @db.VarChar(20)
+  jobId      String?   @db.Uuid
+  leaseToken String?   @db.Uuid
+  leaseUntil DateTime? @db.Timestamptz(3)
+
+  @@map("digital_work_slots")
+}
+
+model DigitalArchive {
+  id              String           @id @default(uuid()) @db.Uuid
+  lineId          String           @unique @db.Uuid
+  snapshotHash    String           @db.Char(64)
+  status          String           @default("PENDING") @db.VarChar(20)
+  storageKey      String?          @db.VarChar(500)
+  storageBackend  String?          @db.VarChar(12)
+  storageProvider String?          @db.VarChar(20)
+  sizeBytes       BigInt?
+  checksum        String?          @db.Char(64)
+  leaseToken      String?          @db.Uuid
+  leaseUntil      DateTime?        @db.Timestamptz(3)
+  attempts        Int              @default(0)
+  errorCode       String?          @db.VarChar(80)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  line            DigitalOrderLine @relation(fields: [lineId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([status, leaseUntil], map: "digital_archives_status_leaseuntil_idx")
+  @@map("digital_archives")
 }
 
 enum UserRole {

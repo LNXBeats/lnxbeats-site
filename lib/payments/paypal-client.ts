@@ -109,6 +109,8 @@ export type PaypalWebhookHeaders = Readonly<{
 export interface PaypalGateway {
   /** Read-only support reconciliation; existing payment paths are unchanged. */
   inspectOrder?(providerOrderId: string): Promise<unknown>;
+  inspectCapture?(captureId: string): Promise<unknown>;
+  inspectDispute?(disputeId: string): Promise<unknown>;
   createOrder(request: PaypalCreateOrderRequest, idempotencyKey: string): Promise<PaypalOrderSession>;
   retrieveOrder(providerOrderId: string): Promise<PaypalOrderSession>;
   captureOrder(providerOrderId: string, idempotencyKey: string): Promise<PaypalCaptureResponseEvidence>;
@@ -519,6 +521,12 @@ function createPaypalGatewayWithConfiguration(
         },
         idempotencyKey,
       ), configuration.environment);
+    },
+    async inspectCapture(captureId) {
+      return api(`/v2/payments/captures/${encodeURIComponent(captureId)}`, { method: "GET" });
+    },
+    async inspectDispute(disputeId) {
+      return api(`/v1/customer/disputes/${encodeURIComponent(disputeId)}`, { method: "GET" });
     },
     async retrieveRefund(providerRefundId) {
       return paypalRefundEvidence(await api(

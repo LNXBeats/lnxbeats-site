@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "incremental": false, "plugins": [], "noEmit": true },
-  "include": ["scripts/digital-media-worker.ts", "scripts/digital-reconcile.ts"],
+  "include": ["scripts/digital-media-worker.ts", "scripts/digital-worker-once.ts", "scripts/digital-reconcile.ts"],
   "exclude": ["node_modules", ".next"]
 }

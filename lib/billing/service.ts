@@ -26,7 +26,7 @@ export class BillingServiceError extends Error {
   }
 }
 
-const sellerSnapshot = Object.freeze({
+export const sellerSnapshot = Object.freeze({
   legalName: "Ludovic Mickaël Mathon",
   legalForm: "Entrepreneur individuel",
   tradeName: "LNX Beats",

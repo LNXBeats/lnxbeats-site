@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import Stripe from "stripe";
-import { digitalAvailableProviders, digitalStripeParameters, stripeDigitalEvidence, verifiedDigitalStripeEvent } from "@/lib/digital/providers";
+import { digitalAvailableProviders, digitalStripeParameters, stripeDigitalEvidence, verifiedDigitalStripeEvent, verifyDigitalPaypalEvent } from "@/lib/digital/providers";
 import { digitalEnabled } from "@/lib/digital/domain";
 
 test("public DCN flag fails closed for missing mode or production context", () => {
@@ -10,6 +10,15 @@ test("public DCN flag fails closed for missing mode or production context", () =
   assert.equal(digitalEnabled({ DCN_ENABLED: "true", DCN_MODE: "LIVE" }), false);
   assert.equal(digitalEnabled({ DCN_ENABLED: "true", DCN_MODE: "TEST", PAYMENT_DEPLOYMENT_ENV: "production" }), false);
   assert.equal(digitalEnabled({ DCN_ENABLED: "true", DCN_MODE: "TEST" }), true);
+});
+test("valid TEST signatures/credentials alone never authorize remote webhook verification",async()=>{
+  const names=["DCN_ENABLED","DCN_MODE","DCN_STRIPE_SECRET_KEY","DCN_STRIPE_ACCOUNT_ID","DCN_STRIPE_WEBHOOK_SECRET","DCN_EXTERNAL_TEST_AUTHORIZED"];
+  const old=new Map(names.map(k=>[k,process.env[k]]));const secret="whsec_LOCAL_DUMMY_ONLY";
+  try{Object.assign(process.env,{DCN_ENABLED:"true",DCN_MODE:"TEST",DCN_STRIPE_SECRET_KEY:"sk_test_LOCAL_DUMMY_ONLY",DCN_STRIPE_ACCOUNT_ID:"acct_localDummy",DCN_STRIPE_WEBHOOK_SECRET:secret,DCN_EXTERNAL_TEST_AUTHORIZED:"false"});
+    const payload=JSON.stringify({id:"evt_local",object:"event",type:"checkout.session.completed",livemode:false,data:{object:{}}}),client=new Stripe("sk_test_LOCAL_DUMMY_ONLY");
+    await assert.rejects(verifiedDigitalStripeEvent(payload,client.webhooks.generateTestHeaderString({payload,secret})),{code:"EXTERNAL_QA_AUTHORIZATION_REQUIRED"});
+    assert.throws(()=>verifyDigitalPaypalEvent("{}",{transmissionId:"qa",transmissionTime:"qa",certUrl:"https://api.sandbox.paypal.com/qa",authAlgo:"SHA256withRSA",transmissionSignature:"qa"}),{code:"EXTERNAL_QA_AUTHORIZATION_REQUIRED"});
+  }finally{for(const[key,value]of old){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });
 
 test("available sandboxes require their own merchant and signature configuration; no LIVE fallback", () => {

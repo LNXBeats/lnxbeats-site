@@ -14,3 +14,5 @@ output/pdf/*.pdf
 .private/
 .local-media/
 output/google-review/
+output/dcn-1-1/
+output/pdf/dcn-qa-*

@@ -4,11 +4,19 @@ import { assertSqlIdentifier,quoteSqlIdentifier } from "@/lib/database/creations
 export const DIGITAL_RUNTIME_GROUP="lnx_digital_runtime";
 export const DIGITAL_UPDATE_COLUMNS={
   digital_offers:["priceCents","active","rightsConfirmed","distribution","version","updatedAt"],
-  digital_masters:[],digital_uploads:["providerUploadId","status","errorCode","leaseUntil","updatedAt"],
+  digital_masters:[],digital_uploads:["providerUploadId","status","errorCode","leaseUntil","leaseToken","cleanupAt","updatedAt"],
   digital_carts:["revision","updatedAt"],digital_cart_lines:["offerVersion","priceCents","selectionHash","removed"],
   digital_orders:["status","updatedAt"],digital_order_lines:[],
   digital_payment_attempts:["operation","status","providerReference","paymentReference","checkoutUrl","leaseUntil","updatedAt"],
   digital_entitlements:["status"],digital_events:[],digital_download_tickets:["usesLeft"],
+  digital_documents:["status","pdf","pdfHash","attempts","availableAt","leaseUntil","leaseToken","errorCode"],
+  digital_fulfillments:["confirmationStatus","confirmationAt","confirmationEvidence","accessReadyAt"],
+  digital_notifications:["status","attempts","availableAt","firstAttemptAt","leaseToken","leaseUntil","transportId","capturedAt","sentAt","deliveredAt"],
+  digital_refunds:["providerReference","status","allocationStatus","leaseUntil","confirmedAt"],
+  digital_disputes:["status","evidenceHash","updatedAt"],
+  digital_inbox:["orderId","status","attempts","availableAt","leaseUntil","leaseToken","errorCode"],
+  digital_work_slots:["jobId","leaseToken","leaseUntil"],
+  digital_archives:["status","storageKey","storageBackend","storageProvider","sizeBytes","checksum","leaseToken","leaseUntil","attempts","errorCode"],
 } as const;
 export const DIGITAL_RUNTIME_TABLES=Object.keys(DIGITAL_UPDATE_COLUMNS) as Array<keyof typeof DIGITAL_UPDATE_COLUMNS>;
 export async function provisionDigitalRuntime(client:Client,role:string){assertSqlIdentifier(role,"Runtime role");
@@ -27,6 +35,7 @@ export async function provisionDigitalRuntime(client:Client,role:string){assertS
       if(allowed.length)await client.query(`GRANT UPDATE (${allowed.map(c=>`"${c}"`).join(",")}) ON ${relation} TO ${group}`);
     }
     await client.query(`GRANT USAGE ON SCHEMA public TO ${quoteSqlIdentifier(DIGITAL_RUNTIME_GROUP)}`);
+    await client.query(`GRANT USAGE ON SEQUENCE public.digital_test_invoice_sequence,public.digital_test_credit_note_sequence TO ${quoteSqlIdentifier(DIGITAL_RUNTIME_GROUP)}`);
     await client.query(`GRANT ${quoteSqlIdentifier(DIGITAL_RUNTIME_GROUP)} TO ${quoteSqlIdentifier(role)} WITH ADMIN FALSE, INHERIT TRUE, SET FALSE`);
     for(const table of DIGITAL_RUNTIME_TABLES){const p=await client.query<{bad:boolean}>("SELECT has_table_privilege($1,$2,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_table_privilege($1,$2,'INSERT WITH GRANT OPTION') AS bad",[role,`public.${table}`]);assert.equal(p.rows[0].bad,false);}
     await client.query("COMMIT");return{tables:DIGITAL_RUNTIME_TABLES,appendOnlyEvents:true};

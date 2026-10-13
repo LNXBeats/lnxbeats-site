@@ -55,7 +55,13 @@ export function createDigitalStripeGateway(): DigitalGateway {
         if (found.length > 1) throw new DigitalError("AMBIGUOUS_PAYMENT", 409); s = found[0]; }
       if (!s) return null;
       if (s.metadata?.digitalAttemptId !== attempt.id) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
-      return { ...(s.url ? { checkout: { id: s.id, url: checkoutProviderUrl(s.url, "STRIPE") } } : {}), evidence: stripeDigitalEvidence(s, `stripe-recover:${s.id}:${s.status}:${s.payment_status}`, merchantId) };
+      const evidence = stripeDigitalEvidence(s, `stripe-recover:${s.id}:${s.status}:${s.payment_status}`, merchantId);
+      if (s.status === "complete" && s.payment_status !== "paid" && s.payment_intent) {
+        const pi = await client.paymentIntents.retrieve(typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent.id);
+        if (pi.livemode || pi.metadata.digitalAttemptId !== attempt.id || pi.metadata.digitalOrderId !== order.id || pi.currency !== "eur" || pi.amount !== order.totalCents) throw new DigitalError("PAYMENT_REQUIRES_REVIEW");
+        if (["canceled", "requires_payment_method"].includes(pi.status)) { evidence.status = "FAILED"; evidence.eventId += `:${pi.status}`; }
+      }
+      return { ...(s.url ? { checkout: { id: s.id, url: checkoutProviderUrl(s.url, "STRIPE") } } : {}), evidence };
     },
   };
 }
@@ -65,6 +71,9 @@ function paypal() {
   if (process.env.DCN_PAYPAL_ENVIRONMENT !== "sandbox" || !clientId || !clientSecret || !webhookId || !merchantId) throw new DigitalError("PAYPAL_SANDBOX_NOT_CONFIGURED", 503);
   return { merchantId, client: createScopedPaypalGateway({ provider: "paypal", enabled: true, configured: true, environment: "sandbox", clientId, clientSecret, webhookId }, fetch, true) };
 }
+// Scoped server-only clients; credentials remain inside the existing factories.
+export const digitalStripeClient = stripe;
+export const digitalPaypalClient = paypal;
 function paypalEvidence(body: unknown, order: DigitalProviderOrder, attempt: DigitalAttemptRef, merchantId: string): DigitalPaymentEvidence {
   const b = body as { id?: string; status?: string; purchase_units?: Array<{ reference_id?: string; custom_id?: string; payee?: { merchant_id?: string }; amount?: { value?: string; currency_code?: string } }> };
   const unit = b.purchase_units?.[0];
@@ -105,7 +114,11 @@ export async function verifiedDigitalStripeEvent(raw: string, signature: string)
   if (!secret.startsWith("whsec_")) throw new DigitalError("WEBHOOK_NOT_CONFIGURED", 503);
   let event:Stripe.Event;try{event=client.webhooks.constructEvent(raw, signature, secret);}catch{throw new DigitalError("INVALID_WEBHOOK",400);}
   if (event.livemode || event.account) throw new DigitalError("INVALID_WEBHOOK", 400);
+  if(process.env.DCN_EXTERNAL_TEST_AUTHORIZED!=="true")throw new DigitalError("EXTERNAL_QA_AUTHORIZATION_REQUIRED",503);
   if ((await client.accounts.retrieve(null)).id !== merchantId) throw new DigitalError("MERCHANT_MISMATCH", 503);
   return { event, merchantId };
 }
-export function verifyDigitalPaypalEvent(raw: string, headers: PaypalWebhookHeaders) { return paypal().client.verifyWebhook(headers, raw); }
+export function verifyDigitalPaypalEvent(raw: string, headers: PaypalWebhookHeaders) {
+  if(process.env.DCN_EXTERNAL_TEST_AUTHORIZED!=="true")throw new DigitalError("EXTERNAL_QA_AUTHORIZATION_REQUIRED",503);
+  return paypal().client.verifyWebhook(headers, raw);
+}

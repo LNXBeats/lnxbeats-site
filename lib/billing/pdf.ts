@@ -115,7 +115,7 @@ function frenchDate(value: Date) {
   return new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "long" }).format(value);
 }
 
-async function render(title: string, number: string, issuedAt: Date, hash: string, mode: BillingDocumentRenderMode, body: (document: PDFKit.PDFDocument) => void) {
+async function render(title: string, number: string, issuedAt: Date, hash: string, mode: BillingDocumentRenderMode, body: (document: PDFKit.PDFDocument) => void,digital=false) {
   const document = new PDFDocument({
     size: "A4",
     bufferPages: true,
@@ -171,7 +171,7 @@ async function render(title: string, number: string, issuedAt: Date, hash: strin
     document.page.margins.bottom = 0;
     document.save();
     document.fillColor(gray).font("Helvetica").fontSize(7.5).text(
-      `Document généré à partir d’un snapshot immuable. Conservation comptable : 10 ans. · Page ${index + 1} / ${range.count}`,
+      `${digital?"Snapshot numérique TEST immuable. Fiscalité et conservation réelles à valider.":"Document généré à partir d’un snapshot immuable. Conservation comptable : 10 ans."} · Page ${index + 1} / ${range.count}`,
       margin,
       billingPdfLayout.footerY,
       { width: PAGE.width - margin * 2, align: "center", lineBreak: false },
@@ -188,7 +188,7 @@ function party(document: PDFKit.PDFDocument, title: string, lines: readonly stri
   document.fillColor(dark).font("Helvetica").fontSize(8.5).text(lines.join("\n"), x, y, { width: 230, lineGap: 2 });
 }
 
-export async function generateInvoicePdf(record: InvoicePdfRecord, mode: BillingDocumentRenderMode = "TEST") {
+export async function generateInvoicePdf(record: InvoicePdfRecord, mode: BillingDocumentRenderMode = "TEST",options:{digital?:boolean}={}) {
   const seller = parseBillingSellerSnapshot(record.sellerSnapshot);
   const customer = parseCustomer(record.customerSnapshot);
   const lines = parseLines(record.lineItemsSnapshot);
@@ -199,6 +199,7 @@ export async function generateInvoicePdf(record: InvoicePdfRecord, mode: Billing
     const customerLines = [customer.companyName || customer.name, ...(customer.companyName ? [customer.name] : []), ...(customer.billingAddress ? billingAddressLines(customer.billingAddress) : []), customer.email, ...(customer.businessIdentifier ? [`SIREN/SIRET ${customer.businessIdentifier}`] : []), ...(customer.vatId ? [`TVA ${customer.vatId}`] : [])].filter(Boolean);
     party(document, "Client", customerLines, 318);
     document.y = Math.max(document.y, partyY + 105);
+    if(options.digital)document.x=margin;
     document.moveDown(.8);
     document.fillColor(dark).font("Helvetica-Bold").fontSize(10).text(`Commande ${record.orderNumberSnapshot}`);
     document.moveDown(.6);
@@ -219,13 +220,14 @@ export async function generateInvoicePdf(record: InvoicePdfRecord, mode: Billing
     if (record.shippingCents) document.text(`Livraison : ${formatBillingMoney(record.shippingCents)}`, { align: "right" });
     document.font("Helvetica-Bold").fontSize(14).text(`TOTAL : ${formatBillingMoney(record.totalCents)}`, { align: "right" });
     document.moveDown(1);
+    if(options.digital)document.x=margin;
     document.fillColor(dark).font("Helvetica-Bold").fontSize(9).text(record.vatLegalNotice);
     document.font("Helvetica").text(`Paiement reçu le ${frenchDate(record.paidAt)} — ${record.paymentMethodLabel}.`);
     if (record.termsVersion) document.text(`Conditions contractuelles : version ${record.termsVersion}.`);
-  });
+  },options.digital);
 }
 
-export async function generateCreditNotePdf(record: CreditNotePdfRecord, mode: BillingDocumentRenderMode = "TEST") {
+export async function generateCreditNotePdf(record: CreditNotePdfRecord, mode: BillingDocumentRenderMode = "TEST",options:{digital?:boolean}={}) {
   const seller = parseBillingSellerSnapshot(record.invoice.sellerSnapshot);
   const customer = parseCustomer(record.invoice.customerSnapshot);
   return render("AVOIR", record.creditNoteNumber, record.issuedAt, record.snapshotHashSha256, mode, (document) => {
@@ -247,6 +249,7 @@ export async function generateCreditNotePdf(record: CreditNotePdfRecord, mode: B
     ].filter(Boolean);
     party(document, "Client", customerLines, 318, billingPdfPalette.creditNoteLabel);
     document.y = Math.max(document.y, partyY + 116);
+    if(options.digital)document.x=margin;
     document.moveDown(.8);
     document.fillColor(billingPdfPalette.creditNoteLabel).font("Helvetica-Bold").fontSize(8).text("RÉFÉRENCES DOCUMENTAIRES");
     document.fillColor(dark).font("Helvetica-Bold").fontSize(9.5).text(`Facture source : ${record.invoice.invoiceNumber}`);
@@ -255,14 +258,15 @@ export async function generateCreditNotePdf(record: CreditNotePdfRecord, mode: B
     document.text(`Commande : ${record.invoice.orderNumberSnapshot}`);
     document.moveDown(.8);
     document.fillColor(billingPdfPalette.creditNoteLabel).font("Helvetica-Bold").fontSize(8).text("MOTIF DE L’AVOIR");
-    document.fillColor(dark).font("Helvetica-Bold").fontSize(9.5).text(`Nature : ${creditNoteReasonLabel(record.reasonCode)}`);
+    document.fillColor(dark).font("Helvetica-Bold").fontSize(9.5).text(`Nature : ${options.digital?"Ajustement d’un achat numérique confirmé":creditNoteReasonLabel(record.reasonCode)}`);
     if (record.reasonText) document.font("Helvetica").text(`Précision : ${record.reasonText}`);
     document.moveDown(1.2);
     document.font("Helvetica-Bold").fontSize(18).text(`Montant de l’avoir : ${formatBillingMoney(record.amountCents)}`, { align: "right" });
     document.font("Helvetica").fontSize(9.5).text(`Total cumulé des avoirs : ${formatBillingMoney(record.cumulativeCreditedCents)}`, { align: "right" });
     document.text(`Solde documentaire restant : ${formatBillingMoney(record.remainingBalanceCents)}`, { align: "right" });
     document.moveDown(1);
+    if(options.digital)document.x=margin;
     document.font("Helvetica").fontSize(9).text(record.invoice.vatLegalNotice);
     document.text("Cet avoir corrige la facture d’origine sans la modifier ni la supprimer.");
-  });
+  },options.digital);
 }
