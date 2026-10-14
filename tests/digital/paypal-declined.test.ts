@@ -11,6 +11,8 @@ import type { DigitalGateway } from "@/lib/digital/providers";
 const orderId = "2c07c4dd-2e1e-4a70-a7ad-33444fd9c057";
 const attemptId = "c38fceda-e088-485c-b69e-307b2f166676";
 const merchant = "FYB627RNF647L", captureId = "CAPTURE-QA", providerOrderId = "ORDER-QA";
+const userId="757bfdf1-4933-4440-9442-4d580c34f48e",trackId="dce1f52f-c4f4-44ec-88b8-c0f250a46fb8",masterId="097d976a-0337-4f71-9f4f-225e372abdc8";
+const wavAssetId="7ce9d4d7-48b1-449a-96ea-ed81c6b90d55",mp3AssetId="18b28d84-760d-4d09-93bf-13e0e78cf7c9";
 const order = { id: orderId, totalCents: 990 }, attempt = { id: attemptId, providerReference: providerOrderId };
 function response(status = "DECLINED") {
   return { id: providerOrderId, status: "APPROVED", purchase_units: [{ reference_id: orderId, custom_id: attemptId,
@@ -64,18 +66,25 @@ type Event = { orderId: string; externalKey?: string; kind: string; details: Rec
 type Inbox = { id: string; provider: string; eventId: string; eventType: string; orderId: string; bodyHash: string; payload: Record<string, unknown>;
   status: string; attempts: number; availableAt: Date; leaseToken: string | null; leaseUntil: Date | null; errorCode: string | null };
 function state(orderStatus = "PENDING", attemptStatus = "OPEN") {
-  const payment = { ...attempt, orderId, provider: "PAYPAL", status: attemptStatus, operation: "CAPTURE", paymentReference: null as string | null, leaseUntil: null as Date | null };
-  return { order: { ...order, userId: "757bfdf1-4933-4440-9442-4d580c34f48e", mode: "TEST", status: orderStatus, user: { email: "qa@example.invalid" }, lines: [], attempts: [payment] },
+  const payment = { ...attempt, orderId, provider: "PAYPAL", status: attemptStatus, operation: attemptStatus==="OPEN"?"CHECKOUT":"CAPTURE", paymentReference: null as string | null, leaseUntil: null as Date | null };
+  const track={trackId,masterId,title:"Offline QA track",position:1,formats:["WAV","MP3"],wavAssetId,mp3AssetId};
+  return { order: { ...order, userId, mode: "TEST", status: orderStatus, user: { id:userId,email: "qa@example.invalid",status:"ACTIVE",emailVerified:true },
+    lines:[{id:"c71aeb27-836d-43f9-a748-a61f6a45b498",title:"Offline QA purchase",scope:"TRACK",priceCents:990,trackSnapshot:[track],completionSnapshot:null}],attempts: [payment] },
     payment, events: [] as Event[], inbox: [] as Inbox[], documents: 0, entitlementWrites: 0, notifications: 0, recoveries: 0 };
 }
 let current = state();
 const fake = {
+  user:{async findFirst(){return current.order.user.status==="ACTIVE"&&current.order.user.emailVerified?{id:current.order.userId}:null;}},
+  digitalMaster:{async findMany(){return[{id:masterId,trackId,status:"READY",masterAssetId:wavAssetId,mp3AssetId,
+    masterAsset:{id:wavAssetId,visibility:"PRIVATE",rightsStatus:"CLEARED",mimeType:"audio/wav",checksumSha256:"a".repeat(64)},
+    mp3Asset:{id:mp3AssetId,visibility:"PRIVATE",rightsStatus:"CLEARED",mimeType:"audio/mpeg",checksumSha256:"b".repeat(64)},
+    track:{status:"RELEASED",project:{status:"PUBLISHED",publicVisible:true}}}];}},
   digitalOrder: { async findUnique() { return current.order; }, async findFirst() { return current.order; }, async findUniqueOrThrow() { return current.order; }, async update({ data }: { data: Record<string, unknown> }) { Object.assign(current.order, data); return current.order; } },
   digitalPaymentAttempt: {
     async findUnique() { return current.payment; }, async findFirst() { return current.payment; },
     async update({ data }: { data: Record<string, unknown> }) { Object.assign(current.payment, data); return current.payment; },
     async updateMany({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) {
-      if (where.status !== current.payment.status) return { count: 0 };
+      if (where.status !== current.payment.status||typeof where.operation==="string"&&where.operation!==current.payment.operation) return { count: 0 };
       Object.assign(current.payment, data); return { count: 1 };
     },
   },
@@ -226,4 +235,22 @@ test("late paid after a failed order stays review and cannot resurrect downloads
     assert.deepEqual(await reconcileDigitalEvidence(paid, merchant), { review: true });
     assert.equal(current.order.status, "REQUIRES_REVIEW"); assert.equal(current.payment.status, "FAILED"); noFulfillment();
   }, initial);
+});
+test("account verification lost before capture refuses the financial double before any provider call",async()=>{
+  for(const failure of ["inactive","unverified"]){const initial=state();if(failure==="inactive")initial.order.user.status="SUSPENDED";else initial.order.user.emailVerified=false;
+    await local(async()=>{const {captureDigitalPaypal}=await import("@/lib/digital/commerce");let captureCalls=0;
+      const supplied:DigitalGateway={...gateway(),async capture(){captureCalls++;return digitalPaypalOrderEvidence(response("COMPLETED"),order,attempt,merchant);}};
+      await assert.rejects(()=>captureDigitalPaypal(userId,orderId,supplied),{code:"VERIFIED_ACCOUNT_REQUIRED"});
+      assert.equal(captureCalls,0);assert.equal(current.payment.status,"OPEN");assert.equal(current.order.status,"PENDING");noFulfillment();
+    },initial);
+  }
+});
+test("fresh paid evidence after account verification loss remains durably PAID but order reviews without rights/documents",async()=>{
+  const initial=state();initial.order.user.emailVerified=false;
+  await local(async()=>{const {reconcileDigitalEvidence}=await import("@/lib/digital/commerce");
+    const paid=digitalPaypalOrderEvidence(response("COMPLETED"),order,attempt,merchant);assert.deepEqual(await reconcileDigitalEvidence(paid,merchant),{review:true});
+    assert.equal(current.payment.status,"PAID");assert.equal(current.payment.paymentReference,captureId);assert.equal(current.order.status,"REQUIRES_REVIEW");
+    assert.ok(current.events.some(e=>e.kind==="PROVIDER_EVIDENCE"&&e.details.status==="PAID"));
+    assert.ok(current.events.some(e=>e.kind==="ACCOUNT_FULFILLMENT_REQUIRES_REVIEW"));noFulfillment();
+  },initial);
 });

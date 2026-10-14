@@ -46,6 +46,8 @@
 .offerActions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:.75rem; min-width:0; }
 .albumOffer .offerActions { justify-content:flex-start; }
 .price { color:#f1d385; white-space:nowrap; font-size:1.15rem; }
+.completionSummary { display:grid; gap:.45rem; padding:.8rem 0; color:#d9cfba; font-size:.9rem; line-height:1.5; }
+.completionSummary strong { color:#f1d385; font-size:1.1rem; }
 .ownedLink { display:inline-flex; align-items:center; min-height:44px; max-width:230px; padding:.5rem .7rem; line-height:1.4; color:#f1d385; border:1px solid #d6b06166; border-radius:8px; }
 .albumDetails { display:block; }
 .albumEditorial { margin-top:2rem; padding-top:1.5rem; border-top:1px solid #ffffff1a; max-width:70ch; }
@@ -94,6 +96,7 @@
 .libraryFileTitle { grid-area:title; min-width:0; }
 .libraryFileTitle strong { font-size:.98rem; overflow-wrap:anywhere; }
 .libraryFiles .downloadAction { grid-area:action; }
+.libraryFiles>li>.actions { grid-area:action; justify-content:flex-end; max-width:320px; }
 .libraryFileTitle p { font-size:.8rem; margin:.25rem 0; }
 .versionDetail { font-size:.78rem; color:#b9b3a7; line-height:1.5; }
 .documentPanel { margin-top:1.2rem; border:1px solid #ffffff22; border-radius:12px; background:#101315; }

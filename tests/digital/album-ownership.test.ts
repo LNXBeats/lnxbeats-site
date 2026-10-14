@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import {randomUUID} from "node:crypto";
+import {test} from "node:test";
+import {digitalOwnsExactAlbum} from "@/lib/digital/album-ownership-policy";
+import {completeDigitalAlbum} from "@/lib/digital/completion-policy";
+import type {DigitalSelection} from "@/lib/digital/domain";
+const album:DigitalSelection={id:randomUUID(),scope:"ALBUM",title:"Album QA",priceCents:990,version:1,tracks:Array.from({length:12},(_,i)=>({trackId:randomUUID(),masterId:randomUUID(),title:`QA ${i+1}`,position:i+1}))};
+const acquired=()=>({offerId:album.id,scope:"ALBUM",trackSnapshot:album.tracks,order:{status:"PAID"},entitlements:album.tracks.map(t=>({masterId:t.masterId,status:"ACTIVE"}))});
+test("album ownership requires an actual album acquisition, not twelve separately acquired singles",()=>{const singles=album.tracks.map(t=>({offerId:randomUUID(),scope:"TRACK",trackSnapshot:[t],order:{status:"PAID"},entitlements:[{masterId:t.masterId,status:"ACTIVE"}]}));
+  assert.equal(digitalOwnsExactAlbum(album,singles),false);const sources=album.tracks.map(t=>({trackId:t.trackId,masterId:t.masterId,sourceLineId:randomUUID(),paidCents:15,refundedCents:0,availableCents:15,creditCents:15,proofHash:"a".repeat(64)}));
+  assert.equal(completeDigitalAlbum(album,new Set(album.tracks.map(t=>t.trackId)),sources).priceCents,810);});
+test("album ownership recognizes the exact paid edition with every right active, including retained price-reduction rights",()=>{for(const status of ["PAID","PARTIALLY_REFUNDED","REFUNDED"]){const line=acquired();line.order.status=status;assert.equal(digitalOwnsExactAlbum(album,[line]),true);}});
+test("different album, master replacement, missing/revoked rights and disputed purchase do not prove this album owned",()=>{for(const variant of ["offer","master","missing","revoked","disputed"]){const line=acquired();
+  if(variant==="offer")line.offerId=randomUUID();if(variant==="master")line.trackSnapshot=[{...album.tracks[0],masterId:randomUUID()},...album.tracks.slice(1)];
+  if(variant==="missing")line.entitlements.pop();if(variant==="revoked")line.entitlements[0].status="REVOKED";if(variant==="disputed")line.order.status="DISPUTED";
+  assert.equal(digitalOwnsExactAlbum(album,[line]),false);}});

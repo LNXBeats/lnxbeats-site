@@ -6,7 +6,8 @@ import { billingSnapshotHash } from "@/lib/billing/domain";
 import { DigitalError, assertDigitalUuid, requireDigitalEnvironment } from "./domain";
 import { enqueueDigitalEmail, prepareDigitalCreditNote } from "./documents";
 import { digitalFinanceGateway } from "./finance-providers";
-import { refundTargets, type DigitalRefundTarget, type DigitalRefundEvidence, type DigitalDisputeEvidence, type DigitalFinanceGateway } from "./finance-policy";
+import { DIGITAL_PERSISTENT_FINANCIAL_INCIDENTS,refundTargets, type DigitalRefundTarget, type DigitalRefundEvidence, type DigitalDisputeEvidence, type DigitalFinanceGateway } from "./finance-policy";
+import { assertNoCreditedSourceRefund,reviewDependentDigitalCompletions } from "./completion";
 type Tx = Prisma.TransactionClient;
 const reservedStatuses = ["REQUESTED", "PENDING", "REQUIRES_REVIEW", "SUCCEEDED"];
 async function lock(tx: Tx, userId: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${userId}`})) IS NULL AS locked`; }
@@ -14,7 +15,7 @@ async function admin(tx: Tx, actor: OrderActor) { const u = await tx.user.findFi
 async function parent(id: string) { assertDigitalUuid(id); return prisma.digitalOrder.findUniqueOrThrow({ where: { id }, select: { userId: true } }); }
 async function orderState(tx: Tx, orderId: string) {
   const o = await tx.digitalOrder.findUniqueOrThrow({ where: { id: orderId }, include: { lines: { include: { entitlements: true } }, refunds: true, disputes: true, attempts: { where: { status: "PAID" } } } });
-  const financialIncident = !!await tx.digitalEvent.findFirst({ where: { orderId, kind: { in: ["PAYMENT_CONTRADICTION", "UNMATCHED_CAPTURE_INCIDENT", "OVERLAPPING_ACQUISITION_INCIDENT", "REFUND_CONTRADICTION"] } } });
+  const financialIncident = !!await tx.digitalEvent.findFirst({ where: { orderId, kind: { in: [...DIGITAL_PERSISTENT_FINANCIAL_INCIDENTS] } } });
   const suspended = financialIncident || o.disputes.some(d => ["OPEN", "REQUIRES_REVIEW"].includes(d.status))
     || o.refunds.some(r => r.status === "SUCCEEDED" && r.allocationStatus === "REVIEW");
   const lost = o.disputes.some(d => d.status === "LOST");
@@ -38,6 +39,8 @@ export async function requestDigitalRefund(actor: OrderActor, id: string, input:
     if (previous) { if (previous.orderId !== id || previous.amountCents !== amountCents || previous.purpose !== input.purpose || billingSnapshotHash(previous.targets) !== billingSnapshotHash(targets)) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409); return previous; }
     const o = await tx.digitalOrder.findUniqueOrThrow({ where: { id }, include: { lines: true, attempts: { where: { status: "PAID" } }, refunds: true, disputes: true } });
     if (!o || !["PAID", "PARTIALLY_REFUNDED"].includes(o.status) || o.attempts.length !== 1 || !o.attempts[0].paymentReference || o.disputes.some(d => d.status !== "WON")) throw new DigitalError("REFUND_REQUIRES_REVIEW", 409);
+    // A refund of an already-credited single needs a commercial/legal decision, never an automatic cross-refund.
+    await assertNoCreditedSourceRefund(tx,targets.map(t=>t.lineId));
     const reserved = o.refunds.filter(r => reservedStatuses.includes(r.status));
     if (reserved.reduce((s, r) => s + r.amountCents, 0) + amountCents > o.totalCents) throw new DigitalError("REFUND_AMOUNT_EXCEEDED", 409);
     if (reserved.some(r => r.allocationStatus === "REVIEW")) throw new DigitalError("REFUND_REQUIRES_REVIEW", 409);
@@ -96,7 +99,9 @@ export async function recordDigitalRefundEvidence(e: DigitalRefundEvidence, merc
       await orderState(tx, o.id); return { review: true };
     }
     await tx.digitalRefund.update({ where: { id: r.id }, data: { providerReference: e.reference, status: e.status, leaseUntil: null, confirmedAt: e.status === "SUCCEEDED" ? new Date() : null } });
-    if (e.status === "SUCCEEDED") { await prepareDigitalCreditNote(tx, r.id); await orderState(tx, o.id); }
+    if(e.status==="PENDING")await reviewDependentDigitalCompletions(tx,o.id,`refund:${e.reference}`);
+    if (e.status === "SUCCEEDED") { await prepareDigitalCreditNote(tx, r.id); await orderState(tx, o.id);
+      await reviewDependentDigitalCompletions(tx,o.id,`refund:${e.reference}`); }
     return { status: e.status };
   });
 }
@@ -133,6 +138,7 @@ export async function recordDigitalDisputeEvidence(e: DigitalDisputeEvidence, me
       paymentReference: e.paymentReference, amountCents: e.amountCents, status: e.status, evidenceHash: hash }, update: { status: terminalChanged ? "REQUIRES_REVIEW" : e.status, evidenceHash: hash } });
     await tx.digitalEvent.create({ data: { orderId: o.id, kind: "DISPUTE_PROVIDER_EVIDENCE", details: { ...e, terminalChanged: !!terminalChanged } } });
     await orderState(tx, o.id);
+    if(e.status!=="WON"||terminalChanged)await reviewDependentDigitalCompletions(tx,o.id,`dispute:${e.reference}:${hash}`);
     await enqueueDigitalEmail(tx, o.id, "INCIDENT", `dispute:${e.reference}:${hash}`);
     return { status: terminalChanged ? "REQUIRES_REVIEW" : e.status };
   });

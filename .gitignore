@@ -17,3 +17,5 @@ output/google-review/
 output/dcn-1-1/
 output/dcn-1-2/
 output/pdf/dcn-qa-*
+# Volatile, SHA-dependent scan metadata is packaged in the offline restitution.
+output/dcn-consolidation/security-scan.json

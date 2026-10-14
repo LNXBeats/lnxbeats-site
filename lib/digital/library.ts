@@ -6,11 +6,12 @@ import { DigitalError, assertDigitalUuid, requireDigitalEnvironment, type Digita
 import { ensureDigitalArchive } from "./archive-worker";
 import { digitalAttachment, digitalByteRange, DIGITAL_DOWNLOAD_TTL_MS } from "./download-policy";
 import { digitalLibraryPagination } from "./presentation";
+import { acquiredAlbumFormats, acquiredDigitalFormats, acquiredDigitalAssetId, type DigitalAudioFormat, type DigitalAcquiredTrack } from "./formats";
 async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
   const line = await prisma.digitalOrderLine.findFirst({
     where: { id, order: { userId, status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] } } },
     include: { order:{include:{fulfillment:true}},entitlements: { where: { userId, status: "ACTIVE" }, include: {
-      master: { include: { masterAsset: true, track: { select: { title: true, position: true } } } },
+      master: { include: { masterAsset: true, mp3Asset: true, track: { select: { title: true, position: true } } } },
     } } },
   });
   if(!line||!line.entitlements.length)throw new DigitalError("NOT_FOUND",404);
@@ -20,26 +21,30 @@ export async function library(userId:string,requestedPage=1){requireDigitalEnvir
   const pagination=digitalLibraryPagination(requestedPage,await prisma.digitalOrder.count({where:{userId}}));
   const rows=await prisma.digitalOrder.findMany({where:{userId},orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(pagination.page-1)*pagination.pageSize,take:pagination.pageSize,select:{id:true,status:true,totalCents:true,mode:true,createdAt:true,contractSnapshot:true,fulfillment:{select:{accessReadyAt:true,confirmationStatus:true}},documents:{select:{id:true,number:true,kind:true,status:true,snapshotHash:true}},lines:{select:{id:true,title:true,scope:true,priceCents:true,trackSnapshot:true,
     offer:{select:{project:{select:{title:true,assets:{where:{role:"COVER",asset:{visibility:"PUBLIC"}},orderBy:[{position:"asc"},{createdAt:"desc"}],take:1,select:{asset:{select:{id:true,alt:true}}}}}}}},
-    archive:{select:{status:true,sizeBytes:true}},
-    entitlements:{select:{id:true,masterId:true,status:true,master:{select:{version:true,masterAsset:{select:{mimeType:true,sizeBytes:true,durationMs:true}},track:{select:{title:true}}}}}}}}}});
+    archives:{select:{format:true,status:true,sizeBytes:true}},
+    entitlements:{select:{id:true,masterId:true,status:true,master:{select:{version:true,masterAsset:{select:{mimeType:true,sizeBytes:true,durationMs:true}},mp3Asset:{select:{mimeType:true,sizeBytes:true,durationMs:true}},track:{select:{title:true}}}}}}}}}});
   return {pagination,orders:rows.map(({contractSnapshot,...o})=>({...o,legacy:!contractSnapshot,accessReady:!contractSnapshot||!!o.fulfillment?.accessReadyAt,createdAt:o.createdAt.toISOString(),lines:o.lines.map(line=>{const snapshot=line.trackSnapshot as unknown as DigitalSelection["tracks"];
-    const {offer,archive,...safeLine}=line,cover=offer.project.assets[0]?.asset;
+    const {offer,archives,...safeLine}=line,cover=offer.project.assets[0]?.asset;
     return{...safeLine,acquiredTrackCount:snapshot.length,coverUrl:cover?`/media/catalog/${cover.id}`:null,coverAlt:cover?.alt??null,
-      archive:archive?{status:archive.status,sizeBytes:archive.sizeBytes!=null&&archive.sizeBytes<=BigInt(Number.MAX_SAFE_INTEGER)?Number(archive.sizeBytes):null}:null,
-      entitlements:line.entitlements.map(e=>({...e,acquiredPosition:snapshot.findIndex(t=>t.masterId===e.masterId)+1,master:{...e.master,
+      formats:acquiredAlbumFormats(snapshot),archives:archives.map(archive=>({format:archive.format,status:archive.status,sizeBytes:archive.sizeBytes!=null&&archive.sizeBytes<=BigInt(Number.MAX_SAFE_INTEGER)?Number(archive.sizeBytes):null})),
+      entitlements:line.entitlements.map(e=>({...e,formats:acquiredDigitalFormats(snapshot.find(t=>t.masterId===e.masterId)??(()=>{throw new DigitalError("ACQUIRED_FORMAT_INTEGRITY",409);})()),acquiredPosition:snapshot.findIndex(t=>t.masterId===e.masterId)+1,master:{...e.master,
         masterAsset:{...e.master.masterAsset,sizeBytes:e.master.masterAsset.sizeBytes<=BigInt(Number.MAX_SAFE_INTEGER)?Number(e.master.masterAsset.sizeBytes):null},
+        mp3Asset:e.master.mp3Asset?{...e.master.mp3Asset,sizeBytes:e.master.mp3Asset.sizeBytes<=BigInt(Number.MAX_SAFE_INTEGER)?Number(e.master.mp3Asset.sizeBytes):null}:null,
         track:{title:snapshot.find(t=>t.masterId===e.masterId)?.title??e.master.track.title}}})).sort((a,b)=>a.acquiredPosition-b.acquiredPosition)};})}))};
 }
 export type DigitalLibraryOrder = Awaited<ReturnType<typeof library>>["orders"][number];
-export async function createDigitalDownload(userId:string,lineId:string,masterId:string|null){requireDigitalEnvironment();
+export async function createDigitalDownload(userId:string,lineId:string,masterId:string|null,format:DigitalAudioFormat="WAV"){requireDigitalEnvironment();
   if(!await prisma.user.findFirst({where:{id:userId,status:"ACTIVE",emailVerified:true}}))throw new DigitalError("NOT_FOUND",404);
   const line=await ownedLine(userId,lineId);
   if(masterId&&!line.entitlements.some(e=>e.masterId===masterId))throw new DigitalError("NOT_FOUND",404);
+  const snapshot=line.trackSnapshot as unknown as DigitalAcquiredTrack[];
+  if(masterId){const track=snapshot.find(t=>t.masterId===masterId),master=line.entitlements.find(e=>e.masterId===masterId)?.master;if(!track||!master)throw new DigitalError("NOT_FOUND",404);acquiredDigitalAssetId(track,format,master);}
+  else if(!acquiredAlbumFormats(snapshot).includes(format))throw new DigitalError("FORMAT_NOT_ACQUIRED",409);
   if(!masterId&&line.scope!=="ALBUM")throw new DigitalError("INVALID_DOWNLOAD");
   if(!masterId&&line.entitlements.length!==(line.trackSnapshot as unknown[]).length)throw new DigitalError("PARTIAL_ACCESS",409);
-  if(!masterId&&(await ensureDigitalArchive(lineId)).status!=="READY")throw new DigitalError("ARCHIVE_PREPARING",409);
+  if(!masterId&&(await ensureDigitalArchive(lineId,format)).status!=="READY")throw new DigitalError("ARCHIVE_PREPARING",409);
   const token=randomBytes(32).toString("hex");
-  const ticket=await prisma.digitalDownloadTicket.create({data:{userId,lineId,masterId,tokenHash:createHash("sha256").update(token).digest("hex"),expiresAt:new Date(Date.now()+DIGITAL_DOWNLOAD_TTL_MS)}});
+  const ticket=await prisma.digitalDownloadTicket.create({data:{userId,lineId,masterId,format,tokenHash:createHash("sha256").update(token).digest("hex"),expiresAt:new Date(Date.now()+DIGITAL_DOWNLOAD_TTL_MS)}});
   return {ticketId:ticket.id,token,url:`/api/digital/download/${ticket.id}`};
 }
 export async function digitalDownloadResponse(userId:string,id:string,token:string,options:{method?:string;range?:string|null;ifRange?:string|null}={}){requireDigitalEnvironment();assertDigitalUuid(id);
@@ -52,14 +57,16 @@ export async function digitalDownloadResponse(userId:string,id:string,token:stri
     if(!line||!line.entitlements.length||!t.masterId&&line.entitlements.length!==(line.trackSnapshot as unknown[]).length)throw new DigitalError("NOT_FOUND",404);
     if(line.order.contractSnapshot&&!line.order.fulfillment?.accessReadyAt)throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);
     if(options.method!=="HEAD")await tx.digitalDownloadTicket.update({where:{id},data:{usesLeft:{decrement:1}}});
-    await tx.digitalEvent.create({data:{orderId:line.orderId,actorId:userId,kind:options.method==="HEAD"?"DOWNLOAD_METADATA_READ":"DOWNLOAD_AUTHORIZED",details:{ticketId:id,scope:t.masterId?"TRACK":"ALBUM"}}});return t;});
+    await tx.digitalEvent.create({data:{orderId:line.orderId,actorId:userId,kind:options.method==="HEAD"?"DOWNLOAD_METADATA_READ":"DOWNLOAD_AUTHORIZED",details:{ticketId:id,format:t.format,scope:t.masterId?"TRACK":"ALBUM"}}});return t;});
   const line=await ownedLine(userId,ticket.lineId);const selected=line.entitlements.filter(e=>!ticket.masterId||e.masterId===ticket.masterId);
   const headers={"Cache-Control":"private, no-store","X-Robots-Tag":"noindex, nofollow","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"};
   let ref:MediaStorageReference,size:number,filename:string,mime:string,checksum:string|null;
-  if(ticket.masterId){const asset=selected[0]?.master.masterAsset;if(!asset||asset.visibility!=="PRIVATE")throw new DigitalError("NOT_FOUND",404);ref=asset;size=Number(asset.sizeBytes);mime=asset.mimeType;checksum=asset.checksumSha256;
-    const snapshot=line.trackSnapshot as unknown as DigitalSelection["tracks"];filename=`${snapshot.find(t=>t.masterId===ticket.masterId)?.title??"piste"}.${asset.filename.split(".").pop()}`;
-  }else{const archive=await prisma.digitalArchive.findUnique({where:{lineId:line.id}});if(!archive||archive.status!=="READY"||!archive.storageKey||!archive.storageBackend||!archive.storageProvider||!archive.sizeBytes)throw new DigitalError("ARCHIVE_PREPARING",409);
-    ref={storageKey:archive.storageKey,storageBackend:archive.storageBackend as "LOCAL"|"OBJECT",storageProvider:archive.storageProvider,visibility:"PRIVATE"};size=Number(archive.sizeBytes);filename=`${line.title}.zip`;mime="application/zip";checksum=archive.checksum;}
+  if(ticket.masterId){const master=selected[0]?.master,track=(line.trackSnapshot as unknown as DigitalAcquiredTrack[]).find(t=>t.masterId===ticket.masterId);if(!master||!track)throw new DigitalError("NOT_FOUND",404);
+    const asset=ticket.format==="MP3"?master.mp3Asset:master.masterAsset,id=acquiredDigitalAssetId(track,ticket.format as DigitalAudioFormat,master);if(!asset||asset.id!==id||asset.visibility!=="PRIVATE")throw new DigitalError("NOT_FOUND",404);ref=asset;size=Number(asset.sizeBytes);mime=asset.mimeType;checksum=asset.checksumSha256;
+    filename=`${track.title??"piste"}.${asset.filename.split(".").pop()}`;
+  }else{if(!acquiredAlbumFormats(line.trackSnapshot as unknown as DigitalAcquiredTrack[]).includes(ticket.format as DigitalAudioFormat))throw new DigitalError("FORMAT_NOT_ACQUIRED",409);
+    const archive=await prisma.digitalArchive.findUnique({where:{lineId_format:{lineId:line.id,format:ticket.format}}});if(!archive||archive.status!=="READY"||!archive.storageKey||!archive.storageBackend||!archive.storageProvider||!archive.sizeBytes)throw new DigitalError("ARCHIVE_PREPARING",409);
+    ref={storageKey:archive.storageKey,storageBackend:archive.storageBackend as "LOCAL"|"OBJECT",storageProvider:archive.storageProvider,visibility:"PRIVATE"};size=Number(archive.sizeBytes);filename=`${line.title} — ${ticket.format}.zip`;mime="application/zip";checksum=archive.checksum;}
   const meta=await headMediaObject(ref);if(meta.contentLength!==size)throw new DigitalError("INTEGRITY",503);
   const etag=checksum?`"${checksum}"`:meta.etag;
   const range=digitalByteRange(options.ifRange&&options.ifRange!==etag?null:options.range??null,size);

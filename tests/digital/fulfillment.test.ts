@@ -3,12 +3,17 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { digitalContractSnapshot, verifyContractSnapshot, digitalEmailTemplate } from "@/lib/digital/fulfillment-policy";
 import { DIGITAL_TERMS_TEXT, DIGITAL_TERMS_VERSION } from "@/lib/digital/domain";
+import { DIGITAL_MUSIC_TERMS_DRAFT_TEXT } from "@/lib/digital/digital-legal";
 import { refundTargets, stripeRefundStatus, stripeDisputeStatus, paypalDisputeStatus } from "@/lib/digital/finance-policy";
 import { digitalByteRange, digitalAttachment } from "@/lib/digital/download-policy";
 import { validateDigitalZip } from "@/lib/digital/zip";
 import { verifiedDigitalStream } from "@/lib/digital/stream-integrity";
 import { digitalLibraryPaymentLabel, digitalLibraryBlockedMessage,digitalConfirmationMessage } from "@/lib/digital/library-policy";
-const hash = createHash("sha256").update(DIGITAL_TERMS_TEXT).digest("hex");
+const hash = createHash("sha256").update(DIGITAL_MUSIC_TERMS_DRAFT_TEXT).digest("hex");
+test("Historical DCN contract remains verifiable without replacing its text",()=>{
+  const s={...digitalContractSnapshot({name:"QA",email:"qa@example.invalid"},new Date()),policy:"DCN-1.1-QA-EXPLICIT-RECEIPT",terms:{version:"DCN-1.0-LOCAL-REVIEW",text:DIGITAL_TERMS_TEXT}};
+  assert.equal(verifyContractSnapshot(s,"DCN-1.0-LOCAL-REVIEW",createHash("sha256").update(DIGITAL_TERMS_TEXT).digest("hex")).snapshot.terms.text,DIGITAL_TERMS_TEXT);
+});
 test("DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval", () => {
   const s = digitalContractSnapshot({ name: "QA", email: "qa@example.invalid" }, new Date("2026-10-13T12:00:00Z"));
   assert.equal(s.licenseStatus, "PROPOSED_NOT_LIVE_APPROVED"); assert.equal(s.fiscalStatus, "LOCAL_REVIEW_ONLY");

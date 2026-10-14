@@ -1,0 +1,1673 @@
+TAP version 13
+# Subtest: Login cannot submit credentials in a native GET before hydration
+ok 1 - Login cannot submit credentials in a native GET before hydration
+  ---
+  duration_ms: 5.995334
+  type: 'test'
+  ...
+# Subtest: sensitive mutations require the exact configured origin
+ok 2 - sensitive mutations require the exact configured origin
+  ---
+  duration_ms: 20.017
+  type: 'test'
+  ...
+# Subtest: safe internal paths preserve path, query and fragment
+ok 3 - safe internal paths preserve path, query and fragment
+  ---
+  duration_ms: 0.587667
+  type: 'test'
+  ...
+# Subtest: external, protocol-relative and malformed redirects fail closed
+ok 4 - external, protocol-relative and malformed redirects fail closed
+  ---
+  duration_ms: 0.080459
+  type: 'test'
+  ...
+# Subtest: all declared roles can enter the account space
+ok 5 - all declared roles can enter the account space
+  ---
+  duration_ms: 0.335542
+  type: 'test'
+  ...
+# Subtest: only ADMIN can enter the administration space
+ok 6 - only ADMIN can enter the administration space
+  ---
+  duration_ms: 0.062209
+  type: 'test'
+  ...
+# Subtest: role and status checks reject unknown client-controlled values
+ok 7 - role and status checks reject unknown client-controlled values
+  ---
+  duration_ms: 0.0515
+  type: 'test'
+  ...
+# Subtest: billing address presentation preserves one logical line per snapshot field
+ok 8 - billing address presentation preserves one logical line per snapshot field
+  ---
+  duration_ms: 0.586041
+  type: 'test'
+  ...
+# Subtest: member invoice HTML renders every structured address line as its own block
+ok 9 - member invoice HTML renders every structured address line as its own block
+  ---
+  duration_ms: 4.779417
+  type: 'test'
+  ...
+# Subtest: final invoice PDF uses the same fictitious customer identity and address lines
+ok 10 - final invoice PDF uses the same fictitious customer identity and address lines
+  ---
+  duration_ms: 26.372875
+  type: 'test'
+  ...
+# Subtest: billing numbers use the Paris issue date and a continuous untruncated sequence
+ok 11 - billing numbers use the Paris issue date and a continuous untruncated sequence
+  ---
+  duration_ms: 37.488958
+  type: 'test'
+  ...
+# Subtest: Admin date search bounds cover the exact Paris civil day across DST
+ok 12 - Admin date search bounds cover the exact Paris civil day across DST
+  ---
+  duration_ms: 0.570916
+  type: 'test'
+  ...
+# Subtest: B2C billing is minimal and rejects every professional or unknown field
+ok 13 - B2C billing is minimal and rejects every professional or unknown field
+  ---
+  duration_ms: 0.536083
+  type: 'test'
+  ...
+# Subtest: B2B billing requires a company and validates only bounded French snapshot fields
+ok 14 - B2B billing requires a company and validates only bounded French snapshot fields
+  ---
+  duration_ms: 0.125209
+  type: 'test'
+  ...
+# Subtest: billing seller presentation is derived only from the immutable closed snapshot
+ok 15 - billing seller presentation is derived only from the immutable closed snapshot
+  ---
+  duration_ms: 0.151833
+  type: 'test'
+  ...
+# Subtest: credit-note PDF text colors meet WCAG AA contrast on the white page
+ok 16 - credit-note PDF text colors meet WCAG AA contrast on the white page
+  ---
+  duration_ms: 0.129042
+  type: 'test'
+  ...
+# Subtest: the member credit-note introduction owns a WCAG AA text surface on desktop and mobile
+ok 17 - the member credit-note introduction owns a WCAG AA text surface on desktop and mobile
+  ---
+  duration_ms: 6.4035
+  type: 'test'
+  ...
+# Subtest: the current fiscal snapshot is centralized, deterministic and never represents charged VAT
+ok 18 - the current fiscal snapshot is centralized, deterministic and never represents charged VAT
+  ---
+  duration_ms: 0.578416
+  type: 'test'
+  ...
+# Subtest: the additive migration keeps parent, amount, VAT and issued-document constraints fail-closed
+ok 19 - the additive migration keeps parent, amount, VAT and issued-document constraints fail-closed
+  ---
+  duration_ms: 2.902375
+  type: 'test'
+  ...
+# Subtest: payment success paths issue the invoice before durable customer notification
+ok 20 - payment success paths issue the invoice before durable customer notification
+  ---
+  duration_ms: 10.835291
+  type: 'test'
+  ...
+# Subtest: private invoice and credit-note routes enforce session ownership and safe response headers
+ok 21 - private invoice and credit-note routes enforce session ownership and safe response headers
+  ---
+  duration_ms: 1.858875
+  type: 'test'
+  ...
+# Subtest: billing presentation derives final versus test rendering only from persisted payment mode
+ok 22 - billing presentation derives final versus test rendering only from persisted payment mode
+  ---
+  duration_ms: 0.156375
+  type: 'test'
+  ...
+# Subtest: Admin billing supports invoice, credit-note, order, customer and date lookup without mutation controls
+ok 23 - Admin billing supports invoice, credit-note, order, customer and date lookup without mutation controls
+  ---
+  duration_ms: 5.026125
+  type: 'test'
+  ...
+# Subtest: billing document pages expose one accessible premium PDF action before quiet navigation
+ok 24 - billing document pages expose one accessible premium PDF action before quiet navigation
+  ---
+  duration_ms: 3.871792
+  type: 'test'
+  ...
+# Subtest: billing PDF layout reserves non-overlapping metadata, QA banner, body and footer bands
+ok 25 - billing PDF layout reserves non-overlapping metadata, QA banner, body and footer bands
+  ---
+  duration_ms: 0.11475
+  type: 'test'
+  ...
+# Subtest: reviewed after-sales credit notes keep their internal code but expose a French customer label
+ok 26 - reviewed after-sales credit notes keep their internal code but expose a French customer label
+  ---
+  duration_ms: 13.204042
+  type: 'test'
+  ...
+# Subtest: credit-note HTML and PDF expose the persisted precise reason without replacing its semantic code
+ok 27 - credit-note HTML and PDF expose the persisted precise reason without replacing its semantic code
+  ---
+  duration_ms: 37.108958
+  type: 'test'
+  ...
+# Subtest: four short billing QA fixtures render on exactly one page with complete snapshot text
+ok 28 - four short billing QA fixtures render on exactly one page with complete snapshot text
+  ---
+  duration_ms: 35.453916
+  type: 'test'
+  ...
+# Subtest: final LIVE invoice and credit-note PDFs omit every test watermark
+ok 29 - final LIVE invoice and credit-note PDFs omit every test watermark
+  ---
+  duration_ms: 8.015792
+  type: 'test'
+  ...
+# Subtest: long invoices paginate naturally and repeat the safe footer on every real page
+ok 30 - long invoices paginate naturally and repeat the safe footer on every real page
+  ---
+  duration_ms: 29.652625
+  type: 'test'
+  ...
+# Subtest: billing browser fixtures are bound to one disposable local database and env-backed credentials
+ok 31 - billing browser fixtures are bound to one disposable local database and env-backed credentials
+  ---
+  duration_ms: 10.98825
+  type: 'test'
+  ...
+# Subtest: DCN accounting export includes immutable territory, credit, tax and acquired formats without known-fee inventions
+ok 32 - DCN accounting export includes immutable territory, credit, tax and acquired formats without known-fee inventions
+  ---
+  duration_ms: 12.396417
+  type: 'test'
+  ...
+# Subtest: Admin readiness counts only the actual released album offer, not announcements
+ok 33 - Admin readiness counts only the actual released album offer, not announcements
+  ---
+  duration_ms: 0.447583
+  type: 'test'
+  ...
+# Subtest: Admin independent album price warning is advisory and only compares identical sellable tracks
+ok 34 - Admin independent album price warning is advisory and only compares identical sellable tracks
+  ---
+  duration_ms: 0.101792
+  type: 'test'
+  ...
+# Subtest: Admin readiness remains fail-closed for draft/hidden/media/rights/invalid excerpt
+ok 35 - Admin readiness remains fail-closed for draft/hidden/media/rights/invalid excerpt
+  ---
+  duration_ms: 0.112833
+  type: 'test'
+  ...
+# Subtest: Twelve-file batch has two active tasks maximum and keeps successes after one failure
+ok 36 - Twelve-file batch has two active tasks maximum and keeps successes after one failure
+  ---
+  duration_ms: 17.091208
+  type: 'test'
+  ...
+# Subtest: Batch stop prevents new starts, and page parsing never accepts an arbitrary offset
+ok 37 - Batch stop prevents new starts, and page parsing never accepts an arbitrary offset
+  ---
+  duration_ms: 0.497708
+  type: 'test'
+  ...
+# Subtest: Admin import keeps batch selection explicit and preserves prior rows; mutations stay authenticated
+ok 38 - Admin import keeps batch selection explicit and preserves prior rows; mutations stay authenticated
+  ---
+  duration_ms: 4.762083
+  type: 'test'
+  ...
+# Subtest: album ownership requires an actual album acquisition, not twelve separately acquired singles
+ok 39 - album ownership requires an actual album acquisition, not twelve separately acquired singles
+  ---
+  duration_ms: 5.314334
+  type: 'test'
+  ...
+# Subtest: album ownership recognizes the exact paid edition with every right active, including retained price-reduction rights
+ok 40 - album ownership recognizes the exact paid edition with every right active, including retained price-reduction rights
+  ---
+  duration_ms: 0.126209
+  type: 'test'
+  ...
+# Subtest: different album, master replacement, missing/revoked rights and disputed purchase do not prove this album owned
+ok 41 - different album, master replacement, missing/revoked rights and disputed purchase do not prove this album owned
+  ---
+  duration_ms: 0.084792
+  type: 'test'
+  ...
+# Subtest: MP3 quality is bounded and explicit; 320 kbit/s default is not a new price
+ok 42 - MP3 quality is bounded and explicit; 320 kbit/s default is not a new price
+  ---
+  duration_ms: 0.591708
+  type: 'test'
+  ...
+# Subtest: real FFmpeg private MP3 and independently streamed WAV/MP3 ZIP payloads
+ok 43 - real FFmpeg private MP3 and independently streamed WAV/MP3 ZIP payloads
+  ---
+  duration_ms: 233.54275
+  type: 'test'
+  ...
+# Subtest: full MP3 conversion rejects non-WAV and aborted leases before exposing output
+ok 44 - full MP3 conversion rejects non-WAV and aborted leases before exposing output
+  ---
+  duration_ms: 43.652791
+  type: 'test'
+  ...
+# Subtest: browser country input accepts evidence only, never server approval flags, modes, policy overrides or provider identity
+ok 45 - browser country input accepts evidence only, never server approval flags, modes, policy overrides or provider identity
+  ---
+  duration_ms: 0.880084
+  type: 'test'
+  ...
+# Subtest: injected QA fixture works only in isolated TEST profile and does not read country policy DB
+ok 46 - injected QA fixture works only in isolated TEST profile and does not read country policy DB
+  ---
+  duration_ms: 2.057791
+  type: 'test'
+  ...
+# Subtest: persisted provider-country=null round-trips and reconciles, instead of creating false country contradiction
+ok 47 - persisted provider-country=null round-trips and reconciles, instead of creating false country contradiction
+  ---
+  duration_ms: 0.56325
+  type: 'test'
+  ...
+# Subtest: non-QA/mismatched merchant cannot reuse a synthetic country policy
+ok 48 - non-QA/mismatched merchant cannot reuse a synthetic country policy
+  ---
+  duration_ms: 17.827333
+  type: 'test'
+  ...
+# Subtest: missing/expired policies refuse initial delivery; null legacy snapshot retained without invented evidence
+ok 49 - missing/expired policies refuse initial delivery; null legacy snapshot retained without invented evidence
+  ---
+  duration_ms: 0.742667
+  type: 'test'
+  ...
+# Subtest: checkout routes never parse browser QA capability; scope is server-derived and same-origin wrapper preserved
+ok 50 - checkout routes never parse browser QA capability; scope is server-derived and same-origin wrapper preserved
+  ---
+  duration_ms: 15.933083
+  type: 'test'
+  ...
+# Subtest: repository: actual allocated partial refund leaves only paid non-refunded single cents
+ok 51 - repository: actual allocated partial refund leaves only paid non-refunded single cents
+  ---
+  duration_ms: 0.904916
+  type: 'test'
+  ...
+# Subtest: repository: pending refunds, unallocated external refunds, disputes, bundles, cross-master and missing final payment block
+ok 52 - repository: pending refunds, unallocated external refunds, disputes, bundles, cross-master and missing final payment block
+  ---
+  duration_ms: 0.354667
+  type: 'test'
+  ...
+# Subtest: repository: reservation pins the source, cannot be reused, remains after unknown timeout, and consumes once
+ok 53 - repository: reservation pins the source, cannot be reused, remains after unknown timeout, and consumes once
+  ---
+  duration_ms: 5.924375
+  type: 'test'
+  ...
+# Subtest: repository: definitive unpaid failure releases only its reservation for a future intentional attempt
+ok 54 - repository: definitive unpaid failure releases only its reservation for a future intentional attempt
+  ---
+  duration_ms: 0.516
+  type: 'test'
+  ...
+# Subtest: repository: after PAID only this album's resulting rights are excluded, sources still revalidate before first delivery
+ok 55 - repository: after PAID only this album's resulting rights are excluded, sources still revalidate before first delivery
+  ---
+  duration_ms: 0.67375
+  type: 'test'
+  ...
+# Subtest: repository: a different album/source acquisition is never excluded by the current target line filter
+ok 56 - repository: a different album/source acquisition is never excluded by the current target line filter
+  ---
+  duration_ms: 0.19675
+  type: 'test'
+  ...
+# Subtest: repository: refund/source change during payment prevents rights grant
+ok 57 - repository: refund/source change during payment prevents rights grant
+  ---
+  duration_ms: 0.195
+  type: 'test'
+  ...
+# Subtest: repository: administrative refund of credited single blocks, pending then confirmed external fact suspends dependent album with one audit
+ok 58 - repository: administrative refund of credited single blocks, pending then confirmed external fact suspends dependent album with one audit
+  ---
+  duration_ms: 0.279125
+  type: 'test'
+  ...
+# Subtest: completion: no singles preserves the independently priced album without invented discount
+ok 59 - completion: no singles preserves the independently priced album without invented discount
+  ---
+  duration_ms: 0.783708
+  type: 'test'
+  ...
+# Subtest: completion: 1 / 11 / 12 canonical singles are credited once using exact paid cents
+ok 60 - completion: 1 / 11 / 12 canonical singles are credited once using exact paid cents
+  ---
+  duration_ms: 4.934292
+  type: 'test'
+  ...
+# Subtest: completion: partial refund is deducted, never current catalogue track price
+ok 61 - completion: partial refund is deducted, never current catalogue track price
+  ---
+  duration_ms: 0.076208
+  type: 'test'
+  ...
+# Subtest: completion: independently changed album price yields a new exact quote
+ok 62 - completion: independently changed album price yields a new exact quote
+  ---
+  duration_ms: 0.056
+  type: 'test'
+  ...
+# Subtest: completion: zero or over-price credit remains safely blocked, no negative or zero PSP payment
+ok 63 - completion: zero or over-price credit remains safely blocked, no negative or zero PSP payment
+  ---
+  duration_ms: 0.336667
+  type: 'test'
+  ...
+# Subtest: completion: free, fully refunded, fractional, negative or fabricated source math is blocked
+ok 64 - completion: free, fully refunded, fractional, negative or fabricated source math is blocked
+  ---
+  duration_ms: 0.152917
+  type: 'test'
+  ...
+# Subtest: completion: duplicate track, duplicate source, absent eligible source and cross-master are not inferred
+ok 65 - completion: duplicate track, duplicate source, absent eligible source and cross-master are not inferred
+  ---
+  duration_ms: 0.100125
+  type: 'test'
+  ...
+# Subtest: completion: source proof ordering is stable but financial/version changes invalidate cart fingerprint
+ok 66 - completion: source proof ordering is stable but financial/version changes invalidate cart fingerprint
+  ---
+  duration_ms: 0.173666
+  type: 'test'
+  ...
+# Subtest: completion: normal cart admits verified completion but retains provisional guard on unproved ownership
+ok 67 - completion: normal cart admits verified completion but retains provisional guard on unproved ownership
+  ---
+  duration_ms: 0.252208
+  type: 'test'
+  ...
+# Subtest: completion: multi-line payable cart fails closed while redundant album-covered title is removed
+ok 68 - completion: multi-line payable cart fails closed while redundant album-covered title is removed
+  ---
+  duration_ms: 0.134334
+  type: 'test'
+  ...
+# Subtest: completion: browser-forged base price, credit, repeated or unowned sources are rejected
+ok 69 - completion: browser-forged base price, credit, repeated or unowned sources are rejected
+  ---
+  duration_ms: 0.099708
+  type: 'test'
+  ...
+# Subtest: only new digital draft documents; previous approvals/version hashes remain referenced and are not replaced
+ok 70 - only new digital draft documents; previous approvals/version hashes remain referenced and are not replaced
+  ---
+  duration_ms: 0.720708
+  type: 'test'
+  ...
+# Subtest: existing CM2C and French context reused; no new membership or automatic worldwide VAT exemption
+ok 71 - existing CM2C and French context reused; no new membership or automatic worldwide VAT exemption
+  ---
+  duration_ms: 0.072375
+  type: 'test'
+  ...
+# Subtest: new documents preserve consumer guarantees, explicit supply/withdrawal review, formats and immutable purchases
+ok 72 - new documents preserve consumer guarantees, explicit supply/withdrawal review, formats and immutable purchases
+  ---
+  duration_ms: 0.066625
+  type: 'test'
+  ...
+# Subtest: prices: exact EUR cents, no implicit/free/float price
+ok 73 - prices: exact EUR cents, no implicit/free/float price
+  ---
+  duration_ms: 0.605667
+  type: 'test'
+  ...
+# Subtest: autonomous preview window: <=60 s, short source, offset and padding
+ok 74 - autonomous preview window: <=60 s, short source, offset and padding
+  ---
+  duration_ms: 0.102584
+  type: 'test'
+  ...
+# Subtest: album covers track, quantity stays one regardless add order
+ok 75 - album covers track, quantity stays one regardless add order
+  ---
+  duration_ms: 0.193167
+  type: 'test'
+  ...
+# Subtest: already owned and partially owned album fail closed
+ok 76 - already owned and partially owned album fail closed
+  ---
+  duration_ms: 0.241333
+  type: 'test'
+  ...
+# Subtest: cart fingerprint binds membership, master version and display content even at the same price
+ok 77 - cart fingerprint binds membership, master version and display content even at the same price
+  ---
+  duration_ms: 0.195375
+  type: 'test'
+  ...
+# Subtest: overlapping albums and unavailable/empty snapshots rejected
+ok 78 - overlapping albums and unavailable/empty snapshots rejected
+  ---
+  duration_ms: 0.078917
+  type: 'test'
+  ...
+# Subtest: independent kill-switch and strict TEST isolation; LIVE cannot be opened
+ok 79 - independent kill-switch and strict TEST isolation; LIVE cannot be opened
+  ---
+  duration_ms: 0.109541
+  type: 'test'
+  ...
+# Subtest: master keys are private-only; traversal and public master rejected
+ok 80 - master keys are private-only; traversal and public master rejected
+  ---
+  duration_ms: 0.302666
+  type: 'test'
+  ...
+# Subtest: upload sizes, real file extensions and explicit replacement
+ok 81 - upload sizes, real file extensions and explicit replacement
+  ---
+  duration_ms: 0.176875
+  type: 'test'
+  ...
+# Subtest: audio file magic never trusts MIME alone
+ok 82 - audio file magic never trusts MIME alone
+  ---
+  duration_ms: 0.119208
+  type: 'test'
+  ...
+# Subtest: payment evidence binds every invariant, environment and merchant
+ok 83 - payment evidence binds every invariant, environment and merchant
+  ---
+  duration_ms: 0.125125
+  type: 'test'
+  ...
+# Subtest: provider redirect allowlist excludes lookalike and LIVE PayPal
+ok 84 - provider redirect allowlist excludes lookalike and LIVE PayPal
+  ---
+  duration_ms: 0.087125
+  type: 'test'
+  ...
+# Subtest: accounting CSV formula injection protection and quoting
+ok 85 - accounting CSV formula injection protection and quoting
+  ---
+  duration_ms: 0.092625
+  type: 'test'
+  ...
+# Subtest: real ZIP bytes with descriptors, CRC and no unsafe archive paths
+ok 86 - real ZIP bytes with descriptors, CRC and no unsafe archive paths
+  ---
+  duration_ms: 27.958291
+  type: 'test'
+  ...
+# Subtest: oversized album ZIP fails before sending headers or opening any master
+ok 87 - oversized album ZIP fails before sending headers or opening any master
+  ---
+  duration_ms: 0.11175
+  type: 'test'
+  ...
+# Subtest: a later WON dispute cannot clear a persistent source/account/territory/media incident or revive suspended rights
+ok 88 - a later WON dispute cannot clear a persistent source/account/territory/media incident or revive suspended rights
+  ---
+  duration_ms: 453.096959
+  type: 'test'
+  ...
+# Subtest: new purchases pin two distinct asset identities and both formats
+ok 89 - new purchases pin two distinct asset identities and both formats
+  ---
+  duration_ms: 0.635208
+  type: 'test'
+  ...
+# Subtest: historical purchases retain original format only without snapshot rewrite or MP3 backfill
+ok 90 - historical purchases retain original format only without snapshot rewrite or MP3 backfill
+  ---
+  duration_ms: 0.224459
+  type: 'test'
+  ...
+# Subtest: format snapshots fail closed if missing IDs, reordered, duplicated or changed master rendition
+ok 91 - format snapshots fail closed if missing IDs, reordered, duplicated or changed master rendition
+  ---
+  duration_ms: 0.118583
+  type: 'test'
+  ...
+# Subtest: download format rejects path, MIME, prototype and unsupported values
+ok 92 - download format rejects path, MIME, prototype and unsupported values
+  ---
+  duration_ms: 0.103542
+  type: 'test'
+  ...
+# Subtest: derived files and both format archives remain strictly private keys; old keys preserved
+ok 93 - derived files and both format archives remain strictly private keys; old keys preserved
+  ---
+  duration_ms: 0.55925
+  type: 'test'
+  ...
+# Subtest: Historical DCN contract remains verifiable without replacing its text
+ok 94 - Historical DCN contract remains verifiable without replacing its text
+  ---
+  duration_ms: 8.585458
+  type: 'test'
+  ...
+# Subtest: DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval
+ok 95 - DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval
+  ---
+  duration_ms: 0.161125
+  type: 'test'
+  ...
+# Subtest: DCN rejects absent, rewritten, LIVE or incompletely acknowledged contract snapshot
+ok 96 - DCN rejects absent, rewritten, LIVE or incompletely acknowledged contract snapshot
+  ---
+  duration_ms: 0.356792
+  type: 'test'
+  ...
+# Subtest: DCN CONTRACT_AVAILABLE HTML/text email escaped and account-only; captured != delivered
+ok 97 - DCN CONTRACT_AVAILABLE HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.801958
+  type: 'test'
+  ...
+# Subtest: DCN ACCESS_READY HTML/text email escaped and account-only; captured != delivered
+ok 98 - DCN ACCESS_READY HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.304166
+  type: 'test'
+  ...
+# Subtest: DCN REFUND_CONFIRMED HTML/text email escaped and account-only; captured != delivered
+ok 99 - DCN REFUND_CONFIRMED HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.108459
+  type: 'test'
+  ...
+# Subtest: DCN INCIDENT HTML/text email escaped and account-only; captured != delivered
+ok 100 - DCN INCIDENT HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.12275
+  type: 'test'
+  ...
+# Subtest: DCN email base refuses credentials, path, query, fragment
+ok 101 - DCN email base refuses credentials, path, query, fragment
+  ---
+  duration_ms: 0.114375
+  type: 'test'
+  ...
+# Subtest: DCN refund targets are cents, unique line IDs and closed input shape
+ok 102 - DCN refund targets are cents, unique line IDs and closed input shape
+  ---
+  duration_ms: 0.551125
+  type: 'test'
+  ...
+# Subtest: DCN Stripe refund accepted/pending is not succeeded; failure/cancellation remain negative
+ok 103 - DCN Stripe refund accepted/pending is not succeeded; failure/cancellation remain negative
+  ---
+  duration_ms: 0.095875
+  type: 'test'
+  ...
+# Subtest: DCN dispute outcome must be conclusive; a warning closure is not automatically won
+ok 104 - DCN dispute outcome must be conclusive; a warning closure is not automatically won
+  ---
+  duration_ms: 0.065542
+  type: 'test'
+  ...
+# Subtest: DCN Range strict, suffix bounded, zero suffix and multi-range rejected
+ok 105 - DCN Range strict, suffix bounded, zero suffix and multi-range rejected
+  ---
+  duration_ms: 0.237125
+  type: 'test'
+  ...
+# Subtest: DCN download filename cannot inject headers/traversal and preserves UTF8 title
+ok 106 - DCN download filename cannot inject headers/traversal and preserves UTF8 title
+  ---
+  duration_ms: 0.136292
+  type: 'test'
+  ...
+# Subtest: DCN ZIP refuses casefold/Unicode-normalized collisions and bounds before opening files
+ok 107 - DCN ZIP refuses casefold/Unicode-normalized collisions and bounds before opening files
+  ---
+  duration_ms: 0.239542
+  type: 'test'
+  ...
+# Subtest: DCN ZIP source verifier rejects truncated, enlarged and corrupt bytes before READY
+ok 108 - DCN ZIP source verifier rejects truncated, enlarged and corrupt bytes before READY
+  ---
+  duration_ms: 18.115417
+  type: 'test'
+  ...
+# Subtest: DCN library never claims an unpaid order paid, or retained price-reduction rights revoked
+ok 109 - DCN library never claims an unpaid order paid, or retained price-reduction rights revoked
+  ---
+  duration_ms: 0.095083
+  type: 'test'
+  ...
+# Subtest: initial delivery: paid/verified/ready private formats grant access only after fresh revalidation
+ok 110 - initial delivery: paid/verified/ready private formats grant access only after fresh revalidation
+  ---
+  duration_ms: 3.64475
+  type: 'test'
+  ...
+# Subtest: initial delivery: rights revoked after paid prevent accessReadyAt and access-ready notification
+ok 111 - initial delivery: rights revoked after paid prevent accessReadyAt and access-ready notification
+  ---
+  duration_ms: 0.658375
+  type: 'test'
+  ...
+# Subtest: initial delivery: changed/missing MP3 or hidden release after payment blocks new access
+ok 112 - initial delivery: changed/missing MP3 or hidden release after payment blocks new access
+  ---
+  duration_ms: 0.704417
+  type: 'test'
+  ...
+# Subtest: initial delivery: policy expired after payment prevents access without rewriting the stored jurisdiction
+ok 113 - initial delivery: policy expired after payment prevents access without rewriting the stored jurisdiction
+  ---
+  duration_ms: 0.353333
+  type: 'test'
+  ...
+# Subtest: initial delivery: lost active/verified account prevents delivery despite old payment proof
+ok 114 - initial delivery: lost active/verified account prevents delivery despite old payment proof
+  ---
+  duration_ms: 0.252
+  type: 'test'
+  ...
+# Subtest: already delivered: repeated acknowledgment returns before new country/media gates, no rights downgrade or duplicate notification
+ok 115 - already delivered: repeated acknowledgment returns before new country/media gates, no rights downgrade or duplicate notification
+  ---
+  duration_ms: 0.204166
+  type: 'test'
+  ...
+# Subtest: FR historical franchise never approves DCN automatically; all missing or draft country rules fail closed
+ok 116 - FR historical franchise never approves DCN automatically; all missing or draft country rules fail closed
+  ---
+  duration_ms: 0.80025
+  type: 'test'
+  ...
+# Subtest: QA approval is explicit, in-memory and incapable of authorizing LIVE
+ok 117 - QA approval is explicit, in-memory and incapable of authorizing LIVE
+  ---
+  duration_ms: 0.370542
+  type: 'test'
+  ...
+# Subtest: worldwide catalogue does not bypass UK/AU/unknown country, PSP or music-rights review
+ok 118 - worldwide catalogue does not bypass UK/AU/unknown country, PSP or music-rights review
+  ---
+  duration_ms: 0.1085
+  type: 'test'
+  ...
+# Subtest: US state and Canadian province required and bound to exact reviewed subdivision
+ok 119 - US state and Canadian province required and bound to exact reviewed subdivision
+  ---
+  duration_ms: 0.125083
+  type: 'test'
+  ...
+# Subtest: B2B, missing country evidence and residence/billing/provider conflicts fail before checkout
+ok 120 - B2B, missing country evidence and residence/billing/provider conflicts fail before checkout
+  ---
+  duration_ms: 0.072209
+  type: 'test'
+  ...
+# Subtest: no ALLOW without complete dated fiscal/legal/payment/expert evidence and approved contract/language
+ok 121 - no ALLOW without complete dated fiscal/legal/payment/expert evidence and approved contract/language
+  ---
+  duration_ms: 0.133375
+  type: 'test'
+  ...
+# Subtest: no default VAT-zero, foreign 293B assumption or QA tax in LIVE policy
+ok 122 - no default VAT-zero, foreign 293B assumption or QA tax in LIVE policy
+  ---
+  duration_ms: 0.257208
+  type: 'test'
+  ...
+# Subtest: tax calculation uses exact cents, capped paid credit and explicit inclusive/exclusive rounding
+ok 123 - tax calculation uses exact cents, capped paid credit and explicit inclusive/exclusive rounding
+  ---
+  duration_ms: 0.289833
+  type: 'test'
+  ...
+# Subtest: expired or superseded country policy, changed evidence and terms cannot silently grant files after payment
+ok 124 - expired or superseded country policy, changed evidence and terms cannot silently grant files after payment
+  ---
+  duration_ms: 0.377833
+  type: 'test'
+  ...
+# Subtest: additive migration seeds 249 countries under review, preserves legacy orders and enforces append-only rules
+ok 125 - additive migration seeds 249 countries under review, preserves legacy orders and enforces append-only rules
+  ---
+  duration_ms: 872.66925
+  type: 'test'
+  ...
+# Subtest: DCN library distinguishes the two real QA purchases without presenting a short reference as an identity check
+ok 126 - DCN library distinguishes the two real QA purchases without presenting a short reference as an identity check
+  ---
+  duration_ms: 0.325958
+  type: 'test'
+  ...
+# Subtest: DCN partial-refund wording explains the purchase without promising every title or ZIP remains downloadable
+ok 127 - DCN partial-refund wording explains the purchase without promising every title or ZIP remains downloadable
+  ---
+  duration_ms: 0.082
+  type: 'test'
+  ...
+# Subtest: DCN partial-refund confirmation points to documents and per-title access, not another payment
+ok 128 - DCN partial-refund confirmation points to documents and per-title access, not another payment
+  ---
+  duration_ms: 0.054125
+  type: 'test'
+  ...
+# Subtest: DCN abbreviated reference changes no order identity, navigation, download gate or purchased history
+ok 129 - DCN abbreviated reference changes no order identity, navigation, download gate or purchased history
+  ---
+  duration_ms: 6.569334
+  type: 'test'
+  ...
+# Subtest: Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+ok 130 - Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+  ---
+  duration_ms: 0.4965
+  type: 'test'
+  ...
+# Subtest: Local route accepts neither browser evidence nor external gateway/merchant fields
+ok 131 - Local route accepts neither browser evidence nor external gateway/merchant fields
+  ---
+  duration_ms: 4.285209
+  type: 'test'
+  ...
+# Subtest: Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+ok 132 - Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+  ---
+  duration_ms: 1.45175
+  type: 'test'
+  ...
+# Subtest: DECLINED v2 reproduces shared-parser rejection but scoped DCN evidence is FAILED, never PAID
+ok 133 - DECLINED v2 reproduces shared-parser rejection but scoped DCN evidence is FAILED, never PAID
+  ---
+  duration_ms: 1.018417
+  type: 'test'
+  ...
+# Subtest: DCN scoped failure validates merchant, amount, currency, Order and custom/reference IDs
+ok 134 - DCN scoped failure validates merchant, amount, currency, Order and custom/reference IDs
+  ---
+  duration_ms: 0.141291
+  type: 'test'
+  ...
+# Subtest: capture omissions, wrong capture amount/currency and contradictory capture metadata fail closed
+ok 135 - capture omissions, wrong capture amount/currency and contradictory capture metadata fail closed
+  ---
+  duration_ms: 0.178208
+  type: 'test'
+  ...
+# Subtest: successful and pending scoped captures retain previous shared validation; no DENIED alias
+ok 136 - successful and pending scoped captures retain previous shared validation; no DENIED alias
+  ---
+  duration_ms: 0.093625
+  type: 'test'
+  ...
+# Subtest: a declined webhook can never reconcile a different capture, paid/pending response or missing evidence
+ok 137 - a declined webhook can never reconcile a different capture, paid/pending response or missing evidence
+  ---
+  duration_ms: 0.10175
+  type: 'test'
+  ...
+# Subtest: DECLINED is persisted, verified by scoped recovery and processed FAILED without fulfillment
+ok 138 - DECLINED is persisted, verified by scoped recovery and processed FAILED without fulfillment
+  ---
+  duration_ms: 387.1625
+  type: 'test'
+  ...
+# Subtest: strict PayPal DECLINED resolves UNKNOWN capture after timeout, without recapturing
+ok 139 - strict PayPal DECLINED resolves UNKNOWN capture after timeout, without recapturing
+  ---
+  duration_ms: 0.272875
+  type: 'test'
+  ...
+# Subtest: shared capture rejection remains UNKNOWN until scoped fresh recovery; a single simulated capture POST
+ok 140 - shared capture rejection remains UNKNOWN until scoped fresh recovery; a single simulated capture POST
+  ---
+  duration_ms: 3.215583
+  type: 'test'
+  ...
+# Subtest: duplicate events and different-event same-capture refusals are idempotent
+ok 141 - duplicate events and different-event same-capture refusals are idempotent
+  ---
+  duration_ms: 0.527875
+  type: 'test'
+  ...
+# Subtest: incomplete declined event or contradictory fresh paid capture remains RETRY, never grants
+ok 142 - incomplete declined event or contradictory fresh paid capture remains RETRY, never grants
+  ---
+  duration_ms: 0.363709
+  type: 'test'
+  ...
+# Subtest: old same-capture DECLINED cannot downgrade PAID/REFUNDED or revoke an acquisition
+ok 143 - old same-capture DECLINED cannot downgrade PAID/REFUNDED or revoke an acquisition
+  ---
+  duration_ms: 1.595792
+  type: 'test'
+  ...
+# Subtest: different capture after paid is a contradiction, never processed as same refusal
+ok 144 - different capture after paid is a contradiction, never processed as same refusal
+  ---
+  duration_ms: 0.402458
+  type: 'test'
+  ...
+# Subtest: a pre-existing financial contradiction is not cleared by later refusal evidence
+ok 145 - a pre-existing financial contradiction is not cleared by later refusal evidence
+  ---
+  duration_ms: 0.146416
+  type: 'test'
+  ...
+# Subtest: late paid after a failed order stays review and cannot resurrect downloads/documents
+ok 146 - late paid after a failed order stays review and cannot resurrect downloads/documents
+  ---
+  duration_ms: 0.150958
+  type: 'test'
+  ...
+# Subtest: account verification lost before capture refuses the financial double before any provider call
+ok 147 - account verification lost before capture refuses the financial double before any provider call
+  ---
+  duration_ms: 0.224708
+  type: 'test'
+  ...
+# Subtest: fresh paid evidence after account verification loss remains durably PAID but order reviews without rights/documents
+ok 148 - fresh paid evidence after account verification loss remains durably PAID but order reviews without rights/documents
+  ---
+  duration_ms: 0.13525
+  type: 'test'
+  ...
+# Subtest: pinned-media: ready dual formats are validated by their frozen asset/master IDs
+ok 149 - pinned-media: ready dual formats are validated by their frozen asset/master IDs
+  ---
+  duration_ms: 0.604458
+  type: 'test'
+  ...
+# Subtest: pinned-media: new master/version/asset may never silently replace a purchased snapshot
+ok 150 - pinned-media: new master/version/asset may never silently replace a purchased snapshot
+  ---
+  duration_ms: 0.16675
+  type: 'test'
+  ...
+# Subtest: pinned-media: rights revoked or hidden/unpublished in flight prevents grant before delivery
+ok 151 - pinned-media: rights revoked or hidden/unpublished in flight prevents grant before delivery
+  ---
+  duration_ms: 0.119208
+  type: 'test'
+  ...
+# Subtest: pinned-media: missing or public MP3, invalid codec/checksum and malformed formats fail closed
+ok 152 - pinned-media: missing or public MP3, invalid codec/checksum and malformed formats fail closed
+  ---
+  duration_ms: 0.3025
+  type: 'test'
+  ...
+# Subtest: pinned-media: legacy WAV-only pending record has no invented derivative format or historical mutation
+ok 153 - pinned-media: legacy WAV-only pending record has no invented derivative format or historical mutation
+  ---
+  duration_ms: 0.083542
+  type: 'test'
+  ...
+# Subtest: DCN external preflight is read-only, fail-closed and never inherits global LIVE keys
+ok 154 - DCN external preflight is read-only, fail-closed and never inherits global LIVE keys
+  ---
+  duration_ms: 0.449125
+  type: 'test'
+  ...
+# Subtest: DCN external preflight refuses LIVE/Production, authenticated origins and Production webhook target
+ok 155 - DCN external preflight refuses LIVE/Production, authenticated origins and Production webhook target
+  ---
+  duration_ms: 0.158
+  type: 'test'
+  ...
+# Subtest: DCN display keeps exact short preview duration and never invents unknown seconds
+ok 156 - DCN display keeps exact short preview duration and never invents unknown seconds
+  ---
+  duration_ms: 0.38675
+  type: 'test'
+  ...
+# Subtest: DCN coordinated pause of pending play ignores only the intentional AbortError, not real playback failures
+ok 157 - DCN coordinated pause of pending play ignores only the intentional AbortError, not real playback failures
+  ---
+  duration_ms: 0.089708
+  type: 'test'
+  ...
+# Subtest: DCN file labels describe only an existing source format, not an invented derived bundle
+ok 158 - DCN file labels describe only an existing source format, not an invented derived bundle
+  ---
+  duration_ms: 0.056417
+  type: 'test'
+  ...
+# Subtest: DCN size labels do not treat absent or unsafe metadata as a valid zero
+ok 159 - DCN size labels do not treat absent or unsafe metadata as a valid zero
+  ---
+  duration_ms: 7.765833
+  type: 'test'
+  ...
+# Subtest: DCN archive preparation/review is never announced as a ready download
+ok 160 - DCN archive preparation/review is never announced as a ready download
+  ---
+  duration_ms: 0.119083
+  type: 'test'
+  ...
+# Subtest: DCN catalog rows reuse the media coordinator with lazy previews and keyboard-labelled controls
+ok 161 - DCN catalog rows reuse the media coordinator with lazy previews and keyboard-labelled controls
+  ---
+  duration_ms: 12.084584
+  type: 'test'
+  ...
+# Subtest: DCN library still gates files by receipt and active rights; acquired snapshot order is retained
+ok 162 - DCN library still gates files by receipt and active rights; acquired snapshot order is retained
+  ---
+  duration_ms: 2.217791
+  type: 'test'
+  ...
+# Subtest: DCN full price-reduction retained rights still prevent a redundant purchase, unlike revoked or suspended rights
+ok 163 - DCN full price-reduction retained rights still prevent a redundant purchase, unlike revoked or suspended rights
+  ---
+  duration_ms: 0.693916
+  type: 'test'
+  ...
+# Subtest: DCN library pagination reaches older acquisitions without a silent 100-order cap or arbitrary client offset
+ok 164 - DCN library pagination reaches older acquisitions without a silent 100-order cap or arbitrary client offset
+  ---
+  duration_ms: 0.636709
+  type: 'test'
+  ...
+# Subtest: public DCN flag fails closed for missing mode or production context
+ok 165 - public DCN flag fails closed for missing mode or production context
+  ---
+  duration_ms: 0.418083
+  type: 'test'
+  ...
+# Subtest: valid TEST signatures/credentials alone never authorize remote webhook verification
+ok 166 - valid TEST signatures/credentials alone never authorize remote webhook verification
+  ---
+  duration_ms: 2.2435
+  type: 'test'
+  ...
+# Subtest: available sandboxes require their own merchant and signature configuration; no LIVE fallback
+ok 167 - available sandboxes require their own merchant and signature configuration; no LIVE fallback
+  ---
+  duration_ms: 13.482708
+  type: 'test'
+  ...
+# Subtest: Checkout metadata belongs only to DCN; physical Orders/Support metadata is not reused
+ok 168 - Checkout metadata belongs only to DCN; physical Orders/Support metadata is not reused
+  ---
+  duration_ms: 0.391459
+  type: 'test'
+  ...
+# Subtest: Stripe session evidence rejects LIVE, wrong domain, reference and currency
+ok 169 - Stripe session evidence rejects LIVE, wrong domain, reference and currency
+  ---
+  duration_ms: 0.157875
+  type: 'test'
+  ...
+# Subtest: dedicated Stripe webhook rejects bad signatures, LIVE and Connect before any account request
+ok 170 - dedicated Stripe webhook rejects bad signatures, LIVE and Connect before any account request
+  ---
+  duration_ms: 8.763333
+  type: 'test'
+  ...
+# Subtest: DCN targeted QA jobs retain the normal worker default and scope only selected orders/lines
+ok 171 - DCN targeted QA jobs retain the normal worker default and scope only selected orders/lines
+  ---
+  duration_ms: 2.128917
+  type: 'test'
+  ...
+# Subtest: charge.refunded without refunds reproduces the real payload without treating ch_ as a refund
+ok 172 - charge.refunded without refunds reproduces the real payload without treating ch_ as a refund
+  ---
+  duration_ms: 0.774959
+  type: 'test'
+  ...
+# Subtest: absent, null, empty and truncated embedded charge refunds never change the charge resource identity
+ok 173 - absent, null, empty and truncated embedded charge refunds never change the charge resource identity
+  ---
+  duration_ms: 0.191084
+  type: 'test'
+  ...
+# Subtest: refund.created, updated and failed preserve only a refund resource reference
+ok 174 - refund.created, updated and failed preserve only a refund resource reference
+  ---
+  duration_ms: 0.077459
+  type: 'test'
+  ...
+# Subtest: charge/refund prefix confusion and malformed embedded refund identifiers fail closed
+ok 175 - charge/refund prefix confusion and malformed embedded refund identifiers fail closed
+  ---
+  duration_ms: 0.14375
+  type: 'test'
+  ...
+# Subtest: fresh charge reconciliation uses expected account, expanded PaymentIntent and a charge-filtered refund list
+ok 176 - fresh charge reconciliation uses expected account, expanded PaymentIntent and a charge-filtered refund list
+  ---
+  duration_ms: 0.3775
+  type: 'test'
+  ...
+# Subtest: fresh pagination gathers distinct partial refunds into the complete amount without trusting an embedded list
+ok 177 - fresh pagination gathers distinct partial refunds into the complete amount without trusting an embedded list
+  ---
+  duration_ms: 4.715834
+  type: 'test'
+  ...
+# Subtest: a partially refunded charge is not mistaken for a complete refund
+ok 178 - a partially refunded charge is not mistaken for a complete refund
+  ---
+  duration_ms: 0.117125
+  type: 'test'
+  ...
+# Subtest: an incomplete fresh list is not acknowledged as a fully reconciled refunded charge
+ok 179 - an incomplete fresh list is not acknowledged as a fully reconciled refunded charge
+  ---
+  duration_ms: 0.166875
+  type: 'test'
+  ...
+# Subtest: duplicated refund IDs across pages are rejected rather than counted twice
+ok 180 - duplicated refund IDs across pages are rejected rather than counted twice
+  ---
+  duration_ms: 0.100625
+  type: 'test'
+  ...
+# Subtest: fresh refund pagination has a hard page bound and rejects a non-terminating sequence
+ok 181 - fresh refund pagination has a hard page bound and rejects a non-terminating sequence
+  ---
+  duration_ms: 0.171708
+  type: 'test'
+  ...
+# Subtest: more than one hundred refunds are never silently truncated
+ok 182 - more than one hundred refunds are never silently truncated
+  ---
+  duration_ms: 0.247917
+  type: 'test'
+  ...
+# Subtest: one hundred complete refund results fit the explicit bound without truncation
+ok 183 - one hundred complete refund results fit the explicit bound without truncation
+  ---
+  duration_ms: 0.332417
+  type: 'test'
+  ...
+# Subtest: wrong merchant rejects before reading the PaymentIntent or refund list
+ok 184 - wrong merchant rejects before reading the PaymentIntent or refund list
+  ---
+  duration_ms: 0.0765
+  type: 'test'
+  ...
+# Subtest: wrong TEST payment, ownership, currency, amount or Connect context rejects before listing refunds
+ok 185 - wrong TEST payment, ownership, currency, amount or Connect context rejects before listing refunds
+  ---
+  duration_ms: 0.626875
+  type: 'test'
+  ...
+# Subtest: a payment with explicit LIVE metadata remains rejected even when livemode is false
+ok 186 - a payment with explicit LIVE metadata remains rejected even when livemode is false
+  ---
+  duration_ms: 0.178958
+  type: 'test'
+  ...
+# Subtest: wrong charge identity, TEST context, paid/captured proof or currency rejects before listing refunds
+ok 187 - wrong charge identity, TEST context, paid/captured proof or currency rejects before listing refunds
+  ---
+  duration_ms: 0.198667
+  type: 'test'
+  ...
+# Subtest: non-expanded or missing latest charge remains ambiguous and is not converted to refund evidence
+ok 188 - non-expanded or missing latest charge remains ambiguous and is not converted to refund evidence
+  ---
+  duration_ms: 0.071959
+  type: 'test'
+  ...
+# Subtest: refund evidence rejects charge IDs, mismatched payment/currency and invalid amounts
+ok 189 - refund evidence rejects charge IDs, mismatched payment/currency and invalid amounts
+  ---
+  duration_ms: 1.573458
+  type: 'test'
+  ...
+# Subtest: fresh refund evidence retains pending and failed states and does not trust webhook arrival order
+ok 190 - fresh refund evidence retains pending and failed states and does not trust webhook arrival order
+  ---
+  duration_ms: 0.133125
+  type: 'test'
+  ...
+# Subtest: provider refunds without application metadata remain identifiable but never invent a local refund UUID
+ok 191 - provider refunds without application metadata remain identifiable but never invent a local refund UUID
+  ---
+  duration_ms: 0.106125
+  type: 'test'
+  ...
+# Subtest: contradictory digital order metadata is rejected even without an application paymentSource
+ok 192 - contradictory digital order metadata is rejected even without an application paymentSource
+  ---
+  duration_ms: 0.051834
+  type: 'test'
+  ...
+# Subtest: failed refunds do not inflate refunded amount and pending refunds never become successful evidence
+ok 193 - failed refunds do not inflate refunded amount and pending refunds never become successful evidence
+  ---
+  duration_ms: 0.0895
+  type: 'test'
+  ...
+# Subtest: cross-charge refunds in a charge-filtered list fail closed
+ok 194 - cross-charge refunds in a charge-filtered list fail closed
+  ---
+  duration_ms: 0.052792
+  type: 'test'
+  ...
+# Subtest: the real digital finance gateway rejects ch_ as a refund before SQL or any provider request
+ok 195 - the real digital finance gateway rejects ch_ as a refund before SQL or any provider request
+  ---
+  duration_ms: 1.975125
+  type: 'test'
+  ...
+# Subtest: DCN typecheck excludes only the two historical opt-in artifacts, not an output subtree
+ok 196 - DCN typecheck excludes only the two historical opt-in artifacts, not an output subtree
+  ---
+  duration_ms: 0.551667
+  type: 'test'
+  ...
+# Subtest: DCN archive exclusion preserves every active application, script and test in the standard typecheck
+ok 197 - DCN archive exclusion preserves every active application, script and test in the standard typecheck
+  ---
+  duration_ms: 71.856084
+  type: 'test'
+  ...
+# Subtest: DCN dedicated workers still use their own explicit sources and exclusions
+ok 198 - DCN dedicated workers still use their own explicit sources and exclusions
+  ---
+  duration_ms: 5.628833
+  type: 'test'
+  ...
+# Subtest: production media migration is additive and classifies catalogue assets as public
+ok 199 - production media migration is additive and classifies catalogue assets as public
+  ---
+  duration_ms: 9.46925
+  type: 'test'
+  ...
+# Subtest: a preview, staging, production or Railway environment refuses ephemeral local media storage
+ok 200 - a preview, staging, production or Railway environment refuses ephemeral local media storage
+  ---
+  duration_ms: 0.393625
+  type: 'test'
+  ...
+# Subtest: Cloudflare R2 configuration requires its canonical endpoint and environment-specific buckets
+ok 201 - Cloudflare R2 configuration requires its canonical endpoint and environment-specific buckets
+  ---
+  duration_ms: 0.737125
+  type: 'test'
+  ...
+# Subtest: Cloudflare R2 preview configuration accepts only dedicated role-scoped preview buckets
+ok 202 - Cloudflare R2 preview configuration accepts only dedicated role-scoped preview buckets
+  ---
+  duration_ms: 0.172459
+  type: 'test'
+  ...
+# Subtest: generic S3-compatible providers retain custom endpoint and path-style support
+ok 203 - generic S3-compatible providers retain custom endpoint and path-style support
+  ---
+  duration_ms: 0.1
+  type: 'test'
+  ...
+# Subtest: object media storage reuses one client per compatible process configuration and isolates bucket changes
+ok 204 - object media storage reuses one client per compatible process configuration and isolates bucket changes
+  ---
+  duration_ms: 2.809833
+  type: 'test'
+  ...
+# Subtest: object media storage does not cache failed initialization and exposes a test-only reset
+ok 205 - object media storage does not cache failed initialization and exposes a test-only reset
+  ---
+  duration_ms: 0.659125
+  type: 'test'
+  ...
+# Subtest: local media storage separates scopes, streams ranges, replaces and deletes
+ok 206 - local media storage separates scopes, streams ranges, replaces and deletes
+  ---
+  duration_ms: 35.769917
+  type: 'test'
+  ...
+# Subtest: storage key and Content-Disposition policies refuse traversal and header injection
+ok 207 - storage key and Content-Disposition policies refuse traversal and header injection
+  ---
+  duration_ms: 1.17225
+  type: 'test'
+  ...
+# Subtest: central order media authorization blocks IDOR
+ok 208 - central order media authorization blocks IDOR
+  ---
+  duration_ms: 0.234667
+  type: 'test'
+  ...
+# Subtest: S3 adapter keeps buckets separate, verifies metadata, supports range, delete and bounded signed URLs
+ok 209 - S3 adapter keeps buckets separate, verifies metadata, supports range, delete and bounded signed URLs
+  ---
+  duration_ms: 3.37675
+  type: 'test'
+  ...
+# Subtest: S3 GET streams close normally without destroying the shared client
+ok 210 - S3 GET streams close normally without destroying the shared client
+  ---
+  duration_ms: 1.581625
+  type: 'test'
+  ...
+# Subtest: S3 GET stream cancellation destroys its source and leaves diagnostics idle
+ok 211 - S3 GET stream cancellation destroys its source and leaves diagnostics idle
+  ---
+  duration_ms: 2.366708
+  type: 'test'
+  ...
+# Subtest: S3 GET stream source errors propagate and destroy the per-request source
+ok 212 - S3 GET stream source errors propagate and destroy the per-request source
+  ---
+  duration_ms: 2.995583
+  type: 'test'
+  ...
+# Subtest: 100 repeated S3 GET streams finish with stable diagnostics and one storage client
+ok 213 - 100 repeated S3 GET streams finish with stable diagnostics and one storage client
+  ---
+  duration_ms: 7.562583
+  type: 'test'
+  ...
+# Subtest: S3 adapter removes a newly uploaded object when provider verification fails
+ok 214 - S3 adapter removes a newly uploaded object when provider verification fails
+  ---
+  duration_ms: 0.365459
+  type: 'test'
+  ...
+# Subtest: S3 adapter attempts compensating cleanup when a PUT response is lost
+ok 215 - S3 adapter attempts compensating cleanup when a PUT response is lost
+  ---
+  duration_ms: 0.191416
+  type: 'test'
+  ...
+# Subtest: direct private multipart lifecycle binds every operation to the server key, upload id and ETag
+ok 216 - direct private multipart lifecycle binds every operation to the server key, upload id and ETag
+  ---
+  duration_ms: 0.411167
+  type: 'test'
+  ...
+# Subtest: direct multipart presigning rejects unsafe part numbers and excessive TTL before provider access
+ok 217 - direct multipart presigning rejects unsafe part numbers and excessive TTL before provider access
+  ---
+  duration_ms: 0.083833
+  type: 'test'
+  ...
+# Subtest: S3 adapter uploads a fragmented 60 MiB Readable with bounded managed multipart parts
+ok 218 - S3 adapter uploads a fragmented 60 MiB Readable with bounded managed multipart parts
+  ---
+  duration_ms: 85.885125
+  type: 'test'
+  ...
+# Subtest: multipart S3 diagnostics emit one public event pair while SDK parts remain counter-only
+ok 219 - multipart S3 diagnostics emit one public event pair while SDK parts remain counter-only
+  ---
+  duration_ms: 23.144
+  type: 'test'
+  ...
+# Subtest: failed S3 storage diagnostics emit one failed pair and restore all counters
+ok 220 - failed S3 storage diagnostics emit one failed pair and restore all counters
+  ---
+  duration_ms: 0.338542
+  type: 'test'
+  ...
+# Subtest: R2 multipart requests omit Expect 100-continue and unsupported S3 headers on the actual SDK wire request
+ok 221 - R2 multipart requests omit Expect 100-continue and unsupported S3 headers on the actual SDK wire request
+  ---
+  duration_ms: 450.686833
+  type: 'test'
+  ...
+# Subtest: S3 adapter reports an R2 CreateMultipartUpload failure without cleanup or object deletion
+ok 222 - S3 adapter reports an R2 CreateMultipartUpload failure without cleanup or object deletion
+  ---
+  duration_ms: 8.157083
+  type: 'test'
+  ...
+# Subtest: S3 adapter aborts multipart without deleting a non-final object after an R2 part failure
+ok 223 - S3 adapter aborts multipart without deleting a non-final object after an R2 part failure
+  ---
+  duration_ms: 7.616042
+  type: 'test'
+  ...
+# Subtest: S3 adapter aborts and cleans a multipart upload when its source closes early
+ok 224 - S3 adapter aborts and cleans a multipart upload when its source closes early
+  ---
+  duration_ms: 7.294541
+  type: 'test'
+  ...
+# Subtest: S3 adapter classifies CompleteMultipartUpload failure and aborts the still-open upload
+ok 225 - S3 adapter classifies CompleteMultipartUpload failure and aborts the still-open upload
+  ---
+  duration_ms: 8.111167
+  type: 'test'
+  ...
+# Subtest: S3 adapter removes a possibly finalized object when Complete response is lost and the upload no longer exists
+ok 226 - S3 adapter removes a possibly finalized object when Complete response is lost and the upload no longer exists
+  ---
+  duration_ms: 7.694041
+  type: 'test'
+  ...
+# Subtest: S3 adapter reports a remaining incomplete multipart when abort cleanup fails
+ok 227 - S3 adapter reports a remaining incomplete multipart when abort cleanup fails
+  ---
+  duration_ms: 7.522375
+  type: 'test'
+  ...
+# Subtest: S3 adapter rejects and removes uploads whose remote checksum or MIME metadata differs
+    # Subtest: checksum
+    ok 1 - checksum
+      ---
+      duration_ms: 0.157
+      type: 'test'
+      ...
+    # Subtest: mime
+    ok 2 - mime
+      ---
+      duration_ms: 0.095458
+      type: 'test'
+      ...
+    1..2
+ok 228 - S3 adapter rejects and removes uploads whose remote checksum or MIME metadata differs
+  ---
+  duration_ms: 0.412417
+  type: 'test'
+  ...
+# Subtest: S3 adapter rejects and removes an upload whose downloaded bytes differ from signed metadata
+ok 229 - S3 adapter rejects and removes an upload whose downloaded bytes differ from signed metadata
+  ---
+  duration_ms: 0.323167
+  type: 'test'
+  ...
+# Subtest: S3 adapter rejects a shared public/private bucket
+ok 230 - S3 adapter rejects a shared public/private bucket
+  ---
+  duration_ms: 0.054417
+  type: 'test'
+  ...
+# Subtest: private contract ownership is fail-closed
+ok 231 - private contract ownership is fail-closed
+  ---
+  duration_ms: 0.388958
+  type: 'test'
+  ...
+# Subtest: the contract route exposes authenticated GET and HEAD with no public URL
+ok 232 - the contract route exposes authenticated GET and HEAD with no public URL
+  ---
+  duration_ms: 3.589708
+  type: 'test'
+  ...
+# Subtest: rights mutations require same-origin authentication before parsing or writes
+ok 233 - rights mutations require same-origin authentication before parsing or writes
+  ---
+  duration_ms: 2.080666
+  type: 'test'
+  ...
+# Subtest: database gates make legal approval and activation non-bypassable
+ok 234 - database gates make legal approval and activation non-bypassable
+  ---
+  duration_ms: 1.044666
+  type: 'test'
+  ...
+# Subtest: the contract workflow cannot create payments and delegates commerce to the separately gated subsystem
+ok 235 - the contract workflow cannot create payments and delegates commerce to the separately gated subsystem
+  ---
+  duration_ms: 9.372583
+  type: 'test'
+  ...
+# Subtest: contract generation is guarded by workflow state and structured parameters
+ok 236 - contract generation is guarded by workflow state and structured parameters
+  ---
+  duration_ms: 4.735792
+  type: 'test'
+  ...
+# Subtest: document generation serializes Prisma Dev relation reads and concurrent retries
+ok 237 - document generation serializes Prisma Dev relation reads and concurrent retries
+  ---
+  duration_ms: 0.756458
+  type: 'test'
+  ...
+# Subtest: the Safari Server Action shares its tested entrypoint and PDFKit stays external
+ok 238 - the Safari Server Action shares its tested entrypoint and PDFKit stays external
+  ---
+  duration_ms: 1.551292
+  type: 'test'
+  ...
+# Subtest: contract objects use the private order-document key allowlist
+ok 239 - contract objects use the private order-document key allowlist
+  ---
+  duration_ms: 6.896708
+  type: 'test'
+  ...
+# Subtest: new personal-use evidence is nullable for non-retroactivity but atomic when present
+ok 240 - new personal-use evidence is nullable for non-retroactivity but atomic when present
+  ---
+  duration_ms: 1.674167
+  type: 'test'
+  ...
+# Subtest: baseline CSP remains exactly unchanged when opt-in is absent
+ok 241 - baseline CSP remains exactly unchanged when opt-in is absent
+  ---
+  duration_ms: 0.403208
+  type: 'test'
+  ...
+# Subtest: nonce policy trusts nonce scripts, not inline/eval/host wildcards
+ok 242 - nonce policy trusts nonce scripts, not inline/eval/host wildcards
+  ---
+  duration_ms: 0.254584
+  type: 'test'
+  ...
+# Subtest: reject malformed/header-injecting nonces
+ok 243 - reject malformed/header-injecting nonces
+  ---
+  duration_ms: 0.113125
+  type: 'test'
+  ...
+# Subtest: opt-in limited to approved page and deployment allowlists
+ok 244 - opt-in limited to approved page and deployment allowlists
+  ---
+  duration_ms: 0.139
+  type: 'test'
+  ...
+# Subtest: nonce opt-in cannot enable Google or real advertising in Preview
+ok 245 - nonce opt-in cannot enable Google or real advertising in Preview
+  ---
+  duration_ms: 0.0475
+  type: 'test'
+  ...
+# Subtest: proxy generates unique 256-bit nonces and forwards matching request/response CSP
+ok 246 - proxy generates unique 256-bit nonces and forwards matching request/response CSP
+  ---
+  duration_ms: 6.976708
+  type: 'test'
+  ...
+# Subtest: excluded pages and POST never receive nonce CSP or client-supplied trusted headers
+ok 247 - excluded pages and POST never receive nonce CSP or client-supplied trusted headers
+  ---
+  duration_ms: 0.7545
+  type: 'test'
+  ...
+# Subtest: Google bootstrap uses current document nonce before any network insertion
+ok 248 - Google bootstrap uses current document nonce before any network insertion
+  ---
+  duration_ms: 12.285167
+  type: 'test'
+  ...
+# Subtest: DistroKid external product input is closed, normalized and price-optional
+ok 249 - DistroKid external product input is closed, normalized and price-optional
+  ---
+  duration_ms: 9.577209
+  type: 'test'
+  ...
+# Subtest: DistroKid URL allowlist is HTTPS-only and rejects arbitrary or deceptive destinations
+ok 250 - DistroKid URL allowlist is HTTPS-only and rejects arbitrary or deceptive destinations
+  ---
+  duration_ms: 1.883667
+  type: 'test'
+  ...
+# Subtest: publication requires a cleared public image but does not invent a price
+ok 251 - publication requires a cleared public image but does not invent a price
+  ---
+  duration_ms: 0.148042
+  type: 'test'
+  ...
+# Subtest: the public external card is editorial-only and leaves internal commerce untouched
+ok 252 - the public external card is editorial-only and leaves internal commerce untouched
+  ---
+  duration_ms: 4.827958
+  type: 'test'
+  ...
+# Subtest: Admin offers generic external creation, update, visibility, ordering and image management
+ok 253 - Admin offers generic external creation, update, visibility, ordering and image management
+  ---
+  duration_ms: 1.879459
+  type: 'test'
+  ...
+# Subtest: migration is additive and keeps external products outside LNX orders, stock and billing
+ok 254 - migration is additive and keeps external products outside LNX orders, stock and billing
+  ---
+  duration_ms: 0.764
+  type: 'test'
+  ...
+# Subtest: the supplied mug review visual is preserved byte-for-byte
+ok 255 - the supplied mug review visual is preserved byte-for-byte
+  ---
+  duration_ms: 4.687875
+  type: 'test'
+  ...
+# Subtest: Shop legal readiness is closed by default and rejects loose booleans
+ok 256 - Shop legal readiness is closed by default and rejects loose booleans
+  ---
+  duration_ms: 0.718
+  type: 'test'
+  ...
+# Subtest: Shop legal QA requires an immutable registered version and exact local armament
+ok 257 - Shop legal QA requires an immutable registered version and exact local armament
+  ---
+  duration_ms: 0.188875
+  type: 'test'
+  ...
+# Subtest: acceptance is explicit and snapshots only server-owned terms identity
+ok 258 - acceptance is explicit and snapshots only server-owned terms identity
+  ---
+  duration_ms: 0.150208
+  type: 'test'
+  ...
+# Subtest: a retry preserves the registered terms snapshot accepted before an active-version rotation
+ok 259 - a retry preserves the registered terms snapshot accepted before an active-version rotation
+  ---
+  duration_ms: 0.130125
+  type: 'test'
+  ...
+# Subtest: a matching success with an active reservation reaches the atomic stock gate
+ok 260 - a matching success with an active reservation reaches the atomic stock gate
+  ---
+  duration_ms: 0.72975
+  type: 'test'
+  ...
+# Subtest: a concurrent provider winner converts a later authentic capture to review
+ok 261 - a concurrent provider winner converts a later authentic capture to review
+  ---
+  duration_ms: 0.068166
+  type: 'test'
+  ...
+# Subtest: an authentic capture after reservation expiry is preserved for operator review
+ok 262 - an authentic capture after reservation expiry is preserved for operator review
+  ---
+  duration_ms: 0.052541
+  type: 'test'
+  ...
+# Subtest: a pre-existing Shop payment review prevents a later capture from confirming stock
+ok 263 - a pre-existing Shop payment review prevents a later capture from confirming stock
+  ---
+  duration_ms: 0.04925
+  type: 'test'
+  ...
+# Subtest: amount, source, mode and provider identifier conflicts fail closed
+ok 264 - amount, source, mode and provider identifier conflicts fail closed
+  ---
+  duration_ms: 0.111792
+  type: 'test'
+  ...
+# Subtest: a replay of the winning success is a no-op and a terminal failure cannot regress it
+ok 265 - a replay of the winning success is a no-op and a terminal failure cannot regress it
+  ---
+  duration_ms: 0.059041
+  type: 'test'
+  ...
+# Subtest: pending and failed attempts never confirm the ShopOrder
+ok 266 - pending and failed attempts never confirm the ShopOrder
+  ---
+  duration_ms: 0.058542
+  type: 'test'
+  ...
+# Subtest: closed support routes refuse before DB, rate-limit writes, session cookies or provider calls
+ok 267 - closed support routes refuse before DB, rate-limit writes, session cookies or provider calls
+  ---
+  duration_ms: 3.498
+  type: 'test'
+  ...
+# Subtest: existing LIVE HTTP mutations reach same-origin guard after closure, without an obsolete TEST-only gate
+ok 268 - existing LIVE HTTP mutations reach same-origin guard after closure, without an obsolete TEST-only gate
+  ---
+  duration_ms: 1.252542
+  type: 'test'
+  ...
+# Subtest: LIVE context requires explicit mode plus exact Production deployment and origin
+ok 269 - LIVE context requires explicit mode plus exact Production deployment and origin
+  ---
+  duration_ms: 0.084625
+  type: 'test'
+  ...
+# Subtest: each LIVE provider requires its own activation and externally proven approval
+ok 270 - each LIVE provider requires its own activation and externally proven approval
+  ---
+  duration_ms: 0.064208
+  type: 'test'
+  ...
+# Subtest: presentation cannot expose a LIVE provider without its merchant binding or with TEST keys
+ok 271 - presentation cannot expose a LIVE provider without its merchant binding or with TEST keys
+  ---
+  duration_ms: 0.134375
+  type: 'test'
+  ...
+# Subtest: provider evidence cannot settle across TEST and LIVE
+ok 272 - provider evidence cannot settle across TEST and LIVE
+  ---
+  duration_ms: 0.064541
+  type: 'test'
+  ...
+# Subtest: Stripe live evidence needs both event and session mode; Connect event never accepted
+ok 273 - Stripe live evidence needs both event and session mode; Connect event never accepted
+  ---
+  duration_ms: 0.087917
+  type: 'test'
+  ...
+# Subtest: PayPal redirects are mode-specific rather than a global union of hosts
+ok 274 - PayPal redirects are mode-specific rather than a global union of hosts
+  ---
+  duration_ms: 0.080666
+  type: 'test'
+  ...
+# Subtest: new mode migration changes only the support CHECK and never rewrites historical data
+ok 275 - new mode migration changes only the support CHECK and never rewrites historical data
+  ---
+  duration_ms: 0.47
+  type: 'test'
+  ...
+1..275
+# tests 277
+# suites 0
+# pass 277
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1248.427708

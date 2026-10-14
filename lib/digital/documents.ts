@@ -8,6 +8,9 @@ import { billingSnapshotHash, invoiceNumber, creditNoteNumber } from "@/lib/bill
 import { generateInvoicePdf, generateCreditNotePdf, type InvoicePdfRecord, type CreditNotePdfRecord } from "@/lib/billing/pdf";
 import { DigitalError, requireDigitalEnvironment, assertDigitalUuid } from "./domain";
 import { DIGITAL_FISCAL_REVIEW_NOTICE, digitalEmailTemplate, verifyContractSnapshot } from "./fulfillment-policy";
+import { checkDigitalAcquiredJurisdiction } from "./checkout-jurisdiction";
+import { verifyDigitalPinnedMedia } from "./pinned-media";
+import { verifyDigitalCompletions } from "./completion";
 type Tx = Prisma.TransactionClient;
 const json = (v: unknown) => v as Prisma.InputJsonValue;
 
@@ -37,11 +40,13 @@ export async function prepareDigitalDocuments(tx: Tx, orderId: string) {
   const date = new Date(), number = await sequence(tx, "INVOICE", date);
   const masters=await tx.digitalMaster.findMany({where:{id:{in:o.lines.flatMap(l=>(l.trackSnapshot as Array<{masterId:string}>).map(t=>t.masterId))}},select:{id:true,version:true,codec:true,masterAsset:{select:{durationMs:true,checksumSha256:true}}}});
   const invoice = { invoiceNumber: number, issuedAt: date.toISOString(), paidAt: date.toISOString(), orderNumberSnapshot: o.id,
-    sellerSnapshot, customerSnapshot: s.customer, lineItemsSnapshot: o.lines.map(l => ({ description: `${l.scope === "ALBUM" ? "Album numérique" : "Titre numérique"} — ${l.title}`, quantity: 1, unitPriceCents: l.priceCents, lineTotalCents: l.priceCents })),
+    sellerSnapshot, customerSnapshot: s.customer, lineItemsSnapshot: o.lines.map(l => ({ description: `${l.scope === "ALBUM" ? "Album numérique" : "Titre numérique"} — ${l.title}${l.completionSnapshot?" — complément d’album, crédit d’achats antérieurs détaillé dans la confirmation":""}`, quantity: 1, unitPriceCents: l.priceCents, lineTotalCents: l.priceCents })),
     currency: "EUR", subtotalCents: o.totalCents, shippingCents: 0, totalCents: o.totalCents, vatLegalNotice: DIGITAL_FISCAL_REVIEW_NOTICE,
     paymentMethodLabel: `${o.attempts[0].provider} TEST`, termsVersion: o.termsVersion,
-    acquired: o.lines.map(l => ({ id: l.id, offerId: l.offerId, version: l.offerVersion, content: l.trackSnapshot, tax: l.taxSnapshot })),
+    acquired: o.lines.map(l => ({ id: l.id, offerId: l.offerId, version: l.offerVersion, content: l.trackSnapshot, tax: l.taxSnapshot,
+      ...(l.completionSnapshot?{completion:l.completionSnapshot}:{}) })),
     versions:masters.map(m=>({masterId:m.id,version:m.version,format:m.codec,durationMs:m.masterAsset.durationMs,checksum:m.masterAsset.checksumSha256})),
+    jurisdiction:o.jurisdictionSnapshot,
     contract: s, payment: { provider: o.attempts[0].provider, reference: o.attempts[0].paymentReference }, mode: "TEST" };
   const doc = await tx.digitalDocument.create({ data: { orderId, kind: "INVOICE", businessKey: `invoice:${orderId}`, number, snapshot: json(invoice), snapshotHash: billingSnapshotHash(invoice) } });
   const contract = { ...invoice, invoiceNumber: undefined, termsText: s.terms.text, invoice: number };
@@ -85,15 +90,21 @@ export async function generateDigitalContractPdf(snapshot: Record<string, unknow
   for (const line of snapshot.lineItemsSnapshot as Array<{ description: string; lineTotalCents: number }>) p.moveDown(.5).text(`${line.description} : ${Math.floor(line.lineTotalCents / 100)},${String(line.lineTotalCents % 100).padStart(2, "0")} EUR`);
   p.moveDown().font("Helvetica-Bold").text("Contenu exact acquis, conservé indépendamment du catalogue courant").font("Helvetica");
   const versions=snapshot.versions as Array<{masterId:string;version:number;format:string}>;
-  for(const line of snapshot.acquired as Array<{content:Array<{title:string;masterId:string}>}>){for(const t of line.content){const v=versions.find(v=>v.masterId===t.masterId);p.text(`${t.title} — version ${v?.version??"figée"} · ${v?.format??"format acquis"}`);}}
+  for(const line of snapshot.acquired as Array<{content:Array<{title:string;masterId:string;trackId?:string;formats?:string[]}>;completion?:{basePriceCents:number;creditCents:number;sources:Array<{trackId:string;paidCents:number;refundedCents:number;creditCents:number}>}}>){
+    for(const t of line.content){const v=versions.find(v=>v.masterId===t.masterId);p.text(`${t.title} — version ${v?.version??"figée"} · ${t.formats?.join(" + ")??v?.format??"format acquis"}`);}
+    if(line.completion){const money=(v:number)=>`${(v/100).toFixed(2)} EUR`;p.moveDown(.5).text(`Complément : prix album ${money(line.completion.basePriceCents)} ; crédit ${money(line.completion.creditCents)} ; reste ${money(line.completion.basePriceCents-line.completion.creditCents)}.`);
+      for(const source of line.completion.sources)p.text(`${line.content.find(t=>t.trackId===source.trackId)?.title??"Titre acquis"} : payé ${money(source.paidCents)}, remboursé ${money(source.refundedCents)}, crédit utilisé ${money(source.creditCents)}.`);
+    }
+  }
   p.moveDown().text(String(snapshot.termsText));
   p.moveDown().text(s.earlyDelivery.text).moveDown(.5).text(s.withdrawal.text);
   p.moveDown().text("Le paiement ou cet email d’information ne suffisent pas à prouver la perte du droit. La fourniture QA commence seulement après réception reconnue du document. Aucun droit de publication/distribution/monétisation n’est cédé.");
   p.moveDown().text(DIGITAL_FISCAL_REVIEW_NOTICE); p.end(); return result;
 }
-export async function processDigitalDocuments(limit = 10, renderer?: (kind: string, snapshot: Record<string, unknown>, hash: string, number: string) => Promise<Buffer>) {
+export async function processDigitalDocuments(limit = 10, renderer?: (kind: string, snapshot: Record<string, unknown>, hash: string, number: string) => Promise<Buffer>, orderId?:string) {
   requireDigitalEnvironment(); let ready = 0;
-  const rows = await prisma.digitalDocument.findMany({ where: { availableAt: { lte: new Date() }, OR: [{ status: { in: ["PENDING", "RETRY"] } }, { status: "PROCESSING", leaseUntil: { lte: new Date() } }] }, take: Math.min(limit, 10), orderBy: { createdAt: "asc" } });
+  if(orderId)assertDigitalUuid(orderId);
+  const rows = await prisma.digitalDocument.findMany({ where: { ...(orderId?{orderId}:{}),availableAt: { lte: new Date() }, OR: [{ status: { in: ["PENDING", "RETRY"] } }, { status: "PROCESSING", leaseUntil: { lte: new Date() } }] }, take: Math.min(limit, 10), orderBy: { createdAt: "asc" } });
   for (const row of rows) {
     if (row.attempts >= 5) { await prisma.digitalDocument.updateMany({ where: { id: row.id, status: { not: "READY" } }, data: { status: "REQUIRES_REVIEW" } }); continue; }
     const token = randomUUID();
@@ -124,6 +135,10 @@ export async function acknowledgeDigitalContract(userId: string, orderId: string
     if(o.status==="REFUNDED"&&!await tx.digitalEntitlement.findFirst({where:{userId,status:"ACTIVE",line:{orderId}}}))throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);
     const current = await tx.digitalFulfillment.findUniqueOrThrow({ where: { orderId } });
     if (current.confirmationAt) return { acknowledged: true };
+    await checkDigitalAcquiredJurisdiction(o.jurisdictionSnapshot,tx);
+    const acquiredLines=await tx.digitalOrderLine.findMany({where:{orderId},select:{trackSnapshot:true,completionSnapshot:true}});
+    await verifyDigitalPinnedMedia(tx,acquiredLines);
+    if(acquiredLines.some(line=>line.completionSnapshot))await verifyDigitalCompletions(tx,orderId,userId);
     const at = new Date();
     await tx.digitalFulfillment.update({ where: { orderId }, data: { confirmationStatus: "ACKNOWLEDGED", confirmationAt: at, accessReadyAt: at,
       confirmationEvidence: { type: "OWNER_EXPLICIT_QA_RECEIPT_AFTER_TRANSFER", documentId, snapshotHash: hash, at: at.toISOString(), policy: "PROPOSED_NOT_LEGAL_VALIDATION" } } });

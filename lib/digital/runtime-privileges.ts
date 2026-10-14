@@ -17,7 +17,12 @@ export const DIGITAL_UPDATE_COLUMNS={
   digital_inbox:["orderId","status","attempts","availableAt","leaseUntil","leaseToken","errorCode"],
   digital_work_slots:["jobId","leaseToken","leaseUntil"],
   digital_archives:["status","storageKey","storageBackend","storageProvider","sizeBytes","checksum","leaseToken","leaseUntil","attempts","errorCode"],
+  digital_completion_credits:["status","updatedAt"],
+  digital_country_tax_rules:[],
 } as const;
+// Tax/legal approvals are provisioned only by an owner-reviewed change. The
+// application can read their versions, never approve or overwrite a country.
+const DIGITAL_READ_ONLY_TABLES = new Set<string>(["digital_country_tax_rules"]);
 export const DIGITAL_RUNTIME_TABLES=Object.keys(DIGITAL_UPDATE_COLUMNS) as Array<keyof typeof DIGITAL_UPDATE_COLUMNS>;
 export async function provisionDigitalRuntime(client:Client,role:string){assertSqlIdentifier(role,"Runtime role");
   const r=await client.query<{safe:boolean}>("SELECT rolcanlogin AND rolinherit AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND NOT rolbypassrls AND rolname<>current_user AS safe FROM pg_roles WHERE rolname=$1",[role]);assert.equal(r.rows[0]?.safe,true);
@@ -30,7 +35,7 @@ export async function provisionDigitalRuntime(client:Client,role:string){assertS
       await client.query(`REVOKE ALL ON TABLE ${relation} FROM ${group}`);
       const cols=await client.query<{column_name:string}>("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=$1",[table]);
       for(const c of cols.rows)await client.query(`REVOKE UPDATE ("${c.column_name.replaceAll('"','""')}") ON ${relation} FROM ${group}`);
-      await client.query(`GRANT SELECT,INSERT ON ${relation} TO ${group}`);
+      await client.query(`GRANT ${DIGITAL_READ_ONLY_TABLES.has(table)?"SELECT":"SELECT,INSERT"} ON ${relation} TO ${group}`);
       const allowed:DIGITAL_COLUMNS= DIGITAL_UPDATE_COLUMNS[table];
       if(allowed.length)await client.query(`GRANT UPDATE (${allowed.map(c=>`"${c}"`).join(",")}) ON ${relation} TO ${group}`);
     }

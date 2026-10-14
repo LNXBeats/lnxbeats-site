@@ -9,7 +9,7 @@ test("Local simulation cannot be moved to another database/role/port or activate
 });
 test("Local route accepts neither browser evidence nor external gateway/merchant fields", async () => {
   const route = await readFile(new URL("../../app/api/digital/local-review/checkout/route.ts", import.meta.url), "utf8");
-  assert.match(route, /digitalBody\(request,\["idempotencyKey","revision","termsVersion","earlyDelivery","withdrawalAcknowledged"\]\)/);
+  assert.match(route, /digitalBody\(request,\["idempotencyKey","revision","termsVersion","earlyDelivery","withdrawalAcknowledged","jurisdiction"\]\)/);
   assert.match(route, /withDigitalApi/); assert.match(route, /localDigitalReviewCheckoutAllowed\(actor\.email/);
   assert.doesNotMatch(route, /fetch\(|new Stripe|digitalGateway\(/);
   assert.match(route, /eventId:`dcn12-local-paid-\$\{attempt\.id\}`/);

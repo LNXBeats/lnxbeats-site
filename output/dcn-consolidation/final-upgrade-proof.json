@@ -1,0 +1,27 @@
+{
+  "backupReused": true,
+  "backupSha256": "b289b2eee7b7f8c9325183b264fb09a6ce47b0f91869487174e1bf762caad657",
+  "encryptionVerified": true,
+  "actualIsolatedRestore": "PASS",
+  "finalMigrationHashes": [
+    {
+      "migration": "20261015010000_digital_formats",
+      "sha256": "59370769068a629c42ca9326422a4518ded7b8d2e6ca3509596ca5b6f94bc2e4"
+    },
+    {
+      "migration": "20261015020000_digital_completion_credit",
+      "sha256": "80f5c4cf7636b026855ca60a5801b79e04283df802ba951676103f1484cc527d"
+    },
+    {
+      "migration": "20261015030000_digital_country_tax_rules",
+      "sha256": "5e9ed618dd774af5162e52344124996f747bc90d26eb2f147780055b992f6aba"
+    }
+  ],
+  "canaryTables": 104,
+  "historicalDataPreserved": true,
+  "historicalSourceUnchanged": true,
+  "runtimeProvisioning": "PASS",
+  "otherDomainAclPreserved": true,
+  "allowedCountries": 0,
+  "plaintextRemoved": true
+}

@@ -1,0 +1,71 @@
+{
+  "environment": "LOCAL_BROWSER_PROVIDER_DOUBLES_NOT_EXTERNAL",
+  "responsive": [
+    {
+      "documentWidth": 375,
+      "horizontalOverflow": false,
+      "tracks": 12,
+      "width": 375
+    },
+    {
+      "documentWidth": 390,
+      "horizontalOverflow": false,
+      "tracks": 12,
+      "width": 390
+    },
+    {
+      "documentWidth": 430,
+      "horizontalOverflow": false,
+      "tracks": 12,
+      "width": 430
+    },
+    {
+      "documentWidth": 768,
+      "horizontalOverflow": false,
+      "tracks": 12,
+      "width": 768
+    },
+    {
+      "documentWidth": 1440,
+      "horizontalOverflow": false,
+      "tracks": 12,
+      "width": 1440
+    }
+  ],
+  "downloads": [
+    {
+      "name": "Télécharger WAV",
+      "bytes": 17199102,
+      "sha256": "0166c482f9655dfaae6b210c56cccf494381cc3ff59a00f56ee893b478a28248"
+    },
+    {
+      "name": "Télécharger MP3",
+      "bytes": 2602840,
+      "sha256": "049199730d02931aa1f0cddac5fd5c070c71eb8eb1726d4e03bfbc31b5fd7509"
+    },
+    {
+      "name": "Télécharger ZIP WAV",
+      "bytes": 36120778,
+      "sha256": "cc60df4f10a5e60154a08146c2c740d63cdd07cea1bbf3bf886c146a1236a17a"
+    },
+    {
+      "name": "Télécharger ZIP MP3",
+      "bytes": 5492577,
+      "sha256": "dfba64a838aadae76b7062a023f8ee2c8557bf68223717020d58b268654a6ba6"
+    }
+  ],
+  "metadataChecksumComparison": "PASS",
+  "nativeBrowserDownloads": 4,
+  "initialDeliveryAcknowledged": true,
+  "albumTracks": 12,
+  "basePriceCents": 990,
+  "creditCents": 100,
+  "paidCents": 890,
+  "providerCalls": 0,
+  "realPspPayment": "NOT_RUN",
+  "pdfVisualReview": {
+    "files": 5,
+    "pages": 9,
+    "result": "PASS"
+  }
+}

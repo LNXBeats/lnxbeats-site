@@ -5,7 +5,7 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { isFictitiousRecipient } from "@/lib/notifications/domain";
 import { billingSnapshotHash } from "@/lib/billing/domain";
-import { DigitalError, requireDigitalEnvironment } from "./domain";
+import { DigitalError, requireDigitalEnvironment, assertDigitalUuid } from "./domain";
 export type DigitalMail = { id: string; recipient: string; businessKey: string; template: unknown };
 export type DigitalMailResult = { id: string; evidence: "CAPTURED_QA" | "SENT" };
 /** Local capture is an idempotent file, not delivery, reading or a legal confirmation. */
@@ -22,9 +22,10 @@ export async function captureDigitalEmail(message: DigitalMail): Promise<Digital
     if (await readFile(path.join(root, `${id}.json`), "utf8") !== record) throw new DigitalError("MAIL_IDEMPOTENCY_CONFLICT"); }
   return { id, evidence: "CAPTURED_QA" };
 }
-export async function processDigitalNotifications(limit = 10, sender = captureDigitalEmail) {
+export async function processDigitalNotifications(limit = 10, sender = captureDigitalEmail, orderId?:string) {
   requireDigitalEnvironment(); const result = { captured: 0, sent: 0, failed: 0 };
-  const rows = await prisma.digitalNotification.findMany({ where: { availableAt: { lte: new Date() }, OR: [
+  if(orderId)assertDigitalUuid(orderId);
+  const rows = await prisma.digitalNotification.findMany({ where: { ...(orderId?{orderId}:{}), availableAt: { lte: new Date() }, OR: [
     { status: { in: ["PENDING", "RETRY"] } }, { status: "PROCESSING", leaseUntil: { lte: new Date() } },
   ] }, orderBy: { createdAt: "asc" }, take: Math.min(limit, 25) });
   for (const row of rows) {

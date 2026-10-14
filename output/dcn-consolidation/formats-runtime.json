@@ -1,0 +1,454 @@
+{
+  "environment": "LOCAL_DISPOSABLE_PG_FFMPEG_STORAGE",
+  "providerCalls": 0,
+  "payment": "SYNTHETIC_FORMAT_RIGHTS_FIXTURE_NOT_PSP",
+  "checks": {
+    "REAL_WAV_MP3_12_TRACKS": "PASS",
+    "PRIVATE_FULL_MASTERS": "PASS",
+    "PUBLIC_EXCERPTS_MAX_60S": "PASS",
+    "ACQUISITION_FORMAT_SNAPSHOT": "PASS",
+    "DISTINCT_FORMAT_ZIPS_CHECKSUMS": "PASS",
+    "ALL_12_ARCHIVED_ENTRIES_EXACT": "PASS",
+    "OWNER_TRACK_AND_ZIP_DOWNLOADS": "PASS",
+    "OTHER_USER_DENIED": "PASS",
+    "MASTER_AND_SOURCE_IDENTITY_IMMUTABLE": "PASS",
+    "LIBRARY_BOTH_FORMATS_NO_STORAGE_KEYS": "PASS",
+    "REVOCATION_REVALIDATED_PER_REQUEST": "PASS",
+    "AUDIO_REAL_PROCESS_CRASH_RESUMED": "PASS",
+    "CRASH_TEMP_CLEANUP_TARGETED": "PASS",
+    "ZIP_REAL_PROCESS_CRASH_RESUMED": "PASS",
+    "NEW_MASTER_DOES_NOT_REPLACE_ACQUIRED_WAV_MP3": "PASS",
+    "ARCHIVE_QUEUE_CONCURRENT_CACHE_IDEMPOTENT": "PASS",
+    "NEW_TICKET_RENEWABLE_NO_PURCHASE_DOWNLOAD_CAP": "PASS",
+    "HISTORICAL_LIBRARY_ORIGINAL_ONLY_READ_ONLY": "PASS"
+  },
+  "measurements": [
+    {
+      "processed": false,
+      "nodeRssPeak": 248004608,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 217645056,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 221872128,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": 16465920,
+      "ffmpegSamples": 5,
+      "tempSourceBytes": 17199102,
+      "tempJobBytesObserved": 21241392,
+      "mp3Checksum": "049199730d02931aa1f0cddac5fd5c070c71eb8eb1726d4e03bfbc31b5fd7509",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 310919168,
+      "externalPeak": 58639672,
+      "arrayBuffersPeak": 45872882
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 236847104,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 250904576,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 224903168,
+      "externalPeak": 20640090,
+      "arrayBuffersPeak": 8037962
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1389252,
+      "tempJobBytesObserved": 1728632,
+      "mp3Checksum": "44e23642c798585f44e290f16486e29b77a82bb9d51c11f5ceae110ecf649e69",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 293781504,
+      "externalPeak": 24742697,
+      "arrayBuffersPeak": 8157920
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 223363072,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 244056064,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 220102656,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1455402,
+      "tempJobBytesObserved": 1811501,
+      "mp3Checksum": "90601f28b52ac2d39fb4af2ccf0accf49f4e034266643a435755b89dc8c88c67",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 275824640,
+      "externalPeak": 34575689,
+      "arrayBuffersPeak": 16905234
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 236797952,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 215990272,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 218628096,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1521552,
+      "tempJobBytesObserved": 1894369,
+      "mp3Checksum": "2054355a2f79afc1c5c1a2c69c4caf34e293712a48f963b426aacf65944224a2",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 278724608,
+      "externalPeak": 35781920,
+      "arrayBuffersPeak": 18111465
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 220069888,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 218349568,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1587702,
+      "tempJobBytesObserved": 1975565,
+      "mp3Checksum": "7c6487ec30ed185c83ea21a031d5a01d9f5258be09e453e3ced9463de1eeb38a",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 294010880,
+      "externalPeak": 24742697,
+      "arrayBuffersPeak": 8637523
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1653852,
+      "tempJobBytesObserved": 2058434,
+      "mp3Checksum": "7b146f8cd0f5e2c2ecddd4634052de90f84cbfeebf290402484cb33a9df1be3e",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 290865152,
+      "externalPeak": 21566412,
+      "arrayBuffersPeak": 8799622
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 234815488,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 220938240,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 235012096,
+      "externalPeak": 19737849,
+      "arrayBuffersPeak": 7135717
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1720002,
+      "tempJobBytesObserved": 2139630,
+      "mp3Checksum": "fc47c7d6fc7e1290f1c5ac8c69eb8d6f5ea9814efa2a357f4c111c9f35e1a507",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 281280512,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 219086848,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 219054080,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 221167616,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1786152,
+      "tempJobBytesObserved": 2222499,
+      "mp3Checksum": "bcbc32d057afb30d9868bbf245b51e5880b62e16ee7ef22a2453fb1be7f5d99b",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 275169280,
+      "externalPeak": 36413623,
+      "arrayBuffersPeak": 18743168
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 252854272,
+      "externalPeak": 28354884,
+      "arrayBuffersPeak": 8037962
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 259407872,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 221921280,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1852302,
+      "tempJobBytesObserved": 2303695,
+      "mp3Checksum": "a73a32669d9bc55ccc35b664aaffa517a04d1434001b761330ef324d2db71780",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 296910848,
+      "externalPeak": 22033872,
+      "arrayBuffersPeak": 9267082
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 249970688,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 226607104,
+      "externalPeak": 28354884,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 214663168,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1918452,
+      "tempJobBytesObserved": 2386563,
+      "mp3Checksum": "d1cad65c695247ea3c5470fa8a87d2add9abfa1810cc6d97fc5557d8b4d9c207",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 291848192,
+      "externalPeak": 22196221,
+      "arrayBuffersPeak": 9429431
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 224116736,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 213942272,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 220168192,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 1984602,
+      "tempJobBytesObserved": 2469432,
+      "mp3Checksum": "983bb73a48c63cb755d340464689c5516a069d7dc8152612bfad2b629a6765ed",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 285671424,
+      "externalPeak": 36886437,
+      "arrayBuffersPeak": 19215982
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 227229696,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 213729280,
+      "externalPeak": 31495996,
+      "arrayBuffersPeak": 13990203
+    },
+    {
+      "processed": false,
+      "nodeRssPeak": 237322240,
+      "externalPeak": 19773496,
+      "arrayBuffersPeak": 7171364
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": "NOT_MEASURED",
+      "ffmpegSamples": 0,
+      "tempSourceBytes": 2050752,
+      "tempJobBytesObserved": 2550628,
+      "mp3Checksum": "12a1a877de5a20a6d43794e1dbcf5d34439f0b3a357ef0577cc79ae067b22ae2",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 279347200,
+      "externalPeak": 37045097,
+      "arrayBuffersPeak": 19374642
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": 15745024,
+      "ffmpegSamples": 5,
+      "tempSourceBytes": 16967046,
+      "tempJobBytesObserved": 20973809,
+      "mp3Checksum": "54824e8c1645be70781e82b78208c7d6289e418f73a5494c155a73e1744dd55c",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 299876352,
+      "externalPeak": 58114010,
+      "arrayBuffersPeak": 45343199
+    },
+    {
+      "cleanupDryRun": {
+        "directories": [
+          "/private/tmp/lnx-dcn-consolidation-rXGsmn/work/de63dddd-7849-4357-8b9a-3f4712c0bef0.f2b277af-9464-4ecb-878b-9aa1857c65e6"
+        ],
+        "containsOnly": "source.wav",
+        "acquiredObjectsDeleted": 0
+      },
+      "zipCleanupDryRun": {
+        "directories": [
+          "/private/tmp/lnx-dcn-consolidation-rXGsmn/work/c5f813e2-fd3a-4f98-ad40-e3d446a1dc26.0e9fda7e-7070-4d6b-a0f8-2f6673313015"
+        ],
+        "acquiredObjectsDeleted": 0
+      }
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": 15941632,
+      "ffmpegSamples": 6,
+      "tempSourceBytes": 17055162,
+      "tempJobBytesObserved": 21075509,
+      "mp3Checksum": "8410be94ffb6eb76e9141c5b81d8335008ea5556af5824a56437684da2fb1776",
+      "mp3BitrateKbps": 320,
+      "nodeRssPeak": 309624832,
+      "externalPeak": 58311105,
+      "arrayBuffersPeak": 45544315
+    }
+  ],
+  "fixtureIds": {
+    "projectId": "5349ccad-b82e-452b-9121-821c18faab80",
+    "slug": "dcn-consolidation-7b2ebd49-4e0c-42b0-80e6-d17484cce6d5",
+    "adminId": "614f4aac-f48b-4214-a292-85546a71c63b",
+    "buyerId": "3797f8cb-e0c8-4117-9a83-b98809dc511b",
+    "otherUserId": "238b3a91-8a33-4cf3-b8a5-bf635af3fd69",
+    "trackIds": [
+      "69f2eb30-eee5-45b1-90cc-c8b173e96f51",
+      "93014840-0e2d-411b-b8da-10c2d95ba4c1",
+      "43fb8c7c-bf64-4e88-b8aa-42528ba29ba1",
+      "82d2034b-b979-4f00-bee4-73681d239c4e",
+      "d94a15a4-7852-49dd-b52d-e206839830f2",
+      "6aa88cd9-bdf9-4019-b844-67e821581b6f",
+      "522a9812-ee72-49f0-8ed2-91ed8b84e899",
+      "ddad3b03-1233-4c9b-bc7d-640ebd03059d",
+      "813aba18-cf83-444c-9fc1-32c812ea7a3e",
+      "9fd284c3-6b41-4d81-bf51-ca0954d9ddcb",
+      "c98a4503-d102-4881-9909-5ae860e22052",
+      "b4a4cb91-88a4-41f7-bf11-553c5c76a780"
+    ],
+    "albumOfferId": "a364e1b4-d951-4871-b8ac-fedbf6a95385",
+    "singleOfferIds": [
+      "8119ecd4-88a0-49e2-bd4d-86ae953781ba",
+      "0376ec1b-8384-4441-b855-bca84368be1b",
+      "d3ba67dc-9b1a-4cc2-b215-ff8984d87d54",
+      "a7f15ac5-85f9-4a54-9264-d861bfaa4a90",
+      "42408588-c1b7-4f8e-94e8-7ae64b6040bd",
+      "a591191c-a83c-4b53-9d57-1a969201cadf",
+      "9d6e42d9-d571-41c3-9521-acd14568ec19",
+      "1ac68896-2cdf-403f-8f32-52aa88ed053a",
+      "c3c201b9-5f5b-43dc-b960-321c124a3f14",
+      "e6d624b2-b751-43a7-b13a-c8e14761fc85",
+      "a9358db8-640b-494e-9370-96b6cfb18226",
+      "5fa2bb8f-b3db-4475-8b88-6b05e659b9dc"
+    ],
+    "formatOrderId": "70955733-f8f9-4c20-b7ee-e4eba0c37c36",
+    "formatLineId": "33df0a5a-e9c2-466d-a247-a5c53eecde8d"
+  }
+}

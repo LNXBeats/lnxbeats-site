@@ -1,4 +1,8 @@
 import { DigitalError, assertDigitalUuid } from "./domain";
+/** A later financial update must never clear an independent delivery/credit incident. */
+export const DIGITAL_PERSISTENT_FINANCIAL_INCIDENTS=["PAYMENT_CONTRADICTION","UNMATCHED_CAPTURE_INCIDENT","OVERLAPPING_ACQUISITION_INCIDENT","REFUND_CONTRADICTION",
+  "COMPLETION_SOURCE_FINANCIAL_INCIDENT","ACCOUNT_FULFILLMENT_REQUIRES_REVIEW","TERRITORY_FULFILLMENT_REQUIRES_REVIEW",
+  "ACQUIRED_MEDIA_REQUIRES_REVIEW","ACQUIRED_RIGHTS_REQUIRES_REVIEW","ACQUIRED_FORMATS_REQUIRES_REVIEW"] as const;
 export type DigitalRefundTarget = { lineId: string; amountCents: number };
 export type DigitalRefundEvidence = { mode: "TEST"; authenticated: boolean; merchantId: string; provider: "STRIPE" | "PAYPAL";
   orderId: string; paymentReference: string; reference: string; amountCents: number; currency: string; status: "PENDING" | "SUCCEEDED" | "FAILED"; localRefundId?: string };

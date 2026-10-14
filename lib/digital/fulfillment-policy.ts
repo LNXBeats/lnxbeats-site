@@ -1,19 +1,20 @@
 import { billingSnapshotHash } from "@/lib/billing/domain";
 import { createHash } from "node:crypto";
-import { DIGITAL_EARLY_DELIVERY_TEXT, DIGITAL_WITHDRAWAL_TEXT, DIGITAL_TERMS_TEXT, DIGITAL_TERMS_VERSION, DigitalError } from "./domain";
+import { DIGITAL_EARLY_DELIVERY_TEXT, DIGITAL_WITHDRAWAL_TEXT, DIGITAL_TERMS_VERSION, DigitalError } from "./domain";
+import { DIGITAL_MUSIC_TERMS_DRAFT_TEXT } from "./digital-legal";
 
 export const DIGITAL_FISCAL_REVIEW_NOTICE = "TEST : fiscalité des contenus numériques à valider. Aucun régime ni taux réel présumé.";
-export const DIGITAL_CONTRACT_POLICY = "DCN-1.1-QA-EXPLICIT-RECEIPT";
+export const DIGITAL_CONTRACT_POLICY = "DCN-CONSOLIDATION-QA-EXPLICIT-RECEIPT";
 export function digitalContractSnapshot(customer: { email: string; name: string }, acceptedAt: Date) {
   return { mode: "TEST", policy: DIGITAL_CONTRACT_POLICY, customer: { type: "INDIVIDUAL", name: customer.name, email: customer.email },
-    acceptedAt: acceptedAt.toISOString(), terms: { version: DIGITAL_TERMS_VERSION, text: DIGITAL_TERMS_TEXT },
+    acceptedAt: acceptedAt.toISOString(), terms: { version: DIGITAL_TERMS_VERSION, text: DIGITAL_MUSIC_TERMS_DRAFT_TEXT },
     earlyDelivery: { expresslyRequested: true, text: DIGITAL_EARLY_DELIVERY_TEXT },
     withdrawal: { expresslyAcknowledged: true, text: DIGITAL_WITHDRAWAL_TEXT },
     licenseStatus: "PROPOSED_NOT_LIVE_APPROVED", fiscalStatus: "LOCAL_REVIEW_ONLY" };
 }
 export function verifyContractSnapshot(snapshot: unknown, termsVersion: string, termsHash: string) {
   const s = snapshot as ReturnType<typeof digitalContractSnapshot>;
-  if (s?.mode !== "TEST" || s.policy !== DIGITAL_CONTRACT_POLICY || s.terms?.version !== termsVersion
+  if (s?.mode !== "TEST" || ![DIGITAL_CONTRACT_POLICY,"DCN-1.1-QA-EXPLICIT-RECEIPT"].includes(s.policy) || s.terms?.version !== termsVersion
     || !s.terms.text || !s.earlyDelivery?.expresslyRequested || !s.withdrawal?.expresslyAcknowledged
     || !s.customer?.email || !s.acceptedAt || createHash("sha256").update(s.terms.text).digest("hex") !== termsHash) throw new DigitalError("CONTRACT_REQUIRES_REVIEW", 409);
   // Terms use the existing text SHA, not a hash of the changing offer or template.

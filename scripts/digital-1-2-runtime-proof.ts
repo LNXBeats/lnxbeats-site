@@ -45,7 +45,7 @@ async function signIn(email: string) { assert.ok(email.endsWith("@example.invali
 try {
   const order = await prisma.$transaction(async tx => {
     await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
-    return tx.digitalOrder.findUniqueOrThrow({ where: { id: orderId }, include: { user: { select: { id: true, email: true } }, fulfillment: true, documents: { select: { id: true, kind: true, status: true, snapshotHash: true, pdfHash: true } }, lines: { include: { archive: true, entitlements: { include: { master: { include: { masterAsset: true } } } } } } } });
+    return tx.digitalOrder.findUniqueOrThrow({ where: { id: orderId }, include: { user: { select: { id: true, email: true } }, fulfillment: true, documents: { select: { id: true, kind: true, status: true, snapshotHash: true, pdfHash: true } }, lines: { include: { archives: true, entitlements: { include: { master: { include: { masterAsset: true } } } } } } } });
   });
   assert.equal(order.mode, "TEST"); assert.equal(order.status, "PAID"); assert.ok(order.user.email === "dcn12-review-member@example.invalid", "Expected synthetic QA owner only."); assert.ok(order.fulfillment?.accessReadyAt); assert.equal(order.lines.length, 1);
   const line = order.lines[0]; assert.equal(line.scope, "ALBUM");
@@ -57,7 +57,7 @@ try {
     const actual = await digestFile(mediaPath(asset.storageKey!)); assert.equal(actual.bytes, Number(asset.sizeBytes)); assert.equal(actual.sha256, asset.checksumSha256);
     sourceProof.push({ position: i + 1, masterId: acquired.masterId, version: entitlement.master.version, bytes: actual.bytes, sha256: actual.sha256, zipName: safeZipName(`${String(i + 1).padStart(2, "0")}-${acquired.title}.${asset.filename.split(".").pop()}`) });
   }
-  const archive = line.archive; assert.ok(archive); assert.equal(archive.status, "READY"); assert.equal(archive.snapshotHash, billingSnapshotHash(line.trackSnapshot)); assert.equal(archive.storageBackend, "LOCAL"); assert.equal(archive.storageProvider, "local");
+  const archive = line.archives.find(a=>a.format==="WAV"); assert.ok(archive); assert.equal(archive.status, "READY"); assert.equal(archive.snapshotHash, billingSnapshotHash(line.trackSnapshot)); assert.equal(archive.storageBackend, "LOCAL"); assert.equal(archive.storageProvider, "local");
   const archiveFile = mediaPath(archive.storageKey!), archiveDigest = await digestFile(archiveFile); assert.equal(archiveDigest.bytes, Number(archive.sizeBytes)); assert.equal(archiveDigest.sha256, archive.checksum);
   const handle = await open(archiveFile, "r"); let offset = 0;
   try {

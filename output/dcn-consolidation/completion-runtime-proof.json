@@ -1,0 +1,67 @@
+{
+  "scope": "LOCAL_POSTGRES_NON_OWNER_AND_PROVIDER_DOUBLES",
+  "database": "lnx_dcn_consolidation_test",
+  "role": "dcn_runtime_a",
+  "runId": "c2ed47c9-8e44-4e2a-84a4-5b11eea59cc2",
+  "results": [
+    {
+      "name": "non-owner runtime normal single purchase stays paid and grants one pinned acquisition",
+      "status": "PASS"
+    },
+    {
+      "name": "partial single refund gives immutable credit note and net eligible cents 100",
+      "status": "PASS"
+    },
+    {
+      "name": "concurrent album checkout has one winner and one durable source reservation",
+      "status": "PASS"
+    },
+    {
+      "name": "confirmed completion consumes credit and grants exact 12-track snapshot with truthful new invoice only",
+      "status": "PASS"
+    },
+    {
+      "name": "different-event same capture is idempotent after credit consumption",
+      "status": "PASS"
+    },
+    {
+      "name": "completion contractual confirmation is generated, transferred and acknowledged before track download authorization",
+      "status": "PASS"
+    },
+    {
+      "name": "partial and balance album refunds create two notes without releasing previously consumed credit",
+      "status": "PASS"
+    },
+    {
+      "name": "after full completion refund a new track/album download request is denied without creating tickets",
+      "status": "PASS"
+    },
+    {
+      "name": "real-world shape pending then confirmed source refund is recorded once, dependent album reviews immediately, no financial movement",
+      "status": "PASS"
+    },
+    {
+      "name": "runtime cannot rewrite credit proof, delete a credit or rewrite immutable source invoice",
+      "status": "PASS"
+    },
+    {
+      "name": "database rejects direct second use of the same canonical credited track and changing a completion snapshot",
+      "status": "PASS"
+    }
+  ],
+  "ids": {
+    "projectId": "c0b453b2-964c-461d-8ca7-f276da305352",
+    "sourceOrderId": "87fbc9b3-2465-4560-a3b0-535cc951f5a2",
+    "sourceLineId": "10541ab9-d8fc-41f3-85d9-bed3b7589457",
+    "completionOrderId": "bd0f4b0c-f629-4f4b-abed-50bd1f339c7b",
+    "completionLineId": "c1b7f0f4-42ea-4728-b058-8c4582a2bc7d"
+  },
+  "providerDoubleCreates": 2,
+  "externalRequests": 0,
+  "priorAcquisitionsMutated": false,
+  "invoiceHashes": {
+    "sourceInvoiceHash": "cd9f6b53d430516a9b9ede84f617b29f85e5e2c1c3af9c91f9db28010cc0a2d3",
+    "invoiceHash": "66b55569a8b20ec2349961de7e959e1edbef716ab7bad2bedc71502fc67e3351"
+  },
+  "proofHash": "683602148c26add020b6fdc00f2ec3d655cd5a0925c67b92ba045f671a3be8ab"
+}

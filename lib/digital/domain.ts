@@ -3,10 +3,10 @@ export class DigitalError extends Error {
 }
 export const DIGITAL_PREVIEW_LIMIT_MS = 60_000;
 export const DIGITAL_MASTER_LIMIT_BYTES = 512 * 1024 * 1024;
-export const DIGITAL_TERMS_VERSION = "DCN-1.0-LOCAL-REVIEW";
+export const DIGITAL_TERMS_VERSION = "digital-music-cgv-20261014-consolidation-draft-01";
 export const DIGITAL_TERMS_TEXT = "Licence personnelle d'écoute et de téléchargement. Aucune cession de droits d'exploitation. Conditions de test uniquement, à valider avant LIVE.";
-export const DIGITAL_EARLY_DELIVERY_TEXT = "Je demande expressément la fourniture immédiate du contenu numérique.";
-export const DIGITAL_WITHDRAWAL_TEXT = "Je reconnais la perte du droit de rétractation après confirmation sur support durable et commencement de la fourniture.";
+export const DIGITAL_EARLY_DELIVERY_TEXT = "Je demande expressément le commencement de la fourniture de ces contenus numériques avant la fin du délai de rétractation applicable. Formulation DCN proposée, à valider par territoire avant LIVE.";
+export const DIGITAL_WITHDRAWAL_TEXT = "Je reconnais que, lorsque les conditions légales applicables sont réunies, je peux perdre mon droit de rétractation après consentement exprès, confirmation sur support durable et commencement de la fourniture. Les garanties légales et les autres recours restent préservés. Formulation QA non approuvée pour LIVE.";
 export const digitalUuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 export function assertDigitalUuid(v: unknown): asserts v is string { if (!digitalUuid(v)) throw new DigitalError("INVALID_ID"); }
 export function digitalPrice(v: unknown) {
@@ -24,8 +24,13 @@ export function previewWindow(durationMs: number, startMs: number, requestedMs =
   // Leave room for MP3 frame padding; the output file itself must be <= 60 s.
   return { startMs, durationMs: Math.min(durationMs - startMs, requestedMs, 59_900) };
 }
+export type DigitalCompletionSource = { trackId: string; masterId: string; sourceLineId: string;
+  paidCents: number; refundedCents: number; availableCents: number; creditCents: number; proofHash: string };
+export type DigitalCompletionSnapshot = { version: 1; basePriceCents: number; creditCents: number; sources: DigitalCompletionSource[] };
 export type DigitalSelection = { id: string; scope: string; title: string; priceCents: number; version: number;
-  tracks: Array<{ trackId: string; masterId: string; title: string; position: number }> };
+  completion?: DigitalCompletionSnapshot;
+  tracks: Array<{ trackId: string; masterId: string; title: string; position: number;
+    formats?: ["WAV", "MP3"]; wavAssetId?: string; mp3AssetId?: string }> };
 export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: Set<string>) {
   if (selected.length > 50) throw new DigitalError("CART_TOO_LARGE");
   const unique = [...new Map(selected.map(s => [s.id, s])).values()];
@@ -36,7 +41,16 @@ export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: 
     digitalPrice(s.priceCents);
     if (!s.tracks.length) throw new DigitalError("NO_MASTER", 409);
     if (s.scope === "TRACK" && covered.has(s.tracks[0].trackId)) { removed.push(s.id); return false; }
-    if (s.tracks.some(t => ownedTracks.has(t.trackId))) throw new DigitalError(s.scope === "ALBUM" ? "ALBUM_PARTIALLY_OWNED" : "ALREADY_OWNED", 409,{ownedTitles:s.tracks.filter(t=>ownedTracks.has(t.trackId)).map(t=>t.title)});
+    const owned = s.tracks.filter(t => ownedTracks.has(t.trackId));
+    if (owned.length && (!s.completion || s.scope !== "ALBUM" || owned.length !== s.completion.sources.length
+      || owned.some(t => !s.completion!.sources.some(c => c.trackId === t.trackId && c.masterId === t.masterId))))
+      throw new DigitalError(s.scope === "ALBUM" ? "ALBUM_PARTIALLY_OWNED" : "ALREADY_OWNED", 409,{ownedTitles:owned.map(t=>t.title)});
+    if (s.completion && (s.scope!=="ALBUM"||s.completion.version !== 1 || !Number.isSafeInteger(s.completion.creditCents) || s.completion.creditCents < 1
+      || s.completion.basePriceCents - s.completion.creditCents !== s.priceCents
+      || s.completion.sources.reduce((n,c)=>n+c.creditCents,0) !== s.completion.creditCents
+      || s.completion.sources.some(c=>!ownedTracks.has(c.trackId)||!s.tracks.some(t=>t.trackId===c.trackId&&t.masterId===c.masterId)
+        ||!Number.isSafeInteger(c.creditCents)||c.creditCents<1||c.creditCents!==c.availableCents||c.availableCents!==c.paidCents-c.refundedCents)
+      || new Set(s.completion.sources.map(c=>c.trackId)).size !== s.completion.sources.length)) throw new DigitalError("INVALID_COMPLETION",409);
     return true;
   });
   const seen = new Set<string>();
@@ -45,6 +59,7 @@ export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: 
     seen.add(track.trackId);
   }
   const totalCents = lines.reduce((sum, s) => sum + s.priceCents, 0);
+  if (lines.some(l=>l.completion) && lines.length !== 1) throw new DigitalError("COMPLETION_MULTI_CART_REQUIRES_REVIEW",409);
   if (!Number.isSafeInteger(totalCents) || totalCents > 500_000) throw new DigitalError("INVALID_TOTAL");
   return { lines, totalCents, removed };
 }
@@ -70,7 +85,8 @@ export function uploadMetadata(input: unknown) {
   if (Object.keys(v).some(k => !["filename", "mimeType", "sizeBytes", "expectedVersion", "previewStartMs", "replaceConfirmed"].includes(k))) throw new DigitalError("INVALID_UPLOAD");
   if (typeof v.filename !== "string" || v.filename.length > 255 || /[\r\n\\/]/.test(v.filename)) throw new DigitalError("INVALID_UPLOAD");
   const extension = v.filename.split(".").pop()!.toLowerCase();
-  const mimes: Record<string, string[]> = { wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "application/octet-stream", ""], mp3: ["audio/mpeg", "audio/mp3", "application/octet-stream", ""], flac: ["audio/flac", "audio/x-flac", "application/octet-stream", ""] };
+  // New DCN sources are lossless WAV; never fabricate WAV by upsampling MP3.
+  const mimes: Record<string, string[]> = { wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "application/octet-stream", ""] };
   if (!mimes[extension]?.includes(String(v.mimeType ?? "")) || !Number.isSafeInteger(v.sizeBytes) || Number(v.sizeBytes) < 12 || Number(v.sizeBytes) > DIGITAL_MASTER_LIMIT_BYTES) throw new DigitalError("INVALID_UPLOAD");
   if (!Number.isSafeInteger(v.expectedVersion) || Number(v.expectedVersion) < 0 || !Number.isSafeInteger(v.previewStartMs) || Number(v.previewStartMs) < 0) throw new DigitalError("INVALID_UPLOAD");
   if (Number(v.expectedVersion) > 0 && v.replaceConfirmed !== true) throw new DigitalError("REPLACEMENT_CONFIRMATION_REQUIRED", 409);
