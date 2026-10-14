@@ -9,6 +9,7 @@ import { digitalGateway, type DigitalGateway, type DigitalProviderOrder } from "
 import { digitalContractSnapshot } from "./fulfillment-policy";
 import { enqueueDigitalEmail, prepareDigitalDocuments } from "./documents";
 import { localDigitalReviewCheckoutAllowed } from "./local-review-policy";
+import { assertDigitalPaypalDeclinedRecovery, digitalPaypalDeclinedReference, isDigitalPaypalDeclinedEvidence } from "./paypal-evidence";
 
 function user(actor: OrderActor) { if (actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("VERIFIED_ACCOUNT_REQUIRED", 403); }
 async function lock(tx: Prisma.TransactionClient, id: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${id}`})) IS NULL AS locked`; }
@@ -121,6 +122,17 @@ export async function reconcileDigitalEvidence(e: DigitalPaymentEvidence, mercha
     const details = { amountCents: e.amountCents, paymentReference: e.paymentReference, providerReference: e.providerReference, status: e.status,currency:e.currency,merchantId:e.merchantId };
     await tx.digitalEvent.create({ data: { orderId: order.id, externalKey: key, kind: "PROVIDER_EVIDENCE", details } });
     if (e.status !== "PAID") {
+      if (isDigitalPaypalDeclinedEvidence(e)) {
+        const recoverable = order.status === "PENDING" || order.status === "REQUIRES_REVIEW" && ["UNKNOWN", "CAPTURING"].includes(attempt.status);
+        const contradiction = await tx.digitalEvent.findFirst({ where: { orderId: order.id,
+          kind: { in: ["PAYMENT_CONTRADICTION", "UNMATCHED_CAPTURE_INCIDENT", "OVERLAPPING_ACQUISITION_INCIDENT"] } } });
+        if (recoverable && !contradiction && !order.attempts.some(a => a.status === "PAID")) {
+          await tx.digitalPaymentAttempt.update({ where: { id: attempt.id }, data: { status: "FAILED", paymentReference: e.paymentReference, leaseUntil: null } });
+          await tx.digitalOrder.update({ where: { id: order.id }, data: { status: "FAILED" } });
+          return { failed: true };
+        }
+        return { ignored: true }; // Never downgrade an actual capture or a financial contradiction.
+      }
       if (order.status === "PENDING") await tx.digitalPaymentAttempt.update({ where: { id: attempt.id }, data: { status: e.status === "FAILED" ? "FAILED" : "PENDING" } });
       if (e.status === "FAILED" && order.status === "PENDING") await tx.digitalOrder.update({ where: { id: order.id }, data: { status: "FAILED" } });
       return { pending: true };
@@ -154,13 +166,20 @@ export async function reconcileDigitalEvidence(e: DigitalPaymentEvidence, mercha
     return { paid: true };
   });
 }
-export async function reconcileDigitalOrder(id: string, suppliedGateway?: DigitalGateway) {
+export async function reconcileDigitalOrder(id: string, suppliedGateway?: DigitalGateway, declinedCapture?: string) {
   requireDigitalEnvironment(); assertDigitalUuid(id);
   const order = await prisma.digitalOrder.findUniqueOrThrow({ where: { id }, include: { lines: true, user: true, attempts: { orderBy: { createdAt: "desc" }, take: 1 } } });
-  const attempt = order.attempts[0]; if (!attempt || ["PAID", "FAILED"].includes(attempt.status)) return;
+  const attempt = order.attempts[0];
+  if (declinedCapture !== undefined) {
+    digitalPaypalDeclinedReference(declinedCapture);
+    if (!attempt || attempt.provider !== "PAYPAL" || attempt.paymentReference && attempt.paymentReference !== declinedCapture) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
+  }
+  if (!attempt || ["PAID", "FAILED"].includes(attempt.status)) return;
   if (attempt.leaseUntil && attempt.leaseUntil.getTime() > Date.now()) return;
   const gateway = suppliedGateway ?? digitalGateway(attempt.provider);
-  const recovered = await gateway.recover(providerOrder(order), attempt); if (!recovered) return;
+  const recovered = await gateway.recover(providerOrder(order), attempt);
+  if (declinedCapture !== undefined) assertDigitalPaypalDeclinedRecovery(declinedCapture, recovered?.evidence);
+  if (!recovered) return;
   if (recovered.checkout && attempt.operation === "CHECKOUT") await prisma.digitalPaymentAttempt.updateMany({ where: { id: attempt.id, status: { in: ["UNKNOWN", "CREATING", "OPEN"] } }, data: {
     providerReference: recovered.checkout.id, checkoutUrl: checkoutProviderUrl(recovered.checkout.url, attempt.provider), status: "OPEN", leaseUntil: null } });
   if (recovered.evidence) await reconcileDigitalEvidence(recovered.evidence, gateway.merchantId);

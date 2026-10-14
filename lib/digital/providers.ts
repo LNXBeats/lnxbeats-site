@@ -2,8 +2,9 @@ import "server-only";
 import Stripe from "stripe";
 import { STRIPE_API_VERSION } from "@/lib/payments/config";
 import { hostedCheckoutParameters } from "@/lib/payments/stripe-client";
-import { createScopedPaypalGateway, paypalCaptureResponseEvidence, paypalCentsFromAmount, type PaypalWebhookHeaders } from "@/lib/payments/paypal-client";
+import { createScopedPaypalGateway, type PaypalWebhookHeaders } from "@/lib/payments/paypal-client";
 import { DigitalError, checkoutProviderUrl, requireDigitalEnvironment, type DigitalPaymentEvidence } from "./domain";
+import { digitalPaypalOrderEvidence } from "./paypal-evidence";
 
 export type DigitalProviderOrder = { id: string; totalCents: number; userEmail: string; lines: Array<{ title: string; priceCents: number }> };
 export type DigitalAttemptRef = { id: string; provider: string; providerReference: string | null; idempotencyKey: string };
@@ -74,16 +75,6 @@ function paypal() {
 // Scoped server-only clients; credentials remain inside the existing factories.
 export const digitalStripeClient = stripe;
 export const digitalPaypalClient = paypal;
-function paypalEvidence(body: unknown, order: DigitalProviderOrder, attempt: DigitalAttemptRef, merchantId: string): DigitalPaymentEvidence {
-  const b = body as { id?: string; status?: string; purchase_units?: Array<{ reference_id?: string; custom_id?: string; payee?: { merchant_id?: string }; amount?: { value?: string; currency_code?: string } }> };
-  const unit = b.purchase_units?.[0];
-  if (b.id !== attempt.providerReference || b.purchase_units?.length !== 1 || unit?.custom_id !== attempt.id || unit.reference_id !== order.id
-    || unit.payee?.merchant_id !== merchantId || unit.amount?.currency_code !== "EUR" || paypalCentsFromAmount(unit.amount.value) !== order.totalCents) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
-  const capture = paypalCaptureResponseEvidence(body);
-  if (!capture.evidenceConsistent || capture.paymentId !== attempt.id || !capture.captureId) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
-  return { authenticated: true, mode: "TEST", provider: "PAYPAL", orderId: order.id, providerReference: b.id!, paymentReference: capture.captureId,
-    merchantId, amountCents: capture.amountCents!, currency: capture.currency!, status: capture.status === "COMPLETED" ? "PAID" : ["DENIED","DECLINED","FAILED"].includes(capture.status??"") ? "FAILED" : "PENDING", eventId: `paypal-recover:${capture.captureId}:${capture.status}` };
-}
 export function createDigitalPaypalGateway(): DigitalGateway {
   const { client, merchantId } = paypal();
   const inspect = async (order: DigitalProviderOrder, attempt: DigitalAttemptRef) => {
@@ -99,12 +90,12 @@ export function createDigitalPaypalGateway(): DigitalGateway {
       returnUrl: `${base()}/musique/confirmation/${order.id}`, cancelUrl: `${base()}/musique/confirmation/${order.id}?annule=1` }, attempt.idempotencyKey);
       if (!s.approvalUrl) throw new DigitalError("INVALID_SESSION", 503); return { id: s.id, url: checkoutProviderUrl(s.approvalUrl, "PAYPAL") }; },
     async recover(order, attempt) { const body = await inspect(order, attempt); if (!body) return null;
-      if (body.purchase_units?.[0]?.payments?.captures?.length) return { evidence: paypalEvidence(body, order, attempt, merchantId) };
+      if (body.purchase_units?.[0]?.payments?.captures?.length) return { evidence: digitalPaypalOrderEvidence(body, order, attempt, merchantId) };
       const url = body.links?.find(l => l.rel === "approve" || l.rel === "payer-action")?.href;
       return url ? { checkout: { id: body.id!, url: checkoutProviderUrl(url, "PAYPAL") } } : null; },
     async capture(order, attempt) { const body = await inspect(order, attempt); if (!body || body.status !== "APPROVED") throw new DigitalError("PAYPAL_NOT_APPROVED", 409);
       await client.captureOrder(attempt.providerReference!, `${attempt.idempotencyKey}:capture`);
-      return paypalEvidence(await client.inspectOrder!(attempt.providerReference!), order, attempt, merchantId); },
+      return digitalPaypalOrderEvidence(await client.inspectOrder!(attempt.providerReference!), order, attempt, merchantId); },
   };
 }
 export function digitalGateway(provider: string) { if (provider === "STRIPE") return createDigitalStripeGateway(); if (provider === "PAYPAL") return createDigitalPaypalGateway(); throw new DigitalError("INVALID_PROVIDER"); }

@@ -11,7 +11,7 @@ import type { DigitalFinanceGateway } from "./finance-policy";
 import type { DigitalGateway } from "./providers";
 export type DigitalInboxPayload = { providerReference?: string; paymentReference?: string; attemptId?: string; resourceReference?: string; refundReferences?: string[] };
 export const DIGITAL_STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed", "checkout.session.expired", "refund.created", "refund.updated", "refund.failed", "charge.refunded", "charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed"];
-export const DIGITAL_PAYPAL_EVENTS = ["PAYMENT.CAPTURE.COMPLETED", "PAYMENT.CAPTURE.PENDING", "PAYMENT.CAPTURE.DENIED", "PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED", "PAYMENT.REFUND.PENDING", "PAYMENT.REFUND.COMPLETED", "PAYMENT.REFUND.FAILED", "CUSTOMER.DISPUTE.CREATED", "CUSTOMER.DISPUTE.UPDATED", "CUSTOMER.DISPUTE.RESOLVED"];
+export const DIGITAL_PAYPAL_EVENTS = ["PAYMENT.CAPTURE.COMPLETED", "PAYMENT.CAPTURE.PENDING", "PAYMENT.CAPTURE.DECLINED", "PAYMENT.CAPTURE.DENIED", "PAYMENT.CAPTURE.REFUNDED", "PAYMENT.CAPTURE.REVERSED", "PAYMENT.REFUND.PENDING", "PAYMENT.REFUND.COMPLETED", "PAYMENT.REFUND.FAILED", "CUSTOMER.DISPUTE.CREATED", "CUSTOMER.DISPUTE.UPDATED", "CUSTOMER.DISPUTE.RESOLVED"];
 /** The route verifies signatures first, then persists before acknowledgement. */
 export async function receiveDigitalEvent(input: { provider: string; eventId: string; eventType: string; orderId?: string; bodyHash: string; payload: DigitalInboxPayload }) {
   requireDigitalEnvironment();
@@ -62,7 +62,8 @@ export async function processDigitalInbox(limit = 25, supplied?: { payment?: Dig
         if (!p.resourceReference) throw new DigitalError("DISPUTE_REQUIRES_REVIEW");
         await recordDigitalDisputeEvidence(await g.readDispute(orderId, p.resourceReference), g.merchantId);
       } else {
-        await reconcileDigitalOrder(orderId, supplied?.payment);
+        if (row.provider === "PAYPAL" && row.eventType === "PAYMENT.CAPTURE.DECLINED" && !p.resourceReference) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
+        await reconcileDigitalOrder(orderId, supplied?.payment, row.provider === "PAYPAL" && row.eventType === "PAYMENT.CAPTURE.DECLINED" ? p.resourceReference : undefined);
         const a = await prisma.digitalPaymentAttempt.findFirst({ where: { orderId }, orderBy: { createdAt: "desc" } });
         if (!a || ["UNKNOWN", "CREATING", "CAPTURING"].includes(a.status)) throw new DigitalError("PAYMENT_REQUIRES_REVIEW");
       }
