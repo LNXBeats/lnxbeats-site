@@ -10,6 +10,7 @@ export interface DigitalFinanceGateway {
   refund(request: DigitalRefundRequest): Promise<DigitalRefundEvidence>;
   recoverRefund(request: DigitalRefundRequest): Promise<DigitalRefundEvidence | null>;
   readRefund(orderId: string, reference: string): Promise<DigitalRefundEvidence>;
+  readChargeRefunds?(orderId: string, chargeReference: string): Promise<DigitalRefundEvidence[]>;
   readDispute(orderId: string, reference: string): Promise<DigitalDisputeEvidence>;
 }
 export function refundTargets(value: unknown): DigitalRefundTarget[] {

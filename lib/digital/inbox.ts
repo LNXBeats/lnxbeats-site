@@ -42,10 +42,21 @@ export async function processDigitalInbox(limit = 25, supplied?: { payment?: Dig
     if (!claim.count) continue;
     try {
       const orderId = await resolveOrder(row), p = row.payload as DigitalInboxPayload;
-      if (/refund/i.test(row.eventType)) {
+      if (row.provider === "STRIPE" && row.eventType === "charge.refunded") {
+        const g = supplied?.finance ?? digitalFinanceGateway(row.provider);
+        // Also handles already-persisted historical payloads. Never send ch_ to
+        // readRefund, and never assume an embedded list is complete/current.
+        if (!p.resourceReference || !/^ch_[A-Za-z0-9]+$/.test(p.resourceReference) || !g.readChargeRefunds) throw new DigitalError("REFUND_REQUIRES_REVIEW");
+        const evidence = await g.readChargeRefunds(orderId, p.resourceReference);
+        if (!evidence.length || evidence.length > 100) throw new DigitalError("REFUND_REQUIRES_REVIEW");
+        for (const e of evidence) await recordDigitalRefundEvidence(e, g.merchantId);
+      } else if (/refund/i.test(row.eventType)) {
         const g = supplied?.finance ?? digitalFinanceGateway(row.provider), refs = p.refundReferences ?? (p.resourceReference ? [p.resourceReference] : []);
         if (!refs.length) throw new DigitalError("REFUND_REQUIRES_REVIEW");
-        for (const ref of refs) await recordDigitalRefundEvidence(await g.readRefund(orderId, ref), g.merchantId);
+        for (const ref of refs) {
+          if (row.provider === "STRIPE" && !/^re_[A-Za-z0-9]+$/.test(ref)) throw new DigitalError("REFUND_EVIDENCE_INVALID");
+          await recordDigitalRefundEvidence(await g.readRefund(orderId, ref), g.merchantId);
+        }
       } else if (/dispute|reversed/i.test(row.eventType)) {
         const g = supplied?.finance ?? digitalFinanceGateway(row.provider);
         if (!p.resourceReference) throw new DigitalError("DISPUTE_REQUIRES_REVIEW");

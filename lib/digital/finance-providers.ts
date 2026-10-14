@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { paypalRefundApplicationReference, paypalCentsFromAmount, type PaypalRefundEvidence } from "@/lib/payments/paypal-client";
 import { DigitalError, requireDigitalEnvironment } from "./domain";
 import { digitalStripeClient, digitalPaypalClient } from "./providers";
-import { stripeRefundStatus, stripeDisputeStatus, paypalDisputeStatus, type DigitalFinanceGateway, type DigitalRefundEvidence } from "./finance-policy";
+import { stripeDisputeStatus, paypalDisputeStatus, type DigitalFinanceGateway, type DigitalRefundEvidence } from "./finance-policy";
+import { readStripeChargeRefunds, stripeRefundEvidence } from "./stripe-refunds";
 async function paid(orderId: string, provider: string) {
   const o = await prisma.digitalOrder.findUniqueOrThrow({ where: { id: orderId }, include: { attempts: { where: { status: "PAID" } } } });
   if (o.mode !== "TEST" || o.attempts.length !== 1 || o.attempts[0].provider !== provider || !o.attempts[0].paymentReference || !o.attempts[0].providerReference) throw new DigitalError("PAYMENT_REQUIRES_REVIEW");
@@ -20,11 +21,12 @@ function stripeGateway(): DigitalFinanceGateway {
     return p;
   }
   async function read(orderId: string, reference: string): Promise<DigitalRefundEvidence> {
+    if (!/^re_[A-Za-z0-9]+$/.test(reference)) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
     const p = await verify(orderId), r = await client.refunds.retrieve(reference);
     const pi = typeof r.payment_intent === "string" ? r.payment_intent : r.payment_intent?.id;
     if (pi !== p.attempt.paymentReference || r.currency !== "eur") throw new DigitalError("REFUND_EVIDENCE_INVALID");
-    return { mode: "TEST", authenticated: true, provider: "STRIPE", merchantId, orderId, reference: r.id,
-      paymentReference: pi, amountCents: r.amount, currency: "EUR", status: stripeRefundStatus(r.status) };
+    if (r.id !== reference) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
+    return stripeRefundEvidence(r, { orderId, attemptId: p.attempt.id, paymentReference: p.attempt.paymentReference!, merchantId, amountCents: p.order.totalCents });
   }
   return { merchantId, async refund(r) {
     const p = await verify(r.orderId);
@@ -38,7 +40,10 @@ function stripeGateway(): DigitalFinanceGateway {
     const found = (await client.refunds.list({ payment_intent: r.paymentReference, limit: 100 })).data.filter(x => x.metadata?.digitalRefundId === r.id);
     if (found.length > 1) throw new DigitalError("AMBIGUOUS_REFUND");
     return found[0] ? read(r.orderId, found[0].id) : null;
-  }, readRefund: read, async readDispute(orderId, reference) {
+  }, readRefund: read, async readChargeRefunds(orderId, chargeReference) {
+    const p = await paid(orderId, "STRIPE");
+    return readStripeChargeRefunds(client, { orderId, attemptId: p.attempt.id, paymentReference: p.attempt.paymentReference!, merchantId, amountCents: p.order.totalCents }, chargeReference);
+  }, async readDispute(orderId, reference) {
     const p = await verify(orderId), d = await client.disputes.retrieve(reference);
     const pi = typeof d.payment_intent === "string" ? d.payment_intent : d.payment_intent?.id;
     if (d.livemode || pi !== p.attempt.paymentReference || d.currency !== "eur") throw new DigitalError("DISPUTE_EVIDENCE_INVALID");

@@ -1,0 +1,134 @@
+LNX STUDIO — DCN : RECETTE STRIPE TEST APRÈS CORRECTIF REFUND
+Date de préparation : 14 octobre 2026
+État : PRÉPARÉE / NON EXÉCUTÉE / NOUVELLE AUTORISATION EXTERNE REQUISE
+
+1. PÉRIMÈTRE ET CIBLES
+
+Compte parent : LNX Beats, acct_1U4GNRRtnn45F3iU.
+Sandbox existant : environnement de test LNX Beats, acct_1U4GNb2KMJwunDgP.
+Application QA : localhost 127.0.0.1:3140 seulement.
+PostgreSQL : lnx_dcn_runtime_test, 127.0.0.1:55473, dcn_runtime_a.
+Emails : capture-only, jamais Resend/SMTP ni clients réels.
+Stockage de cette recette : local synthétique ; pas R2 distant.
+Destination du listener Stripe TEST :
+http://127.0.0.1:3140/api/digital/webhooks/stripe
+Pas de tunnel, nouveau webhook Dashboard, Railway, Production ou LIVE.
+
+Autorisation proposée, à confirmer avant tout appel :
+- maximum 1 nouveau Checkout et 1 paiement TEST, montants QA uniquement ;
+- maximum 1 nouveau remboursement TEST PARTIEL explicitement alloué ;
+- maximum 40 GET applicatifs, 2 replays authentiques, 2 heures ;
+- coût maximal 0 EUR, aucune ressource payante ou sandbox supplémentaire ;
+- réconciliation READ ONLY prestataire de l'ancien événement QA ci-dessous ;
+- écritures d'état/audit uniquement sur ces commandes QA expressément ciblées.
+Ces bornes réduisent les plafonds précédents ; ne jamais réinitialiser l'ancien
+budget pour prolonger sa campagne. Une nouvelle campagne autorisée aura son
+propre run-id, budget atomique et preuves, en conservant le registre précédent.
+Si un plafond est atteint, arrêter le volet concerné sans relancer le réseau.
+
+2. PRÉPARATION APRÈS AUTORISATION, PAS AVANT
+
+Vérifier le SHA/tree local du correctif ; aucun push/merge/deploy.
+Vérifier uniquement le sandbox attendu et les credentials TEST correspondants.
+Ne pas hériter des clés globales LIVE ; ne demander aucune clé dans le chat.
+Configurer éphémèrement, via le mécanisme privé 0600 déjà utilisé :
+DCN_ENABLED=true, DCN_MODE=TEST, DCN_EXTERNAL_TEST_AUTHORIZED=true,
+DCN_NEW_PAYMENTS_ENABLED=false au départ,
+DCN_STRIPE_SECRET_KEY, DCN_STRIPE_ACCOUNT_ID,
+DCN_STRIPE_WEBHOOK_SECRET propre au nouveau listener TEST,
+AUTH_URL=http://127.0.0.1:3140,
+PAYMENT_DEPLOYMENT_ENV=test, MEDIA_DEPLOYMENT_ENV=test,
+MEDIA_STORAGE_DRIVER=local, EMAIL_PROVIDER=capture.
+Aucune valeur secrète imprimée, committée ou fournie au navigateur.
+Conserver le profil de revue original et prévoir son rétablissement.
+
+Listener : exclusivement TEST, compte attendu, événements concernés :
+checkout.session.completed, checkout.session.async_payment_succeeded,
+checkout.session.async_payment_failed, checkout.session.expired,
+refund.created, refund.updated, refund.failed, charge.refunded.
+Ne pas rejouer les campagnes succès/refus/3DS/expiration déjà acquises :
+seules les opérations nécessaires au correctif ci-dessous sont proposées.
+Les logs bruts de la CLI restent capturés/non imprimés ; seules les références,
+types, statuts HTTP et résultats expurgés sont conservés.
+
+3. PRIORITÉ : RÉCONCILIER LE REÇU QA EXISTANT SANS NOUVEAU POST FINANCIER
+
+Commande locale : cf2ce039-e806-48c1-a62f-33e2a51ecb82.
+PaymentIntent TEST : pi_3UQMae2KMJwunDgP1TomMxQj.
+Remboursement déjà confirmé : re_3UQMae2KMJwunDgP11Wy6QZa.
+Reçu technique : evt_3UQMae2KMJwunDgP1zB5qJU2, charge.refunded.
+État observé lors de la recette précédente : RETRY / PROVIDER_READ_FAILED,
+resourceReference ch_..., aucune liste refundReferences.
+La commande est déjà REFUNDED, montant initial 990 centimes EUR,
+un remboursement SUCCEEDED, un avoir READY, 12 droits REVOKED.
+
+Avant traitement : inventorier en lecture seule la queue. Ne pas traiter des
+événements étrangers ; attendre si une autre campagne est active. Ne changer
+ni payload/bodyHash, ni attempts, ni horodatage, ni statut pour forcer le test.
+Attendre un availableAt échu et aucune lease active.
+Reprendre une seule fois ce reçu via le worker/inbox du candidat, avec GET
+prestataire frais et le compte TEST attendu. Aucun refunds.create/capture,
+aucune nouvelle commande, aucun replay signé artificiellement.
+
+Attendus :
+- lecture GET /v1/account ; GET PaymentIntent avec latest_charge développé ;
+- GET /v1/refunds?charge=ch_...&limit=100, pagination si nécessaire ;
+- aucun GET /v1/refunds/ch_... ;
+- références re_... et identité PI/charge/marchand/montant/EUR concordantes ;
+- reçu PROCESSED, pas RETRY ni REQUIRES_REVIEW injustifié ;
+- même remboursement, même avoir, mêmes hashes de facture/contrat,
+  mêmes 12 droits REVOKED, aucun nouvel email ou historique réécrit.
+
+La signature du reçu a été validée à sa réception initiale. Sa reprise n'est
+pas un nouveau webhook ni une nouvelle validation de signature périmée.
+Les nouveaux événements de l'étape suivante doivent avoir une signature
+authentique et actuelle du nouveau listener.
+
+4. CAS PARTIEL RÉEL TEST, SI CE PÉRIMÈTRE EST EXPLICITEMENT AUTORISÉ
+
+Créer une seule commande QA synthétique distincte, compte actif/email vérifié,
+album à un montant QA de 1 000 centimes EUR (pas un tarif de lancement).
+Utiliser Checkout hébergé avec un moyen officiel Stripe TEST ; aucun LIVE.
+Confirmer côté serveur via Stripe et webhook authentique, puis rendre le
+contrat QA effectivement accessible/acknowledged avant les téléchargements.
+
+Réserver un remboursement QA de 200 centimes, purpose PRICE_REDUCTION,
+cible de ligne explicite, clé d'idempotence persistée, confirmation Admin du
+montant fictif. Effectuer un seul POST de remboursement TEST.
+En cas de délai ambigu : GET/reconciliation, jamais second POST aveugle.
+Traiter les événements authentiques refund.created/refund.updated/charge.refunded.
+Vérifier l'absence ou la troncature de la liste embarquée sans la modifier.
+
+Attendus : PARTIALLY_REFUNDED, 200 centimes confirmés, un avoir et une seule
+notification QA capturée ; droits ACTIVE conservés pour PRICE_REDUCTION ;
+total et facture initiale inchangés. Un event incomplet ne vaut pas succès
+financier sans relecture ; les résultats inconnus restent retry/review.
+
+Deux replays au maximum du message authentique original, signature inchangée
+et encore valide : doublon reconnu, aucun nouvel avoir/remboursement/email.
+Ne pas inventer une redelivery Stripe si le replay est seulement local.
+Pas de changement des dates/statuts fournisseurs pour simuler des événements
+désordonnés. Les scénarios impossibles restent NOT_RUN.
+
+5. FIN ET PREUVES
+
+Fermer les nouveaux achats QA ; terminer les opérations déjà engagées avec
+les seuls GET autorisés. Vérifier les références/montants/devise/merchant,
+statuts, avoirs, droits, audit, absence de doublon et emails non délivrés.
+Rapporter séparément recette prestataire réelle et doubles locaux.
+Conserver les IDs TEST, hashes des documents/téléchargements, événements
+expurgés et compteurs. Pas de corps brut, signature, clé ou URL authentifiée.
+Comparer les commandes historiques non ciblées avec leur baseline.
+
+Fermer le listener ; rétablir Web/worker locaux et le profil de revue sans
+credentials prestataires. Nettoyage uniquement des temporaires de cette
+campagne, après dry-run. Ne supprimer aucune acquisition, master, justificatif,
+événement ou ressource de sandbox historique. Aucun remboursement supplémentaire
+de nettoyage n'est inclus dans ce plan. Aucun appel PayPal/R2.
+
+STATUT ACTUEL
+EXTERNAL_RECIPE_EXECUTED = NO
+STRIPE_TEST_NEW_AUTHORIZATION_REQUIRED = YES
+LIVE_OPERATION = NO
+PUSH_MERGE_DEPLOY = NO
+READY_FOR_PRODUCTION = NO
