@@ -61,7 +61,7 @@ export async function recordDigitalRefundEvidence(e: DigitalRefundEvidence, merc
     if (!e.authenticated || e.mode !== "TEST" || e.currency !== "EUR" || e.merchantId !== merchantId || !merchantId || !e.reference
       || !Number.isSafeInteger(e.amountCents) || e.amountCents < 1 || o.attempts.length !== 1 || o.attempts[0].provider !== e.provider || o.attempts[0].paymentReference !== e.paymentReference) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
     let r = e.localRefundId ? await tx.digitalRefund.findUnique({ where: { id: e.localRefundId } }) : await tx.digitalRefund.findUnique({ where: { providerReference: e.reference } });
-    if (e.localRefundId && !r) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
+    if (e.provider === "STRIPE" && e.localRefundId && !r) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
     if (r && (r.orderId !== e.orderId || r.provider !== e.provider || r.paymentReference !== e.paymentReference || r.amountCents !== e.amountCents || r.providerReference && r.providerReference !== e.reference)) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
     const eventKey = `refund-proof:${e.provider}:${e.reference}:${e.status}`;
     const existing = await tx.digitalEvent.findUnique({ where: { externalKey: eventKey } });
@@ -72,7 +72,7 @@ export async function recordDigitalRefundEvidence(e: DigitalRefundEvidence, merc
       if (e.status === "FAILED") { await tx.digitalEvent.create({ data: { orderId: e.orderId, kind: "REFUND_CONTRADICTION", details: { refundId: r.id, reason: "TERMINAL_SUCCESS_CHANGED" } } }); await orderState(tx, e.orderId); return { review: true }; }
       return { ignored: true };
     }
-    if (r?.status === "FAILED" && e.status !== "FAILED") {
+    if (e.provider === "STRIPE" && r?.status === "FAILED" && e.status !== "FAILED") {
       if (e.status === "SUCCEEDED") {
         await tx.digitalRefund.update({ where: { id: r.id }, data: { status: "REQUIRES_REVIEW", leaseUntil: null } });
         await tx.digitalEvent.create({ data: { orderId: e.orderId, kind: "REFUND_CONTRADICTION", details: { refundId: r.id, reason: "TERMINAL_FAILURE_CHANGED", actualProviderStatus: e.status } } });
@@ -88,9 +88,9 @@ export async function recordDigitalRefundEvidence(e: DigitalRefundEvidence, merc
         purpose: full ? "RESOLUTION" : "EXTERNAL_REVIEW", allocationStatus: full ? "MATCHED" : "REVIEW" } });
     }
     const already = o.refunds.filter(x => x.id !== r!.id && reservedStatuses.includes(x.status)).reduce((s, x) => s + x.amountCents, 0);
-    // A failed provider refund does not consume the refundable balance. An old
-    // failed attempt may arrive after a different, still-active reservation.
-    if (e.status !== "FAILED" && already + e.amountCents > o.totalCents) {
+    // An old failed Stripe attempt does not consume the refundable balance of
+    // another active reservation. Other providers retain their existing path.
+    if ((e.provider !== "STRIPE" || e.status !== "FAILED") && already + e.amountCents > o.totalCents) {
       await tx.digitalRefund.update({ where: { id: r.id }, data: { providerReference: e.reference, status: "REQUIRES_REVIEW", leaseUntil: null } });
       await tx.digitalEvent.create({ data: { orderId: o.id, kind: "REFUND_CONTRADICTION", details: { refundId: r.id, amountCents: e.amountCents, actualProviderStatus: e.status, reason: "EXTERNAL_REFUND_OR_RESERVATION_EXCEEDS_ORIGINAL" } } });
       await orderState(tx, o.id); return { review: true };
