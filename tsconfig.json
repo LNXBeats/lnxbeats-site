@@ -36,6 +36,8 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "output/dcn-external-20261013/stripe-campaign.ts",
+    "output/dcn-external-20261013/stripe-download-proof.ts"
   ]
 }

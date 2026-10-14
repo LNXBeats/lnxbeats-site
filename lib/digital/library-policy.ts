@@ -5,10 +5,14 @@ export const DIGITAL_ACTIVE_RIGHTS_ORDER_STATES = ["PAID", "PARTIALLY_REFUNDED",
 export function digitalCountsOwnedRights(orderStatus: string, entitlementStatus: string) {
   return entitlementStatus === "ACTIVE" && DIGITAL_ACTIVE_RIGHTS_ORDER_STATES.some(status => status === orderStatus);
 }
+/** Display-only abbreviation; ownership and navigation always use the complete order ID. */
+export function digitalLibraryPurchaseReference(orderId: string) {
+  return `…${orderId.slice(-8).toUpperCase()}`;
+}
 export function digitalLibraryPaymentLabel(status: string, activeRights: boolean) {
   if (status === "PAID") return "Paiement confirmé";
   if (status === "REFUNDED") return activeRights ? "Remboursé — droits conservés selon les lignes" : "Remboursé — accès retiré";
-  if (status === "PARTIALLY_REFUNDED") return "Remboursement partiel — droits selon les lignes";
+  if (status === "PARTIALLY_REFUNDED") return "Remboursement partiel confirmé. Le détail de vos téléchargements et vos justificatifs figurent ci-dessous.";
   if (status === "DISPUTED") return "Litige — accès suspendu";
   if (status === "FAILED") return "Paiement non abouti";
   return "Paiement en attente / à vérifier";
@@ -23,7 +27,7 @@ export function digitalLibraryBlockedMessage(status: string, accessReady: boolea
 export function digitalConfirmationMessage(status:string,needsReconciliation:boolean){
   if(status==="PAID")return "Paiement confirmé côté serveur.";
   if(status==="REFUNDED")return "Remboursement confirmé. Les droits sont vérifiés selon les lignes ; les justificatifs restent conservés.";
-  if(status==="PARTIALLY_REFUNDED")return "Remboursement partiel confirmé. Consultez les droits de chaque ligne dans Ma musique.";
+  if(status==="PARTIALLY_REFUNDED")return "Une partie de votre paiement a été remboursée. Consultez vos justificatifs ici et l’état de vos téléchargements dans Ma musique.";
   if(status==="DISPUTED")return "Cet achat est en litige et ses accès sont suspendus pour revue, sans accusation de fraude.";
   if(status==="FAILED")return "Paiement non abouti. Aucun accès délivré.";
   return needsReconciliation?"Résultat ambigu, conservé pour vérification. Ne recommencez pas le paiement.":"En attente de confirmation prestataire. Aucun téléchargement débloqué par cette page.";
