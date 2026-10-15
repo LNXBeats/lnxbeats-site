@@ -1,0 +1,64 @@
+{
+  "localOnly": true,
+  "database": "lnx_dcn_france_commercial_test_20261015",
+  "runId": "9d063091-fe2e-432a-bdae-53dd46988e2f",
+  "checks": {
+    "SCOPED_AUDIO_WORKER_LEAVES_OTHER_UPLOAD_UNTOUCHED": "PASS",
+    "REAL_SAME_WAV_NEW_EXCERPT_NEW_IDENTITIES_AND_AUDIT": "PASS",
+    "PREVIOUS_VERSION_AND_PHYSICAL_BYTES_UNCHANGED": "PASS",
+    "NEW_VERSION_REQUIRES_NEW_RIGHTS_REVIEW": "PASS",
+    "UNCHANGED_CROSS_TRACK_AND_STALE_REIMPORT_REFUSED": "PASS",
+    "PRIVATE_DRAFT_PREVIEW_GET_HEAD_RANGE_AND_EXACT_BYTES": "PASS",
+    "NON_ADMIN_AND_ANONYMOUS_DENIED": "PASS",
+    "COMPLETE_FILES_NEVER_SERVED_AS_EXCERPTS": "PASS",
+    "DRAFT_COVER_PRIVATE_AND_PUBLIC_MEDIA_REMAIN_CLOSED": "PASS",
+    "NO_OFFER_NO_PRICE_NO_PUBLICATION_AND_COPIED_MASTERS_UNCHANGED": "PASS"
+  },
+  "measurements": [
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": 16171008,
+      "ffmpegSamples": 9,
+      "tempSourceBytes": 17284102,
+      "tempJobBytesObserved": 21338930,
+      "mp3Checksum": "6cae4735a4caf1d045ed428df1c08165ce14e465cfdd3c0855741004df56f899",
+      "mp3BitrateKbps": 320
+    },
+    {
+      "processed": true,
+      "ready": true,
+      "ffmpegRssPeak": 16007168,
+      "ffmpegSamples": 8,
+      "tempSourceBytes": 17284102,
+      "tempJobBytesObserved": 21172164,
+      "mp3Checksum": "6cae4735a4caf1d045ed428df1c08165ce14e465cfdd3c0855741004df56f899",
+      "mp3BitrateKbps": 320
+    },
+    {
+      "processed": true,
+      "ready": false,
+      "errorCode": "DUPLICATE_MASTER_REVIEW_REQUIRED",
+      "failureType": "DigitalError",
+      "providerCode": "DUPLICATE_MASTER_REVIEW_REQUIRED"
+    },
+    {
+      "processed": true,
+      "ready": false,
+      "errorCode": "DUPLICATE_MASTER_REVIEW_REQUIRED",
+      "failureType": "DigitalError",
+      "providerCode": "DUPLICATE_MASTER_REVIEW_REQUIRED"
+    }
+  ],
+  "adminUrl": "http://127.0.0.1:3140/admin/musique/dcn-edition-privee-9d063091-fe2e-432a-bdae-53dd46988e2f#edition-preview",
+  "projectId": "368cc10f-78e4-48b1-a962-31be22c509fa",
+  "trackId": "cfafe538-3044-4a9a-b8a7-75b2568167f5",
+  "firstMasterId": "2b1b097a-8c4b-4f3f-8b9f-e1fe34494483",
+  "revisedMasterId": "196665e1-7892-4c23-9e16-43890d5fe2a4",
+  "sourceChecksum": "579faae65f85812efa88e8796d05d2d2af75970a3da80b14968901b161b45529",
+  "privateCredentialsFile": ".private/dcn-admin-preparation-credentials-9d063091-fe2e-432a-bdae-53dd46988e2f.json",
+  "providerCalls": 0,
+  "realEmails": 0,
+  "routeVerification": "IN_PROCESS_REAL_ROUTE_HANDLERS_REQUEST_RESPONSE_AUTH_DATABASE_LOCAL_STORAGE_NOT_BROWSER_HTTP",
+  "readyProduction": false
+}

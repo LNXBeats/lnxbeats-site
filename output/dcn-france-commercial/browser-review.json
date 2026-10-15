@@ -1,0 +1,23 @@
+{
+  "environment": "COMPILED_LOCAL_IAB_NOT_SAFARI_PHYSICAL",
+  "application": "http://127.0.0.1:3140",
+  "database": "lnx_dcn_france_commercial_test_20261015",
+  "authentication": "Normal login form, synthetic verified Admin; no session injection",
+  "results": [
+    {"name":"private_admin_preview_visible_with_no_default_prices_or_publication","status":"PASS"},
+    {"name":"actual_private_excerpt_play_pause","status":"PASS","durationSeconds":52.975986,"observedPlayingTimeSeconds":5.841301,"readyState":4,"mediaError":null},
+    {"name":"explicit_source_v1_target_v2_latest_decision_revoked","status":"PASS","decisionSubmitted":false},
+    {"name":"desktop_layout_1440_no_horizontal_overflow","status":"PASS","documentWidth":1440},
+    {"name":"mobile_layout_390_no_horizontal_overflow","status":"PASS","documentWidth":390},
+    {"name":"screenshots_independently_visually_reviewed","status":"PASS","count":4},
+    {"name":"no_ads_script_in_admin","status":"PASS"},
+    {"name":"general_admin_landing","status":"BLOCKED","cause":"Existing restricted QA role has no SELECT on unrelated creations table; normal login redirects to /admin and surfaces server error/React 441. Direct music Admin works. No ACL widened."},
+    {"name":"safari_mac_physical_new_campaign","status":"NOT_RUN","reason":"Previous acquired PASS retained; not extended to new functionality"},
+    {"name":"safari_iphone_physical","status":"NOT_RUN","reason":"Optional validation deferred by user"}
+  ],
+  "screenshots": ["admin-preview-desktop-1440.jpg","admin-preview-mobile-390.jpg","admin-equivalence-desktop-1440.jpg","admin-equivalence-mobile-390.jpg"],
+  "providerCalls":0,
+  "payments":0,
+  "productionAccess":false,
+  "temporaryViewportReset":true
+}

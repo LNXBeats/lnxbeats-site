@@ -1,0 +1,1194 @@
+TAP version 13
+# Subtest: audio QA scopes recovery and ingestion to one exact new upload while the normal worker retains its default
+ok 1 - audio QA scopes recovery and ingestion to one exact new upload while the normal worker retains its default
+  ---
+  duration_ms: 1.455792
+  type: 'test'
+  ...
+# Subtest: Admin readiness counts only the actual released album offer, not announcements
+ok 2 - Admin readiness counts only the actual released album offer, not announcements
+  ---
+  duration_ms: 0.486833
+  type: 'test'
+  ...
+# Subtest: Admin independent album price warning is advisory and only compares identical sellable tracks
+ok 3 - Admin independent album price warning is advisory and only compares identical sellable tracks
+  ---
+  duration_ms: 0.0875
+  type: 'test'
+  ...
+# Subtest: Admin readiness remains fail-closed for draft/hidden/media/rights/invalid excerpt
+ok 4 - Admin readiness remains fail-closed for draft/hidden/media/rights/invalid excerpt
+  ---
+  duration_ms: 0.10275
+  type: 'test'
+  ...
+# Subtest: Twelve-file batch has two active tasks maximum and keeps successes after one failure
+ok 5 - Twelve-file batch has two active tasks maximum and keeps successes after one failure
+  ---
+  duration_ms: 9.312625
+  type: 'test'
+  ...
+# Subtest: Batch stop prevents new starts, and page parsing never accepts an arbitrary offset
+ok 6 - Batch stop prevents new starts, and page parsing never accepts an arbitrary offset
+  ---
+  duration_ms: 1.632959
+  type: 'test'
+  ...
+# Subtest: Admin import keeps batch selection explicit and preserves prior rows; mutations stay authenticated
+ok 7 - Admin import keeps batch selection explicit and preserves prior rows; mutations stay authenticated
+  ---
+  duration_ms: 18.9135
+  type: 'test'
+  ...
+# Subtest: an album batch refuses missing mappings and duplicate destinations, including a completed row
+ok 8 - an album batch refuses missing mappings and duplicate destinations, including a completed row
+  ---
+  duration_ms: 0.211792
+  type: 'test'
+  ...
+# Subtest: excerpt offsets require explicit finite milliseconds inside the source duration ceiling
+ok 9 - excerpt offsets require explicit finite milliseconds inside the source duration ceiling
+  ---
+  duration_ms: 0.172875
+  type: 'test'
+  ...
+# Subtest: admin audition permits a ready bounded excerpt before publication or rights approval, never complete media
+ok 10 - admin audition permits a ready bounded excerpt before publication or rights approval, never complete media
+  ---
+  duration_ms: 0.135667
+  type: 'test'
+  ...
+# Subtest: private edition preview and media routes remain authenticated and independent from public gates
+ok 11 - private edition preview and media routes remain authenticated and independent from public gates
+  ---
+  duration_ms: 14.333958
+  type: 'test'
+  ...
+# Subtest: album ownership requires an actual album acquisition, not twelve separately acquired singles
+ok 12 - album ownership requires an actual album acquisition, not twelve separately acquired singles
+  ---
+  duration_ms: 5.173958
+  type: 'test'
+  ...
+# Subtest: album ownership recognizes the exact paid edition with every right active, including retained price-reduction rights
+ok 13 - album ownership recognizes the exact paid edition with every right active, including retained price-reduction rights
+  ---
+  duration_ms: 0.141375
+  type: 'test'
+  ...
+# Subtest: album price changes and editorial reordering do not sell the already acquired exact contents twice
+ok 14 - album price changes and editorial reordering do not sell the already acquired exact contents twice
+  ---
+  duration_ms: 0.061917
+  type: 'test'
+  ...
+# Subtest: album content additions or removals are not silently treated as the previously acquired edition
+ok 15 - album content additions or removals are not silently treated as the previously acquired edition
+  ---
+  duration_ms: 0.060541
+  type: 'test'
+  ...
+# Subtest: different album, master replacement, missing/revoked rights and disputed purchase do not prove this album owned
+ok 16 - different album, master replacement, missing/revoked rights and disputed purchase do not prove this album owned
+  ---
+  duration_ms: 0.09125
+  type: 'test'
+  ...
+# Subtest: MP3 quality is bounded and explicit; 320 kbit/s default is not a new price
+ok 17 - MP3 quality is bounded and explicit; 320 kbit/s default is not a new price
+  ---
+  duration_ms: 0.579292
+  type: 'test'
+  ...
+# Subtest: real FFmpeg private MP3 and independently streamed WAV/MP3 ZIP payloads
+ok 18 - real FFmpeg private MP3 and independently streamed WAV/MP3 ZIP payloads
+  ---
+  duration_ms: 285.775875
+  type: 'test'
+  ...
+# Subtest: full MP3 conversion rejects non-WAV and aborted leases before exposing output
+ok 19 - full MP3 conversion rejects non-WAV and aborted leases before exposing output
+  ---
+  duration_ms: 21.560459
+  type: 'test'
+  ...
+# Subtest: new unique strictly validated source preserves ordinary append-only import
+ok 20 - new unique strictly validated source preserves ordinary append-only import
+  ---
+  duration_ms: 0.785667
+  type: 'test'
+  ...
+# Subtest: same exact latest v1 WAV permits only additive strict revalidation and emits the previous immutable identity
+ok 21 - same exact latest v1 WAV permits only additive strict revalidation and emits the previous immutable identity
+  ---
+  duration_ms: 3.033167
+  type: 'test'
+  ...
+# Subtest: cross-track, unchanged v2 excerpt, unknown, nonREADY, nonWAV, public or contradictory duplicates remain blocked
+ok 22 - cross-track, unchanged v2 excerpt, unknown, nonREADY, nonWAV, public or contradictory duplicates remain blocked
+  ---
+  duration_ms: 0.742833
+  type: 'test'
+  ...
+# Subtest: ambiguous sources, stale source version and reuse of old assets or storage keys remain blocked
+ok 23 - ambiguous sources, stale source version and reuse of old assets or storage keys remain blocked
+  ---
+  duration_ms: 0.326333
+  type: 'test'
+  ...
+# Subtest: duplicate allowance cannot bypass strict validation provenance or the full SHA256 identity
+ok 24 - duplicate allowance cannot bypass strict validation provenance or the full SHA256 identity
+  ---
+  duration_ms: 0.176667
+  type: 'test'
+  ...
+# Subtest: a different excerpt of the same current strict WAV creates a new immutable version without inherited rights
+ok 25 - a different excerpt of the same current strict WAV creates a new immutable version without inherited rights
+  ---
+  duration_ms: 0.313833
+  type: 'test'
+  ...
+# Subtest: repeated excerpt revisions permit a coherent same-track source history, not another track or an ambiguous lineage
+ok 26 - repeated excerpt revisions permit a coherent same-track source history, not another track or an ambiguous lineage
+  ---
+  duration_ms: 0.426667
+  type: 'test'
+  ...
+# Subtest: same-source excerpt history is bounded and cannot conceal a cross-track duplicate beyond the old two-row lookup
+ok 27 - same-source excerpt history is bounded and cannot conceal a cross-track duplicate beyond the old two-row lookup
+  ---
+  duration_ms: 0.949917
+  type: 'test'
+  ...
+# Subtest: real strict WAV validation rejects truncated data, fake headers and inconsistent PCM metadata
+ok 28 - real strict WAV validation rejects truncated data, fake headers and inconsistent PCM metadata
+  ---
+  duration_ms: 65.186417
+  type: 'test'
+  ...
+# Subtest: real floating PCM WAV is accepted and a two-audio-stream Matroska masquerading as WAV is refused
+ok 29 - real floating PCM WAV is accepted and a two-audio-stream Matroska masquerading as WAV is refused
+  ---
+  duration_ms: 123.753041
+  type: 'test'
+  ...
+# Subtest: real MP3 inspection rejects partial frames, missing complete frames, trailing payloads and bitrate/duration contradictions
+ok 30 - real MP3 inspection rejects partial frames, missing complete frames, trailing payloads and bitrate/duration contradictions
+  ---
+  duration_ms: 96.076625
+  type: 'test'
+  ...
+# Subtest: physical preview remains at most sixty seconds after strict full decoding
+ok 31 - physical preview remains at most sixty seconds after strict full decoding
+  ---
+  duration_ms: 235.628083
+  type: 'test'
+  ...
+# Subtest: commercial readiness requires strict validation provenance, exact metadata and both private formats without mutating history
+ok 32 - commercial readiness requires strict validation provenance, exact metadata and both private formats without mutating history
+  ---
+  duration_ms: 0.278708
+  type: 'test'
+  ...
+# Subtest: browser country input accepts evidence only, never server approval flags, modes, policy overrides or provider identity
+ok 33 - browser country input accepts evidence only, never server approval flags, modes, policy overrides or provider identity
+  ---
+  duration_ms: 3.442542
+  type: 'test'
+  ...
+# Subtest: injected QA fixture works only in isolated TEST profile and does not read country policy DB
+ok 34 - injected QA fixture works only in isolated TEST profile and does not read country policy DB
+  ---
+  duration_ms: 1.706416
+  type: 'test'
+  ...
+# Subtest: persisted provider-country=null round-trips and reconciles, instead of creating false country contradiction
+ok 35 - persisted provider-country=null round-trips and reconciles, instead of creating false country contradiction
+  ---
+  duration_ms: 0.465625
+  type: 'test'
+  ...
+# Subtest: non-QA/mismatched merchant cannot reuse a synthetic country policy
+ok 36 - non-QA/mismatched merchant cannot reuse a synthetic country policy
+  ---
+  duration_ms: 1.520458
+  type: 'test'
+  ...
+# Subtest: missing/expired policies refuse initial delivery; null legacy snapshot retained without invented evidence
+ok 37 - missing/expired policies refuse initial delivery; null legacy snapshot retained without invented evidence
+  ---
+  duration_ms: 0.972959
+  type: 'test'
+  ...
+# Subtest: checkout routes never parse browser QA capability; scope is server-derived and same-origin wrapper preserved
+ok 38 - checkout routes never parse browser QA capability; scope is server-derived and same-origin wrapper preserved
+  ---
+  duration_ms: 64.676416
+  type: 'test'
+  ...
+# Subtest: commercial refund: a non-Admin or forged stale Admin actor is refused before refund/audit/gateway writes
+ok 39 - commercial refund: a non-Admin or forged stale Admin actor is refused before refund/audit/gateway writes
+  ---
+  duration_ms: 1.161875
+  type: 'test'
+  ...
+# Subtest: commercial refund: an operator-reviewed request is only a reservation, never an automatic refund, payment or recapture
+ok 40 - commercial refund: an operator-reviewed request is only a reservation, never an automatic refund, payment or recapture
+  ---
+  duration_ms: 0.274791
+  type: 'test'
+  ...
+# Subtest: commercial refund: one request key returns the same reservation and rejects a conflicting amount without a second audit
+ok 41 - commercial refund: one request key returns the same reservation and rejects a conflicting amount without a second audit
+  ---
+  duration_ms: 0.272
+  type: 'test'
+  ...
+# Subtest: commercial refund: confirmed partial refund creates one credit note/notification, retains rights and original invoice across duplicates
+ok 42 - commercial refund: confirmed partial refund creates one credit note/notification, retains rights and original invoice across duplicates
+  ---
+  duration_ms: 16.537833
+  type: 'test'
+  ...
+# Subtest: commercial refund: confirmed balance resolution adds one unique note, revokes rights and keeps immutable financial history
+ok 43 - commercial refund: confirmed balance resolution adds one unique note, revokes rights and keeps immutable financial history
+  ---
+  duration_ms: 0.922542
+  type: 'test'
+  ...
+# Subtest: commercial refund: timeout leaves review state and later recovery cannot create a second refund blindly
+ok 44 - commercial refund: timeout leaves review state and later recovery cannot create a second refund blindly
+  ---
+  duration_ms: 0.211875
+  type: 'test'
+  ...
+# Subtest: commercial refund: authenticated client refund operation is unavailable and cannot write financial data
+ok 45 - commercial refund: authenticated client refund operation is unavailable and cannot write financial data
+  ---
+  duration_ms: 2.301583
+  type: 'test'
+  ...
+# Subtest: commercial refund: actual Admin HTTP route rejects member, saves only Admin reservation, and cannot execute without external TEST authorization
+ok 46 - commercial refund: actual Admin HTTP route rejects member, saves only Admin reservation, and cannot execute without external TEST authorization
+  ---
+  duration_ms: 1.041458
+  type: 'test'
+  ...
+# Subtest: commercial refund: wrong-origin request cannot reserve or execute a refund
+ok 47 - commercial refund: wrong-origin request cannot reserve or execute a refund
+  ---
+  duration_ms: 0.323125
+  type: 'test'
+  ...
+# Subtest: repository: actual allocated partial refund leaves only paid non-refunded single cents
+ok 48 - repository: actual allocated partial refund leaves only paid non-refunded single cents
+  ---
+  duration_ms: 0.981541
+  type: 'test'
+  ...
+# Subtest: repository: historical v1 completion proof hash stays identical for the same acquired single and financial facts
+ok 49 - repository: historical v1 completion proof hash stays identical for the same acquired single and financial facts
+  ---
+  duration_ms: 0.185625
+  type: 'test'
+  ...
+# Subtest: repository: pending refunds, unallocated external refunds, disputes, unallocated bundles, cross-master and missing final payment block
+ok 50 - repository: pending refunds, unallocated external refunds, disputes, unallocated bundles, cross-master and missing final payment block
+  ---
+  duration_ms: 0.363292
+  type: 'test'
+  ...
+# Subtest: repository: fully price-reduced retained source proves overlap with zero reservation and remains revalidated
+ok 51 - repository: fully price-reduced retained source proves overlap with zero reservation and remains revalidated
+  ---
+  duration_ms: 0.467541
+  type: 'test'
+  ...
+# Subtest: repository: reservation pins the source, cannot be reused, remains after unknown timeout, and consumes once
+ok 52 - repository: reservation pins the source, cannot be reused, remains after unknown timeout, and consumes once
+  ---
+  duration_ms: 18.188583
+  type: 'test'
+  ...
+# Subtest: repository: definitive unpaid failure releases only its reservation for a future intentional attempt
+ok 53 - repository: definitive unpaid failure releases only its reservation for a future intentional attempt
+  ---
+  duration_ms: 0.180833
+  type: 'test'
+  ...
+# Subtest: repository: after PAID only this album's resulting rights are excluded, sources still revalidate before first delivery
+ok 54 - repository: after PAID only this album's resulting rights are excluded, sources still revalidate before first delivery
+  ---
+  duration_ms: 0.258625
+  type: 'test'
+  ...
+# Subtest: repository: a different album/source acquisition is never excluded by the current target line filter
+ok 55 - repository: a different album/source acquisition is never excluded by the current target line filter
+  ---
+  duration_ms: 0.195333
+  type: 'test'
+  ...
+# Subtest: repository: refund/source change during payment prevents rights grant
+ok 56 - repository: refund/source change during payment prevents rights grant
+  ---
+  duration_ms: 0.156583
+  type: 'test'
+  ...
+# Subtest: repository: administrative refund of credited single blocks, pending then confirmed external fact suspends dependent album with one audit
+ok 57 - repository: administrative refund of credited single blocks, pending then confirmed external fact suspends dependent album with one audit
+  ---
+  duration_ms: 0.260541
+  type: 'test'
+  ...
+# Subtest: completion: no singles preserves the independently priced album without invented discount
+ok 58 - completion: no singles preserves the independently priced album without invented discount
+  ---
+  duration_ms: 1.784458
+  type: 'test'
+  ...
+# Subtest: completion: 1 / 11 / 12 canonical singles are credited once using exact paid cents
+ok 59 - completion: 1 / 11 / 12 canonical singles are credited once using exact paid cents
+  ---
+  duration_ms: 6.306833
+  type: 'test'
+  ...
+# Subtest: completion: partial refund is deducted, never current catalogue track price
+ok 60 - completion: partial refund is deducted, never current catalogue track price
+  ---
+  duration_ms: 0.086334
+  type: 'test'
+  ...
+# Subtest: completion: independently changed album price yields a new exact quote
+ok 61 - completion: independently changed album price yields a new exact quote
+  ---
+  duration_ms: 0.0615
+  type: 'test'
+  ...
+# Subtest: completion: zero or over-price eligible amounts produce an explicit free snapshot, not negative price or residual cash
+ok 62 - completion: zero or over-price eligible amounts produce an explicit free snapshot, not negative price or residual cash
+  ---
+  duration_ms: 0.269834
+  type: 'test'
+  ...
+# Subtest: completion: free, over-refunded, fractional, negative or fabricated source math is blocked
+ok 63 - completion: free, over-refunded, fractional, negative or fabricated source math is blocked
+  ---
+  duration_ms: 0.212541
+  type: 'test'
+  ...
+# Subtest: completion: fully refunded price reduction proves retained ownership but contributes zero cents and no free album
+ok 64 - completion: fully refunded price reduction proves retained ownership but contributes zero cents and no free album
+  ---
+  duration_ms: 0.0805
+  type: 'test'
+  ...
+# Subtest: completion: different historical promotional prices and refunds sum in exact integer cents
+ok 65 - completion: different historical promotional prices and refunds sum in exact integer cents
+  ---
+  duration_ms: 0.065208
+  type: 'test'
+  ...
+# Subtest: completion: content removal ignores unrelated purchases; addition is priced from current album, master replacement never inferred
+ok 66 - completion: content removal ignores unrelated purchases; addition is priced from current album, master replacement never inferred
+  ---
+  duration_ms: 0.289875
+  type: 'test'
+  ...
+# Subtest: source allocations: ordinary multi-title promotional cart uses immutable paid line amounts, not current prices
+ok 67 - source allocations: ordinary multi-title promotional cart uses immutable paid line amounts, not current prices
+  ---
+  duration_ms: 0.436125
+  type: 'test'
+  ...
+# Subtest: source allocations: partial refund over several lines plus unrelated resolution remains exact per title
+ok 68 - source allocations: partial refund over several lines plus unrelated resolution remains exact per title
+  ---
+  duration_ms: 0.14325
+  type: 'test'
+  ...
+# Subtest: source allocations: full price reduction with active rights is zero; terminal amount/status inconsistency is blocked
+ok 69 - source allocations: full price reduction with active rights is zero; terminal amount/status inconsistency is blocked
+  ---
+  duration_ms: 0.086
+  type: 'test'
+  ...
+# Subtest: source allocations: duplicate refund rows/references do not count twice; failed attempts never consume paid balance
+ok 70 - source allocations: duplicate refund rows/references do not count twice; failed attempts never consume paid balance
+  ---
+  duration_ms: 0.073792
+  type: 'test'
+  ...
+# Subtest: source allocations: ambiguous promotion, bundle, gift, failed payment accounting and bad refund allocations fail closed
+ok 71 - source allocations: ambiguous promotion, bundle, gift, failed payment accounting and bad refund allocations fail closed
+  ---
+  duration_ms: 0.238875
+  type: 'test'
+  ...
+# Subtest: completion: duplicate track, duplicate source, absent eligible source and cross-master are not inferred
+ok 72 - completion: duplicate track, duplicate source, absent eligible source and cross-master are not inferred
+  ---
+  duration_ms: 0.102167
+  type: 'test'
+  ...
+# Subtest: completion: source proof ordering is stable but financial/version changes invalidate cart fingerprint
+ok 73 - completion: source proof ordering is stable but financial/version changes invalidate cart fingerprint
+  ---
+  duration_ms: 0.166833
+  type: 'test'
+  ...
+# Subtest: completion: normal cart admits verified completion but retains provisional guard on unproved ownership
+ok 74 - completion: normal cart admits verified completion but retains provisional guard on unproved ownership
+  ---
+  duration_ms: 0.088125
+  type: 'test'
+  ...
+# Subtest: completion: multi-line payable cart fails closed while redundant album-covered title is removed
+ok 75 - completion: multi-line payable cart fails closed while redundant album-covered title is removed
+  ---
+  duration_ms: 0.076792
+  type: 'test'
+  ...
+# Subtest: completion: browser-forged base price, credit, repeated or unowned sources are rejected
+ok 76 - completion: browser-forged base price, credit, repeated or unowned sources are rejected
+  ---
+  duration_ms: 0.077875
+  type: 'test'
+  ...
+# Subtest: prices: exact EUR cents, no implicit/free/float price
+ok 77 - prices: exact EUR cents, no implicit/free/float price
+  ---
+  duration_ms: 0.590625
+  type: 'test'
+  ...
+# Subtest: autonomous preview window: <=60 s, short source, offset and padding
+ok 78 - autonomous preview window: <=60 s, short source, offset and padding
+  ---
+  duration_ms: 0.099083
+  type: 'test'
+  ...
+# Subtest: album covers track, quantity stays one regardless add order
+ok 79 - album covers track, quantity stays one regardless add order
+  ---
+  duration_ms: 0.212583
+  type: 'test'
+  ...
+# Subtest: already owned and partially owned album fail closed
+ok 80 - already owned and partially owned album fail closed
+  ---
+  duration_ms: 0.271208
+  type: 'test'
+  ...
+# Subtest: cart fingerprint binds membership, master version and display content even at the same price
+ok 81 - cart fingerprint binds membership, master version and display content even at the same price
+  ---
+  duration_ms: 0.202875
+  type: 'test'
+  ...
+# Subtest: overlapping albums and unavailable/empty snapshots rejected
+ok 82 - overlapping albums and unavailable/empty snapshots rejected
+  ---
+  duration_ms: 0.080084
+  type: 'test'
+  ...
+# Subtest: independent kill-switch and strict TEST isolation; LIVE cannot be opened
+ok 83 - independent kill-switch and strict TEST isolation; LIVE cannot be opened
+  ---
+  duration_ms: 0.113541
+  type: 'test'
+  ...
+# Subtest: master keys are private-only; traversal and public master rejected
+ok 84 - master keys are private-only; traversal and public master rejected
+  ---
+  duration_ms: 0.292917
+  type: 'test'
+  ...
+# Subtest: upload sizes, real file extensions and explicit replacement
+ok 85 - upload sizes, real file extensions and explicit replacement
+  ---
+  duration_ms: 0.177166
+  type: 'test'
+  ...
+# Subtest: audio file magic never trusts MIME alone
+ok 86 - audio file magic never trusts MIME alone
+  ---
+  duration_ms: 0.126292
+  type: 'test'
+  ...
+# Subtest: payment evidence binds every invariant, environment and merchant
+ok 87 - payment evidence binds every invariant, environment and merchant
+  ---
+  duration_ms: 0.124916
+  type: 'test'
+  ...
+# Subtest: provider redirect allowlist excludes lookalike and LIVE PayPal
+ok 88 - provider redirect allowlist excludes lookalike and LIVE PayPal
+  ---
+  duration_ms: 0.094833
+  type: 'test'
+  ...
+# Subtest: accounting CSV formula injection protection and quoting
+ok 89 - accounting CSV formula injection protection and quoting
+  ---
+  duration_ms: 0.097667
+  type: 'test'
+  ...
+# Subtest: real ZIP bytes with descriptors, CRC and no unsafe archive paths
+ok 90 - real ZIP bytes with descriptors, CRC and no unsafe archive paths
+  ---
+  duration_ms: 38.957125
+  type: 'test'
+  ...
+# Subtest: oversized album ZIP fails before sending headers or opening any master
+ok 91 - oversized album ZIP fails before sending headers or opening any master
+  ---
+  duration_ms: 0.112083
+  type: 'test'
+  ...
+# Subtest: paid France checkout persists the exact accepted candidate before one doubled gateway call
+ok 92 - paid France checkout persists the exact accepted candidate before one doubled gateway call
+  ---
+  duration_ms: 9.143875
+  type: 'test'
+  ...
+# Subtest: new paid checkout refuses absent terms acceptance and an old draft before an order or gateway call
+ok 93 - new paid checkout refuses absent terms acceptance and an old draft before an order or gateway call
+  ---
+  duration_ms: 0.710916
+  type: 'test'
+  ...
+# Subtest: historical checkout retry returns its original contract without adopting the new template or calling the gateway
+ok 94 - historical checkout retry returns its original contract without adopting the new template or calling the gateway
+  ---
+  duration_ms: 0.708875
+  type: 'test'
+  ...
+# Subtest: France checkout parser accepts only declarations, never browser proof or approval material
+ok 95 - France checkout parser accepts only declarations, never browser proof or approval material
+  ---
+  duration_ms: 0.849792
+  type: 'test'
+  ...
+# Subtest: non-QA pre-payment gate refuses missing declaration, overseas and unverified residence before policy/provider work
+ok 96 - non-QA pre-payment gate refuses missing declaration, overseas and unverified residence before policy/provider work
+  ---
+  duration_ms: 5.156666
+  type: 'test'
+  ...
+# Subtest: server loader replaces JSON actor claims with a fresh authoritative actor and never falls back to a prior review
+ok 97 - server loader replaces JSON actor claims with a fresh authoritative actor and never falls back to a prior review
+  ---
+  duration_ms: 0.660542
+  type: 'test'
+  ...
+# Subtest: independent residence proof alone never opens the prepared France policy or falls back to generic FR
+ok 98 - independent residence proof alone never opens the prepared France policy or falls back to generic FR
+  ---
+  duration_ms: 0.536333
+  type: 'test'
+  ...
+# Subtest: in-memory synthetic approval snapshots only necessary residence binding; current legal/PSP configuration is not activated
+ok 99 - in-memory synthetic approval snapshots only necessary residence binding; current legal/PSP configuration is not activated
+  ---
+  duration_ms: 2.88425
+  type: 'test'
+  ...
+# Subtest: old acquired jurisdiction snapshots are not rewritten or retrofitted with residence proof
+ok 100 - old acquired jurisdiction snapshots are not rewritten or retrofitted with residence proof
+  ---
+  duration_ms: 0.17525
+  type: 'test'
+  ...
+# Subtest: France checks stay before order/provider creation and capture; completed historical downloads do not gain a residency gate
+ok 101 - France checks stay before order/provider creation and capture; completed historical downloads do not gain a residency gate
+  ---
+  duration_ms: 12.839125
+  type: 'test'
+  ...
+# Subtest: published France draft 02 is immutable and must remain an additive registry entry in future revisions
+ok 102 - published France draft 02 is immutable and must remain an additive registry entry in future revisions
+  ---
+  duration_ms: 0.339375
+  type: 'test'
+  ...
+# Subtest: new France QA contract binds exact draft text, hashes and three distinct positive choices
+ok 103 - new France QA contract binds exact draft text, hashes and three distinct positive choices
+  ---
+  duration_ms: 9.07575
+  type: 'test'
+  ...
+# Subtest: new France policy refuses truthy consent, missing exact wording, invalid timestamp and disguised LIVE approval
+ok 104 - new France policy refuses truthy consent, missing exact wording, invalid timestamp and disguised LIVE approval
+  ---
+  duration_ms: 1.675291
+  type: 'test'
+  ...
+# Subtest: historical snapshots and hashes are retained without inferring a new express acceptance or France terms
+ok 105 - historical snapshots and hashes are retained without inferring a new express acceptance or France terms
+  ---
+  duration_ms: 0.141834
+  type: 'test'
+  ...
+# Subtest: local jurisdiction follows each acquired contract version rather than rebinding old purchases to the new template
+ok 106 - local jurisdiction follows each acquired contract version rather than rebinding old purchases to the new template
+  ---
+  duration_ms: 1.245417
+  type: 'test'
+  ...
+# Subtest: checkout links and displays the France version it submits, with explicit terms acceptance and free-completion action
+ok 107 - checkout links and displays the France version it submits, with explicit terms acceptance and free-completion action
+  ---
+  duration_ms: 5.482333
+  type: 'test'
+  ...
+# Subtest: France terms are a separate non-approved immutable draft, never a territory or fiscal activation
+ok 108 - France terms are a separate non-approved immutable draft, never a territory or fiscal activation
+  ---
+  duration_ms: 0.435708
+  type: 'test'
+  ...
+# Subtest: France text and document hashes deterministically bind the exact candidate
+ok 109 - France text and document hashes deterministically bind the exact candidate
+  ---
+  duration_ms: 0.157375
+  type: 'test'
+  ...
+# Subtest: seller, existing mediator and historical digital/legal proofs are reused without replacement
+ok 110 - seller, existing mediator and historical digital/legal proofs are reused without replacement
+  ---
+  duration_ms: 0.393416
+  type: 'test'
+  ...
+# Subtest: user-confirmed metropolitan/Corse commercial scope is not generic FR or a legally approved nationality/IP/card-country blockade
+ok 111 - user-confirmed metropolitan/Corse commercial scope is not generic FR or a legally approved nationality/IP/card-country blockade
+  ---
+  duration_ms: 0.070042
+  type: 'test'
+  ...
+# Subtest: customer draft describes WAV/MP3 and two ZIPs without imposing a universal twelve-track album or a buyer-selected price
+ok 112 - customer draft describes WAV/MP3 and two ZIPs without imposing a universal twelve-track album or a buyer-selected price
+  ---
+  duration_ms: 0.118417
+  type: 'test'
+  ...
+# Subtest: withdrawal contains all four cumulative conditions and preserves guarantees and the ordinary fourteen-day right
+ok 113 - withdrawal contains all four cumulative conditions and preserves guarantees and the ordinary fourteen-day right
+  ---
+  duration_ms: 0.085917
+  type: 'test'
+  ...
+# Subtest: withdrawal describes the connected local digital route without claiming QA e-mail delivery or obsolete ODR
+ok 114 - withdrawal describes the connected local digital route without claiming QA e-mail delivery or obsolete ODR
+  ---
+  duration_ms: 12.794792
+  type: 'test'
+  ...
+# Subtest: digital conformity includes the full one-off statutory box with two-year liability and one-year presumption
+ok 115 - digital conformity includes the full one-off statutory box with two-year liability and one-year presumption
+  ---
+  duration_ms: 0.209917
+  type: 'test'
+  ...
+# Subtest: exact zero completion is a free grant with preserved sources, not an invented payment or a negative credit
+ok 116 - exact zero completion is a free grant with preserved sources, not an invented payment or a negative credit
+  ---
+  duration_ms: 0.193875
+  type: 'test'
+  ...
+# Subtest: no tax rate, default exemption or historical-policy rewrite is introduced
+ok 117 - no tax rate, default exemption or historical-policy rewrite is introduced
+  ---
+  duration_ms: 0.134709
+  type: 'test'
+  ...
+# Subtest: confirmed private licence, collaboration controls and individual change-of-mind review are not invented legal approval
+ok 118 - confirmed private licence, collaboration controls and individual change-of-mind review are not invented legal approval
+  ---
+  duration_ms: 0.089458
+  type: 'test'
+  ...
+# Subtest: residence V2 normalizes minimal private address, allows Corsica and rejects overseas/CEDEX/extra identity fields
+ok 119 - residence V2 normalizes minimal private address, allows Corsica and rejects overseas/CEDEX/extra identity fields
+  ---
+  duration_ms: 0.949083
+  type: 'test'
+  ...
+# Subtest: residence V2 cannot turn two declarations or missing billing into independent proof
+ok 120 - residence V2 cannot turn two declarations or missing billing into independent proof
+  ---
+  duration_ms: 18.776542
+  type: 'test'
+  ...
+# Subtest: residence V2 forged, malformed, expired, revoked and stale review proof fails closed
+ok 121 - residence V2 forged, malformed, expired, revoked and stale review proof fails closed
+  ---
+  duration_ms: 2.555083
+  type: 'test'
+  ...
+# Subtest: residence V2 malformed billing context cannot be sealed into a verified review
+ok 122 - residence V2 malformed billing context cannot be sealed into a verified review
+  ---
+  duration_ms: 0.127625
+  type: 'test'
+  ...
+# Subtest: billing context distinguishes absence, locally declared consistency and contradictory territory without fetching a PSP
+ok 123 - billing context distinguishes absence, locally declared consistency and contradictory territory without fetching a PSP
+  ---
+  duration_ms: 0.136375
+  type: 'test'
+  ...
+# Subtest: declaration writer rejects client provenance/actor/approval injection and invalid optimistic keys before writes
+ok 124 - declaration writer rejects client provenance/actor/approval injection and invalid optimistic keys before writes
+  ---
+  duration_ms: 0.350833
+  type: 'test'
+  ...
+# Subtest: actual residence paths fail closed on a non-UTC session before writing or trusting dated proofs
+ok 125 - actual residence paths fail closed on a non-UTC session before writing or trusting dated proofs
+  ---
+  duration_ms: 1.482583
+  type: 'test'
+  ...
+# Subtest: declaration writer authenticates current account, uses shared user lock and only appends private events
+ok 126 - declaration writer authenticates current account, uses shared user lock and only appends private events
+  ---
+  duration_ms: 0.215042
+  type: 'test'
+  ...
+# Subtest: declaration writer refuses stale tabs and pending financial engagements without altering historical events
+ok 127 - declaration writer refuses stale tabs and pending financial engagements without altering historical events
+  ---
+  duration_ms: 0.276375
+  type: 'test'
+  ...
+# Subtest: declaration retries preserve effective review and never resurrect a superseded declaration
+ok 128 - declaration retries preserve effective review and never resurrect a superseded declaration
+  ---
+  duration_ms: 0.654583
+  type: 'test'
+  ...
+# Subtest: review writer requires fresh Admin, explicit attestation and an intact owner-bound declaration
+ok 129 - review writer requires fresh Admin, explicit attestation and an intact owner-bound declaration
+  ---
+  duration_ms: 0.328625
+  type: 'test'
+  ...
+# Subtest: manual proportionate review does not require identity uploads and produces only a minimized frozen checkout binding
+ok 130 - manual proportionate review does not require identity uploads and produces only a minimized frozen checkout binding
+  ---
+  duration_ms: 0.512833
+  type: 'test'
+  ...
+# Subtest: contradictory frozen billing requires explicit fresh Admin conflict resolution bound to exact context
+ok 131 - contradictory frozen billing requires explicit fresh Admin conflict resolution bound to exact context
+  ---
+  duration_ms: 2.3975
+  type: 'test'
+  ...
+# Subtest: review retry is append-only/idempotent, latest revocation wins and cannot be hidden by an old key
+ok 132 - review retry is append-only/idempotent, latest revocation wins and cannot be hidden by an old key
+  ---
+  duration_ms: 0.943166
+  type: 'test'
+  ...
+# Subtest: effective owner state never advertises expired review or a disabled reviewer as VERIFIED
+ok 133 - effective owner state never advertises expired review or a disabled reviewer as VERIFIED
+  ---
+  duration_ms: 0.421209
+  type: 'test'
+  ...
+# Subtest: frozen billing IDs are user-scoped and remain stable after first invoice, but modified/missing documents are rejected
+ok 134 - frozen billing IDs are user-scoped and remain stable after first invoice, but modified/missing documents are rejected
+  ---
+  duration_ms: 0.622416
+  type: 'test'
+  ...
+# Subtest: frozen absent billing never silently falls back to later invoices; malformed bindings and changed declarations fail closed
+ok 135 - frozen absent billing never silently falls back to later invoices; malformed bindings and changed declarations fail closed
+  ---
+  duration_ms: 0.510542
+  type: 'test'
+  ...
+# Subtest: billing snapshot integrity failure, foreign document IDs and malformed history cannot become residence proof
+ok 136 - billing snapshot integrity failure, foreign document IDs and malformed history cannot become residence proof
+  ---
+  duration_ms: 0.104125
+  type: 'test'
+  ...
+# Subtest: actual checkout V2 reserves only a reviewed address even in exact local QA and freezes no complete address
+ok 137 - actual checkout V2 reserves only a reviewed address even in exact local QA and freezes no complete address
+  ---
+  duration_ms: 1.570542
+  type: 'test'
+  ...
+# Subtest: actual non-QA checkout stays closed behind the DRAFT legal/fiscal rule despite VERIFIED residence
+ok 138 - actual non-QA checkout stays closed behind the DRAFT legal/fiscal rule despite VERIFIED residence
+  ---
+  duration_ms: 0.383917
+  type: 'test'
+  ...
+# Subtest: actual V2 checkout rejects client country, address and billing changes before policy lookup
+ok 139 - actual V2 checkout rejects client country, address and billing changes before policy lookup
+  ---
+  duration_ms: 0.745833
+  type: 'test'
+  ...
+# Subtest: actual V2 retry and pre-capture acquired checks reject changed or revoked proof, without changing old snapshots
+ok 140 - actual V2 retry and pre-capture acquired checks reject changed or revoked proof, without changing old snapshots
+  ---
+  duration_ms: 0.926959
+  type: 'test'
+  ...
+# Subtest: free completion: exact/surplus grant creates one proof, pinned rights and consumed credits, never payment/invoice or residual balance
+ok 141 - free completion: exact/surplus grant creates one proof, pinned rights and consumed credits, never payment/invoice or residual balance
+  ---
+  duration_ms: 12.195417
+  type: 'test'
+  ...
+# Subtest: free completion: concurrent same-key retries share the acquisition; different-key race grants once
+ok 142 - free completion: concurrent same-key retries share the acquisition; different-key race grants once
+  ---
+  duration_ms: 2.962
+  type: 'test'
+  ...
+# Subtest: free completion: transaction failure rolls back all new rows; source and cart remain unchanged
+ok 143 - free completion: transaction failure rolls back all new rows; source and cart remain unchanged
+  ---
+  duration_ms: 1.338708
+  type: 'test'
+  ...
+# Subtest: free completion: stale prices/proofs, inactive or unverified owner, absent consent and nonzero amount cannot grant
+ok 144 - free completion: stale prices/proofs, inactive or unverified owner, absent consent and nonzero amount cannot grant
+  ---
+  duration_ms: 1.73625
+  type: 'test'
+  ...
+# Subtest: free completion: LIVE/foreign/provider configuration cannot enable a free grant; free labels never claim payment
+ok 145 - free completion: LIVE/foreign/provider configuration cannot enable a free grant; free labels never claim payment
+  ---
+  duration_ms: 0.593541
+  type: 'test'
+  ...
+# Subtest: free completion boundaries are explicit; download grants remain renewable rather than purchase-count limited
+ok 146 - free completion boundaries are explicit; download grants remain renewable rather than purchase-count limited
+  ---
+  duration_ms: 4.323291
+  type: 'test'
+  ...
+# Subtest: Historical DCN contract remains verifiable without replacing its text
+ok 147 - Historical DCN contract remains verifiable without replacing its text
+  ---
+  duration_ms: 4.366375
+  type: 'test'
+  ...
+# Subtest: DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval
+ok 148 - DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval
+  ---
+  duration_ms: 0.186125
+  type: 'test'
+  ...
+# Subtest: DCN rejects absent, rewritten, LIVE or incompletely acknowledged contract snapshot
+ok 149 - DCN rejects absent, rewritten, LIVE or incompletely acknowledged contract snapshot
+  ---
+  duration_ms: 0.175833
+  type: 'test'
+  ...
+# Subtest: DCN CONTRACT_AVAILABLE HTML/text email escaped and account-only; captured != delivered
+ok 150 - DCN CONTRACT_AVAILABLE HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.333208
+  type: 'test'
+  ...
+# Subtest: DCN ACCESS_READY HTML/text email escaped and account-only; captured != delivered
+ok 151 - DCN ACCESS_READY HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.067209
+  type: 'test'
+  ...
+# Subtest: DCN REFUND_CONFIRMED HTML/text email escaped and account-only; captured != delivered
+ok 152 - DCN REFUND_CONFIRMED HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.049458
+  type: 'test'
+  ...
+# Subtest: DCN INCIDENT HTML/text email escaped and account-only; captured != delivered
+ok 153 - DCN INCIDENT HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.054959
+  type: 'test'
+  ...
+# Subtest: DCN email base refuses credentials, path, query, fragment
+ok 154 - DCN email base refuses credentials, path, query, fragment
+  ---
+  duration_ms: 0.0905
+  type: 'test'
+  ...
+# Subtest: free completion notification never presents a grant as paid or an e-mail as durable delivery
+ok 155 - free completion notification never presents a grant as paid or an e-mail as durable delivery
+  ---
+  duration_ms: 0.117666
+  type: 'test'
+  ...
+# Subtest: DCN refund targets are cents, unique line IDs and closed input shape
+ok 156 - DCN refund targets are cents, unique line IDs and closed input shape
+  ---
+  duration_ms: 0.621
+  type: 'test'
+  ...
+# Subtest: DCN Stripe refund accepted/pending is not succeeded; failure/cancellation remain negative
+ok 157 - DCN Stripe refund accepted/pending is not succeeded; failure/cancellation remain negative
+  ---
+  duration_ms: 0.07475
+  type: 'test'
+  ...
+# Subtest: DCN dispute outcome must be conclusive; a warning closure is not automatically won
+ok 158 - DCN dispute outcome must be conclusive; a warning closure is not automatically won
+  ---
+  duration_ms: 0.070833
+  type: 'test'
+  ...
+# Subtest: DCN Range strict, suffix bounded, zero suffix and multi-range rejected
+ok 159 - DCN Range strict, suffix bounded, zero suffix and multi-range rejected
+  ---
+  duration_ms: 0.255292
+  type: 'test'
+  ...
+# Subtest: DCN download filename cannot inject headers/traversal and preserves UTF8 title
+ok 160 - DCN download filename cannot inject headers/traversal and preserves UTF8 title
+  ---
+  duration_ms: 0.133333
+  type: 'test'
+  ...
+# Subtest: DCN ZIP refuses casefold/Unicode-normalized collisions and bounds before opening files
+ok 161 - DCN ZIP refuses casefold/Unicode-normalized collisions and bounds before opening files
+  ---
+  duration_ms: 0.350959
+  type: 'test'
+  ...
+# Subtest: DCN ZIP source verifier rejects truncated, enlarged and corrupt bytes before READY
+ok 162 - DCN ZIP source verifier rejects truncated, enlarged and corrupt bytes before READY
+  ---
+  duration_ms: 11.478958
+  type: 'test'
+  ...
+# Subtest: DCN library never claims an unpaid order paid, or retained price-reduction rights revoked
+ok 163 - DCN library never claims an unpaid order paid, or retained price-reduction rights revoked
+  ---
+  duration_ms: 0.0965
+  type: 'test'
+  ...
+# Subtest: initial delivery: paid/verified/ready private formats grant access only after fresh revalidation
+ok 164 - initial delivery: paid/verified/ready private formats grant access only after fresh revalidation
+  ---
+  duration_ms: 3.183625
+  type: 'test'
+  ...
+# Subtest: initial delivery: rights revoked after paid prevent accessReadyAt and access-ready notification
+ok 165 - initial delivery: rights revoked after paid prevent accessReadyAt and access-ready notification
+  ---
+  duration_ms: 0.574708
+  type: 'test'
+  ...
+# Subtest: initial delivery: changed/missing MP3 or hidden release after payment blocks new access
+ok 166 - initial delivery: changed/missing MP3 or hidden release after payment blocks new access
+  ---
+  duration_ms: 0.605333
+  type: 'test'
+  ...
+# Subtest: initial delivery: policy expired after payment prevents access without rewriting the stored jurisdiction
+ok 167 - initial delivery: policy expired after payment prevents access without rewriting the stored jurisdiction
+  ---
+  duration_ms: 0.35275
+  type: 'test'
+  ...
+# Subtest: initial delivery: lost active/verified account prevents delivery despite old payment proof
+ok 168 - initial delivery: lost active/verified account prevents delivery despite old payment proof
+  ---
+  duration_ms: 0.191792
+  type: 'test'
+  ...
+# Subtest: already delivered: repeated acknowledgment returns before new country/media gates, no rights downgrade or duplicate notification
+ok 169 - already delivered: repeated acknowledgment returns before new country/media gates, no rights downgrade or duplicate notification
+  ---
+  duration_ms: 0.174167
+  type: 'test'
+  ...
+# Subtest: DCN library distinguishes the two real QA purchases without presenting a short reference as an identity check
+ok 170 - DCN library distinguishes the two real QA purchases without presenting a short reference as an identity check
+  ---
+  duration_ms: 0.837084
+  type: 'test'
+  ...
+# Subtest: DCN partial-refund wording explains the purchase without promising every title or ZIP remains downloadable
+ok 171 - DCN partial-refund wording explains the purchase without promising every title or ZIP remains downloadable
+  ---
+  duration_ms: 0.181916
+  type: 'test'
+  ...
+# Subtest: DCN partial-refund confirmation points to documents and per-title access, not another payment
+ok 172 - DCN partial-refund confirmation points to documents and per-title access, not another payment
+  ---
+  duration_ms: 0.062125
+  type: 'test'
+  ...
+# Subtest: DCN abbreviated reference changes no order identity, navigation, download gate or purchased history
+ok 173 - DCN abbreviated reference changes no order identity, navigation, download gate or purchased history
+  ---
+  duration_ms: 6.162167
+  type: 'test'
+  ...
+# Subtest: Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+ok 174 - Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+  ---
+  duration_ms: 0.528208
+  type: 'test'
+  ...
+# Subtest: Only the final DCN QA copy accepts the exact UTC option; no arbitrary libpq parameter or other target is opened
+ok 175 - Only the final DCN QA copy accepts the exact UTC option; no arbitrary libpq parameter or other target is opened
+  ---
+  duration_ms: 0.233875
+  type: 'test'
+  ...
+# Subtest: The commercial France copy is isolated with the same exact UTC-only capability and never permits external credentials
+ok 176 - The commercial France copy is isolated with the same exact UTC-only capability and never permits external credentials
+  ---
+  duration_ms: 0.183542
+  type: 'test'
+  ...
+# Subtest: Local route accepts neither browser evidence nor external gateway/merchant fields
+not ok 177 - Local route accepts neither browser evidence nor external gateway/merchant fields
+  ---
+  duration_ms: 4.633709
+  type: 'test'
+  location: '/Users/lnxbeats/.codex/worktrees/dcn-1-0/lnxbeats-site-v1/tests/digital/local-review-security.test.ts:1:2884'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /digitalBody\(request,\["idempotencyKey","revision","termsVersion","earlyDelivery","withdrawalAcknowledged","jurisdiction"\]\)/. Input:
+
+    'import { createDigitalCheckout,reconcileDigitalEvidence } from "@/lib/digital/commerce";\n' +
+      'import { digitalBody,digitalJson,withDigitalApi } from "@/lib/digital/http";\n' +
+      'import { DigitalError } from "@/lib/digital/domain";\n' +
+      'import { localDigitalReviewCheckoutAllowed,localDigitalReviewAttemptAllowed,LOCAL_REVIEW_MERCHANT } from "@/lib/digital/local-review-policy";\n' +
+      'import { prisma } from "@/lib/prisma";\n' +
+      'import { parseDigitalCustomerTerritory } from "@/lib/digital/checkout-jurisdiction";\n' +
+      'export const dynamic="force-dynamic";\n' +
+      'export async function POST(request:Request){return withDigitalApi(request,async actor=>{\n' +
+      '  if(!localDigitalReviewCheckoutAllowed(actor.email,LOCAL_REVIEW_MERCHANT,true))throw new DigitalError("NOT_FOUND",404);\n' +
+      '  const b=await digitalBody(request,["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction"]);\n' +
+      '  if(typeof b.idempotencyKey!=="string"||typeof b.termsVersion!=="string")throw new DigitalError("INVALID_CHECKOUT");\n' +
+      '  const order=await createDigitalCheckout(actor,{idempotencyKey:b.idempotencyKey,revision:Number(b.revision),provider:"STRIPE",termsVersion:b.termsVersion,termsAccepted:b.termsAccepted===true,earlyDelivery:b.earlyDelivery===true,withdrawalAcknowledged:b.withdrawalAcknowledged===true,jurisdiction:parseDigitalCustomerTerritory(b.jurisdiction)},\n' +
+      '    {merchantId:LOCAL_REVIEW_MERCHANT,async create(_o,a){return{id:`dcn12-local-session-${a.id}`,url:"https://checkout.stripe.com/c/local_simulated_only"};},async recover(){return null;}},{localReview:true});\n' +
+      '  const saved=await prisma.digitalOrder.findUniqueOrThrow({where:{id:order.orderId},include:{attempts:true}});\n' +
+      '  const attempt=saved.attempts[0];\n' +
+      '  if(!attempt?.providerReference||!localDigitalReviewAttemptAllowed(saved,actor.id))throw new DigitalError("PAYMENT_REQUIRES_REVIEW",409);\n' +
+      '  await reconcileDigitalEvidence({authenticated:true,mode:"TEST",merchantId:LOCAL_REVIEW_MERCHANT,provider:"STRIPE",eventId:`dcn12-local-paid-${attempt.id}`,orderId:saved.id,\n' +
+      '    providerReference:attempt.providerReference,paymentReference:`dcn12-local-payment-${attempt.id}`,amountCents:saved.totalCents,currency:"EUR",status:"PAID"},LOCAL_REVIEW_MERCHANT);\n' +
+      '  return digitalJson({orderId:saved.id,simulated:true,externalProviderCalls:0});\n' +
+      '});}\n'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    import { createDigitalCheckout,reconcileDigitalEvidence } from "@/lib/digital/commerce";
+    import { digitalBody,digitalJson,withDigitalApi } from "@/lib/digital/http";
+    import { DigitalError } from "@/lib/digital/domain";
+    import { localDigitalReviewCheckoutAllowed,localDigitalReviewAttemptAllowed,LOCAL_REVIEW_MERCHANT } from "@/lib/digital/local-review-policy";
+    import { prisma } from "@/lib/prisma";
+    import { parseDigitalCustomerTerritory } from "@/lib/digital/checkout-jurisdiction";
+    export const dynamic="force-dynamic";
+    export async function POST(request:Request){return withDigitalApi(request,async actor=>{
+      if(!localDigitalReviewCheckoutAllowed(actor.email,LOCAL_REVIEW_MERCHANT,true))throw new DigitalError("NOT_FOUND",404);
+      const b=await digitalBody(request,["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction"]);
+      if(typeof b.idempotencyKey!=="string"||typeof b.termsVersion!=="string")throw new DigitalError("INVALID_CHECKOUT");
+      const order=await createDigitalCheckout(actor,{idempotencyKey:b.idempotencyKey,revision:Number(b.revision),provider:"STRIPE",termsVersion:b.termsVersion,termsAccepted:b.termsAccepted===true,earlyDelivery:b.earlyDelivery===true,withdrawalAcknowledged:b.withdrawalAcknowledged===true,jurisdiction:parseDigitalCustomerTerritory(b.jurisdiction)},
+        {merchantId:LOCAL_REVIEW_MERCHANT,async create(_o,a){return{id:`dcn12-local-session-${a.id}`,url:"https://checkout.stripe.com/c/local_simulated_only"};},async recover(){return null;}},{localReview:true});
+      const saved=await prisma.digitalOrder.findUniqueOrThrow({where:{id:order.orderId},include:{attempts:true}});
+      const attempt=saved.attempts[0];
+      if(!attempt?.providerReference||!localDigitalReviewAttemptAllowed(saved,actor.id))throw new DigitalError("PAYMENT_REQUIRES_REVIEW",409);
+      await reconcileDigitalEvidence({authenticated:true,mode:"TEST",merchantId:LOCAL_REVIEW_MERCHANT,provider:"STRIPE",eventId:`dcn12-local-paid-${attempt.id}`,orderId:saved.id,
+        providerReference:attempt.providerReference,paymentReference:`dcn12-local-payment-${attempt.id}`,amountCents:saved.totalCents,currency:"EUR",status:"PAID"},LOCAL_REVIEW_MERCHANT);
+      return digitalJson({orderId:saved.id,simulated:true,externalProviderCalls:0});
+    });}
+
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (/Users/lnxbeats/.codex/worktrees/dcn-1-0/lnxbeats-site-v1/tests/digital/local-review-security.test.ts:25:10)
+    async Test.run (node:internal/test_runner/test:1332:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+  ...
+# Subtest: Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+ok 178 - Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+  ---
+  duration_ms: 1.494709
+  type: 'test'
+  ...
+# Subtest: Admin preparation: unreleased 12-track album is sellable without a platform link or individual offers
+ok 179 - Admin preparation: unreleased 12-track album is sellable without a platform link or individual offers
+  ---
+  duration_ms: 10.139125
+  type: 'test'
+  ...
+# Subtest: Admin preparation: single retains its independent price and only its own pinned edition
+ok 180 - Admin preparation: single retains its independent price and only its own pinned edition
+  ---
+  duration_ms: 0.246458
+  type: 'test'
+  ...
+# Subtest: Admin selection: rightsConfirmed flag cannot replace a bound current rights review
+ok 181 - Admin selection: rightsConfirmed flag cannot replace a bound current rights review
+  ---
+  duration_ms: 0.4095
+  type: 'test'
+  ...
+# Subtest: Admin preparation: album fails closed when any included file, rights or excerpt is incomplete
+ok 182 - Admin preparation: album fails closed when any included file, rights or excerpt is incomplete
+  ---
+  duration_ms: 0.809834
+  type: 'test'
+  ...
+# Subtest: Admin saveOffer service: strict audio metadata is required before any offer, rights or audit write
+ok 183 - Admin saveOffer service: strict audio metadata is required before any offer, rights or audit write
+  ---
+  duration_ms: 1.964417
+  type: 'test'
+  ...
+# Subtest: Admin preparation: readiness never grants sale for a hidden project, absent price or unaffirmed rights
+ok 184 - Admin preparation: readiness never grants sale for a hidden project, absent price or unaffirmed rights
+  ---
+  duration_ms: 0.176666
+  type: 'test'
+  ...
+# Subtest: historic acquired contracts do not acquire a new review requirement or database rewrite
+ok 185 - historic acquired contracts do not acquire a new review requirement or database rewrite
+  ---
+  duration_ms: 0.696541
+  type: 'test'
+  ...
+# Subtest: new marked contracts require fresh approvals of exact pinned editions, not current replacement masters
+ok 186 - new marked contracts require fresh approvals of exact pinned editions, not current replacement masters
+  ---
+  duration_ms: 6.785708
+  type: 'test'
+  ...
+# Subtest: unknown markers and malformed/empty acquired contents fail closed
+ok 187 - unknown markers and malformed/empty acquired contents fail closed
+  ---
+  duration_ms: 0.226958
+  type: 'test'
+  ...
+# Subtest: new policy is stamped at checkout and rechecked before confirmation, PayPal capture and first delivery, not redownload
+ok 188 - new policy is stamped at checkout and rechecked before confirmation, PayPal capture and first delivery, not redownload
+  ---
+  duration_ms: 4.716042
+  type: 'test'
+  ...
+1..188
+# tests 188
+# suites 0
+# pass 187
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 769.16125

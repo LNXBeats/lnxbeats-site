@@ -1,0 +1,13 @@
+LNX Beats · DCN local TEST
+
+Votre complément d’album est attribué sans nouveau paiement. Aucun prestataire de paiement n’a été appelé et aucune facture d’encaissement fictif n’est créée. Téléchargez la confirmation contractuelle puis accusez réception dans votre compte avant le commencement de la fourniture QA. Cet email d’information seul ne prouve pas la remise.
+
+QA free completion 2 — Album
+
+0,00 EUR
+
+DCN-QA-FREE-a6d54c00-f0db-4d94-83db-3993e815265c
+
+http://127.0.0.1:3140/musique/confirmation/a6d54c00-f0db-4d94-83db-3993e815265c
+
+Prix et conditions QA, sans valeur comptable. Aucun droit de publication, de distribution ou de monétisation accordé.

@@ -1,4 +1,4 @@
-import { DigitalError, digitalPrice, type DigitalCompletionSnapshot, type DigitalCompletionSource, type DigitalSelection } from "./domain";
+import { DigitalError, digitalPrice, digitalUuid, type DigitalCompletionSnapshot, type DigitalCompletionSource, type DigitalSelection } from "./domain";
 
 type SourceLine = {id:string;scope:string;priceCents:number;trackSnapshot:unknown;completionSnapshot?:unknown};
 type SourceRefund = {id:string;providerReference:string|null;status:string;allocationStatus:string;purpose:string;amountCents:number;targets:unknown};
@@ -75,13 +75,16 @@ export function completeDigitalAlbum(album: DigitalSelection, ownedTracks: Set<s
       || ![s.paidCents,s.refundedCents,s.availableCents,s.creditCents].every(Number.isSafeInteger)
       || s.paidCents < 1 || s.refundedCents < 0 || s.availableCents !== s.paidCents-s.refundedCents
       || s.creditCents !== s.availableCents || s.creditCents < 0) throw new DigitalError("COMPLETION_SOURCE_REQUIRES_REVIEW",409);
+    if(s.equivalence&&(![s.equivalence.reviewId,s.equivalence.sourceMasterId,s.equivalence.targetMasterId].every(digitalUuid)
+      ||s.equivalence.sourceMasterId===s.masterId||s.equivalence.targetMasterId!==s.masterId||!/^[a-f0-9]{64}$/.test(s.equivalence.recordHash)))throw new DigitalError("COMPLETION_EQUIVALENCE_REQUIRES_REVIEW",409);
     sourceIds.add(s.sourceLineId); trackIds.add(s.trackId);
   }
   const basePriceCents = digitalPrice(album.priceCents), eligible = sources.reduce((n,s)=>n+s.creditCents,0);
   if (!Number.isSafeInteger(eligible)) throw new DigitalError("INVALID_COMPLETION",409);
   const creditCents = Math.min(basePriceCents,eligible), priceCents = Math.max(0,basePriceCents-creditCents);
-  // No financial session at zero, no silent free-delivery policy.
-  if (!priceCents) throw new DigitalError("COMPLETION_ZERO_REQUIRES_REVIEW",409);
-  const completion: DigitalCompletionSnapshot = {version:1,basePriceCents,creditCents,sources:[...sources].sort((a,b)=>a.trackId.localeCompare(b.trackId))};
+  // v1 paid proofs remain identical. v2 explicitly records a free grant: the
+  // applied credit is capped at the album price, without a reusable cash balance.
+  const completion: DigitalCompletionSnapshot = {version:priceCents?1:2,basePriceCents,creditCents,
+    ...(!priceCents?{eligibleCents:eligible}:{}),sources:[...sources].sort((a,b)=>a.trackId.localeCompare(b.trackId))};
   return {...album,priceCents,completion};
 }

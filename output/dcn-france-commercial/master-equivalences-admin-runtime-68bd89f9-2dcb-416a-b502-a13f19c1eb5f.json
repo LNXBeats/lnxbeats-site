@@ -1,0 +1,26 @@
+{
+  "localOnly": true,
+  "database": "lnx_dcn_france_commercial_test_20261015",
+  "checks": {
+    "ANONYMOUS_INVALID_SESSION_MEMBER_ORIGIN_AND_CLOSED_BODY_REFUSED": "PASS",
+    "FOREIGN_CANONICAL_TRACK_ID_REFUSED_WITHOUT_EVENT": "PASS",
+    "EXPLICIT_APPROVAL_IDEMPOTENT_SAFE_PROJECTION": "PASS",
+    "TARGETED_CURRENT_PAIR_READ_WITHOUT_HISTORY_WINDOW_DEPENDENCY": "PASS",
+    "STALE_DECISION_REFUSED_AND_REVOKED_PAIR_BLOCKS_PROOF": "PASS",
+    "MASTERS_MEDIA_AND_ACQUIRED_RIGHTS_UNCHANGED": "PASS"
+  },
+  "pair": {
+    "trackId": "cfafe538-3044-4a9a-b8a7-75b2568167f5",
+    "sourceMasterId": "2b1b097a-8c4b-4f3f-8b9f-e1fe34494483",
+    "targetMasterId": "196665e1-7892-4c23-9e16-43890d5fe2a4"
+  },
+  "finalStatus": "REVOKED",
+  "newDecisions": 2,
+  "providerCalls": 0,
+  "realEmails": 0,
+  "newEntitlements": 0,
+  "routeVerification": "REAL_HANDLERS_AUTH_POSTGRES_LOCAL_PROFILE_IN_PROCESS_NOT_BROWSER_HTTP",
+  "adminUrl": "http://127.0.0.1:3140/admin/musique/dcn-edition-privee-9d063091-fe2e-432a-bdae-53dd46988e2f",
+  "privateCredentialsFile": ".private/dcn-equivalence-admin-credentials-68bd89f9-2dcb-416a-b502-a13f19c1eb5f.json",
+  "readyProduction": false
+}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { digitalAdminPage, digitalSalesReadiness, runDigitalBatch, type DigitalReadinessTrack } from "@/lib/digital/admin";
+import { digitalAdminExcerptReady, digitalAdminPage, digitalBatchAssociationIssue, digitalImportStartMs, digitalSalesReadiness, runDigitalBatch, type DigitalReadinessTrack } from "@/lib/digital/admin";
 const project = { status: "PUBLISHED", publicVisible: true }, offer = { priceCents: 149, active: true, rightsConfirmed: true };
 const track = (id: string): DigitalReadinessTrack => ({ id, title: id, publication: "RELEASED", masterReady: true, mediaCleared: true, previewDurationMs: 59_900, offer });
 test("Admin readiness counts only the actual released album offer, not announcements", () => {
@@ -35,4 +35,37 @@ test("Admin import keeps batch selection explicit and preserves prior rows; muta
   assert.match(ui, /\[\.\.\.old, \.\.\.unique\.map/); assert.match(ui, /Choisir explicitement/); assert.match(ui, /saved\.previewStartMs === startMs/); assert.match(ui, /state !== "ready"/);
   const route = await readFile(new URL("../../app/api/admin/digital/projects/[id]/tracks/route.ts", import.meta.url), "utf8");
   assert.match(route, /digitalActor\(request, true\)/); assert.match(route, /digitalBody/); assert.match(route, /updateCatalogTrack/); assert.match(route, /moveCatalogTrack/);
+});
+test("an album batch refuses missing mappings and duplicate destinations, including a completed row", () => {
+  const row = (trackId: string, state = "waiting", valid = true) => ({ trackId, state, valid });
+  assert.equal(digitalBatchAssociationIssue([row("a"), row("b")]), null);
+  assert.match(digitalBatchAssociationIssue([row("a"), row("", "waiting", false)])!, /Associez chaque fichier/);
+  assert.match(digitalBatchAssociationIssue([row("a"), row("a")])!, /même piste/);
+  assert.match(digitalBatchAssociationIssue([row("a", "ready"), row("a")])!, /même piste/);
+  assert.equal(digitalBatchAssociationIssue([row("a", "ready"), row("b", "error")]), null);
+  assert.match(digitalBatchAssociationIssue([row("a", "ready")])!, /Aucun fichier/);
+});
+test("excerpt offsets require explicit finite milliseconds inside the source duration ceiling", () => {
+  for (const [value, expected] of [["0", 0], ["12.345", 12_345], ["1799.999", 1_799_999]] as const) assert.equal(digitalImportStartMs(value), expected);
+  for (const value of ["", " ", "-1", "1e2", "Infinity", "NaN", "1800", "1.0001", "0,1"]) assert.equal(digitalImportStartMs(value), null, value);
+});
+test("admin audition permits a ready bounded excerpt before publication or rights approval, never complete media", () => {
+  const master = { status: "READY", previewDurationMs: 59_900, previewAsset: { type: "AUDIO_PREVIEW", visibility: "PUBLIC", mimeType: "audio/mpeg", sizeBytes: 1_500_000n, durationMs: 59_900, checksumSha256: "a".repeat(64), rightsStatus: "PENDING" } };
+  assert.equal(digitalAdminExcerptReady(master), true);
+  for (const patch of [{ type: "AUDIO" }, { visibility: "PRIVATE" }, { mimeType: "audio/wav" }, { durationMs: 60_001 }, { sizeBytes: 3n * 1024n * 1024n + 1n }, { checksumSha256: null }]) {
+    assert.equal(digitalAdminExcerptReady({ ...master, previewAsset: { ...master.previewAsset, ...patch } }), false);
+  }
+  assert.equal(digitalAdminExcerptReady({ ...master, previewDurationMs: 60_001, previewAsset: { ...master.previewAsset, durationMs: 60_001 } }), false);
+  assert.equal(digitalAdminExcerptReady({ ...master, status: "QUARANTINED" }), false);
+});
+test("private edition preview and media routes remain authenticated and independent from public gates", async () => {
+  for (const kind of ["previews", "covers"]) {
+    const route = await readFile(new URL(`../../app/api/admin/digital/${kind}/[id]/route.ts`, import.meta.url), "utf8");
+    assert.match(route, /digitalActor\(request, true\)/); assert.match(route, /private, no-store/); assert.match(route, /export async function HEAD/);
+    assert.doesNotMatch(route, /create.*SignedUrl|storageKey.*json|rightsStatus: "CLEARED"|publicVisible: true/);
+  }
+  const page = await readFile(new URL("../../app/admin/musique/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /id="edition-preview"/); assert.match(page, /\/api\/admin\/digital\/previews\//); assert.match(page, /Image unoptimized/);
+  const publicRoute = await readFile(new URL("../../app/media/digital/previews/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(publicRoute, /publicVisible:true,status:"PUBLISHED"/); assert.match(publicRoute, /rightsStatus:"CLEARED"/);
 });

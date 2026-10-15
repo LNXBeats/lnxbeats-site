@@ -11,11 +11,19 @@ test("Only the final DCN QA copy accepts the exact UTC option; no arbitrary libp
   const target=new URL(env.DATABASE_URL);target.pathname="/lnx_dcn_final_paths_test_20261015";target.searchParams.set("options","-c timezone=UTC");
   const DATABASE_URL=target.toString();
   assert.equal(localDigitalReviewAvailable({...env,DATABASE_URL}),true);
+  assert.equal(localDigitalReviewAvailable({...env,DATABASE_URL:DATABASE_URL.split('?')[0]}),false);
   for(const bad of[DATABASE_URL.replace("timezone%3DUTC","timezone%3DEurope%2FParis"),`${DATABASE_URL}&options=-c+timezone%3DUTC`,`${DATABASE_URL}&host=remote.example.invalid`,DATABASE_URL.replace("lnx_dcn_final_paths_test_20261015","lnx_dcn_runtime_test"),DATABASE_URL.replace("127.0.0.1","remote.example.invalid")])assert.equal(localDigitalReviewAvailable({...env,DATABASE_URL:bad}),false);
+});
+test("The commercial France copy is isolated with the same exact UTC-only capability and never permits external credentials",()=>{
+  const target=new URL(env.DATABASE_URL);target.pathname="/lnx_dcn_france_commercial_test_20261015";target.searchParams.set("options","-c timezone=UTC");
+  const DATABASE_URL=target.toString();
+  assert.equal(localDigitalReviewAvailable({...env,DATABASE_URL}),true);
+  for(const bad of[DATABASE_URL.replace("timezone%3DUTC","timezone%3DEurope%2FParis"),`${DATABASE_URL}&options=-c+timezone%3DUTC`,`${DATABASE_URL}&host=remote.example.invalid`,DATABASE_URL.replace("lnx_dcn_france_commercial_test_20261015","lnx_dcn_france_commercial_other"),DATABASE_URL.replace("127.0.0.1","remote.example.invalid")])assert.equal(localDigitalReviewAvailable({...env,DATABASE_URL:bad}),false);
+  for(const extra of[{DCN_NEW_PAYMENTS_ENABLED:"true"},{DCN_EXTERNAL_TEST_AUTHORIZED:"true"},{PAYPAL_CLIENT_ID:"NEVER_USE_PROVIDER"},{DCN_MODE:"LIVE"}])assert.equal(localDigitalReviewAvailable({...env,DATABASE_URL,...extra}),false);
 });
 test("Local route accepts neither browser evidence nor external gateway/merchant fields", async () => {
   const route = await readFile(new URL("../../app/api/digital/local-review/checkout/route.ts", import.meta.url), "utf8");
-  assert.match(route, /digitalBody\(request,\["idempotencyKey","revision","termsVersion","earlyDelivery","withdrawalAcknowledged","jurisdiction"\]\)/);
+  assert.match(route, /digitalBody\(request,\["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction"\]\)/);
   assert.match(route, /withDigitalApi/); assert.match(route, /localDigitalReviewCheckoutAllowed\(actor\.email/);
   assert.doesNotMatch(route, /fetch\(|new Stripe|digitalGateway\(/);
   assert.match(route, /eventId:`dcn12-local-paid-\$\{attempt\.id\}`/);

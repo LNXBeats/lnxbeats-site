@@ -25,8 +25,9 @@ export function previewWindow(durationMs: number, startMs: number, requestedMs =
   return { startMs, durationMs: Math.min(durationMs - startMs, requestedMs, 59_900) };
 }
 export type DigitalCompletionSource = { trackId: string; masterId: string; sourceLineId: string;
-  paidCents: number; refundedCents: number; availableCents: number; creditCents: number; proofHash: string };
-export type DigitalCompletionSnapshot = { version: 1; basePriceCents: number; creditCents: number; sources: DigitalCompletionSource[] };
+  paidCents: number; refundedCents: number; availableCents: number; creditCents: number; proofHash: string;
+  equivalence?:{reviewId:string;sourceMasterId:string;targetMasterId:string;recordHash:string} };
+export type DigitalCompletionSnapshot = { version: 1 | 2; basePriceCents: number; creditCents: number; eligibleCents?: number; sources: DigitalCompletionSource[] };
 export type DigitalSelection = { id: string; scope: string; title: string; priceCents: number; version: number;
   completion?: DigitalCompletionSnapshot;
   tracks: Array<{ trackId: string; masterId: string; title: string; position: number;
@@ -38,16 +39,20 @@ export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: 
   const covered = new Set(albums.flatMap(s => s.tracks.map(t => t.trackId)));
   const removed: string[] = [];
   const lines = unique.filter(s => {
-    digitalPrice(s.priceCents);
+    const freeCompletion=s.scope==="ALBUM"&&s.priceCents===0&&s.completion?.version===2;
+    if(!freeCompletion)digitalPrice(s.priceCents);
+    if(s.completion)digitalPrice(s.completion.basePriceCents);
     if (!s.tracks.length) throw new DigitalError("NO_MASTER", 409);
     if (s.scope === "TRACK" && covered.has(s.tracks[0].trackId)) { removed.push(s.id); return false; }
     const owned = s.tracks.filter(t => ownedTracks.has(t.trackId));
     if (owned.length && (!s.completion || s.scope !== "ALBUM" || owned.length !== s.completion.sources.length
       || owned.some(t => !s.completion!.sources.some(c => c.trackId === t.trackId && c.masterId === t.masterId))))
       throw new DigitalError(s.scope === "ALBUM" ? "ALBUM_PARTIALLY_OWNED" : "ALREADY_OWNED", 409,{ownedTitles:owned.map(t=>t.title)});
-    if (s.completion && (s.scope!=="ALBUM"||s.completion.version !== 1 || !Number.isSafeInteger(s.completion.creditCents) || s.completion.creditCents < 0
+    if (s.completion && (s.scope!=="ALBUM"||![1,2].includes(s.completion.version) || !Number.isSafeInteger(s.completion.creditCents) || s.completion.creditCents < 0
       || s.completion.basePriceCents - s.completion.creditCents !== s.priceCents
-      || s.completion.sources.reduce((n,c)=>n+c.creditCents,0) !== s.completion.creditCents
+      || (s.completion.version===1?s.completion.sources.reduce((n,c)=>n+c.creditCents,0) !== s.completion.creditCents
+        :!freeCompletion||!Number.isSafeInteger(s.completion.eligibleCents)||s.completion.eligibleCents!<s.completion.basePriceCents
+          ||s.completion.sources.reduce((n,c)=>n+c.creditCents,0)!==s.completion.eligibleCents)
       || s.completion.sources.some(c=>!ownedTracks.has(c.trackId)||!s.tracks.some(t=>t.trackId===c.trackId&&t.masterId===c.masterId)
         ||!Number.isSafeInteger(c.creditCents)||c.creditCents<0||!Number.isSafeInteger(c.paidCents)||c.paidCents<1
         ||!Number.isSafeInteger(c.refundedCents)||c.refundedCents<0||c.creditCents!==c.availableCents||c.availableCents!==c.paidCents-c.refundedCents)

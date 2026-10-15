@@ -1,0 +1,585 @@
+{
+  "status": "PASS",
+  "source": "lnx_dcn_final_paths_test_20261015",
+  "target": "lnx_dcn_france_commercial_test_20261015",
+  "sourceMutation": false,
+  "productionAccess": false,
+  "externalCalls": 0,
+  "backup": {
+    "scope": "LOCAL_QA_ONLY",
+    "sha256": "6752d7a2a28961d0f6e716e9b64af3c64b87917a2a7dfe7e60760a99db8f37b8",
+    "encryption": "AES-256-GCM",
+    "keyStoredSeparately": true,
+    "recoverable": true,
+    "encryptedArchive": "/private/tmp/lnx-dcn-france-commercial-vP3cHx/source.dump.enc"
+  },
+  "restore": {
+    "status": "PASS",
+    "canaryTables": 106,
+    "plaintextRemoved": true
+  },
+  "migration": {
+    "name": "20261015050000_digital_free_completion",
+    "sha256": "6077e2ebd6cb63fb30ecb786673446069857ed6791dcb3b275f035388c3d21bc",
+    "status": "PASS",
+    "historicalRowsPreserved": true
+  },
+  "runtime": {
+    "status": "PASS",
+    "role": "dcn_runtime_a",
+    "checks": [
+      "non_owner_runtime",
+      "read_digital_orders",
+      "read_digital_order_lines",
+      "read_digital_completion_credits",
+      "read_digital_documents",
+      "read_digital_entitlements",
+      "read_digital_events",
+      "no_delete_orders",
+      "append_only_events",
+      "immutable_documents",
+      "no_tax_approval",
+      "no_ddl",
+      "physical_shop_unchanged"
+    ],
+    "otherDomainAclUnchanged": true,
+    "provisioningIdempotent": true
+  },
+  "sourceRecheck": {
+    "status": "PASS",
+    "canaries": [
+      {
+        "table": "admin_cleanup_audit_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "admin_record_archives",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "assets",
+        "count": 294,
+        "hash": "b9cdc9fffbfd0382757e2a20c20cf134"
+      },
+      {
+        "table": "auth_accounts",
+        "count": 6,
+        "hash": "8fadd2533c246532b5817c355b08cbd0"
+      },
+      {
+        "table": "auth_rate_limits",
+        "count": 6,
+        "hash": "23095222dc2bb33ba57057f8947f134e"
+      },
+      {
+        "table": "auth_registration_attempts",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "auth_sessions",
+        "count": 5,
+        "hash": "2adee0e9a15244ba068cdf960f35ea97"
+      },
+      {
+        "table": "auth_verifications",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "billing_audit_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "commercial_licenses",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "confidence_annotations",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "consumer_withdrawal_requests",
+        "count": 8,
+        "hash": "20b7fd1b4ca1c2477f97c968655220b7"
+      },
+      {
+        "table": "contract_acceptances",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "contract_documents",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "contract_party_snapshots",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "contract_templates",
+        "count": 5,
+        "hash": "2f184a18f6304ca42a190de4255dddf0"
+      },
+      {
+        "table": "creation_assets",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "creation_collaborator_links",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "creation_collaborators",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "creation_external_links",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "creation_media_upload_sessions",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "creations",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "credit_notes",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "credits",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "customers",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "digital_archives",
+        "count": 10,
+        "hash": "a7022fa2577efce2e4b0fd420af83889"
+      },
+      {
+        "table": "digital_cart_lines",
+        "count": 48,
+        "hash": "b51fc6a84ed30d303ed3f2707484ce8d"
+      },
+      {
+        "table": "digital_carts",
+        "count": 35,
+        "hash": "686a9ee6f57e763006caaf3bedbcb70a"
+      },
+      {
+        "table": "digital_completion_credits",
+        "count": 7,
+        "hash": "48f724f8bf26200607002641393037f6"
+      },
+      {
+        "table": "digital_country_tax_rules",
+        "count": 249,
+        "hash": "176573265cdb2cc060e56b847228b9e2"
+      },
+      {
+        "table": "digital_disputes",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "digital_documents",
+        "count": 63,
+        "hash": "160cd881e5fc986b2b06ac668f108dac"
+      },
+      {
+        "table": "digital_download_tickets",
+        "count": 90,
+        "hash": "8b71c86373ec1d0b7c268f9638ad776c"
+      },
+      {
+        "table": "digital_entitlements",
+        "count": 170,
+        "hash": "1cdeffaefb5a03d8f5d3b3d163dd544d"
+      },
+      {
+        "table": "digital_events",
+        "count": 505,
+        "hash": "f636c968a1e2d5a078346d24dc782503"
+      },
+      {
+        "table": "digital_fulfillments",
+        "count": 19,
+        "hash": "a0ad458d2a27d2495917f3ff285cb3ca"
+      },
+      {
+        "table": "digital_inbox",
+        "count": 16,
+        "hash": "25c5549f3dcdab41e97dfd3fdf8fd163"
+      },
+      {
+        "table": "digital_masters",
+        "count": 103,
+        "hash": "29f4b29a5c6bde4cd0a69f2dac6f0a55"
+      },
+      {
+        "table": "digital_notifications",
+        "count": 65,
+        "hash": "d82d35a6c55071a18f702425a7635c90"
+      },
+      {
+        "table": "digital_offers",
+        "count": 42,
+        "hash": "16b32c66a41a85d463397b9b4438d18b"
+      },
+      {
+        "table": "digital_order_lines",
+        "count": 59,
+        "hash": "d9f1cc5599de0be4a16266bcad40fa96"
+      },
+      {
+        "table": "digital_orders",
+        "count": 54,
+        "hash": "9de6c7fef57afb42178a8c3065adcc4e"
+      },
+      {
+        "table": "digital_payment_attempts",
+        "count": 44,
+        "hash": "ba4be88500db40fda89a5b978dd56d90"
+      },
+      {
+        "table": "digital_refunds",
+        "count": 25,
+        "hash": "e6e15aed2e504cd36a97d0687e7b00aa"
+      },
+      {
+        "table": "digital_uploads",
+        "count": 34,
+        "hash": "3ca83431f7789e6f4a00e90b5838811a"
+      },
+      {
+        "table": "digital_work_slots",
+        "count": 3,
+        "hash": "4ff7d43e2c03ab25ca645c499957a2ab"
+      },
+      {
+        "table": "external_shop_product_audit_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "external_shop_products",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "favorites",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "invoices",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "legal_document_versions",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "music_pricing_activations",
+        "count": 1,
+        "hash": "8a268fcb8b064ae91501dce9a177317e"
+      },
+      {
+        "table": "music_pricing_configurations",
+        "count": 1,
+        "hash": "1e4bd76ad806c254cb6586c810689972"
+      },
+      {
+        "table": "music_pricing_versions",
+        "count": 2,
+        "hash": "008a9ae79213619e62f6440770dfd1e6"
+      },
+      {
+        "table": "notification_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "notification_suppressions",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "order_assets",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "order_current_view_visibility_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "order_delivery_upload_sessions",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "order_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "order_notifications",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "orders",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "packaging_profiles",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "payment_audit_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "payment_incidents",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "payments",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "platform_links",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "product_assets",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "product_audit_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "product_stock_adjustments",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "products",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "project_assets",
+        "count": 2,
+        "hash": "9d23fc7e245640d95011086f13a75f57"
+      },
+      {
+        "table": "projects",
+        "count": 12,
+        "hash": "674e9ed52bc8bdddf85cd72348795239"
+      },
+      {
+        "table": "provider_event_technical_reviews",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "provider_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "refund_attempts",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_contributions",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_grants",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_licenses",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_messages",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_payment_winners",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_request_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_requests",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_split_proposals",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "rights_withdrawal_requests",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shipping_rate_tiers",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shipping_rate_versions",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_maintenance_runs",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_order_customer_requests",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_order_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_order_items",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_order_lifecycle_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_orders",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_readiness_alerts",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_return_audit_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_return_evidence",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_return_items",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_return_requests",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "shop_shipping_provider_attempts",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "stock_reservations",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "support_contribution_attempts",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "support_contribution_events",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "support_contributions",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "support_notifications",
+        "count": 0,
+        "hash": "d751713988987e9331980363e24189ce"
+      },
+      {
+        "table": "tracks",
+        "count": 115,
+        "hash": "572f94e738ac924518c58f36e4af8182"
+      },
+      {
+        "table": "users",
+        "count": 66,
+        "hash": "4fe645f34a90a2af8f11b8e132517313"
+      }
+    ],
+    "readOnly": true
+  },
+  "stage": "COMPLETE"
+}

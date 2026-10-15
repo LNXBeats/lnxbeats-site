@@ -7,9 +7,9 @@ import { parseDigitalCustomerTerritory } from "@/lib/digital/checkout-jurisdicti
 export const dynamic="force-dynamic";
 export async function POST(request:Request){return withDigitalApi(request,async actor=>{
   if(!localDigitalReviewCheckoutAllowed(actor.email,LOCAL_REVIEW_MERCHANT,true))throw new DigitalError("NOT_FOUND",404);
-  const b=await digitalBody(request,["idempotencyKey","revision","termsVersion","earlyDelivery","withdrawalAcknowledged","jurisdiction"]);
+  const b=await digitalBody(request,["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction"]);
   if(typeof b.idempotencyKey!=="string"||typeof b.termsVersion!=="string")throw new DigitalError("INVALID_CHECKOUT");
-  const order=await createDigitalCheckout(actor,{idempotencyKey:b.idempotencyKey,revision:Number(b.revision),provider:"STRIPE",termsVersion:b.termsVersion,earlyDelivery:b.earlyDelivery===true,withdrawalAcknowledged:b.withdrawalAcknowledged===true,jurisdiction:parseDigitalCustomerTerritory(b.jurisdiction)},
+  const order=await createDigitalCheckout(actor,{idempotencyKey:b.idempotencyKey,revision:Number(b.revision),provider:"STRIPE",termsVersion:b.termsVersion,termsAccepted:b.termsAccepted===true,earlyDelivery:b.earlyDelivery===true,withdrawalAcknowledged:b.withdrawalAcknowledged===true,jurisdiction:parseDigitalCustomerTerritory(b.jurisdiction)},
     {merchantId:LOCAL_REVIEW_MERCHANT,async create(_o,a){return{id:`dcn12-local-session-${a.id}`,url:"https://checkout.stripe.com/c/local_simulated_only"};},async recover(){return null;}},{localReview:true});
   const saved=await prisma.digitalOrder.findUniqueOrThrow({where:{id:order.orderId},include:{attempts:true}});
   const attempt=saved.attempts[0];

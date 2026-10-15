@@ -1,0 +1,12 @@
+{
+  "scope":"INITIAL_LOCAL_QA_HARNESS_ATTEMPT_NOT_ADDITIONAL_TEST_PASS",
+  "database":"lnx_dcn_france_commercial_test_20261015",
+  "result":"DIGITAL_CLOSED_FAIL_CLOSED_BEFORE_EQUIVALENCE_DECISION_OR_CREDIT",
+  "cause":"The new private QA profile does not itself turn DCN_ENABLED on. The first test harness assigned the profile but omitted its explicit TEST-only capability. The application guard was not changed; the final harness explicitly sets DCN_ENABLED=true and DCN_MODE=TEST, matching the local launcher.",
+  "retained":"New synthetic Admin/buyer, DRAFT hidden project, two READY metadata-only masters/assets, inactive offers and one synthetic source order/entitlement. No equivalence decision, target credit or entitlement was created in that attempt. All rows retained.",
+  "finalProof":"master-equivalence-runtime.json",
+  "historicalRowsChanged":false,
+  "externalRequests":0,
+  "providerCalls":0,
+  "emailsSent":0
+}

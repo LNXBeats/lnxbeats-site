@@ -1,23 +1,23 @@
 import "server-only";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import type { OrderActor } from "@/lib/orders/domain";
 import { prisma } from "@/lib/prisma";
 import { ownedTrackIds, selections, selectionFingerprint } from "./catalog";
 import { DigitalError, DIGITAL_TERMS_VERSION, assertDigitalUuid, assertPaymentEvidence, checkoutProviderUrl, normalizeDigitalCart, requireDigitalEnvironment, type DigitalPaymentEvidence, type DigitalSelection } from "./domain";
 import { digitalGateway, type DigitalGateway, type DigitalProviderOrder } from "./providers";
-import { digitalContractSnapshot } from "./fulfillment-policy";
+import { digitalContractSnapshot, digitalContractTerms } from "./fulfillment-policy";
 import { enqueueDigitalEmail, prepareDigitalDocuments } from "./documents";
 import { localDigitalReviewCheckoutAllowed } from "./local-review-policy";
 import { assertDigitalPaypalDeclinedRecovery, digitalPaypalDeclinedReference, isDigitalPaypalDeclinedEvidence } from "./paypal-evidence";
 import { applyDigitalCompletions, reserveDigitalCompletion, verifyDigitalCompletions, consumeDigitalCompletions, releaseDigitalCompletions,reviewDependentDigitalCompletions } from "./completion";
 import { reserveDigitalJurisdiction, checkDigitalAcquiredJurisdiction, checkDigitalResidenceRetry, digitalLocalTerritoryFixtureAllowed, type DigitalCustomerTerritory } from "./checkout-jurisdiction";
 import { calculateDigitalTax } from "./jurisdictions";
-import { DIGITAL_MUSIC_TERMS_DRAFT_TEXT } from "./digital-legal";
 import { verifyDigitalPinnedMedia } from "./pinned-media";
 import {DIGITAL_RIGHTS_REVIEW_POLICY} from "./rights-review-policy";
 import {checkDigitalAcquiredRightsReview} from "./rights-review-checkout";
 import {assertDigitalProviderBilling,digitalExpectedBilling} from "./france-provider-billing";
+import { DIGITAL_FRANCE_TERMS_VERSION } from "./france-legal";
 
 function user(actor: OrderActor) { if (actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("VERIFIED_ACCOUNT_REQUIRED", 403); }
 async function lock(tx: Prisma.TransactionClient, id: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${id}`})) IS NULL AS locked`; }
@@ -30,13 +30,15 @@ function presentOrder(order: { id: string; status: string; totalCents: number; m
     checkoutUrl: order.status === "PENDING" && attempt?.status === "OPEN" ? attempt.checkoutUrl : null,
     needsReconciliation: order.status === "REQUIRES_REVIEW" || attempt?.status === "UNKNOWN" };
 }
-export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; earlyDelivery: boolean; withdrawalAcknowledged: boolean; jurisdiction?:DigitalCustomerTerritory }, suppliedGateway?: DigitalGateway, options?:{localReview?:true;localQaFixture?:true}) {
+export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; termsAccepted?:boolean; earlyDelivery: boolean; withdrawalAcknowledged: boolean; jurisdiction?:DigitalCustomerTerritory }, suppliedGateway?: DigitalGateway, options?:{localReview?:true;localQaFixture?:true}) {
   user(actor); requireDigitalEnvironment();
   if (process.env.DCN_NEW_PAYMENTS_ENABLED !== "true" && !localDigitalReviewCheckoutAllowed(actor.email,suppliedGateway?.merchantId??"",options?.localReview===true)) throw new DigitalError("NEW_DIGITAL_PAYMENTS_CLOSED", 503);
   if(!suppliedGateway&&process.env.DCN_EXTERNAL_TEST_AUTHORIZED!=="true")throw new DigitalError("EXTERNAL_QA_AUTHORIZATION_REQUIRED",503);
   assertDigitalUuid(input.idempotencyKey);
   if (!Number.isSafeInteger(input.revision) || input.revision < 1 || !["STRIPE", "PAYPAL"].includes(input.provider)
-    || input.termsVersion !== DIGITAL_TERMS_VERSION || input.earlyDelivery !== true || input.withdrawalAcknowledged !== true) throw new DigitalError("INVALID_CHECKOUT");
+    || ![DIGITAL_TERMS_VERSION,DIGITAL_FRANCE_TERMS_VERSION].includes(input.termsVersion)
+    || input.termsVersion===DIGITAL_FRANCE_TERMS_VERSION&&input.termsAccepted!==true
+    || input.earlyDelivery !== true || input.withdrawalAcknowledged !== true) throw new DigitalError("INVALID_CHECKOUT");
   // Resolve TEST-only provider configuration before creating a persistent order.
   const gateway = suppliedGateway ?? digitalGateway(input.provider);
   const localQa=!!suppliedGateway&&(options?.localReview===true||options?.localQaFixture===true)&&digitalLocalTerritoryFixtureAllowed(gateway.merchantId);
@@ -48,10 +50,12 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
     if(options?.localReview&&!localDigitalReviewCheckoutAllowed(currentUser.email,suppliedGateway?.merchantId??"",true))throw new DigitalError("NOT_FOUND",404);
     const previous = await tx.digitalOrder.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: { user: true, lines: true, attempts: { orderBy: { createdAt: "desc" } } } });
     if (previous) {
-      if (previous.userId !== actor.id || previous.cartRevision !== input.revision || previous.attempts[0]?.provider !== input.provider) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);
+      if (previous.userId !== actor.id || previous.cartRevision !== input.revision || previous.attempts[0]?.provider !== input.provider
+        ||previous.termsVersion!==input.termsVersion) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);
       await checkDigitalResidenceRetry(input.jurisdiction,previous.jurisdictionSnapshot,tx,gateway.merchantId,actor.id);
       return { order: previous, attempt: previous.attempts[0], created: false };
     }
+    if(input.termsVersion!==DIGITAL_FRANCE_TERMS_VERSION)throw new DigitalError("CURRENT_DIGITAL_TERMS_REQUIRED",409);
     if (await tx.digitalOrder.findFirst({ where: { userId: actor.id, status: { in: ["PENDING", "REQUIRES_REVIEW", "DISPUTED"] } } })) throw new DigitalError("PAYMENT_ALREADY_ENGAGED", 409);
     const cart = await tx.digitalCart.findUnique({ where: { userId: actor.id }, include: { lines: { where: { removed: false } } } });
     if (!cart || cart.revision !== input.revision || !cart.lines.length) throw new DigitalError("STALE_CART", 409);
@@ -63,16 +67,17 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
     if(chosen.some(o=>cart.lines.find(l=>l.offerId===o.id)?.selectionHash!==selectionFingerprint(o)))throw new DigitalError("CATALOGUE_CHANGED",409);
     const normalized = normalizeDigitalCart(chosen, owned);
     if (!normalized.lines.length) throw new DigitalError("EMPTY_CART", 409);
-    const jurisdiction=await reserveDigitalJurisdiction(input.jurisdiction,tx,localQa,actor.id);
+    if(!normalized.totalCents)throw new DigitalError("FREE_COMPLETION_SEPARATE_FLOW_REQUIRED",409);
+    const jurisdiction=await reserveDigitalJurisdiction(input.jurisdiction,tx,localQa,actor.id,input.termsVersion);
     if(!jurisdiction.tax.priceIncludesTax)throw new DigitalError("TAX_EXCLUSIVE_CHECKOUT_REVIEW_REQUIRED",409);
     if(normalized.lines.some(l=>l.completion)&&jurisdiction.approvalScope!=="LOCAL_QA")throw new DigitalError("COMPLETION_TAX_ALLOCATION_REVIEW_REQUIRED",409);
     const order = await tx.digitalOrder.create({ data: { userId: actor.id, idempotencyKey: input.idempotencyKey, cartRevision: cart.revision,
-      totalCents: normalized.totalCents, mode: "TEST", termsVersion: DIGITAL_TERMS_VERSION, termsHash: createHash("sha256").update(DIGITAL_MUSIC_TERMS_DRAFT_TEXT).digest("hex"),
+      totalCents: normalized.totalCents, mode: "TEST", termsVersion: input.termsVersion, termsHash: digitalContractTerms(input.termsVersion).hash,
       jurisdictionSnapshot:jurisdiction as unknown as Prisma.InputJsonValue,
       earlyDelivery: true, withdrawalAcknowledged: true, lines: { create: normalized.lines.map(l => ({ offerId: l.id, scope: l.scope, title: l.title, priceCents: l.priceCents,
         offerVersion: l.version, trackSnapshot: l.tracks, ...(l.completion?{completionSnapshot:l.completion}:{}),
         taxSnapshot: {status:jurisdiction.approvalScope==="LOCAL_QA"?"LOCAL_REVIEW_ONLY":"APPROVED_TERRITORY",...calculateDigitalTax({grossBeforeCreditCents:l.completion?.basePriceCents??l.priceCents,creditCents:l.completion?.creditCents??0},jurisdiction)} })) },
-      contractSnapshot: {...digitalContractSnapshot({ email: currentUser.email, name: currentUser.displayName || "Client QA" }, new Date()),rightsReviewPolicy:DIGITAL_RIGHTS_REVIEW_POLICY},
+      contractSnapshot: {...digitalContractSnapshot({ email: currentUser.email, name: currentUser.displayName || "Client QA" }, new Date(),input.termsVersion),rightsReviewPolicy:DIGITAL_RIGHTS_REVIEW_POLICY},
     }, include: { user: true, lines: true } });
     for(const l of normalized.lines)if(l.completion)await reserveDigitalCompletion(tx,actor.id,order.lines.find(line=>line.offerId===l.id)!.id,l.completion);
     const attempt = await tx.digitalPaymentAttempt.create({ data: { orderId: order.id, provider: input.provider, idempotencyKey: `dcn:${order.id}:${randomUUID()}`, leaseUntil: new Date(Date.now() + 60000) } });
@@ -194,7 +199,7 @@ export async function reconcileDigitalEvidence(e: DigitalPaymentEvidence, mercha
     const trackIds = order.lines.flatMap(l => (l.trackSnapshot as unknown as DigitalSelection["tracks"]).map(t => t.trackId));
     const existingRights=completionLines.length?await tx.digitalEntitlement.findMany({where:{userId:order.userId,status:"ACTIVE",line:{orderId:{not:order.id}},master:{trackId:{in:trackIds}}},select:{lineId:true,masterId:true,master:{select:{trackId:true}}}}):null;
     const admittedSources=completionLines.flatMap(l=>(l.completionSnapshot as unknown as NonNullable<DigitalSelection["completion"]>).sources);
-    const overlapping=existingRights?existingRights.some(r=>!admittedSources.some(s=>s.sourceLineId===r.lineId&&s.masterId===r.masterId&&s.trackId===r.master.trackId)):
+    const overlapping=existingRights?existingRights.some(r=>!admittedSources.some(s=>s.sourceLineId===r.lineId&&(s.equivalence?.sourceMasterId??s.masterId)===r.masterId&&s.trackId===r.master.trackId)):
       !!await tx.digitalEntitlement.findFirst({where:{userId:order.userId,status:"ACTIVE",line:{orderId:{not:order.id}},master:{trackId:{in:trackIds}}}});
     if (overlapping) {
       await tx.digitalPaymentAttempt.update({ where: { id: attempt.id }, data: { status: "PAID", paymentReference: e.paymentReference, leaseUntil: null } });

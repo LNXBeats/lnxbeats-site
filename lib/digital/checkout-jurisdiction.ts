@@ -30,7 +30,7 @@ export function digitalLocalTerritoryFixtureAllowed(merchant:string) {
   return (merchant===LOCAL_REVIEW_MERCHANT||merchant.startsWith("dcn-consolidation-"))
     && localDigitalReviewAvailable({...process.env,DCN_NEW_PAYMENTS_ENABLED:"false"});
 }
-function input(territory:DigitalCustomerTerritory|undefined,qa:boolean):DigitalJurisdictionInput {
+function input(territory:DigitalCustomerTerritory|undefined,qa:boolean,termsVersion=DIGITAL_TERMS_VERSION):DigitalJurisdictionInput {
   if(!territory||typeof territory.countryCode!=="string"||typeof territory.residenceCountryCode!=="string"||typeof territory.billingCountryCode!=="string"
     ||territory.customerType!=="B2C"||territory.subdivisionCode!==undefined&&typeof territory.subdivisionCode!=="string")throw new DigitalError("COUNTRY_EVIDENCE_REQUIRED",409);
   if(qa&&!digitalLocalTerritoryFixtureAllowed(LOCAL_REVIEW_MERCHANT))throw new DigitalError("LOCAL_QA_POLICY_NOT_AUTHORIZED",403);
@@ -40,12 +40,12 @@ function input(territory:DigitalCustomerTerritory|undefined,qa:boolean):DigitalJ
   return {countryCode:territory.countryCode,subdivisionCode:territory.subdivisionCode,residenceCountryCode:territory.residenceCountryCode,
     billingCountryCode:territory.billingCountryCode,customerType:territory.customerType,
     ...(providerCountryCode!==null&&providerCountryCode!==undefined?{providerCountryCode:String(providerCountryCode)}:{}),
-    mode:"TEST",termsVersion:DIGITAL_TERMS_VERSION,locale:"fr",providerAllowed:true,rightsApproved:true,formatsReady:true,localQaFixtureAuthorized:qa};
+    mode:"TEST",termsVersion,locale:"fr",providerAllowed:true,rightsApproved:true,formatsReady:true,localQaFixtureAuthorized:qa};
 }
 type AcquiredTerritory=DigitalJurisdictionSnapshot&{franceResidence?:DigitalFranceResidenceSnapshot;franceResidenceV2?:DigitalFranceResidenceSnapshotV2};
-function localRule(v2:boolean){const rule=localQaDigitalCountryRule(DIGITAL_TERMS_VERSION);return v2?{...rule,subdivisionCode:DIGITAL_FRANCE_LAUNCH_POLICY.registrySubdivision}:rule;}
-export async function reserveDigitalJurisdiction(territory:DigitalCustomerTerritory|undefined,tx:Prisma.TransactionClient,qa:boolean,subjectUserId?:string):Promise<AcquiredTerritory>{
-  const context=input(territory,qa);
+function localRule(v2:boolean,termsVersion=DIGITAL_TERMS_VERSION){const rule=localQaDigitalCountryRule(termsVersion);return v2?{...rule,subdivisionCode:DIGITAL_FRANCE_LAUNCH_POLICY.registrySubdivision}:rule;}
+export async function reserveDigitalJurisdiction(territory:DigitalCustomerTerritory|undefined,tx:Prisma.TransactionClient,qa:boolean,subjectUserId?:string,termsVersion=DIGITAL_TERMS_VERSION):Promise<AcquiredTerritory>{
+  const context=input(territory,qa,termsVersion);
   const hasFranceDeclaration=territory&&(territory.residencePostalCode!==undefined||territory.billingPostalCode!==undefined||territory.residenceConfirmed!==undefined);
   if(hasFranceDeclaration){
     if(territory.residenceConfirmed!==true||context.countryCode!=="FR"||context.residenceCountryCode!=="FR"||context.billingCountryCode!=="FR")throw new DigitalError("FRANCE_RESIDENCE_DECLARATION_REQUIRED",409);
@@ -53,13 +53,13 @@ export async function reserveDigitalJurisdiction(territory:DigitalCustomerTerrit
   }
   const v2=territory&&(territory.residenceDeclarationId!==undefined||territory.addressHash!==undefined);
   // Existing isolated provider-double fixtures are not residence/fiscal evidence.
-  if(qa&&!v2)return assertDigitalCheckoutJurisdiction(context,tx,localRule(false));
+  if(qa&&!v2)return assertDigitalCheckoutJurisdiction(context,tx,localRule(false,termsVersion));
   if(!territory||!subjectUserId||territory.residenceConfirmed!==true||context.countryCode!=="FR"||context.residenceCountryCode!=="FR"||context.billingCountryCode!=="FR"
     ||territory.subdivisionCode!==undefined&&territory.subdivisionCode!==DIGITAL_FRANCE_LAUNCH_POLICY.registrySubdivision)throw new DigitalError("FRANCE_RESIDENCE_DECLARATION_REQUIRED",409);
   if(!digitalUuid(territory.residenceDeclarationId)||typeof territory.addressHash!=="string"||!/^[a-f0-9]{64}$/.test(territory.addressHash)||!territory.billingPostalCode)throw new DigitalError("FRANCE_ADDRESS_DECLARATION_REQUIRED",409);
   const residence=assertDigitalFranceResidenceV2Prepared(await assessDigitalFranceResidenceV2({residenceDeclarationId:territory.residenceDeclarationId,addressHash:territory.addressHash,billingPostalCode:territory.billingPostalCode},subjectUserId,tx));
   if(residence.residencePostalCode!==territory.residencePostalCode)throw new DigitalError("FRANCE_RESIDENCE_PROOF_CHANGED_REQUIRES_REVIEW",409);
-  const jurisdiction=await assertDigitalCheckoutJurisdiction({...context,subdivisionCode:DIGITAL_FRANCE_LAUNCH_POLICY.registrySubdivision},tx,qa?localRule(true):undefined);
+  const jurisdiction=await assertDigitalCheckoutJurisdiction({...context,subdivisionCode:DIGITAL_FRANCE_LAUNCH_POLICY.registrySubdivision},tx,qa?localRule(true,termsVersion):undefined);
   return{...jurisdiction,franceResidenceV2:residence};
 }
 /** Missing historical snapshots remain historical, never inferred or rewritten. */
@@ -79,7 +79,8 @@ export async function checkDigitalAcquiredJurisdiction(snapshot:unknown,tx:Prism
     const current=await assessDigitalFranceResidence({countryCode:"FR",postalCode:residence.residencePostalCode,billingPostalCode:residence.billingPostalCode},subjectUserId,tx);
     revalidateDigitalFranceResidenceSnapshot(residence,current);
   }
-  return revalidateDigitalCheckoutJurisdiction(s,input(s,qa),tx,qa?localRule(v2):undefined);
+  // Revalidation follows the acquired policy version, never the current checkout template.
+  return revalidateDigitalCheckoutJurisdiction(s,input(s,qa,s.termsVersion),tx,qa?localRule(v2,s.termsVersion):undefined);
 }
 /** Retry is not permission to change the bound territory or reuse an outdated
  * address review. Only new V2 orders gain this guard; old receipts stay intact. */

@@ -3,9 +3,27 @@ import { approvedLegalNotices, approvedWithdrawalNotice, consumerMediatorInforma
 import { digitalMusicTermsDraft, DIGITAL_MUSIC_TERMS_DRAFT_TEXT_HASH } from "./digital-legal";
 
 /** Separate proposal. Importing this file never approves terms, tax or a territory. */
-export const DIGITAL_FRANCE_TERMS_VERSION = "digital-music-france-cgv-20261015-draft-01";
+export const DIGITAL_FRANCE_TERMS_VERSION = "digital-music-france-cgv-20261015-draft-02";
 export const DIGITAL_FRANCE_IMMEDIATE_SUPPLY_DRAFT = "Je demande expressément que la fourniture des contenus numériques commandés commence avant la fin du délai de rétractation de quatorze jours.";
 export const DIGITAL_FRANCE_WITHDRAWAL_ACKNOWLEDGEMENT_DRAFT = "Je reconnais que je perdrai mon droit de rétractation lorsque la fourniture aura commencé, après mon consentement exprès et la confirmation de cet accord sur un support durable. Mes garanties légales restent applicables.";
+/** Statutory model for one-off supply, included in this DRAFT without legal approval. */
+export const DIGITAL_FRANCE_GUARANTEE_BOX_PARAGRAPHS = Object.freeze([
+  "Le consommateur dispose d'un délai de deux ans à compter de la fourniture du contenu numérique ou du service numérique pour obtenir la mise en œuvre de la garantie légale de conformité en cas d'apparition d'un défaut de conformité. Durant un délai d'un an à compter de la date de fourniture, le consommateur n'est tenu d'établir que l'existence du défaut de conformité et non la date d'apparition de celui-ci.",
+  "La garantie légale de conformité emporte obligation de fournir toutes les mises à jour nécessaires au maintien de la conformité du contenu numérique ou du service numérique.",
+  "La garantie légale de conformité donne au consommateur droit à la mise en conformité du contenu numérique ou du service numérique sans retard injustifié suivant sa demande, sans frais et sans inconvénient majeur pour lui.",
+  "Le consommateur peut obtenir une réduction du prix en conservant le contenu numérique ou le service numérique ou il peut mettre fin au contrat en se faisant rembourser intégralement contre renoncement au contenu numérique ou au service numérique, si :",
+  "1° Le professionnel refuse de mettre le contenu numérique ou le service numérique en conformité ;",
+  "2° La mise en conformité du contenu numérique ou du service numérique est retardée de manière injustifiée ;",
+  "3° La mise en conformité du contenu numérique ou du service numérique ne peut intervenir sans frais imposés au consommateur ;",
+  "4° La mise en conformité du contenu numérique ou du service numérique occasionne un inconvénient majeur pour le consommateur ;",
+  "5° La non-conformité du contenu numérique ou du service numérique persiste en dépit de la tentative de mise en conformité du professionnel restée infructueuse.",
+  "Le consommateur a également droit à une réduction du prix ou à la résolution du contrat lorsque le défaut de conformité est si grave qu'il justifie que la réduction du prix ou la résolution du contrat soit immédiate. Le consommateur n'est alors pas tenu de demander la mise en conformité du contenu numérique ou du service numérique au préalable.",
+  "Dans les cas où le défaut de conformité est mineur, le consommateur n'a droit à l'annulation du contrat que si le contrat ne prévoit pas le paiement d'un prix.",
+  "Toute période d'indisponibilité du contenu numérique ou du service numérique en vue de sa remise en conformité suspend la garantie qui restait à courir jusqu'à la fourniture du contenu numérique ou du service numérique de nouveau conforme.",
+  "Les droits mentionnés ci-dessus résultent de l'application des articles L. 224-25-1 à L. 224-25-31 du code de la consommation.",
+  "Le professionnel qui fait obstacle de mauvaise foi à la mise en œuvre de la garantie légale de conformité encourt une amende civile d'un montant maximal de 300 000 euros, qui peut être porté jusqu'à 10 % du chiffre d'affaires moyen annuel (article L. 242-18-1 du code de la consommation).",
+  "Le consommateur bénéficie, en outre, de la garantie légale des vices cachés en application des articles 1641 à 1649 du code civil, pendant une durée de deux ans à compter de la découverte du défaut. Cette garantie donne droit à une réduction de prix si le contenu numérique ou le service numérique est conservé ou à un remboursement intégral contre renonciation au contenu numérique ou au service numérique.",
+]);
 
 export const DIGITAL_FRANCE_PROPOSED_SCOPE = Object.freeze({
   marketCode: "FR-MET", marketCodeIsInternal: true, countryCode: "FR", customerType: "B2C",
@@ -28,7 +46,13 @@ const references = Object.freeze({
   seller: Object.freeze({ version: approvedLegalNotices.version, hashSha256: approvedLegalNotices.hashSha256 }),
   withdrawalInformation: Object.freeze({ version: approvedWithdrawalNotice.version, hashSha256: approvedWithdrawalNotice.hashSha256, informationPath: "/retractation" }),
   previousDigitalDraft: Object.freeze({ version: digitalMusicTermsDraft.version, hashSha256: digitalMusicTermsDraft.hashSha256, textHashSha256: DIGITAL_MUSIC_TERMS_DRAFT_TEXT_HASH }),
+  previousFranceDraft: Object.freeze({ version: "digital-music-france-cgv-20261015-draft-01", hashSha256: "d427d12daaa4514b58fac159073cee0def92548e15ce03d697250eea793896f9", textHashSha256: "c462b145b76c8d5247b48a0ec02837be11068163bef4c378e392387a6de4b215", status: "DRAFT_NOT_SELECTED_AT_CHECKOUT" }),
 });
+export const DIGITAL_FRANCE_LEGAL_SOURCES = Object.freeze([
+  Object.freeze({ provision: "L. 221-13 et L. 221-28 13°", url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000044563170/2022-08-25", checkedAt: "2026-10-15", purpose: "Confirmation durable et exception numérique cumulative" }),
+  Object.freeze({ provision: "L. 221-21 et D. 221-5", url: "https://www.economie.gouv.fr/dgccrf/les-fiches-pratiques/delais-de-reflexion-ou-de-retractation-comment-sappliquent-t-ils", checkedAt: "2026-10-15", purpose: "Fonctionnalité en ligne depuis le 19 juin 2026 et accusé daté" }),
+  Object.freeze({ provision: "D. 211-3 et annexe", url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000045981318/2026-02-04", checkedAt: "2026-10-15", purpose: "Fourniture ponctuelle et encadré de garanties à valider" }),
+]);
 
 const sections = [
   { title: "1. Vendeur et objet", paragraphs: [
@@ -56,7 +80,7 @@ const sections = [
   { title: "5. Compléter un album", paragraphs: [
     "Pour les titres admissibles déjà acquis séparément, le complément déduit uniquement les sommes réellement payées et non remboursées attribuables à ces titres. Les prix d’origine peuvent différer, notamment en présence de promotions historiques ; les prix courants des titres ne remplacent pas la preuve de la somme payée.",
     "Le récapitulatif présente le prix actuel de l’album, les titres pris en compte, les crédits retenus et le solde. Une même acquisition ne peut servir deux fois ; les engagements concurrents et remboursements sont contrôlés côté serveur. Les calculs utilisent les centimes exacts, sans crédit réutilisable ni remise rétroactive implicite sur les achats précédents.",
-    "Un album déjà acquis n’est pas facturé une seconde fois. Si les titres sont possédés séparément, le devis vérifie les versions et la composition ; un changement de master, un contenu non admissible, une preuve ambiguë ou un solde nul ou négatif ne déclenche aucun paiement automatique et nécessite une revue. L’évolution future d’un album n’est pas incluse rétroactivement.",
+    "Un album déjà acquis n’est pas facturé une seconde fois. Si les titres sont possédés séparément, le devis vérifie les versions et la composition. Lorsque les sommes admissibles couvrent le prix de l’album, le crédit appliqué est plafonné à ce prix et le complément est attribué sans nouveau paiement : aucun prestataire n’est appelé et aucune facture d’encaissement fictif n’est créée. Le surplus ne devient ni solde créditeur réutilisable, ni remboursement ; il reste traçable dans la confirmation, avec le prix album, les acquisitions sources et leur montant. Les consentements et contrôles de fourniture restent nécessaires. Un changement de master, un contenu non admissible ou une preuve ambiguë nécessite une revue. L’évolution future d’un album n’est pas incluse rétroactivement.",
   ] },
   { title: "6. Paiement, confirmation et fourniture", paragraphs: [
     "Stripe et PayPal interviennent comme prestataires de paiement, sans devenir automatiquement vendeurs de la musique. Seule une confirmation vérifiée côté serveur, concordante sur le montant, la devise, le compte marchand et les références, permet de confirmer le règlement. Un retour navigateur, une approbation ou une URL de succès ne prouve pas un encaissement.",
@@ -67,7 +91,8 @@ const sections = [
   { title: "7. Rétractation", paragraphs: [
     "Pour ce contrat de contenu numérique sans support matériel, le consommateur dispose en principe de quatorze jours à compter de la conclusion du contrat pour notifier sa rétractation, sans avoir à donner de motif.",
     "L’exception de l’article L. 221-28, 13° du Code de la consommation ne s’applique que si la fourniture a commencé avant la fin de ce délai, après le consentement exprès préalable du client, sa reconnaissance de la perte de son droit et la confirmation de cet accord sur un support durable conformément à l’article L. 221-13. L’acceptation des CGV ou le seul paiement ne remplace pas ces conditions cumulatives. Si elles ne sont pas réunies, la perte du droit n’est pas présumée.",
-    "Le client peut adresser une déclaration non ambiguë au contact postal ou électronique du vendeur, en identifiant le contrat et son nom. Il peut utiliser le modèle joint, sans y être obligé. Les informations et le formulaire existants sont accessibles à /retractation ; leur prise en charge explicite des achats numériques doit être raccordée et vérifiée avant ouverture, et n’est pas présentée ici comme déjà opérationnelle.",
+    "Le client peut adresser une déclaration non ambiguë au contact postal ou électronique du vendeur, en identifiant le contrat et son nom. Il peut utiliser le modèle joint, sans y être obligé. La fonctionnalité sans frais à /retractation permet de choisir un achat numérique, de relire et corriger la déclaration puis de confirmer expressément la rétractation ; elle ne requiert pas de connexion ni de motif. L’accusé téléchargeable conserve son contenu et la date et l’heure UTC de réception. La capture locale d’un e-mail n’est ni son envoi ni sa remise au consommateur ; le transport réel reste à valider avant LIVE.",
+    "Si l’information requise sur la rétractation n’a pas été fournie, le délai peut être prolongé de douze mois après l’expiration du délai initial ; si elle est reçue pendant cette prolongation, le délai expire quatorze jours après sa réception. Une demande n’est donc pas rejetée automatiquement sur le seul âge apparent de la commande.",
     "Lorsqu’une rétractation valable est exercée, les sommes dues sont remboursées sans retard injustifié et au plus tard quatorze jours après notification, par le même moyen de paiement sauf accord exprès sur un autre moyen sans frais. Aucune clause générale de non-remboursement n’est opposée. Les garanties légales demeurent applicables même lorsque l’exception au droit de rétractation est acquise.",
   ] },
   { title: "8. Licence personnelle et versions", paragraphs: [
@@ -75,12 +100,7 @@ const sections = [
     "Les fichiers et la composition acquis sont figés au moment de l’achat. Un nouveau master, une réédition ou un remaster n’est pas ajouté automatiquement. Cette conservation ne supprime pas l’obligation de remédier à une non-conformité ni de fournir les mises à jour légalement nécessaires.",
     "Les liens privés temporaires peuvent être renouvelés ; tant que le service de bibliothèque fonctionne et que les droits concernés restent actifs, aucune limite arbitraire du nombre de re-téléchargements n’est imposée. Le client est invité à conserver ses fichiers. Il n’est pas promis un hébergement perpétuel ; une fin de service doit préserver les droits impératifs et faire l’objet de modalités validées avant lancement.",
   ] },
-  { title: "9. Garanties légales des contenus numériques — encadré de revue", paragraphs: [
-    "Pour un contenu fourni en une fois, LNX Beats répond des défauts de conformité présents lors de la fourniture et apparaissant dans les deux ans qui la suivent. Le défaut apparu pendant les douze premiers mois est présumé exister lors de la fourniture, sauf preuve contraire. Ces deux durées ne doivent pas être confondues.",
-    "Le consommateur peut demander une mise en conformité sans frais, sans retard injustifié et sans inconvénient majeur. Dans les cas prévus par la loi, notamment impossibilité, refus ou absence de correction appropriée, il peut demander une réduction du prix ou la résolution du contrat. L’appréciation d’un défaut mineur et les modalités des remboursements suivent les règles légales, non une exclusion générale des remboursements.",
-    "Les corrections et mises à jour nécessaires au maintien de la conformité restent dues selon les règles applicables ; elles sont distinctes d’une nouvelle édition artistique commerciale. Les autres garanties impératives, dont celle des vices cachés lorsqu’elle s’applique, ne sont pas écartées.",
-    "Ce résumé doit être relu et complété par l’encadré réglementaire applicable à une fourniture ponctuelle, prévu à l’article D. 211-3 et son annexe, dans la mise en forme finale des CGV. Il n’est pas présenté comme une reproduction certifiée de cet encadré. Pour toute demande, utiliser les coordonnées du vendeur indiquées au début du document.",
-  ] },
+  { title: "9. Garanties légales des contenus numériques D. 211-3 et son annexe", boxed: true, paragraphs: DIGITAL_FRANCE_GUARANTEE_BOX_PARAGRAPHS },
   { title: "10. Remboursements, documents et incidents", paragraphs: [
     "Une demande de remboursement pour un simple changement d’avis fait l’objet d’un examen individuel. Lorsque la fourniture immédiate a légalement entraîné la perte du droit de rétractation, aucun remboursement commercial automatique n’est accordé pour ce seul motif. Cette politique ne limite ni le droit de rétractation lorsqu’il subsiste, ni les garanties légales, ni aucun autre remboursement ou recours imposé par la loi.",
     "Un remboursement confirmé est rattaché à l’achat concerné et donne lieu au justificatif et à l’avoir appropriés ; le paiement initial, la facture et l’historique restent conservés. Une réduction de prix ne vaut pas automatiquement résolution ni retrait de tous les droits.",
@@ -103,8 +123,8 @@ const payload = Object.freeze({
   title: "Conditions de vente de musique numérique — France métropolitaine et Corse — brouillon de revue",
   status: "DRAFT" as const, createdAt: "2026-10-15T00:00:00.000Z", effectiveAt: null, approvedAt: null, approvedBy: null,
   legalReviewReference: null, fiscalReviewReference: null, approvedForLive: false, userApprovalRecorded: false, userApprovalScope: "TERMS_TEXT_ONLY" as const,
-  proposedScope: DIGITAL_FRANCE_PROPOSED_SCOPE, commercialDecisions: DIGITAL_FRANCE_COMMERCIAL_DECISIONS, existingProofReferences: references,
-  sections: Object.freeze(sections.map(section => Object.freeze({ title: section.title, paragraphs: Object.freeze([...section.paragraphs]) }))),
+  proposedScope: DIGITAL_FRANCE_PROPOSED_SCOPE, commercialDecisions: DIGITAL_FRANCE_COMMERCIAL_DECISIONS, existingProofReferences: references, legalSources: DIGITAL_FRANCE_LEGAL_SOURCES,
+  sections: Object.freeze(sections.map(section => Object.freeze({ title: section.title, paragraphs: Object.freeze([...section.paragraphs]), ...("boxed" in section ? { boxed: section.boxed } : {}) }))),
   reviewRequired: Object.freeze(["FR_DIGITAL_TERMS_LEGAL_REVIEW", "FR_GEOGRAPHIC_RESTRICTION_NON_DISCRIMINATION", "FR_DIGITAL_TAX_AND_INVOICE_WORDING",
     "FR_DIGITAL_WITHDRAWAL_ONLINE_ROUTE", "FR_IMMEDIATE_SUPPLY_AND_DURABLE_CONFIRMATION", "FR_D211_3_STATUTORY_GUARANTEE_BOX",
     "FR_LICENSE_AND_SERVICE_END", "CM2C_EXISTING_CONVENTION_DIGITAL_SCOPE", "FR_REAL_PRICES_AND_COMPLETION_POLICY"]),

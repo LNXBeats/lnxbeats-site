@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {digitalErrorMessage} from "../../lib/digital/error-presentation";
 
 test("exact owned edition points to library without proposing a duplicate purchase",()=>{
@@ -11,7 +12,30 @@ test("completion blockers distinguish a credit calculation from a captured payme
     assert.match(digitalErrorMessage(code),/acquisitions, remboursements ou crédits réservés/);
     assert.doesNotMatch(digitalErrorMessage(code),/Ce paiement nécessite|Aucun paiement n’a/);
   }
-  assert.match(digitalErrorMessage("COMPLETION_ZERO_REQUIRES_REVIEW"),/attribution sans paiement reste à valider/);
+  const free=digitalErrorMessage("COMPLETION_ZERO_REQUIRES_REVIEW");
+  assert.match(free,/Revenez au panier/); assert.match(free,/sans paiement dans le parcours contrôlé/);
+  assert.match(free,/via \/contact/); assert.doesNotMatch(free,/reste à valider/);
+});
+test("unallocatable promotion and completion blockers propose a concrete contact without granting credits",()=>{
+  for(const code of ["ALBUM_PARTIALLY_OWNED","COMPLETION_SOURCE_REQUIRES_REVIEW","COMPLETION_PROMOTION_ALLOCATION_REQUIRES_REVIEW","COMPLETION_REFUND_REQUIRES_REVIEW"]){
+    assert.match(digitalErrorMessage(code),/via \/contact/);
+    assert.match(digitalErrorMessage(code),/ne permet pas|nécessite une vérification/);
+  }
+  assert.match(digitalErrorMessage("ALBUM_PARTIALLY_OWNED",["QA track"]),/via \/contact/);
+  assert.match(digitalErrorMessage("COMPLETION_SOURCE_REQUIRES_REVIEW"),/Aucun nouveau crédit n’est appliqué/);
+});
+test("catalogue, cart and checkout blocker contacts use a plain path without prefilled private data",async()=>{
+  for(const path of ["components/digital-catalog.tsx","components/digital-cart.tsx","components/digital-checkout.tsx"]){
+    const source=await readFile(path,"utf8");
+    assert.match(source,/<Link href="\/contact" className="text-link">Contacter LNX Beats pour examiner le (?:complément|blocage)<\/Link>/);
+    assert.doesNotMatch(source,/href=["']\/contact[?#]/);
+  }
+});
+test("geographic blockers remain closed and never offer a contact as an override",()=>{
+  for(const code of ["FRANCE_RESIDENCE_DECLARATION_REQUIRED","COUNTRY_DISABLED","TERRITORY_REVIEW_REQUIRED"]){
+    const text=digitalErrorMessage(code);assert.match(text,/Aucun nouveau paiement n’a été lancé/);
+    assert.doesNotMatch(text,/complément sans paiement|via \/contact|autorisé/);
+  }
 });
 test("owned title explanation does not restore the obsolete blanket album prohibition",()=>{
   assert.match(digitalErrorMessage("ALBUM_PARTIALLY_OWNED",["QA — Piste 01"]),/QA — Piste 01/);

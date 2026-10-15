@@ -7,9 +7,10 @@ import { ensureDigitalArchive } from "./archive-worker";
 import { digitalAttachment, digitalByteRange, DIGITAL_DOWNLOAD_TTL_MS } from "./download-policy";
 import { digitalLibraryPagination } from "./presentation";
 import { acquiredAlbumFormats, acquiredDigitalFormats, acquiredDigitalAssetId, type DigitalAudioFormat, type DigitalAcquiredTrack } from "./formats";
+import { DIGITAL_ACTIVE_RIGHTS_ORDER_STATES } from "./library-policy";
 async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
   const line = await prisma.digitalOrderLine.findFirst({
-    where: { id, order: { userId, status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] } } },
+    where: { id, order: { userId, status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } },
     include: { order:{include:{fulfillment:true}},entitlements: { where: { userId, status: "ACTIVE" }, include: {
       master: { include: { masterAsset: true, mp3Asset: true, track: { select: { title: true, position: true } } } },
     } } },
@@ -53,7 +54,7 @@ export async function digitalDownloadResponse(userId:string,id:string,token:stri
   const ticket=await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${userId}`})) IS NULL AS locked`;
     const t=await tx.digitalDownloadTicket.findFirst({where:{id,userId,tokenHash:hash,expiresAt:{gt:new Date()},usesLeft:{gt:0}}});if(!t)throw new DigitalError("NOT_FOUND",404);
     const owner=await tx.user.findUnique({where:{id:userId},select:{status:true,emailVerified:true}});if(owner?.status!=="ACTIVE"||!owner.emailVerified)throw new DigitalError("NOT_FOUND",404);
-    const line=await tx.digitalOrderLine.findFirst({where:{id:t.lineId,order:{userId,status:{in:["PAID","PARTIALLY_REFUNDED","REFUNDED"]}}},include:{order:{include:{fulfillment:true}},entitlements:{where:{status:"ACTIVE",userId,...(t.masterId?{masterId:t.masterId}:{})}}}});
+    const line=await tx.digitalOrderLine.findFirst({where:{id:t.lineId,order:{userId,status:{in:[...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES]}}},include:{order:{include:{fulfillment:true}},entitlements:{where:{status:"ACTIVE",userId,...(t.masterId?{masterId:t.masterId}:{})}}}});
     if(!line||!line.entitlements.length||!t.masterId&&line.entitlements.length!==(line.trackSnapshot as unknown[]).length)throw new DigitalError("NOT_FOUND",404);
     if(line.order.contractSnapshot&&!line.order.fulfillment?.accessReadyAt)throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);
     if(options.method!=="HEAD")await tx.digitalDownloadTicket.update({where:{id},data:{usesLeft:{decrement:1}}});

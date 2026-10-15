@@ -7,7 +7,7 @@ import { sellerSnapshot } from "@/lib/billing/service";
 import { billingSnapshotHash, invoiceNumber, creditNoteNumber } from "@/lib/billing/domain";
 import { generateInvoicePdf, generateCreditNotePdf, type InvoicePdfRecord, type CreditNotePdfRecord } from "@/lib/billing/pdf";
 import { DigitalError, requireDigitalEnvironment, assertDigitalUuid } from "./domain";
-import { DIGITAL_FISCAL_REVIEW_NOTICE, digitalEmailTemplate, verifyContractSnapshot } from "./fulfillment-policy";
+import { DIGITAL_FISCAL_REVIEW_NOTICE, DIGITAL_FRANCE_CONTRACT_POLICY, digitalEmailTemplate, verifyContractSnapshot } from "./fulfillment-policy";
 import { checkDigitalAcquiredJurisdiction } from "./checkout-jurisdiction";
 import {checkDigitalAcquiredRightsReview} from "./rights-review-checkout";
 import { verifyDigitalPinnedMedia } from "./pinned-media";
@@ -58,6 +58,35 @@ export async function prepareDigitalDocuments(tx: Tx, orderId: string) {
   await enqueueDigitalEmail(tx, orderId, "CONTRACT_AVAILABLE", `contract-mail:${orderId}`, number);
   return doc;
 }
+/** Explicit proof of a free completion, never a zero invoice or invented PSP receipt. */
+export async function prepareFreeDigitalCompletionDocuments(tx:Tx,orderId:string){
+  const o=await tx.digitalOrder.findUniqueOrThrow({where:{id:orderId},include:{lines:true,attempts:true}});
+  const acquisition=(o.contractSnapshot as {acquisition?:{kind?:string}})?.acquisition;
+  if(o.mode!=="TEST"||o.status!=="GRANTED"||o.totalCents!==0||o.attempts.length||acquisition?.kind!=="FREE_ALBUM_COMPLETION"
+    ||o.lines.length!==1||o.lines[0].priceCents!==0||o.lines[0].scope!=="ALBUM")throw new DigitalError("FREE_COMPLETION_PROOF_REQUIRED",409);
+  const completion=o.lines[0].completionSnapshot as unknown as import("./domain").DigitalCompletionSnapshot;
+  if(completion?.version!==2||completion.creditCents!==completion.basePriceCents||!Number.isSafeInteger(completion.eligibleCents)
+    ||completion.eligibleCents!<completion.creditCents)throw new DigitalError("FREE_COMPLETION_PROOF_REQUIRED",409);
+  const key=`contract:${orderId}`,existing=await tx.digitalDocument.findUnique({where:{businessKey:key}});
+  if(existing)return existing;
+  const contract=verifyContractSnapshot(o.contractSnapshot,o.termsVersion,o.termsHash).snapshot;
+  const masters=await tx.digitalMaster.findMany({where:{id:{in:(o.lines[0].trackSnapshot as Array<{masterId:string}>).map(t=>t.masterId)}},
+    select:{id:true,version:true,codec:true,masterAsset:{select:{durationMs:true,checksumSha256:true}}}});
+  const snapshot={issuedAt:new Date().toISOString(),orderNumberSnapshot:o.id,mode:"TEST",currency:"EUR",totalCents:0,
+    sellerSnapshot,customerSnapshot:contract.customer,termsVersion:o.termsVersion,termsText:contract.terms.text,contract,
+    supply:{kind:"FREE_ALBUM_COMPLETION",amountChargedCents:0,eligibleCents:completion.eligibleCents,
+      appliedCreditCents:completion.creditCents,surplusCents:completion.eligibleCents!-completion.creditCents,reusableBalanceCents:0,
+      paymentAttemptCreated:false,invoiceCreated:false,policy:"LOCAL_QA_FREE_COMPLETION_V1"},
+    lineItemsSnapshot:[{description:`Complément gratuit d’album — ${o.lines[0].title}`,quantity:1,unitPriceCents:0,lineTotalCents:0}],
+    acquired:o.lines.map(l=>({id:l.id,offerId:l.offerId,version:l.offerVersion,content:l.trackSnapshot,tax:l.taxSnapshot,completion:l.completionSnapshot})),
+    versions:masters.map(m=>({masterId:m.id,version:m.version,format:m.codec,durationMs:m.masterAsset.durationMs,checksum:m.masterAsset.checksumSha256})),
+    jurisdiction:o.jurisdictionSnapshot};
+  const number=`DCN-QA-FREE-${orderId}`;
+  const document=await tx.digitalDocument.create({data:{orderId,kind:"CONTRACT",businessKey:key,number,snapshot:json(snapshot),snapshotHash:billingSnapshotHash(snapshot)}});
+  await tx.digitalFulfillment.upsert({where:{orderId},update:{},create:{orderId}});
+  await enqueueDigitalEmail(tx,orderId,"FREE_COMPLETION_AVAILABLE",`contract-mail:${orderId}`,number);
+  return document;
+}
 export async function prepareDigitalCreditNote(tx: Tx, refundId: string) {
   const r = await tx.digitalRefund.findUniqueOrThrow({ where: { id: refundId } });
   if (r.status !== "SUCCEEDED" || !r.confirmedAt || !r.providerReference) throw new DigitalError("REFUND_NOT_CONFIRMED");
@@ -85,19 +114,50 @@ export async function generateDigitalContractPdf(snapshot: Record<string, unknow
   const result = new Promise<Buffer>((resolve, reject) => { p.on("data", b => { size += b.length; if (size > 2097152) (p as unknown as import("node:stream").Readable).destroy(new DigitalError("PDF_TOO_LARGE")); else chunks.push(b); }); p.on("error", reject); p.on("end", () => resolve(Buffer.concat(chunks))); });
   p.fontSize(20).text("LNX Beats — Confirmation numérique");
   p.moveDown().fontSize(10).text("DOCUMENT QA / TEST — CONDITIONS PROPOSÉES, NON APPROUVÉES POUR LIVE");
-  p.moveDown().text(`Référence : ${number}\nCommande : ${snapshot.orderNumberSnapshot}\nFacture QA : ${snapshot.invoice}`);
-  const s = snapshot.contract as { customer: { name: string; email: string }; acceptedAt: string; earlyDelivery: { text: string }; withdrawal: { text: string } };
+  const free=(snapshot.supply as {kind?:string}|undefined)?.kind==="FREE_ALBUM_COMPLETION";
+  p.moveDown().text(`Référence : ${number}\nCommande : ${snapshot.orderNumberSnapshot}\n${free?"Complément fourni sans paiement — aucune facture ni transaction prestataire créée.":`Facture QA : ${snapshot.invoice}`}`);
+  if(free){const supply=snapshot.supply as {eligibleCents:number;appliedCreditCents:number;surplusCents:number};
+    p.moveDown().text(`Montants éligibles : ${(supply.eligibleCents/100).toFixed(2)} EUR. Crédit appliqué plafonné : ${(supply.appliedCreditCents/100).toFixed(2)} EUR. Reste à payer : 0,00 EUR. Aucun solde, avoir monétaire ou crédit réutilisable créé, y compris pour l’excédent ${(supply.surplusCents/100).toFixed(2)} EUR.`);}
+  const s = snapshot.contract as { customer: { name: string; email: string }; acceptedAt: string; earlyDelivery: { text: string }; withdrawal: { text: string };
+    terms?: { version?: string; hashSha256?: string; sections?: Array<{ title: string; paragraphs: string[]; boxed?: boolean }> } };
   p.moveDown().text(`${s.customer.name}\n${s.customer.email}\nConsentements recueillis le ${s.acceptedAt}`);
+  if(s.terms?.version)p.moveDown(.5).text(`Version des conditions acceptée : ${s.terms.version}`);
+  if(s.terms?.hashSha256)p.text(`Empreinte SHA-256 du texte accepté : ${s.terms.hashSha256}`);
   for (const line of snapshot.lineItemsSnapshot as Array<{ description: string; lineTotalCents: number }>) p.moveDown(.5).text(`${line.description} : ${Math.floor(line.lineTotalCents / 100)},${String(line.lineTotalCents % 100).padStart(2, "0")} EUR`);
   p.moveDown().font("Helvetica-Bold").text("Contenu exact acquis, conservé indépendamment du catalogue courant").font("Helvetica");
   const versions=snapshot.versions as Array<{masterId:string;version:number;format:string}>;
   for(const line of snapshot.acquired as Array<{content:Array<{title:string;masterId:string;trackId?:string;formats?:string[]}>;completion?:{basePriceCents:number;creditCents:number;sources:Array<{trackId:string;paidCents:number;refundedCents:number;creditCents:number}>}}>){
     for(const t of line.content){const v=versions.find(v=>v.masterId===t.masterId);p.text(`${t.title} — version ${v?.version??"figée"} · ${t.formats?.join(" + ")??v?.format??"format acquis"}`);}
     if(line.completion){const money=(v:number)=>`${(v/100).toFixed(2)} EUR`;p.moveDown(.5).text(`Complément : prix album ${money(line.completion.basePriceCents)} ; crédit ${money(line.completion.creditCents)} ; reste ${money(line.completion.basePriceCents-line.completion.creditCents)}.`);
-      for(const source of line.completion.sources)p.text(`${line.content.find(t=>t.trackId===source.trackId)?.title??"Titre acquis"} : payé ${money(source.paidCents)}, remboursé ${money(source.refundedCents)}, crédit utilisé ${money(source.creditCents)}.`);
+      for(const source of line.completion.sources)p.text(`${line.content.find(t=>t.trackId===source.trackId)?.title??"Titre acquis"} : payé ${money(source.paidCents)}, remboursé ${money(source.refundedCents)}, ${free?"montant éligible pris en compte":"crédit utilisé"} ${money(source.creditCents)}.`);
     }
   }
-  p.moveDown().text(String(snapshot.termsText));
+  if (s.terms?.sections) {
+    // Render the acquired structure, not the current legal template. One statutory
+    // box per page fragment keeps a long model legible without clipping its border.
+    const left = 48, width = p.page.width - 96, bottom = () => p.page.height - 48;
+    for (const section of s.terms.sections) {
+      p.font("Helvetica-Bold").fontSize(11);
+      const headingHeight=p.heightOfString(section.title,{width});
+      p.font("Helvetica").fontSize(10);
+      const firstParagraphHeight=section.paragraphs[0]?p.heightOfString(section.paragraphs[0],{width:section.boxed?width-20:width}):0;
+      // Keep the heading and the first boxed paragraph together. Starting an
+      // empty border at the foot of a page is not a meaningful box fragment.
+      if(p.y+(section.boxed?headingHeight+firstParagraphHeight+50:70)>bottom())p.addPage();
+      p.moveDown().font("Helvetica-Bold").fontSize(11).text(section.title, left, p.y, { width });
+      p.font("Helvetica").fontSize(10).moveDown(.5);
+      if (!section.boxed) { for (const paragraph of section.paragraphs) p.text(paragraph, left, p.y, { width }).moveDown(.5); continue; }
+      let boxTop = p.y;
+      const border = () => p.save().lineWidth(.75).strokeColor("#333333").rect(left, boxTop, width, p.y - boxTop + 8).stroke().restore();
+      p.y += 10;
+      for (const paragraph of section.paragraphs) {
+        const height = p.heightOfString(paragraph, { width: width - 20 });
+        if (p.y + height + 18 > bottom()) { border(); p.addPage(); boxTop = p.y; p.y += 10; }
+        p.text(paragraph, left + 10, p.y, { width: width - 20 }).moveDown(.5);
+      }
+      border(); p.y += 18;
+    }
+  } else p.moveDown().text(String(snapshot.termsText));
   p.moveDown().text(s.earlyDelivery.text).moveDown(.5).text(s.withdrawal.text);
   p.moveDown().text("Le paiement ou cet email d’information ne suffisent pas à prouver la perte du droit. La fourniture QA commence seulement après réception reconnue du document. Aucun droit de publication/distribution/monétisation n’est cédé.");
   p.moveDown().text(DIGITAL_FISCAL_REVIEW_NOTICE); p.end(); return result;
@@ -129,9 +189,18 @@ export async function acknowledgeDigitalContract(userId: string, orderId: string
   requireDigitalEnvironment();
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${userId}`})) IS NULL AS locked`;
-    const o = await tx.digitalOrder.findFirst({ where: { id: orderId, userId, status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] }, user: { status: "ACTIVE", emailVerified: true } } });
+    const o = await tx.digitalOrder.findFirst({ where: { id: orderId, userId, status: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "GRANTED"] }, user: { status: "ACTIVE", emailVerified: true } } });
     const d = await tx.digitalDocument.findFirst({ where: { id: documentId, orderId, kind: "CONTRACT", status: "READY", snapshotHash: hash } });
     if (!o || !d || !o.contractSnapshot || !await tx.digitalEvent.findFirst({ where: { orderId, actorId: userId, kind: "DOCUMENT_TRANSFER_FINISHED", details: { path: ["documentId"], equals: documentId } } })) throw new DigitalError("CONTRACT_RECEIPT_REQUIRED", 409);
+    if((o.contractSnapshot as {policy?:string}).policy===DIGITAL_FRANCE_CONTRACT_POLICY){
+      const contract=verifyContractSnapshot(o.contractSnapshot,o.termsVersion,o.termsHash).snapshot;
+      const document=d.snapshot as {contract?:unknown;orderNumberSnapshot?:string;termsText?:string};
+      if(billingSnapshotHash(d.snapshot)!==d.snapshotHash||billingSnapshotHash(document.contract)!==billingSnapshotHash(contract)
+        ||document.orderNumberSnapshot!==o.id||document.termsText!==contract.terms.text)throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);
+    }
+    if(o.status==="GRANTED"&&(billingSnapshotHash(d.snapshot)!==d.snapshotHash
+      ||billingSnapshotHash((d.snapshot as {contract?:unknown}).contract)!==billingSnapshotHash(o.contractSnapshot)
+      ||(d.snapshot as {supply?:{kind?:string}}).supply?.kind!=="FREE_ALBUM_COMPLETION"))throw new DigitalError("FREE_COMPLETION_PROOF_REQUIRED",409);
     // A full price reduction may retain rights; a resolution must never restore them.
     if(o.status==="REFUNDED"&&!await tx.digitalEntitlement.findFirst({where:{userId,status:"ACTIVE",line:{orderId}}}))throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);
     const current = await tx.digitalFulfillment.findUniqueOrThrow({ where: { orderId } });

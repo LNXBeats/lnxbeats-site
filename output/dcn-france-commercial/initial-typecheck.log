@@ -1,0 +1,5 @@
+
+> lnx-studio@0.2.0 typecheck
+> tsc --noEmit
+
+scripts/test-digital-free-completion-runtime.ts(35,163): error TS2775: Assertions require every name in the call target to be declared with an explicit type annotation.

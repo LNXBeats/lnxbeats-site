@@ -30,6 +30,13 @@ for (const kind of ["CONTRACT_AVAILABLE", "ACCESS_READY", "REFUND_CONFIRMED", "I
 test("DCN email base refuses credentials, path, query, fragment", () => {
   for (const base of ["https://a:b@example.invalid", "https://example.invalid/private", "https://example.invalid/?token=QA", "https://example.invalid/#x"]) assert.throws(() => digitalEmailTemplate({ kind: "ACCESS_READY", orderId: randomUUID(), totalCents: 1, titles: [], base }));
 });
+test("free completion notification never presents a grant as paid or an e-mail as durable delivery", () => {
+  const mail = digitalEmailTemplate({ kind: "FREE_COMPLETION_AVAILABLE", orderId: randomUUID(), totalCents: 0, titles: ["QA album"], base: "http://127.0.0.1:3140" });
+  assert.match(mail.subject, /sans paiement/); assert.match(mail.text, /sans nouveau paiement/);
+  assert.match(mail.text, /Aucun prestataire de paiement n’a été appelé/); assert.match(mail.text, /aucune facture d’encaissement fictif/);
+  assert.match(mail.text, /avant le commencement de la fourniture QA/); assert.match(mail.text, /seul ne prouve pas la remise/);
+  assert.doesNotMatch(mail.text, /Votre paiement est confirmé/);
+});
 test("DCN refund targets are cents, unique line IDs and closed input shape", () => {
   const id = randomUUID(); assert.deepEqual(refundTargets([{ lineId: id, amountCents: 101 }]), [{ lineId: id, amountCents: 101 }]);
   for (const v of [[], [{ lineId: id, amountCents: 1.1 }], [{ lineId: id, amountCents: -1 }], [{ lineId: id, amountCents: 1, privilege: true }], [{ lineId: "../bad", amountCents: 1 }], [{ lineId: id, amountCents: 1 }, { lineId: id, amountCents: 1 }]]) assert.throws(() => refundTargets(v));

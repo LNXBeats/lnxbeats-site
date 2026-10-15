@@ -8,18 +8,20 @@ import { pipeline } from "node:stream/promises";
 import { prisma } from "@/lib/prisma";
 import { deleteMediaObject, getMediaObject, putMediaObject, sha256Hex, type MediaStorageReference } from "@/lib/media/storage";
 import { activeMediaStorage } from "@/lib/media/storage/config";
-import { DigitalError, requireDigitalEnvironment, signatureMatches } from "./domain";
+import { assertDigitalUuid, DigitalError, requireDigitalEnvironment, signatureMatches } from "./domain";
 import { trackLock, recoverDigitalCompletion } from "./upload";
 import { generateDigitalMp3, validateDigitalAudio, DIGITAL_MP3_LIMIT_BYTES } from "./audio";
 import { planDigitalMasterImport } from "./master-import-policy";
 import { claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot, checkDigitalDisk, DIGITAL_WORK_LIMITS } from "./work-slots";
 
-export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>}={}) {
+export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;uploadId?:string}={}) {
   requireDigitalEnvironment(); const now=new Date();
-  const recovery=await prisma.digitalUpload.findFirst({where:{status:"COMPLETING",leaseUntil:{lte:now}},orderBy:{createdAt:"asc"}});
+  if(hooks.uploadId!==undefined)assertDigitalUuid(hooks.uploadId);
+  const scope=hooks.uploadId?{id:hooks.uploadId}:{};
+  const recovery=await prisma.digitalUpload.findFirst({where:{...scope,status:"COMPLETING",leaseUntil:{lte:now}},orderBy:{createdAt:"asc"}});
   if(recovery) { const c=await prisma.digitalUpload.updateMany({where:{id:recovery.id,status:"COMPLETING",leaseUntil:{lte:now}},data:{leaseUntil:new Date(Date.now()+60000)}});
     if(c.count) await recoverDigitalCompletion(recovery).catch(()=>undefined); }
-  const s=await prisma.digitalUpload.findFirst({where:{OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},orderBy:{createdAt:"asc"}});
+  const s=await prisma.digitalUpload.findFirst({where:{...scope,OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},orderBy:{createdAt:"asc"}});
   if(!s) return {processed:false};
   const slot=await claimDigitalSlot("audio",s.id); if(!slot)return{processed:false};
   const leaseUntil=new Date(Date.now()+15*60000);
@@ -61,9 +63,9 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>}
       if((latest?.version??0)!==s.expectedVersion) throw new DigitalError("MASTER_VERSION_CONFLICT",409);
       // Serialise only identical hashes after all file/network work, without holding a DB transaction during decoding or storage calls.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-master-sha:${checksum}`})) IS NULL AS locked`;
-      const duplicates=await tx.digitalMaster.findMany({where:{masterAsset:{checksumSha256:checksum}},take:2,select:{id:true,trackId:true,version:true,status:true,codec:true,encoderVersion:true,masterAssetId:true,
+      const duplicates=await tx.digitalMaster.findMany({where:{masterAsset:{checksumSha256:checksum}},take:101,select:{id:true,trackId:true,version:true,status:true,codec:true,encoderVersion:true,previewStartMs:true,masterAssetId:true,
         masterAsset:{select:{checksumSha256:true,storageKey:true,visibility:true,mimeType:true}}}});
-      const importPlan=planDigitalMasterImport({trackId:s.trackId,expectedVersion:s.expectedVersion,latestMasterId:latest?.id??null,checksum,newAssetId:s.id,newStorageKey:s.storageKey,encoderVersion:rendition.encoderVersion,duplicates});
+      const importPlan=planDigitalMasterImport({trackId:s.trackId,expectedVersion:s.expectedVersion,latestMasterId:latest?.id??null,checksum,newAssetId:s.id,newStorageKey:s.storageKey,encoderVersion:rendition.encoderVersion,previewStartMs:s.previewStartMs,duplicates});
       await tx.asset.create({data:{id:s.id,type:"AUDIO",storageKey:s.storageKey,storageBackend:driver.backend,storageProvider:driver.provider,visibility:"PRIVATE",filename:s.filename,
         mimeType:s.mimeType,sizeBytes:s.sizeBytes,durationMs:decoded.durationMs,checksumSha256:checksum,rightsStatus:"PENDING",confidence:"CONFIRMED"}});
       await tx.asset.create({data:{id:previewId,type:"AUDIO_PREVIEW",storageKey:key,storageBackend:stored.storageBackend,storageProvider:stored.storageProvider,visibility:"PUBLIC",filename:"preview.mp3",

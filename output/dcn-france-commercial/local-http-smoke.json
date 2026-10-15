@@ -1,0 +1,41 @@
+{
+  "environment": "COMPILED_LOCAL_LOOPBACK_ONLY",
+  "browserTests": false,
+  "providerCalls": 0,
+  "results": [
+    {
+      "path": "/api/health",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "path": "/musique/conditions",
+      "status": 200,
+      "expected": 200,
+      "pass": true,
+      "franceDraftPresent": true,
+      "guaranteeBoxPresent": true,
+      "adsScriptAbsent": true
+    },
+    {
+      "path": "/musique/panier",
+      "status": 200,
+      "expected": 200,
+      "pass": true
+    },
+    {
+      "path": "/musique/checkout",
+      "status": 307,
+      "expected": 307,
+      "pass": true,
+      "loginRedirect": true
+    },
+    {
+      "path": "/album/dcn-edition-privee-9d063091-fe2e-432a-bdae-53dd46988e2f",
+      "status": 404,
+      "expected": 404,
+      "pass": true
+    }
+  ]
+}

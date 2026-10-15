@@ -16,7 +16,7 @@ import { checkDigitalDisk, claimDigitalSlot, releaseDigitalSlot, renewDigitalSlo
 export async function ensureDigitalArchive(lineId: string, format: DigitalAudioFormat = "WAV") {
   requireDigitalEnvironment();
   const l = await prisma.digitalOrderLine.findUniqueOrThrow({ where: { id: lineId }, include: { order: true } });
-  if (l.scope !== "ALBUM" || !["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED"].includes(l.order.status)) throw new DigitalError("ARCHIVE_UNAVAILABLE");
+  if (l.scope !== "ALBUM" || !["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED", "GRANTED"].includes(l.order.status)) throw new DigitalError("ARCHIVE_UNAVAILABLE");
   if (!acquiredAlbumFormats(l.trackSnapshot as unknown as DigitalAcquiredTrack[]).includes(format)) throw new DigitalError("FORMAT_NOT_ACQUIRED", 409);
   return prisma.digitalArchive.upsert({ where: { lineId_format: { lineId, format } }, create: { lineId, format, snapshotHash: billingSnapshotHash(l.trackSnapshot) }, update: {} });
 }

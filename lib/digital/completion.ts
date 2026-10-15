@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { DigitalError, type DigitalCompletionSnapshot, type DigitalCompletionSource, type DigitalSelection } from "./domain";
 import { completeDigitalAlbum,digitalCompletionSourceAmounts } from "./completion-policy";
 import {digitalOwnsExactAlbum} from "./album-ownership-policy";
+import {digitalMasterEquivalenceProof} from "./master-equivalence-service";
 type Tx = Prisma.TransactionClient;
 const activeCredit = ["RESERVED","CONSUMED"];
 // PostgreSQL JSONB reorders keys: use the existing canonical immutable-document hash.
@@ -30,17 +31,19 @@ async function completionSources(tx:Tx,userId:string,album:DigitalSelection,targ
     const paid=o.attempts.filter(a=>a.status==="PAID");
     if(line.scope!=="TRACK"||paid.length!==1||!paid[0].paymentReference
       ||!Array.isArray(acquired)||acquired.length!==1||acquired[0].trackId!==track.trackId
-      ||e.master.id!==track.masterId||acquired[0].masterId!==track.masterId
+      ||acquired[0].masterId!==e.master.id
       ||line.completionSnapshot||o.disputes.some(d=>d.status!=="WON"))throw new DigitalError("COMPLETION_SOURCE_REQUIRES_REVIEW",409);
+    const equivalence=e.master.id!==track.masterId?await digitalMasterEquivalenceProof(tx,e.master.id,track.masterId,track.trackId):undefined;
     const {paidCents,refundedCents,availableCents}=digitalCompletionSourceAmounts(line,o);
     const used=await tx.digitalCompletionCredit.findFirst({where:{userId,trackId:track.trackId,status:{in:activeCredit},...(targetLineId?{targetLineId:{not:targetLineId}}:{})}});
     if(used)throw new DigitalError("COMPLETION_CREDIT_ALREADY_USED",409);
     const proofHash=jsonHash({sourceLineId:line.id,trackId:track.trackId,masterId:track.masterId,paidCents,
       orderId:o.id,mode:o.mode,currency:o.currency,status:o.status,paymentReference:paid[0].paymentReference,
       // Keep the v1 hash material byte-for-byte compatible with acquired snapshots.
-      refundedCents,refunds:o.refunds.map(r=>[r.id,r.providerReference,r.amountCents,r.status,r.allocationStatus,r.purpose,r.targets]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))});
+      refundedCents,refunds:o.refunds.map(r=>[r.id,r.providerReference,r.amountCents,r.status,r.allocationStatus,r.purpose,r.targets]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))),
+      ...(equivalence?{equivalence}:{})});
     sources.push({trackId:track.trackId,masterId:track.masterId,sourceLineId:line.id,paidCents,refundedCents,
-      availableCents,creditCents:availableCents,proofHash});
+      availableCents,creditCents:availableCents,proofHash,...(equivalence?{equivalence}:{})});
   }
   return sources;
 }

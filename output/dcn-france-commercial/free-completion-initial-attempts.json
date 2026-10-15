@@ -1,0 +1,16 @@
+{
+  "scope": "LOCAL_QA_HARNESS_ATTEMPT_LOG_FROM_OBSERVED_COMMAND_OUTPUTS_NOT_ADDITIONAL_TEST_PASSES",
+  "database": "lnx_dcn_france_commercial_test_20261015",
+  "attempts": [
+    {"result":"REFUSED_BEFORE_FIXTURES","cause":"Harness media bound was 10 MB but the existing local QA WAV was 17 MB; bound raised to an explicit 32 MB. No database or storage writes in this attempt."},
+    {"result":"HARNESS_KEY_REFUSED","cause":"Synthetic preview key digital/previews was not an authorized public storage key. Fixed to catalog/audio-previews; no storage policy weakened.","retained":"New synthetic Admin/project and two private assets only. No acquisition or free grant."},
+    {"result":"HISTORICAL_AUDIO_METADATA_REFUSED","cause":"The old consolidation album uses encoder v1. Rights-master-ready guard rejected the new fixture copies. Harness now selects only already-strict v2 local QA sources; old masters were not upgraded or rewritten.","retained":"New synthetic Admin/project/assets/master rows only. No acquisition or free grant."},
+    {"result":"GRANT_AND_DOCUMENT_PASS_ARCHIVE_REFUSED","grantOrderId":"8c4d2874-e65e-42c4-bffb-35492a674e2c","cause":"Combined test harness exceeded unchanged 512 MiB ZIP worker budget; new WAV archive remains REQUIRES_REVIEW / WORKER_MEMORY_LIMIT."},
+    {"result":"GRANT_AND_DOCUMENT_PASS_ARCHIVE_REFUSED","grantOrderId":"812b4fa1-847a-430d-8ceb-0bf87df956d3","cause":"Binary hash comparison removed a large JSON allocation, but accumulated main-process fixture/PDF/audio memory still exceeded unchanged ZIP worker budget. New WAV archive remains REQUIRES_REVIEW / WORKER_MEMORY_LIMIT."},
+    {"result":"PASS_9_FINAL_CHECKS","cause":"ZIP jobs ran in a separate fresh process, matching the existing worker architecture. No memory limit or application error was bypassed; final acquired WAV/MP3 and both ZIP downloads passed."}
+  ],
+  "cleanup": "All synthetic rows, documents, masters, local copies and initial failed archives are retained. No historical acquisition/document/master was rewritten or deleted.",
+  "externalRequests": 0,
+  "realEmailsSent": 0,
+  "note": "Overlapping successful checks from initial attempts are not added to the final count. Final proof is free-completion-runtime.json. No Stripe/PayPal/R2 recipe or LIVE validation."
+}

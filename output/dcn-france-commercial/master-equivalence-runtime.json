@@ -1,0 +1,39 @@
+{
+  "scope": "REAL_NON_OWNER_POSTGRESQL_NEW_QA_COPY_METADATA_FIXTURES_ONLY",
+  "database": "lnx_dcn_france_commercial_test_20261015",
+  "runId": "da4608e3-57a9-4c40-b4f8-8d8dc401e80d",
+  "results": [
+    {
+      "name": "default_closed_and_exact_directional_admin_approval_then_quote",
+      "status": "PASS"
+    },
+    {
+      "name": "actual_non_owner_sql_trigger_admits_exact_approved_mapping_and_reserves_once",
+      "status": "PASS"
+    },
+    {
+      "name": "shared_source_read_blocks_revoke_until_transaction_finishes_then_fresh_verification_refuses",
+      "status": "PASS"
+    },
+    {
+      "name": "all_preexisting_orders_documents_masters_and_rights_remain_identical",
+      "status": "PASS"
+    }
+  ],
+  "ids": {
+    "projectId": "614cdcd4-68cf-4481-8044-e565e0f8a367",
+    "sourceOrderId": "ccce2eba-31eb-4f36-b043-9bd3f032c074",
+    "targetOrderId": "28fbceea-acd8-4ee9-938c-f36128b00cb3",
+    "sourceMasterId": "5eab3af9-e712-472f-a916-916288496b1f",
+    "targetMasterId": "c6fecb94-d66a-48e9-84f5-adcfe1eb3256"
+  },
+  "externalRequests": 0,
+  "providerCalls": 0,
+  "emailsSent": 0,
+  "newTargetPaymentAttempts": 0,
+  "newTargetEntitlements": 0,
+  "publication": false,
+  "historicalRowsUnchanged": true,
+  "historicalProofHash": "3106a02c8119cd768fef255148f75a5471faa8c9bddd6ab8e2a1b6fa8761083d",
+  "retained": "All synthetic fixtures, approval, revocation and reserved credit retained; no cleanup or historical rewrite."
+}

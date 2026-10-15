@@ -1,0 +1,25 @@
+{
+  "environment": "LOCAL_UNIT_REPOSITORY_AND_PROVIDER_DOUBLES_NOT_EXTERNAL_RECIPES",
+  "files": [
+    "tests/digital/completion.test.ts",
+    "tests/digital/completion-repository.test.ts",
+    "tests/digital/album-ownership.test.ts",
+    "tests/digital/free-completion.test.ts",
+    "tests/digital/master-equivalence.test.ts",
+    "tests/digital/master-equivalences-admin.test.ts",
+    "tests/digital/france-contract-binding.test.ts",
+    "tests/digital/france-checkout-contract.test.ts",
+    "tests/digital/france-legal.test.ts",
+    "tests/digital/fulfillment.test.ts",
+    "tests/digital/initial-delivery.test.ts",
+    "tests/digital/domain.test.ts",
+    "tests/digital/library-labels.test.ts",
+    "tests/digital/local-review-security.test.ts",
+    "tests/digital/checkout-jurisdiction.test.ts",
+    "tests/digital/error-presentation.test.ts"
+  ],
+  "pass": 129,
+  "fail": 0,
+  "skip": 0,
+  "tests": 129
+}

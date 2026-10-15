@@ -1,7 +1,7 @@
 /** Public labels describe verified state, never manufacture payment or access evidence. */
 // A full price reduction can be REFUNDED while its source entitlement remains ACTIVE.
 // A resolution revokes that entitlement; the financial label alone does not revoke rights.
-export const DIGITAL_ACTIVE_RIGHTS_ORDER_STATES = ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] as const;
+export const DIGITAL_ACTIVE_RIGHTS_ORDER_STATES = ["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "GRANTED"] as const;
 export function digitalCountsOwnedRights(orderStatus: string, entitlementStatus: string) {
   return entitlementStatus === "ACTIVE" && DIGITAL_ACTIVE_RIGHTS_ORDER_STATES.some(status => status === orderStatus);
 }
@@ -10,6 +10,7 @@ export function digitalLibraryPurchaseReference(orderId: string) {
   return `…${orderId.slice(-8).toUpperCase()}`;
 }
 export function digitalLibraryPaymentLabel(status: string, activeRights: boolean) {
+  if(status==="GRANTED")return "Complément gratuit attribué — aucun nouveau paiement";
   if (status === "PAID") return "Paiement confirmé";
   if (status === "REFUNDED") return activeRights ? "Remboursé — droits conservés selon les lignes" : "Remboursé — accès retiré";
   if (status === "PARTIALLY_REFUNDED") return "Remboursement partiel confirmé. Le détail de vos téléchargements et vos justificatifs figurent ci-dessous.";
@@ -18,13 +19,14 @@ export function digitalLibraryPaymentLabel(status: string, activeRights: boolean
   return "Paiement en attente / à vérifier";
 }
 export function digitalLibraryBlockedMessage(status: string, accessReady: boolean) {
-  if (["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(status)) return !accessReady
+  if (DIGITAL_ACTIVE_RIGHTS_ORDER_STATES.some(state=>state===status)) return !accessReady
     ? "La réception contractuelle QA reste nécessaire avant toute nouvelle fourniture. Les droits actifs sont vérifiés séparément."
     : "Aucun accès actif pour cette ligne.";
   if (status === "DISPUTED") return "Accès lié à cet achat suspendu pour revue ; vos autres acquisitions ne sont pas suspendues automatiquement.";
   return "Aucun fichier débloqué : paiement non confirmé ou achat en revue. Ne recommencez pas un paiement ambigu.";
 }
 export function digitalConfirmationMessage(status:string,needsReconciliation:boolean){
+  if(status==="GRANTED")return "Complément gratuit attribué sans nouveau paiement. Conservez sa confirmation avant de commencer la fourniture QA.";
   if(status==="PAID")return "Paiement confirmé côté serveur.";
   if(status==="REFUNDED")return "Remboursement confirmé. Les droits sont vérifiés selon les lignes ; les justificatifs restent conservés.";
   if(status==="PARTIALLY_REFUNDED")return "Une partie de votre paiement a été remboursée. Consultez vos justificatifs ici et l’état de vos téléchargements dans Ma musique.";

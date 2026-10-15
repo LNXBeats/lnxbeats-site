@@ -1,0 +1,97 @@
+LNX Beats - Conditions France DRAFT pour revue uniquement
+
+NON APPROUVE POUR LIVE. Aucun contrat réel ni avis juridique n’est attesté par cet export.
+
+Version : digital-music-france-cgv-20261015-draft-02
+
+Empreinte SHA-256 du texte exact : 5e350e6bddb003b6ff0d2cd0236aa6876857b2d0376f8c99dd8362e8a1babe48
+
+Empreinte SHA-256 du document DRAFT avec métadonnées : 30c7ac06586dad083f13c334affd4763ba4c9b215b3c8f4cc28522e400ef042c
+
+Choix séparés proposés, non précochés : acceptation des conditions QA dans cette version ; demande expresse de fourniture immédiate ; reconnaissance relative à la rétractation.
+
+Je demande expressément que la fourniture des contenus numériques commandés commence avant la fin du délai de rétractation de quatorze jours.
+
+Je reconnais que je perdrai mon droit de rétractation lorsque la fourniture aura commencé, après mon consentement exprès et la confirmation de cet accord sur un support durable. Mes garanties légales restent applicables.
+
+--- Texte exact des conditions proposé et hashé ---
+
+1. Vendeur et objet
+BROUILLON DE REVUE — ces conditions ne sont pas encore approuvées pour une vente réelle. Elles concernent uniquement la musique du catalogue fournie par téléchargement à des particuliers. Elles ne remplacent pas les conditions approuvées des créations sur commande, de la Boutique physique, des licences d’exploitation ou du soutien.
+Le site est édité par Ludovic Mickaël Mathon, entrepreneur individuel, sous le nom commercial LNX Beats. LNX STUDIO désigne le service en ligne et n’est pas une société distincte.
+Adresse professionnelle : 35 Impasse des Orties, 07370 Ozon, France. Contact : lnx.beats.pro@gmail.com — 06 71 66 70 32.
+SIREN : 106 870 850. SIRET : 106 870 850 00018. Code APE : 9003B. Activité déclarée : auteur-compositeur et auteur de textes, conception et création d’œuvres musicales originales avec ou sans paroles.
+Le professionnel désigné ci-dessus répond de la fourniture et des garanties légales. Ses coordonnées servent aussi aux demandes de service après-vente, de conformité et de rétractation. Les mentions légales existantes restent consultables à /mentions-legales.
+
+2. Périmètre de lancement retenu
+Le périmètre commercial retenu par LNX Beats concerne les particuliers résidant et facturés en France métropolitaine, Corse comprise. Cette décision de lancement est confirmée ; sa mise en œuvre reste soumise au contrôle juridique. Les marchés d’outre-mer, étrangers et professionnels ne sont pas ouverts par ce brouillon. FR-MET est seulement un code de marché interne : ce n’est pas un code pays officiel ni une autorisation générale de la France.
+Les modalités de cette limitation commerciale doivent être vérifiées au regard des règles françaises et européennes de non-discrimination et de géoblocage, sans redemander la décision commerciale déjà prise. L’exception visant certains contenus protégés par le droit d’auteur ne dispense pas automatiquement de toutes ces règles. Ce document n’approuve pas une interdiction générale fondée sur la résidence.
+Le catalogue reste consultable sans filtrage par nationalité ou adresse IP. Les informations territoriales demandées au paiement doivent être exactes et limitées à ce qui est nécessaire ; ni la nationalité, ni le seul pays d’une carte bancaire ne déterminent l’accès au catalogue ou une décision d’achat.
+
+3. Musique, formats et compatibilité
+La fiche présente les titres, la composition exacte de l’album, les versions et les caractéristiques essentielles disponibles avant la commande. Un inédit peut être vendu sans distribution préalable sur une plateforme externe, sous réserve des droits nécessaires.
+Une œuvre ou un master réalisé en collaboration ne peut être proposé à la vente qu’après vérification des droits nécessaires sur l’œuvre, l’enregistrement, les contributions, samples et interventions concernés. Les justificatifs restent privés dans l’Admin ; un état de droits non validé bloque la commercialisation. L’historique des preuves et décisions est conservé.
+Chaque titre acquis comprend son fichier WAV et son fichier MP3, sans supplément lié au format. L’album acquis comprend les fichiers individuels des titres qui le composent et deux archives distinctes : ZIP WAV et ZIP MP3. Le nombre de titres est celui annoncé et enregistré lors de l’achat ; aucun nombre fixe de pistes n’est promis pour tous les albums.
+Les extraits publics, distincts des fichiers complets, ne dépassent pas soixante secondes. Un navigateur ou lecteur compatible WAV/MP3, une connexion Internet et un espace de stockage suffisant sont nécessaires ; les ZIP doivent être décompressés. Les caractéristiques utiles du WAV, du MP3 et les éventuelles restrictions sont présentées avant l’achat. Aucun abonnement de streaming n’est requis pour lire un fichier déjà téléchargé.
+
+4. Compte, prix et commande
+L’achat nécessite un compte actif et une adresse e-mail vérifiée. Le panier numérique est distinct du panier physique : aucun transport, stock physique ou produit matériel n’est ajouté par l’achat de musique téléchargeable.
+Les prix de chaque titre et de chaque album sont fixés librement par LNX Beats, indépendamment les uns des autres. Le client ne choisit pas un montant libre : il accepte le prix récapitulé avant paiement. Aucun tarif de lancement n’est fixé par ce brouillon ; les montants de démonstration restent fictifs.
+Avant de confirmer la commande avec obligation de paiement, le client peut vérifier et corriger son panier. Le récapitulatif indique le total en euros, le crédit de complément éventuel et la présentation fiscale applicable après validation. Aucun taux de TVA, exemption ou mention fiscale du nouveau commerce numérique n’est approuvé par les présentes conditions.
+Une évolution ultérieure du prix ou du catalogue ne modifie pas une acquisition déjà confirmée. Si le prix ou le contenu change avant confirmation, le serveur recalcule le devis ; le client doit accepter le nouveau récapitulatif avant tout nouvel engagement.
+
+5. Compléter un album
+Pour les titres admissibles déjà acquis séparément, le complément déduit uniquement les sommes réellement payées et non remboursées attribuables à ces titres. Les prix d’origine peuvent différer, notamment en présence de promotions historiques ; les prix courants des titres ne remplacent pas la preuve de la somme payée.
+Le récapitulatif présente le prix actuel de l’album, les titres pris en compte, les crédits retenus et le solde. Une même acquisition ne peut servir deux fois ; les engagements concurrents et remboursements sont contrôlés côté serveur. Les calculs utilisent les centimes exacts, sans crédit réutilisable ni remise rétroactive implicite sur les achats précédents.
+Un album déjà acquis n’est pas facturé une seconde fois. Si les titres sont possédés séparément, le devis vérifie les versions et la composition. Lorsque les sommes admissibles couvrent le prix de l’album, le crédit appliqué est plafonné à ce prix et le complément est attribué sans nouveau paiement : aucun prestataire n’est appelé et aucune facture d’encaissement fictif n’est créée. Le surplus ne devient ni solde créditeur réutilisable, ni remboursement ; il reste traçable dans la confirmation, avec le prix album, les acquisitions sources et leur montant. Les consentements et contrôles de fourniture restent nécessaires. Un changement de master, un contenu non admissible ou une preuve ambiguë nécessite une revue. L’évolution future d’un album n’est pas incluse rétroactivement.
+
+6. Paiement, confirmation et fourniture
+Stripe et PayPal interviennent comme prestataires de paiement, sans devenir automatiquement vendeurs de la musique. Seule une confirmation vérifiée côté serveur, concordante sur le montant, la devise, le compte marchand et les références, permet de confirmer le règlement. Un retour navigateur, une approbation ou une URL de succès ne prouve pas un encaissement.
+Après confirmation du règlement, LNX Beats remet sur un support durable la confirmation contractuelle avec les contenus et versions acquis, les présentes conditions dans leur version acceptée, le prix et les consentements recueillis. Les e-mails transactionnels et documents téléchargeables sont distincts des communications marketing. La facture et les éventuels avoirs sont conservés dans Ma musique, sans réécriture des factures antérieures.
+La fourniture immédiate n’est engagée qu’après le recueil séparé des choix requis et la remise de leur confirmation durable. L’accès aux fichiers est accordé dans la bibliothèque après les contrôles serveur et l’étape explicite de commencement prévue au parcours. La définition exacte de cette étape et de sa preuve reste à approuver pour ce lancement.
+Je demande expressément que la fourniture des contenus numériques commandés commence avant la fin du délai de rétractation de quatorze jours.
+Je reconnais que je perdrai mon droit de rétractation lorsque la fourniture aura commencé, après mon consentement exprès et la confirmation de cet accord sur un support durable. Mes garanties légales restent applicables.
+
+7. Rétractation
+Pour ce contrat de contenu numérique sans support matériel, le consommateur dispose en principe de quatorze jours à compter de la conclusion du contrat pour notifier sa rétractation, sans avoir à donner de motif.
+L’exception de l’article L. 221-28, 13° du Code de la consommation ne s’applique que si la fourniture a commencé avant la fin de ce délai, après le consentement exprès préalable du client, sa reconnaissance de la perte de son droit et la confirmation de cet accord sur un support durable conformément à l’article L. 221-13. L’acceptation des CGV ou le seul paiement ne remplace pas ces conditions cumulatives. Si elles ne sont pas réunies, la perte du droit n’est pas présumée.
+Le client peut adresser une déclaration non ambiguë au contact postal ou électronique du vendeur, en identifiant le contrat et son nom. Il peut utiliser le modèle joint, sans y être obligé. La fonctionnalité sans frais à /retractation permet de choisir un achat numérique, de relire et corriger la déclaration puis de confirmer expressément la rétractation ; elle ne requiert pas de connexion ni de motif. L’accusé téléchargeable conserve son contenu et la date et l’heure UTC de réception. La capture locale d’un e-mail n’est ni son envoi ni sa remise au consommateur ; le transport réel reste à valider avant LIVE.
+Si l’information requise sur la rétractation n’a pas été fournie, le délai peut être prolongé de douze mois après l’expiration du délai initial ; si elle est reçue pendant cette prolongation, le délai expire quatorze jours après sa réception. Une demande n’est donc pas rejetée automatiquement sur le seul âge apparent de la commande.
+Lorsqu’une rétractation valable est exercée, les sommes dues sont remboursées sans retard injustifié et au plus tard quatorze jours après notification, par le même moyen de paiement sauf accord exprès sur un autre moyen sans frais. Aucune clause générale de non-remboursement n’est opposée. Les garanties légales demeurent applicables même lorsque l’exception au droit de rétractation est acquise.
+
+8. Licence personnelle et versions
+La licence retenue par LNX Beats autorise exclusivement l’écoute, le téléchargement et la conservation des fichiers acquis pour un usage privé. Elle n’autorise aucune diffusion publique, redistribution, publication, synchronisation, monétisation ou exploitation commerciale. Ces utilisations nécessitent des autorisations spécifiques séparées. Aucun droit d’auteur ou droit voisin n’est cédé. Les usages et droits résultant de dispositions impératives restent préservés ; la rédaction contractuelle est encore soumise à revue juridique.
+Les fichiers et la composition acquis sont figés au moment de l’achat. Un nouveau master, une réédition ou un remaster n’est pas ajouté automatiquement. Cette conservation ne supprime pas l’obligation de remédier à une non-conformité ni de fournir les mises à jour légalement nécessaires.
+Les liens privés temporaires peuvent être renouvelés ; tant que le service de bibliothèque fonctionne et que les droits concernés restent actifs, aucune limite arbitraire du nombre de re-téléchargements n’est imposée. Le client est invité à conserver ses fichiers. Il n’est pas promis un hébergement perpétuel ; une fin de service doit préserver les droits impératifs et faire l’objet de modalités validées avant lancement.
+
+9. Garanties légales des contenus numériques D. 211-3 et son annexe
+Le consommateur dispose d'un délai de deux ans à compter de la fourniture du contenu numérique ou du service numérique pour obtenir la mise en œuvre de la garantie légale de conformité en cas d'apparition d'un défaut de conformité. Durant un délai d'un an à compter de la date de fourniture, le consommateur n'est tenu d'établir que l'existence du défaut de conformité et non la date d'apparition de celui-ci.
+La garantie légale de conformité emporte obligation de fournir toutes les mises à jour nécessaires au maintien de la conformité du contenu numérique ou du service numérique.
+La garantie légale de conformité donne au consommateur droit à la mise en conformité du contenu numérique ou du service numérique sans retard injustifié suivant sa demande, sans frais et sans inconvénient majeur pour lui.
+Le consommateur peut obtenir une réduction du prix en conservant le contenu numérique ou le service numérique ou il peut mettre fin au contrat en se faisant rembourser intégralement contre renoncement au contenu numérique ou au service numérique, si :
+1° Le professionnel refuse de mettre le contenu numérique ou le service numérique en conformité ;
+2° La mise en conformité du contenu numérique ou du service numérique est retardée de manière injustifiée ;
+3° La mise en conformité du contenu numérique ou du service numérique ne peut intervenir sans frais imposés au consommateur ;
+4° La mise en conformité du contenu numérique ou du service numérique occasionne un inconvénient majeur pour le consommateur ;
+5° La non-conformité du contenu numérique ou du service numérique persiste en dépit de la tentative de mise en conformité du professionnel restée infructueuse.
+Le consommateur a également droit à une réduction du prix ou à la résolution du contrat lorsque le défaut de conformité est si grave qu'il justifie que la réduction du prix ou la résolution du contrat soit immédiate. Le consommateur n'est alors pas tenu de demander la mise en conformité du contenu numérique ou du service numérique au préalable.
+Dans les cas où le défaut de conformité est mineur, le consommateur n'a droit à l'annulation du contrat que si le contrat ne prévoit pas le paiement d'un prix.
+Toute période d'indisponibilité du contenu numérique ou du service numérique en vue de sa remise en conformité suspend la garantie qui restait à courir jusqu'à la fourniture du contenu numérique ou du service numérique de nouveau conforme.
+Les droits mentionnés ci-dessus résultent de l'application des articles L. 224-25-1 à L. 224-25-31 du code de la consommation.
+Le professionnel qui fait obstacle de mauvaise foi à la mise en œuvre de la garantie légale de conformité encourt une amende civile d'un montant maximal de 300 000 euros, qui peut être porté jusqu'à 10 % du chiffre d'affaires moyen annuel (article L. 242-18-1 du code de la consommation).
+Le consommateur bénéficie, en outre, de la garantie légale des vices cachés en application des articles 1641 à 1649 du code civil, pendant une durée de deux ans à compter de la découverte du défaut. Cette garantie donne droit à une réduction de prix si le contenu numérique ou le service numérique est conservé ou à un remboursement intégral contre renonciation au contenu numérique ou au service numérique.
+
+10. Remboursements, documents et incidents
+Une demande de remboursement pour un simple changement d’avis fait l’objet d’un examen individuel. Lorsque la fourniture immédiate a légalement entraîné la perte du droit de rétractation, aucun remboursement commercial automatique n’est accordé pour ce seul motif. Cette politique ne limite ni le droit de rétractation lorsqu’il subsiste, ni les garanties légales, ni aucun autre remboursement ou recours imposé par la loi.
+Un remboursement confirmé est rattaché à l’achat concerné et donne lieu au justificatif et à l’avoir appropriés ; le paiement initial, la facture et l’historique restent conservés. Une réduction de prix ne vaut pas automatiquement résolution ni retrait de tous les droits.
+En cas de résolution, les conséquences sur la licence et les nouveaux téléchargements des contenus concernés sont appliquées selon les règles légales et les droits effectivement affectés. Les autres achats ne sont pas supprimés. Une contestation ou contradiction de paiement est examinée et tracée ; elle ne justifie pas une double capture, un remboursement improvisé ni une suppression des preuves.
+
+11. Réclamation, médiation et règlement des litiges
+Une réclamation préalable peut être adressée aux coordonnées professionnelles indiquées ci-dessus. Le consommateur conserve ses recours judiciaires et les protections impératives applicables ; aucune compétence exclusive au siège du vendeur n’est imposée par ce brouillon.
+Après cette démarche préalable, le consommateur peut recourir gratuitement au Centre de la Médiation de la Consommation de Conciliateurs de Justice — CM2C, 49 rue de Ponthieu, 75008 Paris, France — 01 89 47 00 14 — https://www.cm2c.net/, dans les conditions d’admissibilité de la médiation.
+CM2C est déjà le médiateur désigné de LNX Beats : aucune nouvelle adhésion n’est proposée. La couverture du nouveau téléchargement numérique doit être confirmée dans la convention existante si nécessaire. Aucune ancienne plateforme européenne de règlement en ligne devenue indisponible n’est présentée comme un recours actuel.
+
+Annexe — modèle de notification de rétractation
+À l’attention du vendeur et aux coordonnées indiquées au début de ces conditions : je vous notifie ma rétractation du contrat portant sur le téléchargement musical suivant : [titre ou album et référence de commande].
+Commande conclue le : [date]. Nom du consommateur : [nom]. Adresse du consommateur : [adresse]. Date de la déclaration : [date]. Signature uniquement si ce modèle est remis sur papier.
+Envoyer ce modèle seulement lorsque vous souhaitez exercer le droit de rétractation applicable. Vous pouvez aussi utiliser toute déclaration non ambiguë. L’accusé de réception de la demande ne préjuge pas de son éligibilité et ne remplace pas le remboursement lorsqu’il est dû.

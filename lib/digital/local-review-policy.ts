@@ -10,8 +10,9 @@ export function localDigitalReviewAvailable(env:Record<string,string|undefined> 
     const origin=new URL(env.AUTH_URL??"");
     return digitalEnabled(env) && env.DCN_LOCAL_REVIEW_AUTHORIZED==="true"
       && env.DCN_EXTERNAL_TEST_AUTHORIZED!=="true" && env.DCN_NEW_PAYMENTS_ENABLED==="false"
-      && db.hostname==="127.0.0.1" && db.port==="55473" && ["/lnx_dcn_runtime_test","/lnx_dcn_consolidation_test","/lnx_dcn_final_paths_test_20261015"].includes(db.pathname)
+      && db.hostname==="127.0.0.1" && db.port==="55473" && ["/lnx_dcn_runtime_test","/lnx_dcn_consolidation_test","/lnx_dcn_final_paths_test_20261015","/lnx_dcn_france_commercial_test_20261015"].includes(db.pathname)
       && db.username==="dcn_runtime_a" && env.MEDIA_STORAGE_DRIVER==="local" && env.EMAIL_PROVIDER==="capture"
+      && (!["/lnx_dcn_final_paths_test_20261015","/lnx_dcn_france_commercial_test_20261015"].includes(db.pathname)||db.searchParams.get("options")==="-c timezone=UTC")
       && origin.origin==="http://127.0.0.1:3140" && origin.pathname==="/" && !origin.username && !origin.password && !origin.search && !origin.hash
       && !Object.entries(env).some(([k,v])=>!!v&&/(?:^|_)(?:STRIPE|PAYPAL|RESEND)(?:_|$)/.test(k));
   } catch { return false; }

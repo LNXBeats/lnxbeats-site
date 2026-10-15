@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { approvedLegalDocuments, approvedLegalNotices, approvedWithdrawalNotice, consumerMediatorInformation } from "@/data/legal";
 import { digitalMusicTermsDraft, DIGITAL_MUSIC_TERMS_DRAFT_TEXT_HASH } from "@/lib/digital/digital-legal";
-import { digitalFranceTermsDraft, DIGITAL_FRANCE_TERMS_TEXT, DIGITAL_FRANCE_TERMS_TEXT_HASH, DIGITAL_FRANCE_TERMS_VERSION,
+import { digitalFranceTermsDraft, DIGITAL_FRANCE_TERMS_TEXT, DIGITAL_FRANCE_TERMS_TEXT_HASH, DIGITAL_FRANCE_TERMS_VERSION, DIGITAL_FRANCE_GUARANTEE_BOX_PARAGRAPHS,
   DIGITAL_FRANCE_PROPOSED_SCOPE, DIGITAL_FRANCE_IMMEDIATE_SUPPLY_DRAFT, DIGITAL_FRANCE_WITHDRAWAL_ACKNOWLEDGEMENT_DRAFT } from "@/lib/digital/france-legal";
 
 test("France terms are a separate non-approved immutable draft, never a territory or fiscal activation", () => {
@@ -59,20 +59,40 @@ test("withdrawal contains all four cumulative conditions and preserves guarantee
   assert.match(DIGITAL_FRANCE_TERMS_TEXT, /modèle de notification de rétractation/);
 });
 
-test("withdrawal reference is an existing route, not a false claim of current digital support or an obsolete ODR URL", async () => {
+test("withdrawal describes the connected local digital route without claiming QA e-mail delivery or obsolete ODR", async () => {
   assert.equal(digitalFranceTermsDraft.existingProofReferences.withdrawalInformation.informationPath, "/retractation");
   const page = await readFile("app/retractation/page.tsx", "utf8"); assert.match(page, /WithdrawalForm/);
-  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /prise en charge explicite des achats numériques doit être raccordée et vérifiée/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /permet de choisir un achat numérique/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /relire et corriger/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /ne requiert pas de connexion ni de motif/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /capture locale d’un e-mail n’est ni son envoi ni sa remise/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /prolongé de douze mois/);
   assert.ok(digitalFranceTermsDraft.reviewRequired.includes("FR_DIGITAL_WITHDRAWAL_ONLINE_ROUTE"));
   assert.doesNotMatch(DIGITAL_FRANCE_TERMS_TEXT, /ec\.europa\.eu\/consumers\/odr|webgate\.ec\.europa/);
 });
 
-test("digital conformity distinguishes two-year liability from twelve-month presumption and retains the statutory-box review", () => {
-  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /deux ans qui la suivent/); assert.match(DIGITAL_FRANCE_TERMS_TEXT, /douze premiers mois/);
-  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /sans frais, sans retard injustifié et sans inconvénient majeur/);
+test("digital conformity includes the full one-off statutory box with two-year liability and one-year presumption", () => {
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /deux ans à compter de la fourniture/); assert.match(DIGITAL_FRANCE_TERMS_TEXT, /Durant un délai d'un an/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /sans retard injustifié suivant sa demande, sans frais et sans inconvénient majeur/);
   assert.match(DIGITAL_FRANCE_TERMS_TEXT, /D\. 211-3 et son annexe/);
   assert.ok(digitalFranceTermsDraft.reviewRequired.includes("FR_D211_3_STATUTORY_GUARANTEE_BOX"));
   assert.match(DIGITAL_FRANCE_TERMS_TEXT, /mises à jour légalement nécessaires/);
+  const box=digitalFranceTermsDraft.sections.find(section => section.boxed);
+  assert.deepEqual(box?.paragraphs, DIGITAL_FRANCE_GUARANTEE_BOX_PARAGRAPHS); assert.equal(box?.paragraphs.length, 15);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /Le consommateur n'est alors pas tenu/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /remise en conformité suspend la garantie/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /deux ans à compter de la découverte/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /300 000 euros/);
+});
+
+test("exact zero completion is a free grant with preserved sources, not an invented payment or a negative credit", () => {
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /sommes admissibles couvrent le prix de l’album/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /complément est attribué sans nouveau paiement/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /aucune facture d’encaissement fictif/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /ni solde créditeur réutilisable, ni remboursement/);
+  assert.match(DIGITAL_FRANCE_TERMS_TEXT, /consentements et contrôles de fourniture restent nécessaires/i);
+  assert.equal(digitalFranceTermsDraft.existingProofReferences.previousFranceDraft.version, "digital-music-france-cgv-20261015-draft-01");
+  assert.ok(digitalFranceTermsDraft.legalSources.every(source => source.checkedAt === "2026-10-15" && /^https:\/\/(?:www\.)?(?:legifrance|economie)\.gouv\.fr\//.test(source.url)));
 });
 
 test("no tax rate, default exemption or historical-policy rewrite is introduced", () => {

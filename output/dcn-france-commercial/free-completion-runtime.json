@@ -1,0 +1,67 @@
+{
+  "scope": "REAL_POSTGRES_NON_OWNER_NEW_QA_COPY_AND_LOCAL_FILES_ONLY",
+  "database": "lnx_dcn_france_commercial_test_20261015",
+  "role": "dcn_runtime_a",
+  "runId": "144cd1ab-b221-480d-9971-38f01596fe56",
+  "results": [
+    {
+      "name": "postgres_concurrent_same_keys_grant_exactly_one_free_acquisition",
+      "status": "PASS"
+    },
+    {
+      "name": "free_1_proof_exact_france_draft_hash_surplus_and_unique_audit",
+      "status": "PASS"
+    },
+    {
+      "name": "free_1_document_download_receipt_and_local_email_without_claim_of_payment",
+      "status": "PASS"
+    },
+    {
+      "name": "free_1_acquired_wav_mp3_and_both_zips_use_actual_local_bytes",
+      "status": "PASS"
+    },
+    {
+      "name": "postgres_concurrent_different_keys_grant_exactly_one_free_acquisition",
+      "status": "PASS"
+    },
+    {
+      "name": "free_2_proof_exact_france_draft_hash_surplus_and_unique_audit",
+      "status": "PASS"
+    },
+    {
+      "name": "free_2_document_download_receipt_and_local_email_without_claim_of_payment",
+      "status": "PASS"
+    },
+    {
+      "name": "free_2_acquired_wav_mp3_and_both_zips_use_actual_local_bytes",
+      "status": "PASS"
+    },
+    {
+      "name": "historical_acquisitions_documents_masters_entitlements_are_unchanged",
+      "status": "PASS"
+    }
+  ],
+  "createdFixtures": [
+    {
+      "projectId": "f8f39dbc-81cc-4980-b57e-f4d240cb9e2c",
+      "sourceOrderId": "fad516a8-207b-447d-8c21-81fdca1f7b0a",
+      "grantOrderId": "2e6a5971-cb22-4e41-ab33-fb6748f8015d"
+    },
+    {
+      "projectId": "128c9de7-f02b-4b1b-ab68-2b98a37475bd",
+      "sourceOrderId": "abb843fe-3d50-4684-8ad7-c1da2bf65a05",
+      "grantOrderId": "a6d54c00-f0db-4d94-83db-3993e815265c"
+    }
+  ],
+  "sourcePayments": "SYNTHETIC_OWNER_FIXTURES_NOT_PSP_RECEIPTS",
+  "residenceEvidence": "SERVER_AUTHORIZED_LOCAL_FIXTURE_NOT_RESIDENCE_APPROVAL",
+  "audio": "LOCAL_COPIES_OF_EXISTING_QA_BYTES_NEW_ASSETS_NO_PUBLICATION_RECIPE",
+  "externalProviderCalls": 0,
+  "externalRequests": 0,
+  "realEmailsSent": 0,
+  "newFreePaymentAttempts": 0,
+  "newFreeInvoices": 0,
+  "historicalRowsUnchanged": true,
+  "historicalProofHash": "fddca714c1b7dd2bdea5a2d7a9efd62e07205993c188652c2c905acb0df3e931",
+  "cleanup": "No acquisitions/documents/masters deleted; all fixtures retained"
+}

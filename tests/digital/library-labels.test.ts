@@ -28,6 +28,6 @@ test("DCN abbreviated reference changes no order identity, navigation, download 
   assert.ok(source.includes("key={o.id}"));
   assert.ok(source.includes("Réf. abrégée {digitalLibraryPurchaseReference(o.id)}"));
   assert.ok(source.includes("href={`/musique/confirmation/${o.id}`}"));
-  assert.ok(source.includes('canDownload=o.accessReady&&["PAID","PARTIALLY_REFUNDED","REFUNDED"].includes(o.status)&&active.length>0'));
+  assert.ok(source.includes('canDownload=o.accessReady&&["PAID","PARTIALLY_REFUNDED","REFUNDED","GRANTED"].includes(o.status)&&active.length>0'));
   assert.ok(source.includes("active.length===l.acquiredTrackCount"));
 });

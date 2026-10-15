@@ -16,8 +16,10 @@ test("completion: 1 / 11 / 12 canonical singles are credited once using exact pa
 test("completion: partial refund is deducted, never current catalogue track price",()=>{const s=source(0,137,31),q=completeDigitalAlbum(album(),new Set([s.trackId]),[s]);
   assert.equal(q.priceCents,1894);assert.equal(q.completion?.creditCents,106);assert.equal(q.completion?.sources[0].refundedCents,31);});
 test("completion: independently changed album price yields a new exact quote",()=>{const s=source(),owned=new Set([s.trackId]);assert.equal(completeDigitalAlbum(album(990),owned,[s]).priceCents,861);assert.equal(completeDigitalAlbum(album(1000),owned,[s]).priceCents,871);});
-test("completion: zero or over-price credit remains safely blocked, no negative or zero PSP payment",()=>{
-  for(const p of [129,100]){const s=source();assert.throws(()=>completeDigitalAlbum(album(p),new Set([s.trackId]),[s]),{code:"COMPLETION_ZERO_REQUIRES_REVIEW"});}
+test("completion: zero or over-price eligible amounts produce an explicit free snapshot, not negative price or residual cash",()=>{
+  for(const p of [129,100]){const s=source(),q=completeDigitalAlbum(album(p),new Set([s.trackId]),[s]);
+    assert.equal(q.priceCents,0);assert.equal(q.completion?.version,2);assert.equal(q.completion?.creditCents,p);assert.equal(q.completion?.eligibleCents,129);
+    assert.equal(normalizeDigitalCart([q],new Set([s.trackId])).totalCents,0);}
 });
 test("completion: free, over-refunded, fractional, negative or fabricated source math is blocked",()=>{
   const s=source(),owned=new Set([s.trackId]);for(const patch of [{paidCents:0,availableCents:0,creditCents:0},{refundedCents:130,availableCents:-1,creditCents:-1},

@@ -1,0 +1,35 @@
+{
+  "environment": "LOCAL_QA_ONLY",
+  "providerRecipesRepeated": false,
+  "productionMutation": false,
+  "results": [
+    {
+      "name": "targeted-tests",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "/usr/local/bin/node --conditions=react-server --import tsx --test --test-reporter=tap tests/digital/admin.test.ts tests/digital/admin-media-scope.test.ts tests/digital/real-album-admin.test.ts tests/digital/audio-revalidation.test.ts tests/digital/audio-validation.test.ts tests/digital/audio-formats.test.ts tests/digital/completion.test.ts tests/digital/completion-repository.test.ts tests/digital/album-ownership.test.ts tests/digital/free-completion.test.ts tests/digital/france-contract-binding.test.ts tests/digital/france-checkout-contract.test.ts tests/digital/france-legal.test.ts tests/digital/fulfillment.test.ts tests/digital/initial-delivery.test.ts tests/digital/domain.test.ts tests/digital/library-labels.test.ts tests/digital/local-review-security.test.ts tests/digital/checkout-jurisdiction.test.ts tests/digital/france-checkout.test.ts tests/digital/france-residence-v2.test.ts tests/digital/rights-review-checkout.test.ts tests/digital/commercial-refund-policy.test.ts"
+    },
+    {
+      "name": "prisma-validate",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "./node_modules/.bin/prisma validate"
+    },
+    {
+      "name": "lint",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run lint"
+    },
+    {
+      "name": "typecheck",
+      "status": "FAIL",
+      "exitCode": 2,
+      "signal": null,
+      "command": "npm run typecheck"
+    }
+  ]
+}

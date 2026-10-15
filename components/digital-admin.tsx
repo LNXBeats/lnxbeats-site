@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { runDirectMultipartUpload, uploadPartWithProgress, multipartFileSignature, waitUntilVisible, type MultipartDependencies, type MultipartProgress } from "@/lib/creations/direct-multipart-upload";
 import { parseEuroCents } from "@/lib/digital/domain";
-import { DIGITAL_BATCH_FILE_LIMIT, runDigitalBatch } from "@/lib/digital/admin";
+import { DIGITAL_BATCH_FILE_LIMIT, digitalBatchAssociationIssue, digitalImportStartMs, runDigitalBatch } from "@/lib/digital/admin";
 import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
 import { digitalRequest } from "./digital-cart";
 import styles from "./digital.module.css";
@@ -21,13 +21,13 @@ export function DigitalOfferForm({ projectId, trackId, offer, label }: { project
   const [price, setPrice] = useState(offer?.priceCents ? String(offer.priceCents / 100) : ""), [active, setActive] = useState(offer?.active ?? false), [rights, setRights] = useState(offer?.rightsConfirmed ?? false), [distribution, setDistribution] = useState(offer?.distribution ?? "UNRELEASED"), [state, setState] = useState(""), [busy, setBusy] = useState(false);
   return <form className={`${styles.form} ${admin.offer}`} onSubmit={async e => {
     e.preventDefault(); setBusy(true);
-    try { await digitalRequest("/api/admin/digital/offers", { projectId, trackId, priceCents: price.trim() ? parseEuroCents(price) : null, active, rightsConfirmed: rights, distribution, expectedVersion: offer?.version ?? 0 }); setState("Offre de démonstration enregistrée. Vérifiez le diagnostic de préparation."); router.refresh(); }
+    try { await digitalRequest("/api/admin/digital/offers", { projectId, trackId, priceCents: price.trim() ? parseEuroCents(price) : null, active, rightsConfirmed: rights, distribution, expectedVersion: offer?.version ?? 0 }); setState("Offre de préparation TEST enregistrée. Vérifiez le diagnostic ; aucune ouverture LIVE."); router.refresh(); }
     catch (e) { setState(e instanceof Error ? e.message : "Enregistrement refusé."); } finally { setBusy(false); }
   }}>
     <h3>{label}</h3>
-    <div className={admin.fields}><label>Prix indépendant QA (EUR)<input inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="À définir" aria-describedby={`price-${trackId ?? projectId}`} maxLength={10} /></label>
+    <div className={admin.fields}><label>Prix vendeur indépendant (EUR) — TEST<input inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="À définir" aria-describedby={`price-${trackId ?? projectId}`} maxLength={10} /></label>
       <label>Distribution externe<select value={distribution} onChange={e => setDistribution(e.target.value)}><option value="UNRELEASED">Inédit / non distribué</option><option value="DISTRIBUTED">Distribué sur plateformes</option></select></label></div>
-    <small id={`price-${trackId ?? projectId}`} className={styles.note}>Prix fictif de démonstration, aucun tarif de lancement. Prix et droits vérifiés requis avant vente TEST.</small>
+    <small id={`price-${trackId ?? projectId}`} className={styles.note}>Aucun prix par défaut. À fixer librement par le vendeur, indépendamment des autres offres. Gardez le prix vide et l’offre inactive tant que le tarif n’est pas validé ; les fixtures QA ne sont pas des tarifs de lancement.</small>
     <label className={styles.checkbox}><input type="checkbox" checked={rights} onChange={e => setRights(e.target.checked)} /><span>J’ai vérifié les droits de vente et d’extrait, y compris co-auteurs, featurings et distribution. Cette déclaration est auditée.</span></label>
     <label className={styles.checkbox}><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>Autoriser la vente en TEST. Publication et médias prêts restent obligatoires.</span></label>
     <div className={styles.actions}><button type="submit" disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer l’offre"}</button></div><p role="status">{state}</p>
@@ -53,22 +53,21 @@ type UploadState = "waiting" | "busy" | "ready" | "paused" | "error";
 type RegisteredUpload = { start: () => Promise<void>; stop: () => void; valid: boolean; state: UploadState; trackId: string };
 type BatchEntry = { id: string; file: File };
 type SavedUpload = { token: string; signature: string; expiresAt: string; previewStartMs: number; expectedVersion: number };
-function UploadFile({ entry, tracks, register, report, batchBusy }: { entry: BatchEntry; tracks: DigitalAdminTrack[]; register: (id: string, row: RegisteredUpload | null) => void; report: (id: string, state: UploadState) => void; batchBusy: boolean }) {
+function UploadFile({ entry, tracks, register, report, associate, remove, duplicate, batchBusy }: { entry: BatchEntry; tracks: DigitalAdminTrack[]; register: (id: string, row: RegisteredUpload | null) => void; report: (id: string, state: UploadState) => void; associate: (id: string, trackId: string) => void; remove: (id: string) => void; duplicate: boolean; batchBusy: boolean }) {
   const file = entry.file;
   const [trackId, setTrackId] = useState(""), [offset, setOffset] = useState("0"), [confirmed, setConfirmed] = useState(false), [progress, setProgress] = useState<MultipartProgress | null>(null), [message, setMessage] = useState(""), [state, setState] = useState<UploadState>("waiting"), [hasSession, setHasSession] = useState(false);
   const controller = useRef<AbortController | null>(null), inFlight = useRef(false), memorySession = useRef<SavedUpload | null>(null), router = useRouter();
-  const track = tracks.find(t => t.id === trackId), valid = !!track && (hasSession || !track.version || confirmed) && Number.isFinite(Number(offset)) && Number(offset) >= 0;
+  const track = tracks.find(t => t.id === trackId), startMs = digitalImportStartMs(offset), valid = !!track && !duplicate && (hasSession || !track.version || confirmed) && startMs !== null;
   const api = useCallback(async <T,>(id: string, op: string, b: unknown, signal?: AbortSignal) => {
     const r = await fetch(`/api/admin/digital/tracks/${id}/${op}`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(b), signal });
     const v = await r.json(); if (!r.ok) throw Error(v.error ?? "Transfert refusé."); return v as T;
   }, []);
   function changeState(s: UploadState) { setState(s); report(entry.id, s); }
   async function upload() {
-    if (!track || !valid || inFlight.current || state === "ready") return;
+    if (!track || !valid || startMs === null || inFlight.current || state === "ready") return;
     const c = new AbortController(); controller.current = c; inFlight.current = true; changeState("busy"); setMessage(""); let token = "";
     const key = `lnx:dcn:upload:${trackId}`; let saved = memorySession.current;
     try { saved ??= JSON.parse(localStorage.getItem(key) ?? "null"); } catch { /* optional resume aid */ }
-    const startMs = Math.round(Number(offset) * 1000);
     const deps: MultipartDependencies<Init> = {
       init: b => api(trackId, "init", b, c.signal), partUrl: (sessionToken, partNumber) => api(trackId, "part-url", { sessionToken, partNumber }, c.signal), status: sessionToken => api(trackId, "status", { sessionToken }, c.signal), complete: sessionToken => api(trackId, "complete", { sessionToken }, c.signal),
       uploadPart: input => {
@@ -101,23 +100,27 @@ function UploadFile({ entry, tracks, register, report, batchBusy }: { entry: Bat
   useEffect(() => () => controller.current?.abort(), []);
   return <article className={admin.upload} data-state={state} aria-label={`Import ${file.name}`}>
     <div className={admin.status}><strong>{file.name}</strong><span>{(file.size / 1024 / 1024).toFixed(1)} Mio · {({ waiting: "À associer", busy: "Traitement", ready: "Prêt", paused: "Suspendu", error: "À reprendre" })[state]}</span></div>
-    <div className={styles.form}><div className={admin.fields}><label>Associer ce fichier à une piste<select disabled={state === "busy" || hasSession || state === "ready"} value={trackId} onChange={e => { setTrackId(e.target.value); setConfirmed(false); }}><option value="">Choisir explicitement</option>{tracks.map(t => <option key={t.id} value={t.id}>{t.position}. {t.title}</option>)}</select></label><label>Début d’extrait (secondes)<input type="number" min="0" step=".1" value={offset} disabled={state === "busy" || hasSession || state === "ready"} onChange={e => setOffset(e.target.value)} /></label></div>
+    <div className={styles.form}><div className={admin.fields}><label>Associer ce fichier à une piste<select disabled={state === "busy" || hasSession || state === "ready" || batchBusy} value={trackId} onChange={e => { setTrackId(e.target.value); associate(entry.id, e.target.value); setConfirmed(false); }}><option value="">Choisir explicitement</option>{tracks.map(t => <option key={t.id} value={t.id}>{t.position}. {t.title}</option>)}</select></label><label>Début d’extrait (secondes)<input type="number" min="0" max="1799.999" step=".001" value={offset} disabled={state === "busy" || hasSession || state === "ready" || batchBusy} onChange={e => setOffset(e.target.value)} /></label></div>
+      {duplicate ? <p role="alert">Cette piste est associée à plusieurs fichiers. Corrigez l’association ou retirez une ligne avant l’envoi.</p> : null}
+      {startMs === null ? <p role="alert">Saisissez un début entre 0 et moins de 1 800 secondes, avec trois décimales au maximum. La durée réelle du WAV sera contrôlée avant validation.</p> : null}
       {track?.version ? <label className={styles.checkbox}><input type="checkbox" checked={confirmed} disabled={state === "busy" || state === "ready"} onChange={e => setConfirmed(e.target.checked)} /><span>Créer une nouvelle version. Les fichiers et extraits acquis antérieurement sont conservés.</span></label> : null}
-      <div className={styles.actions}><button type="button" disabled={!valid || state === "busy" || state === "ready" || batchBusy} onClick={() => void upload()}>{state === "paused" || state === "error" ? "Reprendre ce fichier" : state === "ready" ? "Fichier prêt" : "Envoyer ce fichier"}</button>{state === "busy" ? <button type="button" className={styles.quiet} onClick={() => controller.current?.abort()}>Suspendre ce fichier</button> : null}</div>
+      <div className={styles.actions}><button type="button" disabled={!valid || state === "busy" || state === "ready" || batchBusy} onClick={() => void upload()}>{state === "paused" || state === "error" ? "Reprendre ce fichier" : state === "ready" ? "Fichier prêt" : "Envoyer ce fichier"}</button>{state === "busy" ? <button type="button" className={styles.quiet} onClick={() => controller.current?.abort()}>Suspendre ce fichier</button> : null}<button type="button" className={styles.quiet} disabled={batchBusy || state === "busy" || hasSession} onClick={() => remove(entry.id)}>Retirer du lot{state === "ready" ? " (master conservé)" : ""}</button></div>
       {progress ? <><progress className={styles.progress} aria-label={`Envoi de ${file.name}`} max={100} value={progress.percent} /><span role="status">{({ initializing: "Préparation", uploading: "Envoi", finalizing: "Finalisation", validating: "Validation", analyzing: "Analyse", transcoding: "Extrait", ready: "Prêt", paused: "En pause", retrying: "Reprise" } as Record<string, string>)[progress.phase] ?? "Traitement"} · {Math.round(progress.percent)} %</span></> : null}
       <p role="status">{message}</p>
     </div>
   </article>;
 }
 export function DigitalBatchUpload({ tracks }: { tracks: DigitalAdminTrack[] }) {
-  const [entries, setEntries] = useState<BatchEntry[]>([]), [states, setStates] = useState<Record<string, UploadState>>({}), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [entries, setEntries] = useState<BatchEntry[]>([]), [states, setStates] = useState<Record<string, UploadState>>({}), [associations, setAssociations] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const rows = useRef(new Map<string, RegisteredUpload>()), stop = useRef(false);
   const register = useCallback((id: string, row: RegisteredUpload | null) => { if (row) rows.current.set(id, row); else rows.current.delete(id); }, []);
   const report = useCallback((id: string, state: UploadState) => setStates(previous => ({ ...previous, [id]: state })), []);
+  const associate = useCallback((id: string, trackId: string) => setAssociations(previous => ({ ...previous, [id]: trackId })), []);
+  const remove = useCallback((id: string) => { setEntries(previous => previous.filter(row => row.id !== id)); setStates(previous => { const next = { ...previous }; delete next[id]; return next; }); setAssociations(previous => { const next = { ...previous }; delete next[id]; return next; }); }, []);
   async function batch() {
-    const pending = [...rows.current.values()].filter(row => row.state !== "ready" && row.valid);
-    if (!pending.length) { setMessage("Associez explicitement au moins un fichier et confirmez les remplacements avant l’envoi."); return; }
-    if (new Set(pending.map(row => row.trackId)).size !== pending.length) { setMessage("Deux fichiers sont associés à la même piste. Corrigez cette association avant le lot."); return; }
+    const registered = [...rows.current.values()], issue = digitalBatchAssociationIssue(registered);
+    if (issue) { setMessage(issue); return; }
+    const pending = registered.filter(row => row.state !== "ready" && row.valid);
     stop.current = false; setBusy(true); setMessage("Import groupé : deux fichiers maximum en traitement. Chaque résultat reste indépendant.");
     await runDigitalBatch(pending, row => row.start(), () => stop.current); setBusy(false); setMessage("Lot arrêté ou terminé. Les fichiers prêts sont conservés ; reprenez seulement les lignes en erreur/suspendues.");
   }
@@ -128,7 +131,7 @@ export function DigitalBatchUpload({ tracks }: { tracks: DigitalAdminTrack[] }) 
     }} /></label></div>
     <div className={admin.summary}><div><span>Dans le lot</span><strong>{entries.length} fichier(s)</strong></div><div><span>Validés</span><strong>{ready} prêt(s)</strong></div><div><span>Reprise ciblée</span><strong>{errors} erreur(s)</strong></div></div>
     <div className={styles.actions}><button type="button" disabled={busy || !entries.length} onClick={() => void batch()}>{busy ? "Lot en cours…" : "Envoyer / reprendre le lot associé"}</button>{busy ? <button type="button" className={styles.quiet} onClick={() => { stop.current = true; for (const row of rows.current.values()) row.stop(); }}>Suspendre le lot</button> : null}</div><p role="status">{message}</p>
-    {entries.map(entry => <UploadFile key={entry.id} entry={entry} tracks={tracks} register={register} report={report} batchBusy={busy} />)}
+    {entries.map(entry => <UploadFile key={entry.id} entry={entry} tracks={tracks} register={register} report={report} associate={associate} remove={remove} duplicate={!!associations[entry.id] && Object.values(associations).filter(id => id === associations[entry.id]).length > 1} batchBusy={busy} />)}
     <details className={admin.details}><summary>Limites et diagnostics techniques QA</summary><p>Source WAV privée · MP3 privé dérivé (320 kbit/s par défaut) · 512 Mio par master · 50 fichiers sélectionnés · 2 traitements au maximum · extraits physiques ≤60 s. Le début d’extrait après import se modifie par une nouvelle version du master, jamais en altérant une acquisition. Les associations déjà validées sont immuables ; une correction après import passe également par une nouvelle version.</p></details>
   </section>;
 }
