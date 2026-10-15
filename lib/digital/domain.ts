@@ -45,11 +45,12 @@ export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: 
     if (owned.length && (!s.completion || s.scope !== "ALBUM" || owned.length !== s.completion.sources.length
       || owned.some(t => !s.completion!.sources.some(c => c.trackId === t.trackId && c.masterId === t.masterId))))
       throw new DigitalError(s.scope === "ALBUM" ? "ALBUM_PARTIALLY_OWNED" : "ALREADY_OWNED", 409,{ownedTitles:owned.map(t=>t.title)});
-    if (s.completion && (s.scope!=="ALBUM"||s.completion.version !== 1 || !Number.isSafeInteger(s.completion.creditCents) || s.completion.creditCents < 1
+    if (s.completion && (s.scope!=="ALBUM"||s.completion.version !== 1 || !Number.isSafeInteger(s.completion.creditCents) || s.completion.creditCents < 0
       || s.completion.basePriceCents - s.completion.creditCents !== s.priceCents
       || s.completion.sources.reduce((n,c)=>n+c.creditCents,0) !== s.completion.creditCents
       || s.completion.sources.some(c=>!ownedTracks.has(c.trackId)||!s.tracks.some(t=>t.trackId===c.trackId&&t.masterId===c.masterId)
-        ||!Number.isSafeInteger(c.creditCents)||c.creditCents<1||c.creditCents!==c.availableCents||c.availableCents!==c.paidCents-c.refundedCents)
+        ||!Number.isSafeInteger(c.creditCents)||c.creditCents<0||!Number.isSafeInteger(c.paidCents)||c.paidCents<1
+        ||!Number.isSafeInteger(c.refundedCents)||c.refundedCents<0||c.creditCents!==c.availableCents||c.availableCents!==c.paidCents-c.refundedCents)
       || new Set(s.completion.sources.map(c=>c.trackId)).size !== s.completion.sources.length)) throw new DigitalError("INVALID_COMPLETION",409);
     return true;
   });

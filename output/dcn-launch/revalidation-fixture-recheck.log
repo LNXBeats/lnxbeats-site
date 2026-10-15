@@ -1,0 +1,13 @@
+✔ new unique strictly validated source preserves ordinary append-only import (0.641708ms)
+✔ same exact latest v1 WAV permits only additive strict revalidation and emits the previous immutable identity (0.096334ms)
+✔ cross-track, v2, unknown, nonREADY, nonWAV, public or contradictory duplicates remain blocked (0.253583ms)
+✔ ambiguous sources, stale source version and reuse of old assets or storage keys remain blocked (0.093208ms)
+✔ duplicate allowance cannot bypass strict validation provenance or the full SHA256 identity (0.060083ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 104.889084

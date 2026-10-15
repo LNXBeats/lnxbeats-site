@@ -1,0 +1,26 @@
+{
+  "environment": "LOCAL_ONLY",
+  "results": [
+    {
+      "name": "targeted-tests",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "/usr/local/bin/node --conditions=react-server --import tsx --test --test-reporter=tap tests/digital/domain.test.ts tests/digital/completion.test.ts tests/digital/completion-repository.test.ts tests/digital/album-ownership.test.ts tests/digital/formats.test.ts tests/digital/audio-formats.test.ts tests/digital/audio-validation.test.ts tests/digital/audio-revalidation.test.ts tests/digital/admin.test.ts tests/digital/real-album-admin.test.ts tests/digital/fulfillment.test.ts tests/digital/initial-delivery.test.ts tests/digital/pinned-media.test.ts tests/digital/finance-incident-preservation.test.ts tests/digital/accounting-export.test.ts tests/digital/library-labels.test.ts tests/digital/presentation.test.ts tests/digital/error-presentation.test.ts tests/digital/checkout-jurisdiction.test.ts tests/digital/local-review-security.test.ts tests/digital/scoped-jobs.test.ts"
+    },
+    {
+      "name": "lint",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run lint"
+    },
+    {
+      "name": "typecheck",
+      "status": "FAIL",
+      "exitCode": 2,
+      "signal": null,
+      "command": "npm run typecheck"
+    }
+  ]
+}

@@ -2,7 +2,8 @@ import "server-only";
 import { billingSnapshotHash } from "@/lib/billing/domain";
 import type { Prisma } from "@/generated/prisma/client";
 import { DigitalError, type DigitalCompletionSnapshot, type DigitalCompletionSource, type DigitalSelection } from "./domain";
-import { completeDigitalAlbum } from "./completion-policy";
+import { completeDigitalAlbum,digitalCompletionSourceAmounts } from "./completion-policy";
+import {digitalOwnsExactAlbum} from "./album-ownership-policy";
 type Tx = Prisma.TransactionClient;
 const activeCredit = ["RESERVED","CONSUMED"];
 // PostgreSQL JSONB reorders keys: use the existing canonical immutable-document hash.
@@ -15,6 +16,9 @@ async function completionSources(tx:Tx,userId:string,album:DigitalSelection,targ
     // result being verified, not an additional source credit. Exclude ONLY this line.
     ...(targetLineId?{lineId:{not:targetLineId}}:{})},
     include:{master:{select:{id:true,trackId:true}},line:{include:{order:{include:{lines:true,attempts:true,refunds:true,disputes:true}}}}}});
+  if(digitalOwnsExactAlbum(album,entitlements.filter(e=>e.line.scope==="ALBUM").map(e=>({...e.line,
+    entitlements:entitlements.filter(right=>right.line.id===e.line.id).map(right=>({masterId:right.master.id,status:right.status}))}))))
+    throw new DigitalError("ALREADY_OWNED",409);
   const sources:DigitalCompletionSource[]=[];
   for(const track of album.tracks){
     const acquisitions=entitlements.filter(e=>e.master.trackId===track.trackId);
@@ -24,29 +28,18 @@ async function completionSources(tx:Tx,userId:string,album:DigitalSelection,targ
     const e=acquisitions[0],line=e.line,o=line.order;
     const acquired=line.trackSnapshot as unknown as DigitalSelection["tracks"];
     const paid=o.attempts.filter(a=>a.status==="PAID");
-    if(line.scope!=="TRACK"||o.lines.length!==1||o.totalCents!==line.priceCents||o.mode!=="TEST"||o.currency!=="EUR"
-      ||!["PAID","PARTIALLY_REFUNDED"].includes(o.status)||paid.length!==1||!paid[0].paymentReference
+    if(line.scope!=="TRACK"||paid.length!==1||!paid[0].paymentReference
       ||!Array.isArray(acquired)||acquired.length!==1||acquired[0].trackId!==track.trackId
       ||e.master.id!==track.masterId||acquired[0].masterId!==track.masterId
       ||line.completionSnapshot||o.disputes.some(d=>d.status!=="WON"))throw new DigitalError("COMPLETION_SOURCE_REQUIRES_REVIEW",409);
-    if(o.refunds.some(r=>["REQUESTED","PENDING","REQUIRES_REVIEW"].includes(r.status)
-      ||r.status==="SUCCEEDED"&&(r.allocationStatus!=="MATCHED"||r.purpose!=="PRICE_REDUCTION")))throw new DigitalError("COMPLETION_REFUND_REQUIRES_REVIEW",409);
-    let refundedCents=0;
-    for(const refund of o.refunds.filter(r=>r.status==="SUCCEEDED")){
-      const targets=refund.targets as unknown as Array<{lineId:string;amountCents:number}>;
-      if(!Array.isArray(targets)||targets.length!==1||targets[0].lineId!==line.id
-        ||targets[0].amountCents!==refund.amountCents||!Number.isSafeInteger(refund.amountCents)||refund.amountCents<1)
-        throw new DigitalError("COMPLETION_REFUND_REQUIRES_REVIEW",409);
-      refundedCents+=refund.amountCents;
-    }
+    const {paidCents,refundedCents,availableCents}=digitalCompletionSourceAmounts(line,o);
     const used=await tx.digitalCompletionCredit.findFirst({where:{userId,trackId:track.trackId,status:{in:activeCredit},...(targetLineId?{targetLineId:{not:targetLineId}}:{})}});
     if(used)throw new DigitalError("COMPLETION_CREDIT_ALREADY_USED",409);
-    const availableCents=line.priceCents-refundedCents;
-    if(availableCents<1)throw new DigitalError("COMPLETION_ZERO_SOURCE_REQUIRES_REVIEW",409);
-    const proofHash=jsonHash({sourceLineId:line.id,trackId:track.trackId,masterId:track.masterId,paidCents:line.priceCents,
+    const proofHash=jsonHash({sourceLineId:line.id,trackId:track.trackId,masterId:track.masterId,paidCents,
       orderId:o.id,mode:o.mode,currency:o.currency,status:o.status,paymentReference:paid[0].paymentReference,
+      // Keep the v1 hash material byte-for-byte compatible with acquired snapshots.
       refundedCents,refunds:o.refunds.map(r=>[r.id,r.providerReference,r.amountCents,r.status,r.allocationStatus,r.purpose,r.targets]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))});
-    sources.push({trackId:track.trackId,masterId:track.masterId,sourceLineId:line.id,paidCents:line.priceCents,refundedCents,
+    sources.push({trackId:track.trackId,masterId:track.masterId,sourceLineId:line.id,paidCents,refundedCents,
       availableCents,creditCents:availableCents,proofHash});
   }
   return sources;
@@ -59,7 +52,7 @@ export async function applyDigitalCompletions(tx:Tx,userId:string,selected:Digit
   return result;
 }
 export async function reserveDigitalCompletion(tx:Tx,userId:string,lineId:string,snapshot:DigitalCompletionSnapshot){
-  for(const s of snapshot.sources)await tx.digitalCompletionCredit.create({data:{userId,trackId:s.trackId,sourceLineId:s.sourceLineId,
+  for(const s of snapshot.sources.filter(s=>s.creditCents>0))await tx.digitalCompletionCredit.create({data:{userId,trackId:s.trackId,sourceLineId:s.sourceLineId,
     targetLineId:lineId,amountCents:s.creditCents,sourceNetCents:s.availableCents}});
 }
 export async function verifyDigitalCompletions(tx:Tx,orderId:string,userId:string){
@@ -73,7 +66,8 @@ export async function verifyDigitalCompletions(tx:Tx,orderId:string,userId:strin
     const current=completeDigitalAlbum(album,new Set(snapshot.sources.map(s=>s.trackId)),sources);
     if(jsonHash(current.completion)!==jsonHash(snapshot)||current.priceCents!==line.priceCents)throw new DigitalError("COMPLETION_SOURCE_CHANGED",409);
     const reservations=await tx.digitalCompletionCredit.findMany({where:{targetLineId:line.id,status:{in:activeCredit}}});
-    if(reservations.length!==snapshot.sources.length||snapshot.sources.some(s=>!reservations.some(r=>r.sourceLineId===s.sourceLineId
+    const credited=snapshot.sources.filter(s=>s.creditCents>0);
+    if(reservations.length!==credited.length||credited.some(s=>!reservations.some(r=>r.sourceLineId===s.sourceLineId
       &&r.trackId===s.trackId&&r.amountCents===s.creditCents&&r.sourceNetCents===s.availableCents)))throw new DigitalError("COMPLETION_RESERVATION_CHANGED",409);
   }
 }

@@ -1,0 +1,5 @@
+
+> lnx-studio@0.2.0 typecheck
+> tsc --noEmit
+
+tests/digital/audio-revalidation.test.ts(49,34): error TS2322: Type 'string' is not assignable to type '`${string}-${string}-${string}-${string}-${string}`'.

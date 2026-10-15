@@ -1,0 +1,53 @@
+{
+  "scope": "LOCAL_POSTGRES_NON_OWNER_REPOSITORY_FIXTURES_AND_FINANCE_DOUBLES",
+  "database": "lnx_dcn_consolidation_test",
+  "role": "dcn_runtime_a",
+  "runId": "4c5e8e9b-8ead-4e1f-b279-77085272d2b8",
+  "results": [
+    {
+      "name": "actual PostgreSQL repository sums different frozen promotional/individual prices, never catalogue129",
+      "status": "PASS"
+    },
+    {
+      "name": "exact allocated partial refund across two titles and unrelated full resolution retain correct per-line credit",
+      "status": "PASS"
+    },
+    {
+      "name": "fully refunded PRICE_REDUCTION retains source rights as zero-credit evidence, not a positive reusable credit",
+      "status": "PASS"
+    },
+    {
+      "name": "album price/content changes re-quote exact current amounts while unrelated removed source cannot leak credit",
+      "status": "PASS"
+    },
+    {
+      "name": "concurrent non-owner transactions commit only one reservation group, with durable atomic canonical-track uniqueness",
+      "status": "PASS"
+    },
+    {
+      "name": "zero source stays verified; consumption is idempotent and terminal credit cannot release after completion refund",
+      "status": "PASS"
+    },
+    {
+      "name": "new completion target cannot rewrite frozen proof; pre-existing acquisitions/catalogue/documents remain byte-identical",
+      "status": "PASS"
+    }
+  ],
+  "syntheticPaidFixture": true,
+  "providerCalls": 0,
+  "externalRequests": 0,
+  "mediaPublicationTest": false,
+  "newQaOrderIds": [
+    "4d1ed26f-8f17-40e2-a323-d7934f58c89e",
+    "07346d93-4e00-451a-9e2e-16b19e7b6e23",
+    "035ac864-65b8-46d8-86e7-e48bd0cc89b4",
+    "75f8dd62-ca09-4122-8162-3dfba90ca423"
+  ],
+  "creditCents": 290,
+  "payableCents": 700,
+  "consumedPositiveCredits": 2,
+  "zeroCreditSourceReservations": 0,
+  "existingCatalogueAndAcquisitionsUnchanged": true,
+  "historicalProofHash": "18518bb7e678d3e5ccf87f6b57211f58e945d5eae6b951418dc7cb27e8d84880",
+  "cleanup": "No acquisition/document/master deleted; test orders retained"
+}

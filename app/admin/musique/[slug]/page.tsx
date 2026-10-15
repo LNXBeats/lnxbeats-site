@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { requireDigitalEnvironment } from "@/lib/digital/domain";
 import { digitalSalesReadiness } from "@/lib/digital/admin";
+import { digitalCommercialAudioReady } from "@/lib/digital/formats";
 import { DigitalOfferForm, DigitalBatchUpload, DigitalTrackEditor, DigitalAdminPreview } from "@/components/digital-admin";
 import styles from "@/components/digital.module.css";
 import admin from "@/components/digital-admin.module.css";
@@ -20,7 +21,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     return { id: t.id, title: t.title, position: t.position, publication: t.status, durationSeconds: t.durationSeconds, version: m?.version ?? 0, previewStartMs: m?.previewStartMs ?? 0, previewDurationMs: m?.previewDurationMs ?? null,
       previewUrl: t.status === "RELEASED" && m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED" ? `/media/digital/previews/${m.previewAsset.id}` : null,
       mp3Ready:!!m?.mp3Asset&&m.mp3Asset.visibility==="PRIVATE"&&m.mp3Asset.mimeType==="audio/mpeg",mp3BitrateKbps:m?.mp3BitrateKbps??null,
-      masterReady: !!m && m.masterAsset.visibility === "PRIVATE"&&m.masterAsset.mimeType==="audio/wav"&&!!m.mp3Asset&&m.mp3Asset.visibility==="PRIVATE", mediaCleared: m?.masterAsset.rightsStatus === "CLEARED" && m?.mp3Asset?.rightsStatus==="CLEARED"&&m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED",
+      masterReady: !!m && digitalCommercialAudioReady(m), mediaCleared: m?.masterAsset.rightsStatus === "CLEARED" && m?.mp3Asset?.rightsStatus==="CLEARED"&&m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED",
       offer: p.digitalOffers.find(o => o.trackId === t.id) ?? null };
   });
   const albumOffer = p.digitalOffers.find(o => o.scope === "ALBUM") ?? null;
@@ -30,7 +31,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     <header className="admin-page-heading"><div><p className="admin-kicker">DCN‑1.2 · TEST</p><h1>{p.title}</h1></div><div className={admin.toolbar}><Link className="admin-row-action" href={`/admin/catalogue/${slug}`}>Identité, cover et publication Catalogue</Link>{p.publicVisible && p.status === "PUBLISHED" ? <Link className="admin-row-action" href={`/album/${slug}`} target="_blank" rel="noreferrer">Prévisualiser la fiche publique</Link> : <span>Fiche publique masquée</span>}</div></header>
     <p className={admin.banner}>Démonstration — aucun paiement réel. Prix fictifs, aucune ouverture LIVE. Les versions et compositions déjà acquises restent inchangées.</p>
     <section className={styles.panel} aria-labelledby="readiness"><h2 id="readiness">Préparation à la vente</h2><div className={admin.summary}><div><span>Publication projet</span><strong>{p.status === "PUBLISHED" && p.publicVisible ? "Publié et visible" : "Non public"}</strong></div><div><span>Pistes publiées / nommées</span><strong>{readiness.releasedTrackCount} / {tracks.length}</strong></div><div><span>Masters + extraits prêts</span><strong>{readiness.preparedTrackCount} / {readiness.releasedTrackCount}</strong></div><div><span>Offre album vendable TEST</span><strong>{readiness.albumReady ? `${readiness.includedTrackCount} pistes incluses` : "À compléter"}</strong></div></div>
-      <p className={styles.muted}>L’offre album contient exactement les pistes publiées disposant des médias requis. Une piste annoncée ou non listée n’augmente pas le contenu vendu. La distribution sur Spotify ou Apple Music n’est pas une condition de vente.</p>
+      <p className={styles.muted}>L’offre album contient exactement les pistes publiées disposant des médias requis et validés intégralement. Une piste annoncée ou non listée n’augmente pas le contenu vendu. La distribution sur Spotify ou Apple Music n’est pas une condition de vente. Une ancienne version non qualifiée pour de nouvelles ventes reste conservée pour ses acquisitions existantes ; ne modifiez pas sa preuve pour l’activer.</p>
       {readiness.albumMoreExpensive ? <p className={admin.advisory} role="status">Attention : l’album ({money(albumOffer!.priceCents!)}) dépasse la somme des mêmes pistes vendables séparément ({money(readiness.individualTotalCents!)}). Le prix reste indépendant : aucune remise automatique et aucune interdiction.</p> : null}
     </section>
     <div className={styles.panel}><DigitalOfferForm key={albumOffer?.version ?? 0} projectId={p.id} trackId={null} offer={albumOffer} label="Offre album indépendante" /></div>

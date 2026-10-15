@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
 import {test} from "node:test";
-import {completeDigitalAlbum} from "@/lib/digital/completion-policy";
+import {completeDigitalAlbum,digitalCompletionSourceAmounts} from "@/lib/digital/completion-policy";
 import {normalizeDigitalCart,type DigitalSelection,type DigitalCompletionSource} from "@/lib/digital/domain";
 import {selectionFingerprint} from "@/lib/digital/catalog";
 const tracks=Array.from({length:12},(_,i)=>({trackId:randomUUID(),masterId:randomUUID(),title:`QA ${i+1}`,position:i+1}));
@@ -19,9 +19,66 @@ test("completion: independently changed album price yields a new exact quote",()
 test("completion: zero or over-price credit remains safely blocked, no negative or zero PSP payment",()=>{
   for(const p of [129,100]){const s=source();assert.throws(()=>completeDigitalAlbum(album(p),new Set([s.trackId]),[s]),{code:"COMPLETION_ZERO_REQUIRES_REVIEW"});}
 });
-test("completion: free, fully refunded, fractional, negative or fabricated source math is blocked",()=>{
-  const s=source(),owned=new Set([s.trackId]);for(const patch of [{paidCents:0,availableCents:0,creditCents:0},{refundedCents:129,availableCents:0,creditCents:0},
+test("completion: free, over-refunded, fractional, negative or fabricated source math is blocked",()=>{
+  const s=source(),owned=new Set([s.trackId]);for(const patch of [{paidCents:0,availableCents:0,creditCents:0},{refundedCents:130,availableCents:-1,creditCents:-1},
     {refundedCents:-1},{availableCents:999},{creditCents:0.5},{paidCents:NaN},{proofHash:"bad"}])assert.throws(()=>completeDigitalAlbum(album(),owned,[{...s,...patch}]));
+});
+test("completion: fully refunded price reduction proves retained ownership but contributes zero cents and no free album",()=>{
+  const s=source(0,129,129),q=completeDigitalAlbum(album(990),new Set([s.trackId]),[s]);
+  assert.equal(q.priceCents,990);assert.equal(q.completion?.creditCents,0);assert.equal(normalizeDigitalCart([q],new Set([s.trackId])).totalCents,990);
+});
+test("completion: different historical promotional prices and refunds sum in exact integer cents",()=>{
+  const ss=[source(0,137,31),source(1,49,0),source(2,201,17)],q=completeDigitalAlbum(album(990),new Set(ss.map(s=>s.trackId)),ss);
+  assert.equal(q.completion?.creditCents,339);assert.equal(q.priceCents,651);
+});
+test("completion: content removal ignores unrelated purchases; addition is priced from current album, master replacement never inferred",()=>{
+  const a=album(),s=source(0,137),owned=new Set([s.trackId,randomUUID()]);
+  assert.equal(completeDigitalAlbum(a,owned,[s]).priceCents,1863);
+  const added={...a,tracks:[...a.tracks,{trackId:randomUUID(),masterId:randomUUID(),title:"New title",position:13}]};
+  assert.equal(completeDigitalAlbum(added,owned,[s]).priceCents,1863);
+  const removed={...a,tracks:a.tracks.slice(1)};assert.equal(completeDigitalAlbum(removed,owned,[]),removed);
+  assert.throws(()=>completeDigitalAlbum({...a,tracks:[{...a.tracks[0],masterId:randomUUID()},...a.tracks.slice(1)]},owned,[s]),{code:"COMPLETION_SOURCE_REQUIRES_REVIEW"});
+});
+
+function allocatedOrder(){
+  const lines=[0,1,2].map((i)=>({id:randomUUID(),scope:"TRACK",priceCents:[137,49,201][i],trackSnapshot:[tracks[i]],completionSnapshot:null}));
+  return{lines,order:{mode:"TEST",currency:"EUR",status:"PAID",totalCents:387,lines,
+    refunds:[] as Array<{id:string;providerReference:string;status:string;allocationStatus:string;purpose:string;amountCents:number;targets:Array<{lineId:string;amountCents:number}>}>}};
+}
+test("source allocations: ordinary multi-title promotional cart uses immutable paid line amounts, not current prices",()=>{
+  const f=allocatedOrder();assert.deepEqual(f.lines.map(l=>digitalCompletionSourceAmounts(l,f.order).paidCents),[137,49,201]);
+  f.order.totalCents=300;assert.throws(()=>digitalCompletionSourceAmounts(f.lines[0],f.order),{code:"COMPLETION_SOURCE_REQUIRES_REVIEW"});
+});
+test("source allocations: partial refund over several lines plus unrelated resolution remains exact per title",()=>{
+  const f=allocatedOrder();f.order.status="PARTIALLY_REFUNDED";
+  f.order.refunds.push({id:randomUUID(),providerReference:"re_qa_partial",status:"SUCCEEDED",allocationStatus:"MATCHED",purpose:"PRICE_REDUCTION",amountCents:48,
+    targets:[{lineId:f.lines[0].id,amountCents:31},{lineId:f.lines[2].id,amountCents:17}]},
+    {id:randomUUID(),providerReference:"re_qa_resolution_other",status:"SUCCEEDED",allocationStatus:"MATCHED",purpose:"RESOLUTION",amountCents:49,targets:[{lineId:f.lines[1].id,amountCents:49}]});
+  assert.equal(digitalCompletionSourceAmounts(f.lines[0],f.order).availableCents,106);
+  assert.equal(digitalCompletionSourceAmounts(f.lines[2],f.order).availableCents,184);
+  assert.throws(()=>digitalCompletionSourceAmounts(f.lines[1],f.order),{code:"COMPLETION_REFUND_REQUIRES_REVIEW"});
+});
+test("source allocations: full price reduction with active rights is zero; terminal amount/status inconsistency is blocked",()=>{
+  const f=allocatedOrder();f.order.status="REFUNDED";
+  f.order.refunds.push({id:randomUUID(),providerReference:"re_qa_full",status:"SUCCEEDED",allocationStatus:"MATCHED",purpose:"PRICE_REDUCTION",amountCents:387,targets:f.lines.map(l=>({lineId:l.id,amountCents:l.priceCents}))});
+  assert.equal(digitalCompletionSourceAmounts(f.lines[0],f.order).availableCents,0);
+  f.order.status="PARTIALLY_REFUNDED";assert.throws(()=>digitalCompletionSourceAmounts(f.lines[0],f.order),{code:"COMPLETION_REFUND_REQUIRES_REVIEW"});
+});
+test("source allocations: duplicate refund rows/references do not count twice; failed attempts never consume paid balance",()=>{
+  const f=allocatedOrder();f.order.status="PARTIALLY_REFUNDED";const refund={id:randomUUID(),providerReference:"re_qa_once",status:"SUCCEEDED",allocationStatus:"MATCHED",purpose:"PRICE_REDUCTION",amountCents:31,targets:[{lineId:f.lines[0].id,amountCents:31}]};
+  f.order.refunds.push(refund,{...refund,id:randomUUID(),providerReference:"re_qa_failed",status:"FAILED"});
+  assert.equal(digitalCompletionSourceAmounts(f.lines[0],f.order).availableCents,106);
+  f.order.refunds.push({...refund,id:randomUUID()});assert.throws(()=>digitalCompletionSourceAmounts(f.lines[0],f.order),{code:"COMPLETION_REFUND_REQUIRES_REVIEW"});
+});
+test("source allocations: ambiguous promotion, bundle, gift, failed payment accounting and bad refund allocations fail closed",()=>{
+  for(const variant of ["bundle","gift","unallocated","duplicate-target","over-refund","fractional","wrong-sum","unknown-line","pending"]){
+    const f=allocatedOrder();
+    if(variant==="bundle")f.lines[1].scope="ALBUM";if(variant==="gift")f.lines[1].priceCents=0;
+    if(!["bundle","gift"].includes(variant)){f.order.status="PARTIALLY_REFUNDED";f.order.refunds.push({id:randomUUID(),providerReference:"re_qa",status:variant==="pending"?"PENDING":"SUCCEEDED",allocationStatus:variant==="unallocated"?"REVIEW":"MATCHED",purpose:"PRICE_REDUCTION",amountCents:31,targets:[{lineId:f.lines[0].id,amountCents:31}]});
+      const r=f.order.refunds[0];if(variant==="duplicate-target")r.targets.push({...r.targets[0]});if(variant==="over-refund")r.targets[0].amountCents=138;
+      if(variant==="fractional")r.targets[0].amountCents=30.5;if(variant==="wrong-sum")r.amountCents=32;if(variant==="unknown-line")r.targets[0].lineId=randomUUID();}
+    assert.throws(()=>digitalCompletionSourceAmounts(f.lines[0],f.order));
+  }
 });
 test("completion: duplicate track, duplicate source, absent eligible source and cross-master are not inferred",()=>{
   const s=source(),other=source(1),owned=new Set([s.trackId,other.trackId]);for(const ss of [[s,s],[s,{...other,sourceLineId:s.sourceLineId}],[s],[s,{...other,masterId:randomUUID()}]])

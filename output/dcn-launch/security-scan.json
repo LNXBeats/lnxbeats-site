@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "filesScanned": 42,
+  "matches": 0,
+  "secretsPrinted": false,
+  "method": "Changed allowlisted files + known QA credential literals + private-key/provider-token/credentialed-URL patterns",
+  "limitation": "Targeted scan, not a full historical security audit"
+}

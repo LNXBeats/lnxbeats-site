@@ -11,6 +11,7 @@ import { activeMediaStorage } from "@/lib/media/storage/config";
 import { DigitalError, requireDigitalEnvironment, signatureMatches } from "./domain";
 import { trackLock, recoverDigitalCompletion } from "./upload";
 import { generateDigitalMp3, validateDigitalAudio, DIGITAL_MP3_LIMIT_BYTES } from "./audio";
+import { planDigitalMasterImport } from "./master-import-policy";
 import { claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot, checkDigitalDisk, DIGITAL_WORK_LIMITS } from "./work-slots";
 
 export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>}={}) {
@@ -58,7 +59,11 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>}
       if(admin?.role!=="ADMIN"||admin.status!=="ACTIVE"||!admin.emailVerified) throw new DigitalError("ADMIN_REQUIRED",403);
       const latest=await tx.digitalMaster.findFirst({where:{trackId:s.trackId},orderBy:{version:"desc"}});
       if((latest?.version??0)!==s.expectedVersion) throw new DigitalError("MASTER_VERSION_CONFLICT",409);
-      if(await tx.digitalMaster.findFirst({where:{masterAsset:{checksumSha256:checksum}}})) throw new DigitalError("DUPLICATE_MASTER_REVIEW_REQUIRED",409);
+      // Serialise only identical hashes after all file/network work, without holding a DB transaction during decoding or storage calls.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-master-sha:${checksum}`})) IS NULL AS locked`;
+      const duplicates=await tx.digitalMaster.findMany({where:{masterAsset:{checksumSha256:checksum}},take:2,select:{id:true,trackId:true,version:true,status:true,codec:true,encoderVersion:true,masterAssetId:true,
+        masterAsset:{select:{checksumSha256:true,storageKey:true,visibility:true,mimeType:true}}}});
+      const importPlan=planDigitalMasterImport({trackId:s.trackId,expectedVersion:s.expectedVersion,latestMasterId:latest?.id??null,checksum,newAssetId:s.id,newStorageKey:s.storageKey,encoderVersion:rendition.encoderVersion,duplicates});
       await tx.asset.create({data:{id:s.id,type:"AUDIO",storageKey:s.storageKey,storageBackend:driver.backend,storageProvider:driver.provider,visibility:"PRIVATE",filename:s.filename,
         mimeType:s.mimeType,sizeBytes:s.sizeBytes,durationMs:decoded.durationMs,checksumSha256:checksum,rightsStatus:"PENDING",confidence:"CONFIRMED"}});
       await tx.asset.create({data:{id:previewId,type:"AUDIO_PREVIEW",storageKey:key,storageBackend:stored.storageBackend,storageProvider:stored.storageProvider,visibility:"PUBLIC",filename:"preview.mp3",
@@ -67,10 +72,10 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>}
         mimeType:"audio/mpeg",sizeBytes:BigInt(mp3Metadata.size),durationMs:rendition.durationMs,checksumSha256:mp3Checksum,rightsStatus:"PENDING",confidence:"CONFIRMED"}});
       await tx.digitalMaster.create({data:{trackId:s.trackId,version:s.expectedVersion+1,masterAssetId:s.id,previewAssetId:previewId,mp3AssetId:mp3Id,mp3BitrateKbps:rendition.bitrateKbps,encoderVersion:rendition.encoderVersion,previewStartMs:s.previewStartMs,previewDurationMs:decoded.previewDurationMs,codec:extension,status:"READY"}});
       await tx.digitalUpload.update({where:{id:s.id},data:{status:"READY",leaseUntil:null,leaseToken:null}});
-      await tx.digitalEvent.create({data:{actorId:s.actorId,kind:"MASTER_VALIDATED",details:{trackId:s.trackId,version:s.expectedVersion+1,checksum,durationMs:decoded.durationMs,previewDurationMs:decoded.previewDurationMs,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps,encoderVersion:rendition.encoderVersion,probe:rendition.probe,rightsReview:"PENDING"}}});
+      await tx.digitalEvent.create({data:{actorId:s.actorId,kind:"MASTER_VALIDATED",details:{trackId:s.trackId,version:s.expectedVersion+1,checksum,durationMs:decoded.durationMs,previewDurationMs:decoded.previewDurationMs,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps,encoderVersion:rendition.encoderVersion,probe:rendition.probe,sourceProbe:"RIFF_CHUNKS_AND_FFMPEG_STRICT_DECODE",mp3Probe:"MPEG_LAYER_III_FRAMES_AND_FFMPEG_STRICT_DECODE",revalidation:importPlan.revalidation,rightsReview:"PENDING"}}});
     });
     generatedRefs.length=0; return {processed:true,ready:true,ffmpegRssPeak:decoded.ffmpegRssPeak,ffmpegSamples:decoded.ffmpegSamples,tempSourceBytes:size,tempJobBytesObserved:size+metadata.size+mp3Metadata.size,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps};
-  } catch(e) { const code=e instanceof DigitalError?e.code:"VALIDATION_FAILED";const retry=["INSUFFICIENT_TEMP_DISK","WORKER_MEMORY_LIMIT","LEASE_LOST"].includes(code);
+  } catch(e) { const code=e instanceof DigitalError?e.code:"VALIDATION_FAILED";const retry=["INSUFFICIENT_TEMP_DISK","WORKER_MEMORY_LIMIT","WORKER_MONITOR_UNAVAILABLE","LEASE_LOST"].includes(code);
     await prisma.digitalUpload.updateMany({where:{id:s.id,status:"VALIDATING",leaseToken:slot.leaseToken},data:{status:retry?"QUARANTINE":"REJECTED",leaseUntil:retry?new Date(Date.now()+60000):null,leaseToken:null,errorCode:code}});
     const failureType=e instanceof Error?e.name:"UNKNOWN",providerCode=e&&typeof e==="object"&&"code" in e&&typeof e.code==="string"&&/^[A-Z0-9_]{1,40}$/.test(e.code)?e.code:null;
     return {processed:true,ready:false,errorCode:code,failureType,providerCode}; }

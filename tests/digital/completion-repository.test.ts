@@ -4,6 +4,7 @@ import {test} from "node:test";
 import type {Prisma} from "@/generated/prisma/client";
 import {applyDigitalCompletions,assertNoCreditedSourceRefund,consumeDigitalCompletions,releaseDigitalCompletions,reserveDigitalCompletion,reviewDependentDigitalCompletions,verifyDigitalCompletions} from "@/lib/digital/completion";
 import type {DigitalSelection,DigitalCompletionSnapshot} from "@/lib/digital/domain";
+import {billingSnapshotHash} from "@/lib/billing/domain";
 
 /** Repository doubles only: no provider, PostgreSQL or signature claim. Real DB concurrency is tested separately. */
 function fixture(){
@@ -36,13 +37,28 @@ function fixture(){
 test("repository: actual allocated partial refund leaves only paid non-refunded single cents",async()=>{const f=fixture();f.order.status="PARTIALLY_REFUNDED";
   f.order.refunds.push({id:randomUUID(),providerReference:"re_local",amountCents:29,status:"SUCCEEDED",allocationStatus:"MATCHED",purpose:"PRICE_REDUCTION",targets:[{lineId:f.sourceLineId,amountCents:29}]});
   const q=(await applyDigitalCompletions(f.tx,f.userId,[f.album],new Set([f.trackId])))[0];assert.equal(q.priceCents,890);assert.equal(q.completion?.sources[0].availableCents,100);});
-test("repository: pending refunds, unallocated external refunds, disputes, bundles, cross-master and missing final payment block",async()=>{
+test("repository: historical v1 completion proof hash stays identical for the same acquired single and financial facts",async()=>{
+  const f=fixture(),source=(await applyDigitalCompletions(f.tx,f.userId,[f.album],new Set([f.trackId])))[0].completion!.sources[0];
+  const expected=billingSnapshotHash({sourceLineId:f.sourceLineId,trackId:f.trackId,masterId:f.album.tracks[0].masterId,paidCents:129,
+    orderId:f.sourceOrderId,mode:"TEST",currency:"EUR",status:"PAID",paymentReference:"pi_local_double_only",refundedCents:0,refunds:[]});
+  assert.equal(source.proofHash,expected);
+});
+test("repository: pending refunds, unallocated external refunds, disputes, unallocated bundles, cross-master and missing final payment block",async()=>{
   for(const variant of ["pending","unallocated","dispute","bundle","version","payment"]){const f=fixture();
     if(variant==="pending"||variant==="unallocated")f.order.refunds.push({id:randomUUID(),providerReference:"re_local",amountCents:29,status:variant==="pending"?"PENDING":"SUCCEEDED",allocationStatus:variant==="unallocated"?"REVIEW":"MATCHED",purpose:"PRICE_REDUCTION",targets:[{lineId:f.sourceLineId,amountCents:29}]});
     if(variant==="dispute")f.order.disputes.push({status:"OPEN"});if(variant==="bundle")f.order.lines.push({...f.order.lines[0],id:randomUUID()});
     if(variant==="version")f.acquisition.master.id=randomUUID();if(variant==="payment")f.order.attempts[0].status="OPEN";
     await assert.rejects(()=>applyDigitalCompletions(f.tx,f.userId,[f.album],new Set([f.trackId])));
   }
+});
+test("repository: fully price-reduced retained source proves overlap with zero reservation and remains revalidated",async()=>{
+  const f=fixture();f.order.status="REFUNDED";
+  f.order.refunds.push({id:randomUUID(),providerReference:"re_local_full_reduction",amountCents:129,status:"SUCCEEDED",allocationStatus:"MATCHED",purpose:"PRICE_REDUCTION",targets:[{lineId:f.sourceLineId,amountCents:129}]});
+  const q=(await applyDigitalCompletions(f.tx,f.userId,[f.album],new Set([f.trackId])))[0];
+  assert.equal(q.priceCents,990);assert.equal(q.completion?.creditCents,0);f.target.priceCents=990;f.target.completionSnapshot=q.completion;
+  await reserveDigitalCompletion(f.tx,f.userId,f.targetLineId,q.completion!);assert.equal(f.credits.length,0);
+  await verifyDigitalCompletions(f.tx,f.targetOrderId,f.userId);
+  f.order.refunds[0].allocationStatus="REVIEW";await assert.rejects(()=>verifyDigitalCompletions(f.tx,f.targetOrderId,f.userId),{code:"COMPLETION_REFUND_REQUIRES_REVIEW"});
 });
 test("repository: reservation pins the source, cannot be reused, remains after unknown timeout, and consumes once",async()=>{
   const f=fixture(),q=(await applyDigitalCompletions(f.tx,f.userId,[f.album],new Set([f.trackId])))[0];f.target.completionSnapshot=q.completion;

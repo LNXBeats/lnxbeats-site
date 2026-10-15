@@ -10,6 +10,13 @@ test("album ownership requires an actual album acquisition, not twelve separatel
   assert.equal(digitalOwnsExactAlbum(album,singles),false);const sources=album.tracks.map(t=>({trackId:t.trackId,masterId:t.masterId,sourceLineId:randomUUID(),paidCents:15,refundedCents:0,availableCents:15,creditCents:15,proofHash:"a".repeat(64)}));
   assert.equal(completeDigitalAlbum(album,new Set(album.tracks.map(t=>t.trackId)),sources).priceCents,810);});
 test("album ownership recognizes the exact paid edition with every right active, including retained price-reduction rights",()=>{for(const status of ["PAID","PARTIALLY_REFUNDED","REFUNDED"]){const line=acquired();line.order.status=status;assert.equal(digitalOwnsExactAlbum(album,[line]),true);}});
+test("album price changes and editorial reordering do not sell the already acquired exact contents twice",()=>{
+  const line=acquired();assert.equal(digitalOwnsExactAlbum({...album,priceCents:1500,version:8,tracks:[...album.tracks].reverse()},[line]),true);
+});
+test("album content additions or removals are not silently treated as the previously acquired edition",()=>{
+  const line=acquired();assert.equal(digitalOwnsExactAlbum({...album,tracks:album.tracks.slice(1)},[line]),false);
+  assert.equal(digitalOwnsExactAlbum({...album,tracks:[...album.tracks,{trackId:randomUUID(),masterId:randomUUID(),position:13,title:"New track"}]},[line]),false);
+});
 test("different album, master replacement, missing/revoked rights and disputed purchase do not prove this album owned",()=>{for(const variant of ["offer","master","missing","revoked","disputed"]){const line=acquired();
   if(variant==="offer")line.offerId=randomUUID();if(variant==="master")line.trackSnapshot=[{...album.tracks[0],masterId:randomUUID()},...album.tracks.slice(1)];
   if(variant==="missing")line.entitlements.pop();if(variant==="revoked")line.entitlements[0].status="REVOKED";if(variant==="disputed")line.order.status="DISPUTED";

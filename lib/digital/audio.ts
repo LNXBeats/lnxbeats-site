@@ -4,8 +4,11 @@ import { promisify } from "node:util";
 import { catalogFfmpegPath } from "@/lib/catalog/ffmpeg";
 import { DigitalError, previewWindow } from "./domain";
 import { DIGITAL_WORK_LIMITS } from "./work-slots";
+import { inspectDigitalWav } from "./wav-validation";
+import { inspectDigitalMp3 } from "./mp3-validation";
+import { DIGITAL_MP3_ENCODER_VERSION } from "./formats";
 const exec = promisify(execFile);
-export const DIGITAL_MP3_ENCODER_VERSION = "ffmpeg-libmp3lame-cbr-v1";
+export { DIGITAL_MP3_ENCODER_VERSION } from "./formats";
 export const DIGITAL_MP3_LIMIT_BYTES = 96 * 1024 * 1024;
 export function digitalMp3Bitrate(value = process.env.DCN_MP3_BITRATE_KBPS) {
   const bitrate = value === undefined || value === "" ? 320 : Number(value);
@@ -21,15 +24,15 @@ async function run(args: string[], signal: AbortSignal, timeoutMs: number, parse
     const abort = () => { failure = new DigitalError("LEASE_LOST"); child.kill("SIGKILL"); }; signal.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(() => { failure = new DigitalError("FFMPEG_TIMEOUT"); child.kill("SIGKILL"); }, timeoutMs);
     const monitor = setInterval(() => { if (sampling || !child.pid) return; sampling = true;
-      void exec("ps", ["-o", "rss=", "-p", String(child.pid)], { timeout: 1000, maxBuffer: 1024 }).then(r => {
+      void Promise.resolve().then(() => exec("ps", ["-o", "rss=", "-p", String(child.pid)], { timeout: 1000, maxBuffer: 1024 })).then(r => {
         const rss=Number(r.stdout.trim())*1024;if(stats&&Number.isFinite(rss)&&rss>0){stats.samples++;stats.rssPeak=Math.max(stats.rssPeak,rss);}
         if (rss > DIGITAL_WORK_LIMITS.ffmpegRssBytes || process.memoryUsage().rss > DIGITAL_WORK_LIMITS.nodeRssBytes) { failure = new DigitalError("WORKER_MEMORY_LIMIT"); child.kill("SIGKILL"); }
-      }).catch(() => undefined).finally(() => { sampling = false; });
+      }).catch(() => { if (child.exitCode === null && child.signalCode === null) { failure = new DigitalError("WORKER_MONITOR_UNAVAILABLE"); child.kill("SIGKILL"); } }).finally(() => { sampling = false; });
     }, 25);
     child.stderr.on("data", chunk => { if (stderr.length < 65536) stderr += String(chunk).slice(0, 65536 - stderr.length); });
     child.once("error", () => { failure = new DigitalError("FFMPEG_UNAVAILABLE"); });
     child.once("close", code => { clearTimeout(timeout); clearInterval(monitor); signal.removeEventListener("abort", abort);
-      if (failure) reject(failure); else if (code !== 0 && !parseOnly) reject(new DigitalError("INVALID_AUDIO")); else resolve(stderr); });
+      if (failure) reject(failure); else if (code !== 0 && (!parseOnly || code !== 1 || !/At least one output file must be specified/.test(stderr))) reject(new DigitalError("INVALID_AUDIO")); else resolve(stderr); });
   });
 }
 function duration(stderr: string) {
@@ -39,13 +42,44 @@ function duration(stderr: string) {
   if (ms < 1 || ms > DIGITAL_WORK_LIMITS.durationMs) throw new DigitalError("AUDIO_DURATION_LIMIT");
   return ms;
 }
+/** Fail on decoder errors even when FFmpeg would otherwise recover and exit zero. */
+async function strictDecode(source: string, signal: AbortSignal, stats: { rssPeak: number; samples: number }) {
+  const result = await run(["-v", "error", "-xerror", "-err_detect", "explode", "-i", source, "-map", "0:a:0", "-vn", "-sn", "-dn", "-threads", "1", "-progress", "pipe:2", "-nostats", "-f", "null", "-"], signal, 180000, false, stats);
+  const times = Array.from(result.matchAll(/^out_time_us=(\d+)$/gm), match => Number(match[1]));
+  const durationMs = Math.round((times.at(-1) ?? 0) / 1000);
+  if (!Number.isSafeInteger(durationMs) || durationMs < 1 || !/^progress=end$/m.test(result)
+    || result.split(/\r?\n/).some(line => line.trim() && !/^[a-zA-Z0-9_]+=/.test(line))) throw new DigitalError("INVALID_AUDIO");
+  return durationMs;
+}
+function assertDecodedDuration(decodedMs: number, declaredMs: number, toleranceMs = 100) {
+  if (Math.abs(decodedMs - declaredMs) > toleranceMs) throw new DigitalError("AUDIO_DURATION_MISMATCH");
+}
+/** Public previews and private MP3 renditions both require a genuine MPEG audio stream. */
+export async function validateDigitalMp3(source: string, signal: AbortSignal, expected?: { durationMs: number; bitrateKbps?: number }, stats = { rssPeak: 0, samples: 0 }) {
+  const structure = await inspectDigitalMp3(source, signal);
+  if (expected && structure.xingFrames === null) throw new DigitalError("MP3_RENDITION_INTEGRITY");
+  const probe = await run(["-i", source], signal, 15000, true, stats), durationMs = duration(probe);
+  const streams = Array.from(probe.matchAll(/Stream #\d+:\d+(?:\[[^\]]+\])?[^\n]*: (Audio|Video|Subtitle|Data):/g));
+  const bitrateKbps = Number(probe.match(/Audio:\s*mp3[^\n]*,\s*(\d+) kb\/s/)?.[1]);
+  if (!/Input #0, mp3,/.test(probe) || !/Audio:\s*mp3/.test(probe) || streams.length !== 1 || streams[0]?.[1] !== "Audio"
+    || !Number.isFinite(bitrateKbps) || (expected?.bitrateKbps !== undefined && (bitrateKbps !== expected.bitrateKbps
+      || structure.bitrates.some(bitrate => bitrate !== expected.bitrateKbps)))) throw new DigitalError("MP3_RENDITION_INTEGRITY");
+  const decodedDurationMs = await strictDecode(source, signal, stats);
+  assertDecodedDuration(decodedDurationMs, durationMs);
+  if (expected) assertDecodedDuration(decodedDurationMs, expected.durationMs);
+  return { durationMs, decodedDurationMs, bitrateKbps, codec: "mp3" as const, probe: "FFMPEG_STRICT_COMPLETE_DECODE" as const };
+}
 export async function validateDigitalAudio(source: string, output: string, offsetMs: number, signal: AbortSignal) {
   const stats={rssPeak:0,samples:0};
-  const durationMs = duration(await run(["-i", source], signal, 15000, true,stats));
-  await run(["-v", "error", "-i", source, "-map", "0:a:0", "-vn", "-sn", "-dn", "-threads", "1", "-f", "null", "-"], signal, 180000,false,stats);
+  if (signal.aborted) throw new DigitalError("LEASE_LOST");
+  const wav = await inspectDigitalWav(source), sourceProbe = await run(["-i", source], signal, 15000, true,stats);
+  if (!/Input #0, wav,/.test(sourceProbe) || !/Audio:\s*pcm_(?:s|u|f)\w*/.test(sourceProbe)) throw new DigitalError("WAV_SOURCE_REQUIRED");
+  const durationMs = wav.durationMs;
+  assertDecodedDuration(duration(sourceProbe), durationMs);
+  assertDecodedDuration(await strictDecode(source, signal, stats), durationMs);
   const window = previewWindow(durationMs, offsetMs);
   await run(["-loglevel", "error", "-i", source, "-ss", (window.startMs / 1000).toFixed(3), "-t", (window.durationMs / 1000).toFixed(3), "-map", "0:a:0", "-vn", "-sn", "-dn", "-map_metadata", "-1", "-map_chapters", "-1", "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "192k", "-threads", "1", "-fs", "3145728", "-id3v2_version", "0", "-write_id3v1", "0", "-write_xing", "1", "-y", output], signal, 120000,false,stats);
-  const previewDurationMs = duration(await run(["-i", output], signal, 15000, true,stats));
+  const previewDurationMs = (await validateDigitalMp3(output, signal, { durationMs: window.durationMs, bitrateKbps: 192 }, stats)).durationMs;
   if (previewDurationMs > 60000) throw new DigitalError("INVALID_PREVIEW_DURATION");
   return { durationMs, previewDurationMs,ffmpegRssPeak:stats.samples?stats.rssPeak:"NOT_MEASURED",ffmpegSamples:stats.samples };
 }
@@ -55,13 +89,12 @@ export async function generateDigitalMp3(source: string, output: string, sourceD
   const bitrateKbps = digitalMp3Bitrate(), stats = { rssPeak: 0, samples: 0 };
   const sourceProbe = await run(["-i", source], signal, 15000, true, stats);
   if (!/Audio:\s*pcm_(?:s|u|f)\w*/.test(sourceProbe) || !/Input #0, wav,/.test(sourceProbe)) throw new DigitalError("WAV_SOURCE_REQUIRED");
+  const wav = await inspectDigitalWav(source);
+  assertDecodedDuration(wav.durationMs, sourceDurationMs, 1);
+  assertDecodedDuration(await strictDecode(source, signal, stats), wav.durationMs);
   await run(["-loglevel", "error", "-i", source, "-map", "0:a:0", "-vn", "-sn", "-dn", "-map_metadata", "-1", "-map_chapters", "-1",
     "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", `${bitrateKbps}k`, "-threads", "1", "-fs", String(DIGITAL_MP3_LIMIT_BYTES),
     "-id3v2_version", "0", "-write_id3v1", "0", "-write_xing", "1", "-y", output], signal, 180000, false, stats);
-  const probe = await run(["-i", output], signal, 15000, true, stats), durationMs = duration(probe);
-  const audioBitrate = Number(probe.match(/Audio:\s*mp3[^\n]*,\s*(\d+) kb\/s/)?.[1]);
-  if (!/Input #0, mp3,/.test(probe) || !/Audio:\s*mp3/.test(probe) || audioBitrate !== bitrateKbps
-    || Math.abs(durationMs - sourceDurationMs) > 100) throw new DigitalError("MP3_RENDITION_INTEGRITY");
-  await run(["-v", "error", "-i", output, "-map", "0:a:0", "-vn", "-sn", "-dn", "-f", "null", "-"], signal, 180000, false, stats);
-  return { durationMs, bitrateKbps, encoderVersion: DIGITAL_MP3_ENCODER_VERSION, codec: "mp3", probe: "FFMPEG_BOUNDED_DECODE_PROBE", ffmpegRssPeak: stats.samples ? stats.rssPeak : "NOT_MEASURED", ffmpegSamples: stats.samples };
+  const validated = await validateDigitalMp3(output, signal, { durationMs: sourceDurationMs, bitrateKbps }, stats);
+  return { ...validated, bitrateKbps, encoderVersion: DIGITAL_MP3_ENCODER_VERSION, ffmpegRssPeak: stats.samples ? stats.rssPeak : "NOT_MEASURED", ffmpegSamples: stats.samples };
 }
