@@ -1,0 +1,67 @@
+{
+  "environment": "REAL_LOCAL_POSTGRESQL_COPY_NON_OWNER_ROLE",
+  "database": "lnx_dcn_final_paths_test_20261015",
+  "role": "dcn_runtime_a",
+  "checks": [
+    {
+      "name": "unsafe_non_utc_transaction_refused_without_configuration_bypass",
+      "status": "PASS"
+    },
+    {
+      "name": "declaration_without_review_cannot_pay",
+      "status": "PASS"
+    },
+    {
+      "name": "fresh_non_owner_admin_review_is_bound_but_live_stays_closed",
+      "status": "PASS"
+    },
+    {
+      "name": "address_country_frozen_and_retry_cannot_switch_country",
+      "status": "PASS"
+    },
+    {
+      "name": "new_declaration_invalidates_previous_review_and_snapshot",
+      "status": "PASS"
+    },
+    {
+      "name": "native_sql_receipt_epoch_matches_snapshot_and_prisma_utc",
+      "status": "PASS"
+    },
+    {
+      "name": "matched_request_and_duplicate_are_recorded_once_without_decision",
+      "status": "PASS"
+    },
+    {
+      "name": "durable_receipt_roundtrips_real_jsonb_with_content_date_time_and_hash",
+      "status": "PASS"
+    },
+    {
+      "name": "acknowledgement_queue_captured_locally_never_sent",
+      "status": "PASS"
+    },
+    {
+      "name": "human_review_idempotence_survives_jsonb_no_finance_called",
+      "status": "PASS"
+    },
+    {
+      "name": "withdrawal_conformity_and_goodwill_are_distinct_requests",
+      "status": "PASS"
+    },
+    {
+      "name": "requests_do_not_refund_revoke_access_or_rewrite_billing",
+      "status": "PASS"
+    }
+  ],
+  "residenceProof": "SYNTHETIC_ADMIN_REVIEW_NOT_REAL_CUSTOMER_OR_FISCAL_APPROVAL",
+  "providerCalls": 0,
+  "realPayments": 0,
+  "emailsSent": 0,
+  "createdFixtures": {
+    "users": 2,
+    "orders": 1,
+    "consumerRequests": 3
+  },
+  "receiptBytes": 963,
+  "receiptDownloadSha256": "f536a75003c59bd2335d1ea9744a64449054dc4a11c17ec958bac8e877934c31",
+  "historicalFinancialRowsUnchanged": true
+}

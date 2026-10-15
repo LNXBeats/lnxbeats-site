@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "method": "Real Codex in-app browser UI + actual downloaded TXT + independent native SQL epoch / JSON snapshot / Prisma UTC crosscheck",
+  "environment": "LOCAL_ONLY_SYNTHETIC_UNMATCHED_REQUEST",
+  "checks": [
+    "digital_default_selection",
+    "review_before_confirmation",
+    "modify_preserves_form",
+    "explicit_confirmation",
+    "content_date_time_receipt",
+    "actual_txt_download",
+    "no_console_error_or_warning",
+    "unmatched_remains_pending",
+    "single_durable_outbox_job_not_sent",
+    "native_sql_epoch_matches_snapshot"
+  ],
+  "receiptDownloadSha256": "fb6692ab219580f0467769833eff4924d99ea0e633110c9ab19291eacd3e8f50",
+  "receiptBytes": 972,
+  "requestMatched": false,
+  "automaticRefund": false,
+  "accessRevocation": false,
+  "emailsSent": 0,
+  "physicalSafariTest": false,
+  "initialBeforeUtcReceiptPreserved": true
+}

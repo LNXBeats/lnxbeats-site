@@ -19,6 +19,7 @@ export const DIGITAL_UPDATE_COLUMNS={
   digital_archives:["status","storageKey","storageBackend","storageProvider","sizeBytes","checksum","leaseToken","leaseUntil","attempts","errorCode"],
   digital_completion_credits:["status","updatedAt"],
   digital_country_tax_rules:[],
+  consumer_withdrawal_requests:["publicReceiptTokenHash","status","eligibilityReview","reviewedAt","reviewedByUserId","reviewReason","acknowledgementStatus","acknowledgementSentAt","updatedAt"],
 } as const;
 // Tax/legal approvals are provisioned only by an owner-reviewed change. The
 // application can read their versions, never approve or overwrite a country.

@@ -1,0 +1,433 @@
+{
+  "status": "PASS",
+  "connectionReadOnly": true,
+  "canaryTables": 106,
+  "canaries": [
+    {
+      "table": "admin_cleanup_audit_events",
+      "result": "PASS"
+    },
+    {
+      "table": "admin_record_archives",
+      "result": "PASS"
+    },
+    {
+      "table": "assets",
+      "result": "PASS"
+    },
+    {
+      "table": "auth_accounts",
+      "result": "PASS"
+    },
+    {
+      "table": "auth_rate_limits",
+      "result": "PASS"
+    },
+    {
+      "table": "auth_registration_attempts",
+      "result": "PASS"
+    },
+    {
+      "table": "auth_sessions",
+      "result": "PASS"
+    },
+    {
+      "table": "auth_verifications",
+      "result": "PASS"
+    },
+    {
+      "table": "billing_audit_events",
+      "result": "PASS"
+    },
+    {
+      "table": "commercial_licenses",
+      "result": "PASS"
+    },
+    {
+      "table": "confidence_annotations",
+      "result": "PASS"
+    },
+    {
+      "table": "consumer_withdrawal_requests",
+      "result": "PASS"
+    },
+    {
+      "table": "contract_acceptances",
+      "result": "PASS"
+    },
+    {
+      "table": "contract_documents",
+      "result": "PASS"
+    },
+    {
+      "table": "contract_party_snapshots",
+      "result": "PASS"
+    },
+    {
+      "table": "contract_templates",
+      "result": "PASS"
+    },
+    {
+      "table": "creation_assets",
+      "result": "PASS"
+    },
+    {
+      "table": "creation_collaborator_links",
+      "result": "PASS"
+    },
+    {
+      "table": "creation_collaborators",
+      "result": "PASS"
+    },
+    {
+      "table": "creation_external_links",
+      "result": "PASS"
+    },
+    {
+      "table": "creation_media_upload_sessions",
+      "result": "PASS"
+    },
+    {
+      "table": "creations",
+      "result": "PASS"
+    },
+    {
+      "table": "credit_notes",
+      "result": "PASS"
+    },
+    {
+      "table": "credits",
+      "result": "PASS"
+    },
+    {
+      "table": "customers",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_archives",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_cart_lines",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_carts",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_completion_credits",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_country_tax_rules",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_disputes",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_documents",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_download_tickets",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_entitlements",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_events",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_fulfillments",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_inbox",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_masters",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_notifications",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_offers",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_order_lines",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_orders",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_payment_attempts",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_refunds",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_uploads",
+      "result": "PASS"
+    },
+    {
+      "table": "digital_work_slots",
+      "result": "PASS"
+    },
+    {
+      "table": "external_shop_product_audit_events",
+      "result": "PASS"
+    },
+    {
+      "table": "external_shop_products",
+      "result": "PASS"
+    },
+    {
+      "table": "favorites",
+      "result": "PASS"
+    },
+    {
+      "table": "invoices",
+      "result": "PASS"
+    },
+    {
+      "table": "legal_document_versions",
+      "result": "PASS"
+    },
+    {
+      "table": "music_pricing_activations",
+      "result": "PASS"
+    },
+    {
+      "table": "music_pricing_configurations",
+      "result": "PASS"
+    },
+    {
+      "table": "music_pricing_versions",
+      "result": "PASS"
+    },
+    {
+      "table": "notification_events",
+      "result": "PASS"
+    },
+    {
+      "table": "notification_suppressions",
+      "result": "PASS"
+    },
+    {
+      "table": "order_assets",
+      "result": "PASS"
+    },
+    {
+      "table": "order_current_view_visibility_events",
+      "result": "PASS"
+    },
+    {
+      "table": "order_delivery_upload_sessions",
+      "result": "PASS"
+    },
+    {
+      "table": "order_events",
+      "result": "PASS"
+    },
+    {
+      "table": "order_notifications",
+      "result": "PASS"
+    },
+    {
+      "table": "orders",
+      "result": "PASS"
+    },
+    {
+      "table": "packaging_profiles",
+      "result": "PASS"
+    },
+    {
+      "table": "payment_audit_events",
+      "result": "PASS"
+    },
+    {
+      "table": "payment_incidents",
+      "result": "PASS"
+    },
+    {
+      "table": "payments",
+      "result": "PASS"
+    },
+    {
+      "table": "platform_links",
+      "result": "PASS"
+    },
+    {
+      "table": "product_assets",
+      "result": "PASS"
+    },
+    {
+      "table": "product_audit_events",
+      "result": "PASS"
+    },
+    {
+      "table": "product_stock_adjustments",
+      "result": "PASS"
+    },
+    {
+      "table": "products",
+      "result": "PASS"
+    },
+    {
+      "table": "project_assets",
+      "result": "PASS"
+    },
+    {
+      "table": "projects",
+      "result": "PASS"
+    },
+    {
+      "table": "provider_event_technical_reviews",
+      "result": "PASS"
+    },
+    {
+      "table": "provider_events",
+      "result": "PASS"
+    },
+    {
+      "table": "refund_attempts",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_contributions",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_grants",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_licenses",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_messages",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_payment_winners",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_request_events",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_requests",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_split_proposals",
+      "result": "PASS"
+    },
+    {
+      "table": "rights_withdrawal_requests",
+      "result": "PASS"
+    },
+    {
+      "table": "shipping_rate_tiers",
+      "result": "PASS"
+    },
+    {
+      "table": "shipping_rate_versions",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_maintenance_runs",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_order_customer_requests",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_order_events",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_order_items",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_order_lifecycle_events",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_orders",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_readiness_alerts",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_return_audit_events",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_return_evidence",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_return_items",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_return_requests",
+      "result": "PASS"
+    },
+    {
+      "table": "shop_shipping_provider_attempts",
+      "result": "PASS"
+    },
+    {
+      "table": "stock_reservations",
+      "result": "PASS"
+    },
+    {
+      "table": "support_contribution_attempts",
+      "result": "PASS"
+    },
+    {
+      "table": "support_contribution_events",
+      "result": "PASS"
+    },
+    {
+      "table": "support_contributions",
+      "result": "PASS"
+    },
+    {
+      "table": "support_notifications",
+      "result": "PASS"
+    },
+    {
+      "table": "tracks",
+      "result": "PASS"
+    },
+    {
+      "table": "users",
+      "result": "PASS"
+    }
+  ],
+  "sourceMutation": false,
+  "productionAccess": false
+}

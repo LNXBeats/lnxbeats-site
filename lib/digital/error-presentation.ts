@@ -1,5 +1,6 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
+  if (code === "DIGITAL_DATABASE_TIMEZONE_UNSAFE") return "Le parcours numérique est temporairement indisponible : la configuration d’horodatage doit être vérifiée. Aucune nouvelle opération n’a été enregistrée par cette action.";
   if (ownedTitles.length) return `Déjà acquis : ${ownedTitles.join(" · ")}. Ce panier ne permet pas un complément automatique sûr. Vos achats restent dans Ma musique ; aucun crédit n’est appliqué sans vérification.`;
   if(code.startsWith("FRANCE_"))return "L’achat numérique est préparé pour les particuliers résidant en France métropolitaine, Corse comprise. Vos informations de résidence ou leur vérification serveur sont absentes, insuffisantes ou contradictoires. Aucun nouveau paiement n’a été lancé ; vos acquisitions existantes restent conservées.";
   if(code.startsWith("RIGHTS_")||code.startsWith("INVALID_RIGHTS_"))return "La revue des droits et autorisations du master est absente, incomplète ou à vérifier. Aucune nouvelle vente ni première fourniture ne peut être autorisée sur cette seule action. L’Admin doit consulter les preuves privées et l’historique ; aucun document confidentiel n’est publié.";

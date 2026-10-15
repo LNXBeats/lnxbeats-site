@@ -22,10 +22,12 @@ export async function captureDigitalEmail(message: DigitalMail): Promise<Digital
     if (await readFile(path.join(root, `${id}.json`), "utf8") !== record) throw new DigitalError("MAIL_IDEMPOTENCY_CONFLICT"); }
   return { id, evidence: "CAPTURED_QA" };
 }
-export async function processDigitalNotifications(limit = 10, sender = captureDigitalEmail, orderId?:string) {
+export async function processDigitalNotifications(limit = 10, sender = captureDigitalEmail, orderId?:string, withdrawalRequestId?:string) {
   requireDigitalEnvironment(); const result = { captured: 0, sent: 0, failed: 0 };
   if(orderId)assertDigitalUuid(orderId);
-  const rows = await prisma.digitalNotification.findMany({ where: { ...(orderId?{orderId}:{}), availableAt: { lte: new Date() }, OR: [
+  if(withdrawalRequestId)assertDigitalUuid(withdrawalRequestId);
+  if(orderId && withdrawalRequestId)throw new DigitalError("INVALID_NOTIFICATION_SCOPE");
+  const rows = await prisma.digitalNotification.findMany({ where: { ...(orderId?{orderId}:{}), ...(withdrawalRequestId?{withdrawalRequestId}:{}), availableAt: { lte: new Date() }, OR: [
     { status: { in: ["PENDING", "RETRY"] } }, { status: "PROCESSING", leaseUntil: { lte: new Date() } },
   ] }, orderBy: { createdAt: "asc" }, take: Math.min(limit, 25) });
   for (const row of rows) {
@@ -41,6 +43,11 @@ export async function processDigitalNotifications(limit = 10, sender = captureDi
       const r = await sender({ id: row.id, recipient: row.recipient, businessKey: row.businessKey, template: row.template });
       const c = await prisma.digitalNotification.updateMany({ where: { id: row.id, status: "PROCESSING", leaseToken, leaseUntil: { gt: new Date() } }, data: {
         status: r.evidence, transportId: r.id, ...(r.evidence === "CAPTURED_QA" ? { capturedAt: new Date() } : { sentAt: new Date() }), leaseToken: null, leaseUntil: null } });
+      // A QA file is never a sent acknowledgement. Notification evidence remains
+      // authoritative if a worker stops before this optional status projection.
+      if (c.count && row.withdrawalRequestId && r.evidence === "SENT") await prisma.consumerWithdrawalRequest.updateMany({
+        where: { id: row.withdrawalRequestId, acknowledgementSentAt: null }, data: { acknowledgementStatus: "SENT", acknowledgementSentAt: new Date() },
+      });
       if (c.count) { if (r.evidence === "CAPTURED_QA") result.captured++; else result.sent++; }
     } catch { await prisma.digitalNotification.updateMany({ where: { id: row.id, status: "PROCESSING", leaseToken }, data: { status: row.attempts + 1 >= 5 ? "REQUIRES_REVIEW" : "RETRY", availableAt: new Date(Date.now() + 60000), leaseToken: null, leaseUntil: null } }); result.failed++; }
   }

@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "environment": "NEW_LOCAL_QA_PROFILE_ONLY",
+  "previousTimezone": "Europe/Paris",
+  "newSessionTimezone": "UTC",
+  "profilePermissions": "0600",
+  "databaseGlobalSettingChanged": false,
+  "sourceProfileChanged": false,
+  "historicalRowsChanged": false,
+  "initialSyntheticReceipt": {
+    "reference": "LNX-RET-2026-1F9CD390D8A0",
+    "sqlAndSnapshotEpochMismatchObserved": true,
+    "preservedUnmodified": true
+  },
+  "cause": "Existing adapter-pg serializes Date as UTC wall time without offset and normalizes timestamptz by stripping server offset; it requires UTC sessions. Local QA inherited a non-UTC server timezone.",
+  "correction": "Explicit UTC connection option for this generated QA copy; new DCN application guard refuses unsafe timezone before writes. No historical timestamp or receipt rewritten.",
+  "productionAccess": false,
+  "providerCalls": 0
+}

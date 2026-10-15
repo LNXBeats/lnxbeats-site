@@ -1,0 +1,778 @@
+TAP version 13
+# Subtest: browser country input accepts evidence only, never server approval flags, modes, policy overrides or provider identity
+ok 1 - browser country input accepts evidence only, never server approval flags, modes, policy overrides or provider identity
+  ---
+  duration_ms: 0.866709
+  type: 'test'
+  ...
+# Subtest: injected QA fixture works only in isolated TEST profile and does not read country policy DB
+ok 2 - injected QA fixture works only in isolated TEST profile and does not read country policy DB
+  ---
+  duration_ms: 1.377625
+  type: 'test'
+  ...
+# Subtest: persisted provider-country=null round-trips and reconciles, instead of creating false country contradiction
+ok 3 - persisted provider-country=null round-trips and reconciles, instead of creating false country contradiction
+  ---
+  duration_ms: 0.437625
+  type: 'test'
+  ...
+# Subtest: non-QA/mismatched merchant cannot reuse a synthetic country policy
+ok 4 - non-QA/mismatched merchant cannot reuse a synthetic country policy
+  ---
+  duration_ms: 1.781375
+  type: 'test'
+  ...
+# Subtest: missing/expired policies refuse initial delivery; null legacy snapshot retained without invented evidence
+ok 5 - missing/expired policies refuse initial delivery; null legacy snapshot retained without invented evidence
+  ---
+  duration_ms: 1.13425
+  type: 'test'
+  ...
+# Subtest: checkout routes never parse browser QA capability; scope is server-derived and same-origin wrapper preserved
+ok 6 - checkout routes never parse browser QA capability; scope is server-derived and same-origin wrapper preserved
+  ---
+  duration_ms: 10.488125
+  type: 'test'
+  ...
+# Subtest: commercial refund: a non-Admin or forged stale Admin actor is refused before refund/audit/gateway writes
+ok 7 - commercial refund: a non-Admin or forged stale Admin actor is refused before refund/audit/gateway writes
+  ---
+  duration_ms: 1.052209
+  type: 'test'
+  ...
+# Subtest: commercial refund: an operator-reviewed request is only a reservation, never an automatic refund, payment or recapture
+ok 8 - commercial refund: an operator-reviewed request is only a reservation, never an automatic refund, payment or recapture
+  ---
+  duration_ms: 0.228625
+  type: 'test'
+  ...
+# Subtest: commercial refund: one request key returns the same reservation and rejects a conflicting amount without a second audit
+ok 9 - commercial refund: one request key returns the same reservation and rejects a conflicting amount without a second audit
+  ---
+  duration_ms: 0.241583
+  type: 'test'
+  ...
+# Subtest: commercial refund: confirmed partial refund creates one credit note/notification, retains rights and original invoice across duplicates
+ok 10 - commercial refund: confirmed partial refund creates one credit note/notification, retains rights and original invoice across duplicates
+  ---
+  duration_ms: 9.001667
+  type: 'test'
+  ...
+# Subtest: commercial refund: confirmed balance resolution adds one unique note, revokes rights and keeps immutable financial history
+ok 11 - commercial refund: confirmed balance resolution adds one unique note, revokes rights and keeps immutable financial history
+  ---
+  duration_ms: 0.883417
+  type: 'test'
+  ...
+# Subtest: commercial refund: timeout leaves review state and later recovery cannot create a second refund blindly
+ok 12 - commercial refund: timeout leaves review state and later recovery cannot create a second refund blindly
+  ---
+  duration_ms: 0.195625
+  type: 'test'
+  ...
+# Subtest: commercial refund: authenticated client refund operation is unavailable and cannot write financial data
+ok 13 - commercial refund: authenticated client refund operation is unavailable and cannot write financial data
+  ---
+  duration_ms: 2.321584
+  type: 'test'
+  ...
+# Subtest: commercial refund: actual Admin HTTP route rejects member, saves only Admin reservation, and cannot execute without external TEST authorization
+ok 14 - commercial refund: actual Admin HTTP route rejects member, saves only Admin reservation, and cannot execute without external TEST authorization
+  ---
+  duration_ms: 0.915667
+  type: 'test'
+  ...
+# Subtest: commercial refund: wrong-origin request cannot reserve or execute a refund
+ok 15 - commercial refund: wrong-origin request cannot reserve or execute a refund
+  ---
+  duration_ms: 0.24225
+  type: 'test'
+  ...
+# Subtest: exact owned edition points to library without proposing a duplicate purchase
+ok 16 - exact owned edition points to library without proposing a duplicate purchase
+  ---
+  duration_ms: 0.466417
+  type: 'test'
+  ...
+# Subtest: completion blockers distinguish a credit calculation from a captured payment
+ok 17 - completion blockers distinguish a credit calculation from a captured payment
+  ---
+  duration_ms: 0.10125
+  type: 'test'
+  ...
+# Subtest: owned title explanation does not restore the obsolete blanket album prohibition
+ok 18 - owned title explanation does not restore the obsolete blanket album prohibition
+  ---
+  duration_ms: 0.053209
+  type: 'test'
+  ...
+# Subtest: new-sale audio failure distinguishes existing acquisitions
+ok 19 - new-sale audio failure distinguishes existing acquisitions
+  ---
+  duration_ms: 0.045417
+  type: 'test'
+  ...
+# Subtest: financial review and unrelated safe public explanations stay fail-closed
+ok 20 - financial review and unrelated safe public explanations stay fail-closed
+  ---
+  duration_ms: 0.052209
+  type: 'test'
+  ...
+# Subtest: a later WON dispute cannot clear a persistent source/account/territory/media incident or revive suspended rights
+ok 21 - a later WON dispute cannot clear a persistent source/account/territory/media incident or revive suspended rights
+  ---
+  duration_ms: 258.434916
+  type: 'test'
+  ...
+# Subtest: France checkout parser accepts only declarations, never browser proof or approval material
+ok 22 - France checkout parser accepts only declarations, never browser proof or approval material
+  ---
+  duration_ms: 0.852291
+  type: 'test'
+  ...
+# Subtest: non-QA pre-payment gate refuses missing declaration, overseas and unverified residence before policy/provider work
+ok 23 - non-QA pre-payment gate refuses missing declaration, overseas and unverified residence before policy/provider work
+  ---
+  duration_ms: 4.335416
+  type: 'test'
+  ...
+# Subtest: server loader replaces JSON actor claims with a fresh authoritative actor and never falls back to a prior review
+ok 24 - server loader replaces JSON actor claims with a fresh authoritative actor and never falls back to a prior review
+  ---
+  duration_ms: 0.634625
+  type: 'test'
+  ...
+# Subtest: independent residence proof alone never opens the prepared France policy or falls back to generic FR
+ok 25 - independent residence proof alone never opens the prepared France policy or falls back to generic FR
+  ---
+  duration_ms: 0.532708
+  type: 'test'
+  ...
+# Subtest: in-memory synthetic approval snapshots only necessary residence binding; current legal/PSP configuration is not activated
+ok 26 - in-memory synthetic approval snapshots only necessary residence binding; current legal/PSP configuration is not activated
+  ---
+  duration_ms: 0.4355
+  type: 'test'
+  ...
+# Subtest: old acquired jurisdiction snapshots are not rewritten or retrofitted with residence proof
+ok 27 - old acquired jurisdiction snapshots are not rewritten or retrofitted with residence proof
+  ---
+  duration_ms: 0.175708
+  type: 'test'
+  ...
+# Subtest: France checks stay before order/provider creation and capture; completed historical downloads do not gain a residency gate
+ok 28 - France checks stay before order/provider creation and capture; completed historical downloads do not gain a residency gate
+  ---
+  duration_ms: 15.129667
+  type: 'test'
+  ...
+# Subtest: provider billing minimises existing response and never invents residence or card origin
+ok 29 - provider billing minimises existing response and never invents residence or card origin
+  ---
+  duration_ms: 0.617125
+  type: 'test'
+  ...
+# Subtest: missing provider fields are unknown, not proof; available disagreements block only V2 new supply
+ok 30 - missing provider fields are unknown, not proof; available disagreements block only V2 new supply
+  ---
+  duration_ms: 1.072833
+  type: 'test'
+  ...
+# Subtest: authenticated Stripe normalisation carries only existing billing country/postal and no extra API call
+ok 31 - authenticated Stripe normalisation carries only existing billing country/postal and no extra API call
+  ---
+  duration_ms: 0.492667
+  type: 'test'
+  ...
+# Subtest: provider inconsistency gates are before entitlement and PayPal capture, not a refund or legacy download rewrite
+ok 32 - provider inconsistency gates are before entitlement and PayPal capture, not a refund or legacy download rewrite
+  ---
+  duration_ms: 4.432
+  type: 'test'
+  ...
+# Subtest: fresh PayPal Orders response carries its existing payer billing country without inventing a shipping address
+ok 33 - fresh PayPal Orders response carries its existing payer billing country without inventing a shipping address
+  ---
+  duration_ms: 0.460792
+  type: 'test'
+  ...
+# Subtest: residence V2 normalizes minimal private address, allows Corsica and rejects overseas/CEDEX/extra identity fields
+ok 34 - residence V2 normalizes minimal private address, allows Corsica and rejects overseas/CEDEX/extra identity fields
+  ---
+  duration_ms: 1.136875
+  type: 'test'
+  ...
+# Subtest: residence V2 cannot turn two declarations or missing billing into independent proof
+ok 35 - residence V2 cannot turn two declarations or missing billing into independent proof
+  ---
+  duration_ms: 2.1515
+  type: 'test'
+  ...
+# Subtest: residence V2 forged, malformed, expired, revoked and stale review proof fails closed
+ok 36 - residence V2 forged, malformed, expired, revoked and stale review proof fails closed
+  ---
+  duration_ms: 0.915541
+  type: 'test'
+  ...
+# Subtest: residence V2 malformed billing context cannot be sealed into a verified review
+ok 37 - residence V2 malformed billing context cannot be sealed into a verified review
+  ---
+  duration_ms: 0.118667
+  type: 'test'
+  ...
+# Subtest: billing context distinguishes absence, locally declared consistency and contradictory territory without fetching a PSP
+ok 38 - billing context distinguishes absence, locally declared consistency and contradictory territory without fetching a PSP
+  ---
+  duration_ms: 0.122666
+  type: 'test'
+  ...
+# Subtest: declaration writer rejects client provenance/actor/approval injection and invalid optimistic keys before writes
+ok 39 - declaration writer rejects client provenance/actor/approval injection and invalid optimistic keys before writes
+  ---
+  duration_ms: 0.33675
+  type: 'test'
+  ...
+# Subtest: declaration writer authenticates current account, uses shared user lock and only appends private events
+ok 40 - declaration writer authenticates current account, uses shared user lock and only appends private events
+  ---
+  duration_ms: 0.480917
+  type: 'test'
+  ...
+# Subtest: declaration writer refuses stale tabs and pending financial engagements without altering historical events
+ok 41 - declaration writer refuses stale tabs and pending financial engagements without altering historical events
+  ---
+  duration_ms: 0.324542
+  type: 'test'
+  ...
+# Subtest: declaration retries preserve effective review and never resurrect a superseded declaration
+ok 42 - declaration retries preserve effective review and never resurrect a superseded declaration
+  ---
+  duration_ms: 1.240125
+  type: 'test'
+  ...
+# Subtest: review writer requires fresh Admin, explicit attestation and an intact owner-bound declaration
+ok 43 - review writer requires fresh Admin, explicit attestation and an intact owner-bound declaration
+  ---
+  duration_ms: 0.540042
+  type: 'test'
+  ...
+# Subtest: manual proportionate review does not require identity uploads and produces only a minimized frozen checkout binding
+ok 44 - manual proportionate review does not require identity uploads and produces only a minimized frozen checkout binding
+  ---
+  duration_ms: 0.653916
+  type: 'test'
+  ...
+# Subtest: contradictory frozen billing requires explicit fresh Admin conflict resolution bound to exact context
+ok 45 - contradictory frozen billing requires explicit fresh Admin conflict resolution bound to exact context
+  ---
+  duration_ms: 0.501291
+  type: 'test'
+  ...
+# Subtest: review retry is append-only/idempotent, latest revocation wins and cannot be hidden by an old key
+ok 46 - review retry is append-only/idempotent, latest revocation wins and cannot be hidden by an old key
+  ---
+  duration_ms: 14.252167
+  type: 'test'
+  ...
+# Subtest: effective owner state never advertises expired review or a disabled reviewer as VERIFIED
+ok 47 - effective owner state never advertises expired review or a disabled reviewer as VERIFIED
+  ---
+  duration_ms: 0.522625
+  type: 'test'
+  ...
+# Subtest: frozen billing IDs are user-scoped and remain stable after first invoice, but modified/missing documents are rejected
+ok 48 - frozen billing IDs are user-scoped and remain stable after first invoice, but modified/missing documents are rejected
+  ---
+  duration_ms: 3.156375
+  type: 'test'
+  ...
+# Subtest: frozen absent billing never silently falls back to later invoices; malformed bindings and changed declarations fail closed
+ok 49 - frozen absent billing never silently falls back to later invoices; malformed bindings and changed declarations fail closed
+  ---
+  duration_ms: 0.596833
+  type: 'test'
+  ...
+# Subtest: billing snapshot integrity failure, foreign document IDs and malformed history cannot become residence proof
+ok 50 - billing snapshot integrity failure, foreign document IDs and malformed history cannot become residence proof
+  ---
+  duration_ms: 0.109791
+  type: 'test'
+  ...
+# Subtest: actual checkout V2 reserves only a reviewed address even in exact local QA and freezes no complete address
+ok 51 - actual checkout V2 reserves only a reviewed address even in exact local QA and freezes no complete address
+  ---
+  duration_ms: 1.595959
+  type: 'test'
+  ...
+# Subtest: actual non-QA checkout stays closed behind the DRAFT legal/fiscal rule despite VERIFIED residence
+ok 52 - actual non-QA checkout stays closed behind the DRAFT legal/fiscal rule despite VERIFIED residence
+  ---
+  duration_ms: 0.401625
+  type: 'test'
+  ...
+# Subtest: actual V2 checkout rejects client country, address and billing changes before policy lookup
+ok 53 - actual V2 checkout rejects client country, address and billing changes before policy lookup
+  ---
+  duration_ms: 0.758125
+  type: 'test'
+  ...
+# Subtest: actual V2 retry and pre-capture acquired checks reject changed or revoked proof, without changing old snapshots
+ok 54 - actual V2 retry and pre-capture acquired checks reject changed or revoked proof, without changing old snapshots
+  ---
+  duration_ms: 1.004417
+  type: 'test'
+  ...
+# Subtest: Historical DCN contract remains verifiable without replacing its text
+ok 55 - Historical DCN contract remains verifiable without replacing its text
+  ---
+  duration_ms: 4.811792
+  type: 'test'
+  ...
+# Subtest: DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval
+ok 56 - DCN confirmation snapshots distinct express requests, terms and timestamp, without legal approval
+  ---
+  duration_ms: 0.149583
+  type: 'test'
+  ...
+# Subtest: DCN rejects absent, rewritten, LIVE or incompletely acknowledged contract snapshot
+ok 57 - DCN rejects absent, rewritten, LIVE or incompletely acknowledged contract snapshot
+  ---
+  duration_ms: 0.160042
+  type: 'test'
+  ...
+# Subtest: DCN CONTRACT_AVAILABLE HTML/text email escaped and account-only; captured != delivered
+ok 58 - DCN CONTRACT_AVAILABLE HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.35725
+  type: 'test'
+  ...
+# Subtest: DCN ACCESS_READY HTML/text email escaped and account-only; captured != delivered
+ok 59 - DCN ACCESS_READY HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.074542
+  type: 'test'
+  ...
+# Subtest: DCN REFUND_CONFIRMED HTML/text email escaped and account-only; captured != delivered
+ok 60 - DCN REFUND_CONFIRMED HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.050833
+  type: 'test'
+  ...
+# Subtest: DCN INCIDENT HTML/text email escaped and account-only; captured != delivered
+ok 61 - DCN INCIDENT HTML/text email escaped and account-only; captured != delivered
+  ---
+  duration_ms: 0.055375
+  type: 'test'
+  ...
+# Subtest: DCN email base refuses credentials, path, query, fragment
+ok 62 - DCN email base refuses credentials, path, query, fragment
+  ---
+  duration_ms: 0.104375
+  type: 'test'
+  ...
+# Subtest: DCN refund targets are cents, unique line IDs and closed input shape
+ok 63 - DCN refund targets are cents, unique line IDs and closed input shape
+  ---
+  duration_ms: 0.509916
+  type: 'test'
+  ...
+# Subtest: DCN Stripe refund accepted/pending is not succeeded; failure/cancellation remain negative
+ok 64 - DCN Stripe refund accepted/pending is not succeeded; failure/cancellation remain negative
+  ---
+  duration_ms: 0.089666
+  type: 'test'
+  ...
+# Subtest: DCN dispute outcome must be conclusive; a warning closure is not automatically won
+ok 65 - DCN dispute outcome must be conclusive; a warning closure is not automatically won
+  ---
+  duration_ms: 0.0705
+  type: 'test'
+  ...
+# Subtest: DCN Range strict, suffix bounded, zero suffix and multi-range rejected
+ok 66 - DCN Range strict, suffix bounded, zero suffix and multi-range rejected
+  ---
+  duration_ms: 0.225792
+  type: 'test'
+  ...
+# Subtest: DCN download filename cannot inject headers/traversal and preserves UTF8 title
+ok 67 - DCN download filename cannot inject headers/traversal and preserves UTF8 title
+  ---
+  duration_ms: 0.120292
+  type: 'test'
+  ...
+# Subtest: DCN ZIP refuses casefold/Unicode-normalized collisions and bounds before opening files
+ok 68 - DCN ZIP refuses casefold/Unicode-normalized collisions and bounds before opening files
+  ---
+  duration_ms: 0.231083
+  type: 'test'
+  ...
+# Subtest: DCN ZIP source verifier rejects truncated, enlarged and corrupt bytes before READY
+ok 69 - DCN ZIP source verifier rejects truncated, enlarged and corrupt bytes before READY
+  ---
+  duration_ms: 13.887541
+  type: 'test'
+  ...
+# Subtest: DCN library never claims an unpaid order paid, or retained price-reduction rights revoked
+ok 70 - DCN library never claims an unpaid order paid, or retained price-reduction rights revoked
+  ---
+  duration_ms: 0.089667
+  type: 'test'
+  ...
+# Subtest: initial delivery: paid/verified/ready private formats grant access only after fresh revalidation
+ok 71 - initial delivery: paid/verified/ready private formats grant access only after fresh revalidation
+  ---
+  duration_ms: 3.625375
+  type: 'test'
+  ...
+# Subtest: initial delivery: rights revoked after paid prevent accessReadyAt and access-ready notification
+ok 72 - initial delivery: rights revoked after paid prevent accessReadyAt and access-ready notification
+  ---
+  duration_ms: 0.560333
+  type: 'test'
+  ...
+# Subtest: initial delivery: changed/missing MP3 or hidden release after payment blocks new access
+ok 73 - initial delivery: changed/missing MP3 or hidden release after payment blocks new access
+  ---
+  duration_ms: 0.607041
+  type: 'test'
+  ...
+# Subtest: initial delivery: policy expired after payment prevents access without rewriting the stored jurisdiction
+ok 74 - initial delivery: policy expired after payment prevents access without rewriting the stored jurisdiction
+  ---
+  duration_ms: 0.331917
+  type: 'test'
+  ...
+# Subtest: initial delivery: lost active/verified account prevents delivery despite old payment proof
+ok 75 - initial delivery: lost active/verified account prevents delivery despite old payment proof
+  ---
+  duration_ms: 0.172125
+  type: 'test'
+  ...
+# Subtest: already delivered: repeated acknowledgment returns before new country/media gates, no rights downgrade or duplicate notification
+ok 76 - already delivered: repeated acknowledgment returns before new country/media gates, no rights downgrade or duplicate notification
+  ---
+  duration_ms: 0.155542
+  type: 'test'
+  ...
+# Subtest: Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+ok 77 - Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+  ---
+  duration_ms: 0.499208
+  type: 'test'
+  ...
+# Subtest: Local route accepts neither browser evidence nor external gateway/merchant fields
+ok 78 - Local route accepts neither browser evidence nor external gateway/merchant fields
+  ---
+  duration_ms: 10.215292
+  type: 'test'
+  ...
+# Subtest: Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+ok 79 - Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+  ---
+  duration_ms: 1.751416
+  type: 'test'
+  ...
+# Subtest: DECLINED v2 reproduces shared-parser rejection but scoped DCN evidence is FAILED, never PAID
+ok 80 - DECLINED v2 reproduces shared-parser rejection but scoped DCN evidence is FAILED, never PAID
+  ---
+  duration_ms: 3.391583
+  type: 'test'
+  ...
+# Subtest: DCN scoped failure validates merchant, amount, currency, Order and custom/reference IDs
+ok 81 - DCN scoped failure validates merchant, amount, currency, Order and custom/reference IDs
+  ---
+  duration_ms: 0.169917
+  type: 'test'
+  ...
+# Subtest: capture omissions, wrong capture amount/currency and contradictory capture metadata fail closed
+ok 82 - capture omissions, wrong capture amount/currency and contradictory capture metadata fail closed
+  ---
+  duration_ms: 0.185416
+  type: 'test'
+  ...
+# Subtest: successful and pending scoped captures retain previous shared validation; no DENIED alias
+ok 83 - successful and pending scoped captures retain previous shared validation; no DENIED alias
+  ---
+  duration_ms: 0.120459
+  type: 'test'
+  ...
+# Subtest: a declined webhook can never reconcile a different capture, paid/pending response or missing evidence
+ok 84 - a declined webhook can never reconcile a different capture, paid/pending response or missing evidence
+  ---
+  duration_ms: 0.109875
+  type: 'test'
+  ...
+# Subtest: DECLINED is persisted, verified by scoped recovery and processed FAILED without fulfillment
+ok 85 - DECLINED is persisted, verified by scoped recovery and processed FAILED without fulfillment
+  ---
+  duration_ms: 246.70625
+  type: 'test'
+  ...
+# Subtest: strict PayPal DECLINED resolves UNKNOWN capture after timeout, without recapturing
+ok 86 - strict PayPal DECLINED resolves UNKNOWN capture after timeout, without recapturing
+  ---
+  duration_ms: 0.215125
+  type: 'test'
+  ...
+# Subtest: shared capture rejection remains UNKNOWN until scoped fresh recovery; a single simulated capture POST
+ok 87 - shared capture rejection remains UNKNOWN until scoped fresh recovery; a single simulated capture POST
+  ---
+  duration_ms: 2.32825
+  type: 'test'
+  ...
+# Subtest: duplicate events and different-event same-capture refusals are idempotent
+ok 88 - duplicate events and different-event same-capture refusals are idempotent
+  ---
+  duration_ms: 0.424375
+  type: 'test'
+  ...
+# Subtest: incomplete declined event or contradictory fresh paid capture remains RETRY, never grants
+ok 89 - incomplete declined event or contradictory fresh paid capture remains RETRY, never grants
+  ---
+  duration_ms: 0.276125
+  type: 'test'
+  ...
+# Subtest: old same-capture DECLINED cannot downgrade PAID/REFUNDED or revoke an acquisition
+ok 90 - old same-capture DECLINED cannot downgrade PAID/REFUNDED or revoke an acquisition
+  ---
+  duration_ms: 0.2295
+  type: 'test'
+  ...
+# Subtest: different capture after paid is a contradiction, never processed as same refusal
+ok 91 - different capture after paid is a contradiction, never processed as same refusal
+  ---
+  duration_ms: 0.155541
+  type: 'test'
+  ...
+# Subtest: a pre-existing financial contradiction is not cleared by later refusal evidence
+ok 92 - a pre-existing financial contradiction is not cleared by later refusal evidence
+  ---
+  duration_ms: 0.092833
+  type: 'test'
+  ...
+# Subtest: late paid after a failed order stays review and cannot resurrect downloads/documents
+ok 93 - late paid after a failed order stays review and cannot resurrect downloads/documents
+  ---
+  duration_ms: 0.11175
+  type: 'test'
+  ...
+# Subtest: account verification lost before capture refuses the financial double before any provider call
+ok 94 - account verification lost before capture refuses the financial double before any provider call
+  ---
+  duration_ms: 0.179875
+  type: 'test'
+  ...
+# Subtest: fresh paid evidence after account verification loss remains durably PAID but order reviews without rights/documents
+ok 95 - fresh paid evidence after account verification loss remains durably PAID but order reviews without rights/documents
+  ---
+  duration_ms: 0.10325
+  type: 'test'
+  ...
+# Subtest: DCN display keeps exact short preview duration and never invents unknown seconds
+ok 96 - DCN display keeps exact short preview duration and never invents unknown seconds
+  ---
+  duration_ms: 0.465083
+  type: 'test'
+  ...
+# Subtest: DCN coordinated pause of pending play ignores only the intentional AbortError, not real playback failures
+ok 97 - DCN coordinated pause of pending play ignores only the intentional AbortError, not real playback failures
+  ---
+  duration_ms: 0.0875
+  type: 'test'
+  ...
+# Subtest: DCN file labels describe only an existing source format, not an invented derived bundle
+ok 98 - DCN file labels describe only an existing source format, not an invented derived bundle
+  ---
+  duration_ms: 0.079792
+  type: 'test'
+  ...
+# Subtest: DCN size labels do not treat absent or unsafe metadata as a valid zero
+ok 99 - DCN size labels do not treat absent or unsafe metadata as a valid zero
+  ---
+  duration_ms: 9.208209
+  type: 'test'
+  ...
+# Subtest: DCN archive preparation/review is never announced as a ready download
+ok 100 - DCN archive preparation/review is never announced as a ready download
+  ---
+  duration_ms: 0.133584
+  type: 'test'
+  ...
+# Subtest: DCN catalog rows reuse the media coordinator with lazy previews and keyboard-labelled controls
+ok 101 - DCN catalog rows reuse the media coordinator with lazy previews and keyboard-labelled controls
+  ---
+  duration_ms: 8.049708
+  type: 'test'
+  ...
+# Subtest: DCN library still gates files by receipt and active rights; acquired snapshot order is retained
+ok 102 - DCN library still gates files by receipt and active rights; acquired snapshot order is retained
+  ---
+  duration_ms: 5.175167
+  type: 'test'
+  ...
+# Subtest: DCN full price-reduction retained rights still prevent a redundant purchase, unlike revoked or suspended rights
+ok 103 - DCN full price-reduction retained rights still prevent a redundant purchase, unlike revoked or suspended rights
+  ---
+  duration_ms: 1.125666
+  type: 'test'
+  ...
+# Subtest: DCN library pagination reaches older acquisitions without a silent 100-order cap or arbitrary client offset
+ok 104 - DCN library pagination reaches older acquisitions without a silent 100-order cap or arbitrary client offset
+  ---
+  duration_ms: 0.791958
+  type: 'test'
+  ...
+# Subtest: public DCN flag fails closed for missing mode or production context
+ok 105 - public DCN flag fails closed for missing mode or production context
+  ---
+  duration_ms: 0.371458
+  type: 'test'
+  ...
+# Subtest: valid TEST signatures/credentials alone never authorize remote webhook verification
+ok 106 - valid TEST signatures/credentials alone never authorize remote webhook verification
+  ---
+  duration_ms: 4.078666
+  type: 'test'
+  ...
+# Subtest: available sandboxes require their own merchant and signature configuration; no LIVE fallback
+ok 107 - available sandboxes require their own merchant and signature configuration; no LIVE fallback
+  ---
+  duration_ms: 0.543333
+  type: 'test'
+  ...
+# Subtest: Checkout metadata belongs only to DCN; physical Orders/Support metadata is not reused
+ok 108 - Checkout metadata belongs only to DCN; physical Orders/Support metadata is not reused
+  ---
+  duration_ms: 0.32425
+  type: 'test'
+  ...
+# Subtest: Stripe session evidence rejects LIVE, wrong domain, reference and currency
+ok 109 - Stripe session evidence rejects LIVE, wrong domain, reference and currency
+  ---
+  duration_ms: 0.162125
+  type: 'test'
+  ...
+# Subtest: dedicated Stripe webhook rejects bad signatures, LIVE and Connect before any account request
+ok 110 - dedicated Stripe webhook rejects bad signatures, LIVE and Connect before any account request
+  ---
+  duration_ms: 0.572208
+  type: 'test'
+  ...
+# Subtest: digital consumer form accepts withdrawal without reason and separates non-conformity/goodwill without arbitrary fields
+ok 111 - digital consumer form accepts withdrawal without reason and separates non-conformity/goodwill without arbitrary fields
+  ---
+  duration_ms: 0.864584
+  type: 'test'
+  ...
+# Subtest: durable receipt survives JSONB key order with versioned canonical hash; historical hashes retain their exact original order
+ok 112 - durable receipt survives JSONB key order with versioned canonical hash; historical hashes retain their exact original order
+  ---
+  duration_ms: 0.410834
+  type: 'test'
+  ...
+# Subtest: public route is login-free but enforces origin, JSON and an actual streamed 8 KiB body limit without enumeration
+ok 113 - public route is login-free but enforces origin, JSON and an actual streamed 8 KiB body limit without enumeration
+  ---
+  duration_ms: 8.631667
+  type: 'test'
+  ...
+# Subtest: submission atomically preserves the original declaration, creates one durable acknowledgement/outbox and retries once
+ok 114 - submission atomically preserves the original declaration, creates one durable acknowledgement/outbox and retries once
+  ---
+  duration_ms: 1.747625
+  type: 'test'
+  ...
+# Subtest: knowing reference/email never grants the original receipt after changing claimant/content; unmatched contracts look identical publicly
+ok 115 - knowing reference/email never grants the original receipt after changing claimant/content; unmatched contracts look identical publicly
+  ---
+  duration_ms: 0.822542
+  type: 'test'
+  ...
+# Subtest: persistent identity rate limit stops the sixth request even when all are idempotent
+ok 116 - persistent identity rate limit stops the sixth request even when all are idempotent
+  ---
+  duration_ms: 0.648958
+  type: 'test'
+  ...
+# Subtest: digital exception is cumulative, informative and never an automatic refusal from two boxes, QA receipt or apparent age
+ok 117 - digital exception is cumulative, informative and never an automatic refusal from two boxes, QA receipt or apparent age
+  ---
+  duration_ms: 0.254083
+  type: 'test'
+  ...
+# Subtest: Admin refreshes database role and refuses arbitrary/short review input before writes
+ok 118 - Admin refreshes database role and refuses arbitrary/short review input before writes
+  ---
+  duration_ms: 0.502
+  type: 'test'
+  ...
+# Subtest: human review writes one audit and no refund/access/order mutation; JSONB-sorted retry is idempotent
+ok 119 - human review writes one audit and no refund/access/order mutation; JSONB-sorted retry is idempotent
+  ---
+  duration_ms: 0.45675
+  type: 'test'
+  ...
+# Subtest: same-millisecond stale concurrent review cannot overwrite latest; identity and unproven digital exception fail closed
+ok 120 - same-millisecond stale concurrent review cannot overwrite latest; identity and unproven digital exception fail closed
+  ---
+  duration_ms: 0.375667
+  type: 'test'
+  ...
+# Subtest: QA notification capture never marks the durable consumer acknowledgement SENT
+ok 121 - QA notification capture never marks the durable consumer acknowledgement SENT
+  ---
+  duration_ms: 0.399375
+  type: 'test'
+  ...
+# Subtest: notification processing can scope only the new withdrawal and refuses combined/invalid scopes before reading jobs
+ok 122 - notification processing can scope only the new withdrawal and refuses combined/invalid scopes before reading jobs
+  ---
+  duration_ms: 0.149958
+  type: 'test'
+  ...
+# Subtest: additive migration and provision preserve durable facts, strict parents and no runtime deletion/DDL
+ok 123 - additive migration and provision preserve durable facts, strict parents and no runtime deletion/DDL
+  ---
+  duration_ms: 0.252208
+  type: 'test'
+  ...
+# Subtest: withdrawal payload is closed, normalized, allows no reason and requires explicit declaration
+ok 124 - withdrawal payload is closed, normalized, allows no reason and requires explicit declaration
+  ---
+  duration_ms: 1.172
+  type: 'test'
+  ...
+# Subtest: route checks origin, returns a generic response and stores the receipt token only in HttpOnly cookie
+ok 125 - route checks origin, returns a generic response and stores the receipt token only in HttpOnly cookie
+  ---
+  duration_ms: 7.998209
+  type: 'test'
+  ...
+# Subtest: database design is anti-enumeration, duplicate safe and never triggers an automatic refund
+ok 126 - database design is anti-enumeration, duplicate safe and never triggers an automatic refund
+  ---
+  duration_ms: 0.470792
+  type: 'test'
+  ...
+# Subtest: private receipt is noindex, no-store at API level and cannot be fetched by order number
+ok 127 - private receipt is noindex, no-store at API level and cannot be fetched by order number
+  ---
+  duration_ms: 0.177834
+  type: 'test'
+  ...
+# Subtest: the member archive is ownership-scoped and exposes no receipt capability
+ok 128 - the member archive is ownership-scoped and exposes no receipt capability
+  ---
+  duration_ms: 0.198417
+  type: 'test'
+  ...
+1..128
+# tests 128
+# suites 0
+# pass 128
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 598.589208

@@ -5,8 +5,9 @@ import { hostedCheckoutParameters } from "@/lib/payments/stripe-client";
 import { createScopedPaypalGateway, type PaypalWebhookHeaders } from "@/lib/payments/paypal-client";
 import { DigitalError, checkoutProviderUrl, requireDigitalEnvironment, type DigitalPaymentEvidence } from "./domain";
 import { digitalPaypalOrderEvidence } from "./paypal-evidence";
+import {assertDigitalProviderBilling,digitalProviderBilling,digitalPaypalProviderBilling,type DigitalExpectedBilling} from "./france-provider-billing";
 
-export type DigitalProviderOrder = { id: string; totalCents: number; userEmail: string; lines: Array<{ title: string; priceCents: number }> };
+export type DigitalProviderOrder = { id: string; totalCents: number; userEmail: string; lines: Array<{ title: string; priceCents: number }>; expectedBilling?:DigitalExpectedBilling };
 export type DigitalAttemptRef = { id: string; provider: string; providerReference: string | null; idempotencyKey: string };
 export interface DigitalGateway {
   merchantId: string;
@@ -40,7 +41,8 @@ export function stripeDigitalEvidence(session: Stripe.Checkout.Session, eventId:
     || session.client_reference_id !== session.metadata.digitalOrderId || !Number.isSafeInteger(session.amount_total) || session.currency !== "eur") throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
   return { authenticated: true, mode: "TEST", eventId, orderId: session.metadata.digitalOrderId, provider: "STRIPE", providerReference: session.id,
     paymentReference: payment ?? "", merchantId, amountCents: session.amount_total!, currency: "EUR",
-    status: session.status === "complete" && session.payment_status === "paid" ? "PAID" : session.status === "expired" || eventType === "checkout.session.async_payment_failed" ? "FAILED" : "PENDING" };
+    status: session.status === "complete" && session.payment_status === "paid" ? "PAID" : session.status === "expired" || eventType === "checkout.session.async_payment_failed" ? "FAILED" : "PENDING",
+    ...(digitalProviderBilling(session.customer_details?.address)?{billing:digitalProviderBilling(session.customer_details?.address)}:{}) };
 }
 export function createDigitalStripeGateway(): DigitalGateway {
   const { client, merchantId } = stripe();
@@ -79,7 +81,7 @@ export function createDigitalPaypalGateway(): DigitalGateway {
   const { client, merchantId } = paypal();
   const inspect = async (order: DigitalProviderOrder, attempt: DigitalAttemptRef) => {
     if (!attempt.providerReference) return null;
-    const body = await client.inspectOrder!(attempt.providerReference) as { id?: string; status?: string; links?: Array<{ rel: string; href: string }>; purchase_units?: Array<{ payee?: { merchant_id?: string }; reference_id?: string; custom_id?: string; payments?: { captures?: unknown[] } }> };
+    const body = await client.inspectOrder!(attempt.providerReference) as { id?: string; status?: string; payer?:{address?:unknown}; links?: Array<{ rel: string; href: string }>; purchase_units?: Array<{ payee?: { merchant_id?: string }; reference_id?: string; custom_id?: string; payments?: { captures?: unknown[] } }> };
     const unit = body.purchase_units?.[0];
     if (body.id !== attempt.providerReference || unit?.payee?.merchant_id !== merchantId || unit.reference_id !== order.id || unit.custom_id !== attempt.id) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
     return body;
@@ -94,6 +96,7 @@ export function createDigitalPaypalGateway(): DigitalGateway {
       const url = body.links?.find(l => l.rel === "approve" || l.rel === "payer-action")?.href;
       return url ? { checkout: { id: body.id!, url: checkoutProviderUrl(url, "PAYPAL") } } : null; },
     async capture(order, attempt) { const body = await inspect(order, attempt); if (!body || body.status !== "APPROVED") throw new DigitalError("PAYPAL_NOT_APPROVED", 409);
+      assertDigitalProviderBilling(order.expectedBilling,digitalPaypalProviderBilling(body));
       await client.captureOrder(attempt.providerReference!, `${attempt.idempotencyKey}:capture`);
       return digitalPaypalOrderEvidence(await client.inspectOrder!(attempt.providerReference!), order, attempt, merchantId); },
   };

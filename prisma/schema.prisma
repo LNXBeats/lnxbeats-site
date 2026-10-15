@@ -142,23 +142,23 @@ model DigitalCartLine {
 }
 
 model DigitalOrder {
-  id                     String                  @id @default(uuid()) @db.Uuid
-  userId                 String                  @db.Uuid
-  idempotencyKey         String                  @unique @db.Uuid
+  id                     String                      @id @default(uuid()) @db.Uuid
+  userId                 String                      @db.Uuid
+  idempotencyKey         String                      @unique @db.Uuid
   cartRevision           Int
-  mode                   String                  @default("TEST") @db.VarChar(8)
-  status                 String                  @default("PENDING") @db.VarChar(24)
+  mode                   String                      @default("TEST") @db.VarChar(8)
+  status                 String                      @default("PENDING") @db.VarChar(24)
   totalCents             Int
-  currency               String                  @default("EUR") @db.VarChar(3)
-  termsVersion           String                  @db.VarChar(80)
-  termsHash              String                  @db.VarChar(64)
-  earlyDelivery          Boolean                 @default(false)
-  withdrawalAcknowledged Boolean                 @default(false)
+  currency               String                      @default("EUR") @db.VarChar(3)
+  termsVersion           String                      @db.VarChar(80)
+  termsHash              String                      @db.VarChar(64)
+  earlyDelivery          Boolean                     @default(false)
+  withdrawalAcknowledged Boolean                     @default(false)
   contractSnapshot       Json?
-  jurisdictionSnapshot   Json?                   @db.JsonB
-  createdAt              DateTime                @default(now()) @db.Timestamptz(3)
-  updatedAt              DateTime                @updatedAt @db.Timestamptz(3)
-  user                   User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  jurisdictionSnapshot   Json?                       @db.JsonB
+  createdAt              DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                    @updatedAt @db.Timestamptz(3)
+  user                   User                        @relation(fields: [userId], references: [id], onDelete: Restrict)
   lines                  DigitalOrderLine[]
   attempts               DigitalPaymentAttempt[]
   events                 DigitalEvent[]
@@ -168,6 +168,7 @@ model DigitalOrder {
   refunds                DigitalRefund[]
   disputes               DigitalDispute[]
   inbox                  DigitalInbox[]
+  withdrawalRequests     ConsumerWithdrawalRequest[]
 
   @@index([userId, createdAt])
   @@map("digital_orders")
@@ -319,24 +320,26 @@ model DigitalFulfillment {
 }
 
 model DigitalNotification {
-  id             String       @id @default(uuid()) @db.Uuid
-  orderId        String       @db.Uuid
-  businessKey    String       @unique @db.VarChar(255)
-  kind           String       @db.VarChar(30)
-  recipient      String       @db.VarChar(320)
-  template       Json
-  status         String       @default("PENDING") @db.VarChar(24)
-  attempts       Int          @default(0)
-  availableAt    DateTime     @default(now()) @db.Timestamptz(3)
-  firstAttemptAt DateTime?    @db.Timestamptz(3)
-  leaseToken     String?      @db.Uuid
-  leaseUntil     DateTime?    @db.Timestamptz(3)
-  transportId    String?      @db.VarChar(180)
-  capturedAt     DateTime?    @db.Timestamptz(3)
-  sentAt         DateTime?    @db.Timestamptz(3)
-  deliveredAt    DateTime?    @db.Timestamptz(3)
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  order          DigitalOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id                  String                     @id @default(uuid()) @db.Uuid
+  orderId             String?                    @db.Uuid
+  withdrawalRequestId String?                    @db.Uuid
+  businessKey         String                     @unique @db.VarChar(255)
+  kind                String                     @db.VarChar(30)
+  recipient           String                     @db.VarChar(320)
+  template            Json
+  status              String                     @default("PENDING") @db.VarChar(24)
+  attempts            Int                        @default(0)
+  availableAt         DateTime                   @default(now()) @db.Timestamptz(3)
+  firstAttemptAt      DateTime?                  @db.Timestamptz(3)
+  leaseToken          String?                    @db.Uuid
+  leaseUntil          DateTime?                  @db.Timestamptz(3)
+  transportId         String?                    @db.VarChar(180)
+  capturedAt          DateTime?                  @db.Timestamptz(3)
+  sentAt              DateTime?                  @db.Timestamptz(3)
+  deliveredAt         DateTime?                  @db.Timestamptz(3)
+  createdAt           DateTime                   @default(now()) @db.Timestamptz(3)
+  order               DigitalOrder?              @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  withdrawalRequest   ConsumerWithdrawalRequest? @relation(fields: [withdrawalRequestId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@index([status, availableAt], map: "digital_notifications_status_availableat_idx")
   @@map("digital_notifications")
@@ -997,6 +1000,7 @@ enum LegalDocumentStatus {
 enum ConsumerContractType {
   MUSIC_ORDER
   SHOP_ORDER
+  DIGITAL_ORDER
 }
 
 enum ConsumerWithdrawalStatus {
@@ -3093,6 +3097,9 @@ model ConsumerWithdrawalRequest {
   claimedOrderReference     String                                  @db.VarChar(64)
   orderId                   String?                                 @db.Uuid
   shopOrderId               String?                                 @db.Uuid
+  digitalOrderId            String?                                 @db.Uuid
+  requestKind               String                                  @default("WITHDRAWAL") @db.VarChar(20)
+  reviewReason              String?                                 @db.VarChar(2000)
   identityMatch             ConsumerWithdrawalIdentityMatch
   claimantFirstName         String                                  @db.VarChar(100)
   claimantLastName          String                                  @db.VarChar(100)
@@ -3118,6 +3125,8 @@ model ConsumerWithdrawalRequest {
   updatedAt                 DateTime                                @updatedAt @db.Timestamptz(3)
   order                     Order?                                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
   shopOrder                 ShopOrder?                              @relation(fields: [shopOrderId], references: [id], onDelete: Restrict)
+  digitalOrder              DigitalOrder?                           @relation(fields: [digitalOrderId], references: [id], onDelete: Restrict)
+  digitalAcknowledgements   DigitalNotification[]
   reviewedBy                User?                                   @relation("ConsumerWithdrawalReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
   creditNotes               CreditNote[]
   shopReturnRequest         ShopReturnRequest?
@@ -3125,6 +3134,7 @@ model ConsumerWithdrawalRequest {
   @@index([status, receivedAt])
   @@index([orderId, receivedAt])
   @@index([shopOrderId, receivedAt])
+  @@index([digitalOrderId, receivedAt])
   @@index([reviewedByUserId])
   @@map("consumer_withdrawal_requests")
 }

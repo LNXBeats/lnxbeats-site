@@ -1,0 +1,18 @@
+{
+  "environment": "LOCAL_UNIT_REPOSITORY_SESSION_PROVIDER_DOUBLES_NOT_EXTERNAL_RECIPES",
+  "files": [
+    "tests/legal/withdrawal.test.ts",
+    "tests/legal/digital-withdrawal.test.ts",
+    "tests/digital/database-time-policy.test.ts",
+    "tests/digital/france-residence-v2.test.ts",
+    "tests/digital/france-provider-billing.test.ts",
+    "tests/digital/providers.test.ts",
+    "tests/digital/paypal-declined.test.ts",
+    "tests/digital/local-review-security.test.ts"
+  ],
+  "tests": 76,
+  "pass": 76,
+  "fail": 0,
+  "skip": 0,
+  "exitCode": 0
+}

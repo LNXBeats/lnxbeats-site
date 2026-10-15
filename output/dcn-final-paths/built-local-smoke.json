@@ -1,0 +1,63 @@
+{
+  "environment": "BUILT_NEW_LOCAL_POSTGRESQL_COPY_LOOPBACK",
+  "checks": [
+    {
+      "route": "/api/health",
+      "method": "GET",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/album/dcn-consolidation-7b2ebd49-4e0c-42b0-80e6-d17484cce6d5",
+      "method": "GET",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/musique/conditions",
+      "method": "GET",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/retractation?contrat=digital",
+      "method": "GET",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/api/digital/residence",
+      "method": "GET",
+      "status": 401,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/api/admin/digital/consumer-requests",
+      "method": "POST",
+      "status": 401,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/api/admin/digital/residence-reviews",
+      "method": "POST",
+      "status": 401,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/compte/musique",
+      "method": "GET",
+      "status": 307,
+      "result": "PASS",
+      "authenticated": false
+    }
+  ],
+  "providerCalls": 0,
+  "note": "Anonymous Admin/residence APIs refuse and library redirects. Initial smoke used GET on POST-only Admin route (405); harness corrected to actual POST, without changing application. No provider recipe or authenticated Admin browser claim."
+}

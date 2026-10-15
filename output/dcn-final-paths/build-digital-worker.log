@@ -1,0 +1,3 @@
+
+> lnx-studio@0.2.0 dcn:worker:build
+> tsc --project tsconfig.digital-worker.json

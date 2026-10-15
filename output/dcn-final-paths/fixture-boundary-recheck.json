@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "environment": "LOCAL_UNIT_ONLY",
+  "command": "node --conditions=react-server --import tsx --test tests/digital/local-review-security.test.ts",
+  "tests": 4,
+  "pass": 4,
+  "fail": 0,
+  "skip": 0,
+  "reason": "Final test-only mechanical change composes the passwordless local QA URL rather than duplicating a private profile value. Identical test semantics; secret scan has no exception for private profile literals.",
+  "notAddedToCampaignTotal": true,
+  "providerCalls": 0
+}

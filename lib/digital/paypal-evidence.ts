@@ -1,10 +1,11 @@
 import "server-only";
 import { paypalCaptureResponseEvidence, paypalCentsFromAmount } from "@/lib/payments/paypal-client";
 import { DigitalError, type DigitalPaymentEvidence } from "./domain";
+import {digitalPaypalProviderBilling} from "./france-provider-billing";
 
 type Order = { id: string; totalCents: number };
 type Attempt = { id: string; providerReference: string | null };
-type PaypalOrder = { id?: string; status?: string; purchase_units?: Array<{
+type PaypalOrder = { id?: string; status?: string; payer?:{address?:unknown}; purchase_units?: Array<{
   reference_id?: string; custom_id?: string; payee?: { merchant_id?: string };
   amount?: { value?: string; currency_code?: string }; payments?: { captures?: Array<{
     id?: string; status?: string; custom_id?: string; payee?: { merchant_id?: string };
@@ -44,7 +45,8 @@ export function digitalPaypalOrderEvidence(body: unknown, order: Order, attempt:
   if (!capture.evidenceConsistent || capture.paymentId !== attempt.id || !capture.captureId) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
   return { authenticated: true, mode: "TEST", provider: "PAYPAL", orderId: order.id, providerReference: b.id!, paymentReference: capture.captureId,
     merchantId, amountCents: capture.amountCents!, currency: capture.currency!, status: capture.status === "COMPLETED" ? "PAID" : "PENDING",
-    eventId: `paypal-recover:${capture.captureId}:${capture.status}` };
+    eventId: `paypal-recover:${capture.captureId}:${capture.status}`,
+    ...(digitalPaypalProviderBilling(body)?{billing:digitalPaypalProviderBilling(body)}:{}) };
 }
 export function isDigitalPaypalDeclinedEvidence(evidence: DigitalPaymentEvidence) {
   return evidence.provider === "PAYPAL" && evidence.status === "FAILED" && Boolean(evidence.paymentReference)

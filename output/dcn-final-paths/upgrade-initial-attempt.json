@@ -1,0 +1,50 @@
+{
+  "source": "lnx_dcn_consolidation_test",
+  "target": "lnx_dcn_final_paths_test_20261015",
+  "migration": "20261015040000_digital_consumer_withdrawal",
+  "status": "FAIL",
+  "stage": "TARGET_RUNTIME_ACL",
+  "externalProviderCalls": 0,
+  "mediaObjectAccesses": 0,
+  "sourceMutation": false,
+  "historicalDataDeletion": false,
+  "productionMutation": false,
+  "backup": {
+    "freshLocalLogical": "PASS",
+    "sha256": "0d5dc422f0e657539cc96e1b6f17fcc5c9a089655b27017bf00072de1b814464",
+    "encryptedArchive": "/private/tmp/lnx-dcn-final-paths-FvTmTv/source.dump.enc",
+    "encryption": "AES-256-GCM",
+    "keyStoredSeparately": true,
+    "decryptSha256Verified": true
+  },
+  "restore": {
+    "actualIsolatedRestore": "PASS",
+    "restoredCanaryTables": 106,
+    "plaintextRemoved": true
+  },
+  "appliedMigrations": [
+    {
+      "name": "20261015040000_digital_consumer_withdrawal",
+      "sha256": "d1c6e1a2a701433343fbd5b774745080c2178bb31b3f48837efec9027cd1c6d6"
+    }
+  ],
+  "newColumnsExcludedFromHistoricalProjection": [
+    {
+      "table": "consumer_withdrawal_requests",
+      "column": "digitalOrderId"
+    },
+    {
+      "table": "consumer_withdrawal_requests",
+      "column": "requestKind"
+    },
+    {
+      "table": "consumer_withdrawal_requests",
+      "column": "reviewReason"
+    },
+    {
+      "table": "digital_notifications",
+      "column": "withdrawalRequestId"
+    }
+  ],
+  "failureCode": "23514"
+}

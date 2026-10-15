@@ -101,6 +101,7 @@ export function signatureMatches(bytes: Uint8Array, extension: string) {
   return extension === "mp3" && (b.toString("ascii", 0, 3) === "ID3" || b.length > 1 && b[0] === 255 && (b[1] & 224) === 224);
 }
 export type DigitalPaymentEvidence = { eventId: string; orderId: string; provider: "STRIPE" | "PAYPAL"; mode: "TEST";
+  billing?: {countryCode?:string;postalCode?:string};
   providerReference: string; paymentReference: string; merchantId: string; amountCents: number; currency: string;
   status: "PAID" | "PENDING" | "FAILED"; authenticated: boolean };
 export function assertPaymentEvidence(e: DigitalPaymentEvidence, expected: { id: string; totalCents: number; mode: string }, attempt: { provider: string; providerReference: string | null }, merchant: string) {

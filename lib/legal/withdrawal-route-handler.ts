@@ -2,6 +2,7 @@ import "server-only";
 
 import { shouldUseSecureAuthCookies } from "@/lib/auth/environment";
 import { isSameOriginMutation } from "@/lib/auth/origin";
+import { readOrderJson } from "@/lib/orders/request";
 import {
   parseWithdrawalSubmission,
   submitWithdrawalRequest,
@@ -19,7 +20,7 @@ export type WithdrawalRouteDependencies = Readonly<{
 const defaultDependencies: WithdrawalRouteDependencies = { sameOrigin: isSameOriginMutation, submit: submitWithdrawalRequest };
 
 function json(body: object, status: number, cookie?: string) {
-  const headers = new Headers({ "content-type": "application/json", "cache-control": "no-store" });
+  const headers = new Headers({ "content-type": "application/json", "cache-control": "private, no-store", "x-robots-tag": "noindex", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" });
   if (cookie) headers.append("set-cookie", cookie);
   return new Response(JSON.stringify(body), { status, headers });
 }
@@ -35,7 +36,10 @@ export async function handleWithdrawalSubmission(request: Request, dependencies:
   const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
   if (contentType !== "application/json") return json(genericError, 415);
   try {
-    const parsed = parseWithdrawalSubmission(await request.json());
+    let body: unknown;
+    try { body = await readOrderJson(request, 8192); }
+    catch { return json(genericError, 400); }
+    const parsed = parseWithdrawalSubmission(body);
     const result = await dependencies.submit(parsed, clientAddress(request));
     const secure = shouldUseSecureAuthCookies(process.env.NODE_ENV === "production");
     const cookie = [

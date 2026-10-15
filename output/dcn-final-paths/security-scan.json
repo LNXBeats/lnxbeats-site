@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "filesScanned": 87,
+  "matches": 0,
+  "secretsPrinted": false,
+  "method": "All changed allowlisted files + exact private-profile credential values in memory + token/private-key/credentialed-URL patterns",
+  "exception": "Only explicit never-connect mocked DSNs in the two new unit tests; known private values have no exemptions",
+  "limitation": "Targeted local scan, not a dependency or historical audit"
+}

@@ -4,6 +4,7 @@ import { Container } from "@/components/container";
 import { WithdrawalForm } from "@/components/withdrawal-form";
 import { approvedWithdrawalNotice } from "@/data/legal";
 import { publicLegalDocument } from "@/lib/legal/public-document";
+import { digitalEnabled } from "@/lib/digital/domain";
 
 export const metadata: Metadata = {
   title: "Exercer mon droit de rétractation",
@@ -12,8 +13,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/retractation" },
 };
 
-export default function WithdrawalPage() {
+export default async function WithdrawalPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const notice = publicLegalDocument(approvedWithdrawalNotice);
+  const query = await searchParams, digitalAvailable = digitalEnabled();
+  const initialDigitalOrderId = digitalAvailable && query.contrat === "digital" && typeof query.commande === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.commande) ? query.commande.toLowerCase() : undefined;
   return (
     <section className="withdrawal-page">
       <Container className="withdrawal-page__container">
@@ -31,7 +35,7 @@ export default function WithdrawalPage() {
             </section>
           ))}
         </div>
-        <WithdrawalForm />
+        <WithdrawalForm digitalAvailable={digitalAvailable} initialDigital={digitalAvailable && query.contrat === "digital"} initialDigitalOrderId={initialDigitalOrderId} />
       </Container>
     </section>
   );

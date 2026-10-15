@@ -11,17 +11,19 @@ import { enqueueDigitalEmail, prepareDigitalDocuments } from "./documents";
 import { localDigitalReviewCheckoutAllowed } from "./local-review-policy";
 import { assertDigitalPaypalDeclinedRecovery, digitalPaypalDeclinedReference, isDigitalPaypalDeclinedEvidence } from "./paypal-evidence";
 import { applyDigitalCompletions, reserveDigitalCompletion, verifyDigitalCompletions, consumeDigitalCompletions, releaseDigitalCompletions,reviewDependentDigitalCompletions } from "./completion";
-import { reserveDigitalJurisdiction, checkDigitalAcquiredJurisdiction, digitalLocalTerritoryFixtureAllowed, type DigitalCustomerTerritory } from "./checkout-jurisdiction";
+import { reserveDigitalJurisdiction, checkDigitalAcquiredJurisdiction, checkDigitalResidenceRetry, digitalLocalTerritoryFixtureAllowed, type DigitalCustomerTerritory } from "./checkout-jurisdiction";
 import { calculateDigitalTax } from "./jurisdictions";
 import { DIGITAL_MUSIC_TERMS_DRAFT_TEXT } from "./digital-legal";
 import { verifyDigitalPinnedMedia } from "./pinned-media";
 import {DIGITAL_RIGHTS_REVIEW_POLICY} from "./rights-review-policy";
 import {checkDigitalAcquiredRightsReview} from "./rights-review-checkout";
+import {assertDigitalProviderBilling,digitalExpectedBilling} from "./france-provider-billing";
 
 function user(actor: OrderActor) { if (actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("VERIFIED_ACCOUNT_REQUIRED", 403); }
 async function lock(tx: Prisma.TransactionClient, id: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${id}`})) IS NULL AS locked`; }
-function providerOrder(order: { id: string; totalCents: number; user: { email: string }; lines: Array<{ title: string; priceCents: number }> }): DigitalProviderOrder {
-  return { id: order.id, totalCents: order.totalCents, userEmail: order.user.email, lines: order.lines.map(l => ({ title: l.title, priceCents: l.priceCents })) };
+function providerOrder(order: { id: string; totalCents: number; jurisdictionSnapshot?:unknown; user: { email: string }; lines: Array<{ title: string; priceCents: number }> }): DigitalProviderOrder {
+  return { id: order.id, totalCents: order.totalCents, userEmail: order.user.email, lines: order.lines.map(l => ({ title: l.title, priceCents: l.priceCents })),
+    ...(digitalExpectedBilling(order.jurisdictionSnapshot)?{expectedBilling:digitalExpectedBilling(order.jurisdictionSnapshot)}:{}) };
 }
 function presentOrder(order: { id: string; status: string; totalCents: number; mode: string }, attempt?: { status: string; checkoutUrl: string | null } | null) {
   return { orderId: order.id, status: order.status, totalCents: order.totalCents, mode: order.mode,
@@ -47,6 +49,7 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
     const previous = await tx.digitalOrder.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: { user: true, lines: true, attempts: { orderBy: { createdAt: "desc" } } } });
     if (previous) {
       if (previous.userId !== actor.id || previous.cartRevision !== input.revision || previous.attempts[0]?.provider !== input.provider) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);
+      await checkDigitalResidenceRetry(input.jurisdiction,previous.jurisdictionSnapshot,tx,gateway.merchantId,actor.id);
       return { order: previous, attempt: previous.attempts[0], created: false };
     }
     if (await tx.digitalOrder.findFirst({ where: { userId: actor.id, status: { in: ["PENDING", "REQUIRES_REVIEW", "DISPUTED"] } } })) throw new DigitalError("PAYMENT_ALREADY_ENGAGED", 409);
@@ -172,6 +175,7 @@ export async function reconcileDigitalEvidence(e: DigitalPaymentEvidence, mercha
       await tx.digitalEvent.create({data:{orderId:order.id,kind:"ACCOUNT_FULFILLMENT_REQUIRES_REVIEW",details:{reason:"VERIFIED_ACCOUNT_REQUIRED"}}});return{review:true};
     }
     try {await checkDigitalAcquiredJurisdiction(order.jurisdictionSnapshot,tx,merchantId,order.userId);
+      assertDigitalProviderBilling(digitalExpectedBilling(order.jurisdictionSnapshot),e.billing);
       await checkDigitalAcquiredRightsReview(order.contractSnapshot,order.lines,tx);
       await verifyDigitalPinnedMedia(tx,order.lines);
     }catch(error){

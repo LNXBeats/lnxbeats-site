@@ -17,6 +17,7 @@ export function DigitalCartNavigation() {
   }, []);
   return <nav className={styles.nav} aria-label="Votre musique numérique">
     <Link href="/compte/musique">Ma musique</Link>
+    <Link href="/retractation?contrat=digital">Exercer mon droit de rétractation</Link>
     <Link className={styles.cart} href="/musique/panier" aria-label={`Panier musique, ${count} sélection${count > 1 ? "s" : ""}`}><UiIcon name="bag" />Panier musique <span aria-hidden="true">{count}</span></Link>
   </nav>;
 }

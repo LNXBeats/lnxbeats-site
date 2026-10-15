@@ -1,0 +1,466 @@
+TAP version 13
+# Subtest: database time guard checks the actual session read-only and accepts only explicitly UTC zones
+ok 1 - database time guard checks the actual session read-only and accepts only explicitly UTC zones
+  ---
+  duration_ms: 0.697792
+  type: 'test'
+  ...
+# Subtest: database time guard rejects civil/DST zones, offset aliases, malformed or missing state
+ok 2 - database time guard rejects civil/DST zones, offset aliases, malformed or missing state
+  ---
+  duration_ms: 0.4825
+  type: 'test'
+  ...
+# Subtest: database time guard converts a failed session check into a bounded fail-closed error without provider or raw DB details
+ok 3 - database time guard converts a failed session check into a bounded fail-closed error without provider or raw DB details
+  ---
+  duration_ms: 0.101792
+  type: 'test'
+  ...
+# Subtest: provider billing minimises existing response and never invents residence or card origin
+ok 4 - provider billing minimises existing response and never invents residence or card origin
+  ---
+  duration_ms: 1.035959
+  type: 'test'
+  ...
+# Subtest: missing provider fields are unknown, not proof; available disagreements block only V2 new supply
+ok 5 - missing provider fields are unknown, not proof; available disagreements block only V2 new supply
+  ---
+  duration_ms: 0.406541
+  type: 'test'
+  ...
+# Subtest: authenticated Stripe normalisation carries only existing billing country/postal and no extra API call
+ok 6 - authenticated Stripe normalisation carries only existing billing country/postal and no extra API call
+  ---
+  duration_ms: 0.115667
+  type: 'test'
+  ...
+# Subtest: provider inconsistency gates are before entitlement and PayPal capture, not a refund or legacy download rewrite
+ok 7 - provider inconsistency gates are before entitlement and PayPal capture, not a refund or legacy download rewrite
+  ---
+  duration_ms: 3.42875
+  type: 'test'
+  ...
+# Subtest: fresh PayPal Orders response carries its existing payer billing country without inventing a shipping address
+ok 8 - fresh PayPal Orders response carries its existing payer billing country without inventing a shipping address
+  ---
+  duration_ms: 0.603458
+  type: 'test'
+  ...
+# Subtest: residence V2 normalizes minimal private address, allows Corsica and rejects overseas/CEDEX/extra identity fields
+ok 9 - residence V2 normalizes minimal private address, allows Corsica and rejects overseas/CEDEX/extra identity fields
+  ---
+  duration_ms: 1.158666
+  type: 'test'
+  ...
+# Subtest: residence V2 cannot turn two declarations or missing billing into independent proof
+ok 10 - residence V2 cannot turn two declarations or missing billing into independent proof
+  ---
+  duration_ms: 1.56675
+  type: 'test'
+  ...
+# Subtest: residence V2 forged, malformed, expired, revoked and stale review proof fails closed
+ok 11 - residence V2 forged, malformed, expired, revoked and stale review proof fails closed
+  ---
+  duration_ms: 0.953375
+  type: 'test'
+  ...
+# Subtest: residence V2 malformed billing context cannot be sealed into a verified review
+ok 12 - residence V2 malformed billing context cannot be sealed into a verified review
+  ---
+  duration_ms: 0.115542
+  type: 'test'
+  ...
+# Subtest: billing context distinguishes absence, locally declared consistency and contradictory territory without fetching a PSP
+ok 13 - billing context distinguishes absence, locally declared consistency and contradictory territory without fetching a PSP
+  ---
+  duration_ms: 0.1275
+  type: 'test'
+  ...
+# Subtest: declaration writer rejects client provenance/actor/approval injection and invalid optimistic keys before writes
+ok 14 - declaration writer rejects client provenance/actor/approval injection and invalid optimistic keys before writes
+  ---
+  duration_ms: 0.345334
+  type: 'test'
+  ...
+# Subtest: actual residence paths fail closed on a non-UTC session before writing or trusting dated proofs
+ok 15 - actual residence paths fail closed on a non-UTC session before writing or trusting dated proofs
+  ---
+  duration_ms: 1.845167
+  type: 'test'
+  ...
+# Subtest: declaration writer authenticates current account, uses shared user lock and only appends private events
+ok 16 - declaration writer authenticates current account, uses shared user lock and only appends private events
+  ---
+  duration_ms: 0.256125
+  type: 'test'
+  ...
+# Subtest: declaration writer refuses stale tabs and pending financial engagements without altering historical events
+ok 17 - declaration writer refuses stale tabs and pending financial engagements without altering historical events
+  ---
+  duration_ms: 0.289875
+  type: 'test'
+  ...
+# Subtest: declaration retries preserve effective review and never resurrect a superseded declaration
+ok 18 - declaration retries preserve effective review and never resurrect a superseded declaration
+  ---
+  duration_ms: 1.14575
+  type: 'test'
+  ...
+# Subtest: review writer requires fresh Admin, explicit attestation and an intact owner-bound declaration
+ok 19 - review writer requires fresh Admin, explicit attestation and an intact owner-bound declaration
+  ---
+  duration_ms: 0.455291
+  type: 'test'
+  ...
+# Subtest: manual proportionate review does not require identity uploads and produces only a minimized frozen checkout binding
+ok 20 - manual proportionate review does not require identity uploads and produces only a minimized frozen checkout binding
+  ---
+  duration_ms: 0.563667
+  type: 'test'
+  ...
+# Subtest: contradictory frozen billing requires explicit fresh Admin conflict resolution bound to exact context
+ok 21 - contradictory frozen billing requires explicit fresh Admin conflict resolution bound to exact context
+  ---
+  duration_ms: 0.503459
+  type: 'test'
+  ...
+# Subtest: review retry is append-only/idempotent, latest revocation wins and cannot be hidden by an old key
+ok 22 - review retry is append-only/idempotent, latest revocation wins and cannot be hidden by an old key
+  ---
+  duration_ms: 1.720958
+  type: 'test'
+  ...
+# Subtest: effective owner state never advertises expired review or a disabled reviewer as VERIFIED
+ok 23 - effective owner state never advertises expired review or a disabled reviewer as VERIFIED
+  ---
+  duration_ms: 0.527209
+  type: 'test'
+  ...
+# Subtest: frozen billing IDs are user-scoped and remain stable after first invoice, but modified/missing documents are rejected
+ok 24 - frozen billing IDs are user-scoped and remain stable after first invoice, but modified/missing documents are rejected
+  ---
+  duration_ms: 0.637875
+  type: 'test'
+  ...
+# Subtest: frozen absent billing never silently falls back to later invoices; malformed bindings and changed declarations fail closed
+ok 25 - frozen absent billing never silently falls back to later invoices; malformed bindings and changed declarations fail closed
+  ---
+  duration_ms: 0.512459
+  type: 'test'
+  ...
+# Subtest: billing snapshot integrity failure, foreign document IDs and malformed history cannot become residence proof
+ok 26 - billing snapshot integrity failure, foreign document IDs and malformed history cannot become residence proof
+  ---
+  duration_ms: 0.0975
+  type: 'test'
+  ...
+# Subtest: actual checkout V2 reserves only a reviewed address even in exact local QA and freezes no complete address
+ok 27 - actual checkout V2 reserves only a reviewed address even in exact local QA and freezes no complete address
+  ---
+  duration_ms: 1.649
+  type: 'test'
+  ...
+# Subtest: actual non-QA checkout stays closed behind the DRAFT legal/fiscal rule despite VERIFIED residence
+ok 28 - actual non-QA checkout stays closed behind the DRAFT legal/fiscal rule despite VERIFIED residence
+  ---
+  duration_ms: 0.4425
+  type: 'test'
+  ...
+# Subtest: actual V2 checkout rejects client country, address and billing changes before policy lookup
+ok 29 - actual V2 checkout rejects client country, address and billing changes before policy lookup
+  ---
+  duration_ms: 0.788333
+  type: 'test'
+  ...
+# Subtest: actual V2 retry and pre-capture acquired checks reject changed or revoked proof, without changing old snapshots
+ok 30 - actual V2 retry and pre-capture acquired checks reject changed or revoked proof, without changing old snapshots
+  ---
+  duration_ms: 0.880917
+  type: 'test'
+  ...
+# Subtest: Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+ok 31 - Local simulation cannot be moved to another database/role/port or activated by NODE_ENV
+  ---
+  duration_ms: 0.5645
+  type: 'test'
+  ...
+# Subtest: Only the final DCN QA copy accepts the exact UTC option; no arbitrary libpq parameter or other target is opened
+ok 32 - Only the final DCN QA copy accepts the exact UTC option; no arbitrary libpq parameter or other target is opened
+  ---
+  duration_ms: 0.2465
+  type: 'test'
+  ...
+# Subtest: Local route accepts neither browser evidence nor external gateway/merchant fields
+ok 33 - Local route accepts neither browser evidence nor external gateway/merchant fields
+  ---
+  duration_ms: 5.26675
+  type: 'test'
+  ...
+# Subtest: Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+ok 34 - Local launcher whitelists inherited environment and explicitly retains new-payments OFF
+  ---
+  duration_ms: 4.486958
+  type: 'test'
+  ...
+# Subtest: DECLINED v2 reproduces shared-parser rejection but scoped DCN evidence is FAILED, never PAID
+ok 35 - DECLINED v2 reproduces shared-parser rejection but scoped DCN evidence is FAILED, never PAID
+  ---
+  duration_ms: 0.851458
+  type: 'test'
+  ...
+# Subtest: DCN scoped failure validates merchant, amount, currency, Order and custom/reference IDs
+ok 36 - DCN scoped failure validates merchant, amount, currency, Order and custom/reference IDs
+  ---
+  duration_ms: 0.13
+  type: 'test'
+  ...
+# Subtest: capture omissions, wrong capture amount/currency and contradictory capture metadata fail closed
+ok 37 - capture omissions, wrong capture amount/currency and contradictory capture metadata fail closed
+  ---
+  duration_ms: 0.171958
+  type: 'test'
+  ...
+# Subtest: successful and pending scoped captures retain previous shared validation; no DENIED alias
+ok 38 - successful and pending scoped captures retain previous shared validation; no DENIED alias
+  ---
+  duration_ms: 0.195292
+  type: 'test'
+  ...
+# Subtest: a declined webhook can never reconcile a different capture, paid/pending response or missing evidence
+ok 39 - a declined webhook can never reconcile a different capture, paid/pending response or missing evidence
+  ---
+  duration_ms: 0.107333
+  type: 'test'
+  ...
+# Subtest: DECLINED is persisted, verified by scoped recovery and processed FAILED without fulfillment
+ok 40 - DECLINED is persisted, verified by scoped recovery and processed FAILED without fulfillment
+  ---
+  duration_ms: 230.764
+  type: 'test'
+  ...
+# Subtest: strict PayPal DECLINED resolves UNKNOWN capture after timeout, without recapturing
+ok 41 - strict PayPal DECLINED resolves UNKNOWN capture after timeout, without recapturing
+  ---
+  duration_ms: 0.232
+  type: 'test'
+  ...
+# Subtest: shared capture rejection remains UNKNOWN until scoped fresh recovery; a single simulated capture POST
+ok 42 - shared capture rejection remains UNKNOWN until scoped fresh recovery; a single simulated capture POST
+  ---
+  duration_ms: 2.343708
+  type: 'test'
+  ...
+# Subtest: duplicate events and different-event same-capture refusals are idempotent
+ok 43 - duplicate events and different-event same-capture refusals are idempotent
+  ---
+  duration_ms: 0.439916
+  type: 'test'
+  ...
+# Subtest: incomplete declined event or contradictory fresh paid capture remains RETRY, never grants
+ok 44 - incomplete declined event or contradictory fresh paid capture remains RETRY, never grants
+  ---
+  duration_ms: 0.334333
+  type: 'test'
+  ...
+# Subtest: old same-capture DECLINED cannot downgrade PAID/REFUNDED or revoke an acquisition
+ok 45 - old same-capture DECLINED cannot downgrade PAID/REFUNDED or revoke an acquisition
+  ---
+  duration_ms: 0.281584
+  type: 'test'
+  ...
+# Subtest: different capture after paid is a contradiction, never processed as same refusal
+ok 46 - different capture after paid is a contradiction, never processed as same refusal
+  ---
+  duration_ms: 0.160875
+  type: 'test'
+  ...
+# Subtest: a pre-existing financial contradiction is not cleared by later refusal evidence
+ok 47 - a pre-existing financial contradiction is not cleared by later refusal evidence
+  ---
+  duration_ms: 0.120458
+  type: 'test'
+  ...
+# Subtest: late paid after a failed order stays review and cannot resurrect downloads/documents
+ok 48 - late paid after a failed order stays review and cannot resurrect downloads/documents
+  ---
+  duration_ms: 0.11625
+  type: 'test'
+  ...
+# Subtest: account verification lost before capture refuses the financial double before any provider call
+ok 49 - account verification lost before capture refuses the financial double before any provider call
+  ---
+  duration_ms: 0.181208
+  type: 'test'
+  ...
+# Subtest: fresh paid evidence after account verification loss remains durably PAID but order reviews without rights/documents
+ok 50 - fresh paid evidence after account verification loss remains durably PAID but order reviews without rights/documents
+  ---
+  duration_ms: 0.115167
+  type: 'test'
+  ...
+# Subtest: public DCN flag fails closed for missing mode or production context
+ok 51 - public DCN flag fails closed for missing mode or production context
+  ---
+  duration_ms: 0.3645
+  type: 'test'
+  ...
+# Subtest: valid TEST signatures/credentials alone never authorize remote webhook verification
+ok 52 - valid TEST signatures/credentials alone never authorize remote webhook verification
+  ---
+  duration_ms: 2.211416
+  type: 'test'
+  ...
+# Subtest: available sandboxes require their own merchant and signature configuration; no LIVE fallback
+ok 53 - available sandboxes require their own merchant and signature configuration; no LIVE fallback
+  ---
+  duration_ms: 0.500458
+  type: 'test'
+  ...
+# Subtest: Checkout metadata belongs only to DCN; physical Orders/Support metadata is not reused
+ok 54 - Checkout metadata belongs only to DCN; physical Orders/Support metadata is not reused
+  ---
+  duration_ms: 0.303833
+  type: 'test'
+  ...
+# Subtest: Stripe session evidence rejects LIVE, wrong domain, reference and currency
+ok 55 - Stripe session evidence rejects LIVE, wrong domain, reference and currency
+  ---
+  duration_ms: 0.151625
+  type: 'test'
+  ...
+# Subtest: dedicated Stripe webhook rejects bad signatures, LIVE and Connect before any account request
+ok 56 - dedicated Stripe webhook rejects bad signatures, LIVE and Connect before any account request
+  ---
+  duration_ms: 0.546583
+  type: 'test'
+  ...
+# Subtest: digital consumer form accepts withdrawal without reason and separates non-conformity/goodwill without arbitrary fields
+ok 57 - digital consumer form accepts withdrawal without reason and separates non-conformity/goodwill without arbitrary fields
+  ---
+  duration_ms: 0.791917
+  type: 'test'
+  ...
+# Subtest: durable receipt survives JSONB key order with versioned canonical hash; historical hashes retain their exact original order
+ok 58 - durable receipt survives JSONB key order with versioned canonical hash; historical hashes retain their exact original order
+  ---
+  duration_ms: 0.366167
+  type: 'test'
+  ...
+# Subtest: public route is login-free but enforces origin, JSON and an actual streamed 8 KiB body limit without enumeration
+ok 59 - public route is login-free but enforces origin, JSON and an actual streamed 8 KiB body limit without enumeration
+  ---
+  duration_ms: 9.634542
+  type: 'test'
+  ...
+# Subtest: submission atomically preserves the original declaration, creates one durable acknowledgement/outbox and retries once
+ok 60 - submission atomically preserves the original declaration, creates one durable acknowledgement/outbox and retries once
+  ---
+  duration_ms: 1.683958
+  type: 'test'
+  ...
+# Subtest: knowing reference/email never grants the original receipt after changing claimant/content; unmatched contracts look identical publicly
+ok 61 - knowing reference/email never grants the original receipt after changing claimant/content; unmatched contracts look identical publicly
+  ---
+  duration_ms: 0.678708
+  type: 'test'
+  ...
+# Subtest: persistent identity rate limit stops the sixth request even when all are idempotent
+ok 62 - persistent identity rate limit stops the sixth request even when all are idempotent
+  ---
+  duration_ms: 0.501833
+  type: 'test'
+  ...
+# Subtest: DCN submission rejects a non-UTC database session before rate limits, receipt, audit or email writes
+ok 63 - DCN submission rejects a non-UTC database session before rate limits, receipt, audit or email writes
+  ---
+  duration_ms: 0.133083
+  type: 'test'
+  ...
+# Subtest: digital exception is cumulative, informative and never an automatic refusal from two boxes, QA receipt or apparent age
+ok 64 - digital exception is cumulative, informative and never an automatic refusal from two boxes, QA receipt or apparent age
+  ---
+  duration_ms: 0.218125
+  type: 'test'
+  ...
+# Subtest: DCN human decision rejects a non-UTC session before status, decision date or audit writes
+ok 65 - DCN human decision rejects a non-UTC session before status, decision date or audit writes
+  ---
+  duration_ms: 0.440334
+  type: 'test'
+  ...
+# Subtest: Admin refreshes database role and refuses arbitrary/short review input before writes
+ok 66 - Admin refreshes database role and refuses arbitrary/short review input before writes
+  ---
+  duration_ms: 0.211
+  type: 'test'
+  ...
+# Subtest: human review writes one audit and no refund/access/order mutation; JSONB-sorted retry is idempotent
+ok 67 - human review writes one audit and no refund/access/order mutation; JSONB-sorted retry is idempotent
+  ---
+  duration_ms: 0.298208
+  type: 'test'
+  ...
+# Subtest: same-millisecond stale concurrent review cannot overwrite latest; identity and unproven digital exception fail closed
+ok 68 - same-millisecond stale concurrent review cannot overwrite latest; identity and unproven digital exception fail closed
+  ---
+  duration_ms: 0.280583
+  type: 'test'
+  ...
+# Subtest: QA notification capture never marks the durable consumer acknowledgement SENT
+ok 69 - QA notification capture never marks the durable consumer acknowledgement SENT
+  ---
+  duration_ms: 0.338041
+  type: 'test'
+  ...
+# Subtest: notification processing can scope only the new withdrawal and refuses combined/invalid scopes before reading jobs
+ok 70 - notification processing can scope only the new withdrawal and refuses combined/invalid scopes before reading jobs
+  ---
+  duration_ms: 0.129291
+  type: 'test'
+  ...
+# Subtest: additive migration and provision preserve durable facts, strict parents and no runtime deletion/DDL
+ok 71 - additive migration and provision preserve durable facts, strict parents and no runtime deletion/DDL
+  ---
+  duration_ms: 0.597458
+  type: 'test'
+  ...
+# Subtest: withdrawal payload is closed, normalized, allows no reason and requires explicit declaration
+ok 72 - withdrawal payload is closed, normalized, allows no reason and requires explicit declaration
+  ---
+  duration_ms: 0.956458
+  type: 'test'
+  ...
+# Subtest: route checks origin, returns a generic response and stores the receipt token only in HttpOnly cookie
+ok 73 - route checks origin, returns a generic response and stores the receipt token only in HttpOnly cookie
+  ---
+  duration_ms: 9.687667
+  type: 'test'
+  ...
+# Subtest: database design is anti-enumeration, duplicate safe and never triggers an automatic refund
+ok 74 - database design is anti-enumeration, duplicate safe and never triggers an automatic refund
+  ---
+  duration_ms: 0.534459
+  type: 'test'
+  ...
+# Subtest: private receipt is noindex, no-store at API level and cannot be fetched by order number
+ok 75 - private receipt is noindex, no-store at API level and cannot be fetched by order number
+  ---
+  duration_ms: 0.2215
+  type: 'test'
+  ...
+# Subtest: the member archive is ownership-scoped and exposes no receipt capability
+ok 76 - the member archive is ownership-scoped and exposes no receipt capability
+  ---
+  duration_ms: 0.222917
+  type: 'test'
+  ...
+1..76
+# tests 76
+# suites 0
+# pass 76
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 499.844042
