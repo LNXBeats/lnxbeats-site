@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "filesScanned": 51,
+  "matches": 0,
+  "secretsPrinted": false,
+  "method": "Changed allowlisted files + known private-profile credential literals + token/private-key/credentialed-URL patterns",
+  "exception": "Only explicit fixture_never_connect_20261015 URLs and the mocked unit repository at 127.0.0.1:1/unit; known private credential literals still checked without exemptions",
+  "limitation": "Targeted local scan, not a historical audit"
+}

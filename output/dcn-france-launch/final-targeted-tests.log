@@ -1,0 +1,112 @@
+TAP version 13
+# Subtest: Admin preparation: unreleased 12-track album is sellable without a platform link or individual offers
+ok 1 - Admin preparation: unreleased 12-track album is sellable without a platform link or individual offers
+  ---
+  duration_ms: 7.89225
+  type: 'test'
+  ...
+# Subtest: Admin preparation: single retains its independent price and only its own pinned edition
+ok 2 - Admin preparation: single retains its independent price and only its own pinned edition
+  ---
+  duration_ms: 0.290958
+  type: 'test'
+  ...
+# Subtest: Admin selection: rightsConfirmed flag cannot replace a bound current rights review
+ok 3 - Admin selection: rightsConfirmed flag cannot replace a bound current rights review
+  ---
+  duration_ms: 0.55875
+  type: 'test'
+  ...
+# Subtest: Admin preparation: album fails closed when any included file, rights or excerpt is incomplete
+ok 4 - Admin preparation: album fails closed when any included file, rights or excerpt is incomplete
+  ---
+  duration_ms: 2.336041
+  type: 'test'
+  ...
+# Subtest: Admin saveOffer service: strict audio metadata is required before any offer, rights or audit write
+ok 5 - Admin saveOffer service: strict audio metadata is required before any offer, rights or audit write
+  ---
+  duration_ms: 1.821667
+  type: 'test'
+  ...
+# Subtest: Admin preparation: readiness never grants sale for a hidden project, absent price or unaffirmed rights
+ok 6 - Admin preparation: readiness never grants sale for a hidden project, absent price or unaffirmed rights
+  ---
+  duration_ms: 0.156792
+  type: 'test'
+  ...
+# Subtest: rights review: no approval from offer flag or missing journal; approved evidence binds exact master/audio hashes
+ok 7 - rights review: no approval from offer flag or missing journal; approved evidence binds exact master/audio hashes
+  ---
+  duration_ms: 7.337916
+  type: 'test'
+  ...
+# Subtest: rights review: latest non-approved state never falls back, including a same-tick revocation
+ok 8 - rights review: latest non-approved state never falls back, including a same-tick revocation
+  ---
+  duration_ms: 3.66175
+  type: 'test'
+  ...
+# Subtest: rights review: fresh DB Admin role, active status and verified email are required for approval and later use
+ok 9 - rights review: fresh DB Admin role, active status and verified email are required for approval and later use
+  ---
+  duration_ms: 0.815209
+  type: 'test'
+  ...
+# Subtest: rights review: approvals require opaque private reference, full hash and attestation; input cannot mint actor or binding
+ok 10 - rights review: approvals require opaque private reference, full hash and attestation; input cannot mint actor or binding
+  ---
+  duration_ms: 0.166875
+  type: 'test'
+  ...
+# Subtest: rights review: retries append once; changed payload or stale decision cannot override latest state
+ok 11 - rights review: retries append once; changed payload or stale decision cannot override latest state
+  ---
+  duration_ms: 0.352292
+  type: 'test'
+  ...
+# Subtest: rights review: twelve current masters can share one private manifest with distinct immutable bindings
+ok 12 - rights review: twelve current masters can share one private manifest with distinct immutable bindings
+  ---
+  duration_ms: 1.2205
+  type: 'test'
+  ...
+# Subtest: rights review: Admin history is bounded and exposes only date, version, status and opaque reviewer/review IDs
+ok 13 - rights review: Admin history is bounded and exposes only date, version, status and opaque reviewer/review IDs
+  ---
+  duration_ms: 0.349541
+  type: 'test'
+  ...
+# Subtest: rights review: old strict edition may be revoked after replacement; only approval requires current master
+ok 14 - rights review: old strict edition may be revoked after replacement; only approval requires current master
+  ---
+  duration_ms: 0.341334
+  type: 'test'
+  ...
+# Subtest: rights review: legacy encoder, changed record hash and unrelated signature do not approve new sales
+ok 15 - rights review: legacy encoder, changed record hash and unrelated signature do not approve new sales
+  ---
+  duration_ms: 0.227834
+  type: 'test'
+  ...
+# Subtest: rights review: empty catalogue selection keeps empty cart valid, but direct first-delivery review cannot be empty
+ok 16 - rights review: empty catalogue selection keeps empty cart valid, but direct first-delivery review cannot be empty
+  ---
+  duration_ms: 0.201084
+  type: 'test'
+  ...
+# Subtest: rights review: Admin endpoint is private/same-origin; raw evidence never enters public catalogue or historical download flow
+ok 17 - rights review: Admin endpoint is private/same-origin; raw evidence never enters public catalogue or historical download flow
+  ---
+  duration_ms: 3.978958
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 163.004334

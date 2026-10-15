@@ -1,6 +1,8 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
   if (ownedTitles.length) return `Déjà acquis : ${ownedTitles.join(" · ")}. Ce panier ne permet pas un complément automatique sûr. Vos achats restent dans Ma musique ; aucun crédit n’est appliqué sans vérification.`;
+  if(code.startsWith("FRANCE_"))return "L’achat numérique est préparé pour les particuliers résidant en France métropolitaine, Corse comprise. Vos informations de résidence ou leur vérification serveur sont absentes, insuffisantes ou contradictoires. Aucun nouveau paiement n’a été lancé ; vos acquisitions existantes restent conservées.";
+  if(code.startsWith("RIGHTS_")||code.startsWith("INVALID_RIGHTS_"))return "La revue des droits et autorisations du master est absente, incomplète ou à vérifier. Aucune nouvelle vente ni première fourniture ne peut être autorisée sur cette seule action. L’Admin doit consulter les preuves privées et l’historique ; aucun document confidentiel n’est publié.";
   if (/TERRITORY|COUNTRY|SUBDIVISION|B2C_REQUIRED/.test(code)) return "Ce territoire ou les informations de résidence ne permettent pas encore cet achat numérique. Aucun nouveau paiement n’a été lancé. Vérifiez vos informations ou attendez une ouverture validée.";
   if (code === "ALREADY_OWNED") return "Cette édition est déjà dans Ma musique. Retrouvez-y vos fichiers et documents ; aucun nouvel achat n’est nécessaire.";
   if (code === "ALBUM_PARTIALLY_OWNED") return "Certains titres sont déjà acquis, mais leur édition ou leur situation ne permet pas de calculer un complément automatique sûr. Vos achats restent dans Ma musique.";

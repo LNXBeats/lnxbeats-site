@@ -1,0 +1,51 @@
+{
+  "environment": "LOCAL_ONLY",
+  "phase": "FINAL_RIGHTS_INGESTION_LOCK_CHANGE",
+  "noProviderRecipe": true,
+  "noProductionMutation": true,
+  "prismaAndDependenciesUnchanged": true,
+  "results": [
+    {
+      "name": "targeted-tests",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "/usr/local/bin/node --conditions=react-server --import tsx --test --test-reporter=tap tests/digital/rights-review.test.ts tests/digital/real-album-admin.test.ts"
+    },
+    {
+      "name": "lint",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run lint"
+    },
+    {
+      "name": "typecheck",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run typecheck"
+    },
+    {
+      "name": "build-web",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run build"
+    },
+    {
+      "name": "build-digital-worker",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run dcn:worker:build"
+    },
+    {
+      "name": "diff-check",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "git diff --check"
+    }
+  ]
+}

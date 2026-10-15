@@ -64,9 +64,9 @@ test("non-QA/mismatched merchant cannot reuse a synthetic country policy", async
 });
 test("missing/expired policies refuse initial delivery; null legacy snapshot retained without invented evidence", async () => {
   await withLocalEnv(async () => {
-    const f = repo(); await assert.rejects(() => reserveDigitalJurisdiction(territory(), f.tx, false), { code: "TERRITORY_POLICY_MISSING" });
+    const f = repo(); await assert.rejects(() => reserveDigitalJurisdiction(territory(), f.tx, false), { code: "FRANCE_RESIDENCE_DECLARATION_REQUIRED" });
     const expired = { ...localQaDigitalCountryRule(DIGITAL_TERMS_VERSION), expiresAt: "2020-01-01T00:00:00.000Z" };
-    await assert.rejects(() => reserveDigitalJurisdiction(territory(), repo(expired).tx, false), { code: "TERRITORY_POLICY_EXPIRED" });
+    await assert.rejects(() => reserveDigitalJurisdiction(territory(), repo(expired).tx, false), { code: "FRANCE_RESIDENCE_DECLARATION_REQUIRED" });
     const initialReads = f.reads();
     assert.equal(await checkDigitalAcquiredJurisdiction(null, f.tx), undefined); assert.equal(await checkDigitalAcquiredJurisdiction(undefined, f.tx), undefined);
     assert.equal(f.reads(), initialReads);

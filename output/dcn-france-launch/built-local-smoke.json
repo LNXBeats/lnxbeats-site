@@ -1,0 +1,43 @@
+{
+  "environment": "BUILT_LOCAL_LOOPBACK_ONLY",
+  "checks": [
+    {
+      "route": "/api/health",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/album/dcn-consolidation-7b2ebd49-4e0c-42b0-80e6-d17484cce6d5",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/musique/conditions",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/connexion",
+      "status": 200,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/compte/musique",
+      "status": 307,
+      "result": "PASS",
+      "authenticated": false
+    },
+    {
+      "route": "/api/admin/digital/rights-reviews",
+      "status": 401,
+      "result": "PASS",
+      "authenticated": false
+    }
+  ],
+  "note": "Anonymous library redirects and Admin API refuses. No authenticated Admin UI, payment or acquired download recipe repeated.",
+  "providerCalls": 0
+}

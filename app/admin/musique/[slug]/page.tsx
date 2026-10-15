@@ -7,6 +7,8 @@ import { requireDigitalEnvironment } from "@/lib/digital/domain";
 import { digitalSalesReadiness } from "@/lib/digital/admin";
 import { digitalCommercialAudioReady } from "@/lib/digital/formats";
 import { DigitalOfferForm, DigitalBatchUpload, DigitalTrackEditor, DigitalAdminPreview } from "@/components/digital-admin";
+import { DigitalRightsReview } from "@/components/digital-rights-review";
+import { loadDigitalRightsReviews, loadProjectDigitalRightsHistory } from "@/lib/digital/rights-review-service";
 import styles from "@/components/digital.module.css";
 import admin from "@/components/digital-admin.module.css";
 export const dynamic = "force-dynamic";
@@ -16,12 +18,15 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   await requireAdmin(); const { slug } = await params;
   const p = await prisma.project.findUnique({ where: { slug }, include: { digitalOffers: true, tracks: { orderBy: [{ position: "asc" }, { id: "asc" }], include: { digitalMasters: { where: { status: "READY", previewAssetId: { not: null } }, orderBy: { version: "desc" }, take: 1, include: { masterAsset: true, mp3Asset: true, previewAsset: true } } } } } });
   if (!p) notFound();
+  const currentMasters = p.tracks.flatMap(track=>track.digitalMasters);
+  const rightsReviews = await loadDigitalRightsReviews(prisma,currentMasters);
+  const rightsHistory = await loadProjectDigitalRightsHistory(prisma,p.id);
   const tracks = p.tracks.map(t => {
     const m = t.digitalMasters[0];
     return { id: t.id, title: t.title, position: t.position, publication: t.status, durationSeconds: t.durationSeconds, version: m?.version ?? 0, previewStartMs: m?.previewStartMs ?? 0, previewDurationMs: m?.previewDurationMs ?? null,
       previewUrl: t.status === "RELEASED" && m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED" ? `/media/digital/previews/${m.previewAsset.id}` : null,
       mp3Ready:!!m?.mp3Asset&&m.mp3Asset.visibility==="PRIVATE"&&m.mp3Asset.mimeType==="audio/mpeg",mp3BitrateKbps:m?.mp3BitrateKbps??null,
-      masterReady: !!m && digitalCommercialAudioReady(m), mediaCleared: m?.masterAsset.rightsStatus === "CLEARED" && m?.mp3Asset?.rightsStatus==="CLEARED"&&m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED",
+      masterReady: !!m && digitalCommercialAudioReady(m), mediaCleared: !!m && rightsReviews.find(review=>review.masterId===m.id)?.status==="APPROVED" && m?.masterAsset.rightsStatus === "CLEARED" && m?.mp3Asset?.rightsStatus==="CLEARED"&&m?.previewAsset?.visibility === "PUBLIC" && m.previewAsset.rightsStatus === "CLEARED",
       offer: p.digitalOffers.find(o => o.trackId === t.id) ?? null };
   });
   const albumOffer = p.digitalOffers.find(o => o.scope === "ALBUM") ?? null;
@@ -34,8 +39,14 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
       <p className={styles.muted}>L’offre album contient exactement les pistes publiées disposant des médias requis et validés intégralement. Une piste annoncée ou non listée n’augmente pas le contenu vendu. La distribution sur Spotify ou Apple Music n’est pas une condition de vente. Une ancienne version non qualifiée pour de nouvelles ventes reste conservée pour ses acquisitions existantes ; ne modifiez pas sa preuve pour l’activer.</p>
       {readiness.albumMoreExpensive ? <p className={admin.advisory} role="status">Attention : l’album ({money(albumOffer!.priceCents!)}) dépasse la somme des mêmes pistes vendables séparément ({money(readiness.individualTotalCents!)}). Le prix reste indépendant : aucune remise automatique et aucune interdiction.</p> : null}
     </section>
-    <div className={styles.panel}><DigitalOfferForm key={albumOffer?.version ?? 0} projectId={p.id} trackId={null} offer={albumOffer} label="Offre album indépendante" /></div>
     <DigitalBatchUpload tracks={tracks} />
+    <DigitalRightsReview projectId={p.id} tracks={p.tracks.flatMap(track=>track.digitalMasters.map(master=>({masterId:master.id,title:track.title,version:master.version,strictReady:digitalCommercialAudioReady(master),
+      review:rightsReviews.find(review=>review.masterId===master.id)!})))} />
+    <details className={`${styles.panel} ${admin.details}`}><summary>Historique des revues de droits — {rightsHistory.entries.length} décision(s) affichée(s)</summary>
+      <p>Décisions enregistrées, distinctes de l’état courant de chaque version. Les preuves et correspondances restent privées. {rightsHistory.truncated?"50 dernières décisions ; l’historique complet reste conservé dans le journal.":"Historique disponible pour ce projet."}</p>
+      {!rightsHistory.entries.length?<p>Aucune revue enregistrée.</p>:<ol>{rightsHistory.entries.map(entry=><li key={entry.reviewId}><p>{new Date(entry.createdAt).toLocaleString("fr-FR")} · V{entry.masterVersion??"?"} · {entry.status}</p><p>Réviseur : {entry.reviewerId??"indisponible"}<br/>Revue : {entry.reviewId}</p></li>)}</ol>}
+    </details>
+    <div className={styles.panel}><DigitalOfferForm key={albumOffer?.version ?? 0} projectId={p.id} trackId={null} offer={albumOffer} label="Offre album indépendante" /></div>
     <section className={styles.panel} aria-labelledby="tracks"><h2 id="tracks">Pistes, extraits et offres individuelles</h2><p className={styles.muted}>Importez puis vérifiez chaque piste. Les pistes non publiées et les offres incomplètes ne deviennent pas achetables.</p>
       {tracks.map(t => { const diagnostic = readiness.items.find(i => i.id === t.id)!; return <article className={admin.track} key={t.id}><div className={admin.trackHeader}><h2>{t.position}. {t.title}</h2><span>{diagnostic.ready ? "Prête à la vente TEST" : "À compléter"}</span></div><p>Master : {t.version ? `version ${t.version} privée` : "à importer"} · MP3 privé : {t.mp3Ready?`${t.mp3BitrateKbps} kbit/s prêt`:"à préparer via un nouveau master WAV"} · Début d’extrait : {(t.previewStartMs / 1000).toFixed(1)} s · Extrait : {t.previewDurationMs ? `${(t.previewDurationMs / 1000).toFixed(2)} s` : "indisponible"}</p>
         {!diagnostic.ready ? <p className={styles.note}>{diagnostic.blockers.join(" · ")}</p> : null}

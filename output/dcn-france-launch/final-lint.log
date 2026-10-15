@@ -1,0 +1,18 @@
+
+> lnx-studio@0.2.0 lint
+> eslint .
+
+
+/Users/lnxbeats/.codex/worktrees/dcn-1-0/lnxbeats-site-v1/output/dcn-1-2/safari-physical-20261014/verify-physical-downloads.mjs
+  25:7  warning  'hash' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/lnxbeats/.codex/worktrees/dcn-1-0/lnxbeats-site-v1/output/dcn-external-20261013/stripe-download-proof.ts
+  287:40  warning  '_name' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/lnxbeats/.codex/worktrees/dcn-1-0/lnxbeats-site-v1/output/dcn-paypal-final-20261014/controller.mjs
+  8:10  warning  'randomUUID' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/lnxbeats/.codex/worktrees/dcn-1-0/lnxbeats-site-v1/output/dcn-r2-qa-20261014/prepare-isolated-db.mjs
+  3:27  warning  'mkdir' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 4 problems (0 errors, 4 warnings)

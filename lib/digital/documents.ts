@@ -9,6 +9,7 @@ import { generateInvoicePdf, generateCreditNotePdf, type InvoicePdfRecord, type 
 import { DigitalError, requireDigitalEnvironment, assertDigitalUuid } from "./domain";
 import { DIGITAL_FISCAL_REVIEW_NOTICE, digitalEmailTemplate, verifyContractSnapshot } from "./fulfillment-policy";
 import { checkDigitalAcquiredJurisdiction } from "./checkout-jurisdiction";
+import {checkDigitalAcquiredRightsReview} from "./rights-review-checkout";
 import { verifyDigitalPinnedMedia } from "./pinned-media";
 import { verifyDigitalCompletions } from "./completion";
 type Tx = Prisma.TransactionClient;
@@ -135,8 +136,9 @@ export async function acknowledgeDigitalContract(userId: string, orderId: string
     if(o.status==="REFUNDED"&&!await tx.digitalEntitlement.findFirst({where:{userId,status:"ACTIVE",line:{orderId}}}))throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);
     const current = await tx.digitalFulfillment.findUniqueOrThrow({ where: { orderId } });
     if (current.confirmationAt) return { acknowledged: true };
-    await checkDigitalAcquiredJurisdiction(o.jurisdictionSnapshot,tx);
+    await checkDigitalAcquiredJurisdiction(o.jurisdictionSnapshot,tx,undefined,userId);
     const acquiredLines=await tx.digitalOrderLine.findMany({where:{orderId},select:{trackSnapshot:true,completionSnapshot:true}});
+    await checkDigitalAcquiredRightsReview(o.contractSnapshot,acquiredLines,tx);
     await verifyDigitalPinnedMedia(tx,acquiredLines);
     if(acquiredLines.some(line=>line.completionSnapshot))await verifyDigitalCompletions(tx,orderId,userId);
     const at = new Date();

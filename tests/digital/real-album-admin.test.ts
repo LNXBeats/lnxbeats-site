@@ -7,6 +7,14 @@ import { digitalSalesReadiness } from "@/lib/digital/admin";
 import { DIGITAL_MP3_ENCODER_VERSION } from "@/lib/digital/formats";
 import { prisma } from "@/lib/prisma";
 import type { OrderActor } from "@/lib/orders/domain";
+import { DIGITAL_RIGHTS_ATTESTATION, DIGITAL_RIGHTS_REVIEW_EVENT, DIGITAL_RIGHTS_REVIEW_POLICY, digitalRightsMasterBinding, digitalRightsReviewHash } from "@/lib/digital/rights-review-policy";
+
+function approvedReview(master: Parameters<typeof digitalRightsMasterBinding>[0], actorId: string) {
+  const createdAt = new Date("2026-10-15T10:00:00.000Z"), proof = { policy: DIGITAL_RIGHTS_REVIEW_POLICY, binding: digitalRightsMasterBinding(master), status: "APPROVED",
+    privateEvidenceReference: "private-evidence:synthetic/manifest", evidenceSha256: "b".repeat(64), attestation: DIGITAL_RIGHTS_ATTESTATION, reason: null,
+    reviewedAt: createdAt.toISOString(), requestHash: "c".repeat(64) };
+  return { id: randomUUID(), actorId, kind: DIGITAL_RIGHTS_REVIEW_EVENT, createdAt, details: { ...proof, recordHash: digitalRightsReviewHash({ actorId, ...proof }) } };
+}
 
 /** Catalogue repository doubles only: no real album import, DB or provider call. */
 function fixture(scope: "ALBUM" | "TRACK" = "ALBUM") {
@@ -16,14 +24,19 @@ function fixture(scope: "ALBUM" | "TRACK" = "ALBUM") {
     const mp3Id: string = randomUUID(); // Mutable negative fixture, not a production UUID type relaxation.
     const asset = (assetId: string, mimeType: string, visibility = "PRIVATE") => ({ id: assetId, visibility, rightsStatus: "CLEARED", mimeType, checksumSha256: "a".repeat(64), durationMs: 120_000, sizeBytes: 400_000n });
     return { id: trackId, title: `Synthetic title ${index + 1}`, status: "RELEASED", position: index + 1,
-      digitalMasters: [{ id: randomUUID(), masterAssetId: wavId, mp3AssetId: mp3Id, previewAssetId: previewId, status: "READY", codec: "wav", encoderVersion: DIGITAL_MP3_ENCODER_VERSION, mp3BitrateKbps: 320,
+      digitalMasters: [{ id: randomUUID(), trackId, version: 1, masterAssetId: wavId, mp3AssetId: mp3Id, previewAssetId: previewId, status: "READY", codec: "wav", encoderVersion: DIGITAL_MP3_ENCODER_VERSION, mp3BitrateKbps: 320,
         masterAsset: asset(wavId, "audio/wav"), mp3Asset: { ...asset(mp3Id, "audio/mpeg"), durationMs: 120_040 },
         previewAsset: { ...asset(previewId, "audio/mpeg", "PUBLIC"), durationMs: 59_900 }, previewDurationMs: 59_900 }] };
   });
   const offer = { id, scope, trackId: scope === "TRACK" ? tracks[0].id : null, active: true, rightsConfirmed: true, priceCents: scope === "ALBUM" ? 990 : 129,
     version: 2, distribution: "UNRELEASED", project: { id: projectId, title: "Synthetic unreleased album", type: scope === "ALBUM" ? "ALBUM" : "SINGLE", status: "PUBLISHED", publicVisible: true, tracks } };
   let query: unknown;
-  const db = { digitalOffer: { async findMany(input: unknown) { query = input; return [offer]; } } } as unknown as Prisma.TransactionClient;
+  const reviewerId = randomUUID();
+  const db = { $queryRaw: async () => [], digitalOffer: { async findMany(input: unknown) { query = input; return [offer]; } },
+    digitalMaster: { async findMany({ where }: { where: { id: { in: string[] } } }) { return tracks.flatMap(track => track.digitalMasters).filter(master => where.id.in.includes(master.id)); } },
+    digitalEvent: { async findFirst({ where }: { where: { details: { equals: string } } }) { const master = tracks.flatMap(track => track.digitalMasters).find(master => master.id === where.details.equals); return master ? approvedReview(master, reviewerId) : null; } },
+    user: { async findUnique() { return { id: reviewerId, role: "ADMIN", status: "ACTIVE", emailVerified: true }; } },
+  } as unknown as Prisma.TransactionClient;
   return { id, db, offer, tracks, query: () => query };
 }
 
@@ -42,6 +55,12 @@ test("Admin preparation: unreleased 12-track album is sellable without a platfor
 test("Admin preparation: single retains its independent price and only its own pinned edition", async () => {
   const f = fixture("TRACK"), chosen = (await selections([f.id], f.db))[0];
   assert.equal(chosen.priceCents, 129); assert.equal(chosen.tracks.length, 1); assert.equal(chosen.tracks[0].trackId, f.tracks[0].id);
+});
+
+test("Admin selection: rightsConfirmed flag cannot replace a bound current rights review", async () => {
+  const f = fixture();
+  f.db.digitalEvent.findFirst = (async () => null) as unknown as typeof f.db.digitalEvent.findFirst;
+  await assert.rejects(() => selections([f.id], f.db), { code: "RIGHTS_REVIEW_REQUIRED" });
 });
 
 test("Admin preparation: album fails closed when any included file, rights or excerpt is incomplete", async () => {
@@ -70,7 +89,7 @@ test("Admin saveOffer service: strict audio metadata is required before any offe
   Object.assign(process.env, { DCN_ENABLED: "true", DCN_MODE: "TEST" });
   delete process.env.RAILWAY_ENVIRONMENT_NAME; delete process.env.MEDIA_DEPLOYMENT_ENV; delete process.env.PAYMENT_DEPLOYMENT_ENV;
   try {
-    for (const variant of ["oldEncoder", "truncatedProof", "durationMismatch", "newInvalidTrack", "hiddenProject", "draftProject", "valid", "inactiveDraft"] as const) {
+    for (const variant of ["oldEncoder", "truncatedProof", "durationMismatch", "newInvalidTrack", "hiddenProject", "draftProject", "missingRightsReview", "reviewerInactive", "valid", "inactiveDraft"] as const) {
       const f = fixture(), master = f.tracks[11].digitalMasters[0], writes: string[] = [];
       if (variant === "oldEncoder") master.encoderVersion = "ffmpeg-libmp3lame-cbr-v1";
       if (variant === "truncatedProof") master.mp3Asset.checksumSha256 = "a".repeat(63);
@@ -86,7 +105,11 @@ test("Admin saveOffer service: strict audio metadata is required before any offe
         digitalOffer: { async findFirst() { return null; }, async create({ data }: { data: Record<string, unknown> }) { writes.push("offer"); return { ...data, id: f.id }; } },
         digitalMaster: { async findMany() { return f.tracks.flatMap(track => track.digitalMasters); } },
         asset: { async updateMany() { writes.push("rights"); return { count: 1 }; } },
-        digitalEvent: { async create() { writes.push("audit"); return {}; } },
+        digitalEvent: { async create() { writes.push("audit"); return {}; }, async findFirst({ where }: { where: { details: { equals: string } } }) {
+          if(variant==="missingRightsReview")return null;
+          const master = f.tracks.flatMap(track => track.digitalMasters).find(master => master.id === where.details.equals); return master ? approvedReview(master, actor.id) : null;
+        } },
+        user: { async findUnique() { return { id: actor.id, role: "ADMIN", status: variant==="reviewerInactive"?"SUSPENDED":"ACTIVE", emailVerified: true }; } },
       } as unknown as Prisma.TransactionClient;
       prisma.$transaction = (async (callback: (db: Prisma.TransactionClient) => Promise<unknown>) => callback(tx)) as unknown as typeof original;
       const run = () => saveOffer(actor, { projectId: f.offer.project.id, trackId: null, priceCents: variant === "inactiveDraft" ? null : 990,
@@ -96,7 +119,7 @@ test("Admin saveOffer service: strict audio metadata is required before any offe
       } else if (variant === "inactiveDraft") {
         assert.equal(await run(), f.id); assert.deepEqual(writes, ["offer", "audit"]);
       } else {
-        await assert.rejects(run, { code: "NO_READY_MASTER" }, variant); assert.deepEqual(writes, [], variant);
+        await assert.rejects(run, { code: ["missingRightsReview","reviewerInactive"].includes(variant)?"RIGHTS_REVIEW_REQUIRED":"NO_READY_MASTER" }, variant); assert.deepEqual(writes, [], variant);
       }
     }
   } finally {

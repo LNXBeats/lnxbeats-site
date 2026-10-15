@@ -1,0 +1,211 @@
+
+> lnx-studio@0.2.0 build
+> next build --webpack
+
+▲ Next.js 16.3.8 (webpack)
+✓ Running next.config.ts took 18ms
+- Experiments (use with caution):
+  · imgOptConcurrency: 1
+  ⨯ imgOptOperationCache
+  · proxyClientMaxBodySize: 10551296
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 6.0s
+  Running TypeScript ...
+  Finished TypeScript in 3.7s ...
+  Collecting page data using 13 workers ...
+  Generating static pages using 13 workers (0/19) ...
+  Generating static pages using 13 workers (4/19)
+  Generating static pages using 13 workers (9/19)
+  Generating static pages using 13 workers (14/19)
+✓ Generating static pages using 13 workers (19/19) in 238ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ○ /a-propos
+├ ƒ /admin
+├ ƒ /admin/boutique
+├ ƒ /admin/boutique/[slug]
+├ ƒ /admin/boutique/commandes
+├ ƒ /admin/boutique/commandes/[orderNumber]
+├ ƒ /admin/boutique/externe/[id]
+├ ƒ /admin/boutique/externe/nouveau
+├ ƒ /admin/boutique/logistique
+├ ƒ /admin/boutique/nouveau
+├ ƒ /admin/boutique/retours
+├ ƒ /admin/boutique/retours/[requestNumber]
+├ ƒ /admin/catalogue
+├ ƒ /admin/catalogue/[slug]
+├ ƒ /admin/catalogue/nouveau
+├ ƒ /admin/commandes
+├ ƒ /admin/commandes/[orderNumber]
+├ ƒ /admin/creations
+├ ƒ /admin/creations/[slug]
+├ ƒ /admin/creations/nouveau
+├ ƒ /admin/droits
+├ ƒ /admin/droits/[requestNumber]
+├ ƒ /admin/evenements-financiers
+├ ƒ /admin/evenements-financiers/[id]
+├ ƒ /admin/facturation
+├ ƒ /admin/facturation/[invoiceNumber]
+├ ƒ /admin/facturation/avoirs/[creditNoteNumber]
+├ ƒ /admin/membres
+├ ƒ /admin/musique
+├ ƒ /admin/musique/[slug]
+├ ƒ /admin/musique/achats/[id]
+├ ƒ /admin/musique/juridictions
+├ ƒ /admin/nettoyage
+├ ƒ /admin/notifications
+├ ƒ /admin/recherche
+├ ƒ /admin/soutiens
+├ ƒ /admin/soutiens/[id]
+├ ƒ /admin/tarifs
+├ ƒ /ads.txt
+├ ƒ /album/[slug]
+├ ƒ /api/admin/boutique/external-products/[productId]/image
+├ ƒ /api/admin/boutique/products/[productId]/image
+├ ƒ /api/admin/catalogue/audio
+├ ƒ /api/admin/catalogue/audio/[assetId]
+├ ƒ /api/admin/catalogue/cover
+├ ƒ /api/admin/creations/media
+├ ƒ /api/admin/creations/media/[assetId]
+├ ƒ /api/admin/creations/media/multipart/abort
+├ ƒ /api/admin/creations/media/multipart/complete
+├ ƒ /api/admin/creations/media/multipart/init
+├ ƒ /api/admin/creations/media/multipart/part-url
+├ ƒ /api/admin/creations/media/multipart/status
+├ ƒ /api/admin/digital/export
+├ ƒ /api/admin/digital/offers
+├ ƒ /api/admin/digital/orders/[id]/[operation]
+├ ƒ /api/admin/digital/projects/[id]/tracks
+├ ƒ /api/admin/digital/rights-reviews
+├ ƒ /api/admin/digital/tracks/[id]/[operation]
+├ ƒ /api/admin/digital/tracks/[id]/parts/[sessionId]/[partNumber]
+├ ƒ /api/admin/orders/[orderNumber]/delivery
+├ ƒ /api/admin/orders/[orderNumber]/delivery/[assetId]
+├ ƒ /api/admin/orders/[orderNumber]/delivery/multipart/[operation]
+├ ƒ /api/admin/support/export
+├ ƒ /api/auth/[...all]
+├ ƒ /api/auth/registration/code
+├ ƒ /api/auth/registration/complete
+├ ƒ /api/auth/registration/state
+├ ƒ /api/auth/registration/verify
+├ ƒ /api/auth/verification-email
+├ ƒ /api/billing/credit-notes/[creditNoteNumber]/pdf
+├ ƒ /api/billing/invoices/[invoiceNumber]/pdf
+├ ƒ /api/digital/cart
+├ ƒ /api/digital/checkout
+├ ƒ /api/digital/documents/[id]
+├ ƒ /api/digital/download/[id]
+├ ƒ /api/digital/library/download
+├ ƒ /api/digital/local-review/checkout
+├ ƒ /api/digital/orders/[id]/[operation]
+├ ƒ /api/digital/orders/[id]/confirmation
+├ ƒ /api/digital/quote
+├ ƒ /api/digital/webhooks/[provider]
+├ ƒ /api/health
+├ ƒ /api/internal/notifications/dispatch
+├ ƒ /api/internal/notifications/production/owner-email-smoke
+├ ƒ /api/internal/notifications/production/owner-email-smoke/dispatch
+├ ƒ /api/internal/notifications/qa/owner-email-smoke
+├ ƒ /api/internal/notifications/qa/owner-email-smoke/dispatch
+├ ƒ /api/internal/notifications/qa/resend
+├ ƒ /api/internal/qa/auth/login
+├ ƒ /api/legal/withdrawals
+├ ƒ /api/notifications/resend/webhook
+├ ƒ /api/orders/[orderNumber]
+├ ƒ /api/orders/[orderNumber]/delivery/[assetId]
+├ ƒ /api/orders/[orderNumber]/finalize
+├ ƒ /api/orders/[orderNumber]/payments/paypal/capture
+├ ƒ /api/orders/[orderNumber]/payments/paypal/checkout
+├ ƒ /api/orders/[orderNumber]/payments/stripe/checkout
+├ ƒ /api/orders/[orderNumber]/payments/stripe/prepare-edit
+├ ƒ /api/orders/[orderNumber]/photos
+├ ƒ /api/orders/[orderNumber]/photos/[assetId]
+├ ƒ /api/orders/[orderNumber]/rights
+├ ƒ /api/orders/drafts
+├ ƒ /api/payments/paypal/webhook
+├ ƒ /api/payments/stripe/webhook
+├ ƒ /api/rights/[requestNumber]
+├ ƒ /api/rights/[requestNumber]/accept
+├ ƒ /api/rights/[requestNumber]/confirm
+├ ƒ /api/rights/[requestNumber]/payments/paypal/capture
+├ ƒ /api/rights/[requestNumber]/payments/paypal/checkout
+├ ƒ /api/rights/[requestNumber]/payments/stripe/checkout
+├ ƒ /api/rights/[requestNumber]/preauthorization/revise
+├ ƒ /api/rights/[requestNumber]/response
+├ ƒ /api/rights/[requestNumber]/withdrawal
+├ ƒ /api/rights/documents/[documentId]
+├ ƒ /api/shop/orders
+├ ƒ /api/shop/orders/[orderNumber]/payments/paypal/capture
+├ ƒ /api/shop/orders/[orderNumber]/payments/paypal/checkout
+├ ƒ /api/shop/orders/[orderNumber]/payments/stripe/checkout
+├ ƒ /api/shop/sav/evidence/[evidenceId]
+├ ƒ /api/shop/shipping/quote
+├ ƒ /api/support/[id]
+├ ƒ /api/support/[id]/capture
+├ ƒ /api/support/[id]/reconcile
+├ ƒ /api/support/checkout
+├ ƒ /api/support/session
+├ ƒ /api/support/webhooks/paypal
+├ ƒ /api/support/webhooks/stripe
+├ ƒ /boutique
+├ ƒ /boutique/[slug]
+├ ƒ /boutique/panier
+├ ○ /cgv
+├ ○ /cgv/boutique
+├ ○ /cgv/creation-musicale
+├ ƒ /commande/[orderNumber]/confirmation
+├ ƒ /commander
+├ ƒ /compte
+├ ƒ /compte/achats/[orderNumber]
+├ ƒ /compte/achats/[orderNumber]/sav
+├ ƒ /compte/avoirs/[creditNoteNumber]
+├ ƒ /compte/commandes/[orderNumber]
+├ ƒ /compte/commandes/[orderNumber]/droits/licence
+├ ƒ /compte/commandes/[orderNumber]/droits/partenariat
+├ ƒ /compte/droits/[requestNumber]
+├ ƒ /compte/droits/[requestNumber]/verifier
+├ ƒ /compte/factures/[invoiceNumber]
+├ ƒ /compte/musique
+├ ƒ /compte/sav/[requestNumber]
+├ ○ /confidentialite
+├ ƒ /connexion
+├ ○ /contact
+├ ƒ /creations
+├ ƒ /creations/[slug]
+├ ƒ /discographie
+├ ƒ /documents-juridiques/[version]
+├ ○ /icon
+├ ƒ /inscription
+├ ƒ /media/boutique/[assetId]
+├ ƒ /media/catalog/[assetId]
+├ ƒ /media/catalog/audio/[assetId]
+├ ƒ /media/creations/[assetId]
+├ ƒ /media/digital/previews/[id]
+├ ○ /mentions-legales
+├ ƒ /merchant-center.xml
+├ ƒ /mot-de-passe-oublie
+├ ƒ /musique/checkout
+├ ƒ /musique/conditions
+├ ƒ /musique/confirmation/[id]
+├ ƒ /musique/panier
+├ ƒ /qa/access
+├ ƒ /reinitialiser-mot-de-passe
+├ ƒ /renvoyer-verification
+├ ○ /retractation
+├ ƒ /retractation/confirmation
+├ ○ /robots.txt
+├ ƒ /sitemap.xml
+├ ƒ /soutenir
+├ ƒ /soutenir/confirmation/[id]
+└ ƒ /verifier-email
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

@@ -8,6 +8,7 @@ import { DIGITAL_ACTIVE_RIGHTS_ORDER_STATES } from "./library-policy";
 import { applyDigitalCompletions } from "./completion";
 import { digitalOwnsExactAlbum } from "./album-ownership-policy";
 import { digitalCommercialAudioReady } from "./formats";
+import { assertDigitalRightsReviews } from "./rights-review-service";
 type DB = Prisma.TransactionClient;
 export function selectionFingerprint(offer:DigitalSelection){return createHash("sha256").update(JSON.stringify([offer.id,offer.scope,offer.title,offer.version,offer.priceCents,offer.tracks.map(t=>[t.trackId,t.masterId,t.title,t.position,t.formats??null,t.wavAssetId??null,t.mp3AssetId??null]),offer.completion??null])).digest("hex");}
 
@@ -20,7 +21,7 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
     } },
   } } } });
   if (offers.length !== ids.length) throw new DigitalError("OFFER_UNAVAILABLE", 409);
-  return offers.map(offer => {
+  const selected = offers.map(offer => {
     if (!offer.active || !offer.rightsConfirmed || offer.project.status !== "PUBLISHED" || !offer.project.publicVisible) throw new DigitalError("OFFER_UNAVAILABLE", 409);
     const tracks = offer.scope === "ALBUM" ? offer.project.tracks : offer.project.tracks.filter(t => t.id === offer.trackId);
     if (!tracks.length || tracks.some(t => { const m = t.digitalMasters[0]; return !m || !digitalCommercialAudioReady(m) || m.masterAsset.visibility !== "PRIVATE" || m.masterAsset.rightsStatus !== "CLEARED"
@@ -32,6 +33,8 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
       tracks: tracks.map(t => ({ trackId: t.id, masterId: t.digitalMasters[0].id, title: t.title, position: t.position,
         formats:["WAV","MP3"] as ["WAV","MP3"],wavAssetId:t.digitalMasters[0].masterAssetId,mp3AssetId:t.digitalMasters[0].mp3AssetId! })) };
   });
+  if(selected.length)await assertDigitalRightsReviews(db, selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
+  return selected;
 }
 export async function ownedTrackIds(userId: string, db: DB = prisma) {
   const rows = await db.digitalEntitlement.findMany({ where: { userId, status: "ACTIVE", line: { order: { status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } } }, select: { master: { select: { trackId: true } } } });
@@ -92,12 +95,14 @@ export async function saveOffer(actor: OrderActor, input: { projectId: string; t
     // strict ingestion proof; an extension, MIME label or old READY flag is insufficient.
     if(input.active && (project.status!=="PUBLISHED"||!project.publicVisible||!project.tracks.length
       ||project.tracks.some(t=>!t.digitalMasters[0]||!digitalCommercialAudioReady(t.digitalMasters[0]))))throw new DigitalError("NO_READY_MASTER",409);
+    if(input.active)await assertDigitalRightsReviews(tx,project.tracks.map(track=>track.digitalMasters[0].id));
     const current = await tx.digitalOffer.findFirst({ where: { projectId: input.projectId, trackId: input.trackId ?? null } });
     if ((current?.version ?? 0) !== input.expectedVersion) throw new DigitalError("STALE_OFFER", 409);
     const data = { priceCents: input.priceCents, active: input.active, rightsConfirmed: input.rightsConfirmed, distribution: input.distribution, version: (current?.version ?? 0) + 1 };
     const offer = current ? await tx.digitalOffer.update({ where: { id: current.id }, data }) : await tx.digitalOffer.create({ data: { ...data, scope: input.trackId ? "TRACK" : "ALBUM", projectId: input.projectId, trackId: input.trackId ?? null } });
     // Upload alone grants no rights. This acknowledgement is explicit and audited.
-    const masters = await tx.digitalMaster.findMany({ where: { status: "READY", track: { projectId: input.projectId, ...(input.trackId ? { id: input.trackId } : {}) } }, select: { masterAssetId: true, previewAssetId: true,mp3AssetId:true } });
+    // Do not rewrite rights on older acquired editions while preparing a new offer.
+    const masters = project.tracks.flatMap(track=>track.digitalMasters.slice(0,1)).filter(digitalCommercialAudioReady);
     if (masters.length) await tx.asset.updateMany({ where: { id: { in: masters.flatMap(m => [m.masterAssetId, ...(m.previewAssetId ? [m.previewAssetId] : []),...(m.mp3AssetId?[m.mp3AssetId]:[])]) } }, data: { rightsStatus: input.rightsConfirmed ? "CLEARED" : "PENDING" } });
     await tx.digitalEvent.create({ data: { actorId: actor.id, kind: "OFFER_SAVED", details: { offerId: offer.id, version: offer.version, priceCents: offer.priceCents, active: offer.active, rightsConfirmed: offer.rightsConfirmed } } });
     return offer.id;

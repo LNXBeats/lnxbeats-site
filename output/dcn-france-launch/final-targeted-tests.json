@@ -1,0 +1,12 @@
+{
+  "environment": "LOCAL_UNIT_REPOSITORY_SESSION_AND_PROVIDER_DOUBLES_PGLITE_NOT_EXTERNAL_RECIPES",
+  "files": [
+    "tests/digital/rights-review.test.ts",
+    "tests/digital/real-album-admin.test.ts"
+  ],
+  "tests": 17,
+  "pass": 17,
+  "fail": 0,
+  "skip": 0,
+  "exitCode": 0
+}
