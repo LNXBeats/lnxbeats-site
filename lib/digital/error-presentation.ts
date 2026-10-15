@@ -1,5 +1,9 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
+  if (code === "EXCERPT_SELECTION_CHANGED") return "Le choix a changé dans une autre fenêtre. Actualisez cette piste avant de l’enregistrer ; votre saisie n’a pas remplacé le choix plus récent.";
+  if (code === "EXCERPT_MASTER_CHANGED") return "Une autre version du master est maintenant courante. Rechargez la fiche pour choisir un passage de cette version ; les versions précédentes restent conservées.";
+  if (code === "EXCERPT_NOT_READY" || code === "EXCERPT_ATTESTATION_REQUIRED") return "Générez et écoutez d’abord le nouvel extrait, puis confirmez explicitement votre validation. Aucun passage n’a été validé par cette action.";
+  if (code.startsWith("EXCERPT_") || code === "INVALID_EXCERPT") return "Ce choix d’extrait ne peut pas encore être enregistré ou généré. Vérifiez le début du passage et l’état du traitement. Le master et l’extrait provisoire restent conservés.";
   if (code === "DIGITAL_DATABASE_TIMEZONE_UNSAFE") return "Le parcours numérique est temporairement indisponible : la configuration d’horodatage doit être vérifiée. Aucune nouvelle opération n’a été enregistrée par cette action.";
   if (ownedTitles.length) return `Déjà acquis : ${ownedTitles.join(" · ")}. Ce panier ne permet pas un complément automatique sûr. Vos achats restent dans Ma musique ; aucun crédit n’est appliqué sans vérification. Contactez LNX Beats via /contact pour examiner le complément.`;
   if(code.startsWith("FRANCE_"))return "L’achat numérique est préparé pour les particuliers résidant en France métropolitaine, Corse comprise. Vos informations de résidence ou leur vérification serveur sont absentes, insuffisantes ou contradictoires. Aucun nouveau paiement n’a été lancé ; vos acquisitions existantes restent conservées.";
