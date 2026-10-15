@@ -1,0 +1,57 @@
+{
+  "status": "PASS",
+  "environment": "LOCAL_BUILT_QA_IN_APP_BROWSER",
+  "page": "/admin/musique/dcn-edition-privee-9d063091-fe2e-432a-bdae-53dd46988e2f",
+  "realAlbumImported": false,
+  "physicalSafariRecipeRepeated": false,
+  "presentationOnly": true,
+  "privatePreviewPreserved": true,
+  "singleCompleteAndUnitOfferLabelsDistinct": true,
+  "bothPricesEmpty": true,
+  "bothOffersRemainInactive": true,
+  "rightsApprovalRequired": true,
+  "rightsInformationAndInputsRetained": true,
+  "privateCoverLoaded": {"naturalWidth": 480},
+  "mobileBeforeFix": {
+    "viewportWidth": 390,
+    "rightsRegionClientWidth": 356,
+    "rightsRegionScrollWidth": 567,
+    "fieldsetWidth": 550.75,
+    "fieldsetRight": 583.75,
+    "result": "FAIL_HORIZONTAL_TRUNCATION"
+  },
+  "mobileFinal": {
+    "viewport": {"width": 390, "height": 844},
+    "documentClientWidth": 390,
+    "documentScrollWidth": 390,
+    "rightsRegionClientWidth": 356,
+    "rightsRegionScrollWidth": 356,
+    "previewRegionClientWidth": 356,
+    "previewRegionScrollWidth": 356,
+    "overflowingRightsFields": 0,
+    "result": "PASS"
+  },
+  "desktopFinal": {
+    "viewport": {"width": 1440, "height": 1000},
+    "rightsRegionClientWidth": 1143,
+    "rightsRegionScrollWidth": 1143,
+    "overflowingRightsFields": 0,
+    "result": "PASS"
+  },
+  "fix": "CSS scoped to the rights form: shrink grid/fieldset and wrap legend, attestation, button and textarea; no hidden, clipping or ellipsis rule.",
+  "screenshotsVisuallyInspected": [
+    "admin-single-desktop-1440.jpg",
+    "admin-single-mobile-390.jpg",
+    "admin-offers-single-mobile-390.jpg",
+    "admin-rights-mobile-390.jpg"
+  ],
+  "consoleErrorsObservedAfterReload": [],
+  "advertisingScriptsObserved": 0,
+  "viewportOverrideReset": true,
+  "newFormSubmissions": 0,
+  "newImports": 0,
+  "priceWrites": 0,
+  "rightsWrites": 0,
+  "providerCalls": 0,
+  "productionMutation": false
+}

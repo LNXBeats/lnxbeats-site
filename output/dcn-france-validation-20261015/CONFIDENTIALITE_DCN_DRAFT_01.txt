@@ -1,0 +1,13 @@
+DRAFT - non approuvé, non entré en vigueur
+digital-privacy-addendum-20261014-draft-01
+Empreinte du document : 195988799601eae2250dbd868eba9a5eb6d32b9f0d3a4540c043dc4d213cdc8a
+
+Portée séparée
+Cet ajout proposé concerne uniquement le nouveau commerce numérique. La notice approuvée existante, ses versions et preuves historiques sont conservées sans modification.
+
+Données nécessaires
+Compte vérifié, pays de résidence et de facturation, subdivision requise, indices prestataire strictement nécessaires, commandes et versions acquises, consentements et remise durable, factures/avoirs, journal de sécurité et téléchargements autorisés. Pas de décision IP-only ni de profilage géographique inutile.
+
+Finalités, destinataires et conservation
+Contrat, délivrance, justification comptable/fiscale, conformité et sécurité des fichiers privés. Stripe et PayPal restent des prestataires de paiement, non des Merchant of Record automatiquement. R2 et le transport d’e-mails existant sont réutilisés selon leur configuration autorisée.
+La base juridique, les durées par catégorie, les éventuels registres OSS/SME, les transferts et garanties internationales ainsi que l’exercice des droits doivent être validés pour les territoires ouverts. Ce brouillon ne fixe aucun délai de conservation nouveau ni consentement marketing implicite.

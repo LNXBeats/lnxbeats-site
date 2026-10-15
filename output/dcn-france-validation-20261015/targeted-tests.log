@@ -1,0 +1,112 @@
+TAP version 13
+# Subtest: single, album and project Admin labels distinguish the whole edition from individual titles without changing scopes
+ok 1 - single, album and project Admin labels distinguish the whole edition from individual titles without changing scopes
+  ---
+  duration_ms: 0.401458
+  type: 'test'
+  ...
+# Subtest: audio labels retain exact version, private formats, bitrate and millisecond excerpt choice in plain French
+ok 2 - audio labels retain exact version, private formats, bitrate and millisecond excerpt choice in plain French
+  ---
+  duration_ms: 7.550916
+  type: 'test'
+  ...
+# Subtest: clearer missing-media labels retain every fail-closed readiness requirement
+ok 3 - clearer missing-media labels retain every fail-closed readiness requirement
+  ---
+  duration_ms: 0.171166
+  type: 'test'
+  ...
+# Subtest: Admin integrates context labels while preserving private preview, independent offer inputs and explicit rights checks
+ok 4 - Admin integrates context labels while preserving private preview, independent offer inputs and explicit rights checks
+  ---
+  duration_ms: 2.798584
+  type: 'test'
+  ...
+# Subtest: rights review alone can shrink its grid, fieldset and long consent text without hiding information
+ok 5 - rights review alone can shrink its grid, fieldset and long consent text without hiding information
+  ---
+  duration_ms: 0.608708
+  type: 'test'
+  ...
+# Subtest: Admin readiness counts only the actual released album offer, not announcements
+ok 6 - Admin readiness counts only the actual released album offer, not announcements
+  ---
+  duration_ms: 0.484041
+  type: 'test'
+  ...
+# Subtest: Admin independent album price warning is advisory and only compares identical sellable tracks
+ok 7 - Admin independent album price warning is advisory and only compares identical sellable tracks
+  ---
+  duration_ms: 0.088791
+  type: 'test'
+  ...
+# Subtest: Admin readiness remains fail-closed for draft/hidden/media/rights/invalid excerpt
+ok 8 - Admin readiness remains fail-closed for draft/hidden/media/rights/invalid excerpt
+  ---
+  duration_ms: 0.101333
+  type: 'test'
+  ...
+# Subtest: Twelve-file batch has two active tasks maximum and keeps successes after one failure
+ok 9 - Twelve-file batch has two active tasks maximum and keeps successes after one failure
+  ---
+  duration_ms: 7.30425
+  type: 'test'
+  ...
+# Subtest: Batch stop prevents new starts, and page parsing never accepts an arbitrary offset
+ok 10 - Batch stop prevents new starts, and page parsing never accepts an arbitrary offset
+  ---
+  duration_ms: 0.476375
+  type: 'test'
+  ...
+# Subtest: Admin import keeps batch selection explicit and preserves prior rows; mutations stay authenticated
+ok 11 - Admin import keeps batch selection explicit and preserves prior rows; mutations stay authenticated
+  ---
+  duration_ms: 0.993042
+  type: 'test'
+  ...
+# Subtest: an album batch refuses missing mappings and duplicate destinations, including a completed row
+ok 12 - an album batch refuses missing mappings and duplicate destinations, including a completed row
+  ---
+  duration_ms: 0.129292
+  type: 'test'
+  ...
+# Subtest: excerpt offsets require explicit finite milliseconds inside the source duration ceiling
+ok 13 - excerpt offsets require explicit finite milliseconds inside the source duration ceiling
+  ---
+  duration_ms: 0.132667
+  type: 'test'
+  ...
+# Subtest: admin audition permits a ready bounded excerpt before publication or rights approval, never complete media
+ok 14 - admin audition permits a ready bounded excerpt before publication or rights approval, never complete media
+  ---
+  duration_ms: 0.149334
+  type: 'test'
+  ...
+# Subtest: private edition preview and media routes remain authenticated and independent from public gates
+ok 15 - private edition preview and media routes remain authenticated and independent from public gates
+  ---
+  duration_ms: 1.52
+  type: 'test'
+  ...
+# Subtest: Admin equivalence API authenticates both methods and accepts only the explicit immutable-review input
+ok 16 - Admin equivalence API authenticates both methods and accepts only the explicit immutable-review input
+  ---
+  duration_ms: 2.459833
+  type: 'test'
+  ...
+# Subtest: Admin equivalence decisions require explicit direction, selection and reread rather than inferred remapping
+ok 17 - Admin equivalence decisions require explicit direction, selection and reread rather than inferred remapping
+  ---
+  duration_ms: 0.562416
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 78.541042

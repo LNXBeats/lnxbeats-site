@@ -20,3 +20,5 @@ output/pdf/dcn-qa-*
 # Volatile, SHA-dependent scan metadata is packaged in the offline restitution.
 output/dcn-consolidation/security-scan.json
 output/dcn-france-commercial/security-scan.json
+output/dcn-france-validation-20261015/security-scan.json
+output/dcn-france-validation-20261015/pdf-review/

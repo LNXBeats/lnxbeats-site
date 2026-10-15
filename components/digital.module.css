@@ -20,6 +20,12 @@
 .form label { display:grid; gap:.4rem; line-height:1.5; }
 .form input:not([type=checkbox]),.form select { width:100%; min-width:0; padding:.7rem; min-height:44px; border:1px solid #ffffff33; background:#080b0d; color:#fff; border-radius:8px; }
 .form .checkbox { display:flex; align-items:flex-start; gap:.75rem; min-height:44px; }
+.rightsReview { grid-template-columns:minmax(0,1fr); min-width:0; }
+.rightsReview>* { min-width:0; }
+.rightsReview fieldset { min-inline-size:0; margin-inline:0; }
+.rightsReview legend { max-inline-size:100%; white-space:normal; overflow-wrap:anywhere; }
+.rightsReview .checkbox>span { min-width:0; overflow-wrap:anywhere; }
+.rightsReview :is(button,textarea) { min-width:0; max-width:100%; white-space:normal; overflow-wrap:anywhere; }
 .field { display:grid; gap:.5rem; margin:1rem 0; min-width:0; }
 .field :is(input:not([type=checkbox]),select) { width:100%; min-width:0; min-height:44px; padding:.7rem; border:1px solid #ffffff33; border-radius:8px; background:#080b0d; color:#fff; }
 .consent { display:flex; align-items:flex-start; gap:.75rem; min-height:44px; margin:1rem 0; line-height:1.6; }

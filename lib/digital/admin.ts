@@ -12,10 +12,10 @@ export function digitalSalesReadiness(project: { status: string; publicVisible: 
   const items = tracks.map(t => ({ id: t.id, ready: published && t.publication === "RELEASED" && prepared(t) && saleOffer(t.offer), blockers: [
     ...(!published ? ["Projet non publié ou masqué"] : []),
     ...(t.publication !== "RELEASED" ? ["Piste non publiée"] : []),
-    ...(!t.masterReady ? ["Master privé manquant"] : []),
-    ...(!t.previewDurationMs || t.previewDurationMs > 60_000 ? ["Extrait valide manquant"] : []),
-    ...(!t.mediaCleared ? ["Droits médias à confirmer"] : []),
-    ...(!saleOffer(t.offer) ? ["Offre/prix/droits de vente à compléter"] : []),
+    ...(!t.masterReady ? ["WAV/MP3 à valider pour la vente"] : []),
+    ...(!t.previewDurationMs || t.previewDurationMs > 60_000 ? ["Extrait à vérifier — 60 s maximum"] : []),
+    ...(!t.mediaCleared ? ["Droits de cette version à confirmer"] : []),
+    ...(!saleOffer(t.offer) ? ["Prix, droits de vente ou disponibilité à compléter"] : []),
   ] }));
   const albumReady = published && released.length > 0 && released.every(prepared) && saleOffer(album);
   // Compare only the same released tracks actually available independently.

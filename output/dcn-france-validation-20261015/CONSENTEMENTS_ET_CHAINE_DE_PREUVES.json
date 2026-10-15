@@ -1,0 +1,68 @@
+{
+  "scope": "EXPORT_POUR_REVUE_PAS_CONTRAT_CONCLU",
+  "mode": "TEST",
+  "approvedForLive": false,
+  "contract": {
+    "version": "digital-music-france-cgv-20261015-draft-02",
+    "textHashSha256": "5e350e6bddb003b6ff0d2cd0236aa6876857b2d0376f8c99dd8362e8a1babe48",
+    "documentHashSha256": "30c7ac06586dad083f13c334affd4763ba4c9b215b3c8f4cc28522e400ef042c",
+    "status": "DRAFT"
+  },
+  "privacy": {
+    "version": "digital-privacy-addendum-20261014-draft-01",
+    "documentHashSha256": "195988799601eae2250dbd868eba9a5eb6d32b9f0d3a4540c043dc4d213cdc8a",
+    "status": "DRAFT"
+  },
+  "checkoutChoices": [
+    {
+      "field": "termsAccepted",
+      "initiallyChecked": false,
+      "text": "J’ai lu et j’accepte les conditions France de cette démonstration QA, dans la version indiquée ci-dessus. Cette case ne vaut pas approbation du texte pour une vente réelle."
+    },
+    {
+      "field": "earlyDelivery",
+      "initiallyChecked": false,
+      "text": "Je demande expressément que la fourniture des contenus numériques commandés commence avant la fin du délai de rétractation de quatorze jours."
+    },
+    {
+      "field": "withdrawalAcknowledged",
+      "initiallyChecked": false,
+      "text": "Je reconnais que je perdrai mon droit de rétractation lorsque la fourniture aura commencé, après mon consentement exprès et la confirmation de cet accord sur un support durable. Mes garanties légales restent applicables."
+    }
+  ],
+  "durableConfirmation": {
+    "example": "EXEMPLE_CONFIRMATION_QA.pdf",
+    "content": "Contenu/versions acquis, prix, texte accepté, choix, identité et dates. Exemple synthétique conservé du lot précédent, pas preuve de remise LIVE.",
+    "sequence": [
+      "Consentements et réservation vérifiés serveur",
+      "Paiement confirmé serveur, ou attribution gratuite prouvée sans PSP",
+      "Document privé figé et empreinte vérifiée",
+      "GET document propriétaire : flux terminé tracé, HEAD sans remise",
+      "Accusé explicite distinct du client QA après demande de téléchargement",
+      "Première fourniture revalidée puis accès bibliothèque"
+    ],
+    "limitations": [
+      "Fin de flux ≠ fichier conservé sur appareil",
+      "E-mail avec lien/capture QA ≠ remise durable juridiquement approuvée",
+      "Commencement/transport et libellés LIVE à valider",
+      "Attribution gratuite sans facture d'encaissement fictif"
+    ]
+  },
+  "withdrawal": {
+    "path": "/retractation",
+    "kinds": [
+      "Rétractation",
+      "Non-conformité",
+      "Geste commercial"
+    ],
+    "onlineReceipt": "Contenu, date, heure UTC, empreinte, téléchargement privé",
+    "automaticRefund": false,
+    "automaticAccessRevocation": false,
+    "reviewRequired": true
+  },
+  "syntheticSnapshotHash": "7282a62a798444c8b161b42f732ab4af14caef4e38ffd3e2322ba19fce3977b2",
+  "noPersonalDataSource": true,
+  "noDatabaseCalls": true,
+  "noProviderCalls": true,
+  "noEmailsSent": true
+}

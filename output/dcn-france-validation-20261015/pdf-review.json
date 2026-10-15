@@ -1,0 +1,15 @@
+{
+  "status":"PASS",
+  "document":"DOSSIER_VALIDATION_PROFESSIONNELLE_DRAFT.pdf",
+  "pages":6,
+  "method":"ReportLab with embedded system Arial fonts, pypdf readback, Poppler PNG rendering and visual inspection of all six final pages",
+  "iterations":[
+    {"pages":7,"result":"LAYOUT_REVISED","reason":"Short final orphan page; relative appendix paths too long for a professional brief."},
+    {"pages":6,"result":"PASS","reason":"Readable tables and choices, no clipped content or overlap; final paragraph retained on page six."}
+  ],
+  "contractTextEdited":false,
+  "oldAcquiredPdfEdited":false,
+  "legalApproval":false,
+  "humanProfessionalReviewStillRequired":true,
+  "renderingWarning":"Fontconfig could not load its default config; Poppler completed successfully using the embedded PDF fonts. Final PNGs inspected."
+}

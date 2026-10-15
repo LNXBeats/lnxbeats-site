@@ -1,0 +1,11 @@
+{
+  "environment": "LOCAL_PRESENTATION_TESTS_WITH_DOUBLES_NO_PROVIDER_RECIPES",
+  "files": [
+    "tests/digital/admin-presentation.test.ts",
+    "tests/digital/admin.test.ts",
+    "tests/digital/master-equivalences-admin.test.ts"
+  ],
+  "pass": 17,
+  "fail": 0,
+  "skip": 0
+}

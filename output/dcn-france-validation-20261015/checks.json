@@ -1,0 +1,45 @@
+{
+  "environment": "LOCAL_QA",
+  "base": "d0e995e612e353230a318ad4214daa9cb3697795",
+  "providerRecipesRepeated": false,
+  "productionMutation": false,
+  "prisma": "NOT_RUN_SCHEMA_UNCHANGED",
+  "workerBuild": "REUSED_FROM_UNCHANGED_WORKER_BASE",
+  "results": [
+    {
+      "name": "targeted-tests",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "/usr/local/bin/node --conditions=react-server --import tsx --test --test-reporter=tap tests/digital/admin-presentation.test.ts tests/digital/admin.test.ts tests/digital/master-equivalences-admin.test.ts"
+    },
+    {
+      "name": "lint",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run lint"
+    },
+    {
+      "name": "typecheck",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run typecheck"
+    },
+    {
+      "name": "build-web",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "npm run build"
+    },
+    {
+      "name": "diff-check",
+      "status": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "command": "git diff --check"
+    }
+  ]
+}

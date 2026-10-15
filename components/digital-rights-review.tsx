@@ -10,10 +10,10 @@ export function DigitalRightsReview({ projectId, tracks }: { projectId: string; 
   const [reference, setReference] = useState(""), [sha, setSha] = useState(""), [attested, setAttested] = useState(false), [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [reviews, setReviews] = useState(tracks.map(track => track.review)), [requestId, setRequestId] = useState<string | null>(null);
   function changed() { setRequestId(null); setMessage(""); }
-  return <section className={styles.panel} aria-labelledby="rights-review-title"><h2 id="rights-review-title">Autorisations et collaborateurs — par version de master</h2>
+  return <section className={styles.panel} aria-labelledby="rights-review-title"><h2 id="rights-review-title">Droits et collaborateurs — par version audio</h2>
     <p>Avant toute nouvelle vente, vérifiez les autorisations de la composition, du master, des interprètes/collaborateurs, des samples ou reprises éventuels et de l’extrait. La simple case de l’offre ne constitue plus une preuve. Cette revue couvre la vente personnelle WAV/MP3 en France métropolitaine, Corse comprise.</p>
     <p className={styles.note}>Conservez les documents dans votre archive privée. Saisissez seulement sa référence opaque et le SHA‑256 du justificatif ou du manifeste vérifié. Aucun document n’est publié ; le logiciel ne remplace pas votre examen juridique.</p>
-    <form className={styles.form} onSubmit={async event => {
+    <form className={`${styles.form} ${styles.rightsReview}`} onSubmit={async event => {
       event.preventDefault(); if (busy) return; setBusy(true); setMessage("");
       const key = requestId ?? crypto.randomUUID(); setRequestId(key);
       try {
@@ -23,16 +23,16 @@ export function DigitalRightsReview({ projectId, tracks }: { projectId: string; 
         const value = await response.json() as { reviews?: DigitalRightsReviewSummary[]; error?: string };
         if (!response.ok || !value.reviews) throw new Error(value.error ?? "La revue n’a pas été enregistrée. Vérifiez la version et rechargez les états si nécessaire.");
         const updated = value.reviews; setReviews(previous => previous.map(review => updated.find(entry => entry.masterId === review.masterId) ?? review));
-        setRequestId(null); setSelected([]); setMessage("Revue enregistrée dans le journal append-only. Aucun achat, document ou fichier historique modifié. L’offre et la fiscalité restent des contrôles séparés."); router.refresh();
+        setRequestId(null); setSelected([]); setMessage("Revue ajoutée au journal, sans effacer les décisions précédentes. Aucun achat, document ou fichier historique modifié. L’offre et la fiscalité restent à vérifier séparément."); router.refresh();
       } catch (error) { setMessage(error instanceof Error ? error.message : "Résultat inconnu : ne recommencez pas avec une autre clé. Réessayez ce même enregistrement ou rechargez ses états."); }
       finally { setBusy(false); }
     }}>
       <fieldset disabled={busy}><legend>Versions courantes à examiner — 100 maximum par lot</legend>
-        {!tracks.length ? <p>Aucun master importé. Importez et validez d’abord une nouvelle version WAV.</p> : tracks.map(track => { const review = reviews.find(entry => entry.masterId === track.masterId) ?? track.review; return <label key={track.masterId} className={styles.checkbox}>
+        {!tracks.length ? <p>Aucun WAV importé. Importez et validez d’abord une version audio.</p> : tracks.map(track => { const review = reviews.find(entry => entry.masterId === track.masterId) ?? track.review; return <label key={track.masterId} className={styles.checkbox}>
           <input type="checkbox" disabled={!track.strictReady || busy} checked={selected.includes(track.masterId)} onChange={event => { changed(); setSelected(previous => event.target.checked ? [...previous, track.masterId] : previous.filter(id => id !== track.masterId)); }} />
           <span>{track.title} — V{track.version} · {track.strictReady ? labels[review.status] : "Ancienne preuve audio : nouvelle version strictement validée requise pour les nouvelles ventes"}</span>
         </label>; })}
-        <button type="button" className={styles.quiet} onClick={() => { changed(); setSelected(tracks.filter(track => track.strictReady).slice(0, 100).map(track => track.masterId)); }}>Sélectionner les versions éligibles de cet album</button>
+        <button type="button" className={styles.quiet} onClick={() => { changed(); setSelected(tracks.filter(track => track.strictReady).slice(0, 100).map(track => track.masterId)); }}>Sélectionner les versions éligibles</button>
       </fieldset>
       <label>Décision de revue<select value={status} onChange={event => { changed(); setStatus(event.target.value as DigitalRightsReviewStatus); }} disabled={busy}>
         <option value="DRAFT">Brouillon</option><option value="REVIEW_REQUIRED">Revue nécessaire</option><option value="APPROVED">Approuver les droits de ces versions</option><option value="REJECTED">Refuser</option><option value="REVOKED">Révoquer l’approbation</option>
