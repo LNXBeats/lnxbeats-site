@@ -12,10 +12,12 @@ Cette liste accompagne le dossier professionnel et le guide Admin. Elle ne valid
 | Qualification fiscale/sociale du nouveau flux | Traitement propre des ventes directes, agrégats, franchise/mention actuelle et sortie, factures/avoirs/complément, rubriques sociales | Questions ciblées prêtes ; pas d’assimilation automatique à SACEM/DistroKid |
 | Vérifier les droits du catalogue réellement choisi | Autorisations par œuvre/master/version, interprètes, collaborateurs, samples/reprises, mandats/distribution et extraits | À examiner sur les vraies pièces privées ; l’import n’approuve pas les droits |
 | Choisir édition et prix réels | Tracklist exacte, masters/covers définitifs, prix titres et édition complète indépendants, extraits écoutés | Aucun prix réel fixé par cette mission |
-| Vérifier la convention CM2C existante | Couverture du nouveau téléchargement ou adaptation précise si nécessaire | Convention existante réutilisée ; pas de nouvelle adhésion automatique |
+| Couverture CM2C du commerce numérique DCN | Réponse originale du 15/10/2026 à 19 h 02 vérifiée dans la messagerie professionnelle et reliée à l’attestation existante ; coordonnées du médiateur conservées | **CONFIRMÉ — DOCUMENT_VERIFIED** ; aucune nouvelle convention ni adhésion |
 | Préparer l’exploitation et le lot LIVE autorisé | Worker opérationnel, stockage privé, contrats/documents/e-mails et comptes vérifiés, sauvegarde/restore/ACL, rollback et seules recettes affectées | Aucun changement LIVE, migration ou déploiement par ce lot |
 
 Les avis doivent identifier les faits et la version examinés, la date, l’auteur compétent, sa conclusion et les conditions éventuelles. Une réponse fiscale ne vaut pas validation des conditions ; une validation commerciale ne vaut pas approbation juridique. Une modification du texte gelé impose une nouvelle version, sans réécrire les preuves historiques.
+
+La confirmation CM2C porte sur la couverture des activités du SIRET existant, dans l’échange relatif aux téléchargements WAV/MP3 DCN. Elle ne constitue **pas une approbation juridique des CGV numériques**, qui restent DRAFT. La réponse complète et son rattachement à l’attestation sont conservés hors Git dans l’archive privée `DCN_TRANSMISSIONS_20261015/reponses/CM2C/20261015_1902/` ; aucune correspondance complète ni pièce confidentielle n’est incluse dans cette checklist.
 
 ## Préparation du premier album
 
