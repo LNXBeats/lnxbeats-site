@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { syntheticExistingExcerptApproval } from "./fixtures/excerpt-approval";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
@@ -24,8 +25,9 @@ function fixture(albumPrice=100,paidCents=149){
   const actor={id:userId,email,status:"ACTIVE",emailVerified:true,role:"MEMBER"} as OrderActor;
   const masters=Array.from({length:2},()=>{const id=randomUUID(),trackId=randomUUID(),wavId=randomUUID(),mp3Id=randomUUID(),previewId=randomUUID();
     const asset={visibility:"PRIVATE",rightsStatus:"CLEARED",mimeType:"audio/wav",durationMs:3000,sizeBytes:100000n,checksumSha256:"a".repeat(64)};
-    return{id,trackId,version:1,status:"READY",codec:"wav",encoderVersion:DIGITAL_MP3_ENCODER_VERSION,mp3BitrateKbps:320,previewDurationMs:3000,
-      masterAssetId:wavId,mp3AssetId:mp3Id,previewAssetId:previewId,masterAsset:{...asset,id:wavId},mp3Asset:{...asset,id:mp3Id,mimeType:"audio/mpeg"},previewAsset:{...asset,id:previewId,mimeType:"audio/mpeg",visibility:"PUBLIC"}};});
+    return{id,trackId,version:1,status:"READY",codec:"wav",encoderVersion:DIGITAL_MP3_ENCODER_VERSION,mp3BitrateKbps:320,previewStartMs:0,previewDurationMs:3000,
+      masterAssetId:wavId,mp3AssetId:mp3Id,previewAssetId:previewId,masterAsset:{...asset,id:wavId},mp3Asset:{...asset,id:mp3Id,mimeType:"audio/mpeg"},previewAsset:{...asset,id:previewId,type:"AUDIO_PREVIEW",mimeType:"audio/mpeg",visibility:"PUBLIC"}};});
+  const artistic=masters.map(master=>syntheticExistingExcerptApproval(master,reviewerId));
   const tracks=masters.map((m,i)=>({trackId:m.trackId,masterId:m.id,title:`Synthetic ${i+1}`,position:i+1,formats:["WAV","MP3"] as ["WAV","MP3"],wavAssetId:m.masterAssetId,mp3AssetId:m.mp3AssetId}));
   const album={id:randomUUID(),scope:"ALBUM",title:"Synthetic — Album",version:1,priceCents:albumPrice,tracks};
   const source={id:sourceLineId,scope:"TRACK",priceCents:paidCents,trackSnapshot:[tracks[0]],completionSnapshot:null};
@@ -35,7 +37,9 @@ function fixture(albumPrice=100,paidCents=149){
   const orders:Row[]=[],credits:Row[]=[],documents:Row[]=[],notifications:Row[]=[],events:Row[]=[],rights:Row[]=[];
   const cart={id:randomUUID(),revision:1,lines:[{offerId:album.id,offerVersion:1,priceCents:0,selectionHash:""}]};
   let currentStatus="ACTIVE",verified=true,activeSource=true,failure=false;
-  const db={async $queryRaw(){return[];},user:{async findUnique({where}:{where:{id:string}}){return where.id===reviewerId?{id:reviewerId,role:"ADMIN",status:"ACTIVE",emailVerified:true}:{id:userId,email,displayName:"Synthetic buyer",status:currentStatus,emailVerified:verified};}},
+  const db={async $queryRaw(parts:TemplateStringsArray){const sql=parts.join("?");
+    if(sql.includes("dcn-excerpt-current-masters"))return masters.map(master=>({id:master.id,trackId:master.trackId}));
+    if(sql.includes("dcn-excerpt-latest-artistic-events"))return artistic;return[];},user:{async findUnique({where}:{where:{id:string}}){return where.id===reviewerId?{id:reviewerId,role:"ADMIN",status:"ACTIVE",emailVerified:true}:{id:userId,email,displayName:"Synthetic buyer",status:currentStatus,emailVerified:verified};},async findMany(){return[{id:reviewerId,role:"ADMIN",status:"ACTIVE",emailVerified:true}];}},
     digitalOffer:{async findMany(){return[{...album,active:true,rightsConfirmed:true,project:{title:"Synthetic",status:"PUBLISHED",publicVisible:true,
       tracks:tracks.map((t,i)=>({id:t.trackId,title:t.title,position:t.position,digitalMasters:[masters[i]]}))}}];}},
     digitalMaster:{async findMany(){return masters;}},
@@ -65,7 +69,10 @@ function fixture(albumPrice=100,paidCents=149){
   const input:DigitalFreeCompletionInput={idempotencyKey:randomUUID(),revision:1,termsVersion:DIGITAL_FRANCE_TERMS_VERSION,termsAccepted:true,earlyDelivery:true,withdrawalAcknowledged:true,
     jurisdiction:{countryCode:"FR",residenceCountryCode:"FR",billingCountryCode:"FR",customerType:"B2C",residencePostalCode:"20000",billingPostalCode:"75001",residenceConfirmed:true}};
   return{actor,input,tx,orders,credits,documents,events,notifications,rights,sourceOrder,source,cart,album,acquisitions,
-    async sync(){const q=(await applyDigitalCompletions(tx,userId,[album],new Set(activeSource?[tracks[0].trackId]:[])))[0];cart.lines[0].priceCents=q.priceCents;cart.lines[0].selectionHash=selectionFingerprint(q);},
+    async sync(){const saved={enabled:process.env.DCN_ENABLED,mode:process.env.DCN_MODE};
+      Object.assign(process.env,{DCN_ENABLED:"true",DCN_MODE:"TEST"});
+      try{const q=(await applyDigitalCompletions(tx,userId,[album],new Set(activeSource?[tracks[0].trackId]:[])))[0];cart.lines[0].priceCents=q.priceCents;cart.lines[0].selectionHash=selectionFingerprint(q);}
+      finally{for(const[k,v]of[["DCN_ENABLED",saved.enabled],["DCN_MODE",saved.mode]]){if(v===undefined)delete process.env[k!];else process.env[k!]=v;}}},
     deactivate(){currentStatus="DISABLED";},unverify(){verified=false;},revoke(){activeSource=false;},failDocument(){failure=true;}};
 }
 async function local<T>(f:ReturnType<typeof fixture>,run:()=>Promise<T>){const saved={...process.env},original=prisma.$transaction;let queue=Promise.resolve();

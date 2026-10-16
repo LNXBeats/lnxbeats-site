@@ -47,7 +47,7 @@ test("DCN catalog rows reuse the media coordinator with lazy previews and keyboa
 test("DCN library still gates files by receipt and active rights; acquired snapshot order is retained", async () => {
   const source = await readFile(new URL("../../components/digital-library.tsx", import.meta.url), "utf8");
   const library = await readFile(new URL("../../lib/digital/library.ts", import.meta.url), "utf8");
-  assert.ok(source.includes('canDownload=o.accessReady&&["PAID","PARTIALLY_REFUNDED","REFUNDED"].includes(o.status)&&active.length>0'));
+  assert.ok(source.includes('canDownload=o.accessReady&&["PAID","PARTIALLY_REFUNDED","REFUNDED","GRANTED"].includes(o.status)&&active.length>0'));
   assert.ok(source.includes('active.length===l.acquiredTrackCount'));
   assert.ok(source.includes('archiveStatus==="REQUIRES_REVIEW"'));
   assert.ok(library.includes("snapshot.findIndex(t=>t.masterId===e.masterId)"));
@@ -59,7 +59,8 @@ test("DCN full price-reduction retained rights still prevent a redundant purchas
   for(const state of ["REVOKED","SUSPENDED"]) assert.equal(digitalCountsOwnedRights("REFUNDED",state),false);
   for(const status of ["PENDING","REQUIRES_REVIEW","DISPUTED","FAILED"]) assert.equal(digitalCountsOwnedRights(status,"ACTIVE"),false);
   const catalog=await readFile(new URL("../../lib/digital/catalog.ts",import.meta.url),"utf8");
-  assert.ok(catalog.includes('status: "ACTIVE", line: { order: { status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } }'));
+  assert.ok(catalog.includes('status: "ACTIVE", line: { order: { mode, status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } }'));
+  assert.ok(catalog.includes('const mode = requireDigitalEnvironment()'));
 });
 test("DCN library pagination reaches older acquisitions without a silent 100-order cap or arbitrary client offset", async () => {
   assert.equal(parseDigitalLibraryPage("6"),6);
@@ -69,7 +70,8 @@ test("DCN library pagination reaches older acquisitions without a silent 100-ord
   assert.equal(digitalLibraryPagination(999999,121).page,7);
   assert.equal(digitalLibraryPagination(1,0).totalPages,1);
   const library=await readFile(new URL("../../lib/digital/library.ts",import.meta.url),"utf8");
-  assert.ok(library.includes('digitalOrder.count({where:{userId}})'));
+  assert.ok(library.includes('digitalOrder.count({where:{userId,mode}})'));
+  assert.ok(library.includes('digitalOrder.findMany({where:{userId,mode}'));
   assert.ok(library.includes('orderBy:[{createdAt:"desc"},{id:"desc"}]'));
   assert.ok(!library.includes('take:100'));
 });

@@ -4,7 +4,7 @@ import {DIGITAL_PERSISTENT_FINANCIAL_INCIDENTS} from "@/lib/digital/finance-poli
 const id="2cfdd150-080b-4a4a-bc0e-93c20cab7610",userId="887a5b13-579f-45ee-bc7d-eb94f8da19a2",lineId="3a961c30-46f0-41c1-ac48-7c43d0437555";
 let incident:string="COMPLETION_SOURCE_FINANCIAL_INCIDENT",rights="SUSPENDED";
 const dispute={status:"OPEN",providerReference:"dp_local_only",evidenceHash:"old",orderId:id,provider:"STRIPE",paymentReference:"pi_local_only",amountCents:100};
-const order={id,userId,status:"REQUIRES_REVIEW",totalCents:990,user:{email:"qa@example.invalid"},contractSnapshot:null,lines:[{id:lineId,title:"QA album",entitlements:[{status:"SUSPENDED"}]}],
+const order={id,userId,mode:"TEST",status:"REQUIRES_REVIEW",totalCents:990,user:{email:"qa@example.invalid"},contractSnapshot:null,lines:[{id:lineId,title:"QA album",entitlements:[{status:"SUSPENDED"}]}],
   refunds:[],disputes:[dispute],attempts:[{status:"PAID",provider:"STRIPE",paymentReference:"pi_local_only"}]};
 const fake={digitalOrder:{async findUniqueOrThrow(){return order;},async update({data}:{data:{status:string}}){order.status=data.status;return order;}},
   digitalDispute:{async findUnique(){return dispute;},async upsert({update}:{update:Record<string,unknown>}){Object.assign(dispute,update);return dispute;}},

@@ -118,9 +118,9 @@ const fake = {
 Object.assign(globalThis, { prisma: fake });
 async function local<T>(operation: () => Promise<T>, initial = state()) {
   current = initial;
-  const names = ["DCN_ENABLED", "DCN_MODE", "MEDIA_DEPLOYMENT_ENV", "PAYMENT_DEPLOYMENT_ENV", "RAILWAY_ENVIRONMENT_NAME"];
+  const names = ["DCN_ENABLED", "DCN_MODE", "DCN_EXTERNAL_TEST_AUTHORIZED", "DCN_NEW_PAYMENTS_ENABLED", "MEDIA_DEPLOYMENT_ENV", "PAYMENT_DEPLOYMENT_ENV", "RAILWAY_ENVIRONMENT_NAME"];
   const old = new Map(names.map(k => [k, process.env[k]]));
-  Object.assign(process.env, { DCN_ENABLED: "true", DCN_MODE: "TEST", MEDIA_DEPLOYMENT_ENV: "test", PAYMENT_DEPLOYMENT_ENV: "development" });
+  Object.assign(process.env, { DCN_ENABLED: "true", DCN_MODE: "TEST", DCN_EXTERNAL_TEST_AUTHORIZED:"true", DCN_NEW_PAYMENTS_ENABLED:"true", MEDIA_DEPLOYMENT_ENV: "test", PAYMENT_DEPLOYMENT_ENV: "development" });
   delete process.env.RAILWAY_ENVIRONMENT_NAME;
   try { return await operation(); } finally { for (const [key, value] of old) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
 }

@@ -449,6 +449,18 @@ test("final LIVE invoice and credit-note PDFs omit every test watermark", async 
   }
 });
 
+test("digital FINAL billing PDFs remove QA-only fiscal footer while TEST snapshots keep it",async()=>{
+  const invoice=invoiceFixture(),credit={creditNoteNumber:"SYNTHETIC-CREDIT-NOT-ISSUED",issuedAt:invoice.issuedAt,amountCents:1000,cumulativeCreditedCents:1000,
+    remainingBalanceCents:2000,currency:"EUR",reasonCode:"OTHER_REVIEWED",reasonText:"Exemple sans transaction",snapshotHashSha256:"f".repeat(64),invoice};
+  for(const mode of["FINAL","TEST"] as const){
+    const results=[await generateInvoicePdf(invoice,mode,{digital:true}),await generateCreditNotePdf(credit,mode,{digital:true})];
+    for(const result of results){const text=decodedPdfPageText(result.bytes).join("\n");
+      if(mode==="FINAL"){assert.doesNotMatch(text,/Snapshot numérique TEST|Fiscalité et conservation réelles à valider|DOCUMENT QA/);assert.match(text,/Conservation comptable : 10 ans/);}
+      else assert.match(text,/Snapshot numérique TEST immuable/);
+    }
+  }
+});
+
 test("long invoices paginate naturally and repeat the safe footer on every real page", async () => {
   const lineItems = Array.from({ length: 36 }, (_, index) => ({
     description: `Ligne fictive QA ${index + 1} — prestation détaillée destinée à vérifier la pagination réelle du document`,

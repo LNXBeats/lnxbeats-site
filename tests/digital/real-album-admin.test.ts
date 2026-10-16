@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { syntheticExistingExcerptApproval } from "./fixtures/excerpt-approval";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import type { Prisma } from "@/generated/prisma/client";
@@ -22,9 +23,9 @@ function fixture(scope: "ALBUM" | "TRACK" = "ALBUM") {
   const tracks = Array.from({ length: 12 }, (_, index) => {
     const trackId = randomUUID(), wavId = randomUUID(), previewId = randomUUID();
     const mp3Id: string = randomUUID(); // Mutable negative fixture, not a production UUID type relaxation.
-    const asset = (assetId: string, mimeType: string, visibility = "PRIVATE") => ({ id: assetId, visibility, rightsStatus: "CLEARED", mimeType, checksumSha256: "a".repeat(64), durationMs: 120_000, sizeBytes: 400_000n });
+    const asset = (assetId: string, mimeType: string, visibility = "PRIVATE") => ({ id: assetId, type: mimeType === "audio/wav" ? "AUDIO" : "AUDIO_PREVIEW", visibility, rightsStatus: "CLEARED", mimeType, checksumSha256: "a".repeat(64), durationMs: 120_000, sizeBytes: 400_000n });
     return { id: trackId, title: `Synthetic title ${index + 1}`, status: "RELEASED", position: index + 1,
-      digitalMasters: [{ id: randomUUID(), trackId, version: 1, masterAssetId: wavId, mp3AssetId: mp3Id, previewAssetId: previewId, status: "READY", codec: "wav", encoderVersion: DIGITAL_MP3_ENCODER_VERSION, mp3BitrateKbps: 320,
+      digitalMasters: [{ id: randomUUID(), trackId, version: 1, masterAssetId: wavId, mp3AssetId: mp3Id, previewAssetId: previewId, status: "READY", codec: "wav", encoderVersion: DIGITAL_MP3_ENCODER_VERSION, mp3BitrateKbps: 320, previewStartMs: 0,
         masterAsset: asset(wavId, "audio/wav"), mp3Asset: { ...asset(mp3Id, "audio/mpeg"), durationMs: 120_040 },
         previewAsset: { ...asset(previewId, "audio/mpeg", "PUBLIC"), durationMs: 59_900 }, previewDurationMs: 59_900 }] };
   });
@@ -32,10 +33,16 @@ function fixture(scope: "ALBUM" | "TRACK" = "ALBUM") {
     version: 2, distribution: "UNRELEASED", project: { id: projectId, title: "Synthetic unreleased album", type: scope === "ALBUM" ? "ALBUM" : "SINGLE", status: "PUBLISHED", publicVisible: true, tracks } };
   let query: unknown;
   const reviewerId = randomUUID();
-  const db = { $queryRaw: async () => [], digitalOffer: { async findMany(input: unknown) { query = input; return [offer]; } },
+  // Explicit immutable synthetic artistic proofs; never approvals on a real catalogue.
+  const artistic = tracks.map(track => syntheticExistingExcerptApproval(track.digitalMasters[0], reviewerId));
+  const db = { $queryRaw: async (parts: TemplateStringsArray, ...values: unknown[]) => { const sql = parts.join("?");
+    if (sql.includes("dcn-excerpt-current-masters")) return tracks.filter(track => (values[0] as string[]).includes(track.id)).map(track => ({ id: track.digitalMasters[0]?.id, trackId: track.id }));
+    if (sql.includes("dcn-excerpt-latest-artistic-events")) return artistic.filter(event => (values[1] as string[]).includes(event.masterId));
+    return []; }, digitalOffer: { async findMany(input: unknown) { query = input; return [offer]; } },
     digitalMaster: { async findMany({ where }: { where: { id: { in: string[] } } }) { return tracks.flatMap(track => track.digitalMasters).filter(master => where.id.in.includes(master.id)); } },
     digitalEvent: { async findFirst({ where }: { where: { details: { equals: string } } }) { const master = tracks.flatMap(track => track.digitalMasters).find(master => master.id === where.details.equals); return master ? approvedReview(master, reviewerId) : null; } },
-    user: { async findUnique() { return { id: reviewerId, role: "ADMIN", status: "ACTIVE", emailVerified: true }; } },
+    user: { async findUnique() { return { id: reviewerId, role: "ADMIN", status: "ACTIVE", emailVerified: true }; },
+      async findMany() { return [{ id: reviewerId, role: "ADMIN", status: "ACTIVE", emailVerified: true }]; } },
   } as unknown as Prisma.TransactionClient;
   return { id, db, offer, tracks, query: () => query };
 }
@@ -91,6 +98,7 @@ test("Admin saveOffer service: strict audio metadata is required before any offe
   try {
     for (const variant of ["oldEncoder", "truncatedProof", "durationMismatch", "newInvalidTrack", "hiddenProject", "draftProject", "missingRightsReview", "reviewerInactive", "valid", "inactiveDraft"] as const) {
       const f = fixture(), master = f.tracks[11].digitalMasters[0], writes: string[] = [];
+      const artistic=f.tracks.flatMap(track=>track.digitalMasters).map(master=>syntheticExistingExcerptApproval(master,actor.id));
       if (variant === "oldEncoder") master.encoderVersion = "ffmpeg-libmp3lame-cbr-v1";
       if (variant === "truncatedProof") master.mp3Asset.checksumSha256 = "a".repeat(63);
       if (variant === "durationMismatch") master.mp3Asset.durationMs += 101;
@@ -99,7 +107,13 @@ test("Admin saveOffer service: strict audio metadata is required before any offe
       if (variant === "draftProject" || variant === "inactiveDraft") f.offer.project.status = "DRAFT";
       if (variant === "inactiveDraft") for (const track of f.tracks) track.digitalMasters = [];
       const tx = {
-        $queryRaw: async () => [],
+        $queryRaw: async (parts:TemplateStringsArray,...values:unknown[]) => {
+          const sql=parts.join("?");
+          if(sql.includes("dcn-excerpt-current-masters"))return f.tracks.filter(track=>(values[0] as string[]).includes(track.id))
+            .flatMap(track=>track.digitalMasters.map(master=>({id:master.id,trackId:track.id})));
+          if(sql.includes("dcn-excerpt-latest-artistic-events"))return artistic.filter(event=>(values[1] as string[]).includes(event.masterId));
+          return[];
+        },
         project: { async findUnique() { return f.offer.project; } },
         track: { async findFirst() { return null; } },
         digitalOffer: { async findFirst() { return null; }, async create({ data }: { data: Record<string, unknown> }) { writes.push("offer"); return { ...data, id: f.id }; } },
@@ -109,7 +123,8 @@ test("Admin saveOffer service: strict audio metadata is required before any offe
           if(variant==="missingRightsReview")return null;
           const master = f.tracks.flatMap(track => track.digitalMasters).find(master => master.id === where.details.equals); return master ? approvedReview(master, actor.id) : null;
         } },
-        user: { async findUnique() { return { id: actor.id, role: "ADMIN", status: variant==="reviewerInactive"?"SUSPENDED":"ACTIVE", emailVerified: true }; } },
+        user: { async findUnique() { return { id: actor.id, role: "ADMIN", status: variant==="reviewerInactive"?"SUSPENDED":"ACTIVE", emailVerified: true }; },
+          async findMany() { return [{ id: actor.id, role: "ADMIN", status: variant==="reviewerInactive"?"SUSPENDED":"ACTIVE", emailVerified: true }]; } },
       } as unknown as Prisma.TransactionClient;
       prisma.$transaction = (async (callback: (db: Prisma.TransactionClient) => Promise<unknown>) => callback(tx)) as unknown as typeof original;
       const run = () => saveOffer(actor, { projectId: f.offer.project.id, trackId: null, priceCents: variant === "inactiveDraft" ? null : 990,

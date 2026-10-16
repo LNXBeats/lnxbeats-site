@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { syntheticExistingExcerptApproval } from "./fixtures/excerpt-approval";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import type { OrderActor } from "@/lib/orders/domain";
@@ -18,12 +19,13 @@ function fixture() {
   const actor: OrderActor = { id: randomUUID(), name: "Synthetic buyer", email: LOCAL_REVIEW_BUYER, status: "ACTIVE", role: "MEMBER", emailVerified: true };
   const reviewer = { id: randomUUID(), role: "ADMIN", status: "ACTIVE", emailVerified: true };
   const trackId = randomUUID(), masterId = randomUUID(), wavId = randomUUID(), mp3Id = randomUUID(), previewId = randomUUID();
-  const asset = (id: string, mimeType: string, visibility = "PRIVATE", durationMs = 120000) => ({ id, mimeType, visibility, durationMs, rightsStatus: "CLEARED", checksumSha256: "a".repeat(64), sizeBytes: 400000n });
+  const asset = (id: string, mimeType: string, visibility = "PRIVATE", durationMs = 120000) => ({ id, type: mimeType === "audio/wav" ? "AUDIO" : "AUDIO_PREVIEW", mimeType, visibility, durationMs, rightsStatus: "CLEARED", checksumSha256: "a".repeat(64), sizeBytes: 400000n });
   const master = { id: masterId, trackId, version: 1, masterAssetId: wavId, mp3AssetId: mp3Id, previewAssetId: previewId, status: "READY", codec: "wav", encoderVersion: DIGITAL_MP3_ENCODER_VERSION,
-    mp3BitrateKbps: 320, previewDurationMs: 59900, masterAsset: asset(wavId, "audio/wav"), mp3Asset: asset(mp3Id, "audio/mpeg"), previewAsset: asset(previewId, "audio/mpeg", "PUBLIC", 59900) };
+    mp3BitrateKbps: 320, previewStartMs: 0, previewDurationMs: 59900, masterAsset: asset(wavId, "audio/wav"), mp3Asset: asset(mp3Id, "audio/mpeg"), previewAsset: asset(previewId, "audio/mpeg", "PUBLIC", 59900) };
   const at = new Date(), proof = { policy: DIGITAL_RIGHTS_REVIEW_POLICY, binding: digitalRightsMasterBinding(master), status: "APPROVED", privateEvidenceReference: "private-evidence:synthetic-only/contract-test",
     evidenceSha256: "b".repeat(64), attestation: DIGITAL_RIGHTS_ATTESTATION, reason: null, reviewedAt: at.toISOString(), requestHash: "c".repeat(64) };
   const rights = { id: randomUUID(), actorId: reviewer.id, kind: DIGITAL_RIGHTS_REVIEW_EVENT, createdAt: at, details: { ...proof, recordHash: digitalRightsReviewHash({ actorId: reviewer.id, ...proof }) } };
+  const artistic = syntheticExistingExcerptApproval(master, reviewer.id);
   const selected: DigitalSelection = { id: randomUUID(), scope: "TRACK", title: "Synthetic track", priceCents: 129, version: 1,
     tracks: [{ trackId, masterId, title: "Synthetic track", position: 1, formats: ["WAV", "MP3"], wavAssetId: wavId, mp3AssetId: mp3Id }] };
   type Attempt = { id: string; provider: string; status: string; checkoutUrl: string | null; providerReference: string | null; idempotencyKey: string };
@@ -31,8 +33,11 @@ function fixture() {
     user: { email: string }; lines: Array<{ id: string; title: string; priceCents: number }>; attempts: Attempt[] };
   let order: Order | null = null, creates = 0, gatewayCalls = 0, cartReads = 0;
   const tx = {
-    async $queryRaw() { return []; },
-    user: { async findUnique({ where }: { where: { id: string } }) { return where.id === reviewer.id ? reviewer : { ...actor, displayName: actor.name }; } },
+    async $queryRaw(parts: TemplateStringsArray) { const sql = parts.join("?");
+      if (sql.includes("dcn-excerpt-current-masters")) return [{ id: master.id, trackId: master.trackId }];
+      if (sql.includes("dcn-excerpt-latest-artistic-events")) return [artistic];
+      return []; },
+    user: { async findUnique({ where }: { where: { id: string } }) { return where.id === reviewer.id ? reviewer : { ...actor, displayName: actor.name }; }, async findMany() { return [reviewer]; } },
     digitalOrder: { async findUnique() { return order; }, async findFirst() { return null; }, async create({ data }: { data: Record<string, unknown> }) {
       creates++; order = { ...data, id: randomUUID(), status: "PENDING", user: { email: actor.email }, lines: [{ id: randomUUID(), title: selected.title, priceCents: selected.priceCents }], attempts: [] } as unknown as Order; return order;
     } },

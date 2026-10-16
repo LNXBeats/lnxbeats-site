@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
-import {test} from "node:test";
+import {test,before,after} from "node:test";
 import type {Prisma} from "@/generated/prisma/client";
 import {applyDigitalCompletions,assertNoCreditedSourceRefund,consumeDigitalCompletions,releaseDigitalCompletions,reserveDigitalCompletion,reviewDependentDigitalCompletions,verifyDigitalCompletions} from "@/lib/digital/completion";
 import type {DigitalSelection,DigitalCompletionSnapshot} from "@/lib/digital/domain";
 import {billingSnapshotHash} from "@/lib/billing/domain";
+
+const savedEnvironment={...process.env};
+before(()=>{
+  for(const key of Object.keys(process.env))if(/RAILWAY|MEDIA_DEPLOYMENT_ENV|PAYMENT_DEPLOYMENT_ENV/.test(key))delete process.env[key];
+  Object.assign(process.env,{DCN_ENABLED:"true",DCN_MODE:"TEST"});
+});
+after(()=>{for(const key of Object.keys(process.env))if(!(key in savedEnvironment))delete process.env[key];Object.assign(process.env,savedEnvironment);});
 
 /** Repository doubles only: no provider, PostgreSQL or signature claim. Real DB concurrency is tested separately. */
 function fixture(){
