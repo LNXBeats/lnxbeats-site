@@ -153,7 +153,7 @@ function safeClientAddress(value: string) {
 async function resolveContract(transaction: Transaction, input: WithdrawalSubmission) {
   if (input.contractType === "DIGITAL_ORDER") {
     const order = await transaction.digitalOrder.findUnique({ where: { id: input.orderNumber }, select: { id: true, termsVersion: true, mode: true, user: { select: { email: true } } } });
-    return order && order.mode === "TEST" && order.user.email.trim().toLowerCase() === input.email
+    return order && order.mode === requireDigitalEnvironment() && order.user.email.trim().toLowerCase() === input.email
       ? { identityMatch: "MATCHED" as const, orderId: null, shopOrderId: null, digitalOrderId: order.id, termsVersion: order.termsVersion }
       : { identityMatch: "UNMATCHED" as const, orderId: null, shopOrderId: null, digitalOrderId: null, termsVersion: null };
   }
@@ -177,12 +177,12 @@ async function resolveContract(transaction: Transaction, input: WithdrawalSubmis
 
 export async function submitWithdrawalRequest(input: WithdrawalSubmission, clientAddress: string, now = new Date()) {
   assertDatabaseConfigured();
-  if (input.contractType === "DIGITAL_ORDER") requireDigitalEnvironment();
+  const digitalMode = input.contractType === "DIGITAL_ORDER" ? requireDigitalEnvironment() : null;
   const kind = input.requestKind ?? "WITHDRAWAL";
   const token = receiptToken();
   const publicReceiptTokenHash = tokenHash(token);
   // Preserve the historical withdrawal deduplication key; other legal bases stay distinct.
-  let deduplicationHashSha256 = keyedHash("withdrawal-deduplication", `${input.contractType}\0${input.orderNumber}\0${input.email}${kind === "WITHDRAWAL" ? "" : `\0${kind}`}`);
+  let deduplicationHashSha256 = keyedHash("withdrawal-deduplication", `${input.contractType}\0${input.orderNumber}\0${input.email}${kind === "WITHDRAWAL" ? "" : `\0${kind}`}${digitalMode==="LIVE"?"\0LIVE":""}`);
   const identityLimitKey = `withdrawal:identity:${keyedHash("withdrawal-rate-identity", `${input.orderNumber}\0${input.email}`)}`;
   const addressLimitKey = `withdrawal:address:${keyedHash("withdrawal-rate-address", safeClientAddress(clientAddress))}`;
 
@@ -219,6 +219,7 @@ export async function submitWithdrawalRequest(input: WithdrawalSubmission, clien
       requestNumber: nextRequestNumber,
       receivedAt: now.toISOString(),
       contractType: input.contractType,
+      ...(digitalMode==="LIVE"?{digitalMode}:{}),
       requestKind: kind,
       claimedOrderReference: input.orderNumber,
       claimantName: `${input.firstName} ${input.lastName}`,
@@ -259,7 +260,7 @@ export async function submitWithdrawalRequest(input: WithdrawalSubmission, clien
     });
     if (input.contractType === "DIGITAL_ORDER") {
       await transaction.digitalNotification.create({ data: { withdrawalRequestId: created.id, businessKey: `withdraw:${created.id}:ack`,
-        kind: "CONSUMER_REQUEST_ACK", recipient: input.email, template: withdrawalAcknowledgementTemplate(acknowledgementSnapshot, acknowledgementHashSha256) } });
+        kind: "CONSUMER_REQUEST_ACK", recipient: input.email, template: { ...withdrawalAcknowledgementTemplate(acknowledgementSnapshot, acknowledgementHashSha256), ...(digitalMode==="LIVE"?{mode:"LIVE"}:{}) } } });
       await transaction.digitalEvent.create({ data: { orderId: contract.digitalOrderId, kind: "CONSUMER_REQUEST_RECEIVED",
         details: { requestId: created.id, requestNumber: created.requestNumber, requestKind: kind, acknowledgementHashSha256, eligibility: "HUMAN_REVIEW_REQUIRED" } } });
     }

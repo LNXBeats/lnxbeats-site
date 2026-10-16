@@ -1,6 +1,7 @@
 import "server-only";
 
 import Stripe from "stripe";
+import { createHash } from "node:crypto";
 
 import { assertStripeReconciliationServerEnvironment, STRIPE_API_VERSION } from "@/lib/payments/config";
 import { normalizePaymentMethod } from "@/lib/payments/domain";
@@ -23,6 +24,7 @@ import {
 } from "@/lib/payments/webhook";
 import { isRightsStripeWebhookEvent, processVerifiedRightsStripeWebhookEvent } from "@/lib/rights/payment-webhooks";
 import { isSupportFinancialEvent, processVerifiedSupportFinancialEvent } from "@/lib/support/financial-events";
+import { handoffVerifiedDigitalStripeEvent } from "@/lib/digital/shared-webhook-isolation";
 
 export const STRIPE_WEBHOOK_MAX_BYTES = 256 * 1024;
 
@@ -34,7 +36,7 @@ export type StripeWebhookRouteDependencies = Readonly<{
   constructEvent(rawBody: Buffer, signature: string, configuration: EnabledPaymentConfiguration): VerifiedStripeWebhookEvent;
   enrichEvent(event: VerifiedStripeWebhookEvent, configuration: EnabledPaymentConfiguration): Promise<VerifiedStripeWebhookEvent>;
   findDuplicateEvent?(eventId: string): Promise<StripeWebhookProcessingResult | null>;
-  processEvent(event: VerifiedStripeWebhookEvent): Promise<StripeWebhookProcessingResult>;
+  processEvent(event: VerifiedStripeWebhookEvent, originalBodyHash?: string): Promise<StripeWebhookProcessingResult>;
 }>;
 
 class StripeWebhookRequestError extends Error {
@@ -222,7 +224,8 @@ const routeDependencies: StripeWebhookRouteDependencies = {
       : enrichStripeWebhookEvent(sourced, configuration);
   },
   findDuplicateEvent: findProcessedStripeWebhookEvent,
-  processEvent: (event) => {
+  processEvent: async (event, originalBodyHash) => {
+    if(originalBodyHash){const handoff=await handoffVerifiedDigitalStripeEvent(event,originalBodyHash);if(handoff)return handoff;}
     if (isSupportFinancialEvent(event)) return processVerifiedSupportFinancialEvent(event);
     if (isStripeFinancialEvent(event.type)) return processVerifiedStripeFinancialEvent(event);
     if (isRightsStripeWebhookEvent(event)) return processVerifiedRightsStripeWebhookEvent(event);
@@ -304,7 +307,7 @@ export async function handleStripeWebhookPost(
 
   try {
     logPaymentEvent("payment.webhook.received", { providerEventId: event.id });
-    const result = await dependencies.processEvent(event);
+    const result = await dependencies.processEvent(event,createHash("sha256").update(rawBody).digest("hex"));
     logPaymentEvent("payment.webhook.processed", {
       providerEventId: event.id,
       outcome: result.outcome,

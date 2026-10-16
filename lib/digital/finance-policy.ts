@@ -1,16 +1,17 @@
-import { DigitalError, assertDigitalUuid } from "./domain";
+import { DigitalError, assertDigitalUuid, type DigitalMode } from "./domain";
 /** A later financial update must never clear an independent delivery/credit incident. */
 export const DIGITAL_PERSISTENT_FINANCIAL_INCIDENTS=["PAYMENT_CONTRADICTION","UNMATCHED_CAPTURE_INCIDENT","OVERLAPPING_ACQUISITION_INCIDENT","REFUND_CONTRADICTION",
   "COMPLETION_SOURCE_FINANCIAL_INCIDENT","ACCOUNT_FULFILLMENT_REQUIRES_REVIEW","TERRITORY_FULFILLMENT_REQUIRES_REVIEW",
   "ACQUIRED_MEDIA_REQUIRES_REVIEW","ACQUIRED_RIGHTS_REQUIRES_REVIEW","ACQUIRED_FORMATS_REQUIRES_REVIEW"] as const;
 export type DigitalRefundTarget = { lineId: string; amountCents: number };
-export type DigitalRefundEvidence = { mode: "TEST"; authenticated: boolean; merchantId: string; provider: "STRIPE" | "PAYPAL";
+export type DigitalRefundEvidence = { mode: DigitalMode; authenticated: boolean; merchantId: string; provider: "STRIPE" | "PAYPAL";
   orderId: string; paymentReference: string; reference: string; amountCents: number; currency: string; status: "PENDING" | "SUCCEEDED" | "FAILED"; localRefundId?: string };
-export type DigitalDisputeEvidence = { mode: "TEST"; authenticated: boolean; merchantId: string; provider: "STRIPE" | "PAYPAL";
+export type DigitalDisputeEvidence = { mode: DigitalMode; authenticated: boolean; merchantId: string; provider: "STRIPE" | "PAYPAL";
   orderId: string; paymentReference: string; reference: string; amountCents: number; currency: string; status: "OPEN" | "WON" | "LOST" | "REQUIRES_REVIEW" };
 export type DigitalRefundRequest = { id: string; orderId: string; provider: string; paymentReference: string; providerReference: string | null; idempotencyKey: string; amountCents: number };
 export interface DigitalFinanceGateway {
   merchantId: string;
+  mode?: DigitalMode;
   refund(request: DigitalRefundRequest): Promise<DigitalRefundEvidence>;
   recoverRefund(request: DigitalRefundRequest): Promise<DigitalRefundEvidence | null>;
   readRefund(orderId: string, reference: string): Promise<DigitalRefundEvidence>;

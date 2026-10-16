@@ -8,6 +8,7 @@ import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/
 import { digitalRequest } from "./digital-cart";
 import styles from "./digital.module.css";
 import admin from "./digital-admin.module.css";
+import { digitalUiIsLive, type DigitalUiMode } from "./digital-mode-copy";
 
 type Offer = { priceCents: number | null; version: number; active: boolean; rightsConfirmed: boolean; distribution: string };
 export type DigitalAdminTrack = { id: string; title: string; position: number; publication: string; durationSeconds: number | null; version: number; previewStartMs: number; previewDurationMs: number | null; previewUrl: string | null; offer: Offer | null };
@@ -16,20 +17,21 @@ export function DigitalAdminPreview({ src, title }: { src: string; title: string
   useEffect(() => listenForOtherMediaPlayback(id, () => audio.current?.pause()), [id]);
   return <audio ref={audio} controls preload="none" src={src} aria-label={`Contrôler l’extrait de ${title}`} onPlay={() => announceMediaPlayback({ ownerId: id, kind: "audio" })} />;
 }
-export function DigitalOfferForm({ projectId, trackId, offer, label }: { projectId: string; trackId: string | null; offer: Offer | null; label: string }) {
+export function DigitalOfferForm({ projectId, trackId, offer, label, mode="TEST" }: { projectId: string; trackId: string | null; offer: Offer | null; label: string;mode?:DigitalUiMode }) {
+  const live=digitalUiIsLive(mode);
   const router = useRouter();
   const [price, setPrice] = useState(offer?.priceCents ? String(offer.priceCents / 100) : ""), [active, setActive] = useState(offer?.active ?? false), [rights, setRights] = useState(offer?.rightsConfirmed ?? false), [distribution, setDistribution] = useState(offer?.distribution ?? "UNRELEASED"), [state, setState] = useState(""), [busy, setBusy] = useState(false);
   return <form className={`${styles.form} ${admin.offer}`} onSubmit={async e => {
     e.preventDefault(); setBusy(true);
-    try { await digitalRequest("/api/admin/digital/offers", { projectId, trackId, priceCents: price.trim() ? parseEuroCents(price) : null, active, rightsConfirmed: rights, distribution, expectedVersion: offer?.version ?? 0 }); setState("Offre enregistrée pour les tests. Vérifiez les points à compléter ; aucune vente réelle n’est ouverte."); router.refresh(); }
+    try { await digitalRequest("/api/admin/digital/offers", { projectId, trackId, priceCents: price.trim() ? parseEuroCents(price) : null, active, rightsConfirmed: rights, distribution, expectedVersion: offer?.version ?? 0 }); setState(live?"Offre enregistrée. Les contrôles serveur de publication, droits, extraits, contrat et disponibilité restent obligatoires.":"Offre enregistrée pour les tests. Vérifiez les points à compléter ; aucune vente réelle n’est ouverte."); router.refresh(); }
     catch (e) { setState(e instanceof Error ? e.message : "Enregistrement refusé."); } finally { setBusy(false); }
   }}>
     <h3>{label}</h3>
-    <div className={admin.fields}><label>Prix (EUR) — TEST<input inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="À définir" aria-describedby={`price-${trackId ?? projectId}`} maxLength={10} /></label>
+    <div className={admin.fields}><label>{live?"Prix (EUR)":"Prix (EUR) — TEST"}<input inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="À définir" aria-describedby={`price-${trackId ?? projectId}`} maxLength={10} /></label>
       <label>Distribution externe<select value={distribution} onChange={e => setDistribution(e.target.value)}><option value="UNRELEASED">Inédit / non distribué</option><option value="DISTRIBUTED">Distribué sur plateformes</option></select></label></div>
-    <small id={`price-${trackId ?? projectId}`} className={styles.note}>Vous fixez ce prix librement, sans montant par défaut. Il est indépendant des autres offres. Prix non validé ? Laissez le champ vide et l’offre inactive. Les montants d’essai ne sont pas des tarifs de lancement.</small>
+    <small id={`price-${trackId ?? projectId}`} className={styles.note}>Vous fixez ce prix librement, sans montant par défaut. Il est indépendant des autres offres. Prix non validé ? Laissez le champ vide et l’offre inactive.{!live?" Les montants d’essai ne sont pas des tarifs de lancement.":""}</small>
     <label className={styles.checkbox}><input type="checkbox" checked={rights} onChange={e => setRights(e.target.checked)} /><span>J’ai vérifié les droits de vente et d’extrait, y compris co-auteurs, featurings et distribution. Cette déclaration est auditée.</span></label>
-    <label className={styles.checkbox}><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>Autoriser la vente en TEST. Publication et médias prêts restent obligatoires.</span></label>
+    <label className={styles.checkbox}><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>{live?"Autoriser cette offre à la vente, sous réserve des contrôles serveur.":"Autoriser la vente en TEST."} Publication et médias prêts restent obligatoires.</span></label>
     <div className={styles.actions}><button type="submit" disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer l’offre"}</button></div><p role="status">{state}</p>
   </form>;
 }

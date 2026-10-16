@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { assertDigitalUuid, DigitalError, previewWindow } from "./domain";
+import { assertDigitalUuid, digitalUuid, DigitalError, previewWindow } from "./domain";
 import { digitalCommercialAudioReady, type DigitalCommercialAudioProof } from "./formats";
 
 export const DIGITAL_EXCERPT_EVENT = "EXCERPT_SELECTION_RECORDED";
@@ -7,7 +7,7 @@ export const DIGITAL_EXCERPT_POLICY = "dcn-private-excerpt-selection-v1";
 export const DIGITAL_EXCERPT_STATUSES = ["DRAFT", "QUEUED", "READY", "VALIDATED", "FAILED"] as const;
 export type DigitalExcerptStatus = "TO_LISTEN" | typeof DIGITAL_EXCERPT_STATUSES[number];
 export type DigitalExcerptMaster = DigitalCommercialAudioProof & {
-  id: string; trackId: string; version: number; masterAssetId: string; previewStartMs: number;
+  id: string; trackId: string; version: number; masterAssetId: string; previewStartMs: number; previewAssetId?: string | null;
 };
 export type DigitalExcerptBinding = { masterId: string; trackId: string; version: number; sourceAssetId: string; sourceSha256: string; durationMs: number };
 export type DigitalExcerptDetails = {
@@ -15,6 +15,7 @@ export type DigitalExcerptDetails = {
   startMs: number; candidateAssetId: string | null; candidateSha256: string | null; previewDurationMs: number | null;
   requestId: string | null; previousRevisionId: string | null; errorCode: string | null;
   attested: boolean; requestHash: string; recordHash: string;
+  candidateOrigin?: "EXISTING_PROVISIONAL";
 };
 export type DigitalExcerptEvent = { id: string; actorId: string | null; kind: string; details: unknown; createdAt: Date };
 export type DigitalExcerptSelection = { revisionId: string | null; status: DigitalExcerptStatus; startMs: number; previewDurationMs: number | null; candidateUrl: string | null; errorCode: string | null };
@@ -31,15 +32,15 @@ export function digitalExcerptBinding(master: DigitalExcerptMaster): DigitalExce
   return { masterId: master.id, trackId: master.trackId, version: master.version, sourceAssetId: master.masterAssetId,
     sourceSha256: master.masterAsset.checksumSha256!, durationMs: master.masterAsset.durationMs! };
 }
-export type DigitalExcerptInput = { action: "save" | "generate" | "validate"; startMs: number; expectedRevisionId: string | null; idempotencyKey: string; attested: boolean };
+export type DigitalExcerptInput = { action: "save" | "generate" | "validate" | "validate-existing" | "validate-current"; startMs: number; expectedRevisionId: string | null; idempotencyKey: string; attested: boolean };
 export function digitalExcerptInput(value: unknown): DigitalExcerptInput {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new DigitalError("INVALID_EXCERPT");
   const input = value as Record<string, unknown>;
   if (Object.keys(input).some(key => !["action", "startMs", "expectedRevisionId", "idempotencyKey", "attested"].includes(key))
-    || !["save", "generate", "validate"].includes(String(input.action)) || !Number.isSafeInteger(input.startMs) || Number(input.startMs) < 0
+    || !["save", "generate", "validate", "validate-existing", "validate-current"].includes(String(input.action)) || !Number.isSafeInteger(input.startMs) || Number(input.startMs) < 0
     || typeof input.attested !== "boolean") throw new DigitalError("INVALID_EXCERPT");
   assertDigitalUuid(input.idempotencyKey); if (input.expectedRevisionId !== null) assertDigitalUuid(input.expectedRevisionId);
-  if (input.action === "validate" && input.attested !== true) throw new DigitalError("EXCERPT_ATTESTATION_REQUIRED", 409);
+  if (["validate", "validate-existing", "validate-current"].includes(String(input.action)) && input.attested !== true) throw new DigitalError("EXCERPT_ATTESTATION_REQUIRED", 409);
   return input as DigitalExcerptInput;
 }
 export function digitalExcerptDetails(event: DigitalExcerptEvent, master: DigitalExcerptMaster): DigitalExcerptDetails {
@@ -55,6 +56,8 @@ export function digitalExcerptDetails(event: DigitalExcerptEvent, master: Digita
     assertDigitalUuid(d.candidateAssetId); if (!/^[a-f0-9]{64}$/.test(d.candidateSha256 ?? "") || !Number.isSafeInteger(d.previewDurationMs)
       || d.previewDurationMs! < 1 || d.previewDurationMs! > 60_000 || d.status === "VALIDATED" && !d.attested) throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);
   } else if (d.candidateAssetId !== null || d.candidateSha256 !== null || d.previewDurationMs !== null) throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);
+  if (d.candidateOrigin !== undefined && (d.candidateOrigin !== "EXISTING_PROVISIONAL" || d.status !== "VALIDATED"
+    || !digitalExistingExcerptReady(master, d))) throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);
   if (d.requestId !== null) assertDigitalUuid(d.requestId);
   if (d.previousRevisionId !== null) assertDigitalUuid(d.previousRevisionId);
   if (d.status === "FAILED" ? !/^[A-Z0-9_]{1,80}$/.test(d.errorCode ?? "") : d.errorCode !== null) throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);
@@ -65,7 +68,7 @@ export function digitalExcerptSelection(master: DigitalExcerptMaster, event: Dig
   if (!event) return { revisionId: null, status: "TO_LISTEN", startMs: master.previewStartMs, previewDurationMs: master.previewDurationMs, candidateUrl: null, errorCode: null };
   const d = digitalExcerptDetails(event, master); previewWindow(binding.durationMs, d.startMs);
   return { revisionId: event.id, status: d.status, startMs: d.startMs, previewDurationMs: d.previewDurationMs,
-    candidateUrl: d.candidateAssetId ? `/api/admin/digital/excerpt-candidates/${d.candidateAssetId}` : null, errorCode: d.errorCode };
+    candidateUrl: d.candidateAssetId ? d.candidateOrigin === "EXISTING_PROVISIONAL" ? `/api/admin/digital/previews/${d.candidateAssetId}` : `/api/admin/digital/excerpt-candidates/${d.candidateAssetId}` : null, errorCode: d.errorCode };
 }
 export function assertDigitalExcerptRevision(selection: DigitalExcerptSelection, expectedRevisionId: string | null) {
   if (selection.revisionId !== expectedRevisionId) throw new DigitalError("EXCERPT_SELECTION_CHANGED", 409);
@@ -79,4 +82,14 @@ export function digitalExcerptCandidateReady(asset: { type: string; visibility: 
     && Number.isSafeInteger(Number(asset.sizeBytes)) && Number(asset.sizeBytes) > 0 && Number(asset.sizeBytes) <= 3 * 1024 * 1024
     && asset.checksumSha256 === details.candidateSha256 && asset.durationMs === details.previewDurationMs
     && Number.isSafeInteger(asset.durationMs) && asset.durationMs! > 0 && asset.durationMs! <= 60_000;
+}
+
+/** A recovered provisional preview is eligible only for its exact current master; never an arbitrary PUBLIC asset. */
+export function digitalExistingExcerptReady(master: DigitalExcerptMaster, details?: Pick<DigitalExcerptDetails, "candidateAssetId" | "candidateSha256" | "previewDurationMs" | "startMs">) {
+  const asset = master.previewAsset as (NonNullable<DigitalExcerptMaster["previewAsset"]> & { id?: string; type?: string }) | null;
+  return digitalUuid(master.previewAssetId) && !!asset && asset.id === master.previewAssetId && asset.type === "AUDIO_PREVIEW" && asset.visibility === "PUBLIC" && asset.mimeType === "audio/mpeg"
+    && /^[a-f0-9]{64}$/.test(asset.checksumSha256 ?? "") && Number.isSafeInteger(Number(asset.sizeBytes)) && Number(asset.sizeBytes) > 0 && Number(asset.sizeBytes) <= 3 * 1024 * 1024
+    && Number.isSafeInteger(master.previewDurationMs) && master.previewDurationMs! > 0 && master.previewDurationMs! <= 60_000 && asset.durationMs === master.previewDurationMs
+    && (!details || details.candidateAssetId === master.previewAssetId && details.candidateSha256 === asset.checksumSha256
+      && details.previewDurationMs === master.previewDurationMs && details.startMs === master.previewStartMs);
 }

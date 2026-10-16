@@ -1,3 +1,6 @@
+import { digitalRuntimeMode, type DigitalMode } from "./runtime-policy";
+export type { DigitalMode } from "./runtime-policy";
+
 export class DigitalError extends Error {
   constructor(readonly code: string, readonly status = 400, readonly publicDetails?:{ownedTitles:string[]}) { super(code); this.name = "DigitalError"; }
 }
@@ -70,18 +73,17 @@ export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: 
   return { lines, totalCents, removed };
 }
 export function digitalEnabled(env: Record<string, string | undefined> = process.env) {
-  return env.DCN_ENABLED === "true" && env.DCN_MODE === "TEST"
-    && !/production/i.test(env.RAILWAY_ENVIRONMENT_NAME ?? "")
-    && env.MEDIA_DEPLOYMENT_ENV !== "production" && env.PAYMENT_DEPLOYMENT_ENV !== "production";
+  return digitalRuntimeMode(env) !== null;
 }
 export function requireDigitalEnvironment(env: Record<string, string | undefined> = process.env) {
-  if (!digitalEnabled(env) || env.DCN_MODE !== "TEST" || /production/i.test(env.RAILWAY_ENVIRONMENT_NAME ?? "")
-    || env.MEDIA_DEPLOYMENT_ENV === "production" || env.PAYMENT_DEPLOYMENT_ENV === "production") throw new DigitalError("DIGITAL_CLOSED", 503);
-  return "TEST" as const;
+  const mode = digitalRuntimeMode(env);
+  if (!mode) throw new DigitalError("DIGITAL_CLOSED", 503);
+  return mode;
 }
-export function checkoutProviderUrl(v: string, provider: string) {
+export function checkoutProviderUrl(v: string, provider: string, mode: DigitalMode = "TEST") {
   let u: URL; try { u = new URL(v); } catch { throw new DigitalError("INVALID_PROVIDER_URL", 503); }
-  const host = provider === "STRIPE" ? "checkout.stripe.com" : "www.sandbox.paypal.com";
+  if (!["STRIPE", "PAYPAL"].includes(provider) || !["TEST", "LIVE"].includes(mode)) throw new DigitalError("INVALID_PROVIDER_URL", 503);
+  const host = provider === "STRIPE" ? "checkout.stripe.com" : mode === "LIVE" ? "www.paypal.com" : "www.sandbox.paypal.com";
   if (u.protocol !== "https:" || u.hostname !== host || u.port || u.username || u.password) throw new DigitalError("INVALID_PROVIDER_URL", 503);
   return v;
 }
@@ -105,12 +107,12 @@ export function signatureMatches(bytes: Uint8Array, extension: string) {
   if (extension === "flac") return b.toString("ascii", 0, 4) === "fLaC";
   return extension === "mp3" && (b.toString("ascii", 0, 3) === "ID3" || b.length > 1 && b[0] === 255 && (b[1] & 224) === 224);
 }
-export type DigitalPaymentEvidence = { eventId: string; orderId: string; provider: "STRIPE" | "PAYPAL"; mode: "TEST";
+export type DigitalPaymentEvidence = { eventId: string; orderId: string; provider: "STRIPE" | "PAYPAL"; mode: DigitalMode;
   billing?: {countryCode?:string;postalCode?:string};
   providerReference: string; paymentReference: string; merchantId: string; amountCents: number; currency: string;
   status: "PAID" | "PENDING" | "FAILED"; authenticated: boolean };
 export function assertPaymentEvidence(e: DigitalPaymentEvidence, expected: { id: string; totalCents: number; mode: string }, attempt: { provider: string; providerReference: string | null }, merchant: string) {
-  if (e.authenticated !== true || e.mode !== "TEST" || expected.mode !== e.mode || e.orderId !== expected.id || e.provider !== attempt.provider
+  if (e.authenticated !== true || !["TEST", "LIVE"].includes(e.mode) || expected.mode !== e.mode || e.orderId !== expected.id || e.provider !== attempt.provider
     || !attempt.providerReference || e.providerReference !== attempt.providerReference || (e.status === "PAID" && !e.paymentReference) || e.merchantId !== merchant || !merchant
     || e.amountCents !== expected.totalCents || e.currency !== "EUR" || !e.eventId) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
 }

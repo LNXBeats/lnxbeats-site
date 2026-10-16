@@ -3,10 +3,17 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { OrderActor } from "@/lib/orders/domain";
 import { assertDigitalUuid, DigitalError, previewWindow, requireDigitalEnvironment } from "./domain";
+import { assertDigitalLiveObjectAssets } from "./live-media-policy";
 import { DIGITAL_EXCERPT_EVENT, DIGITAL_EXCERPT_POLICY, assertDigitalExcerptRevision, assertDigitalExcerptValidation,
-  digitalExcerptBinding, digitalExcerptCandidateReady, digitalExcerptDetails, digitalExcerptHash, digitalExcerptInput,
+  digitalExcerptBinding, digitalExcerptCandidateReady, digitalExistingExcerptReady, digitalExcerptDetails, digitalExcerptHash, digitalExcerptInput,
   digitalExcerptSelection, type DigitalExcerptDetails, type DigitalExcerptEvent, type DigitalExcerptMaster } from "./excerpt-policy";
 
+export const RECOVERY_EXCERPT_PROJECT_ID = "e62bfcea-6d0c-4a9c-8de9-eee8961c30d7";
+export function digitalRecoveryExcerptsReviewOnly() { return process.env.DCN_RECOVERY_EXCERPTS_REVIEW_ONLY === "true"; }
+function assertRecoveryExcerptReview(projectId: string) {
+  if (!digitalRecoveryExcerptsReviewOnly() || process.env.DCN_MODE !== "TEST" || process.env.DCN_STORAGE_MODE !== "LOCAL"
+    || projectId !== RECOVERY_EXCERPT_PROJECT_ID) throw new DigitalError("EXCERPT_NOT_READY", 403);
+}
 export type DigitalExcerptDb = Prisma.TransactionClient;
 export const digitalExcerptMasterInclude = { masterAsset: true, mp3Asset: true, previewAsset: true, track: { select: { projectId: true, title: true } } } as const;
 export async function requireDigitalExcerptAdmin(db: DigitalExcerptDb, actorId: string) {
@@ -53,12 +60,19 @@ export async function getDigitalExcerptSelection(actor: OrderActor, masterId: st
 }
 /** Artistic choices only: no updates of masters, acquisitions, rights, offers or original previews. */
 export async function recordDigitalExcerptSelection(actor: OrderActor, masterId: string, raw: unknown) {
-  requireDigitalEnvironment(); assertDigitalUuid(masterId); const input = digitalExcerptInput(raw);
+  const mode=requireDigitalEnvironment(); assertDigitalUuid(masterId); const input = digitalExcerptInput(raw);
+  const recoveryReview = input.action === "validate-existing", currentReview=input.action==="validate-current";
+  const existingReview = recoveryReview || currentReview;
+  if (digitalRecoveryExcerptsReviewOnly() && !recoveryReview || currentReview && mode!=="LIVE") throw new DigitalError("EXCERPT_NOT_READY", 403);
+  // Private candidate generation remains a QA preparation tool, not an unstaffed LIVE queue.
+  if(mode==="LIVE"&&!currentReview)throw new DigitalError("EXCERPT_NOT_READY",403);
   return prisma.$transaction(async db => {
     await requireDigitalExcerptAdmin(db, actor.id);
     let master = await getCurrentDigitalExcerptMaster(db, masterId);
     await lockDigitalExcerpt(db, master); master = await getCurrentDigitalExcerptMaster(db, masterId);
     const binding = digitalExcerptBinding(master); previewWindow(binding.durationMs, input.startMs);
+    if (recoveryReview) assertRecoveryExcerptReview(master.track.projectId);
+    if (currentReview) assertDigitalLiveObjectAssets(mode,[master.masterAsset,master.mp3Asset,master.previewAsset]);
     const externalKey = `dcn-excerpt:${masterId}:${input.idempotencyKey}`, requestHash = digitalExcerptHash({ actorId: actor.id, binding, input });
     const duplicate = await db.digitalEvent.findUnique({ where: { externalKey }, select: { id: true, actorId: true, details: true, createdAt: true, kind: true } });
     if (duplicate) {
@@ -69,6 +83,8 @@ export async function recordDigitalExcerptSelection(actor: OrderActor, masterId:
     const previous = await latestDigitalExcerptEvent(db, master.id), selection = digitalExcerptSelection(master, previous);
     assertDigitalExcerptRevision(selection, input.expectedRevisionId); assertDigitalExcerptValidation(selection, input);
     const previousDetails = previous ? digitalExcerptDetails(previous, master) : null;
+    if (existingReview && (selection.status !== "TO_LISTEN" || input.startMs !== master.previewStartMs || !digitalExistingExcerptReady(master)))
+      throw new DigitalError("EXCERPT_NOT_READY", 409);
     if (input.action === "validate") {
       const asset = await db.asset.findUnique({ where: { id: previousDetails!.candidateAssetId! } });
       if (!asset || !digitalExcerptCandidateReady(asset, previousDetails!)) throw new DigitalError("EXCERPT_NOT_READY", 409);
@@ -76,11 +92,12 @@ export async function recordDigitalExcerptSelection(actor: OrderActor, masterId:
     const status = input.action === "save" ? "DRAFT" : input.action === "generate" ? "QUEUED" : "VALIDATED";
     const event = await appendDigitalExcerptEvent(db, actor.id, externalKey, previous, {
       policy: DIGITAL_EXCERPT_POLICY, binding, status, startMs: input.startMs,
-      candidateAssetId: input.action === "validate" ? previousDetails!.candidateAssetId : null,
-      candidateSha256: input.action === "validate" ? previousDetails!.candidateSha256 : null,
-      previewDurationMs: input.action === "validate" ? previousDetails!.previewDurationMs : null,
+      candidateAssetId: existingReview ? master.previewAssetId : input.action === "validate" ? previousDetails!.candidateAssetId : null,
+      candidateSha256: existingReview ? master.previewAsset!.checksumSha256 : input.action === "validate" ? previousDetails!.candidateSha256 : null,
+      previewDurationMs: existingReview ? master.previewDurationMs : input.action === "validate" ? previousDetails!.previewDurationMs : null,
       requestId: input.action === "validate" ? previousDetails!.requestId : null,
-      previousRevisionId: previous?.id ?? null, errorCode: null, attested: input.action === "validate" && input.attested, requestHash,
+      previousRevisionId: previous?.id ?? null, errorCode: null, attested: (input.action === "validate" || existingReview) && input.attested, requestHash,
+      ...(existingReview ? { candidateOrigin: "EXISTING_PROVISIONAL" as const } : {}),
     });
     return { selection: digitalExcerptSelection(master, event) };
   });

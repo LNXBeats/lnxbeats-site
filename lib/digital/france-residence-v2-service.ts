@@ -40,7 +40,7 @@ export async function loadDigitalFranceBillingContextV2(userId:string,billingPos
   assertDigitalUuid(userId);
   if(documentIds!==undefined&&(!Array.isArray(documentIds)||documentIds.length>10||new Set(documentIds).size!==documentIds.length))throw new DigitalError("FRANCE_BILLING_CONTEXT_INVALID",409);
   documentIds?.forEach(assertDigitalUuid);
-  const rows=documentIds?.length===0?[]:await db.digitalDocument.findMany({where:{kind:"INVOICE",order:{userId,mode:"TEST"},...(documentIds?{id:{in:documentIds}}:{})},
+  const rows=documentIds?.length===0?[]:await db.digitalDocument.findMany({where:{kind:"INVOICE",order:{userId,mode:requireDigitalEnvironment()},...(documentIds?{id:{in:documentIds}}:{})},
     orderBy:[{createdAt:"desc"},{id:"desc"}],take:10,select:{id:true,snapshot:true,snapshotHash:true}});
   if(documentIds&&rows.length!==documentIds.length)throw new DigitalError("FRANCE_BILLING_CONTEXT_CHANGED",409);
   const documents:DigitalFranceBillingDocument[]=rows.map(row=>{

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { consumerRequestLabel } from "./withdrawal-copy";
 import { billingSnapshotHash } from "@/lib/billing/domain";
+import { verifyContractSnapshot,DIGITAL_FRANCE_LIVE_CONTRACT_POLICY } from "@/lib/digital/fulfillment-policy";
 export const CONSUMER_ACKNOWLEDGEMENT_POLICY = "LNX-CONSUMER-ACK-CANONICAL-1";
 
 type EvidenceOrder = {
@@ -19,13 +20,20 @@ export function assessDigitalWithdrawalEvidence(order: EvidenceOrder) {
     && createHash("sha256").update(s.terms.text).digest("hex") === order.termsHash;
   const expressConsent = !!acceptedAt && termsMatch && order.earlyDelivery && s?.earlyDelivery?.expresslyRequested === true;
   const acknowledgementOfLoss = !!acceptedAt && termsMatch && order.withdrawalAcknowledged && s?.withdrawal?.expresslyAcknowledged === true;
-  const f = order.fulfillment, evidence = f?.confirmationEvidence as { documentId?: string; policy?: string; type?: string } | null;
+  const f = order.fulfillment, evidence = f?.confirmationEvidence as { documentId?: string; policy?: string; type?: string; snapshotHash?:string;at?:string } | null;
   const document = order.documents.find(d => d.id === evidence?.documentId && d.kind === "CONTRACT" && d.status === "READY" && /^[a-f0-9]{64}$/.test(d.snapshotHash) && /^[a-f0-9]{64}$/.test(d.pdfHash ?? ""));
   const documentTransmissionRecorded = !!document && order.events.some(e => e.kind === "DOCUMENT_TRANSFER_FINISHED" && e.actorId === order.userId
     && (e.details as { documentId?: string } | null)?.documentId === document.id);
   const explicitReceiptRecorded = !!f && f.confirmationStatus === "ACKNOWLEDGED" && !!f.confirmationAt && documentTransmissionRecorded;
   // The current TEST policy expressly does NOT claim legally effective receipt.
-  const durableConfirmation = explicitReceiptRecorded && s?.mode === "LIVE" && evidence?.policy === "LEGAL_DURABLE_RECEIPT_VERIFIED";
+  let approvedLiveContract=false;
+  if(s?.mode==="LIVE")try{approvedLiveContract=verifyContractSnapshot(s,order.termsVersion,order.termsHash).snapshot.mode==="LIVE";}catch{}
+  const receiptEvent=!!document&&order.events.some(e=>e.kind==="CONTRACT_RECEIPT_ACKNOWLEDGED"&&e.actorId===order.userId
+    &&(e.details as {documentId?:string;policy?:string}|null)?.documentId===document.id
+    &&(e.details as {policy?:string})?.policy===DIGITAL_FRANCE_LIVE_CONTRACT_POLICY);
+  const durableConfirmation = explicitReceiptRecorded && s?.mode === "LIVE" && (evidence?.policy === "LEGAL_DURABLE_RECEIPT_VERIFIED"
+    ||approvedLiveContract&&receiptEvent&&evidence?.policy===DIGITAL_FRANCE_LIVE_CONTRACT_POLICY&&evidence.type==="OWNER_EXPLICIT_RECEIPT_AFTER_TRANSFER"
+      &&evidence.snapshotHash===document?.snapshotHash&&evidence.at===f?.confirmationAt?.toISOString());
   const executionStarted = !!f?.confirmationAt && order.events.some(e => e.kind === "DOWNLOAD_STARTED" && e.actorId === order.userId
     && e.createdAt >= f.confirmationAt! && typeof (e.details as { ticketId?: unknown } | null)?.ticketId === "string");
   return Object.freeze({ decision: "HUMAN_REVIEW_REQUIRED" as const, expressConsent, acknowledgementOfLoss, documentTransmissionRecorded,

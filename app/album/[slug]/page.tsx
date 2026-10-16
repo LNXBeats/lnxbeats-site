@@ -15,6 +15,7 @@ import { getAuthSession } from "@/lib/auth/session";
 import digitalStyles from "@/components/digital.module.css";
 import { publicDigitalProject } from "@/lib/digital/catalog";
 import { digitalEnabled } from "@/lib/digital/domain";
+import { digitalRuntimeMode } from "@/lib/digital/runtime-policy";
 import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import {
   getProjectConfidenceLabel,
@@ -64,6 +65,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   const kind = getProjectKindLabel(project.type);
   const session = digitalEnabled() ? await getAuthSession() : null;
   const digital = digitalEnabled() ? await publicDigitalProject(project.slug, session?.user.status === "ACTIVE" && session.user.emailVerified ? session.user.id : undefined) : null;
+  const digitalMode = digitalRuntimeMode() ?? "TEST";
   const status = getProjectStatusLabel(project.status);
   const confidence = getProjectConfidenceLabel(project.dataConfidence.overall);
   const documentedDate = project.releaseDate
@@ -77,7 +79,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
         <div className="album-hero__backdrop" aria-hidden="true" />
         <Container className="album-hero__inner">
           <Link className="back-link" href="/discographie"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Retour à la discographie</Link>
-          {digital ? <><DigitalDemoBanner/><DigitalCartNavigation/></> : null}
+          {digital ? <><DigitalDemoBanner mode={digitalMode}/><DigitalCartNavigation/></> : null}
           <div className={`album-hero__grid${digital ? ` ${digitalStyles.albumHeroGrid}` : ""}`}>
             <div data-motion-layer="media"><ProjectArtwork project={project} priority sizes={digital ? "(max-width: 620px) 60vw, 280px" : "(max-width: 820px) 100vw, 48vw"} className="album-hero__art" /></div>
             <div className="album-hero__content" data-motion-layer="copy">
@@ -115,7 +117,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
 
       <section className="section album-details">
         <Container className={`${digital ? digitalStyles.albumDetails : "album-details__grid"} motion-reveal motion-reveal--soft`}>
-          {digital ? <DigitalTracklist view={digital} /> : null}
+          {digital ? <DigitalTracklist view={digital} mode={digitalMode} /> : null}
           <aside className={`album-editorial-note${digital ? ` ${digitalStyles.albumEditorial}` : ""}`}>
             <p className="eyebrow">Derrière le projet</p>
             <h2>{project.description ? "L’histoire qui ouvre la musique." : "Le récit viendra trouver sa place."}</h2>

@@ -1,9 +1,9 @@
 import "server-only";
 import { paypalCaptureResponseEvidence, paypalCentsFromAmount } from "@/lib/payments/paypal-client";
-import { DigitalError, type DigitalPaymentEvidence } from "./domain";
+import { DigitalError, type DigitalPaymentEvidence, type DigitalMode } from "./domain";
 import {digitalPaypalProviderBilling} from "./france-provider-billing";
 
-type Order = { id: string; totalCents: number };
+type Order = { id: string; mode?: DigitalMode; totalCents: number };
 type Attempt = { id: string; providerReference: string | null };
 type PaypalOrder = { id?: string; status?: string; payer?:{address?:unknown}; purchase_units?: Array<{
   reference_id?: string; custom_id?: string; payee?: { merchant_id?: string };
@@ -17,10 +17,10 @@ export function digitalPaypalDeclinedReference(value: unknown): asserts value is
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]{1,255}$/.test(value)) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
 }
 /** Called only with the authenticated, freshly retrieved Orders v2 response. */
-export function digitalPaypalOrderEvidence(body: unknown, order: Order, attempt: Attempt, merchantId: string): DigitalPaymentEvidence {
+export function digitalPaypalOrderEvidence(body: unknown, order: Order, attempt: Attempt, merchantId: string, mode: DigitalMode = "TEST"): DigitalPaymentEvidence {
   const b = body as PaypalOrder;
   const unit = b?.purchase_units?.[0];
-  if (!b || b.id !== attempt.providerReference || b.purchase_units?.length !== 1 || unit?.custom_id !== attempt.id
+  if (!["TEST", "LIVE"].includes(mode) || (order.mode ?? "TEST") !== mode || !b || b.id !== attempt.providerReference || b.purchase_units?.length !== 1 || unit?.custom_id !== attempt.id
     || unit.reference_id !== order.id || !merchantId || unit.payee?.merchant_id !== merchantId
     || unit.amount?.currency_code !== "EUR" || paypalCentsFromAmount(unit.amount.value) !== order.totalCents) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
   const captures = unit.payments?.captures;
@@ -35,7 +35,7 @@ export function digitalPaypalOrderEvidence(body: unknown, order: Order, attempt:
       || capture.supplementary_data?.related_ids?.order_id !== undefined && capture.supplementary_data.related_ids.order_id !== b.id) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
     digitalPaypalDeclinedReference(capture.id);
     if (capture.id === b.id) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
-    return { authenticated: true, mode: "TEST", provider: "PAYPAL", orderId: order.id, providerReference: b.id!,
+    return { authenticated: true, mode, provider: "PAYPAL", orderId: order.id, providerReference: b.id!,
       paymentReference: capture.id, merchantId, amountCents: order.totalCents, currency: "EUR", status: "FAILED",
       eventId: `paypal-recover:${capture.id}:DECLINED` };
   }
@@ -43,7 +43,7 @@ export function digitalPaypalOrderEvidence(body: unknown, order: Order, attempt:
   // mapping is scoped to DCN rather than widening other PayPal payment domains.
   const capture = paypalCaptureResponseEvidence(body);
   if (!capture.evidenceConsistent || capture.paymentId !== attempt.id || !capture.captureId) throw new DigitalError("PAYMENT_REQUIRES_REVIEW", 409);
-  return { authenticated: true, mode: "TEST", provider: "PAYPAL", orderId: order.id, providerReference: b.id!, paymentReference: capture.captureId,
+  return { authenticated: true, mode, provider: "PAYPAL", orderId: order.id, providerReference: b.id!, paymentReference: capture.captureId,
     merchantId, amountCents: capture.amountCents!, currency: capture.currency!, status: capture.status === "COMPLETED" ? "PAID" : "PENDING",
     eventId: `paypal-recover:${capture.captureId}:${capture.status}`,
     ...(digitalPaypalProviderBilling(body)?{billing:digitalPaypalProviderBilling(body)}:{}) };

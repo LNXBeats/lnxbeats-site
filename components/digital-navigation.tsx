@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { readDigitalCart,writeDigitalCart } from "./digital-catalog";
 import { UiIcon } from "./ui-icon";
 import styles from "./digital-navigation.module.css";
+import { digitalUiIsLive, type DigitalUiMode } from "./digital-mode-copy";
 
 /** Digital selection only: never reads or mutates the physical shop cart. */
 export function DigitalCartNavigation() {
@@ -21,7 +22,7 @@ export function DigitalCartNavigation() {
     <Link className={styles.cart} href="/musique/panier" aria-label={`Panier musique, ${count} sélection${count > 1 ? "s" : ""}`}><UiIcon name="bag" />Panier musique <span aria-hidden="true">{count}</span></Link>
   </nav>;
 }
-export function DigitalDemoBanner() { return <p className={styles.demo}>Démonstration — aucun paiement réel <span>· Prix fictifs</span></p>; }
+export function DigitalDemoBanner({ mode = "TEST" }: { mode?: DigitalUiMode }) { return digitalUiIsLive(mode) ? null : <p className={styles.demo}>Démonstration — aucun paiement réel <span>· Prix fictifs</span></p>; }
 /** Receives only server-confirmed, owner-scoped offers; no URL/status input grants rights. */
 export function DigitalConfirmedCartCleanup({offerIds}:{offerIds:string[]}){
   useEffect(()=>{try{const previous=readDigitalCart(),next=previous.filter(id=>!offerIds.includes(id));if(next.length!==previous.length)writeDigitalCart(next);}catch{/* Unavailable browser storage must not hide a confirmed purchase. */}},[offerIds]);

@@ -24,6 +24,9 @@ export const DIGITAL_UPDATE_COLUMNS={
 // Tax/legal approvals are provisioned only by an owner-reviewed change. The
 // application can read their versions, never approve or overwrite a country.
 const DIGITAL_READ_ONLY_TABLES = new Set<string>(["digital_country_tax_rules"]);
+// This pre-existing legal table also serves physical/custom orders. Preserve
+// its historical direct UPDATE grant; the DCN group still receives columns only.
+const DIGITAL_SHARED_HISTORICAL_TABLES = new Set<string>(["consumer_withdrawal_requests"]);
 export const DIGITAL_RUNTIME_TABLES=Object.keys(DIGITAL_UPDATE_COLUMNS) as Array<keyof typeof DIGITAL_UPDATE_COLUMNS>;
 export async function provisionDigitalRuntime(client:Client,role:string){assertSqlIdentifier(role,"Runtime role");
   const r=await client.query<{safe:boolean}>("SELECT rolcanlogin AND rolinherit AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND NOT rolbypassrls AND rolname<>current_user AS safe FROM pg_roles WHERE rolname=$1",[role]);assert.equal(r.rows[0]?.safe,true);
@@ -42,8 +45,14 @@ export async function provisionDigitalRuntime(client:Client,role:string){assertS
     }
     await client.query(`GRANT USAGE ON SCHEMA public TO ${quoteSqlIdentifier(DIGITAL_RUNTIME_GROUP)}`);
     await client.query(`GRANT USAGE ON SEQUENCE public.digital_test_invoice_sequence,public.digital_test_credit_note_sequence TO ${quoteSqlIdentifier(DIGITAL_RUNTIME_GROUP)}`);
+    // Reuse the existing shared billing series. USAGE permits nextval only;
+    // no reset, ownership or access to physical-order data is granted here.
+    await client.query(`GRANT USAGE ON SEQUENCE public.invoice_sequence,public.credit_note_sequence TO ${quoteSqlIdentifier(DIGITAL_RUNTIME_GROUP)}`);
     await client.query(`GRANT ${quoteSqlIdentifier(DIGITAL_RUNTIME_GROUP)} TO ${quoteSqlIdentifier(role)} WITH ADMIN FALSE, INHERIT TRUE, SET FALSE`);
-    for(const table of DIGITAL_RUNTIME_TABLES){const p=await client.query<{bad:boolean}>("SELECT has_table_privilege($1,$2,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_table_privilege($1,$2,'INSERT WITH GRANT OPTION') AS bad",[role,`public.${table}`]);assert.equal(p.rows[0].bad,false);}
+    for(const table of DIGITAL_RUNTIME_TABLES){
+      const forbidden=DIGITAL_SHARED_HISTORICAL_TABLES.has(table)?"DELETE,TRUNCATE,REFERENCES,TRIGGER":"UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER";
+      const p=await client.query<{bad:boolean}>("SELECT has_table_privilege($1,$2,$3) OR has_table_privilege($1,$2,'INSERT WITH GRANT OPTION') AS bad",[role,`public.${table}`,forbidden]);assert.equal(p.rows[0].bad,false);
+    }
     await client.query("COMMIT");return{tables:DIGITAL_RUNTIME_TABLES,appendOnlyEvents:true};
   }catch(e){await client.query("ROLLBACK");throw e;}}
 type DIGITAL_COLUMNS=readonly string[];

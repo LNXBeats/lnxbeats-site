@@ -9,6 +9,9 @@ import { applyDigitalCompletions } from "./completion";
 import { digitalOwnsExactAlbum } from "./album-ownership-policy";
 import { digitalCommercialAudioReady } from "./formats";
 import { assertDigitalRightsReviews } from "./rights-review-service";
+import { assertDigitalExcerptApprovals } from "./excerpt-commerce";
+import {digitalRuntimeMode} from "./runtime-policy";
+import {assertDigitalLiveObjectAssets} from "./live-media-policy";
 type DB = Prisma.TransactionClient;
 export function selectionFingerprint(offer:DigitalSelection){return createHash("sha256").update(JSON.stringify([offer.id,offer.scope,offer.title,offer.version,offer.priceCents,offer.tracks.map(t=>[t.trackId,t.masterId,t.title,t.position,t.formats??null,t.wavAssetId??null,t.mp3AssetId??null]),offer.completion??null])).digest("hex");}
 
@@ -17,7 +20,7 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
   ids.forEach(assertDigitalUuid);
   const offers = await db.digitalOffer.findMany({ where: { id: { in: ids } }, include: { project: { include: {
     tracks: { where: { status: "RELEASED" }, orderBy: [{ position: "asc" }, { id: "asc" }], include: {
-      digitalMasters: { where: { status: "READY", previewAssetId: { not: null } }, orderBy: { version: "desc" }, take: 1, include: { masterAsset: true, previewAsset: true,mp3Asset:true } },
+      digitalMasters: { orderBy: { version: "desc" }, take: 1, include: { masterAsset: true, previewAsset: true,mp3Asset:true } },
     } },
   } } } });
   if (offers.length !== ids.length) throw new DigitalError("OFFER_UNAVAILABLE", 409);
@@ -28,16 +31,22 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
       || m.masterAsset.mimeType!=="audio/wav"||!m.masterAsset.checksumSha256||!m.mp3AssetId||m.mp3Asset?.visibility!=="PRIVATE"
       ||m.mp3Asset.rightsStatus!=="CLEARED"||m.mp3Asset.mimeType!=="audio/mpeg"||!/^[a-f0-9]{64}$/.test(m.mp3Asset.checksumSha256??"")
       || m.previewAsset?.visibility !== "PUBLIC" || m.previewAsset.rightsStatus !== "CLEARED" || !m.previewDurationMs || m.previewDurationMs > 60000; })) throw new DigitalError("NO_READY_MASTER", 409);
+    assertDigitalLiveObjectAssets(digitalRuntimeMode(),tracks.flatMap(t=>{const m=t.digitalMasters[0];return[m.masterAsset,m.mp3Asset,m.previewAsset];}));
     return { id: offer.id, scope: offer.scope, title: offer.scope === "ALBUM" ? `${offer.project.title} — Album` : tracks[0].title,
       priceCents: digitalPrice(offer.priceCents), version: offer.version,
       tracks: tracks.map(t => ({ trackId: t.id, masterId: t.digitalMasters[0].id, title: t.title, position: t.position,
         formats:["WAV","MP3"] as ["WAV","MP3"],wavAssetId:t.digitalMasters[0].masterAssetId,mp3AssetId:t.digitalMasters[0].mp3AssetId! })) };
   });
-  if(selected.length)await assertDigitalRightsReviews(db, selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
+  if(selected.length) {
+    await assertDigitalRightsReviews(db, selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
+    const masterIds = new Set(selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
+    await assertDigitalExcerptApprovals(db, offers.flatMap(offer => offer.project.tracks.flatMap(track => track.digitalMasters)).filter(master => masterIds.has(master.id)));
+  }
   return selected;
 }
 export async function ownedTrackIds(userId: string, db: DB = prisma) {
-  const rows = await db.digitalEntitlement.findMany({ where: { userId, status: "ACTIVE", line: { order: { status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } } }, select: { master: { select: { trackId: true } } } });
+  const mode = requireDigitalEnvironment();
+  const rows = await db.digitalEntitlement.findMany({ where: { userId, status: "ACTIVE", line: { order: { mode, status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } } }, select: { master: { select: { trackId: true } } } });
   return new Set(rows.map(r => r.master.trackId));
 }
 export async function quote(ids: string[], userId?: string) {
@@ -64,7 +73,7 @@ export async function publicDigitalProject(slug: string, userId?: string) {
   const album = offers.find(o => o.scope === "ALBUM");
   const owned = userId ? await ownedTrackIds(userId) : new Set<string>();
   const albumOwnedCount = album?.tracks.filter(t => owned.has(t.trackId)).length ?? 0;
-  const ownsAlbum=!!album&&!!userId&&digitalOwnsExactAlbum(album,await prisma.digitalOrderLine.findMany({where:{offerId:album.id,scope:"ALBUM",order:{userId,status:{in:[...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES]}}},
+  const ownsAlbum=!!album&&!!userId&&digitalOwnsExactAlbum(album,await prisma.digitalOrderLine.findMany({where:{offerId:album.id,scope:"ALBUM",order:{userId,mode:requireDigitalEnvironment(),status:{in:[...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES]}}},
     include:{order:{select:{status:true}},entitlements:{where:{userId,status:"ACTIVE"},select:{masterId:true,status:true}}}}));
   let completion:null|{priceCents:number;basePriceCents:number;creditCents:number;creditedTrackCount:number;blockedReason:string|null}=null;
   if(album&&userId&&albumOwnedCount){try{const q=await applyDigitalCompletions(prisma,userId,[album],owned),c=q[0].completion;
@@ -95,7 +104,10 @@ export async function saveOffer(actor: OrderActor, input: { projectId: string; t
     // strict ingestion proof; an extension, MIME label or old READY flag is insufficient.
     if(input.active && (project.status!=="PUBLISHED"||!project.publicVisible||!project.tracks.length
       ||project.tracks.some(t=>!t.digitalMasters[0]||!digitalCommercialAudioReady(t.digitalMasters[0]))))throw new DigitalError("NO_READY_MASTER",409);
-    if(input.active)await assertDigitalRightsReviews(tx,project.tracks.map(track=>track.digitalMasters[0].id));
+    if(input.active){
+      await assertDigitalRightsReviews(tx,project.tracks.map(track=>track.digitalMasters[0].id));
+      await assertDigitalExcerptApprovals(tx,project.tracks.map(track=>track.digitalMasters[0]));
+    }
     const current = await tx.digitalOffer.findFirst({ where: { projectId: input.projectId, trackId: input.trackId ?? null } });
     if ((current?.version ?? 0) !== input.expectedVersion) throw new DigitalError("STALE_OFFER", 409);
     const data = { priceCents: input.priceCents, active: input.active, rightsConfirmed: input.rightsConfirmed, distribution: input.distribution, version: (current?.version ?? 0) + 1 };

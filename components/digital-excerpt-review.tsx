@@ -10,7 +10,7 @@ import styles from "./digital-excerpt-review.module.css";
 export type DigitalExcerptReviewTrack = { masterId: string; trackId: string; title: string; position: number;
   durationMs: number; provisionalStartMs: number; provisionalDurationMs: number; provisionalUrl: string | null;
   selection: DigitalExcerptSelection };
-type Action = "save" | "generate" | "validate";
+type Action = "save" | "generate" | "validate" | "validate-existing" | "validate-current";
 const stateLabel = (status: DigitalExcerptSelection["status"]) => status === "TO_LISTEN" ? "À écouter" : status === "VALIDATED" ? "Validé" : "À valider";
 function time(milliseconds: number) {
   const ms = Math.max(0, Math.round(milliseconds));
@@ -26,7 +26,7 @@ async function requestSelection(masterId: string, input?: { action: Action; star
   return body.selection as DigitalExcerptSelection;
 }
 
-export function DigitalExcerptReview({ tracks }: { tracks: DigitalExcerptReviewTrack[] }) {
+export function DigitalExcerptReview({ tracks, existingOnly = false, live = false }: { tracks: DigitalExcerptReviewTrack[]; existingOnly?: boolean; live?: boolean }) {
   const [active, setActive] = useState(0), [selections, setSelections] = useState(() => Object.fromEntries(tracks.map(track => [track.masterId, track.selection])));
   const validated = Object.values(selections).filter(selection => selection.status === "VALIDATED").length;
   return <div className={styles.review}>
@@ -36,20 +36,22 @@ export function DigitalExcerptReview({ tracks }: { tracks: DigitalExcerptReviewT
       <ol className={styles.trackList}>{tracks.map((track, index) => <li key={track.masterId}><button type="button" className={styles.trackButton} aria-current={active === index ? "step" : undefined}
         onClick={() => setActive(index)}><span className={styles.trackNumber}>{String(track.position).padStart(2, "0")}</span><span className={styles.trackTitle}>{track.title}</span><span className={styles.badge} data-state={selections[track.masterId].status}>{stateLabel(selections[track.masterId].status)}</span></button></li>)}</ol>
     </section>
-    <div className={styles.editors}>{tracks.map((track, index) => <ExcerptEditor key={track.masterId} track={track} active={index === active} index={index} count={tracks.length}
+    <div className={styles.editors}>{tracks.map((track, index) => <ExcerptEditor key={track.masterId} track={track} active={index === active} index={index} count={tracks.length} existingOnly={existingOnly} live={live}
       selection={selections[track.masterId]} change={selection => setSelections(previous => ({ ...previous, [track.masterId]: selection }))}
       previous={() => setActive(index - 1)} next={() => setActive(index + 1)} />)}</div>
   </div>;
 }
 
-function ExcerptEditor({ track, active, index, count, selection, change, previous, next }: { track: DigitalExcerptReviewTrack; active: boolean; index: number; count: number;
+function ExcerptEditor({ track, active, index, count, selection, change, previous, next, existingOnly, live }: { track: DigitalExcerptReviewTrack; active: boolean; index: number; count: number; existingOnly: boolean; live: boolean;
   selection: DigitalExcerptSelection; change: (selection: DigitalExcerptSelection) => void; previous: () => void; next: () => void }) {
   const ownerId = `dcn-excerpt-master-${useId()}`, editor = useRef<HTMLElement>(null), audio = useRef<HTMLAudioElement>(null), segmentEnd = useRef<number | null>(null);
   const [offset, setOffset] = useState(seconds(selection.startMs)), [currentMs, setCurrentMs] = useState(0), [busy, setBusy] = useState<Action | "refresh" | null>(null);
   const [message, setMessage] = useState(""), [error, setError] = useState(""), [attested, setAttested] = useState(false), [pollStopped, setPollStopped] = useState(false);
   const startMs = digitalImportStartMs(offset), valid = startMs !== null && startMs < track.durationMs;
   const previewDuration = valid ? Math.min(59_900, track.durationMs - startMs) : 0, changed = startMs !== selection.startMs;
-  const queued = selection.status === "QUEUED", canValidate = selection.status === "READY" && !changed && !!selection.candidateUrl;
+  const queued = selection.status === "QUEUED", canValidate = existingOnly
+    ? selection.status === "TO_LISTEN" && !changed && selection.startMs === track.provisionalStartMs && !!track.provisionalUrl
+    : selection.status === "READY" && !changed && !!selection.candidateUrl;
   useEffect(() => listenForOtherMediaPlayback(ownerId, () => audio.current?.pause()), [ownerId]);
   useEffect(() => { if (!active) editor.current?.querySelectorAll("audio").forEach(player => player.pause()); }, [active]);
   useEffect(() => {
@@ -71,11 +73,12 @@ function ExcerptEditor({ track, active, index, count, selection, change, previou
   }, [active, queued, selection.revisionId, track.masterId]);
   function edit(value: string) { setOffset(value); setAttested(false); setMessage(""); setError(""); }
   async function mutate(action: Action) {
-    if (!valid || busy || queued || action === "validate" && (!canValidate || !attested)) return;
+    if (!valid || busy || queued || ["validate", "validate-existing", "validate-current"].includes(action) && (!canValidate || !attested)) return;
+    if (existingOnly && action !== (live ? "validate-current" : "validate-existing")) return;
     setBusy(action); setError(""); setMessage("");
     if (action === "generate") setPollStopped(false);
     try {
-      const value = await requestSelection(track.masterId, { action, startMs, expectedRevisionId: selection.revisionId, idempotencyKey: crypto.randomUUID(), attested: action === "validate" && attested });
+      const value = await requestSelection(track.masterId, { action, startMs, expectedRevisionId: selection.revisionId, idempotencyKey: crypto.randomUUID(), attested: ["validate", "validate-existing", "validate-current"].includes(action) && attested });
       change(value); setOffset(seconds(value.startMs)); setAttested(false);
       setMessage(action === "save" ? "Brouillon enregistré. Vous pouvez poursuivre plus tard ou passer au titre suivant." : action === "generate" ? "Création du candidat demandée. Le master et l’extrait provisoire sont conservés." : "Votre choix d’extrait est validé et conservé. Aucune publication ni validation de droits n’a été effectuée.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Enregistrement indisponible."); }
@@ -92,6 +95,19 @@ function ExcerptEditor({ track, active, index, count, selection, change, previou
     segmentEnd.current = (startMs + previewDuration) / 1000; player.currentTime = startMs / 1000;
     void player.play().catch(() => { segmentEnd.current = null; setError("La lecture n’a pas démarré. Utilisez le lecteur privé ou réessayez."); });
   }
+  if (existingOnly) return <article ref={editor} className={styles.editor} hidden={!active} aria-labelledby={`excerpt-${track.masterId}`}>
+    <header className={styles.heading}><div><p className={styles.kicker}>Titre {track.position} sur {count}</p><h2 id={`excerpt-${track.masterId}`}>{track.title}</h2><p>Durée totale : {time(track.durationMs)}</p></div><span className={styles.badge} data-state={selection.status}>{stateLabel(selection.status)}</span></header>
+    <section className={styles.section} aria-label="Écouter et valider l’extrait conservé"><h3>Écouter cet extrait</h3>
+      <p>Début : {time(track.provisionalStartMs)} · Durée mesurée : {duration(track.provisionalDurationMs)}. Ce fichier conservé ne sera ni remplacé ni régénéré.</p>
+      {track.provisionalUrl ? <DigitalAdminPreview src={track.provisionalUrl} title={`${track.title} — extrait conservé`} /> : <p>Extrait indisponible : validation bloquée.</p>}
+      {selection.status === "VALIDATED" ? <p className={styles.confirmed}>Extrait validé personnellement{live ? "" : " dans cette QA"}. Trace conservée : {selection.revisionId}.</p> : <>
+        <label className={styles.attestation}><input type="checkbox" checked={attested} disabled={!canValidate || !!busy} onChange={event => setAttested(event.target.checked)} /><span>J’ai écouté cet extrait et je valide ce passage pour cette version du titre. Cela ne valide ni les droits de vente ni la publication.</span></label>
+        <div className={styles.actions}><button type="button" disabled={!canValidate || !attested || !!busy} onClick={() => void mutate(live ? "validate-current" : "validate-existing")}>{busy === "validate-existing" || busy === "validate-current" ? "Validation…" : "Valider cet extrait"}</button><button type="button" className={styles.quiet} disabled={!!busy} onClick={() => void refresh()}>Actualiser l’état</button></div>
+      </>}
+    </section>
+    <div aria-live="polite">{message ? <p className={styles.feedback} role="status">{message}</p> : null}{error ? <p className={styles.error} role="alert">{error} Aucun nouveau choix n’est confirmé par ce message. Actualisez l’état avant de réessayer.</p> : null}</div>
+    <nav className={styles.footer} aria-label="Parcourir les titres"><button type="button" className={styles.quiet} disabled={index === 0} onClick={previous}>← Titre précédent</button><span>{index + 1} / {count}</span><button type="button" className={styles.quiet} disabled={index === count - 1} onClick={next}>Titre suivant →</button></nav>
+  </article>;
   return <article ref={editor} className={styles.editor} hidden={!active} aria-labelledby={`excerpt-${track.masterId}`}>
     <header className={styles.heading}><div><p className={styles.kicker}>Titre {track.position} sur {count}</p><h2 id={`excerpt-${track.masterId}`}>{track.title}</h2><p>Durée totale : {time(track.durationMs)} · WAV complet privé</p></div><span className={styles.badge} data-state={selection.status}>{stateLabel(selection.status)}</span></header>
     <section className={styles.section} aria-label="Écouter le master privé">

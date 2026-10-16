@@ -10,7 +10,7 @@ import { acquiredAlbumFormats, acquiredDigitalFormats, acquiredDigitalAssetId, t
 import { DIGITAL_ACTIVE_RIGHTS_ORDER_STATES } from "./library-policy";
 async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
   const line = await prisma.digitalOrderLine.findFirst({
-    where: { id, order: { userId, status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } },
+    where: { id, order: { userId, mode: requireDigitalEnvironment(), status: { in: [...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES] } } },
     include: { order:{include:{fulfillment:true}},entitlements: { where: { userId, status: "ACTIVE" }, include: {
       master: { include: { masterAsset: true, mp3Asset: true, track: { select: { title: true, position: true } } } },
     } } },
@@ -18,9 +18,9 @@ async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
   if(!line||!line.entitlements.length)throw new DigitalError("NOT_FOUND",404);
   if(line.order.contractSnapshot&&!line.order.fulfillment?.accessReadyAt)throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);return line;
 }
-export async function library(userId:string,requestedPage=1){requireDigitalEnvironment();assertDigitalUuid(userId);
-  const pagination=digitalLibraryPagination(requestedPage,await prisma.digitalOrder.count({where:{userId}}));
-  const rows=await prisma.digitalOrder.findMany({where:{userId},orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(pagination.page-1)*pagination.pageSize,take:pagination.pageSize,select:{id:true,status:true,totalCents:true,mode:true,createdAt:true,contractSnapshot:true,fulfillment:{select:{accessReadyAt:true,confirmationStatus:true}},documents:{select:{id:true,number:true,kind:true,status:true,snapshotHash:true}},lines:{select:{id:true,title:true,scope:true,priceCents:true,trackSnapshot:true,
+export async function library(userId:string,requestedPage=1){const mode=requireDigitalEnvironment();assertDigitalUuid(userId);
+  const pagination=digitalLibraryPagination(requestedPage,await prisma.digitalOrder.count({where:{userId,mode}}));
+  const rows=await prisma.digitalOrder.findMany({where:{userId,mode},orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(pagination.page-1)*pagination.pageSize,take:pagination.pageSize,select:{id:true,status:true,totalCents:true,mode:true,createdAt:true,contractSnapshot:true,fulfillment:{select:{accessReadyAt:true,confirmationStatus:true}},documents:{select:{id:true,number:true,kind:true,status:true,snapshotHash:true}},lines:{select:{id:true,title:true,scope:true,priceCents:true,trackSnapshot:true,
     offer:{select:{project:{select:{title:true,assets:{where:{role:"COVER",asset:{visibility:"PUBLIC"}},orderBy:[{position:"asc"},{createdAt:"desc"}],take:1,select:{asset:{select:{id:true,alt:true}}}}}}}},
     archives:{select:{format:true,status:true,sizeBytes:true}},
     entitlements:{select:{id:true,masterId:true,status:true,master:{select:{version:true,masterAsset:{select:{mimeType:true,sizeBytes:true,durationMs:true}},mp3Asset:{select:{mimeType:true,sizeBytes:true,durationMs:true}},track:{select:{title:true}}}}}}}}}});
@@ -54,7 +54,7 @@ export async function digitalDownloadResponse(userId:string,id:string,token:stri
   const ticket=await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${userId}`})) IS NULL AS locked`;
     const t=await tx.digitalDownloadTicket.findFirst({where:{id,userId,tokenHash:hash,expiresAt:{gt:new Date()},usesLeft:{gt:0}}});if(!t)throw new DigitalError("NOT_FOUND",404);
     const owner=await tx.user.findUnique({where:{id:userId},select:{status:true,emailVerified:true}});if(owner?.status!=="ACTIVE"||!owner.emailVerified)throw new DigitalError("NOT_FOUND",404);
-    const line=await tx.digitalOrderLine.findFirst({where:{id:t.lineId,order:{userId,status:{in:[...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES]}}},include:{order:{include:{fulfillment:true}},entitlements:{where:{status:"ACTIVE",userId,...(t.masterId?{masterId:t.masterId}:{})}}}});
+    const line=await tx.digitalOrderLine.findFirst({where:{id:t.lineId,order:{userId,mode:requireDigitalEnvironment(),status:{in:[...DIGITAL_ACTIVE_RIGHTS_ORDER_STATES]}}},include:{order:{include:{fulfillment:true}},entitlements:{where:{status:"ACTIVE",userId,...(t.masterId?{masterId:t.masterId}:{})}}}});
     if(!line||!line.entitlements.length||!t.masterId&&line.entitlements.length!==(line.trackSnapshot as unknown[]).length)throw new DigitalError("NOT_FOUND",404);
     if(line.order.contractSnapshot&&!line.order.fulfillment?.accessReadyAt)throw new DigitalError("CONTRACT_RECEIPT_REQUIRED",409);
     if(options.method!=="HEAD")await tx.digitalDownloadTicket.update({where:{id},data:{usesLeft:{decrement:1}}});

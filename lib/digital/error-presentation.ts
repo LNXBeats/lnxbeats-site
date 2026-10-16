@@ -1,5 +1,12 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
+  if(code==="NEW_DIGITAL_PAYMENTS_CLOSED")return "Les nouveaux achats numériques sont temporairement suspendus. Aucun nouveau paiement n’a été lancé ; vos acquisitions restent accessibles dans Ma musique.";
+  if(code==="STALE_SALES_CONTROL")return "Une autre instruction administrative a été enregistrée. Actualisez cette page avant de modifier l’ouverture des achats.";
+  if(code==="LIVE_MEDIA_STORAGE_NOT_READY")return "Les fichiers de cette version ne sont pas encore disponibles dans le stockage sécurisé du site. Aucun paiement n’a été lancé ; vos achats déjà acquis restent conservés.";
+  if(code==="CUSTOMER_NAME_REQUIRED")return "Renseignez votre nom dans votre compte avant de confirmer cet achat. Aucun paiement n’a été lancé.";
+  if(code==="FRANCE_BILLING_ADDRESS_REQUIRED")return "Vérifiez votre adresse de facturation française avant l’achat. Si elle diffère de votre résidence, contactez LNX Beats pour une vérification ; aucun paiement n’a été lancé.";
+  if(code==="FR_LIVE_CONTRACT_APPROVAL_REQUIRED")return "Les conditions de vente numérique doivent encore être validées par LNX Beats. Aucun paiement n’a été lancé ; vos achats existants restent accessibles.";
+  if (code === "EXCERPT_ARTISTIC_VALIDATION_REQUIRED") return "L’extrait de cette version doit être écouté et validé personnellement par l’artiste avant une nouvelle vente. Aucun paiement n’a été lancé ; vos achats déjà acquis restent inchangés.";
   if (code === "EXCERPT_SELECTION_CHANGED") return "Le choix a changé dans une autre fenêtre. Actualisez cette piste avant de l’enregistrer ; votre saisie n’a pas remplacé le choix plus récent.";
   if (code === "EXCERPT_MASTER_CHANGED") return "Une autre version du master est maintenant courante. Rechargez la fiche pour choisir un passage de cette version ; les versions précédentes restent conservées.";
   if (code === "EXCERPT_NOT_READY" || code === "EXCERPT_ATTESTATION_REQUIRED") return "Générez et écoutez d’abord le nouvel extrait, puis confirmez explicitement votre validation. Aucun passage n’a été validé par cette action.";
@@ -15,7 +22,7 @@ export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]
   if (code.startsWith("COMPLETION_")) return "Le complément de cet album nécessite une vérification de vos acquisitions, remboursements ou crédits réservés. Aucun nouveau crédit n’est appliqué par cette action refusée. Contactez LNX Beats via /contact pour examiner le complément.";
   if (code === "NO_READY_MASTER") return "Les fichiers requis ne sont pas tous validés pour une nouvelle vente. Vérifiez les masters, MP3 et extraits dans l’Admin ; les fichiers déjà acquis ne sont pas remplacés.";
   if (code === "ARCHIVE_PREPARING") return "L’archive privée est en préparation dans le worker. Réessayez dans quelques instants ; vos pistes restent accessibles individuellement.";
-  if (code === "CONTRACT_RECEIPT_REQUIRED") return "Téléchargez et accusez réception de votre confirmation contractuelle avant de commencer la fourniture QA.";
+  if (code === "CONTRACT_RECEIPT_REQUIRED") return "Téléchargez et accusez réception de votre confirmation contractuelle avant de commencer la fourniture.";
   if (code === "PRICE_CHANGED") return "Le prix a changé. Vérifiez et confirmez de nouveau le panier.";
   if (code === "CATALOGUE_CHANGED") return "Le contenu ou la version de la sélection a changé. Vérifiez de nouveau le panier avant tout paiement.";
   if (code.includes("REVIEW")) return "Ce paiement nécessite une vérification. Ne recommencez pas le paiement.";

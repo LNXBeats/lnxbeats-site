@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 
 import { createPaypalReconciliationGateway, type PaypalGateway, type PaypalWebhookHeaders } from "@/lib/payments/paypal-client";
 import {
@@ -12,21 +13,23 @@ import type { PaymentsConfiguration } from "@/lib/payments/types";
 import type { PaypalReconciliationConfiguration } from "@/lib/payments/config";
 import { processVerifiedPaypalWebhookEventByPaymentSource } from "@/lib/shop/payment-webhooks";
 import { isRightsPaypalWebhookEvent, processVerifiedRightsPaypalWebhookEvent } from "@/lib/rights/payment-webhooks";
+import { handoffVerifiedDigitalPaypalEvent } from "@/lib/digital/shared-webhook-isolation";
 
 export const PAYPAL_WEBHOOK_MAX_BYTES = 256 * 1024;
 
 export type PaypalWebhookRouteDependencies = Readonly<{
   assertRuntime(): Promise<PaymentsConfiguration | PaypalReconciliationConfiguration | void>;
   gateway(): PaypalGateway;
-  processEvent(event: VerifiedPaypalWebhookEvent): ReturnType<typeof processVerifiedPaypalWebhookEvent>;
+  processEvent(event: VerifiedPaypalWebhookEvent, originalBodyHash?: string): ReturnType<typeof processVerifiedPaypalWebhookEvent>;
 }>;
 
 const dependencies: PaypalWebhookRouteDependencies = {
   assertRuntime: assertPaypalWebhookRuntimeEnvironment,
   gateway: createPaypalReconciliationGateway,
-  processEvent: async (event) => {
+  processEvent: async (event, originalBodyHash) => {
     const configuration = await assertPaypalWebhookRuntimeEnvironment();
     const environment = configuration.paypal.environment;
+    if(originalBodyHash){const handoff=await handoffVerifiedDigitalPaypalEvent(event,environment,originalBodyHash);if(handoff)return{...handoff,orderConfirmed:false};}
     if (isPaypalFinancialEvent(event.event_type)) {
       return { ...(await processVerifiedPaypalFinancialEvent(event, environment)), orderConfirmed: false };
     }
@@ -183,7 +186,7 @@ export async function handlePaypalWebhookPost(
   }
   try {
     logPaymentEvent("payment.webhook.received", { providerEventId: event.id });
-    const result = await routeDependencies.processEvent(event);
+    const result = await routeDependencies.processEvent(event,createHash("sha256").update(body).digest("hex"));
     logPaymentEvent("payment.webhook.processed", {
       providerEventId: event.id,
       outcome: result.outcome,

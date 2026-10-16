@@ -12,7 +12,7 @@ type Tx = Prisma.TransactionClient;
 const reservedStatuses = ["REQUESTED", "PENDING", "REQUIRES_REVIEW", "SUCCEEDED"];
 async function lock(tx: Tx, userId: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${userId}`})) IS NULL AS locked`; }
 async function admin(tx: Tx, actor: OrderActor) { const u = await tx.user.findFirst({ where: { id: actor.id, role: "ADMIN", status: "ACTIVE", emailVerified: true } }); if (!u) throw new DigitalError("ADMIN_REQUIRED", 403); }
-async function parent(id: string) { assertDigitalUuid(id); return prisma.digitalOrder.findUniqueOrThrow({ where: { id }, select: { userId: true } }); }
+async function parent(id: string) { assertDigitalUuid(id); return prisma.digitalOrder.findUniqueOrThrow({ where: { id }, select: { userId: true, mode: true } }); }
 async function orderState(tx: Tx, orderId: string) {
   const o = await tx.digitalOrder.findUniqueOrThrow({ where: { id: orderId }, include: { lines: { include: { entitlements: true } }, refunds: true, disputes: true, attempts: { where: { status: "PAID" } } } });
   const financialIncident = !!await tx.digitalEvent.findFirst({ where: { orderId, kind: { in: [...DIGITAL_PERSISTENT_FINANCIAL_INCIDENTS] } } });
@@ -29,7 +29,8 @@ async function orderState(tx: Tx, orderId: string) {
     : o.disputes.some(d => ["OPEN", "LOST", "REQUIRES_REVIEW"].includes(d.status)) ? "DISPUTED" : sum >= o.totalCents ? "REFUNDED" : sum ? "PARTIALLY_REFUNDED" : "PAID" } });
 }
 export async function requestDigitalRefund(actor: OrderActor, id: string, input: { idempotencyKey: string; targets: unknown; purpose: string; confirmedAmountCents: number }) {
-  requireDigitalEnvironment(); assertDigitalUuid(input.idempotencyKey); const head = await parent(id);
+  const mode = requireDigitalEnvironment(); assertDigitalUuid(input.idempotencyKey); const head = await parent(id);
+  if (head.mode !== mode) throw new DigitalError("REFUND_REQUIRES_REVIEW", 409);
   const targets = refundTargets(input.targets), amountCents = targets.reduce((s, t) => s + t.amountCents, 0);
   if (input.confirmedAmountCents !== amountCents || !["RESOLUTION", "PRICE_REDUCTION"].includes(input.purpose)) throw new DigitalError("REFUND_CONFIRMATION_REQUIRED");
   return prisma.$transaction(async tx => {
@@ -57,16 +58,16 @@ export async function requestDigitalRefund(actor: OrderActor, id: string, input:
   });
 }
 export async function recordDigitalRefundEvidence(e: DigitalRefundEvidence, merchantId: string) {
-  requireDigitalEnvironment(); const head = await parent(e.orderId);
+  const mode = requireDigitalEnvironment(); const head = await parent(e.orderId);
   return prisma.$transaction(async tx => {
     await lock(tx, head.userId);
     const o = await tx.digitalOrder.findUniqueOrThrow({ where: { id: e.orderId }, include: { lines: true, refunds: true, attempts: { where: { status: "PAID" } } } });
-    if (!e.authenticated || e.mode !== "TEST" || e.currency !== "EUR" || e.merchantId !== merchantId || !merchantId || !e.reference
+    if (!e.authenticated || e.mode !== mode || o.mode !== mode || e.currency !== "EUR" || e.merchantId !== merchantId || !merchantId || !e.reference
       || !Number.isSafeInteger(e.amountCents) || e.amountCents < 1 || o.attempts.length !== 1 || o.attempts[0].provider !== e.provider || o.attempts[0].paymentReference !== e.paymentReference) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
     let r = e.localRefundId ? await tx.digitalRefund.findUnique({ where: { id: e.localRefundId } }) : await tx.digitalRefund.findUnique({ where: { providerReference: e.reference } });
     if (e.provider === "STRIPE" && e.localRefundId && !r) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
     if (r && (r.orderId !== e.orderId || r.provider !== e.provider || r.paymentReference !== e.paymentReference || r.amountCents !== e.amountCents || r.providerReference && r.providerReference !== e.reference)) throw new DigitalError("REFUND_EVIDENCE_INVALID", 409);
-    const eventKey = `refund-proof:${e.provider}:${e.reference}:${e.status}`;
+    const eventKey = e.mode === "TEST" ? `refund-proof:${e.provider}:${e.reference}:${e.status}` : `refund-proof:${e.provider}:LIVE:${merchantId}:${e.reference}:${e.status}`;
     const existing = await tx.digitalEvent.findUnique({ where: { externalKey: eventKey } });
     const proof = { ...e }; delete proof.localRefundId;
     if (existing) { if (billingSnapshotHash(existing.details) !== billingSnapshotHash(proof)) throw new DigitalError("EVENT_COLLISION", 409); return { duplicate: true }; }
@@ -86,7 +87,7 @@ export async function recordDigitalRefundEvidence(e: DigitalRefundEvidence, merc
     if (!r) {
       const others = o.refunds.filter(r => reservedStatuses.includes(r.status)).reduce((s, r) => s + r.amountCents, 0);
       const full = e.amountCents === o.totalCents && others === 0;
-      r = await tx.digitalRefund.create({ data: { orderId: o.id, provider: e.provider, paymentReference: e.paymentReference, idempotencyKey: `dcn-external:${e.provider}:${e.reference}`,
+      r = await tx.digitalRefund.create({ data: { orderId: o.id, provider: e.provider, paymentReference: e.paymentReference, idempotencyKey: e.mode === "TEST" ? `dcn-external:${e.provider}:${e.reference}` : `dcn-external:${e.provider}:LIVE:${merchantId}:${e.reference}`,
         providerReference: e.reference, amountCents: e.amountCents, targets: full ? o.lines.map(l => ({ lineId: l.id, amountCents: l.priceCents })) : [],
         purpose: full ? "RESOLUTION" : "EXTERNAL_REVIEW", allocationStatus: full ? "MATCHED" : "REVIEW" } });
     }
@@ -106,16 +107,18 @@ export async function recordDigitalRefundEvidence(e: DigitalRefundEvidence, merc
   });
 }
 export async function processDigitalRefund(id: string, supplied?: DigitalFinanceGateway) {
-  requireDigitalEnvironment(); assertDigitalUuid(id);
+  const mode = requireDigitalEnvironment(); assertDigitalUuid(id);
   const r = await prisma.digitalRefund.findUniqueOrThrow({ where: { id } });
   if (["SUCCEEDED", "FAILED"].includes(r.status)) return;
-  const gateway = supplied ?? digitalFinanceGateway(r.provider);
+  const head = await parent(r.orderId);
+  if (head.mode !== mode) throw new DigitalError("REFUND_REQUIRES_REVIEW", 409);
+  const gateway = supplied ?? digitalFinanceGateway(r.provider, mode);
+  if ((gateway.mode ?? "TEST") !== mode) throw new DigitalError("REFUND_REQUIRES_REVIEW", 409);
   if (r.status !== "REQUESTED") {
     if (r.leaseUntil && r.leaseUntil > new Date()) return;
     const evidence = await gateway.recoverRefund(r); if (evidence) await recordDigitalRefundEvidence({ ...evidence, localRefundId: r.id }, gateway.merchantId);
     return; // An unknown result is never a new financial POST, regardless of process restarts.
   }
-  const head = await parent(r.orderId);
   const claimed = await prisma.$transaction(async tx => { await lock(tx, head.userId);
     if (await tx.digitalDispute.findFirst({ where: { orderId: r.orderId, status: { not: "WON" } } })) return false;
     return !!(await tx.digitalRefund.updateMany({ where: { id, status: "REQUESTED" }, data: { status: "PENDING", leaseUntil: new Date(Date.now() + 60000) } })).count; });
@@ -124,10 +127,10 @@ export async function processDigitalRefund(id: string, supplied?: DigitalFinance
   catch { await prisma.digitalRefund.updateMany({ where: { id, status: "PENDING" }, data: { status: "REQUIRES_REVIEW", leaseUntil: null } }); }
 }
 export async function recordDigitalDisputeEvidence(e: DigitalDisputeEvidence, merchantId: string) {
-  requireDigitalEnvironment(); const head = await parent(e.orderId);
+  const mode = requireDigitalEnvironment(); const head = await parent(e.orderId);
   return prisma.$transaction(async tx => { await lock(tx, head.userId);
     const o = await tx.digitalOrder.findUniqueOrThrow({ where: { id: e.orderId }, include: { attempts: { where: { status: "PAID" } } } });
-    if (!e.authenticated || e.mode !== "TEST" || e.merchantId !== merchantId || !merchantId || !e.reference || e.currency !== "EUR"
+    if (!e.authenticated || e.mode !== mode || o.mode !== mode || e.merchantId !== merchantId || !merchantId || !e.reference || e.currency !== "EUR"
       || e.amountCents < 1 || e.amountCents > o.totalCents || o.attempts.length !== 1 || o.attempts[0].provider !== e.provider || o.attempts[0].paymentReference !== e.paymentReference) throw new DigitalError("DISPUTE_EVIDENCE_INVALID");
     const previous = await tx.digitalDispute.findUnique({ where: { providerReference: e.reference } });
     if (previous && (previous.orderId !== o.id || previous.provider !== e.provider || previous.paymentReference !== e.paymentReference || previous.amountCents !== e.amountCents)) throw new DigitalError("EVENT_COLLISION", 409);

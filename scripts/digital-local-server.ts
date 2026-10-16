@@ -16,6 +16,7 @@ for (const key of Object.keys(config)) assert.ok(!/(STRIPE|PAYPAL|RESEND|LIVE)/i
 const command = process.argv[2] ?? "web";
 assert.ok(["web", "web-built", "worker"].includes(command));
 const env:NodeJS.ProcessEnv = { PATH: process.env.PATH!, HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR ?? "/private/tmp", NODE_ENV:command==="web-built"?"production":"development", ...config, NEXT_TELEMETRY_DISABLED:"1", DCN_LOCAL_REVIEW_AUTHORIZED:"true" };
+if(command==="worker")env.DCN_WORKER_ENABLED="true";
 if(finalPaths||commercialFrance){env.DCN_ENABLED="true";env.DCN_MODE="TEST";env.DCN_NEW_PAYMENTS_ENABLED="false";env.DCN_EXTERNAL_TEST_AUTHORIZED="false";}
 const child = command === "worker"
   ? spawn(process.execPath, ["--conditions=react-server", "--import", "tsx", "scripts/digital-media-worker.ts"], { env, stdio: "inherit" })

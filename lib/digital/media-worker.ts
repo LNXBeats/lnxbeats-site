@@ -14,8 +14,9 @@ import { generateDigitalMp3, validateDigitalAudio, DIGITAL_MP3_LIMIT_BYTES } fro
 import { planDigitalMasterImport } from "./master-import-policy";
 import { claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot, checkDigitalDisk, DIGITAL_WORK_LIMITS } from "./work-slots";
 
-export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;uploadId?:string}={}) {
+export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;uploadId?:string;signal?:AbortSignal}={}) {
   requireDigitalEnvironment(); const now=new Date();
+  if(hooks.signal?.aborted)return{processed:false};
   if(hooks.uploadId!==undefined)assertDigitalUuid(hooks.uploadId);
   const scope=hooks.uploadId?{id:hooks.uploadId}:{};
   const recovery=await prisma.digitalUpload.findFirst({where:{...scope,status:"COMPLETING",leaseUntil:{lte:now}},orderBy:{createdAt:"asc"}});
@@ -28,10 +29,12 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
   const claim=await prisma.digitalUpload.updateMany({where:{id:s.id,OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},data:{status:"VALIDATING",leaseUntil,leaseToken:slot.leaseToken}});
   if(!claim.count){await releaseDigitalSlot(slot);return{processed:false};}
   let root:string|null=null; const stop=new AbortController();let renewing=false;
+  const shutdown=()=>stop.abort();hooks.signal?.addEventListener("abort",shutdown,{once:true});if(hooks.signal?.aborted)shutdown();
   const heartbeat=setInterval(()=>{if(renewing)return;renewing=true;void (async()=>{if(!await renewDigitalSlot(slot)||!(await prisma.digitalUpload.updateMany({where:{id:s.id,status:"VALIDATING",leaseToken:slot.leaseToken,leaseUntil:{gt:new Date()}},data:{leaseUntil:new Date(Date.now()+15*60000)}})).count)stop.abort();})().catch(()=>stop.abort()).finally(()=>{renewing=false;});},10000);
-  const driver=activeMediaStorage(); const ref: MediaStorageReference={storageKey:s.storageKey,storageBackend:driver.backend,storageProvider:driver.provider,visibility:"PRIVATE"};
   const generatedRefs: MediaStorageReference[]=[];
   try {
+    if(stop.signal.aborted)throw new DigitalError("WORKER_SHUTDOWN");
+    const driver=activeMediaStorage(); const ref: MediaStorageReference={storageKey:s.storageKey,storageBackend:driver.backend,storageProvider:driver.provider,visibility:"PRIVATE"};
     if(Number(s.sizeBytes)>DIGITAL_WORK_LIMITS.masterBytes)throw new DigitalError("MASTER_SIZE_LIMIT");
     root=path.join(await checkDigitalDisk(Number(s.sizeBytes)+3*1024*1024+DIGITAL_MP3_LIMIT_BYTES),`${s.id}.${slot.leaseToken}`);await mkdir(root,{mode:0o700});
     const extension=s.filename.split(".").pop()!.toLowerCase(),source=path.join(root,`source.${extension}`),preview=path.join(root,"preview.mp3"),mp3=path.join(root,"full.mp3");
@@ -77,9 +80,9 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
       await tx.digitalEvent.create({data:{actorId:s.actorId,kind:"MASTER_VALIDATED",details:{trackId:s.trackId,version:s.expectedVersion+1,checksum,durationMs:decoded.durationMs,previewDurationMs:decoded.previewDurationMs,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps,encoderVersion:rendition.encoderVersion,probe:rendition.probe,sourceProbe:"RIFF_CHUNKS_AND_FFMPEG_STRICT_DECODE",mp3Probe:"MPEG_LAYER_III_FRAMES_AND_FFMPEG_STRICT_DECODE",revalidation:importPlan.revalidation,rightsReview:"PENDING"}}});
     });
     generatedRefs.length=0; return {processed:true,ready:true,ffmpegRssPeak:decoded.ffmpegRssPeak,ffmpegSamples:decoded.ffmpegSamples,tempSourceBytes:size,tempJobBytesObserved:size+metadata.size+mp3Metadata.size,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps};
-  } catch(e) { const code=e instanceof DigitalError?e.code:"VALIDATION_FAILED";const retry=["INSUFFICIENT_TEMP_DISK","WORKER_MEMORY_LIMIT","WORKER_MONITOR_UNAVAILABLE","LEASE_LOST"].includes(code);
+  } catch(e) { const code=hooks.signal?.aborted?"WORKER_SHUTDOWN":e instanceof DigitalError?e.code:"VALIDATION_FAILED";const retry=hooks.signal?.aborted||["INSUFFICIENT_TEMP_DISK","WORKER_MEMORY_LIMIT","WORKER_MONITOR_UNAVAILABLE","LEASE_LOST"].includes(code);
     await prisma.digitalUpload.updateMany({where:{id:s.id,status:"VALIDATING",leaseToken:slot.leaseToken},data:{status:retry?"QUARANTINE":"REJECTED",leaseUntil:retry?new Date(Date.now()+60000):null,leaseToken:null,errorCode:code}});
     const failureType=e instanceof Error?e.name:"UNKNOWN",providerCode=e&&typeof e==="object"&&"code" in e&&typeof e.code==="string"&&/^[A-Z0-9_]{1,40}$/.test(e.code)?e.code:null;
     return {processed:true,ready:false,errorCode:code,failureType,providerCode}; }
-  finally { clearInterval(heartbeat);stop.abort();for(const generatedRef of generatedRefs)if(!await prisma.asset.findFirst({where:{storageKey:generatedRef.storageKey}}))await deleteMediaObject(generatedRef).catch(()=>undefined);if(root)await rm(root,{recursive:true,force:true});await releaseDigitalSlot(slot); }
+  finally { hooks.signal?.removeEventListener("abort",shutdown);clearInterval(heartbeat);stop.abort();for(const generatedRef of generatedRefs)if(!await prisma.asset.findFirst({where:{storageKey:generatedRef.storageKey}}))await deleteMediaObject(generatedRef).catch(()=>undefined);if(root)await rm(root,{recursive:true,force:true});await releaseDigitalSlot(slot); }
 }

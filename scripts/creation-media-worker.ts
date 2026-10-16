@@ -42,6 +42,13 @@ while (!stopping) {
     await cleanupDeliveryUploadSessions();
     await cleanupTerminalCreationVideoQuarantine();
     await expireAbandonedCreationVideoUploads();
+    // No DCN imports or work while OFF. Heavy media stages remain sequential
+    // with the existing creations/delivery jobs, never parallel with them.
+    if(process.env.DCN_WORKER_ENABLED==="true"&&!shutdown.signal.aborted){
+      const {runDigitalWorkerCycle}=await import("./digital-media-worker");
+      const digital=await runDigitalWorkerCycle(shutdown.signal);
+      if(digital.failures)console.error("[creation-media-worker] DCN bounded cycle failed; durable retry retained.");
+    }
     if (!result.processed && !delivery.processed) await waitForNextPoll();
   } catch (error) {
     // Web and worker deployments can overlap. In particular, the worker may

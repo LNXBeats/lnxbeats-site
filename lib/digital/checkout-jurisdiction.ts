@@ -1,6 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import { DigitalError, DIGITAL_TERMS_VERSION } from "./domain";
+import { DigitalError, DIGITAL_TERMS_VERSION, requireDigitalEnvironment } from "./domain";
 import { localDigitalReviewAvailable, LOCAL_REVIEW_MERCHANT } from "./local-review-policy";
 import { localQaDigitalCountryRule, type DigitalJurisdictionInput, type DigitalJurisdictionSnapshot } from "./jurisdictions";
 import { assertDigitalCheckoutJurisdiction, revalidateDigitalCheckoutJurisdiction } from "./jurisdictions-service";
@@ -40,7 +40,7 @@ function input(territory:DigitalCustomerTerritory|undefined,qa:boolean,termsVers
   return {countryCode:territory.countryCode,subdivisionCode:territory.subdivisionCode,residenceCountryCode:territory.residenceCountryCode,
     billingCountryCode:territory.billingCountryCode,customerType:territory.customerType,
     ...(providerCountryCode!==null&&providerCountryCode!==undefined?{providerCountryCode:String(providerCountryCode)}:{}),
-    mode:"TEST",termsVersion,locale:"fr",providerAllowed:true,rightsApproved:true,formatsReady:true,localQaFixtureAuthorized:qa};
+    mode:requireDigitalEnvironment(),termsVersion,locale:"fr",providerAllowed:true,rightsApproved:true,formatsReady:true,localQaFixtureAuthorized:qa};
 }
 type AcquiredTerritory=DigitalJurisdictionSnapshot&{franceResidence?:DigitalFranceResidenceSnapshot;franceResidenceV2?:DigitalFranceResidenceSnapshotV2};
 function localRule(v2:boolean,termsVersion=DIGITAL_TERMS_VERSION){const rule=localQaDigitalCountryRule(termsVersion);return v2?{...rule,subdivisionCode:DIGITAL_FRANCE_LAUNCH_POLICY.registrySubdivision}:rule;}

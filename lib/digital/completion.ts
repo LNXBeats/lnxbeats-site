@@ -1,7 +1,7 @@
 import "server-only";
 import { billingSnapshotHash } from "@/lib/billing/domain";
 import type { Prisma } from "@/generated/prisma/client";
-import { DigitalError, type DigitalCompletionSnapshot, type DigitalCompletionSource, type DigitalSelection } from "./domain";
+import { DigitalError, requireDigitalEnvironment, type DigitalCompletionSnapshot, type DigitalCompletionSource, type DigitalSelection } from "./domain";
 import { completeDigitalAlbum,digitalCompletionSourceAmounts } from "./completion-policy";
 import {digitalOwnsExactAlbum} from "./album-ownership-policy";
 import {digitalMasterEquivalenceProof} from "./master-equivalence-service";
@@ -12,7 +12,9 @@ const jsonHash = billingSnapshotHash;
 
 /** Repository proof, never amounts submitted by the client. Calls run under the user lock at checkout. */
 async function completionSources(tx:Tx,userId:string,album:DigitalSelection,targetLineId?:string):Promise<DigitalCompletionSource[]> {
+  const mode=requireDigitalEnvironment();
   const entitlements = await tx.digitalEntitlement.findMany({where:{userId,status:"ACTIVE",master:{trackId:{in:album.tracks.map(t=>t.trackId)}},
+    line:{order:{mode}},
     // After PAID, this album legitimately has its own entitlements. They are the
     // result being verified, not an additional source credit. Exclude ONLY this line.
     ...(targetLineId?{lineId:{not:targetLineId}}:{})},
@@ -34,7 +36,7 @@ async function completionSources(tx:Tx,userId:string,album:DigitalSelection,targ
       ||acquired[0].masterId!==e.master.id
       ||line.completionSnapshot||o.disputes.some(d=>d.status!=="WON"))throw new DigitalError("COMPLETION_SOURCE_REQUIRES_REVIEW",409);
     const equivalence=e.master.id!==track.masterId?await digitalMasterEquivalenceProof(tx,e.master.id,track.masterId,track.trackId):undefined;
-    const {paidCents,refundedCents,availableCents}=digitalCompletionSourceAmounts(line,o);
+    const {paidCents,refundedCents,availableCents}=digitalCompletionSourceAmounts(line,o,mode);
     const used=await tx.digitalCompletionCredit.findFirst({where:{userId,trackId:track.trackId,status:{in:activeCredit},...(targetLineId?{targetLineId:{not:targetLineId}}:{})}});
     if(used)throw new DigitalError("COMPLETION_CREDIT_ALREADY_USED",409);
     const proofHash=jsonHash({sourceLineId:line.id,trackId:track.trackId,masterId:track.masterId,paidCents,

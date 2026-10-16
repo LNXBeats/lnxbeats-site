@@ -5,6 +5,7 @@ import { StudioVinylControl } from "@/components/studio-vinyl-control";
 import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
 import { digitalTimeLabel, isDigitalIntentionalPlaybackAbort } from "@/lib/digital/presentation";
 import styles from "./digital.module.css";
+import { digitalUiIsLive, type DigitalUiMode } from "./digital-mode-copy";
 export const DIGITAL_CART_KEY = "lnx:dcn:cart:v1";
 export function readDigitalCart(): string[] { try { const v = JSON.parse(localStorage.getItem(DIGITAL_CART_KEY) ?? "[]"); return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string"))].slice(0, 50) : []; } catch { return []; } }
 export function writeDigitalCart(ids: string[]) { localStorage.setItem(DIGITAL_CART_KEY, JSON.stringify([...new Set(ids)])); window.dispatchEvent(new Event("dcn-cart")); }
@@ -53,9 +54,9 @@ function DigitalTrackRow({ track }: { track: DigitalProjectView["tracks"][number
     {failed ? <span className={styles.playError} role="status">Lecture indisponible. Réessayez cet extrait.</span> : null}
   </li>;
 }
-export function DigitalTracklist({ view }: { view: DigitalProjectView }) {
+export function DigitalTracklist({ view, mode="TEST" }: { view: DigitalProjectView;mode?:DigitalUiMode }) {
   return <section className={styles.tracklist} aria-labelledby="digital-tracks-title"><div className={styles.heading}><div><p className="eyebrow">Écouter et choisir</p><h2 id="digital-tracks-title">Les pistes.</h2></div><Link className="text-link" href="/musique/panier">Ouvrir le panier numérique</Link></div>
     <ol className={styles.trackRows}>{view.tracks.map(t => <DigitalTrackRow track={t} key={t.id}/>)}</ol>{!view.tracks.length ? <p>Aucune piste publiée pour ce projet.</p> : null}
-    <details className={styles.qaDetails}><summary>À propos de cette démonstration</summary><p>Prix fictifs, panier numérique séparé et offres vérifiées côté serveur. Chaque extrait est un fichier autonome de 60 secondes maximum. Le master complet reste privé ; aucune licence de publication n’est accordée par cette démo.</p><p>Le nombre de pistes de l’offre album correspond uniquement aux fichiers inclus à l’achat. Les titres annoncés ne sont pas vendus.</p></details>
+    <details className={styles.qaDetails}><summary>{digitalUiIsLive(mode)?"À propos des téléchargements":"À propos de cette démonstration"}</summary><p>{digitalUiIsLive(mode)?"Panier numérique séparé et offres vérifiées côté serveur.":"Prix fictifs, panier numérique séparé et offres vérifiées côté serveur."} Chaque extrait est un fichier autonome de 60 secondes maximum. Le master complet reste privé ; {digitalUiIsLive(mode)?"la licence incluse est limitée à l’usage privé, sans droit de publication ni d’exploitation commerciale.":"aucune licence de publication n’est accordée par cette démo."}</p><p>Le nombre de pistes de l’offre album correspond uniquement aux fichiers inclus à l’achat. Les titres annoncés ne sont pas vendus.</p></details>
   </section>;
 }

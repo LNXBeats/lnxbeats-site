@@ -14,23 +14,25 @@ import { verifiedDigitalStream } from "./stream-integrity";
 import { acquiredAlbumFormats, acquiredDigitalAssetId, type DigitalAudioFormat, type DigitalAcquiredTrack } from "./formats";
 import { checkDigitalDisk, claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot,DIGITAL_WORK_LIMITS } from "./work-slots";
 export async function ensureDigitalArchive(lineId: string, format: DigitalAudioFormat = "WAV") {
-  requireDigitalEnvironment();
+  const mode=requireDigitalEnvironment();
   const l = await prisma.digitalOrderLine.findUniqueOrThrow({ where: { id: lineId }, include: { order: true } });
-  if (l.scope !== "ALBUM" || !["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED", "GRANTED"].includes(l.order.status)) throw new DigitalError("ARCHIVE_UNAVAILABLE");
+  if (l.order.mode!==mode||l.scope !== "ALBUM" || !["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED", "GRANTED"].includes(l.order.status)) throw new DigitalError("ARCHIVE_UNAVAILABLE");
   if (!acquiredAlbumFormats(l.trackSnapshot as unknown as DigitalAcquiredTrack[]).includes(format)) throw new DigitalError("FORMAT_NOT_ACQUIRED", 409);
   return prisma.digitalArchive.upsert({ where: { lineId_format: { lineId, format } }, create: { lineId, format, snapshotHash: billingSnapshotHash(l.trackSnapshot) }, update: {} });
 }
 /** ZIP work is queued and streamed in this worker, never built by the Next download route. */
-export async function processDigitalArchives(options: { afterChunk?: () => Promise<void>; lineIds?:string[] } = {}) {
-  requireDigitalEnvironment();
+export async function processDigitalArchives(options: { afterChunk?: () => Promise<void>; lineIds?:string[];signal?:AbortSignal } = {}) {
+  const mode=requireDigitalEnvironment();
+  if(options.signal?.aborted)return{processed:false};
   if(options.lineIds){if(!options.lineIds.length||options.lineIds.length>50)throw new DigitalError("INVALID_ARCHIVE_SCOPE");options.lineIds.forEach(assertDigitalUuid);}
-  const row = await prisma.digitalArchive.findFirst({ where: { ...(options.lineIds?{lineId:{in:options.lineIds}}:{}),OR: [{ status: "PENDING" }, { status: "PROCESSING", leaseUntil: { lte: new Date() } }] }, orderBy: { createdAt: "asc" } });
+  const row = await prisma.digitalArchive.findFirst({ where: { line:{order:{mode}},...(options.lineIds?{lineId:{in:options.lineIds}}:{}),OR: [{ status: "PENDING" }, { status: "PROCESSING", leaseUntil: { lte: new Date() } }] }, orderBy: { createdAt: "asc" } });
   if (!row) return { processed: false };
   const slot = await claimDigitalSlot("zip", row.id); if (!slot) return { processed: false };
   if (row.attempts >= 3) { await prisma.digitalArchive.update({ where: { id: row.id }, data: { status: "REQUIRES_REVIEW", errorCode: "ARCHIVE_RETRY_LIMIT" } }); await releaseDigitalSlot(slot); return { processed: true, ready: false }; }
   const c = await prisma.digitalArchive.updateMany({ where: { id: row.id, attempts: row.attempts, OR: [{ status: "PENDING" }, { status: "PROCESSING", leaseUntil: { lte: new Date() } }] }, data: { status: "PROCESSING", attempts: { increment: 1 }, leaseToken: slot.leaseToken, leaseUntil: new Date(Date.now() + 300000) } });
   if (!c.count) { await releaseDigitalSlot(slot); return { processed: false }; }
   const stop = new AbortController(); let renewing = false, root: string | null = null, stored: MediaStorageReference | null = null;
+  const shutdown=()=>stop.abort();options.signal?.addEventListener("abort",shutdown,{once:true});if(options.signal?.aborted)shutdown();
   const heartbeat = setInterval(() => { if (renewing) return; renewing = true; void (async () => {
     if (!await renewDigitalSlot(slot) || !(await prisma.digitalArchive.updateMany({ where: { id: row.id, status: "PROCESSING", leaseToken: slot.leaseToken, leaseUntil: { gt: new Date() } }, data: { leaseUntil: new Date(Date.now() + 300000) } })).count) stop.abort();
   })().catch(() => stop.abort()).finally(() => { renewing = false; }); }, 10000);
@@ -62,7 +64,7 @@ export async function processDigitalArchives(options: { afterChunk?: () => Promi
       await tx.digitalEvent.create({ data: { orderId: l.orderId, kind: "ARCHIVE_READY", details: { archiveId: row.id, format: row.format, snapshotHash: row.snapshotHash, sizeBytes: size, checksum } } });
     }); stored = null; return { processed: true, ready: true, sizeBytes: size, tempJobBytesObserved: size };
   } catch (e) {
-    await prisma.digitalArchive.updateMany({ where: { id: row.id, status: "PROCESSING", leaseToken: slot.leaseToken }, data: { status: "REQUIRES_REVIEW", errorCode: e instanceof DigitalError ? e.code : "ARCHIVE_FAILED", leaseToken: null, leaseUntil: null } });
+    await prisma.digitalArchive.updateMany({ where: { id: row.id, status: "PROCESSING", leaseToken: slot.leaseToken }, data: { status: options.signal?.aborted?"PENDING":"REQUIRES_REVIEW",...(options.signal?.aborted?{attempts:{decrement:1}}:{}),errorCode: options.signal?.aborted?"WORKER_SHUTDOWN":e instanceof DigitalError ? e.code : "ARCHIVE_FAILED", leaseToken: null, leaseUntil: null } });
     return { processed: true, ready: false };
-  } finally { clearInterval(heartbeat); stop.abort(); if (stored && !await prisma.digitalArchive.findFirst({ where: { storageKey: stored.storageKey } })) await deleteMediaObject(stored).catch(() => undefined); if (root) await rm(root, { recursive: true, force: true }); await releaseDigitalSlot(slot); }
+  } finally { options.signal?.removeEventListener("abort",shutdown);clearInterval(heartbeat); stop.abort(); if (stored && !await prisma.digitalArchive.findFirst({ where: { storageKey: stored.storageKey } })) await deleteMediaObject(stored).catch(() => undefined); if (root) await rm(root, { recursive: true, force: true }); await releaseDigitalSlot(slot); }
 }

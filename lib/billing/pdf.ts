@@ -171,7 +171,7 @@ async function render(title: string, number: string, issuedAt: Date, hash: strin
     document.page.margins.bottom = 0;
     document.save();
     document.fillColor(gray).font("Helvetica").fontSize(7.5).text(
-      `${digital?"Snapshot numérique TEST immuable. Fiscalité et conservation réelles à valider.":"Document généré à partir d’un snapshot immuable. Conservation comptable : 10 ans."} · Page ${index + 1} / ${range.count}`,
+      `${digital&&mode==="TEST"?"Snapshot numérique TEST immuable. Fiscalité et conservation réelles à valider.":"Document généré à partir d’un snapshot immuable. Conservation comptable : 10 ans."} · Page ${index + 1} / ${range.count}`,
       margin,
       billingPdfLayout.footerY,
       { width: PAGE.width - margin * 2, align: "center", lineBreak: false },

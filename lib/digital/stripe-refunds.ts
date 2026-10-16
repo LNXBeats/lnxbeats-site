@@ -1,9 +1,10 @@
-import { DigitalError, assertDigitalUuid } from "./domain";
+import { DigitalError, assertDigitalUuid, type DigitalMode } from "./domain";
 import { stripeRefundStatus, type DigitalRefundEvidence } from "./finance-policy";
 import type { DigitalInboxPayload } from "./inbox";
 
 export type StripeRefundExpected = {
   orderId: string;
+  mode?: DigitalMode;
   attemptId: string;
   paymentReference: string;
   merchantId: string;
@@ -30,6 +31,7 @@ function reference(value: unknown, prefix: "pi" | "ch" | "re"): string {
 }
 function expectedContext(expected: StripeRefundExpected) {
   assertDigitalUuid(expected.orderId); assertDigitalUuid(expected.attemptId);
+  if (expected.mode !== undefined && !["TEST", "LIVE"].includes(expected.mode)) invalid();
   reference(expected.paymentReference, "pi");
   if (!expected.merchantId || !Number.isSafeInteger(expected.amountCents) || expected.amountCents < 1) invalid();
 }
@@ -53,7 +55,7 @@ export function stripeRefundWebhookPayload(eventType: string, value: unknown): D
   return { paymentReference, resourceReference: reference(resource.id, "re") };
 }
 
-/** Called only with a freshly retrieved Refund from the expected TEST account. */
+/** Called only with a freshly retrieved Refund from the expected account/mode. */
 export function stripeRefundEvidence(value: unknown, expected: StripeRefundExpected): DigitalRefundEvidence {
   expectedContext(expected);
   const refund = object(value), metadata = refund.metadata == null ? {} : object(refund.metadata);
@@ -63,6 +65,9 @@ export function stripeRefundEvidence(value: unknown, expected: StripeRefundExpec
     || !["succeeded", "pending", "requires_action", "failed", "canceled"].includes(String(refund.status))) invalid();
   if (metadata.paymentSource != null && metadata.paymentSource !== "DIGITAL_MUSIC") invalid();
   if (metadata.digitalOrderId != null && metadata.digitalOrderId !== expected.orderId) invalid();
+  if (metadata.mode != null && metadata.mode !== (expected.mode ?? "TEST")) invalid();
+  if (metadata.digitalAttemptId != null && metadata.digitalAttemptId !== expected.attemptId) invalid();
+  if (refund.livemode !== undefined && refund.livemode !== ((expected.mode ?? "TEST") === "LIVE")) invalid();
   let localRefundId: string | undefined;
   if (metadata.digitalRefundId != null || metadata.paymentSource === "DIGITAL_MUSIC") {
     if (metadata.paymentSource !== "DIGITAL_MUSIC" || metadata.digitalOrderId !== expected.orderId
@@ -70,7 +75,7 @@ export function stripeRefundEvidence(value: unknown, expected: StripeRefundExpec
     try { assertDigitalUuid(metadata.digitalRefundId); } catch { invalid(); }
     localRefundId = metadata.digitalRefundId;
   }
-  return { mode: "TEST", authenticated: true, provider: "STRIPE", merchantId: expected.merchantId,
+  return { mode: expected.mode ?? "TEST", authenticated: true, provider: "STRIPE", merchantId: expected.merchantId,
     orderId: expected.orderId, reference: id, paymentReference: expected.paymentReference,
     amountCents: Number(refund.amount), currency: "EUR", status: stripeRefundStatus(String(refund.status)),
     ...(localRefundId ? { localRefundId } : {}) };
@@ -85,12 +90,12 @@ export async function readStripeChargeRefunds(client: StripeChargeRefundClient, 
   if ((await client.accounts.retrieve(null)).id !== expected.merchantId) invalid();
   const intent = object(await client.paymentIntents.retrieve(expected.paymentReference, { expand: ["latest_charge"] }));
   const metadata = object(intent.metadata);
-  if (intent.id !== expected.paymentReference || intent.livemode !== false || intent.status !== "succeeded"
+  if (intent.id !== expected.paymentReference || intent.livemode !== ((expected.mode ?? "TEST") === "LIVE") || intent.status !== "succeeded"
     || intent.currency !== "eur" || intent.amount_received !== expected.amountCents || intent.on_behalf_of || intent.transfer_data
-    || metadata.paymentSource !== "DIGITAL_MUSIC" || metadata.mode !== "TEST" || metadata.digitalOrderId !== expected.orderId || metadata.digitalAttemptId !== expected.attemptId) invalid();
+    || metadata.paymentSource !== "DIGITAL_MUSIC" || metadata.mode !== (expected.mode ?? "TEST") || metadata.digitalOrderId !== expected.orderId || metadata.digitalAttemptId !== expected.attemptId) invalid();
   const charge = object(intent.latest_charge);
   if (reference(charge.id, "ch") !== chargeReference || reference(charge.payment_intent, "pi") !== expected.paymentReference
-    || charge.livemode !== false || charge.currency !== "eur" || charge.amount !== expected.amountCents
+    || charge.livemode !== ((expected.mode ?? "TEST") === "LIVE") || charge.currency !== "eur" || charge.amount !== expected.amountCents
     || charge.on_behalf_of || charge.transfer_data
     || charge.amount_captured !== expected.amountCents || charge.paid !== true || charge.captured !== true
     || !Number.isSafeInteger(charge.amount_refunded) || Number(charge.amount_refunded) < 0 || Number(charge.amount_refunded) > expected.amountCents) invalid();

@@ -1,4 +1,5 @@
 import { DigitalError, digitalPrice, digitalUuid, type DigitalCompletionSnapshot, type DigitalCompletionSource, type DigitalSelection } from "./domain";
+import type { DigitalMode } from "./runtime-policy";
 
 type SourceLine = {id:string;scope:string;priceCents:number;trackSnapshot:unknown;completionSnapshot?:unknown};
 type SourceRefund = {id:string;providerReference:string|null;status:string;allocationStatus:string;purpose:string;amountCents:number;targets:unknown};
@@ -9,10 +10,10 @@ type SourceOrder = {totalCents:number;mode:string;currency:string;status:string;
  * exactly to the captured order total. Bundles, free gifts and unallocated order
  * discounts cannot be inferred. This does not approve the tax treatment of credit.
  */
-export function digitalCompletionSourceAmounts(line:SourceLine,order:SourceOrder) {
+export function digitalCompletionSourceAmounts(line:SourceLine,order:SourceOrder,expectedMode:DigitalMode="TEST") {
   const invalid=()=>{throw new DigitalError("COMPLETION_SOURCE_REQUIRES_REVIEW",409);};
   const refundInvalid=()=>{throw new DigitalError("COMPLETION_REFUND_REQUIRES_REVIEW",409);};
-  if(order.mode!=="TEST"||order.currency!=="EUR"||!["PAID","PARTIALLY_REFUNDED","REFUNDED"].includes(order.status)
+  if(!["TEST","LIVE"].includes(expectedMode)||order.mode!==expectedMode||order.currency!=="EUR"||!["PAID","PARTIALLY_REFUNDED","REFUNDED"].includes(order.status)
     ||!Number.isSafeInteger(order.totalCents)||order.totalCents<1||!order.lines.length||order.lines.length>50)invalid();
   const lines=new Map<string,SourceLine>(),tracks=new Set<string>();let allocated=0;
   for(const entry of order.lines){
