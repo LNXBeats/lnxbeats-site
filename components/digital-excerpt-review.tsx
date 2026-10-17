@@ -10,7 +10,7 @@ import styles from "./digital-excerpt-review.module.css";
 export type DigitalExcerptReviewTrack = { masterId: string; trackId: string; title: string; position: number;
   durationMs: number; provisionalStartMs: number; provisionalDurationMs: number; provisionalUrl: string | null;
   selection: DigitalExcerptSelection };
-type Action = "save" | "generate" | "validate" | "validate-existing" | "validate-current";
+type Action = "save" | "generate" | "validate" | "validate-existing" | "validate-current" | "validate-prepared";
 const stateLabel = (status: DigitalExcerptSelection["status"]) => status === "TO_LISTEN" ? "À écouter" : status === "VALIDATED" ? "Validé" : "À valider";
 function time(milliseconds: number) {
   const ms = Math.max(0, Math.round(milliseconds));
@@ -26,7 +26,7 @@ async function requestSelection(masterId: string, input?: { action: Action; star
   return body.selection as DigitalExcerptSelection;
 }
 
-export function DigitalExcerptReview({ tracks, existingOnly = false, live = false }: { tracks: DigitalExcerptReviewTrack[]; existingOnly?: boolean; live?: boolean }) {
+export function DigitalExcerptReview({ tracks, existingOnly = false, live = false, prepared = false }: { tracks: DigitalExcerptReviewTrack[]; existingOnly?: boolean; live?: boolean; prepared?: boolean }) {
   const [active, setActive] = useState(0), [selections, setSelections] = useState(() => Object.fromEntries(tracks.map(track => [track.masterId, track.selection])));
   const validated = Object.values(selections).filter(selection => selection.status === "VALIDATED").length;
   return <div className={styles.review}>
@@ -36,13 +36,13 @@ export function DigitalExcerptReview({ tracks, existingOnly = false, live = fals
       <ol className={styles.trackList}>{tracks.map((track, index) => <li key={track.masterId}><button type="button" className={styles.trackButton} aria-current={active === index ? "step" : undefined}
         onClick={() => setActive(index)}><span className={styles.trackNumber}>{String(track.position).padStart(2, "0")}</span><span className={styles.trackTitle}>{track.title}</span><span className={styles.badge} data-state={selections[track.masterId].status}>{stateLabel(selections[track.masterId].status)}</span></button></li>)}</ol>
     </section>
-    <div className={styles.editors}>{tracks.map((track, index) => <ExcerptEditor key={track.masterId} track={track} active={index === active} index={index} count={tracks.length} existingOnly={existingOnly} live={live}
+    <div className={styles.editors}>{tracks.map((track, index) => <ExcerptEditor key={track.masterId} track={track} active={index === active} index={index} count={tracks.length} existingOnly={existingOnly} live={live} prepared={prepared}
       selection={selections[track.masterId]} change={selection => setSelections(previous => ({ ...previous, [track.masterId]: selection }))}
       previous={() => setActive(index - 1)} next={() => setActive(index + 1)} />)}</div>
   </div>;
 }
 
-function ExcerptEditor({ track, active, index, count, selection, change, previous, next, existingOnly, live }: { track: DigitalExcerptReviewTrack; active: boolean; index: number; count: number; existingOnly: boolean; live: boolean;
+function ExcerptEditor({ track, active, index, count, selection, change, previous, next, existingOnly, live, prepared }: { track: DigitalExcerptReviewTrack; active: boolean; index: number; count: number; existingOnly: boolean; live: boolean; prepared: boolean;
   selection: DigitalExcerptSelection; change: (selection: DigitalExcerptSelection) => void; previous: () => void; next: () => void }) {
   const ownerId = `dcn-excerpt-master-${useId()}`, editor = useRef<HTMLElement>(null), audio = useRef<HTMLAudioElement>(null), segmentEnd = useRef<number | null>(null);
   const [offset, setOffset] = useState(seconds(selection.startMs)), [currentMs, setCurrentMs] = useState(0), [busy, setBusy] = useState<Action | "refresh" | null>(null);
@@ -52,6 +52,7 @@ function ExcerptEditor({ track, active, index, count, selection, change, previou
   const queued = selection.status === "QUEUED", canValidate = existingOnly
     ? selection.status === "TO_LISTEN" && !changed && selection.startMs === track.provisionalStartMs && !!track.provisionalUrl
     : selection.status === "READY" && !changed && !!selection.candidateUrl;
+  const existingAction = prepared ? "validate-prepared" : live ? "validate-current" : "validate-existing";
   useEffect(() => listenForOtherMediaPlayback(ownerId, () => audio.current?.pause()), [ownerId]);
   useEffect(() => { if (!active) editor.current?.querySelectorAll("audio").forEach(player => player.pause()); }, [active]);
   useEffect(() => {
@@ -73,12 +74,12 @@ function ExcerptEditor({ track, active, index, count, selection, change, previou
   }, [active, queued, selection.revisionId, track.masterId]);
   function edit(value: string) { setOffset(value); setAttested(false); setMessage(""); setError(""); }
   async function mutate(action: Action) {
-    if (!valid || busy || queued || ["validate", "validate-existing", "validate-current"].includes(action) && (!canValidate || !attested)) return;
-    if (existingOnly && action !== (live ? "validate-current" : "validate-existing")) return;
+    if (!valid || busy || queued || ["validate", "validate-existing", "validate-current", "validate-prepared"].includes(action) && (!canValidate || !attested)) return;
+    if (existingOnly && action !== existingAction) return;
     setBusy(action); setError(""); setMessage("");
     if (action === "generate") setPollStopped(false);
     try {
-      const value = await requestSelection(track.masterId, { action, startMs, expectedRevisionId: selection.revisionId, idempotencyKey: crypto.randomUUID(), attested: ["validate", "validate-existing", "validate-current"].includes(action) && attested });
+      const value = await requestSelection(track.masterId, { action, startMs, expectedRevisionId: selection.revisionId, idempotencyKey: crypto.randomUUID(), attested: ["validate", "validate-existing", "validate-current", "validate-prepared"].includes(action) && attested });
       change(value); setOffset(seconds(value.startMs)); setAttested(false);
       setMessage(action === "save" ? "Brouillon enregistré. Vous pouvez poursuivre plus tard ou passer au titre suivant." : action === "generate" ? "Création du candidat demandée. Le master et l’extrait provisoire sont conservés." : "Votre choix d’extrait est validé et conservé. Aucune publication ni validation de droits n’a été effectuée.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Enregistrement indisponible."); }
@@ -102,7 +103,7 @@ function ExcerptEditor({ track, active, index, count, selection, change, previou
       {track.provisionalUrl ? <DigitalAdminPreview src={track.provisionalUrl} title={`${track.title} — extrait conservé`} /> : <p>Extrait indisponible : validation bloquée.</p>}
       {selection.status === "VALIDATED" ? <p className={styles.confirmed}>Extrait validé personnellement{live ? "" : " dans cette QA"}. Trace conservée : {selection.revisionId}.</p> : <>
         <label className={styles.attestation}><input type="checkbox" checked={attested} disabled={!canValidate || !!busy} onChange={event => setAttested(event.target.checked)} /><span>J’ai écouté cet extrait et je valide ce passage pour cette version du titre. Cela ne valide ni les droits de vente ni la publication.</span></label>
-        <div className={styles.actions}><button type="button" disabled={!canValidate || !attested || !!busy} onClick={() => void mutate(live ? "validate-current" : "validate-existing")}>{busy === "validate-existing" || busy === "validate-current" ? "Validation…" : "Valider cet extrait"}</button><button type="button" className={styles.quiet} disabled={!!busy} onClick={() => void refresh()}>Actualiser l’état</button></div>
+        <div className={styles.actions}><button type="button" disabled={!canValidate || !attested || !!busy} onClick={() => void mutate(existingAction)}>{busy === "validate-existing" || busy === "validate-current" || busy === "validate-prepared" ? "Validation…" : "Valider cet extrait"}</button><button type="button" className={styles.quiet} disabled={!!busy} onClick={() => void refresh()}>Actualiser l’état</button></div>
       </>}
     </section>
     <div aria-live="polite">{message ? <p className={styles.feedback} role="status">{message}</p> : null}{error ? <p className={styles.error} role="alert">{error} Aucun nouveau choix n’est confirmé par ce message. Actualisez l’état avant de réessayer.</p> : null}</div>

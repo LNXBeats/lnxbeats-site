@@ -91,13 +91,17 @@ export async function publicDigitalProject(slug: string, userId?: string) {
 }
 
 export async function saveOffer(actor: OrderActor, input: { projectId: string; trackId?: string | null; priceCents: number | null; active: boolean; rightsConfirmed: boolean; expectedVersion: number; distribution: string }) {
+  return prisma.$transaction(tx => saveOfferInTransaction(tx, actor, input));
+}
+
+/** Same offer engine; Express drafts never rewrite media-rights or activate a sale. */
+export async function saveOfferInTransaction(tx: DB, actor: OrderActor, input: { projectId: string; trackId?: string | null; priceCents: number | null; active: boolean; rightsConfirmed: boolean; expectedVersion: number; distribution: string }, draftOnly = false) {
   requireDigitalEnvironment();
   if (actor.role !== "ADMIN") throw new DigitalError("ADMIN_REQUIRED", 403);
   assertDigitalUuid(input.projectId); if (input.trackId) assertDigitalUuid(input.trackId);
   if (input.priceCents !== null) digitalPrice(input.priceCents);
   if (input.active && (!input.priceCents || !input.rightsConfirmed)) throw new DigitalError("SALE_REQUIREMENTS", 409);
   if (!["UNRELEASED", "DISTRIBUTED"].includes(input.distribution)) throw new DigitalError("INVALID_DISTRIBUTION");
-  return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-offer:${input.projectId}:${input.trackId ?? "album"}`})) IS NULL AS locked`;
     const project = await tx.project.findUnique({ where: { id: input.projectId }, include: { tracks: { where: {status:"RELEASED",...(input.trackId?{id:input.trackId}:{})},include:{digitalMasters:{where:{status:"READY"},orderBy:{version:"desc"},take:1,include:{masterAsset:true,mp3Asset:true,previewAsset:true}}} } } });
     const track = input.trackId ? await tx.track.findFirst({ where: { id: input.trackId, projectId: input.projectId } }) : null;
@@ -111,16 +115,17 @@ export async function saveOffer(actor: OrderActor, input: { projectId: string; t
       await assertDigitalExcerptApprovals(tx,project.tracks.map(track=>track.digitalMasters[0]));
     }
     const current = await tx.digitalOffer.findFirst({ where: { projectId: input.projectId, trackId: input.trackId ?? null } });
+    if (draftOnly && (input.active || input.rightsConfirmed !== (current?.rightsConfirmed ?? false))) throw new DigitalError("SALE_REQUIREMENTS", 409);
+    if (draftOnly && current?.active) throw new DigitalError("EXPRESS_ACTIVE_OFFER", 409);
     if ((current?.version ?? 0) !== input.expectedVersion) throw new DigitalError("STALE_OFFER", 409);
     const data = { priceCents: input.priceCents, active: input.active, rightsConfirmed: input.rightsConfirmed, distribution: input.distribution, version: (current?.version ?? 0) + 1 };
     const offer = current ? await tx.digitalOffer.update({ where: { id: current.id }, data }) : await tx.digitalOffer.create({ data: { ...data, scope: input.trackId ? "TRACK" : "ALBUM", projectId: input.projectId, trackId: input.trackId ?? null } });
     // Upload alone grants no rights. This acknowledgement is explicit and audited.
     // Do not rewrite rights on older acquired editions while preparing a new offer.
     const masters = project.tracks.flatMap(track=>track.digitalMasters.slice(0,1)).filter(digitalCommercialAudioReady);
-    if (masters.length) await tx.asset.updateMany({ where: { id: { in: masters.flatMap(m => [m.masterAssetId, ...(m.previewAssetId ? [m.previewAssetId] : []),...(m.mp3AssetId?[m.mp3AssetId]:[])]) } }, data: { rightsStatus: input.rightsConfirmed ? "CLEARED" : "PENDING" } });
+    if (!draftOnly && masters.length) await tx.asset.updateMany({ where: { id: { in: masters.flatMap(m => [m.masterAssetId, ...(m.previewAssetId ? [m.previewAssetId] : []),...(m.mp3AssetId?[m.mp3AssetId]:[])]) } }, data: { rightsStatus: input.rightsConfirmed ? "CLEARED" : "PENDING" } });
     await tx.digitalEvent.create({ data: { actorId: actor.id, kind: "OFFER_SAVED", details: { offerId: offer.id, version: offer.version, priceCents: offer.priceCents, active: offer.active, rightsConfirmed: offer.rightsConfirmed } } });
     return offer.id;
-  });
 }
 export async function syncCart(userId: string, ids: string[], expectedRevision: number) {
   requireDigitalEnvironment(); assertDigitalUuid(userId);

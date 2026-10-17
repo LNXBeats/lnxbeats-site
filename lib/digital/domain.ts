@@ -93,8 +93,9 @@ export function uploadMetadata(input: unknown) {
   if (Object.keys(v).some(k => !["filename", "mimeType", "sizeBytes", "expectedVersion", "previewStartMs", "replaceConfirmed"].includes(k))) throw new DigitalError("INVALID_UPLOAD");
   if (typeof v.filename !== "string" || v.filename.length > 255 || /[\r\n\\/]/.test(v.filename)) throw new DigitalError("INVALID_UPLOAD");
   const extension = v.filename.split(".").pop()!.toLowerCase();
-  // New DCN sources are lossless WAV; never fabricate WAV by upsampling MP3.
-  const mimes: Record<string, string[]> = { wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "application/octet-stream", ""] };
+  // MP3 sources are accepted only for private draft preparation. The worker never
+  // fabricates a WAV, and the commercial WAV+MP3 gate remains unchanged.
+  const mimes: Record<string, string[]> = { wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "application/octet-stream", ""], mp3: ["audio/mpeg", "audio/mp3", "application/octet-stream", ""] };
   if (!mimes[extension]?.includes(String(v.mimeType ?? "")) || !Number.isSafeInteger(v.sizeBytes) || Number(v.sizeBytes) < 12 || Number(v.sizeBytes) > DIGITAL_MASTER_LIMIT_BYTES) throw new DigitalError("INVALID_UPLOAD");
   if (!Number.isSafeInteger(v.expectedVersion) || Number(v.expectedVersion) < 0 || !Number.isSafeInteger(v.previewStartMs) || Number(v.previewStartMs) < 0) throw new DigitalError("INVALID_UPLOAD");
   if (Number(v.expectedVersion) > 0 && v.replaceConfirmed !== true) throw new DigitalError("REPLACEMENT_CONFIRMATION_REQUIRED", 409);

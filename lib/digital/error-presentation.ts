@@ -1,5 +1,12 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
+  if(code==="EXPRESS_DUPLICATE")return "Ce projet existe déjà. Recherchez-le dans Musique et reprenez sa fiche ; aucun doublon n’a été créé.";
+  if(code==="EXPRESS_CHANGED"||code==="STALE_OFFER")return "La fiche ou un prix a changé. Rechargez les données avant d’enregistrer ; rien n’a été remplacé.";
+  if(code==="EXPRESS_ACTIVE_OFFER")return "Cette fiche contient déjà une offre active. Utilisez les outils avancés pour la modifier sans changer involontairement les ventes en cours.";
+  if(code==="EXPRESS_PUBLIC_METADATA")return "Cette fiche est déjà publique. Les changements de titre, d’ordre ou de composition doivent être examinés dans le Catalogue ; enregistrer un brouillon Express ne doit pas les publier silencieusement.";
+  if(code==="EXPRESS_TRACK_REMOVAL")return "Une piste existante ne peut pas être supprimée depuis Express. Ses fichiers et son historique sont conservés ; utilisez le Catalogue pour examiner sa situation.";
+  if(code==="SALE_REQUIREMENTS")return "La publication reste bloquée : vérifiez la pochette, les crédits, les formats WAV/MP3, les prix, les droits et l’approbation personnelle des extraits.";
+  if(code.startsWith("EXPRESS_"))return "Vérifiez le nom, les pistes, les prix et la confirmation de publication. Le brouillon reste conservé ; aucune vente n’a été ouverte.";
   if(code==="FRANCE_BILLING_ADDRESS_DIFFERENT_REQUIRES_REVIEW")return "Une adresse de facturation différente nécessite une vérification avant paiement. Contactez LNX Beats ; aucun paiement n’a été lancé.";
   if(code==="NEW_DIGITAL_PAYMENTS_CLOSED")return "Les nouveaux achats numériques sont temporairement suspendus. Aucun nouveau paiement n’a été lancé ; vos acquisitions restent accessibles dans Ma musique.";
   if(code==="STALE_SALES_CONTROL")return "Une autre instruction administrative a été enregistrée. Actualisez cette page avant de modifier l’ouverture des achats.";

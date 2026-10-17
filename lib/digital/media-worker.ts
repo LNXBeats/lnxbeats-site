@@ -10,7 +10,8 @@ import { deleteMediaObject, getMediaObject, putMediaObject, sha256Hex, type Medi
 import { activeMediaStorage } from "@/lib/media/storage/config";
 import { assertDigitalUuid, DigitalError, requireDigitalEnvironment, signatureMatches } from "./domain";
 import { trackLock, recoverDigitalCompletion } from "./upload";
-import { generateDigitalMp3, validateDigitalAudio, DIGITAL_MP3_LIMIT_BYTES } from "./audio";
+import { generateDigitalMp3, validateDigitalAudio, validateDigitalMp3, DIGITAL_MP3_LIMIT_BYTES } from "./audio";
+import { expressDurationSeconds } from "./express-policy";
 import { planDigitalMasterImport } from "./master-import-policy";
 import { claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot, checkDigitalDisk, DIGITAL_WORK_LIMITS } from "./work-slots";
 
@@ -38,7 +39,7 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
     if(Number(s.sizeBytes)>DIGITAL_WORK_LIMITS.masterBytes)throw new DigitalError("MASTER_SIZE_LIMIT");
     root=path.join(await checkDigitalDisk(Number(s.sizeBytes)+3*1024*1024+DIGITAL_MP3_LIMIT_BYTES),`${s.id}.${slot.leaseToken}`);await mkdir(root,{mode:0o700});
     const extension=s.filename.split(".").pop()!.toLowerCase(),source=path.join(root,`source.${extension}`),preview=path.join(root,"preview.mp3"),mp3=path.join(root,"full.mp3");
-    if(extension!=="wav"||s.mimeType!=="audio/wav")throw new DigitalError("WAV_SOURCE_REQUIRED");
+    if(!((extension==="wav"&&s.mimeType==="audio/wav")||(extension==="mp3"&&s.mimeType==="audio/mpeg")))throw new DigitalError("WAV_SOURCE_REQUIRED");
     const object=await getMediaObject(ref); if(object.contentLength!==Number(s.sizeBytes)) throw new DigitalError("SIZE_MISMATCH",409);
     const hash=createHash("sha256"); let size=0;
     await pipeline(Readable.fromWeb(object.body as never),new Transform({transform(chunk,_,cb){ if(process.memoryUsage().rss>DIGITAL_WORK_LIMITS.nodeRssBytes)return cb(new DigitalError("WORKER_MEMORY_LIMIT"));size+=chunk.length; if(size>Number(s.sizeBytes)) return cb(new DigitalError("SIZE_MISMATCH",409)); hash.update(chunk); cb(null,chunk); }}),createWriteStream(source,{flags:"wx",mode:0o600}),{signal:AbortSignal.any([stop.signal,AbortSignal.timeout(5*60000)])});
@@ -47,6 +48,28 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
     const fd=await open(source,"r"); const header=Buffer.alloc(12); try { await fd.read(header,0,12,0); } finally { await fd.close(); }
     if(!signatureMatches(header,extension)) throw new DigitalError("INVALID_SIGNATURE");
     await hooks.afterSource?.();
+    if (extension === "mp3") {
+      const decoded = await validateDigitalMp3(source, stop.signal);
+      await trackLock(s.trackId, async tx => {
+        if (!await tx.digitalUpload.findFirst({ where: { id: s.id, status: "VALIDATING", leaseToken: slot.leaseToken, leaseUntil: { gt: new Date() } } })
+          || !await tx.digitalWorkSlot.findFirst({ where: { id: slot.id, leaseToken: slot.leaseToken, leaseUntil: { gt: new Date() } } })) throw new DigitalError("LEASE_LOST",409);
+        const actor = await tx.user.findUnique({ where: { id: s.actorId } });
+        if (actor?.role !== "ADMIN" || actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("ADMIN_REQUIRED",403);
+        const latest = await tx.digitalMaster.findFirst({ where: { trackId: s.trackId }, orderBy: { version: "desc" } });
+        if ((latest?.version ?? 0) !== s.expectedVersion) throw new DigitalError("MASTER_VERSION_CONFLICT",409);
+        // MP3-only is a genuine lossy source, never a commercial READY master.
+        // Replacing a current commercial version with such a draft would hide it.
+        if (latest) throw new DigitalError("MP3_DRAFT_REPLACEMENT_REFUSED",409);
+        await tx.asset.create({ data: { id: s.id, type: "AUDIO", storageKey: s.storageKey, storageBackend: driver.backend, storageProvider: driver.provider,
+          visibility: "PRIVATE", filename: s.filename, mimeType: "audio/mpeg", sizeBytes: s.sizeBytes, durationMs: decoded.durationMs, checksumSha256: checksum, rightsStatus: "PENDING", confidence: "CONFIRMED" } });
+        await tx.digitalMaster.create({ data: { trackId: s.trackId, version: 1, masterAssetId: s.id, codec: "mp3", status: "QUARANTINED" } });
+        await tx.track.update({ where: { id: s.trackId }, data: { durationSeconds: expressDurationSeconds(decoded.durationMs) } });
+        await tx.digitalUpload.update({ where: { id: s.id }, data: { status: "READY", leaseUntil: null, leaseToken: null, errorCode: null } });
+        await tx.digitalEvent.create({ data: { actorId: s.actorId, kind: "MP3_SOURCE_DRAFT_VALIDATED", details: { trackId: s.trackId, checksum, durationMs: decoded.durationMs,
+          bitrateKbps: decoded.bitrateKbps, originalFormat: "MP3_LOSSY", wavAvailable: false, commercialReady: false, probe: decoded.probe } } });
+      });
+      return { processed: true, ready: true, draftOnly: true, sourceFormat: "MP3" };
+    }
     const decoded=await validateDigitalAudio(source,preview,s.previewStartMs,stop.signal),metadata=await stat(preview);
     if(metadata.size>3*1024*1024||metadata.size<1) throw new DigitalError("INVALID_PREVIEW_DURATION");
     const bytes=await readFile(preview); const previewId=slot.leaseToken, key=`catalog/audio-previews/${previewId}.mp3`;
@@ -76,6 +99,7 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
       await tx.asset.create({data:{id:mp3Id,type:"AUDIO",storageKey:mp3Key,storageBackend:mp3Stored.storageBackend,storageProvider:mp3Stored.storageProvider,visibility:"PRIVATE",filename:s.filename.replace(/\.wav$/i,".mp3"),
         mimeType:"audio/mpeg",sizeBytes:BigInt(mp3Metadata.size),durationMs:rendition.durationMs,checksumSha256:mp3Checksum,rightsStatus:"PENDING",confidence:"CONFIRMED"}});
       await tx.digitalMaster.create({data:{trackId:s.trackId,version:s.expectedVersion+1,masterAssetId:s.id,previewAssetId:previewId,mp3AssetId:mp3Id,mp3BitrateKbps:rendition.bitrateKbps,encoderVersion:rendition.encoderVersion,previewStartMs:s.previewStartMs,previewDurationMs:decoded.previewDurationMs,codec:extension,status:"READY"}});
+      await tx.track.update({where:{id:s.trackId},data:{durationSeconds:expressDurationSeconds(decoded.durationMs)}});
       await tx.digitalUpload.update({where:{id:s.id},data:{status:"READY",leaseUntil:null,leaseToken:null}});
       await tx.digitalEvent.create({data:{actorId:s.actorId,kind:"MASTER_VALIDATED",details:{trackId:s.trackId,version:s.expectedVersion+1,checksum,durationMs:decoded.durationMs,previewDurationMs:decoded.previewDurationMs,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps,encoderVersion:rendition.encoderVersion,probe:rendition.probe,sourceProbe:"RIFF_CHUNKS_AND_FFMPEG_STRICT_DECODE",mp3Probe:"MPEG_LAYER_III_FRAMES_AND_FFMPEG_STRICT_DECODE",revalidation:importPlan.revalidation,rightsReview:"PENDING"}}});
     });

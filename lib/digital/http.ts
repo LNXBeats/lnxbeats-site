@@ -19,6 +19,6 @@ export async function digitalRateLimit(identity:string,family:string,max=30){
     if(old.count>=max)return false;await tx.rateLimit.update({where:{key},data:{count:{increment:1}}});return true;});
   if(!allowed)throw new DigitalError("RATE_LIMITED",429);
 }
-export async function digitalBody(request:Request,keys:string[]){let v;try{v=await readOrderJson(request,16384);}catch{throw new DigitalError("INVALID_BODY");}
+export async function digitalBody(request:Request,keys:string[],maximumBytes=16384){let v;try{v=await readOrderJson(request,maximumBytes);}catch{throw new DigitalError("INVALID_BODY");}
   if(!v||typeof v!=="object"||Array.isArray(v)||Object.keys(v).some(k=>!keys.includes(k)))throw new DigitalError("INVALID_BODY");return v as Record<string,unknown>;}
 export async function withDigitalApi(request:Request,handler:(actor:OrderActor)=>Promise<Response>,admin=false){try{const actor=await digitalActor(request,admin);await digitalRateLimit(actor.id,"mutation");return await handler(actor);}catch(e){return digitalHttpError(e);}}

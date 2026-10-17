@@ -160,3 +160,14 @@ test("current excerpt cannot reuse the LIVE action in Recovery TEST or bypass fr
   const f=fixture();await isolated(f.db,async()=>{await assert.rejects(()=>recordDigitalExcerptSelection(f.actor,f.master.id,{...r4Input(f),action:"validate-current"}));});
   await liveReview(f,async()=>{f.user.role="MEMBER";await assert.rejects(()=>recordDigitalExcerptSelection(f.actor,f.master.id,{...r4Input(f),action:"validate-current"}),{code:"ADMIN_REQUIRED"});assert.equal(f.events.length,0);});
 });
+test("Express TEST prepared preview: explicit bounded current file approval, no LIVE/Recovery bypass",async()=>{
+  const f=fixture();await isolated(f.db,async()=>{
+    delete process.env.DCN_RECOVERY_EXCERPTS_REVIEW_ONLY;
+    const input={...r4Input(f),action:"validate-prepared"};
+    await assert.rejects(()=>recordDigitalExcerptSelection(f.actor,f.master.id,{...input,attested:false}),{code:"EXCERPT_ATTESTATION_REQUIRED"});
+    const result=await recordDigitalExcerptSelection(f.actor,f.master.id,input);assert.equal(result.selection.status,"VALIDATED");
+    assert.equal((await recordDigitalExcerptSelection(f.actor,f.master.id,input)).selection.revisionId,result.selection.revisionId);assert.equal(f.events.length,1);
+  });
+  const recovery=fixture();await recovered(recovery,async()=>{await assert.rejects(()=>recordDigitalExcerptSelection(recovery.actor,recovery.master.id,{...r4Input(recovery),action:"validate-prepared"}),{code:"EXCERPT_NOT_READY"});assert.equal(recovery.events.length,0);});
+  const live=fixture();await liveReview(live,async()=>{await assert.rejects(()=>recordDigitalExcerptSelection(live.actor,live.master.id,{...r4Input(live),action:"validate-prepared"}),{code:"EXCERPT_NOT_READY"});assert.equal(live.events.length,0);});
+});

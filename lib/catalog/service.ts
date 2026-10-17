@@ -148,10 +148,14 @@ function createProjectValues(input: Record<string, unknown>) {
 
 export async function createCatalogProject(input: Record<string, unknown>) {
   assertDatabaseConfigured();
+  return prisma.$transaction(transaction => createCatalogProjectInTransaction(transaction, input));
+}
+
+/** Shared Catalogue engine for atomic multi-step Admin workflows. */
+export async function createCatalogProjectInTransaction(transaction: Transaction, input: Record<string, unknown>) {
   const values = createProjectValues(input);
   const requestedPosition = boundedInteger(input.catalogPosition, "La position catalogue", 1, 1_000_000, true);
   try {
-    return await prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('catalog-project-creation')) IS NULL AS locked`;
       const taken = (slug: string) => slug === "nouveau" ? Promise.resolve(true) : transaction.project.findFirst({
         where: { OR: [{ slug }, { formerSlugs: { has: slug } }] }, select: { id: true },
@@ -176,7 +180,6 @@ export async function createCatalogProject(input: Record<string, unknown>) {
           legacySourceVersion: null,
         },
       });
-    });
   } catch (error) {
     if (error instanceof CatalogLifecycleError) throw error;
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -350,17 +353,19 @@ export async function updateCatalogProject(projectId: string, input: Record<stri
 }
 
 export async function addCatalogTrack(projectId: string, input: Record<string, unknown>) {
+  return withProjectLock(projectId, transaction => addCatalogTrackInTransaction(transaction, projectId, input));
+}
+
+export async function addCatalogTrackInTransaction(transaction: Transaction, projectId: string, input: Record<string, unknown>) {
   const title = requiredText(input.title, "Le titre", 240);
   const durationSeconds = boundedInteger(input.durationSeconds, "La durée", 0, 86_400, true);
   const status = trackStatusDb[parseTrackStatus(input.status)];
-  return withProjectLock(projectId, async (transaction) => {
     const project = await transaction.project.findUniqueOrThrow({ where: { id: projectId }, select: { trackCount: true } });
     const aggregate = await transaction.track.aggregate({ where: { projectId }, _max: { position: true } });
     const track = await transaction.track.create({ data: { projectId, title, durationSeconds, status, confidence: "CONFIRMED", position: (aggregate._max.position ?? 0) + 1 } });
     const count = await transaction.track.count({ where: { projectId } });
     await transaction.project.update({ where: { id: projectId }, data: { trackCount: Math.max(project.trackCount ?? 0, count), legacySourceVersion: null } });
     return track;
-  });
 }
 
 export async function updateCatalogTrack(projectId: string, trackId: string, input: Record<string, unknown>) {
@@ -406,17 +411,18 @@ export async function deleteCatalogTrack(projectId: string, trackId: string) {
 }
 
 export async function addCatalogCredit(projectId: string, input: Record<string, unknown>) {
+  return withProjectLock(projectId, transaction => addCatalogCreditInTransaction(transaction, projectId, input));
+}
+export async function addCatalogCreditInTransaction(transaction: Transaction, projectId: string, input: Record<string, unknown>) {
   const name = requiredText(input.name, "Le nom du crédit", 180);
   const role = creditRoleDb[parseCreditRole(input.role)];
   const note = optionalText(input.note, "La précision du crédit", 1_000);
-  return withProjectLock(projectId, async (transaction) => {
     const aggregate = await transaction.credit.aggregate({ where: { projectId, trackId: null }, _max: { position: true } });
     const credit = await transaction.credit.create({
       data: { projectId, name, role, note, position: (aggregate._max.position ?? 0) + 1, confidence: "CONFIRMED" },
     });
     await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
     return credit;
-  });
 }
 
 export async function updateCatalogCredit(projectId: string, creditId: string, input: Record<string, unknown>) {

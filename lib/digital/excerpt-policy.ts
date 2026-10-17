@@ -32,15 +32,15 @@ export function digitalExcerptBinding(master: DigitalExcerptMaster): DigitalExce
   return { masterId: master.id, trackId: master.trackId, version: master.version, sourceAssetId: master.masterAssetId,
     sourceSha256: master.masterAsset.checksumSha256!, durationMs: master.masterAsset.durationMs! };
 }
-export type DigitalExcerptInput = { action: "save" | "generate" | "validate" | "validate-existing" | "validate-current"; startMs: number; expectedRevisionId: string | null; idempotencyKey: string; attested: boolean };
+export type DigitalExcerptInput = { action: "save" | "generate" | "validate" | "validate-existing" | "validate-current" | "validate-prepared"; startMs: number; expectedRevisionId: string | null; idempotencyKey: string; attested: boolean };
 export function digitalExcerptInput(value: unknown): DigitalExcerptInput {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new DigitalError("INVALID_EXCERPT");
   const input = value as Record<string, unknown>;
   if (Object.keys(input).some(key => !["action", "startMs", "expectedRevisionId", "idempotencyKey", "attested"].includes(key))
-    || !["save", "generate", "validate", "validate-existing", "validate-current"].includes(String(input.action)) || !Number.isSafeInteger(input.startMs) || Number(input.startMs) < 0
+    || !["save", "generate", "validate", "validate-existing", "validate-current", "validate-prepared"].includes(String(input.action)) || !Number.isSafeInteger(input.startMs) || Number(input.startMs) < 0
     || typeof input.attested !== "boolean") throw new DigitalError("INVALID_EXCERPT");
   assertDigitalUuid(input.idempotencyKey); if (input.expectedRevisionId !== null) assertDigitalUuid(input.expectedRevisionId);
-  if (["validate", "validate-existing", "validate-current"].includes(String(input.action)) && input.attested !== true) throw new DigitalError("EXCERPT_ATTESTATION_REQUIRED", 409);
+  if (["validate", "validate-existing", "validate-current", "validate-prepared"].includes(String(input.action)) && input.attested !== true) throw new DigitalError("EXCERPT_ATTESTATION_REQUIRED", 409);
   return input as DigitalExcerptInput;
 }
 export function digitalExcerptDetails(event: DigitalExcerptEvent, master: DigitalExcerptMaster): DigitalExcerptDetails {

@@ -35,6 +35,9 @@ export function CatalogCoverForm({
   altPlaceholder,
   hasCover,
   initialState,
+  returnTo,
+  preparedFile,
+  onSaved,
 }: {
   projectId: string;
   slug: string;
@@ -43,6 +46,9 @@ export function CatalogCoverForm({
   altPlaceholder: string;
   hasCover: boolean;
   initialState?: string;
+  returnTo?: string;
+  preparedFile?: File | null;
+  onSaved?: () => Promise<void>;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,8 +65,8 @@ export function CatalogCoverForm({
 
     const form = formRef.current;
     const input = fileInputRef.current;
-    const file = input?.files?.[0];
-    if (!form || !input || input.files?.length !== 1 || !(file instanceof File) || file.size <= 0) {
+    const file = input?.files?.[0] ?? preparedFile;
+    if (!form || !input || (input.files?.length ?? 0) > 1 || !(file instanceof File) || file.size <= 0) {
       setState("cover-vide");
       return;
     }
@@ -112,7 +118,8 @@ export function CatalogCoverForm({
         return;
       }
 
-      window.location.assign(payload.location ?? `/admin/catalogue/${encodeURIComponent(slug)}?etat=cover-enregistree`);
+      if (onSaved) { await onSaved(); setState("cover-enregistree"); }
+      else window.location.assign(returnTo ?? payload.location ?? `/admin/catalogue/${encodeURIComponent(slug)}?etat=cover-enregistree`);
     } catch {
       setState("cover-erreur");
     } finally {
@@ -130,6 +137,7 @@ export function CatalogCoverForm({
         data-selected-file-count={selectedFile?.count ?? 0}
         data-selected-file-size={selectedFile?.size ?? 0}
       >
+        {preparedFile && !selectedFile ? <p>Pochette sélectionnée : {preparedFile.name}. Confirmez ses droits puis ajoutez-la ; aucun envoi automatique.</p> : null}
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="slug" value={slug} />
         <input type="hidden" name="expectedCoverAssetId" value={expectedCoverAssetId ?? ""} />
@@ -141,7 +149,7 @@ export function CatalogCoverForm({
               name="cover"
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              required
+              required={!preparedFile}
               onChange={(event) => {
                 const current = event.currentTarget.files?.[0];
                 setSelectedFile(current ? { count: event.currentTarget.files?.length ?? 0, size: current.size } : null);

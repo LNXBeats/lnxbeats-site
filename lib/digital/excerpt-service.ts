@@ -61,9 +61,9 @@ export async function getDigitalExcerptSelection(actor: OrderActor, masterId: st
 /** Artistic choices only: no updates of masters, acquisitions, rights, offers or original previews. */
 export async function recordDigitalExcerptSelection(actor: OrderActor, masterId: string, raw: unknown) {
   const mode=requireDigitalEnvironment(); assertDigitalUuid(masterId); const input = digitalExcerptInput(raw);
-  const recoveryReview = input.action === "validate-existing", currentReview=input.action==="validate-current";
-  const existingReview = recoveryReview || currentReview;
-  if (digitalRecoveryExcerptsReviewOnly() && !recoveryReview || currentReview && mode!=="LIVE") throw new DigitalError("EXCERPT_NOT_READY", 403);
+  const recoveryReview = input.action === "validate-existing", currentReview=input.action==="validate-current", preparedReview=input.action==="validate-prepared";
+  const existingReview = recoveryReview || currentReview || preparedReview;
+  if (digitalRecoveryExcerptsReviewOnly() && !recoveryReview || currentReview && mode!=="LIVE" || preparedReview && mode!=="TEST") throw new DigitalError("EXCERPT_NOT_READY", 403);
   // Private candidate generation remains a QA preparation tool, not an unstaffed LIVE queue.
   if(mode==="LIVE"&&!currentReview)throw new DigitalError("EXCERPT_NOT_READY",403);
   return prisma.$transaction(async db => {
