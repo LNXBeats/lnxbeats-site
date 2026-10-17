@@ -1,19 +1,87 @@
 "use client";
 import Link from "next/link";
-import { useCallback,useEffect,useRef,useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { readDigitalCart,writeDigitalCart,digitalMoney,type DigitalCompletionView } from "./digital-catalog";
+import { readDigitalCart, writeDigitalCart, digitalMoney, type DigitalCompletionView } from "./digital-catalog";
+import { digitalArticleCount } from "@/lib/digital/cart-presentation";
+import { DigitalRequestError } from "@/lib/digital/request-error";
 import styles from "./digital.module.css";
 import { digitalUiIsLive, type DigitalUiMode } from "./digital-mode-copy";
-type Quote={totalCents:number;removed:string[];lines:Array<{id:string;title:string;scope:string;priceCents:number;trackCount:number;version:number;completion?:DigitalCompletionView|null}>};
-export async function digitalRequest(path:string,body?:unknown){const r=await fetch(path,{method:body===undefined?"GET":"POST",credentials:"same-origin",headers:body===undefined?{}:{"content-type":"application/json"},...(body===undefined?{}:{body:JSON.stringify(body)})});const v=await r.json();if(!r.ok)throw new Error(v.error??"Action indisponible.");return v;}
-export function DigitalCart({mode="TEST"}:{mode?:DigitalUiMode}){const[value,setValue]=useState<Quote|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);const serial=useRef(0);const router=useRouter();
-  const refresh=useCallback(async()=>{const n=++serial.current;try{const q=await digitalRequest("/api/digital/quote",{offerIds:readDigitalCart()}) as Quote;if(n!==serial.current)return;setValue(q);setError("");if(q.removed.length)writeDigitalCart(q.lines.map(l=>l.id));}catch(e){if(n===serial.current){setError(e instanceof Error?e.message:"Panier indisponible.");setValue(null);}}},[]);
-  useEffect(()=>{let live=true;void digitalRequest("/api/digital/quote",{offerIds:readDigitalCart()}).then((q:Quote)=>{if(live){setValue(q);if(q.removed.length)writeDigitalCart(q.lines.map(l=>l.id));}}).catch(e=>{if(live)setError(e instanceof Error?e.message:"Panier indisponible.");});const update=()=>void refresh();window.addEventListener("storage",update);window.addEventListener("dcn-cart",update);return()=>{live=false;window.removeEventListener("storage",update);window.removeEventListener("dcn-cart",update);};},[refresh]);
-  async function continueCheckout(){setBusy(true);try{const response=await fetch("/api/digital/cart",{credentials:"same-origin"});if(response.status===401){router.push("/connexion?retour=%2Fmusique%2Fpanier");return;}if(!response.ok)throw new Error("Votre panier nécessite une vérification.");const cart=await response.json();await digitalRequest("/api/digital/cart",{offerIds:readDigitalCart(),revision:cart.revision});router.push("/musique/checkout");}catch(e){setError(e instanceof Error?e.message:"Connexion requise.");}finally{setBusy(false);}}
-  return <div className={styles.grid}><section className={styles.panel}><h2>Votre sélection</h2><p className={styles.note}>Panier numérique séparé de la Boutique physique.</p>{error?<p role="alert" className={styles.status}>{error}</p>:null}
-    {value?.lines.length?<ul className={styles.rows}>{value.lines.map(l=><li className={styles.row} key={l.id}><span aria-hidden="true">♪</span><div><strong>{l.title}</strong><p>{l.scope==="ALBUM"?`${l.trackCount} pistes · Album`:"Titre individuel"} · WAV + MP3</p>{l.completion?<div className={styles.completionSummary}><span>Album : {digitalMoney(l.completion.basePriceCents)}</span><span>Crédit payé, net de remboursements : −{digitalMoney(l.completion.creditCents)}</span><strong>Complément : {digitalMoney(l.priceCents)}</strong></div>:null}</div><div className={styles.actions}><strong>{digitalMoney(l.priceCents)}</strong><button type="button" className={styles.quiet} aria-label={`Retirer ${l.title}`} onClick={()=>writeDigitalCart(readDigitalCart().filter(id=>id!==l.id))}>Retirer</button></div></li>)}</ul>:<p role="status">{value?"Votre panier numérique est vide.":error?"Sélection à vérifier avant tout paiement.":"Vérification de votre sélection…"}</p>}
-    {error?<div className={styles.actions}><Link href="/contact" className="text-link">Contacter LNX Beats pour examiner le blocage</Link><button type="button" className={styles.quiet} onClick={()=>writeDigitalCart([])}>Vider la sélection numérique</button><p className={styles.muted}>Cela n’annule pas un paiement déjà engagé.</p></div>:null}
-    <Link className="text-link" href="/discographie">Explorer la discographie</Link></section><aside className={styles.panel}><h2>Récapitulatif</h2><div className={styles.summary}><span>Total recalculé serveur</span><strong>{digitalMoney(value?.totalCents??0)}</strong></div>
-    <p className={styles.muted}>Une piste incluse dans un album est retirée du panier. Un complément admissible déduit uniquement les titres individuels déjà payés et non remboursés, une seule fois.</p><p className={styles.note}>{!digitalUiIsLive(mode)?"Tarifs de test, non définitifs. ":""}Éligibilité territoriale revérifiée avant paiement.</p>
-    <div className={styles.actions}><button type="button" disabled={busy||!value?.lines.length} onClick={()=>void continueCheckout()}>{busy?"Vérification…":"Continuer en sécurité"}</button><Link className={styles.quiet} href="/connexion?retour=%2Fmusique%2Fpanier">Se connecter</Link></div></aside></div>;}
+
+type Quote = { totalCents: number; removed: string[]; lines: Array<{ id: string; title: string; scope: string; priceCents: number; trackCount: number; version: number; completion?: DigitalCompletionView | null }> };
+export async function digitalRequest(path: string, body?: unknown) {
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", headers: body === undefined ? {} : { "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const v = await r.json();
+  if (!r.ok) throw new DigitalRequestError(typeof v?.error === "string" ? v.error : "Action indisponible.", r.status, typeof v?.code === "string" ? v.code : null);
+  return v;
+}
+
+export function DigitalCart({ mode = "TEST" }: { mode?: DigitalUiMode }) {
+  const [value, setValue] = useState<Quote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [updating, setUpdating] = useState(true), [notice, setNotice] = useState("");
+  const serial = useRef({ value: 0 });
+  const router = useRouter();
+  const refresh = useCallback(async () => {
+    const n = ++serial.current.value, ids = readDigitalCart();
+    setUpdating(true);
+    try {
+      const q = await digitalRequest("/api/digital/quote", { offerIds: ids }) as Quote;
+      if (n !== serial.current.value || JSON.stringify(readDigitalCart()) !== JSON.stringify(ids)) return;
+      setValue(q); setError("");
+      if (q.removed.length) {
+        setNotice("Les titres inclus dans l’album ont été retirés : ils ne seront pas facturés deux fois.");
+        writeDigitalCart(q.lines.map(l => l.id));
+      }
+    } catch (e) {
+      if (n === serial.current.value) { setError(e instanceof Error ? e.message : "Panier indisponible."); setValue(null); }
+    } finally { if (n === serial.current.value) setUpdating(false); }
+  }, []);
+  useEffect(() => {
+    const requests = serial.current;
+    const initial = setTimeout(() => void refresh(), 0);
+    const update = () => void refresh();
+    window.addEventListener("storage", update); window.addEventListener("dcn-cart", update);
+    return () => { clearTimeout(initial); ++requests.value; window.removeEventListener("storage", update); window.removeEventListener("dcn-cart", update); };
+  }, [refresh]);
+
+  function remove(id: string, title: string) {
+    try { writeDigitalCart(readDigitalCart().filter(item => item !== id)); setNotice(`${title} a été retiré du panier.`); }
+    catch { setError("Le navigateur n’a pas pu modifier le panier. Réessayez."); }
+  }
+  async function continueCheckout() {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/digital/cart", { credentials: "same-origin" });
+      if (response.status === 401) { router.push("/connexion?retour=%2Fmusique%2Fpanier"); return; }
+      if (!response.ok) throw new Error("Votre panier nécessite une vérification.");
+      const cart = await response.json();
+      await digitalRequest("/api/digital/cart", { offerIds: readDigitalCart(), revision: cart.revision });
+      // A new document receives the checkout-scoped CSP nonce used by PayPal.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full navigation is required to receive this document-scoped CSP.
+      window.location.assign("/musique/checkout");
+    } catch (e) { setError(e instanceof Error ? e.message : "Connexion requise."); }
+    finally { setBusy(false); }
+  }
+  return <div className={`${styles.grid} ${styles.cartGrid}`}>
+    <section className={`${styles.panel} ${styles.cartPanel}`} aria-labelledby="digital-cart-selection">
+      <div className={styles.cartHeading}><h2 id="digital-cart-selection">Votre sélection</h2>{value ? <span>{digitalArticleCount(value.lines.length)}</span> : null}</div>
+      <p className={styles.note}>WAV + MP3 inclus. Panier séparé de la Boutique physique.</p>
+      {error ? <p role="alert" className={styles.status}>{error}</p> : null}
+      <p className="sr-only" role="status" aria-live="polite">{notice}</p>
+      {value?.lines.length ? <ul className={styles.cartRows} aria-busy={updating}>{value.lines.map(l => <li className={styles.cartRow} key={l.id}>
+        <span className={styles.cartIcon} aria-hidden="true">♪</span>
+        <div className={styles.cartIdentity}><strong>{l.title}</strong><p>{l.scope === "ALBUM" ? `${l.trackCount} pistes · Album` : "Titre individuel"} · WAV + MP3</p>{l.completion ? <div className={styles.cartCompletion}><span>Prix de l’album <span className={styles.cartAmount}>{digitalMoney(l.completion.basePriceCents)}</span></span><span>Titres déjà payés, après remboursements <span className={styles.cartAmount}>−{digitalMoney(l.completion.creditCents)}</span></span></div> : null}</div>
+        <div className={styles.cartLineActions}><strong className={styles.cartAmount}>{digitalMoney(l.priceCents)}</strong><button type="button" className={styles.cartRemove} aria-label={`Retirer ${l.title} du panier`} disabled={busy || updating} onClick={() => remove(l.id, l.title)}>Retirer</button></div>
+      </li>)}</ul> : <p role="status">{value ? "Votre panier numérique est vide." : error ? "Sélection à vérifier avant tout paiement." : "Vérification de votre sélection…"}</p>}
+      {error ? <div className={styles.actions}><Link href="/contact" className="text-link">Contacter LNX Beats</Link><button type="button" className={styles.quiet} onClick={() => { try { writeDigitalCart([]); } catch { setError("Le navigateur n’a pas pu modifier le panier."); } }}>Vider la sélection numérique</button><p className={styles.muted}>Cela n’annule pas un paiement déjà engagé.</p></div> : null}
+      <Link className={styles.cartBack} href="/discographie">Continuer à découvrir la musique</Link>
+    </section>
+    <aside className={`${styles.panel} ${styles.cartPanel}`} aria-labelledby="digital-cart-summary">
+      <h2 id="digital-cart-summary">Récapitulatif</h2>
+      <div className={styles.cartTotal} aria-busy={updating}><span>Total à payer{value ? <small>{digitalArticleCount(value.lines.length)}</small> : null}</span><strong className={styles.cartAmount}>{value ? digitalMoney(value.totalCents) : "—"}</strong></div>
+      <p className={styles.muted}>Les titres inclus dans un album ne sont pas facturés deux fois. Un complément d’album déduit seulement les achats éligibles déjà payés, après remboursements.</p>
+      <p className={styles.note}>{!digitalUiIsLive(mode) ? "Tarifs de test, non définitifs. " : ""}France métropolitaine et Corse, sous réserve d’éligibilité.</p>
+      <div className={styles.cartCheckoutActions}><button className={styles.button} type="button" disabled={busy || updating || !value?.lines.length || !!error} onClick={() => void continueCheckout()}>{busy ? "Vérification…" : "Passer au paiement"}</button><Link className="text-link" href="/connexion?retour=%2Fmusique%2Fpanier">Se connecter</Link></div>
+    </aside>
+  </div>;
+}

@@ -30,7 +30,7 @@ const db={
     async findMany(){return clone(active.events.filter(e=>e.kind===DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT).sort((a,b)=>b.createdAt.getTime()-a.createdAt.getTime()));}},
   digitalOrder:{async findFirst(){return active.pending?{id:randomUUID()}:null;}},
   digitalCountryTaxRule:{async findFirst(){active.policyReads++;return DIGITAL_FRANCE_LAUNCH_DRAFT_RULE;}},
-  digitalDocument:{async findMany(args:{where:{kind:string;order:{userId:string;mode:string};id?:{in:string[]}}}){active.reads.push(clone(args));assert.equal(args.where.kind,"INVOICE");assert.deepEqual(args.where.order,{userId:active.userId,mode:"TEST"});return clone(active.documents.filter(d=>!args.where.id||args.where.id.in.includes(d.id)).sort((a,b)=>b.createdAt.getTime()-a.createdAt.getTime()||b.id.localeCompare(a.id)));}},
+  digitalDocument:{async findMany(args:{where:{kind:string;order:{userId:string;mode:string};id?:{in?:string[];notIn?:string[]};createdAt?:{gte:Date}};take:number}){active.reads.push(clone(args));assert.equal(args.where.kind,"INVOICE");assert.deepEqual(args.where.order,{userId:active.userId,mode:"TEST"});return clone(active.documents.filter(d=>(!args.where.id?.in||args.where.id.in.includes(d.id))&&(!args.where.id?.notIn||!args.where.id.notIn.includes(d.id))&&(!args.where.createdAt||d.createdAt.getTime()>=args.where.createdAt.gte.getTime())).sort((a,b)=>b.createdAt.getTime()-a.createdAt.getTime()||b.id.localeCompare(a.id)).slice(0,args.take));}},
   async $queryRaw(strings:TemplateStringsArray,key:string){if(strings.join("").includes("current_setting('TimeZone')"))return[{timezone:active.timezone}];active.locks.push(key);return[{locked:true}];},
   async $transaction<T>(callback:(tx:unknown)=>Promise<T>):Promise<T>{return callback(db);},
 };
@@ -83,9 +83,69 @@ test("frozen billing IDs are user-scoped and remain stable after first invoice, 
 test("frozen absent billing never silently falls back to later invoices; malformed bindings and changed declarations fail closed",async()=>{active=fixture();const {snapshot,d}=await prepared();active.documents.push(billingDoc("97100"));await service.revalidateDigitalFranceResidenceV2(snapshot,active.userId,tx);await assert.rejects(()=>service.revalidateDigitalFranceResidenceV2({...snapshot,billingDocumentIds:undefined as never},active.userId,tx),{code:"FRANCE_RESIDENCE_BINDING_INVALID"});await assert.rejects(()=>service.revalidateDigitalFranceResidenceV2(snapshot,randomUUID(),tx),{code:"FRANCE_RESIDENCE_BINDING_INVALID"});await service.saveDigitalFranceResidenceDeclarationV2(active.actor,{...declarationInput(d.id),address:{...address,line1:"14 rue Synthétique"}});await assert.rejects(()=>service.revalidateDigitalFranceResidenceV2(snapshot,active.userId,tx),{code:"FRANCE_RESIDENCE_DECLARATION_CHANGED"});});
 test("billing snapshot integrity failure, foreign document IDs and malformed history cannot become residence proof",async()=>{active=fixture();active.documents.push(billingDoc("75001"));await assert.rejects(()=>service.loadDigitalFranceBillingContextV2(active.userId,"75001",tx,[randomUUID()]),{code:"FRANCE_BILLING_CONTEXT_CHANGED"});active.documents[0].snapshotHash="0".repeat(64);await assert.rejects(()=>service.loadDigitalFranceBillingContextV2(active.userId,"75001",tx),{code:"FRANCE_BILLING_CONTEXT_INVALID"});assert.equal(active.writes,0);assert.equal(active.network,0);});
 
+test("first and subsequent consistent invoices do not invalidate an unchanged reviewed declaration or rewrite its frozen snapshot",async()=>{
+  active=fixture();const {d,snapshot}=await prepared(),eventsBefore=clone(active.events),snapshotBefore=clone(snapshot),writes=active.writes;
+  const input={residenceDeclarationId:d.id,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode};
+  active.documents.push(billingDoc("75001","FR",new Date(Date.parse(snapshot.reviewedAt)+1)));
+  for(let n=0;n<2;n++){
+    const assessment=await service.assessDigitalFranceResidenceV2(input,active.userId,tx);
+    assert.equal(assessment.residenceVerified,true);assert.deepEqual(assessment.snapshot,snapshotBefore);
+    assert.equal((await service.getDigitalFranceResidenceV2(active.actor)).reviewStatus,"VERIFIED");
+    if(n===0)active.documents.push(billingDoc("75001","FR",new Date(Date.parse(snapshot.reviewedAt)+2)));
+  }
+  assert.deepEqual(active.events,eventsBefore);assert.deepEqual(snapshot,snapshotBefore);assert.equal(active.writes,writes);assert.equal(active.network,0);
+});
+test("new contradictory invoices block a new checkout even when a newer consistent invoice would mask them",async()=>{
+  for(const [countryCode,postalCode] of[["DE","10115"],["FR","97100"],["FR","69001"]]){
+    active=fixture();const {d,snapshot}=await prepared(),eventsBefore=clone(active.events);
+    active.documents.push(billingDoc(postalCode,countryCode,new Date(Date.parse(snapshot.reviewedAt)+1)),billingDoc("75001","FR",new Date(Date.parse(snapshot.reviewedAt)+2)));
+    const assessment=await service.assessDigitalFranceResidenceV2({residenceDeclarationId:d.id,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode},active.userId,tx);
+    assert.equal(assessment.residenceVerified,false);assert.equal(assessment.code,"FRANCE_RESIDENCE_BILLING_CONFLICT_REVIEW_REQUIRED");
+    assert.equal((await service.getDigitalFranceResidenceV2(active.actor)).reviewStatus,"REVIEW");assert.deepEqual(active.events,eventsBefore);assert.equal(active.network,0);
+  }
+});
+test("new checkout still re-reads every document of the original review and refuses missing or modified base invoices",async()=>{
+  for(const missing of[false,true]){
+    active=fixture();active.documents.push(billingDoc("75001","FR",new Date(Date.now()-10000)));const {d,snapshot}=await prepared();
+    const base=active.documents[0];active.documents.push(billingDoc("75001","FR",new Date(Date.parse(snapshot.reviewedAt)+1)));
+    if(missing)active.documents=active.documents.filter(row=>row.id!==base.id);else base.snapshot={modified:true};
+    const assessment=await service.assessDigitalFranceResidenceV2({residenceDeclarationId:d.id,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode},active.userId,tx);
+    assert.equal(assessment.residenceVerified,false);assert.equal(assessment.code,missing?"FRANCE_BILLING_CONTEXT_CHANGED":"FRANCE_BILLING_CONTEXT_INVALID");
+    assert.equal((await service.getDigitalFranceResidenceV2(active.actor)).reviewStatus,"REVIEW");
+  }
+});
+test("fresh invoice inspection remains bounded and malformed data never refreshes a residence review",async()=>{
+  active=fixture();const {d,snapshot}=await prepared(),input={residenceDeclarationId:d.id,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode};
+  const doc=billingDoc("75001","FR",new Date(Date.parse(snapshot.reviewedAt)+1));active.documents.push(doc);doc.snapshotHash="0".repeat(64);
+  assert.equal((await service.assessDigitalFranceResidenceV2(input,active.userId,tx)).code,"FRANCE_BILLING_CONTEXT_INVALID");
+  active.documents=Array.from({length:11},(_,index)=>billingDoc("75001","FR",new Date(Date.parse(snapshot.reviewedAt)+index+1)));
+  assert.equal((await service.assessDigitalFranceResidenceV2(input,active.userId,tx)).code,"FRANCE_BILLING_CONTEXT_REFRESH_REQUIRES_REVIEW");
+  assert.equal(active.events.length,2);assert.equal(active.network,0);
+});
+test("coherent fresh invoices cannot revive a revoked or expired review, or a superseded declaration",async()=>{
+  for(const reason of["revoked","expired","declaration"]){
+    active=fixture();const {d,snapshot}=await prepared();active.documents.push(billingDoc("75001","FR",new Date(Date.parse(snapshot.reviewedAt)+1)));
+    if(reason==="revoked")await service.recordDigitalFranceResidenceReviewV2(active.admin,reviewInput(d.id,{status:"REVOKED",attested:false,expectedReviewId:snapshot.reviewEventId}));
+    else if(reason==="expired"){const proof=active.events[1].details as unknown as DigitalFranceResidenceReviewV2;proof.expiresAt=proof.createdAt;const{recordHash,actor,...rest}=proof;void recordHash;void actor;proof.recordHash=digitalFranceResidenceReviewV2Hash(rest);}
+    else await service.saveDigitalFranceResidenceDeclarationV2(active.actor,{...declarationInput(d.id),address:{...address,line1:"14 rue Synthétique"}});
+    const assessment=await service.assessDigitalFranceResidenceV2({residenceDeclarationId:d.id,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode},active.userId,tx);
+    assert.equal(assessment.residenceVerified,false);assert.equal(assessment.code,reason==="revoked"?"FRANCE_RESIDENCE_REVIEW_REVOKED":reason==="expired"?"FRANCE_RESIDENCE_REVIEW_EXPIRED_OR_INVALID":"FRANCE_RESIDENCE_DECLARATION_CHANGED");
+    assert.equal((await service.getDigitalFranceResidenceV2(active.actor)).reviewStatus,reason==="revoked"?"REVOKED":"REVIEW");
+  }
+});
+
 const territory=(d:{id:string;addressHash:string;billingPostalCode:string})=>({countryCode:"FR",residenceCountryCode:"FR",billingCountryCode:"FR",customerType:"B2C",residencePostalCode:"20000",billingPostalCode:d.billingPostalCode,residenceConfirmed:true,residenceDeclarationId:d.id,addressHash:d.addressHash});
 async function exactLocalProfile<T>(callback:()=>Promise<T>){const saved={...process.env};try{for(const k of Object.keys(process.env))if(/(?:^|_)(?:STRIPE|PAYPAL|RESEND)(?:_|$)/.test(k))delete process.env[k];Object.assign(process.env,{DATABASE_URL:"postgresql://dcn_runtime_a:fake-qa-not-a-secret@127.0.0.1:55473/lnx_dcn_consolidation_test",AUTH_URL:"http://127.0.0.1:3140",MEDIA_STORAGE_DRIVER:"local",EMAIL_PROVIDER:"capture",DCN_LOCAL_REVIEW_AUTHORIZED:"true"});return await callback();}finally{for(const k of Object.keys(process.env))if(!(k in saved))delete process.env[k];Object.assign(process.env,saved);}}
 test("actual checkout V2 reserves only a reviewed address even in exact local QA and freezes no complete address",async()=>exactLocalProfile(async()=>{active=fixture();const saved=await service.saveDigitalFranceResidenceDeclarationV2(active.actor,declarationInput()),d=saved.declaration!;await assert.rejects(()=>checkout.reserveDigitalJurisdiction(territory(d),tx,true,active.userId),{code:"FRANCE_RESIDENCE_MANUAL_REVIEW_REQUIRED"});await service.recordDigitalFranceResidenceReviewV2(active.admin,reviewInput(d.id));const snapshot=await checkout.reserveDigitalJurisdiction(territory(d),tx,true,active.userId);assert.equal(snapshot.subdivisionCode,"FR-MET");assert.equal(snapshot.approvalScope,"LOCAL_QA");assert.equal(snapshot.franceResidenceV2!.addressHash,d.addressHash);assert.equal(JSON.stringify(snapshot).includes(address.line1),false);await checkout.checkDigitalAcquiredJurisdiction(snapshot,tx,"dcn12-local-simulation",active.userId);await checkout.checkDigitalResidenceRetry(territory(d),snapshot,tx,"dcn12-local-simulation",active.userId);assert.equal(active.policyReads,0);assert.equal(active.network,0);}));
 test("actual non-QA checkout stays closed behind the DRAFT legal/fiscal rule despite VERIFIED residence",async()=>{active=fixture();const {d}=await prepared();await assert.rejects(()=>checkout.reserveDigitalJurisdiction(territory(d),tx,false,active.userId),{code:"TERRITORY_REVIEW_REQUIRED"});assert.equal(active.policyReads,1);assert.equal(process.env.DCN_NEW_PAYMENTS_ENABLED,"false");assert.equal(active.network,0);});
+test("actual repeated checkout keeps the original review binding after a coherent invoice; acquired snapshots never absorb later history",async()=>exactLocalProfile(async()=>{
+  active=fixture();const {d}=await prepared(),first=await checkout.reserveDigitalJurisdiction(territory(d),tx,true,active.userId),frozen=clone(first),eventsBefore=clone(active.events);
+  active.documents.push(billingDoc("75001","FR",new Date(Date.parse(first.franceResidenceV2!.reviewedAt)+1)));
+  const next=await checkout.reserveDigitalJurisdiction(territory(d),tx,true,active.userId);assert.deepEqual(next,first);
+  active.documents.push(billingDoc("97100","FR",new Date(Date.parse(first.franceResidenceV2!.reviewedAt)+2)));
+  await assert.rejects(()=>checkout.reserveDigitalJurisdiction(territory(d),tx,true,active.userId),{code:"FRANCE_RESIDENCE_BILLING_CONFLICT_REVIEW_REQUIRED"});
+  await checkout.checkDigitalAcquiredJurisdiction(first,tx,"dcn12-local-simulation",active.userId);
+  assert.deepEqual(first,frozen);assert.deepEqual(active.events,eventsBefore);assert.equal(active.network,0);
+}));
 test("actual V2 checkout rejects client country, address and billing changes before policy lookup",async()=>exactLocalProfile(async()=>{active=fixture();const {d}=await prepared();for(const patch of[{countryCode:"DE",residenceCountryCode:"DE",billingCountryCode:"DE"},{residencePostalCode:"97100"},{billingPostalCode:"97100"},{addressHash:"0".repeat(64)},{residenceDeclarationId:randomUUID()},{billingPostalCode:"69001"}])await assert.rejects(()=>checkout.reserveDigitalJurisdiction({...territory(d),...patch},tx,true,active.userId));assert.equal(active.policyReads,0);}));
 test("actual V2 retry and pre-capture acquired checks reject changed or revoked proof, without changing old snapshots",async()=>exactLocalProfile(async()=>{active=fixture();const {d}=await prepared(),snapshot=await checkout.reserveDigitalJurisdiction(territory(d),tx,true,active.userId),frozen=clone(snapshot);await assert.rejects(()=>checkout.checkDigitalResidenceRetry({...territory(d),billingPostalCode:"69001"},snapshot,tx,"dcn12-local-simulation",active.userId),{code:"FRANCE_RESIDENCE_PROOF_CHANGED_REQUIRES_REVIEW"});const current=await service.getDigitalFranceResidenceV2(active.actor);await service.recordDigitalFranceResidenceReviewV2(active.admin,reviewInput(d.id,{status:"REVOKED",attested:false,expectedReviewId:current.reviewId}));await assert.rejects(()=>checkout.checkDigitalAcquiredJurisdiction(snapshot,tx,"dcn12-local-simulation",active.userId),{code:"FRANCE_RESIDENCE_REVIEW_REVOKED"});await assert.rejects(()=>checkout.checkDigitalResidenceRetry(territory(d),snapshot,tx,"dcn12-local-simulation",active.userId),{code:"FRANCE_RESIDENCE_REVIEW_REVOKED"});assert.deepEqual(snapshot,frozen);assert.equal(await checkout.checkDigitalAcquiredJurisdiction(null,tx,"dcn12-local-simulation",active.userId),undefined);}));

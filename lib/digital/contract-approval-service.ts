@@ -5,6 +5,8 @@ import { DIGITAL_FRANCE_LIVE_CONTRACT_VERSION, snapshotDigitalFranceLiveContract
   type DigitalFranceLiveContractApproval } from "./france-live-contract";
 import { normalizeDigitalFranceResidenceAddress, digitalFranceResidenceHash,
   DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT, type DigitalFranceResidenceSnapshotV2 } from "./france-residence-v2-policy";
+import { resolveDigitalContractBillingAddress } from "./billing-address-policy";
+import type { DigitalFranceMinimalAddress } from "./france-residence-v2-policy";
 
 /** Server provenance for new commitments, never an approval submitted by the buyer.
  * This function only reads: recording a seller decision requires a separate explicit action.
@@ -24,8 +26,7 @@ export async function approvedDigitalFranceContract(db: Pick<Prisma.TransactionC
  * document, PSP lookup, unrelated purchase or historical address is collected.
  */
 export async function digitalLiveContractCustomer(db: Pick<Prisma.TransactionClient,"digitalEvent">,
-  userId:string,name:string|null,email:string,residence?:DigitalFranceResidenceSnapshotV2,billingAddressSameAsResidence=false){
-  if(billingAddressSameAsResidence!==true)throw new DigitalError("FRANCE_BILLING_ADDRESS_REQUIRED",409);
+  userId:string,name:string|null,email:string,residence?:DigitalFranceResidenceSnapshotV2,billingAddressSameAsResidence=false,suppliedBillingAddress?:DigitalFranceMinimalAddress){
   if(!name?.trim()||name.trim().length<2)throw new DigitalError("CUSTOMER_NAME_REQUIRED",409);
   if(!residence||residence.subjectUserId!==userId)throw new DigitalError("FRANCE_ADDRESS_DECLARATION_REQUIRED",409);
   const row=await db.digitalEvent.findFirst({where:{id:residence.residenceDeclarationId,actorId:userId,kind:DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT},select:{details:true}});
@@ -33,7 +34,6 @@ export async function digitalLiveContractCustomer(db: Pick<Prisma.TransactionCli
   try{
     const billingAddress=normalizeDigitalFranceResidenceAddress(details?.address);
     if(details?.addressHash!==residence.addressHash||digitalFranceResidenceHash(billingAddress)!==residence.addressHash)throw new Error("ADDRESS_CHANGED");
-    if(billingAddress.postalCode!==residence.billingPostalCode)throw new DigitalError("FRANCE_BILLING_ADDRESS_REQUIRED",409);
-    return{type:"INDIVIDUAL",email,name:name.trim(),billingAddress,billingAddressConfirmedAsResidence:true};
+    return{type:"INDIVIDUAL",email,name:name.trim(),...resolveDigitalContractBillingAddress(billingAddress,residence,billingAddressSameAsResidence,suppliedBillingAddress)};
   }catch(e){if(e instanceof DigitalError)throw e;throw new DigitalError("FRANCE_RESIDENCE_PROOF_CHANGED_REQUIRES_REVIEW",409);}
 }

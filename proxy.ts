@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { nonceCspEnabled } from "@/lib/ads/policy";
 import { contentSecurityPolicy } from "@/lib/security/content-security-policy";
 import { CSP_NONCE_HEADER } from "@/lib/security/csp-nonce";
+import { digitalPaypalCheckoutPath, digitalPaypalSdkConfiguration } from "@/lib/digital/paypal-sdk-config";
 
 // This one streaming upload already enforces Admin/origin and 80 MiB limits.
 // Canonical policy returns "none" for it; do not clone/truncate its multipart
@@ -26,9 +27,11 @@ export function proxy(request: NextRequest) {
   requestHeaders.delete(CSP_NONCE_HEADER);
   requestHeaders.delete("content-security-policy");
   requestHeaders.delete("content-security-policy-report-only");
-  const nonce = ["GET", "HEAD"].includes(request.method) && nonceCspEnabled(request.nextUrl.pathname, process.env)
+  const digitalCheckout = digitalPaypalCheckoutPath(request.nextUrl.pathname);
+  const paypal = digitalCheckout ? digitalPaypalSdkConfiguration(process.env) : null;
+  const nonce = ["GET", "HEAD"].includes(request.method) && (digitalCheckout || nonceCspEnabled(request.nextUrl.pathname, process.env))
     ? randomBytes(32).toString("base64") : undefined;
-  const csp = nonce ? contentSecurityPolicy(process.env, nonce) : undefined;
+  const csp = nonce ? contentSecurityPolicy(process.env, nonce, { digitalPaypalMode: paypal?.mode }) : undefined;
   if (nonce && csp) {
     requestHeaders.set(CSP_NONCE_HEADER, nonce);
     requestHeaders.set("Content-Security-Policy", csp);

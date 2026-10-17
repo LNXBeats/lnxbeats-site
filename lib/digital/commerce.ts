@@ -20,6 +20,9 @@ import {assertDigitalProviderBilling,digitalExpectedBilling} from "./france-prov
 import { DIGITAL_FRANCE_TERMS_VERSION } from "./france-legal";
 import { DIGITAL_FRANCE_LIVE_CONTRACT_VERSION } from "./france-live-contract";
 import { approvedDigitalFranceContract, digitalLiveContractCustomer } from "./contract-approval-service";
+import { assertDigitalBillingAddressRetry } from "./billing-address-policy";
+import { assertDigitalCheckoutConsentRetry, parseDigitalCheckoutConsentPresentation } from "./checkout-consents";
+import type { DigitalFranceMinimalAddress } from "./france-residence-v2-policy";
 import { digitalCompletionJurisdictionAllowed } from "./live-commerce-policy";
 import { digitalNewSalesAllowed } from "./runtime-policy";
 import { digitalCommercialFiscalNotice } from "./document-policy";
@@ -32,16 +35,18 @@ function providerOrder(order: { id: string; mode: string; totalCents: number; ju
   return { id: order.id, mode:order.mode, totalCents: order.totalCents, userEmail: order.user.email, lines: order.lines.map(l => ({ title: l.title, priceCents: l.priceCents })),
     ...(digitalExpectedBilling(order.jurisdictionSnapshot)?{expectedBilling:digitalExpectedBilling(order.jurisdictionSnapshot)}:{}) };
 }
-function presentOrder(order: { id: string; status: string; totalCents: number; mode: string }, attempt?: { status: string; checkoutUrl: string | null } | null) {
+function presentOrder(order: { id: string; status: string; totalCents: number; mode: string }, attempt?: { status: string; checkoutUrl: string | null; provider?: string; providerReference?: string | null } | null) {
   return { orderId: order.id, status: order.status, totalCents: order.totalCents, mode: order.mode,
     checkoutUrl: order.status === "PENDING" && attempt?.status === "OPEN" ? attempt.checkoutUrl : null,
+    providerOrderId: order.status === "PENDING" && attempt?.status === "OPEN" && attempt.provider === "PAYPAL" ? attempt.providerReference ?? null : null,
     needsReconciliation: order.status === "REQUIRES_REVIEW" || attempt?.status === "UNKNOWN" };
 }
-export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; termsAccepted?:boolean; earlyDelivery: boolean; withdrawalAcknowledged: boolean; jurisdiction?:DigitalCustomerTerritory;billingAddressSameAsResidence?:boolean }, suppliedGateway?: DigitalGateway, options?:{localReview?:true;localQaFixture?:true}) {
+export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; termsAccepted?:boolean; earlyDelivery: boolean; withdrawalAcknowledged: boolean; jurisdiction?:DigitalCustomerTerritory;billingAddressSameAsResidence?:boolean;billingAddress?:DigitalFranceMinimalAddress;consentPresentation?:string }, suppliedGateway?: DigitalGateway, options?:{localReview?:true;localQaFixture?:true}) {
   user(actor); const mode=requireDigitalEnvironment();
   if (!digitalNewSalesAllowed(mode) && !localDigitalReviewCheckoutAllowed(actor.email,suppliedGateway?.merchantId??"",options?.localReview===true)) throw new DigitalError("NEW_DIGITAL_PAYMENTS_CLOSED", 503);
   if(mode==="TEST"&&!suppliedGateway&&process.env.DCN_EXTERNAL_TEST_AUTHORIZED!=="true")throw new DigitalError("EXTERNAL_QA_AUTHORIZATION_REQUIRED",503);
   assertDigitalUuid(input.idempotencyKey);
+  parseDigitalCheckoutConsentPresentation(input.consentPresentation);
   if (!Number.isSafeInteger(input.revision) || input.revision < 1 || !["STRIPE", "PAYPAL"].includes(input.provider)
     || !(mode==="LIVE"?[DIGITAL_FRANCE_LIVE_CONTRACT_VERSION]:[DIGITAL_TERMS_VERSION,DIGITAL_FRANCE_TERMS_VERSION]).includes(input.termsVersion)
     || [DIGITAL_FRANCE_TERMS_VERSION,DIGITAL_FRANCE_LIVE_CONTRACT_VERSION].includes(input.termsVersion)&&input.termsAccepted!==true
@@ -62,6 +67,8 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
       if (previous.mode!==mode||previous.userId !== actor.id || previous.cartRevision !== input.revision || previous.attempts[0]?.provider !== input.provider
         ||previous.termsVersion!==input.termsVersion) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);
       await checkDigitalResidenceRetry(input.jurisdiction,previous.jurisdictionSnapshot,tx,gateway.merchantId,actor.id);
+      assertDigitalBillingAddressRetry(previous.contractSnapshot,input.billingAddressSameAsResidence===true,input.billingAddress);
+      assertDigitalCheckoutConsentRetry(previous.contractSnapshot,input.consentPresentation);
       return { order: previous, attempt: previous.attempts[0], created: false };
     }
     if(input.termsVersion!==(mode==="LIVE"?DIGITAL_FRANCE_LIVE_CONTRACT_VERSION:DIGITAL_FRANCE_TERMS_VERSION))throw new DigitalError("CURRENT_DIGITAL_TERMS_REQUIRED",409);
@@ -80,7 +87,7 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
     if(!normalized.totalCents)throw new DigitalError("FREE_COMPLETION_SEPARATE_FLOW_REQUIRED",409);
     const jurisdiction=await reserveDigitalJurisdiction(input.jurisdiction,tx,localQa,actor.id,input.termsVersion);
     digitalCommercialFiscalNotice(jurisdiction,mode);
-    const customer=mode==="LIVE"?await digitalLiveContractCustomer(tx,actor.id,currentUser.displayName,currentUser.email,jurisdiction.franceResidenceV2,input.billingAddressSameAsResidence===true)
+    const customer=mode==="LIVE"?await digitalLiveContractCustomer(tx,actor.id,currentUser.displayName,currentUser.email,jurisdiction.franceResidenceV2,input.billingAddressSameAsResidence===true,input.billingAddress)
       :{email:currentUser.email,name:currentUser.displayName||"Client QA"};
     if(!jurisdiction.tax.priceIncludesTax)throw new DigitalError("TAX_EXCLUSIVE_CHECKOUT_REVIEW_REQUIRED",409);
     if(normalized.lines.some(l=>l.completion)&&!digitalCompletionJurisdictionAllowed(jurisdiction,mode))throw new DigitalError("COMPLETION_TAX_ALLOCATION_REVIEW_REQUIRED",409);
@@ -90,7 +97,7 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
       earlyDelivery: true, withdrawalAcknowledged: true, lines: { create: normalized.lines.map(l => ({ offerId: l.id, scope: l.scope, title: l.title, priceCents: l.priceCents,
         offerVersion: l.version, trackSnapshot: l.tracks, ...(l.completion?{completionSnapshot:l.completion}:{}),
         taxSnapshot: {status:jurisdiction.approvalScope==="LOCAL_QA"?"LOCAL_REVIEW_ONLY":"APPROVED_TERRITORY",...calculateDigitalTax({grossBeforeCreditCents:l.completion?.basePriceCents??l.priceCents,creditCents:l.completion?.creditCents??0},jurisdiction)} })) },
-      contractSnapshot: {...digitalContractSnapshot(customer, new Date(),input.termsVersion,{mode,approval}),rightsReviewPolicy:DIGITAL_RIGHTS_REVIEW_POLICY},
+      contractSnapshot: {...digitalContractSnapshot(customer, new Date(),input.termsVersion,{mode,approval,consentPresentation:input.consentPresentation}),rightsReviewPolicy:DIGITAL_RIGHTS_REVIEW_POLICY},
     }, include: { user: true, lines: true } });
     for(const l of normalized.lines)if(l.completion)await reserveDigitalCompletion(tx,actor.id,order.lines.find(line=>line.offerId===l.id)!.id,l.completion);
     const attempt = await tx.digitalPaymentAttempt.create({ data: { orderId: order.id, provider: input.provider, idempotencyKey: `dcn:${order.id}:${randomUUID()}`, leaseUntil: new Date(Date.now() + 60000) } });

@@ -15,6 +15,11 @@ type EventRow={id:string;actorId:string|null;createdAt:Date;details:unknown};
 const eventSelect={id:true,actorId:true,createdAt:true,details:true} as const;
 const text=(v:Record<string,unknown>,key:string)=>typeof v[key]==="string"?v[key] as string:"";
 const object=(v:unknown)=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;
+function billingDocument(row:{id:string;snapshot:unknown;snapshotHash:string}):DigitalFranceBillingDocument{
+  if(!digitalFranceResidenceSha(row.snapshotHash)||digitalFranceResidenceHash(row.snapshot)!==row.snapshotHash)throw new DigitalError("FRANCE_BILLING_CONTEXT_INVALID",409);
+  const snapshot=object(row.snapshot),customer=object(snapshot?.customerSnapshot),address=object(customer?.billingAddress);
+  return{id:row.id,snapshotHash:row.snapshotHash,addressAvailable:!!address,countryCode:address&&typeof address.countryCode==="string"?address.countryCode:null,postalCode:address&&typeof address.postalCode==="string"?address.postalCode:null};
+}
 async function lock(db:Tx,userId:string){await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${userId}`})) IS NULL AS locked`;}
 async function activeUser(db:Tx,userId:string,admin=false){const u=await db.user.findUnique({where:{id:userId},select:{id:true,role:true,status:true,emailVerified:true}});
   if(!u||u.status!=="ACTIVE"||!u.emailVerified||admin&&u.role!=="ADMIN")throw new DigitalError(admin?"ADMIN_REQUIRED":"VERIFIED_ACCOUNT_REQUIRED",403);return u;}
@@ -43,12 +48,40 @@ export async function loadDigitalFranceBillingContextV2(userId:string,billingPos
   const rows=documentIds?.length===0?[]:await db.digitalDocument.findMany({where:{kind:"INVOICE",order:{userId,mode:requireDigitalEnvironment()},...(documentIds?{id:{in:documentIds}}:{})},
     orderBy:[{createdAt:"desc"},{id:"desc"}],take:10,select:{id:true,snapshot:true,snapshotHash:true}});
   if(documentIds&&rows.length!==documentIds.length)throw new DigitalError("FRANCE_BILLING_CONTEXT_CHANGED",409);
-  const documents:DigitalFranceBillingDocument[]=rows.map(row=>{
-    if(!digitalFranceResidenceSha(row.snapshotHash)||digitalFranceResidenceHash(row.snapshot)!==row.snapshotHash)throw new DigitalError("FRANCE_BILLING_CONTEXT_INVALID",409);
-    const snapshot=object(row.snapshot),customer=object(snapshot?.customerSnapshot),address=object(customer?.billingAddress);
-    return{id:row.id,snapshotHash:row.snapshotHash,addressAvailable:!!address,countryCode:address&&typeof address.countryCode==="string"?address.countryCode:null,postalCode:address&&typeof address.postalCode==="string"?address.postalCode:null};
-  });
+  const documents:DigitalFranceBillingDocument[]=rows.map(billingDocument);
   return digitalFranceBillingContext(documents,billingPostalCode);
+}
+/** A new consistent invoice is not a new residence declaration or a new review.
+ * Keep the reviewed context immutable, and inspect every new invoice separately:
+ * the latest consistent address must never hide an earlier fresh contradiction.
+ * The existing ten-document bound is retained; the sentinel fails closed instead
+ * of silently skipping an unexamined page. No PSP/identity lookup is performed.
+ */
+async function assertFreshBillingConsistent(userId:string,reviewed:DigitalFranceResidenceReviewV2,db:Tx){
+  const rows=await db.digitalDocument.findMany({where:{kind:"INVOICE",order:{userId,mode:requireDigitalEnvironment()},
+    createdAt:{gte:new Date(reviewed.createdAt)},id:{notIn:reviewed.billingContext.documents.map(d=>d.id)}},
+    orderBy:[{createdAt:"desc"},{id:"desc"}],take:11,select:{id:true,snapshot:true,snapshotHash:true}});
+  if(rows.length>10)throw new DigitalError("FRANCE_BILLING_CONTEXT_REFRESH_REQUIRES_REVIEW",409);
+  for(const row of rows){const document=billingDocument(row);
+    if(document.addressAvailable&&(document.countryCode!=="FR"||document.postalCode!==reviewed.billingPostalCode||!digitalFrancePostalScope(document.countryCode,document.postalCode)))
+      throw new DigitalError("FRANCE_RESIDENCE_BILLING_CONFLICT_REVIEW_REQUIRED",409);
+  }
+}
+async function assessLoadedResidence(input:{residenceDeclarationId:string;addressHash:string;billingPostalCode:string},subjectUserId:string,db:Tx,
+  declared:DigitalFranceResidenceDeclarationV2|null,reviewed:DigitalFranceResidenceReviewV2|null,now:Date,options?:{billingDocumentIds:string[]}){
+  // Acquired commitments retain their exact frozen-document revalidation. Never
+  // add later invoices to, or rewrite, a historical jurisdiction/contract snapshot.
+  if(options){const billing=await loadDigitalFranceBillingContextV2(subjectUserId,input.billingPostalCode,db,options.billingDocumentIds);
+    return evaluateDigitalFranceResidenceV2(input,subjectUserId,declared,reviewed,billing,now);}
+  const context=reviewed?reviewed.billingContext:await loadDigitalFranceBillingContextV2(subjectUserId,input.billingPostalCode,db);
+  const preliminary=evaluateDigitalFranceResidenceV2(input,subjectUserId,declared,reviewed,context,now);
+  if(!preliminary.residenceVerified||!reviewed)return preliminary;
+  // The review is valid, but all of its original document hashes must still be
+  // read from this owner's repository, not merely trusted from event JSON.
+  const frozen=await loadDigitalFranceBillingContextV2(subjectUserId,input.billingPostalCode,db,reviewed.billingContext.documents.map(d=>d.id));
+  const assessment=evaluateDigitalFranceResidenceV2(input,subjectUserId,declared,reviewed,frozen,now);
+  if(assessment.residenceVerified)await assertFreshBillingConsistent(subjectUserId,reviewed,db);
+  return assessment;
 }
 export async function assessDigitalFranceResidenceV2(input:{residenceDeclarationId:string;addressHash:string;billingPostalCode:string},subjectUserId:string,db:Tx,now=new Date(),options?:{billingDocumentIds:string[]}){
   try{
@@ -56,8 +89,7 @@ export async function assessDigitalFranceResidenceV2(input:{residenceDeclaration
     assertDigitalUuid(subjectUserId);assertDigitalUuid(input.residenceDeclarationId);
     const declared=declaration(await latest(db,subjectUserId,DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT));
     const reviewed=await review(db,await latest(db,subjectUserId,DIGITAL_FRANCE_RESIDENCE_REVIEW_EVENT));
-    const billing=await loadDigitalFranceBillingContextV2(subjectUserId,input.billingPostalCode,db,options?.billingDocumentIds);
-    return evaluateDigitalFranceResidenceV2(input,subjectUserId,declared,reviewed,billing,now);
+    return await assessLoadedResidence(input,subjectUserId,db,declared,reviewed,now,options);
   }catch(e){return digitalFranceResidenceV2Result(e instanceof DigitalError?e.code:"FRANCE_RESIDENCE_REPOSITORY_UNAVAILABLE");}
 }
 export async function revalidateDigitalFranceResidenceV2(snapshot:DigitalFranceResidenceSnapshotV2,subjectUserId:string,db:Tx,now=new Date()){
@@ -95,7 +127,7 @@ function ownerSummary(d:DigitalFranceResidenceDeclarationV2|null,r:DigitalFrance
 async function ownerCurrentSummary(db:Tx,userId:string){
   const d=declaration(await latest(db,userId,DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT)),r=await review(db,await latest(db,userId,DIGITAL_FRANCE_RESIDENCE_REVIEW_EVENT));
   if(!d)return ownerSummary(null,r);
-  try{const billing=await loadDigitalFranceBillingContextV2(userId,d.billingPostalCode,db),assessment=evaluateDigitalFranceResidenceV2({residenceDeclarationId:d.eventId,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode},userId,d,r,billing);return ownerSummary(d,r,assessment.residenceVerified);}catch{return ownerSummary(d,r);}
+  try{const assessment=await assessLoadedResidence({residenceDeclarationId:d.eventId,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode},userId,db,d,r,new Date());return ownerSummary(d,r,assessment.residenceVerified);}catch{return ownerSummary(d,r);}
 }
 export async function getDigitalFranceResidenceV2(actor:OrderActor){requireDigitalEnvironment();return prisma.$transaction(async db=>{await assertDigitalDatabaseUtc(db);await activeUser(db,actor.id);
   return ownerCurrentSummary(db,actor.id);});}

@@ -8,6 +8,7 @@ import { digitalFranceLiveContractByVersion, DIGITAL_FRANCE_LIVE_CONTRACT_VERSIO
   validateSavedDigitalFranceLiveContractApproval, type DigitalFranceLiveContractApprovalSnapshot } from "./france-live-contract";
 import type { DigitalMode } from "./runtime-policy";
 import { normalizeDigitalFranceResidenceAddress, type DigitalFranceMinimalAddress } from "./france-residence-v2-policy";
+import { digitalCheckoutConsentPresentation, validDigitalCheckoutConsentPresentation, type DigitalCheckoutConsentPresentation } from "./checkout-consents";
 
 export const DIGITAL_FISCAL_REVIEW_NOTICE = "TEST : fiscalité des contenus numériques à valider. Aucun régime ni taux réel présumé.";
 export const DIGITAL_CONTRACT_POLICY = "DCN-CONSOLIDATION-QA-EXPLICIT-RECEIPT";
@@ -34,9 +35,11 @@ type ContractSnapshot = {
   earlyDelivery: { expresslyRequested: boolean; text: string }; withdrawal: { expresslyAcknowledged: boolean; text: string };
   licenseStatus: string; fiscalStatus: string; approvedForLive?: boolean; liveApproval?: DigitalFranceLiveContractApprovalSnapshot;
   billingAddressSource?:"BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE";
+  checkoutConsentPresentation?:DigitalCheckoutConsentPresentation;
 };
 export function digitalContractSnapshot(customer: { email: string; name: string; billingAddress?:DigitalFranceMinimalAddress;billingAddressConfirmedAsResidence?:boolean }, acceptedAt: Date, termsVersion = DIGITAL_TERMS_VERSION,
-  options?:{mode:DigitalMode;approval?:DigitalFranceLiveContractApprovalSnapshot}): ContractSnapshot {
+  options?:{mode:DigitalMode;approval?:DigitalFranceLiveContractApprovalSnapshot;consentPresentation?:string}): ContractSnapshot {
+  const presentation=digitalCheckoutConsentPresentation(options?.consentPresentation);
   if(options?.mode==="LIVE"){
     const document=digitalFranceLiveContractByVersion(termsVersion),approval=options.approval;
     if(!document||!approval||!validateSavedDigitalFranceLiveContractApproval(approval)
@@ -50,7 +53,8 @@ export function digitalContractSnapshot(customer: { email: string; name: string;
         documentHashSha256:document.hashSha256,status:"APPROVED",expresslyAccepted:true,sections:document.sections},
       earlyDelivery:{expresslyRequested:true,text:document.consents.immediateSupply},
       withdrawal:{expresslyAcknowledged:true,text:document.consents.withdrawalAcknowledgement},
-      approvedForLive:true,liveApproval:approval,licenseStatus:"PERSONAL_PRIVATE_USE",fiscalStatus:"APPROVED_TERRITORY_SNAPSHOT"};
+      approvedForLive:true,liveApproval:approval,licenseStatus:"PERSONAL_PRIVATE_USE",fiscalStatus:"APPROVED_TERRITORY_SNAPSHOT",
+      ...(presentation?{checkoutConsentPresentation:presentation}:{})};
   }
   if(termsVersion===DIGITAL_FRANCE_LIVE_CONTRACT_VERSION)throw new DigitalError("FR_LIVE_CONTRACT_APPROVAL_REQUIRED",409);
   const terms = digitalContractTerms(termsVersion), france = termsVersion === DIGITAL_FRANCE_TERMS_VERSION;
@@ -60,10 +64,11 @@ export function digitalContractSnapshot(customer: { email: string; name: string;
     earlyDelivery: { expresslyRequested: true, text: terms.earlyDeliveryText },
     withdrawal: { expresslyAcknowledged: true, text: terms.withdrawalText },
     ...(france ? { approvedForLive: false as const } : {}),
-    licenseStatus: "PROPOSED_NOT_LIVE_APPROVED", fiscalStatus: "LOCAL_REVIEW_ONLY" };
+    licenseStatus: "PROPOSED_NOT_LIVE_APPROVED", fiscalStatus: "LOCAL_REVIEW_ONLY",...(presentation?{checkoutConsentPresentation:presentation}:{}) };
 }
 export function verifyContractSnapshot(snapshot: unknown, termsVersion: string, termsHash: string) {
   const s = snapshot as ReturnType<typeof digitalContractSnapshot>;
+  if(s&&Object.prototype.hasOwnProperty.call(s,"checkoutConsentPresentation")&&!validDigitalCheckoutConsentPresentation(s.checkoutConsentPresentation!))throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);
   if(s?.mode==="LIVE"){
     const document=digitalFranceLiveContractByVersion(termsVersion),exact=digitalContractTerms(termsVersion);
     if(!document||s.policy!==DIGITAL_FRANCE_LIVE_CONTRACT_POLICY)throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);

@@ -13,6 +13,7 @@ import { digitalContractSnapshot, verifyContractSnapshot } from "@/lib/digital/f
 import { LOCAL_REVIEW_BUYER, LOCAL_REVIEW_MERCHANT } from "@/lib/digital/local-review-policy";
 import { DIGITAL_MP3_ENCODER_VERSION } from "@/lib/digital/formats";
 import { DIGITAL_RIGHTS_REVIEW_POLICY, DIGITAL_RIGHTS_REVIEW_EVENT, DIGITAL_RIGHTS_ATTESTATION, digitalRightsMasterBinding, digitalRightsReviewHash } from "@/lib/digital/rights-review-policy";
+import { DIGITAL_CHECKOUT_CONSENT_PRESENTATION } from "@/lib/digital/checkout-consents";
 
 /** Actual paid-checkout service; all persistence and gateway work is doubled. Never a provider test. */
 function fixture() {
@@ -91,4 +92,21 @@ test("historical checkout retry returns its original contract without adopting t
   assert.equal(result.orderId, legacy.id); assert.equal(result.checkoutUrl, legacy.attempts[0].checkoutUrl); assert.equal(f.state().gatewayCalls, 0); assert.equal(f.state().cartReads, 0);
   assert.equal(JSON.stringify(legacy.contractSnapshot), before);
   await assert.rejects(() => isolated(f, () => createDigitalCheckout(f.actor, f.input, f.gateway, { localReview: true })), { code: "IDEMPOTENCY_CONFLICT" });
+});
+test("mobile two-checkbox checkout stores separate consent facts and exact presentation before the doubled gateway", async () => {
+  const f=fixture(),input={...f.input,consentPresentation:DIGITAL_CHECKOUT_CONSENT_PRESENTATION};
+  await isolated(f,()=>createDigitalCheckout(f.actor,input,f.gateway,{localReview:true}));
+  const s=verifyContractSnapshot(f.state().order!.contractSnapshot,DIGITAL_FRANCE_TERMS_VERSION,DIGITAL_FRANCE_TERMS_TEXT_HASH).snapshot;
+  assert.equal(s.checkoutConsentPresentation?.policy,DIGITAL_CHECKOUT_CONSENT_PRESENTATION);
+  assert.equal(s.checkoutConsentPresentation?.termsAccepted,true);assert.equal(s.checkoutConsentPresentation?.immediateSupplyRequested,true);assert.equal(s.checkoutConsentPresentation?.withdrawalLossAcknowledged,true);
+  assert.equal(s.earlyDelivery.expresslyRequested,true);assert.equal(s.withdrawal.expresslyAcknowledged,true);
+  assert.equal(f.state().creates,1);assert.equal(f.state().gatewayCalls,1);
+  await assert.rejects(()=>isolated(f,()=>createDigitalCheckout(f.actor,f.input,f.gateway,{localReview:true})),{code:"IDEMPOTENCY_CONFLICT"});
+  assert.equal(f.state().creates,1);assert.equal(f.state().gatewayCalls,1);
+});
+test("mobile presentation never implies missing delivery or withdrawal consent and unknown presentations fail before persistence",async()=>{
+  for(const patch of[{earlyDelivery:false},{withdrawalAcknowledged:false},{termsAccepted:false},{consentPresentation:"unknown-presentation"}]){
+    const f=fixture();await assert.rejects(()=>isolated(f,()=>createDigitalCheckout(f.actor,{...f.input,consentPresentation:DIGITAL_CHECKOUT_CONSENT_PRESENTATION,...patch},f.gateway,{localReview:true})),{code:"INVALID_CHECKOUT"});
+    assert.equal(f.state().creates,0);assert.equal(f.state().gatewayCalls,0);assert.equal(f.state().cartReads,0);
+  }
 });

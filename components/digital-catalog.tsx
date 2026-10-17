@@ -9,7 +9,8 @@ import { digitalUiIsLive, type DigitalUiMode } from "./digital-mode-copy";
 export const DIGITAL_CART_KEY = "lnx:dcn:cart:v1";
 export function readDigitalCart(): string[] { try { const v = JSON.parse(localStorage.getItem(DIGITAL_CART_KEY) ?? "[]"); return Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string"))].slice(0, 50) : []; } catch { return []; } }
 export function writeDigitalCart(ids: string[]) { localStorage.setItem(DIGITAL_CART_KEY, JSON.stringify([...new Set(ids)])); window.dispatchEvent(new Event("dcn-cart")); }
-export const digitalMoney = (c: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(c / 100);
+import { digitalMoney } from "@/lib/digital/cart-presentation";
+export { digitalMoney } from "@/lib/digital/cart-presentation";
 export type DigitalCompletionView = { basePriceCents:number; creditCents:number; creditedTrackCount?:number; priceCents?:number; blockedReason?:string|null };
 export function AddDigitalOffer({ id, priceCents, label = "Ajouter au panier", title, owned = false, partiallyOwned = false, completion }: { id: string; priceCents: number; label?: string; title?: string; owned?: boolean; partiallyOwned?: boolean; completion?:DigitalCompletionView|null }) {
   const [added, setAdded] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState(false);

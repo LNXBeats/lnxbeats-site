@@ -1,5 +1,6 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
+  if(code==="FRANCE_BILLING_ADDRESS_DIFFERENT_REQUIRES_REVIEW")return "Une adresse de facturation différente nécessite une vérification avant paiement. Contactez LNX Beats ; aucun paiement n’a été lancé.";
   if(code==="NEW_DIGITAL_PAYMENTS_CLOSED")return "Les nouveaux achats numériques sont temporairement suspendus. Aucun nouveau paiement n’a été lancé ; vos acquisitions restent accessibles dans Ma musique.";
   if(code==="STALE_SALES_CONTROL")return "Une autre instruction administrative a été enregistrée. Actualisez cette page avant de modifier l’ouverture des achats.";
   if(code==="LIVE_MEDIA_STORAGE_NOT_READY")return "Les fichiers de cette version ne sont pas encore disponibles dans le stockage sécurisé du site. Aucun paiement n’a été lancé ; vos achats déjà acquis restent conservés.";

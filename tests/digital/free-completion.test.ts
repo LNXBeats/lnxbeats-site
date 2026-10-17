@@ -15,6 +15,7 @@ import { DIGITAL_MP3_ENCODER_VERSION } from "@/lib/digital/formats";
 import { DIGITAL_RIGHTS_REVIEW_POLICY,DIGITAL_RIGHTS_REVIEW_EVENT,DIGITAL_RIGHTS_ATTESTATION,digitalRightsMasterBinding,digitalRightsReviewHash } from "@/lib/digital/rights-review-policy";
 import { digitalCountsOwnedRights,digitalConfirmationMessage,digitalLibraryPaymentLabel } from "@/lib/digital/library-policy";
 import { createDigitalDownload } from "@/lib/digital/library";
+import { DIGITAL_CHECKOUT_CONSENT_PRESENTATION } from "@/lib/digital/checkout-consents";
 
 const env={DCN_ENABLED:"true",DCN_MODE:"TEST",DCN_NEW_PAYMENTS_ENABLED:"false",DCN_EXTERNAL_TEST_AUTHORIZED:"false",DCN_LOCAL_REVIEW_AUTHORIZED:"true",
   DATABASE_URL:"postgresql://dcn_runtime_a:synthetic_never_connect@127.0.0.1:55473/lnx_dcn_consolidation_test",AUTH_URL:"http://127.0.0.1:3140",MEDIA_STORAGE_DRIVER:"local",EMAIL_PROVIDER:"capture"};
@@ -134,4 +135,17 @@ test("free completion boundaries are explicit; download grants remain renewable 
     for(let i=0;i<40;i++)await createDigitalDownload(userId,lineId,masterId,"WAV");assert.equal(count,40);
     active=false;await assert.rejects(()=>createDigitalDownload(userId,lineId,masterId,"WAV"),{code:"NOT_FOUND"});assert.equal(count,40);
   }finally{prisma.user.findFirst=originalUser;prisma.digitalOrderLine.findFirst=originalLine;prisma.digitalDownloadTicket.create=originalTicket;for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key];Object.assign(process.env,saved);}
+});
+test("free completion retains the new presentation and never derives missing consent facts from it",async()=>{
+  const f=fixture();await f.sync();await local(f,async()=>{
+    await createDigitalFreeCompletion(f.actor,{...f.input,consentPresentation:DIGITAL_CHECKOUT_CONSENT_PRESENTATION},{localQaFixture:true});
+    const s=f.orders[0].contractSnapshot as {checkoutConsentPresentation:{policy:string;immediateSupplyRequested:boolean;withdrawalLossAcknowledged:boolean}};
+    assert.equal(s.checkoutConsentPresentation.policy,DIGITAL_CHECKOUT_CONSENT_PRESENTATION);assert.equal(s.checkoutConsentPresentation.immediateSupplyRequested,true);assert.equal(s.checkoutConsentPresentation.withdrawalLossAcknowledged,true);
+  });
+  for(const patch of[{earlyDelivery:false},{withdrawalAcknowledged:false},{consentPresentation:"unknown-presentation"}]){
+    const blocked=fixture();await blocked.sync();await local(blocked,async()=>{
+      await assert.rejects(()=>createDigitalFreeCompletion(blocked.actor,{...blocked.input,consentPresentation:DIGITAL_CHECKOUT_CONSENT_PRESENTATION,...patch},{localQaFixture:true}),{code:"INVALID_CHECKOUT"});
+      assert.equal(blocked.orders.length,0);assert.equal(blocked.documents.length,0);assert.equal(blocked.events.length,0);
+    });
+  }
 });

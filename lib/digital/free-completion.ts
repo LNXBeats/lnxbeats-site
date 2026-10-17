@@ -17,9 +17,12 @@ import { digitalCompletionJurisdictionAllowed } from "./live-commerce-policy";
 import { DIGITAL_RIGHTS_REVIEW_POLICY } from "./rights-review-policy";
 import { prepareFreeDigitalCompletionDocuments } from "./documents";
 import { assertDigitalLiveNewSale } from "./sales-control";
+import { assertDigitalBillingAddressRetry } from "./billing-address-policy";
+import { assertDigitalCheckoutConsentRetry, parseDigitalCheckoutConsentPresentation } from "./checkout-consents";
+import type { DigitalFranceMinimalAddress } from "./france-residence-v2-policy";
 
 export type DigitalFreeCompletionInput={idempotencyKey:string;revision:number;termsVersion:string;termsAccepted:boolean;
-  earlyDelivery:boolean;withdrawalAcknowledged:boolean;jurisdiction?:DigitalCustomerTerritory;billingAddressSameAsResidence?:boolean};
+  earlyDelivery:boolean;withdrawalAcknowledged:boolean;jurisdiction?:DigitalCustomerTerritory;billingAddressSameAsResidence?:boolean;billingAddress?:DigitalFranceMinimalAddress;consentPresentation?:string};
 const result=(o:{id:string;status:string;mode:string})=>({orderId:o.id,status:o.status,totalCents:0,mode:o.mode,checkoutUrl:null,needsReconciliation:o.status==="REQUIRES_REVIEW",freeCompletion:true});
 
 /** Separate from checkout: never resolves a gateway, creates a payment attempt or an invoice.
@@ -31,6 +34,7 @@ export async function createDigitalFreeCompletion(actor:OrderActor,input:Digital
   if(mode==="TEST"&&!localDigitalReviewCheckoutAllowed(actor.email,LOCAL_REVIEW_MERCHANT,true))throw new DigitalError("FREE_COMPLETION_LOCAL_ONLY",503);
   if(mode==="LIVE"&&(!digitalNewSalesAllowed(mode)||options?.localQaFixture))throw new DigitalError("NEW_DIGITAL_PAYMENTS_CLOSED",503);
   assertDigitalUuid(input.idempotencyKey);
+  parseDigitalCheckoutConsentPresentation(input.consentPresentation);
   if(!Number.isSafeInteger(input.revision)||input.revision<1||input.termsVersion!==(mode==="LIVE"?DIGITAL_FRANCE_LIVE_CONTRACT_VERSION:DIGITAL_FRANCE_TERMS_VERSION)
     ||input.termsAccepted!==true||input.earlyDelivery!==true||input.withdrawalAcknowledged!==true)throw new DigitalError("INVALID_CHECKOUT");
   // Only a server-side, exact local fixture may omit the normal address-bound
@@ -47,6 +51,8 @@ export async function createDigitalFreeCompletion(actor:OrderActor,input:Digital
       if(previous.mode!==mode||previous.userId!==actor.id||previous.cartRevision!==input.revision||previous.totalCents!==0||previous.attempts.length
         ||previous.termsVersion!==input.termsVersion||(previous.contractSnapshot as {acquisition?:{kind?:string}})?.acquisition?.kind!=="FREE_ALBUM_COMPLETION")throw new DigitalError("IDEMPOTENCY_CONFLICT",409);
       await checkDigitalResidenceRetry(input.jurisdiction,previous.jurisdictionSnapshot,tx,LOCAL_REVIEW_MERCHANT,actor.id);
+      assertDigitalBillingAddressRetry(previous.contractSnapshot,input.billingAddressSameAsResidence===true,input.billingAddress);
+      assertDigitalCheckoutConsentRetry(previous.contractSnapshot,input.consentPresentation);
       return result(previous);
     }
     if(await tx.digitalOrder.findFirst({where:{userId:actor.id,mode,status:{in:["PENDING","REQUIRES_REVIEW","DISPUTED"]}}}))throw new DigitalError("PAYMENT_ALREADY_ENGAGED",409);
@@ -62,12 +68,12 @@ export async function createDigitalFreeCompletion(actor:OrderActor,input:Digital
     const jurisdiction=await reserveDigitalJurisdiction(input.jurisdiction,tx,mode==="TEST",actor.id,input.termsVersion);
     if(!digitalCompletionJurisdictionAllowed(jurisdiction,mode)||jurisdiction.countryCode!=="FR")throw new DigitalError("COMPLETION_TAX_ALLOCATION_REVIEW_REQUIRED",409);
     const approval=mode==="LIVE"?await approvedDigitalFranceContract(tx):undefined;
-    const customer=mode==="LIVE"?await digitalLiveContractCustomer(tx,actor.id,owner.displayName,owner.email,jurisdiction.franceResidenceV2,input.billingAddressSameAsResidence===true)
+    const customer=mode==="LIVE"?await digitalLiveContractCustomer(tx,actor.id,owner.displayName,owner.email,jurisdiction.franceResidenceV2,input.billingAddressSameAsResidence===true,input.billingAddress)
       :{email:owner.email,name:owner.displayName||"Client QA"};
     const order=await tx.digitalOrder.create({data:{userId:actor.id,idempotencyKey:input.idempotencyKey,cartRevision:cart.revision,
       status:"GRANTED",totalCents:0,mode,termsVersion:input.termsVersion,termsHash:digitalContractTerms(input.termsVersion).hash,
       earlyDelivery:true,withdrawalAcknowledged:true,jurisdictionSnapshot:jurisdiction as unknown as Prisma.InputJsonValue,
-      contractSnapshot:{...digitalContractSnapshot(customer,new Date(),input.termsVersion,{mode,approval}),
+      contractSnapshot:{...digitalContractSnapshot(customer,new Date(),input.termsVersion,{mode,approval,consentPresentation:input.consentPresentation}),
         rightsReviewPolicy:DIGITAL_RIGHTS_REVIEW_POLICY,acquisition:{kind:"FREE_ALBUM_COMPLETION",version:1}},
       lines:{create:{offerId:line.id,scope:line.scope,title:line.title,priceCents:0,offerVersion:line.version,trackSnapshot:line.tracks,
         completionSnapshot:line.completion,taxSnapshot:mode==="TEST"?{status:"LOCAL_REVIEW_ONLY",treatment:"FREE_COMPLETION_REQUIRES_FISCAL_REVIEW",amountChargedCents:0}
