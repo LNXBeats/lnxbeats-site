@@ -1,13 +1,11 @@
 import "server-only";
-import { spawn, execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { catalogFfmpegPath } from "@/lib/catalog/ffmpeg";
 import { DigitalError, previewWindow } from "./domain";
 import { DIGITAL_WORK_LIMITS } from "./work-slots";
 import { inspectDigitalWav } from "./wav-validation";
 import { inspectDigitalMp3 } from "./mp3-validation";
 import { DIGITAL_MP3_ENCODER_VERSION } from "./formats";
-const exec = promisify(execFile);
+import { runMonitoredFfmpeg } from "./ffmpeg-monitor";
 export { DIGITAL_MP3_ENCODER_VERSION } from "./formats";
 export const DIGITAL_MP3_LIMIT_BYTES = 96 * 1024 * 1024;
 export function digitalMp3Bitrate(value = process.env.DCN_MP3_BITRATE_KBPS) {
@@ -17,23 +15,7 @@ export function digitalMp3Bitrate(value = process.env.DCN_MP3_BITRATE_KBPS) {
 }
 /** DCN opt-in hardening: no shell, no network protocols, bounded stderr, threads/allocation/time/RSS. */
 async function run(args: string[], signal: AbortSignal, timeoutMs: number, parseOnly = false,stats?:{rssPeak:number;samples:number}) {
-  if (signal.aborted) throw new DigitalError("LEASE_LOST");
-  return new Promise<string>((resolve, reject) => {
-    let stderr = "", failure: Error | null = null, sampling = false;
-    const child = spawn(catalogFfmpegPath(), ["-nostdin", "-hide_banner", "-max_alloc", "67108864", "-threads", "1", "-filter_threads", "1", "-protocol_whitelist", "file,pipe", ...args], { shell: false, stdio: ["ignore", "ignore", "pipe"], env: { PATH: process.env.PATH, NODE_ENV: process.env.NODE_ENV, AV_LOG_FORCE_NOCOLOR: "1" } });
-    const abort = () => { failure = new DigitalError("LEASE_LOST"); child.kill("SIGKILL"); }; signal.addEventListener("abort", abort, { once: true });
-    const timeout = setTimeout(() => { failure = new DigitalError("FFMPEG_TIMEOUT"); child.kill("SIGKILL"); }, timeoutMs);
-    const monitor = setInterval(() => { if (sampling || !child.pid) return; sampling = true;
-      void Promise.resolve().then(() => exec("ps", ["-o", "rss=", "-p", String(child.pid)], { timeout: 1000, maxBuffer: 1024 })).then(r => {
-        const rss=Number(r.stdout.trim())*1024;if(stats&&Number.isFinite(rss)&&rss>0){stats.samples++;stats.rssPeak=Math.max(stats.rssPeak,rss);}
-        if (rss > DIGITAL_WORK_LIMITS.ffmpegRssBytes || process.memoryUsage().rss > DIGITAL_WORK_LIMITS.nodeRssBytes) { failure = new DigitalError("WORKER_MEMORY_LIMIT"); child.kill("SIGKILL"); }
-      }).catch(() => { if (child.exitCode === null && child.signalCode === null) { failure = new DigitalError("WORKER_MONITOR_UNAVAILABLE"); child.kill("SIGKILL"); } }).finally(() => { sampling = false; });
-    }, 25);
-    child.stderr.on("data", chunk => { if (stderr.length < 65536) stderr += String(chunk).slice(0, 65536 - stderr.length); });
-    child.once("error", () => { failure = new DigitalError("FFMPEG_UNAVAILABLE"); });
-    child.once("close", code => { clearTimeout(timeout); clearInterval(monitor); signal.removeEventListener("abort", abort);
-      if (failure) reject(failure); else if (code !== 0 && (!parseOnly || code !== 1 || !/At least one output file must be specified/.test(stderr))) reject(new DigitalError("INVALID_AUDIO")); else resolve(stderr); });
-  });
+  return runMonitoredFfmpeg(catalogFfmpegPath(), args, signal, timeoutMs, DIGITAL_WORK_LIMITS, parseOnly, stats);
 }
 function duration(stderr: string) {
   const match = stderr.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);

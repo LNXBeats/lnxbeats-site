@@ -12,6 +12,7 @@ import { assertDigitalUuid, DigitalError, requireDigitalEnvironment, signatureMa
 import { trackLock, recoverDigitalCompletion } from "./upload";
 import { generateDigitalMp3, validateDigitalAudio, validateDigitalMp3, DIGITAL_MP3_LIMIT_BYTES } from "./audio";
 import { expressDurationSeconds } from "./express-policy";
+import { digitalAudioUploadHeld, digitalAudioUploadHoldFilter } from "./audio-upload-holds";
 import { planDigitalMasterImport } from "./master-import-policy";
 import { claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot, checkDigitalDisk, DIGITAL_WORK_LIMITS } from "./work-slots";
 
@@ -19,15 +20,16 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
   requireDigitalEnvironment(); const now=new Date();
   if(hooks.signal?.aborted)return{processed:false};
   if(hooks.uploadId!==undefined)assertDigitalUuid(hooks.uploadId);
-  const scope=hooks.uploadId?{id:hooks.uploadId}:{};
+  if(hooks.uploadId && digitalAudioUploadHeld(hooks.uploadId))return{processed:false};
+  const scope={...digitalAudioUploadHoldFilter(),...(hooks.uploadId?{id:hooks.uploadId}:{})};
   const recovery=await prisma.digitalUpload.findFirst({where:{...scope,status:"COMPLETING",leaseUntil:{lte:now}},orderBy:{createdAt:"asc"}});
-  if(recovery) { const c=await prisma.digitalUpload.updateMany({where:{id:recovery.id,status:"COMPLETING",leaseUntil:{lte:now}},data:{leaseUntil:new Date(Date.now()+60000)}});
+  if(recovery && !digitalAudioUploadHeld(recovery.id)) { const c=await prisma.digitalUpload.updateMany({where:{...digitalAudioUploadHoldFilter(),id:recovery.id,status:"COMPLETING",leaseUntil:{lte:now}},data:{leaseUntil:new Date(Date.now()+60000)}});
     if(c.count) await recoverDigitalCompletion(recovery).catch(()=>undefined); }
   const s=await prisma.digitalUpload.findFirst({where:{...scope,OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},orderBy:{createdAt:"asc"}});
-  if(!s) return {processed:false};
+  if(!s || digitalAudioUploadHeld(s.id)) return {processed:false};
   const slot=await claimDigitalSlot("audio",s.id); if(!slot)return{processed:false};
   const leaseUntil=new Date(Date.now()+15*60000);
-  const claim=await prisma.digitalUpload.updateMany({where:{id:s.id,OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},data:{status:"VALIDATING",leaseUntil,leaseToken:slot.leaseToken}});
+  const claim=await prisma.digitalUpload.updateMany({where:{...digitalAudioUploadHoldFilter(),id:s.id,OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},data:{status:"VALIDATING",leaseUntil,leaseToken:slot.leaseToken}});
   if(!claim.count){await releaseDigitalSlot(slot);return{processed:false};}
   let root:string|null=null; const stop=new AbortController();let renewing=false;
   const shutdown=()=>stop.abort();hooks.signal?.addEventListener("abort",shutdown,{once:true});if(hooks.signal?.aborted)shutdown();
