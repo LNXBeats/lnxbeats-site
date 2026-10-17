@@ -8,11 +8,12 @@ import { processDigitalDocuments } from "@/lib/digital/documents";
 import { processDigitalNotifications } from "@/lib/digital/notifications";
 import { createDigitalWorkerCycle, digitalWorkerMode, digitalMediaWorkerEnvironment } from "@/lib/digital/worker-cycle";
 import { digitalReconciliationDependencies } from "./digital-reconcile";
+import { digitalAudioUploadHoldFilter } from "@/lib/digital/audio-upload-holds";
 
 async function mediaChild(kind: "audio" | "zip", signal: AbortSignal) {
   if (signal.aborted) return;
   const mode = requireDigitalEnvironment(), now = new Date();
-  const pending = kind === "audio" ? await prisma.digitalUpload.count({ where: { OR: [
+  const pending = kind === "audio" ? await prisma.digitalUpload.count({ where: { ...digitalAudioUploadHoldFilter(), OR: [
     { status: "QUARANTINE", OR: [{ leaseUntil: null }, { leaseUntil: { lte: now } }] },
     { status: { in: ["VALIDATING", "COMPLETING"] }, leaseUntil: { lte: now } },
   ] } }) : await prisma.digitalArchive.count({ where: { line: { order: { mode } }, OR: [
