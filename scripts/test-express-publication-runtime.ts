@@ -46,7 +46,40 @@ try {
   const publish = { projectId: p.id, reviewToken: p.reviewToken, confirmed: true, idempotencyKey: randomUUID() };
   await publishExpressProject(actor, publish); assert.equal((await publishExpressProject(actor, publish)).duplicate, true); p = await loadExpressProject(p.id); assert(p.tracks.every(t => t.offer?.active)); assert.equal(p.albumOffer!.active, true);
   const sale = await selections([p.albumOffer!.id]); assert.equal(sale[0].tracks.length, 2); assert.equal(sale[0].priceCents, 1190); assert.equal((await selections([p.tracks[0].offer!.id]))[0].priceCents, 159); results.COMPLETE_ALBUM_PUBLICATION_AND_SERVER_CART_COHERENCE = "PASS";
+  // New synthetic single: no separate rights step, but the final explicit
+  // declaration must be present and bound atomically to this exact edition.
+  const singleSaved = await saveExpressDraft(actor, { ...input, title: `QA publication declaration ${run}`, type: "SINGLE", tracks: [input.tracks[0]], idempotencyKey: randomUUID() });
+  let single = await loadExpressProject(singleSaved.projectId);
+  const singleAssets: string[] = [];
+  for (const asset of [source.masterAsset, source.mp3Asset!, source.previewAsset!]) {
+    const id = randomUUID(); singleAssets.push(id);
+    await prisma.asset.create({ data: { id, type: asset.type, filename: `SYNTHETIC-${asset.filename}`, storageKey: `qa-single-publication-metadata-only/${id}`, storageBackend: "LOCAL", storageProvider: "local", visibility: asset.visibility, mimeType: asset.mimeType, sizeBytes: asset.sizeBytes, durationMs: asset.durationMs, checksumSha256: asset.checksumSha256, rightsStatus: "PENDING", confidence: "CONFIRMED" } });
+  }
+  await prisma.digitalMaster.create({ data: { trackId: single.tracks[0].id, version: 1, masterAssetId: singleAssets[0], mp3AssetId: singleAssets[1], previewAssetId: singleAssets[2], codec: "wav", status: "READY", encoderVersion: source.encoderVersion, mp3BitrateKbps: 320, previewStartMs: 0, previewDurationMs: source.previewDurationMs } });
+  await prisma.projectAsset.create({ data: { projectId: single.id, assetId: sourceCover.assetId, role: "COVER" } });
+  let singleView = await loadGroupReview(actor, single.id);
+  const singleArt = { ...art, projectId: single.id, masterIds: singleView.tracks.map(t => t.masterId), expectedBindings: singleView.tracks.map(t => ({ masterId: t.masterId, bindingHash: t.bindingHash })), expectedSelections: singleView.tracks.map(t => ({ masterId: t.masterId, revisionId: t.selection?.revisionId ?? null })), idempotencyKey: randomUUID() };
+  await mutateGroupReview(actor, singleArt); single = await loadExpressProject(single.id);
+  assert.equal(single.tracks[0].review?.status, "REVIEW_REQUIRED"); assert.equal(single.tracks[0].rightsAtPublication, true); assert.deepEqual(single.blockers, []);
+  singleView = await loadGroupReview(actor, single.id);
+  const automaticRights = { ...rights, projectId: single.id, masterIds: singleView.tracks.map(t => t.masterId), expectedBindings: singleView.tracks.map(t => ({ masterId: t.masterId, bindingHash: t.bindingHash })), expectedReviews: singleView.tracks.map(t => ({ masterId: t.masterId, reviewId: t.review?.reviewId ?? null })), idempotencyKey: randomUUID() };
+  await assert.rejects(prisma.$transaction(async db => { await mutateGroupReview(actor, automaticRights, db); throw Error("SYNTHETIC_ROLLBACK"); }), /SYNTHETIC_ROLLBACK/);
+  assert.equal((await loadExpressProject(single.id)).tracks[0].review?.status, "REVIEW_REQUIRED"); results.DECLARATION_AND_PUBLICATION_SHARE_ATOMIC_TRANSACTION = "PASS";
+  const singlePublish = { projectId: single.id, reviewToken: single.reviewToken, confirmed: true, idempotencyKey: randomUUID() };
+  await assert.rejects(publishExpressProject(actor, singlePublish), { code: "EXPRESS_RIGHTS_CONFIRMATION_REQUIRED" });
+  assert.equal((await loadExpressProject(single.id)).tracks[0].offer?.active, false); results.OLD_CLIENT_WITHOUT_EXPLICIT_FINAL_DECLARATION_REFUSED = "PASS";
+  const declaredPublish = { ...singlePublish, rightsDeclaration: "OWNER_AT_PUBLICATION_V1" };
+  await publishExpressProject(actor, declaredPublish); assert.equal((await publishExpressProject(actor, declaredPublish)).duplicate, true);
+  single = await loadExpressProject(single.id); assert.equal(single.tracks[0].review?.status, "APPROVED"); assert.equal(single.tracks[0].offer?.active, true); assert.equal(single.albumOffer, null);
+  assert.equal((await selections([single.tracks[0].offer!.id]))[0].priceCents, 149); results.ONE_CONFIRMATION_SINGLE_PUBLICATION_EXACT_PRICE_AND_NO_DUPLICATE = "PASS";
+  // A known third-party contribution is not silently cleared by the simplified path.
+  await prisma.credit.create({ data: { projectId: single.id, name: "Synthetic third party", role: "FEATURING" } });
+  const { recordDigitalRightsReviews } = await import("@/lib/digital/rights-review-service");
+  await recordDigitalRightsReviews(actor, { projectId: single.id, masterIds: [single.tracks[0].masterId], expectedReviews: [{ masterId: single.tracks[0].masterId, reviewId: single.tracks[0].review!.reviewId }], status: "REVOKED", privateEvidenceReference: null, evidenceSha256: null, reason: "Synthetic explicit revocation test", attested: false, idempotencyKey: randomUUID() });
+  single = await loadExpressProject(single.id); assert.equal(single.tracks[0].rightsAtPublication, false); assert(single.blockers.some(b => b.includes("droits particuliers")));
+  await assert.rejects(publishExpressProject(actor, { ...declaredPublish, idempotencyKey: randomUUID(), reviewToken: single.reviewToken }), { code: "SALE_REQUIREMENTS" });
+  results.KNOWN_COLLABORATION_AND_REVOCATION_REMAIN_BLOCKED = "PASS";
   results.FINANCIAL_CALLS = "0";
-  const out = "/Users/lnxbeats/.codex/visualizations/2026/08/09/019fe533-ab67-7791-9ed5-4a0c521aef42/DCN_PUBLICATION_DEBLOCAGE_20261018";
+  const out = "/Users/lnxbeats/.codex/visualizations/2026/08/09/019fe533-ab67-7791-9ed5-4a0c521aef42/DCN_SINGLES_COMPTINES_20261018";
   await fs.writeFile(out + "/proofs/RUNTIME.json", JSON.stringify({ at: new Date().toISOString(), results, projectId: p.id, scope: "Isolated PostgreSQL synthetic fixture; media metadata only, not a new real audio test", recoveryWrites: 0, productionWrites: 0 }, null, 2), { mode: 0o600 }); console.log(JSON.stringify(results));
 } finally { await prisma.$disconnect(); }

@@ -27,8 +27,8 @@ export async function POST(request: Request) {
     if (b.operation === "publish") {
       if (!b.input || typeof b.input !== "object" || Array.isArray(b.input)) throw new DigitalError("EXPRESS_INVALID");
       const v = b.input as Record<string, unknown>;
-      if (Object.keys(v).some(k => !["projectId", "reviewToken", "confirmed", "idempotencyKey"].includes(k)) || typeof v.reviewToken !== "string") throw new DigitalError("EXPRESS_INVALID");
-      const result = await publishExpressProject(actor, { projectId: v.projectId as string, reviewToken: v.reviewToken, confirmed: v.confirmed === true, idempotencyKey: v.idempotencyKey as string });
+      if (Object.keys(v).some(k => !["projectId", "reviewToken", "confirmed", "idempotencyKey", "rightsDeclaration"].includes(k)) || typeof v.reviewToken !== "string" || v.rightsDeclaration !== undefined && typeof v.rightsDeclaration !== "string") throw new DigitalError("EXPRESS_INVALID");
+      const result = await publishExpressProject(actor, { projectId: v.projectId as string, reviewToken: v.reviewToken, confirmed: v.confirmed === true, idempotencyKey: v.idempotencyKey as string, rightsDeclaration: v.rightsDeclaration as string | undefined });
       const project = await loadExpressProject(v.projectId as string);
       for (const path of ["/", "/discographie", "/admin/musique", `/album/${project.slug}`, "/sitemap.xml"]) revalidatePath(path);
       return digitalJson({ ...result, project });

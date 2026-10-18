@@ -8,6 +8,7 @@ import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { digitalEnabled } from "@/lib/digital/domain";
 import { digitalRuntimeMode } from "@/lib/digital/runtime-policy";
 import { publicDigitalProject } from "@/lib/digital/catalog";
+import { digitalCardOffer } from "@/lib/digital/catalog-card";
 import { AddDigitalOffer } from "@/components/digital-catalog";
 import { DigitalCartNavigation, DigitalDemoBanner } from "@/components/digital-navigation";
 import { ProjectArtwork } from "@/components/project-artwork";
@@ -70,8 +71,8 @@ export default async function DiscographyPage() {
           <p className={digitalStyles.note}>{digitalMode==="LIVE"?"Albums et titres à télécharger · WAV + MP3 inclus · usage privé.":"Albums et pistes à télécharger · tarifs QA uniquement · aucune vente LIVE."}</p>
           <div className={digitalStyles.catalogueGrid}>{digitalProjects.filter(p => soon.has(p.project.slug) || p.view?.album || p.view?.tracks.some(t=>t.offer)).map(({project,view}) => <article className={digitalStyles.panel} key={project.slug}>
             <Link href={`/album/${project.slug}`} className={digitalStyles.coverLink}><ProjectArtwork project={project} sizes="(max-width: 768px) 45vw, 25vw" /><h3>{project.title}</h3></Link>
-            {soon.has(project.slug) ? <p role="status">Arrive bientôt · vente et téléchargements indisponibles.</p> : <><p className={digitalStyles.muted}>{view?.tracks.length} pistes · extraits de 60 secondes maximum</p>
-            {view?.album ? <AddDigitalOffer id={view.album.id} priceCents={view.album.priceCents} label="Ajouter l’album" /> : <Link className="text-link" href={`/album/${project.slug}`}>Choisir les pistes</Link>}</>}
+            {soon.has(project.slug) ? <p role="status">Arrive bientôt · vente et téléchargements indisponibles.</p> : <><p className={digitalStyles.muted}>{view?.tracks.length} piste{view?.tracks.length === 1 ? "" : "s"} · extraits de 60 secondes maximum</p>
+            {(() => { const offer = digitalCardOffer(project.type, view); return offer ? <AddDigitalOffer id={offer.id} priceCents={offer.priceCents} label={offer.label} /> : <Link className="text-link" href={`/album/${project.slug}`}>Choisir les pistes</Link>; })()}</>}
           </article>)}</div>
         </section> : null}
         <details className="discography-directory">

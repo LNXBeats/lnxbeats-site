@@ -60,10 +60,10 @@ export async function loadGroupReview(actor: OrderActor, projectId: string, db: 
 export type GroupReviewView = Awaited<ReturnType<typeof loadGroupReview>>;
 
 /** Only append-only reviews. No master, offer, acquisition or file is updated. */
-export async function mutateGroupReview(actor: OrderActor, raw: unknown) {
+export async function mutateGroupReview(actor: OrderActor, raw: unknown, transaction?: DB) {
   enabled(); const input = reviewObject(raw); assertDigitalUuid(input.projectId);
   const projectId = input.projectId;
-  return prisma.$transaction(async db => {
+  const execute = async (db: DB) => {
     await projectForReview(db, actor, projectId, true);
     if (input.operation === "listen-start") {
       assertDigitalUuid(input.masterId); const m = await currentMaster(db, projectId, input.masterId);
@@ -129,5 +129,6 @@ export async function mutateGroupReview(actor: OrderActor, raw: unknown) {
       return { selections, saleActivated: false };
     }
     throw new DigitalError("INVALID_GROUP_REVIEW");
-  }, { timeout: 30_000 });
+  };
+  return transaction ? execute(transaction) : prisma.$transaction(execute, { timeout: 30_000 });
 }

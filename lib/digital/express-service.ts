@@ -12,9 +12,12 @@ import { saveOfferInTransaction, selections } from "./catalog";
 import { digitalCommercialAudioReady } from "./formats";
 import { loadDigitalRightsReviews } from "./rights-review-service";
 import { loadDigitalExcerptSelection, requireDigitalExcerptAdmin } from "./excerpt-service";
+import { requiresParticularRightsCase } from "./group-review-policy";
+import { loadGroupReview, mutateGroupReview } from "./group-review-service";
+import { OWNER_PUBLICATION_POLICY } from "./owner-declaration";
 
 type DB = Prisma.TransactionClient;
-const include = { tracks: { orderBy: { position: "asc" as const }, include: { digitalMasters: { orderBy: { version: "desc" as const }, take: 1, include: { masterAsset: true, mp3Asset: true, previewAsset: true } } } },
+const include = { tracks: { orderBy: { position: "asc" as const }, include: { credits: true, digitalMasters: { orderBy: { version: "desc" as const }, take: 1, include: { masterAsset: true, mp3Asset: true, previewAsset: true } } } },
   digitalOffers: true, credits: true, assets: { where: { role: "COVER" as const }, orderBy: [{ position: "asc" as const }, { createdAt: "desc" as const }], take: 1, include: { asset: true } } };
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
 export async function loadExpressDefaults(db: DB = prisma) {
@@ -55,11 +58,13 @@ export async function loadExpressProject(id: string, db: DB = prisma) {
   const tracks = [];
   for (const t of p.tracks) {
     const m = t.digitalMasters[0], offer = p.digitalOffers.find(o => o.trackId === t.id), excerpt = m ? await loadDigitalExcerptSelection(db, m).catch(() => null) : null;
+    const review = reviews.find(r => r.masterId === m?.id) ?? null;
+    const rightsAtPublication = !!m && digitalCommercialAudioReady(m) && !requiresParticularRightsCase([...p.credits, ...t.credits].map(c => c.role), [m.masterAsset, m.mp3Asset, m.previewAsset].flatMap(a => a ? [a.rightsStatus] : []), review ? [review.status] : []);
     tracks.push({ id: t.id, title: t.title, position: t.position, durationSeconds: t.durationSeconds, durationMs: m?.masterAsset.durationMs ?? null, publication: t.status,
       version: m?.version ?? 0, masterId: m?.id ?? null, previewStartMs: m?.previewStartMs ?? 0, previewDurationMs: m?.previewDurationMs ?? null,
       previewUrl: m?.previewAssetId ? `/api/admin/digital/previews/${m.previewAssetId}` : null, strictReady: !!m && digitalCommercialAudioReady(m),
       formats: !m ? "Aucun fichier" : m.codec === "mp3" ? "MP3 source uniquement — WAV original requis" : m.mp3AssetId ? "WAV + MP3" : "WAV — MP3 à préparer",
-      review: reviews.find(r => r.masterId === m?.id) ?? null, artisticStatus: excerpt?.status ?? "TO_LISTEN",
+      review, rightsAtPublication, artisticStatus: excerpt?.status ?? "TO_LISTEN",
       offer: offer ? { id: offer.id, priceCents: offer.priceCents, version: offer.version, active: offer.active, rightsConfirmed: offer.rightsConfirmed, distribution: offer.distribution } : null });
   }
   const cover = p.assets[0]?.asset, album = p.digitalOffers.find(o => o.scope === "ALBUM");
@@ -67,7 +72,7 @@ export async function loadExpressProject(id: string, db: DB = prisma) {
     ...(p.status === "ARCHIVED" ? ["Projet archivé : revue préalable dans le Catalogue"] : []),
     ...(p.tracks.some(t => t.status === "UNLISTED") ? ["Pistes non listées : confirmez leur inclusion dans le Catalogue avant publication"] : []),
     ...(!cover || cover.rightsStatus !== "CLEARED" ? ["Pochette et droits de publication à vérifier"] : []),
-    ...tracks.flatMap(t => [!t.strictReady ? `${t.title} : WAV/MP3/extrait requis` : "", t.review?.status !== "APPROVED" ? `${t.title} : droits de cette version à confirmer` : "", t.artisticStatus !== "VALIDATED" ? `${t.title} : extrait à écouter et valider` : "", !t.offer?.priceCents ? `${t.title} : prix à renseigner` : ""].filter(Boolean)),
+    ...tracks.flatMap(t => [!t.strictReady ? `${t.title} : WAV/MP3/extrait requis` : "", t.review?.status !== "APPROVED" && !t.rightsAtPublication ? `${t.title} : droits particuliers de cette version à vérifier` : "", t.artisticStatus !== "VALIDATED" ? `${t.title} : extrait à écouter et valider` : "", !t.offer?.priceCents ? `${t.title} : prix à renseigner` : ""].filter(Boolean)),
     ...(p.type === "ALBUM" && !album?.priceCents ? ["Prix de l’album à renseigner"] : []),
     ...(p.type !== "SINGLE" && p.type !== "ALBUM" ? ["Projet expert : publication depuis le Catalogue"] : []),
     ...(p.type === "SINGLE" && p.tracks.length !== 1 ? ["Le single doit contenir une seule piste"] : []),
@@ -135,7 +140,7 @@ export async function saveExpressDraft(actor: OrderActor, raw: unknown) {
     return { projectId, duplicate: false };
   }, { timeout: 30_000 });
 }
-export async function publishExpressProject(actor: OrderActor, input: { projectId: string; reviewToken: string; confirmed: boolean; idempotencyKey: string }) {
+export async function publishExpressProject(actor: OrderActor, input: { projectId: string; reviewToken: string; confirmed: boolean; idempotencyKey: string; rightsDeclaration?: string }) {
   requireDigitalEnvironment(); assertDigitalUuid(input.projectId); assertDigitalUuid(input.idempotencyKey);
   if (input.confirmed !== true || !/^[a-f0-9]{64}$/.test(input.reviewToken)) throw new DigitalError("EXPRESS_CONFIRMATION_REQUIRED", 409);
   return prisma.$transaction(async db => {
@@ -158,6 +163,17 @@ export async function publishExpressProject(actor: OrderActor, input: { projectI
     const review = await loadExpressProject(input.projectId, db);
     if (review.reviewToken !== input.reviewToken) throw new DigitalError("EXPRESS_CHANGED", 409);
     if (review.blockers.length) throw new DigitalError("SALE_REQUIREMENTS", 409);
+    // One explicit publication confirmation, not an approval on upload/read or a
+    // blanket exemption for unknown files. Existing refusals/revocations stay blocked.
+    const pendingRights = review.tracks.filter(t => t.review?.status !== "APPROVED");
+    if (pendingRights.length) {
+      if (input.rightsDeclaration !== OWNER_PUBLICATION_POLICY) throw new DigitalError("EXPRESS_RIGHTS_CONFIRMATION_REQUIRED", 409);
+      const current = await loadGroupReview(actor, input.projectId, db);
+      const tracks = current.tracks.filter(t => pendingRights.some(p => p.masterId === t.masterId));
+      await mutateGroupReview(actor, { operation: "original-rights", projectId: input.projectId, masterIds: tracks.map(t => t.masterId),
+        expectedBindings: tracks.map(t => ({ masterId: t.masterId, bindingHash: t.bindingHash })), expectedReviews: tracks.map(t => ({ masterId: t.masterId, reviewId: t.review?.reviewId ?? null })),
+        facts: { policy: "OWNER_ORIGINAL_CONFIRMATION_V1", confirmed: true }, attested: true, idempotencyKey: input.idempotencyKey }, db);
+    }
     await db.project.update({ where: { id: input.projectId }, data: { status: "PUBLISHED", publicVisible: true } });
     await db.track.updateMany({ where: { projectId: input.projectId }, data: { status: "RELEASED" } });
     const p = await db.project.findUniqueOrThrow({ where: { id: input.projectId }, include: { digitalOffers: true } });
@@ -169,7 +185,7 @@ export async function publishExpressProject(actor: OrderActor, input: { projectI
     }
     // Authoritative sales gates, including current versions/artistic approvals/live storage. All changes roll back on refusal.
     for (const id of ids) await selections([id], db);
-    await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_PUBLISHED", actorId: actor.id, externalKey: key, details: { projectId: p.id, reviewToken: input.reviewToken, offerIds: ids } } });
+    await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_PUBLISHED", actorId: actor.id, externalKey: key, details: { projectId: p.id, reviewToken: input.reviewToken, offerIds: ids, rightsDeclaration: pendingRights.length ? OWNER_PUBLICATION_POLICY : null } } });
     return { ok: true, duplicate: false };
   }, { timeout: 30_000 });
 }
