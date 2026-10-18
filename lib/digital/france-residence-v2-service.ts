@@ -6,6 +6,8 @@ import {prisma} from "@/lib/prisma";
 import {DigitalError,assertDigitalUuid,requireDigitalEnvironment} from "./domain";
 import {digitalFrancePostalScope} from "./france-launch-policy";
 import {assertDigitalDatabaseUtc} from "./database-time-policy";
+import {DIGITAL_ADDRESS_CHECKOUT_POLICY,blockedAddressCheckout,evaluateDeclaredAddressCheckout,assertDigitalAddressCheckoutPrepared,
+  type DigitalAddressCheckoutAssessment,type DigitalCheckoutResidenceSnapshot} from "./address-checkout-policy";
 import {DIGITAL_FRANCE_RESIDENCE_V2_POLICY,DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT,DIGITAL_FRANCE_RESIDENCE_REVIEW_EVENT,DIGITAL_FRANCE_RESIDENCE_ATTESTATION,
   normalizeDigitalFranceResidenceAddress,digitalFranceResidenceHash,digitalFranceResidenceDeclarationHash,digitalFranceResidenceReviewV2Hash,digitalFranceResidenceSha,
   digitalFranceResidenceV2Result,digitalFranceBillingContext,evaluateDigitalFranceResidenceV2,assertDigitalFranceResidenceV2Prepared,
@@ -97,6 +99,36 @@ export async function revalidateDigitalFranceResidenceV2(snapshot:DigitalFranceR
   const fresh=assertDigitalFranceResidenceV2Prepared(await assessDigitalFranceResidenceV2({residenceDeclarationId:snapshot.residenceDeclarationId,addressHash:snapshot.addressHash,billingPostalCode:snapshot.billingPostalCode},subjectUserId,db,now,{billingDocumentIds:snapshot.billingDocumentIds}));
   if(digitalFranceResidenceHash(fresh)!==digitalFranceResidenceHash(snapshot))throw new DigitalError("FRANCE_RESIDENCE_PROOF_CHANGED_REQUIRES_REVIEW",409);return fresh;
 }
+/** New checkout capability is opt-in; old acquired V2 snapshots keep their exact
+ * manual-review policy. Revoked, pending, stale or invalid Admin reviews never
+ * become automatic approvals. No provider call or identity-document collection.
+ */
+export async function assessDigitalAddressCheckout(input:{residenceDeclarationId:string;addressHash:string;billingPostalCode:string},subjectUserId:string,db:Tx,now=new Date(),
+  existing?:{billingDocumentIds:string[];declaredSnapshot:true}):Promise<DigitalAddressCheckoutAssessment>{
+  try{
+    await assertDigitalDatabaseUtc(db);assertDigitalUuid(subjectUserId);assertDigitalUuid(input.residenceDeclarationId);await activeUser(db,subjectUserId);
+    const declared=declaration(await latest(db,subjectUserId,DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT));
+    const reviewRow=await latest(db,subjectUserId,DIGITAL_FRANCE_RESIDENCE_REVIEW_EVENT),reviewed=await review(db,reviewRow);
+    if(reviewRow&&!reviewed)return blockedAddressCheckout("FRANCE_RESIDENCE_REVIEW_PROVENANCE_INVALID");
+    if(reviewed){
+      const manual=await assessLoadedResidence(input,subjectUserId,db,declared,reviewed,now);
+      if(!manual.residenceVerified||!manual.snapshot)return blockedAddressCheckout(manual.code);
+      if(!existing)return{eligible:true,code:manual.code,residenceVerified:true,paymentAllowed:false,basis:"MANUAL_REVIEW",snapshot:manual.snapshot};
+    }
+    // Disabling new self-service sales must not invalidate already engaged
+    // commitments, whose own frozen policy is revalidated independently.
+    if(!existing&&process.env.DCN_ADDRESS_SELF_SERVICE_ENABLED!=="true")return blockedAddressCheckout("FRANCE_RESIDENCE_MANUAL_REVIEW_REQUIRED");
+    const billing=await loadDigitalFranceBillingContextV2(subjectUserId,input.billingPostalCode,db,existing?.billingDocumentIds);
+    return evaluateDeclaredAddressCheckout(input,subjectUserId,declared,billing,now);
+  }catch(e){return blockedAddressCheckout(e instanceof DigitalError?e.code:"FRANCE_RESIDENCE_REPOSITORY_UNAVAILABLE");}
+}
+export async function revalidateDigitalAddressCheckout(snapshot:DigitalCheckoutResidenceSnapshot,subjectUserId:string,db:Tx,now=new Date()){
+  if(snapshot?.policy!==DIGITAL_ADDRESS_CHECKOUT_POLICY)return revalidateDigitalFranceResidenceV2(snapshot as DigitalFranceResidenceSnapshotV2,subjectUserId,db,now);
+  if(snapshot.subjectUserId!==subjectUserId||!Array.isArray(snapshot.billingDocumentIds))throw new DigitalError("FRANCE_RESIDENCE_BINDING_INVALID",409);
+  const fresh=assertDigitalAddressCheckoutPrepared(await assessDigitalAddressCheckout({residenceDeclarationId:snapshot.residenceDeclarationId,addressHash:snapshot.addressHash,billingPostalCode:snapshot.billingPostalCode},subjectUserId,db,now,{billingDocumentIds:snapshot.billingDocumentIds,declaredSnapshot:true}));
+  if(digitalFranceResidenceHash(fresh)!==digitalFranceResidenceHash(snapshot))throw new DigitalError("FRANCE_RESIDENCE_PROOF_CHANGED_REQUIRES_REVIEW",409);
+  return fresh;
+}
 function closed(v:unknown,keys:string[]){const o=object(v);if(!o||Object.keys(o).some(k=>!keys.includes(k)))throw new DigitalError("FRANCE_RESIDENCE_REQUEST_INVALID",400);return o;}
 export function digitalFranceResidenceDeclarationInput(value:unknown){
   const v=closed(value,["address","billingPostalCode","residenceConfirmed","expectedDeclarationId","idempotencyKey"]);assertDigitalUuid(v.idempotencyKey);if(v.expectedDeclarationId!==null)assertDigitalUuid(v.expectedDeclarationId);
@@ -119,15 +151,20 @@ export async function saveDigitalFranceResidenceDeclarationV2(actor:OrderActor,r
       address:input.address,addressHash:digitalFranceResidenceHash(input.address),billingPostalCode:input.billingPostalCode,residenceConfirmed:true,requestHash};
     const full={...proof,recordHash:digitalFranceResidenceDeclarationHash(proof)};
     await db.digitalEvent.create({data:{id,actorId:actor.id,kind:DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT,externalKey,createdAt,details:full}});
-    return ownerSummary(full,null);
+    return ownerCurrentSummary(db,actor.id);
   });
 }
-function ownerSummary(d:DigitalFranceResidenceDeclarationV2|null,r:DigitalFranceResidenceReviewV2|null,verified=false){return{declaration:d?{id:d.eventId,address:d.address,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode,createdAt:d.createdAt}:null,
-  reviewStatus:verified?"VERIFIED" as const:r&&d&&r.declarationId===d.eventId&&r.status==="REVOKED"?"REVOKED" as const:"REVIEW" as const,reviewId:r?.eventId??null,reviewedAt:r?.reviewedAt??null,expiresAt:r?.expiresAt??null,paymentAllowed:false};}
+function ownerSummary(d:DigitalFranceResidenceDeclarationV2|null,r:DigitalFranceResidenceReviewV2|null,verified=false,checkout?:DigitalAddressCheckoutAssessment){return{declaration:d?{id:d.eventId,address:d.address,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode,createdAt:d.createdAt}:null,
+  reviewStatus:verified?"VERIFIED" as const:r&&d&&r.declarationId===d.eventId&&r.status==="REVOKED"?"REVOKED" as const:"REVIEW" as const,reviewId:r?.eventId??null,reviewedAt:r?.reviewedAt??null,expiresAt:r?.expiresAt??null,paymentAllowed:false,
+  checkoutEligible:checkout?.eligible??verified,checkoutCode:checkout?.code??null,checkoutBasis:checkout?.basis??(verified?"MANUAL_REVIEW":null)};}
 async function ownerCurrentSummary(db:Tx,userId:string){
   const d=declaration(await latest(db,userId,DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT)),r=await review(db,await latest(db,userId,DIGITAL_FRANCE_RESIDENCE_REVIEW_EVENT));
   if(!d)return ownerSummary(null,r);
-  try{const assessment=await assessLoadedResidence({residenceDeclarationId:d.eventId,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode},userId,db,d,r,new Date());return ownerSummary(d,r,assessment.residenceVerified);}catch{return ownerSummary(d,r);}
+  try{const input={residenceDeclarationId:d.eventId,addressHash:d.addressHash,billingPostalCode:d.billingPostalCode};
+    const assessment=await assessLoadedResidence(input,userId,db,d,r,new Date());
+    const checkout=await assessDigitalAddressCheckout(input,userId,db);
+    return ownerSummary(d,r,assessment.residenceVerified,checkout);
+  }catch{return ownerSummary(d,r);}
 }
 export async function getDigitalFranceResidenceV2(actor:OrderActor){requireDigitalEnvironment();return prisma.$transaction(async db=>{await assertDigitalDatabaseUtc(db);await activeUser(db,actor.id);
   return ownerCurrentSummary(db,actor.id);});}

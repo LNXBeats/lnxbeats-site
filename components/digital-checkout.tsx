@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { DIGITAL_CHECKOUT_CONSENT_PRESENTATION, DIGITAL_CHECKOUT_IMMEDIATE_CONSENT_TEXT } from "@/lib/digital/checkout-consents";
 import { createDigitalCheckoutOperationLock } from "@/lib/digital/checkout-operation";
-import { digitalCheckoutPreflightRefused } from "@/lib/digital/request-error";
+import { DigitalRequestError, digitalCheckoutPreflightRefused } from "@/lib/digital/request-error";
+import { digitalResidenceFeedback, digitalResidenceErrorMessage } from "@/lib/digital/residence-presentation";
 import { checkoutPaymentChoicePresentation, checkoutPaymentCtaLabel } from "@/lib/payments/presentation";
 import { digitalRequest } from "./digital-cart";
 import { digitalMoney, type DigitalCompletionView } from "./digital-catalog";
@@ -12,7 +13,7 @@ import { DigitalPaypalButtons } from "./digital-paypal-buttons";
 import { digitalUiCopy, type DigitalUiMode } from "./digital-mode-copy";
 import styles from "./digital-checkout.module.css";
 
-type ResidenceState = { declaration: {id:string;address:{line1:string;postalCode:string;city:string;countryCode:"FR"};addressHash:string;billingPostalCode:string;createdAt:string}|null;reviewStatus:"VERIFIED"|"REVIEW"|"REVOKED";reviewId:string|null;paymentAllowed:boolean };
+type ResidenceState = { declaration: {id:string;address:{line1:string;postalCode:string;city:string;countryCode:"FR"};addressHash:string;billingPostalCode:string;createdAt:string}|null;reviewStatus:"VERIFIED"|"REVIEW"|"REVOKED";reviewId:string|null;paymentAllowed:boolean;checkoutEligible?:boolean;checkoutCode?:string|null };
 type CheckoutResult = {orderId:string;checkoutUrl?:string|null;providerOrderId?:string|null};
 export type DigitalCheckoutProps = {
   revision:number;totalCents:number;lines:Array<{id:string;title:string;priceCents:number;trackCount:number;completion?:DigitalCompletionView|null}>;
@@ -25,24 +26,24 @@ export function DigitalCheckout({revision,totalCents,lines,providers,termsVersio
   const[termsAccepted,setTermsAccepted]=useState(false),[deliveryConsent,setDeliveryConsent]=useState(false);
   const[busy,setBusy]=useState(false),[attemptNeedsReview,setAttemptNeedsReview]=useState(false),[error,setError]=useState(""),[line1,setLine1]=useState(""),[city,setCity]=useState(""),[residencePostalCode,setResidencePostalCode]=useState("");
   const[billingLine1,setBillingLine1]=useState(""),[billingCity,setBillingCity]=useState(""),[billingPostalCode,setBillingPostalCode]=useState("");
-  const[residenceConfirmed,setResidenceConfirmed]=useState(false),[billingAddressSameAsResidence,setBillingAddressSameAsResidence]=useState(false),[differentBilling,setDifferentBilling]=useState(false);
+  const[residenceConfirmed,setResidenceConfirmed]=useState(false),[billingAddressSameAsResidence,setBillingAddressSameAsResidence]=useState(true),[differentBilling,setDifferentBilling]=useState(false);
   const[editingAddress,setEditingAddress]=useState(false);
   const[residence,setResidence]=useState<ResidenceState|null>(null),[loaded,setLoaded]=useState(false),[saving,setSaving]=useState(false),[residenceMessage,setResidenceMessage]=useState(""),[pendingOrderId,setPendingOrderId]=useState<string|null>(null);
   const key=useRef<string|null>(null),saveKey=useRef<string|null>(null),operation=useRef(createDigitalCheckoutOperationLock()),startedOrder=useRef<string|null>(null);
-  function hydrate(value:ResidenceState){setBillingAddressSameAsResidence(false);setResidenceConfirmed(false);setEditingAddress(false);key.current=null;setResidence(value);if(value.declaration){setLine1(value.declaration.address.line1);setCity(value.declaration.address.city);setResidencePostalCode(value.declaration.address.postalCode);setBillingPostalCode(value.declaration.billingPostalCode);}setLoaded(true);}
+  function hydrate(value:ResidenceState,preserveConfirmation=false){if(!preserveConfirmation)setResidenceConfirmed(false);setEditingAddress(false);key.current=null;setResidence(value);if(value.declaration){setLine1(value.declaration.address.line1);setCity(value.declaration.address.city);setResidencePostalCode(value.declaration.address.postalCode);setBillingPostalCode(value.declaration.billingPostalCode);if(!preserveConfirmation){const same=value.declaration.address.postalCode===value.declaration.billingPostalCode;setBillingAddressSameAsResidence(same);setDifferentBilling(!same);}}setLoaded(true);}
   useEffect(()=>{let alive=true;void fetch("/api/digital/residence",{credentials:"same-origin",cache:"no-store"}).then(async response=>{if(!response.ok)throw Error();return response.json();}).then(value=>{if(alive)hydrate(value as ResidenceState);}).catch(()=>{if(alive){setLoaded(true);setResidenceMessage("Votre adresse n’a pas pu être chargée. Actualisez son état avant de payer.");}});return()=>{alive=false;};},[]);
   const saved=residence?.declaration,effectiveBillingPostalCode=billingAddressSameAsResidence?residencePostalCode:billingPostalCode;
   const dirty=!saved||saved.address.line1!==line1||saved.address.city!==city||saved.address.postalCode!==residencePostalCode||saved.billingPostalCode!==effectiveBillingPostalCode;
-  const residenceReady=!!saved&&!dirty&&residence?.reviewStatus==="VERIFIED";
+  const residenceReady=!!saved&&!dirty&&(residence?.checkoutEligible===true||residence?.reviewStatus==="VERIFIED");
   const compactAddress=loaded&&residenceReady&&!editingAddress;
   // A different full billing address still requires the existing manual review.
   // Neither matching postcodes nor a presentation change grants payment rights.
   const billingReady=!copy.live||billingAddressSameAsResidence;
   const paymentReady=contractReady&&salesReady&&residenceReady&&residenceConfirmed&&billingReady&&termsAccepted&&deliveryConsent&&!saving&&!editingAddress&&!attemptNeedsReview&&lines.length>0&&(totalCents>0||freeCompletion);
-  function changed(){key.current=null;saveKey.current=null;setError("");setResidenceMessage("");setBillingAddressSameAsResidence(false);setResidenceConfirmed(false);}
+  function changed(){key.current=null;saveKey.current=null;setError("");setResidenceMessage("");setResidenceConfirmed(false);}
   function chooseSameBilling(checked:boolean){key.current=null;saveKey.current=null;setError("");setBillingAddressSameAsResidence(checked);setDifferentBilling(!checked);}
-  async function saveResidence(){if(saving||busy)return;setSaving(true);saveKey.current??=crypto.randomUUID();try{const value=await digitalRequest("/api/digital/residence",{address:{line1,postalCode:residencePostalCode,city,countryCode:"FR"},billingPostalCode:effectiveBillingPostalCode,residenceConfirmed,expectedDeclarationId:saved?.id??null,idempotencyKey:saveKey.current});hydrate(value as ResidenceState);saveKey.current=null;key.current=null;setResidenceMessage("Adresse enregistrée. Nous devons la vérifier avant votre premier achat.");}catch{setResidenceMessage("Cette adresse n’a pas pu être enregistrée. Vérifiez les informations ou contactez LNX Beats.");}finally{setSaving(false);}}
-  async function refreshResidence(){if(saving||busy)return;setSaving(true);try{const response=await fetch("/api/digital/residence",{credentials:"same-origin",cache:"no-store"});if(!response.ok)throw Error();const value=await response.json() as ResidenceState;hydrate(value);setResidenceMessage(value.reviewStatus==="VERIFIED"?"Votre adresse a été vérifiée.":"Votre adresse est en cours de vérification. Aucun paiement n’a été lancé.");}catch{setResidenceMessage("La vérification est momentanément indisponible. Réessayez dans un instant.");}finally{setSaving(false);}}
+  async function saveResidence(){if(saving||busy)return;setSaving(true);saveKey.current??=crypto.randomUUID();try{const value=await digitalRequest("/api/digital/residence",{address:{line1,postalCode:residencePostalCode,city,countryCode:"FR"},billingPostalCode:effectiveBillingPostalCode,residenceConfirmed,expectedDeclarationId:saved?.id??null,idempotencyKey:saveKey.current}) as ResidenceState;hydrate(value,true);saveKey.current=null;key.current=null;setResidenceMessage(digitalResidenceFeedback(value));}catch(e){setResidenceMessage(digitalResidenceErrorMessage(e instanceof DigitalRequestError?e.code:null));}finally{setSaving(false);}}
+  async function refreshResidence(){if(saving||busy)return;setSaving(true);try{const response=await fetch("/api/digital/residence",{credentials:"same-origin",cache:"no-store"});if(!response.ok)throw Error();const value=await response.json() as ResidenceState;hydrate(value);setResidenceMessage(digitalResidenceFeedback(value));}catch{setResidenceMessage("La vérification est momentanément indisponible. Réessayez dans un instant.");}finally{setSaving(false);}}
   async function requestCheckout(selectedProvider:string):Promise<CheckoutResult>{
     if(!paymentReady||!saved)throw Error("Vérifiez votre adresse et les deux confirmations avant de continuer.");
     key.current??=crypto.randomUUID();
@@ -56,7 +57,7 @@ export function DigitalCheckout({revision,totalCents,lines,providers,termsVersio
   async function payByCardOrLocal(){if(!operation.current.claim("STRIPE"))return;setBusy(true);setError("");try{const value=await requestCheckout("STRIPE");setPendingOrderId(value.orderId);window.location.assign(value.checkoutUrl??`/musique/confirmation/${value.orderId}`);}catch(e){setError(e instanceof Error?e.message:"Le paiement est momentanément indisponible.");}finally{if(operation.current.release("STRIPE"))setBusy(false);}}
   async function createPaypalOrder(){if(!operation.current.claim("PAYPAL"))throw Error("Un paiement est déjà en préparation.");setBusy(true);setError("");try{const value=await requestCheckout("PAYPAL");startedOrder.current=value.orderId;setPendingOrderId(value.orderId);if(!value.providerOrderId)throw Error("Consultez le suivi de votre commande avant une nouvelle tentative PayPal.");return{orderId:value.orderId,providerOrderId:value.providerOrderId};}catch(e){if(startedOrder.current||!digitalCheckoutPreflightRefused(e))setAttemptNeedsReview(true);if(operation.current.release("PAYPAL"))setBusy(false);throw e;}}
   async function approvePaypalOrder(order:{orderId:string;providerOrderId:string}){try{await digitalRequest(`/api/digital/orders/${order.orderId}/capture`,{});const confirmation=new URL(`/musique/confirmation/${order.orderId}`,window.location.origin);window.location.assign(confirmation.href);}catch{setAttemptNeedsReview(true);setError("La confirmation PayPal nécessite une vérification. Consultez le suivi de votre commande ; ne recommencez pas le paiement.");}finally{endPaypalOperation();}}
-  const addressStatus=residenceMessage||(!loaded?"Chargement de votre adresse…":residenceReady?"Votre adresse a été vérifiée.":saved&&!dirty?"Votre adresse est en cours de vérification.":"Enregistrez votre adresse pour vérifier votre éligibilité.");
+  const addressStatus=residenceMessage||(!loaded?"Chargement de vos coordonnées…":saved&&!dirty&&residence?digitalResidenceFeedback(residence):"Renseignez vos coordonnées puis confirmez-les pour poursuivre.");
   return <div className={styles.checkout}>
     <aside className={styles.order} aria-labelledby="digital-order-heading">
       <div className={styles.sectionTitle}><span aria-hidden="true">1</span><h2 id="digital-order-heading">Votre commande</h2></div>
@@ -86,7 +87,7 @@ export function DigitalCheckout({revision,totalCents,lines,providers,termsVersio
           </fieldset><p className={styles.notice}>Une adresse de facturation différente nécessite une vérification avant paiement. <Link href="/contact">Contacter LNX Beats</Link>.</p>
         </div>:null}
         <label className={styles.check}><input type="checkbox" checked={residenceConfirmed} disabled={busy||saving||!loaded} onChange={e=>{key.current=null;setResidenceConfirmed(e.target.checked);}}/><span>Je confirme résider à cette adresse et acheter pour mon usage personnel.</span></label>
-        {!compactAddress?<div className={styles.addressActions}><button type="button" className={styles.secondary} disabled={busy||saving||!loaded||!dirty||!residenceConfirmed||line1.trim().length<4||!city.trim()||!/^[0-9]{5}$/.test(residencePostalCode)||!/^[0-9]{5}$/.test(effectiveBillingPostalCode)} onClick={()=>void saveResidence()}>{saving?"Vérification…":"Enregistrer mon adresse"}</button><button type="button" className={styles.textButton} disabled={busy||saving||!loaded} onClick={()=>void refreshResidence()}>Actualiser son état</button></div>:null}
+        {!compactAddress?<div className={styles.addressActions}><button type="button" className={styles.secondary} disabled={busy||saving||!loaded||!dirty||!residenceConfirmed||line1.trim().length<4||!city.trim()||!/^[0-9]{5}$/.test(residencePostalCode)||!/^[0-9]{5}$/.test(effectiveBillingPostalCode)} onClick={()=>void saveResidence()}>{saving?"Contrôle des coordonnées…":"Confirmer mes coordonnées"}</button><button type="button" className={styles.textButton} disabled={busy||saving||!loaded} onClick={()=>void refreshResidence()}>Actualiser les coordonnées</button></div>:null}
         <p role="status" className={styles.addressStatus}>{addressStatus}</p>
       </section>
       <section className={styles.panel} aria-labelledby="digital-consent-heading">

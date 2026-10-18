@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { CREATION_WORK_STATUSES, DEADLINE_NOTE_PREFIX, VISIBILITY_NOTE_PREFIX, WORK_NOTE_PREFIX, isWorkHidden, parseParisDeadline, parseWorkNote } from "@/lib/admin/creation-work-policy";
+import { CREATION_WORK_STATUSES, DEADLINE_NOTE_PREFIX, VISIBILITY_NOTE_PREFIX, WORK_NOTE_PREFIX, indicativeCreationDeadline, isWorkHidden, parseParisDeadline, parseWorkNote } from "@/lib/admin/creation-work-policy";
 import { prisma } from "@/lib/prisma";
 
 const LIMIT = 200;
@@ -13,8 +13,8 @@ export async function getCreationWorkQueue() {
       { events: { some: { visibility: "INTERNAL", actorUserId: { not: null }, note: { startsWith: VISIBILITY_NOTE_PREFIX } } } },
     ] },
     select: {
-      id: true, orderNumber: true, title: true, status: true, updatedAt: true, createdAt: true, submittedAt: true,
-      events: { where: { toStatus: { in: ["ACCEPTED", "IN_PROGRESS"] }, OR: [{ note: null }, { NOT: { note: { startsWith: WORK_NOTE_PREFIX } } }] }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 1, select: { createdAt: true } },
+      id: true, orderNumber: true, title: true, status: true, updatedAt: true, createdAt: true, submittedAt: true, serviceStartedAt: true, priorityProcessing: true,
+      events: { where: { toStatus: { in: ["ACCEPTED", "IN_PROGRESS"] }, OR: [{ note: null }, { NOT: { note: { startsWith: WORK_NOTE_PREFIX } } }] }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 2, select: { createdAt: true, toStatus: true } },
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: LIMIT + 1,
   });
@@ -33,11 +33,15 @@ export async function getCreationWorkQueue() {
     const hiddenNote = visibility.find(({ orderId }) => orderId === order.id);
     const parsed = parseWorkNote(note?.note ?? null, "DEADLINE");
     const deadline = parsed?.orderId === order.id ? parsed : null;
+    const acceptedAt = order.events.find(event => event.toStatus === "ACCEPTED")?.createdAt.toISOString() ?? null;
+    const productionStart = (order.events[0]?.createdAt ?? order.serviceStartedAt)?.toISOString() ?? null;
+    const indicativeDueAt = indicativeCreationDeadline(productionStart, order.priorityProcessing);
     return {
       id: order.id, orderNumber: order.orderNumber, title: order.title || "Création personnalisée", status: order.status,
       updatedAt: order.updatedAt.toISOString(),
-      startedAt: deadline?.startedAt ?? (order.events[0]?.createdAt ?? order.submittedAt ?? order.createdAt).toISOString(),
-      dueAt: deadline?.dueAt ?? null, deadlineRevision: note?.id ?? "", visibilityRevision: hiddenNote?.id ?? "",
+      acceptedAt, startedAt: deadline?.startedAt ?? productionStart ?? (order.submittedAt ?? order.createdAt).toISOString(),
+      dueAt: deadline?.dueAt ?? indicativeDueAt, deadlineSource: deadline ? "INTERNAL_SAVED" as const : indicativeDueAt ? "INDICATIVE_14_DAYS" as const : "NONE" as const,
+      deadlineRevision: note?.id ?? "", visibilityRevision: hiddenNote?.id ?? "",
       deadlineRequestId: randomUUID(), visibilityRequestId: randomUUID(),
       hidden: isWorkHidden(parseWorkNote(hiddenNote?.note ?? null, "VISIBILITY"), order),
     };

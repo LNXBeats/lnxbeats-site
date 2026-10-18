@@ -34,10 +34,10 @@ type ContractSnapshot = {
     sections?: ReadonlyArray<{ title: string; paragraphs: readonly string[]; boxed?: boolean }> };
   earlyDelivery: { expresslyRequested: boolean; text: string }; withdrawal: { expresslyAcknowledged: boolean; text: string };
   licenseStatus: string; fiscalStatus: string; approvedForLive?: boolean; liveApproval?: DigitalFranceLiveContractApprovalSnapshot;
-  billingAddressSource?:"BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE";
+  billingAddressSource?:"BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE"|"BUYER_CONFIRMED_SAME_AS_SERVER_CHECKED_ADDRESS";
   checkoutConsentPresentation?:DigitalCheckoutConsentPresentation;
 };
-export function digitalContractSnapshot(customer: { email: string; name: string; billingAddress?:DigitalFranceMinimalAddress;billingAddressConfirmedAsResidence?:boolean }, acceptedAt: Date, termsVersion = DIGITAL_TERMS_VERSION,
+export function digitalContractSnapshot(customer: { email: string; name: string; billingAddress?:DigitalFranceMinimalAddress;billingAddressConfirmedAsResidence?:boolean;billingAddressSource?:ContractSnapshot["billingAddressSource"] }, acceptedAt: Date, termsVersion = DIGITAL_TERMS_VERSION,
   options?:{mode:DigitalMode;approval?:DigitalFranceLiveContractApprovalSnapshot;consentPresentation?:string}): ContractSnapshot {
   const presentation=digitalCheckoutConsentPresentation(options?.consentPresentation);
   if(options?.mode==="LIVE"){
@@ -45,10 +45,10 @@ export function digitalContractSnapshot(customer: { email: string; name: string;
     if(!document||!approval||!validateSavedDigitalFranceLiveContractApproval(approval)
       ||approval.approval.version!==termsVersion||Date.parse(approval.capturedAt)>acceptedAt.getTime())throw new DigitalError("FR_LIVE_CONTRACT_APPROVAL_REQUIRED",409);
     const billingAddress=normalizeDigitalFranceResidenceAddress(customer.billingAddress);
-    if(customer.billingAddressConfirmedAsResidence!==true)throw new DigitalError("FRANCE_BILLING_ADDRESS_REQUIRED",409);
+    if(customer.billingAddressConfirmedAsResidence!==true||customer.billingAddressSource!==undefined&&!["BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE","BUYER_CONFIRMED_SAME_AS_SERVER_CHECKED_ADDRESS"].includes(customer.billingAddressSource))throw new DigitalError("FRANCE_BILLING_ADDRESS_REQUIRED",409);
     let identity;try{identity=validateBillingCustomerIdentity({type:"INDIVIDUAL",name:customer.name,email:customer.email,billingAddress});}
     catch{throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);}
-    return{mode:"LIVE",policy:DIGITAL_FRANCE_LIVE_CONTRACT_POLICY,customer:{type:"INDIVIDUAL",name:identity.name,email:identity.email,billingAddress},billingAddressSource:"BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE",
+    return{mode:"LIVE",policy:DIGITAL_FRANCE_LIVE_CONTRACT_POLICY,customer:{type:"INDIVIDUAL",name:identity.name,email:identity.email,billingAddress},billingAddressSource:customer.billingAddressSource??"BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE",
       acceptedAt:acceptedAt.toISOString(),terms:{version:document.version,text:digitalContractTerms(termsVersion).text,hashSha256:document.textHashSha256,
         documentHashSha256:document.hashSha256,status:"APPROVED",expresslyAccepted:true,sections:document.sections},
       earlyDelivery:{expresslyRequested:true,text:document.consents.immediateSupply},
@@ -82,7 +82,7 @@ export function verifyContractSnapshot(snapshot: unknown, termsVersion: string, 
       ||s.approvedForLive!==true||!s.liveApproval||!validateSavedDigitalFranceLiveContractApproval(s.liveApproval)
       ||s.liveApproval.approval.version!==termsVersion||Date.parse(s.liveApproval.capturedAt)>Date.parse(s.acceptedAt)
       ||!Number.isFinite(Date.parse(s.acceptedAt))||new Date(s.acceptedAt).toISOString()!==s.acceptedAt
-      ||s.customer?.type!=="INDIVIDUAL"||identity.name!==s.customer.name||identity.email!==s.customer.email||s.billingAddressSource!=="BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE"
+      ||s.customer?.type!=="INDIVIDUAL"||identity.name!==s.customer.name||identity.email!==s.customer.email||!["BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE","BUYER_CONFIRMED_SAME_AS_SERVER_CHECKED_ADDRESS"].includes(s.billingAddressSource??"")
       ||billingSnapshotHash(billingAddress)!==billingSnapshotHash(s.customer.billingAddress)
       ||s.licenseStatus!=="PERSONAL_PRIVATE_USE"||s.fiscalStatus!=="APPROVED_TERRITORY_SNAPSHOT")throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);
     return{snapshot:s,snapshotHash:billingSnapshotHash(s),termsHash};

@@ -11,7 +11,7 @@ import { orderStatusPresentation, type KnownOrderStatus } from "@/lib/orders/sta
 
 export type CreationWorkView = {
   id: string; orderNumber: string; title: string; status: KnownOrderStatus; updatedAt: string;
-  startedAt: string; dueAt: string | null; deadlineRevision: string; visibilityRevision: string; hidden: boolean;
+  startedAt: string; acceptedAt: string | null; dueAt: string | null; deadlineSource: "INTERNAL_SAVED" | "INDICATIVE_14_DAYS" | "NONE"; deadlineRevision: string; visibilityRevision: string; hidden: boolean;
   deadlineRequestId: string; visibilityRequestId: string;
 };
 
@@ -70,13 +70,15 @@ export function AdminCreationWorkCenter({ items, hidden, limited, initialNow, no
       const transitions = getAllowedOrderTransitions(item.status).filter(({ sensitive }) => !sensitive);
       return <article className="admin-creation-work__item" key={item.id} aria-labelledby={`creation-${item.id}`}>
         <div className="admin-creation-work__identity"><small>{item.orderNumber}</small><h3 id={`creation-${item.id}`}>{item.title}</h3><span className="admin-v21-status">{orderStatusPresentation[item.status].label}</span>
+          <small>{item.acceptedAt ? `Acceptée le ${new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "medium", timeStyle: "short" }).format(new Date(item.acceptedAt))}` : "Date d’acceptation non enregistrée"}</small>
           {item.status === "FIRST_VERSION_READY" ? <p>Retour du client attendu avant finalisation.</p> : null}
           <Link href={`${path}#admin-brief-title`}>Lire le brief et ouvrir le dossier →</Link>
         </div>
         <div className="admin-creation-work__deadline" data-tone={gauge.tone}>
           <strong>{gauge.label}</strong>
           <div className="admin-creation-work__gauge" role="meter" aria-label={`Temps écoulé pour ${item.orderNumber}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={gauge.percent} aria-valuetext={gauge.label}><span style={{ width: `${gauge.percent}%` }} /></div>
-          {item.dueAt ? <small>Suivi jusqu’au {new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "medium", timeStyle: "short" }).format(new Date(item.dueAt))} · Paris</small> : <small>Aucun délai précis enregistré : pas de compte à rebours inventé.</small>}
+          {item.dueAt ? <small>{item.deadlineSource === "INDICATIVE_14_DAYS" ? "Livraison estimée" : "Échéance de suivi"} : {new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "medium", timeStyle: "short" }).format(new Date(item.dueAt))} · Paris</small> : <small>Aucun délai précis enregistré : pas de compte à rebours inventé.</small>}
+          {item.deadlineSource === "INDICATIVE_14_DAYS" ? <small>Repère indicatif : 14 jours après prise en charge. À ajuster si un autre délai a été convenu ; aucun contrat n’est modifié.</small> : null}
           <details><summary>{item.dueAt ? "Modifier l’échéance" : "Planifier l’échéance"}</summary><FollowUpForm key={item.deadlineRevision} item={item} kind="DEADLINE" /></details>
         </div>
         <div className="admin-creation-work__actions"><AdminOrderActions orderNumber={item.orderNumber} transitions={transitions} emptyReason="La livraison se prépare depuis le dossier." />

@@ -3,6 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 
 import { commanderAttentionWhere } from "@/lib/admin/cockpit";
+import { VISIBILITY_NOTE_PREFIX, isWorkHidden, parseWorkNote } from "@/lib/admin/creation-work-policy";
 import {
   getAdminOrderTransition,
   getOrderTransitionTimestamps,
@@ -77,7 +78,7 @@ async function listCurrentCommanderOrderIds(filter: Exclude<AdminOrderFilter, "a
     SELECT orders."id"
     FROM "orders" orders
     WHERE (
-      ${filter}::text = 'attention'
+      ${filter}::text IN ('attention', 'all')
       OR (orders."hiddenFromCurrentViewsAt" IS NULL AND NOT EXISTS (
         SELECT 1 FROM "admin_record_archives" archive
         WHERE archive."recordType" = 'MUSIC_ORDER' AND archive."recordId" = orders."id"
@@ -155,7 +156,7 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
     where: filter === "archives"
       ? { id: { in: archiveRows.map((row) => row.recordId) } }
       : filter === "hidden"
-        ? { hiddenFromCurrentViewsAt: { not: null } }
+        ? { OR: [{ hiddenFromCurrentViewsAt: { not: null } }, { events: { some: { visibility: "INTERNAL", actorUserId: { not: null }, note: { startsWith: VISIBILITY_NOTE_PREFIX } } } }] }
       : { id: { in: visibleIds.map((row) => row.id) } },
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: 200,
@@ -174,6 +175,7 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
       totalCents: true,
       createdAt: true,
       updatedAt: true,
+      events: { where: { visibility: "INTERNAL", actorUserId: { not: null }, note: { startsWith: VISIBILITY_NOTE_PREFIX } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { note: true } },
       hiddenFromCurrentViewsAt: true,
       hiddenFromCurrentViewsReason: true,
       hiddenFromCurrentViewsNote: true,
@@ -214,6 +216,7 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
     const guardSnapshot: OrderVisibilityGuardSnapshot = order;
     return {
       ...order,
+      personalWorkHidden: isWorkHidden(parseWorkNote(order.events[0]?.note ?? null, "VISIBILITY"), order),
       operation: classifyCommanderOperation({
       status: order.status,
       archived,
@@ -237,11 +240,11 @@ export async function listAdminOrders(filter: AdminOrderFilter) {
     }), true);
   }
   if (filter === "hidden") {
-    return withOperations(candidates, false)
+    return withOperations(candidates, false).filter(order => order.hiddenFromCurrentViewsAt || order.personalWorkHidden)
       .sort((left, right) => (right.hiddenFromCurrentViewsAt?.getTime() ?? 0) - (left.hiddenFromCurrentViewsAt?.getTime() ?? 0)
         || right.id.localeCompare(left.id));
   }
-  return withOperations(candidates, false)
+  return withOperations(candidates, false).filter(order => filter === "all" || !order.personalWorkHidden)
     .sort((left, right) => compareOperationClassifications(left.operation, right.operation)
       || right.updatedAt.getTime() - left.updatedAt.getTime()
       || right.id.localeCompare(left.id))

@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { financialEventDetailPath } from "@/lib/admin/financial-event-policy";
 
 import { hideSelectedOrdersFromCurrentViewsAction } from "@/app/admin/actions";
 import { AdminBackLink } from "@/components/admin-back-link";
 import { orderCurrentViewHiddenReasonLabels } from "@/lib/admin/order-visibility";
-import { adminOrderFilters, listAdminOrders, listAdminPaymentReviewEvents, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
+import { adminOrderFilters, listAdminOrders, parseAdminOrderFilter, type AdminOrderFilter } from "@/lib/admin/service";
 import { requireAdmin } from "@/lib/auth/session";
 import { formatEuro } from "@/lib/orders/domain";
 import { getOrderProductionSummary } from "@/lib/orders/production-summary";
@@ -32,10 +31,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
   const params = await searchParams;
   const filter = parseAdminOrderFilter(params.filtre);
   const selectable = filter !== "hidden" && filter !== "archives";
-  const [orders, reviewEvents] = await Promise.all([
-    listAdminOrders(filter),
-    filter === "attention" ? listAdminPaymentReviewEvents() : Promise.resolve([]),
-  ]);
+  const orders = await listAdminOrders(filter);
 
   return (
     <div className="admin-main">
@@ -54,26 +50,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
         ))}
       </nav>
 
-      {reviewEvents.length ? (
-        <section className="admin-list-window" aria-labelledby="admin-payment-review-title">
-          <div className="admin-list-window__heading"><h2 id="admin-payment-review-title">Paiements à vérifier</h2><span>{reviewEvents.length}</span></div>
-          <ul className="admin-order-list">
-            {reviewEvents.map((event) => (
-              <li key={event.id}>
-                {event.payment?.order ? (
-                  <Link href={`/admin/commandes/${encodeURIComponent(event.payment.order.orderNumber)}`}>
-                    <span className="admin-order-list__identity"><small>{event.processedAt.toLocaleString("fr-FR")}</small><strong>{event.payment.order.title || event.payment.order.recipient || event.payment.order.orderNumber}</strong><em>Paiement à vérifier</em></span>
-                    <span className="admin-order-list__next"><small>Événement signé nécessitant une revue</small></span><span className="admin-order-list__arrow" aria-hidden="true">→</span>
-                  </Link>
-                ) : (
-                  <Link href={financialEventDetailPath(event.id)}><span className="admin-order-list__identity"><strong>Événement sans commande corrélée</strong><small>{event.processedAt.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })} · revue technique requise</small></span><span>Examiner →</span></Link>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      <Link href="/admin/evenements-financiers">Historique des événements financiers</Link>
+      <p><Link href="/admin/evenements-financiers">Suivi financier et reçus à examiner →</Link> · séparés des créations en cours.</p>
 
       <section className="admin-list-window" aria-labelledby="admin-order-list-title">
         <div className="admin-list-window__heading"><h2 id="admin-order-list-title">{filterLabels[filter]}</h2><span>{orders.length} résultat{orders.length === 1 ? "" : "s"}</span></div>
@@ -91,7 +68,7 @@ export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageP
                     {selectable ? <label className="admin-order-select"><input type="checkbox" name="orderNumber" value={order.orderNumber} disabled={!order.visibilityEligibility.allowed} aria-label={`Sélectionner ${order.orderNumber}`} /></label> : null}
                   <Link href={`/admin/commandes/${encodeURIComponent(order.orderNumber)}`}>
                     <span className="admin-order-list__identity"><small>{order.orderNumber} · {new Date(order.createdAt).toLocaleDateString("fr-FR")}</small><strong>{order.title || order.recipient || "Histoire sans titre"}</strong><em>{order.customerName || order.customerEmail}</em></span>
-                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{production.formatLabel ? <small className="admin-order-list__format">Format de l’illustration : {production.formatLabel}</small> : null}{order.hiddenFromCurrentViewsAt ? <b>Masquée · {order.hiddenFromCurrentViewsReason ? orderCurrentViewHiddenReasonLabels[order.hiddenFromCurrentViewsReason] : "Motif non renseigné"}</b> : order.operation ? <b>{order.operation.label}</b> : null}{!order.visibilityEligibility.allowed && filter !== "hidden" && filter !== "archives" ? <small>{order.visibilityEligibility.reason}</small> : null}</span>
+                    <span className="admin-order-list__facts"><span>{presentation.label}</span><small>{options}</small>{production.formatLabel ? <small className="admin-order-list__format">Format de l’illustration : {production.formatLabel}</small> : null}{order.personalWorkHidden ? <b>Essai personnel · retiré des vues courantes</b> : order.hiddenFromCurrentViewsAt ? <b>Masquée · {order.hiddenFromCurrentViewsReason ? orderCurrentViewHiddenReasonLabels[order.hiddenFromCurrentViewsReason] : "Motif non renseigné"}</b> : order.operation ? <b>{order.operation.label}</b> : null}{!order.visibilityEligibility.allowed && filter !== "hidden" && filter !== "archives" ? <small>{order.visibilityEligibility.reason}</small> : null}</span>
                     <span className="admin-order-list__next"><strong>{formatEuro(order.totalCents)}</strong><small>{presentation.next}</small></span>
                     <span className="admin-order-list__arrow" aria-hidden="true">→</span>
                   </Link>

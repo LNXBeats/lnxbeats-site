@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { CREATION_WORK_STATUSES, DEADLINE_NOTE_PREFIX, VISIBILITY_NOTE_PREFIX, deadlineGauge, isWorkHidden, parisDateTime, parseParisDeadline, parseWorkNote } from "@/lib/admin/creation-work-policy";
+import { CREATION_WORK_STATUSES, DEADLINE_NOTE_PREFIX, VISIBILITY_NOTE_PREFIX, deadlineGauge, indicativeCreationDeadline, isWorkHidden, parisDateTime, parseParisDeadline, parseWorkNote } from "@/lib/admin/creation-work-policy";
 
 const requestId = "f274b292-5186-4623-b3cd-1a88a7046e58";
 const start = "2026-10-01T10:00:00.000Z", due = "2026-10-11T10:00:00.000Z";
@@ -20,6 +20,16 @@ test("missing, invalid or contradictory deadlines never fabricate time remaining
   assert.equal(deadlineGauge(start, null, Date.now()).tone, "unplanned");
   assert.equal(deadlineGauge(start, start, Date.now()).tone, "unplanned");
   assert.equal(deadlineGauge("invalid", due, Date.now()).tone, "unplanned");
+});
+test("an accepted ordinary job gets only an explicit 14-day internal estimate, not a fabricated priority or unaccepted promise",()=>{
+  assert.equal(indicativeCreationDeadline(start,false),"2026-10-15T10:00:00.000Z");
+  assert.equal(indicativeCreationDeadline(start,true),null);assert.equal(indicativeCreationDeadline(null,false),null);assert.equal(indicativeCreationDeadline("invalid",false),null);
+});
+test("creation counters share the work queue; orphan financial receipts have a separate view",async()=>{
+  const layout=await readFile(new URL("../../app/admin/layout.tsx",import.meta.url),"utf8"),list=await readFile(new URL("../../app/admin/commandes/page.tsx",import.meta.url),"utf8"),service=await readFile(new URL("../../lib/admin/service.ts",import.meta.url),"utf8");
+  assert.match(layout,/getCreationWorkQueue\(\)/);assert.match(layout,/"\/admin\/commandes": work.items.length/);
+  assert.doesNotMatch(list,/listAdminPaymentReviewEvents|Paiements à vérifier/);assert.match(list,/Suivi financier et reçus/);
+  assert.match(service,/filter === "all" \|\| !order.personalWorkHidden/);assert.match(service,/isWorkHidden\(parseWorkNote/);
 });
 test("Paris deadline parsing is independent of host timezone, precise across DST and rejects ambiguous/nonexistent times", () => {
   assert.equal(parseParisDeadline("2026-10-18T17:30")?.toISOString(), "2026-10-18T15:30:00.000Z");

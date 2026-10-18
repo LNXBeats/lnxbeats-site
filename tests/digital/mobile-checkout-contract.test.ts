@@ -12,6 +12,7 @@ import {DIGITAL_CHECKOUT_CONSENT_PRESENTATION,digitalCheckoutConsentPresentation
 import {digitalContractSnapshot,verifyContractSnapshot} from "@/lib/digital/fulfillment-policy";
 import {digitalFranceLiveContractCandidate as candidate,DIGITAL_FRANCE_LIVE_CONTRACT_VERSION as version,DIGITAL_FRANCE_LIVE_CONTRACT_SCOPE as scope,digitalFranceLiveContractApprovalHash,snapshotDigitalFranceLiveContractApproval} from "@/lib/digital/france-live-contract";
 import type {DigitalFranceResidenceSnapshotV2} from "@/lib/digital/france-residence-v2-policy";
+import {DIGITAL_ADDRESS_CHECKOUT_POLICY,type DigitalDeclaredAddressSnapshot} from "@/lib/digital/address-checkout-policy";
 
 let calls=0;
 before(()=>{const deny=()=>{calls++;throw Error("NETWORK_FORBIDDEN_IN_MOBILE_CONTRACT_TEST");};mock.method(globalThis,"fetch",deny);for(const method of["request","get"] as const){mock.method(http,method,deny);mock.method(https,method,deny);}mock.method(net,"connect",deny);mock.method(net,"createConnection",deny);});
@@ -73,4 +74,19 @@ test("two-checkbox presentation supplements separate immutable consent facts and
   assert.equal(old.checkoutConsentPresentation,undefined);assert.deepEqual(modern.terms,old.terms);assert.deepEqual(modern.earlyDelivery,old.earlyDelivery);assert.deepEqual(modern.withdrawal,old.withdrawal);
   assert.equal(verifyContractSnapshot(modern,version,candidate.textHashSha256).snapshot.checkoutConsentPresentation?.policy,DIGITAL_CHECKOUT_CONSENT_PRESENTATION);
   assert.throws(()=>verifyContractSnapshot({...modern,checkoutConsentPresentation:{...presentation,withdrawalLossAcknowledged:false}},version,candidate.textHashSha256),{code:"CONTRACT_REQUIRES_REVIEW"});
+});
+test("new declared-address contract names its true source without rewriting legacy contracts or relaxing retry bindings",()=>{
+  const declared={...residence,policy:DIGITAL_ADDRESS_CHECKOUT_POLICY} as unknown as DigitalDeclaredAddressSnapshot;
+  const resolved=resolveDigitalContractBillingAddress(address,declared,true);
+  assert.equal(resolved.billingAddressSource,"BUYER_CONFIRMED_SAME_AS_SERVER_CHECKED_ADDRESS");
+  const customer={name:"Acheteur synthétique",email:"synthetic@example.invalid",...resolved};
+  const saved=digitalContractSnapshot(customer,now,version,{mode:"LIVE",approval:approval()});
+  assert.equal(saved.billingAddressSource,"BUYER_CONFIRMED_SAME_AS_SERVER_CHECKED_ADDRESS");
+  assert.equal(verifyContractSnapshot(saved,version,candidate.textHashSha256).snapshot.billingAddressSource,saved.billingAddressSource);
+  assert.doesNotThrow(()=>assertDigitalBillingAddressRetry(saved,true,address));
+  assert.throws(()=>assertDigitalBillingAddressRetry(saved,false,address),{code:"IDEMPOTENCY_CONFLICT"});
+  assert.throws(()=>assertDigitalBillingAddressRetry(saved,true,{...address,line1:"99 rue différente"}),{code:"IDEMPOTENCY_CONFLICT"});
+  assert.throws(()=>digitalContractSnapshot({...customer,billingAddressSource:"ADMIN_CERTIFIED" as never},now,version,{mode:"LIVE",approval:approval()}),{code:"FRANCE_BILLING_ADDRESS_REQUIRED"});
+  const legacy=digitalContractSnapshot({...customer,billingAddressSource:undefined},now,version,{mode:"LIVE",approval:approval()});
+  assert.equal(legacy.billingAddressSource,"BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE");assert.deepEqual(saved.terms,legacy.terms);assert.deepEqual(saved.earlyDelivery,legacy.earlyDelivery);assert.deepEqual(saved.withdrawal,legacy.withdrawal);
 });

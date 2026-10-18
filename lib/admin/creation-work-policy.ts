@@ -73,3 +73,11 @@ export function deadlineGauge(startedAt: string, dueAt: string | null, now: numb
     label: remaining <= 0 ? `En retard de ${duration}` : `${duration} restantes`,
   } as const;
 }
+
+/** Internal planning aid only: no historic contract or promised date is altered.
+ * A priority job or a job not yet accepted never receives an invented deadline.
+ */
+export function indicativeCreationDeadline(startedAt: string | null, priority: boolean) {
+  if (!startedAt || priority || !validDate(startedAt)) return null;
+  return new Date(Date.parse(startedAt) + 14 * 86_400_000).toISOString();
+}

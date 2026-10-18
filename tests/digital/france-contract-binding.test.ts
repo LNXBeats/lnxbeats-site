@@ -70,11 +70,13 @@ test("local jurisdiction follows each acquired contract version rather than rebi
 test("checkout links and displays the France version it submits, with explicit terms acceptance and free-completion action", async () => {
   const page = await readFile("app/musique/checkout/page.tsx", "utf8"), form = await readFile("components/digital-checkout.tsx", "utf8"), legalPage = await readFile("app/musique/conditions/page.tsx", "utf8");
   assert.match(page, /termsVersion=\{live\?DIGITAL_FRANCE_LIVE_CONTRACT_VERSION:DIGITAL_FRANCE_TERMS_VERSION\}/);
-  assert.match(page, /termsHash=\{live\?DIGITAL_FRANCE_LIVE_CONTRACT_TEXT_HASH:DIGITAL_FRANCE_TERMS_TEXT_HASH\}/);
+  // Hashes are obtained from the server-approved contract, not a browser prop.
+  const approvalService = await readFile(new URL("../../lib/digital/contract-approval-service.ts", import.meta.url), "utf8");
+  assert.match(approvalService, /snapshotDigitalFranceLiveContractApproval/);
   assert.match(page, /approvedDigitalFranceContract\(prisma\)/);
   assert.match(form, /conditions#dcn-france-terms/); assert.match(legalPage, /dcn-france-terms/);
-  assert.match(form, /termsAccepted/); assert.match(form, /!termsAccepted/);
-  assert.match(form, /Obtenir le complément sans paiement/); assert.match(form, /\/api\/digital\/completion\/grant/);
-  assert.match(form, /localReviewAllowed\|\|freeCompletion\?\{\}:\{provider\}/);
+  assert.match(form, /termsAccepted/); assert.match(form, /paymentReady=[^;]*&&termsAccepted&&deliveryConsent/);
+  assert.match(form, /Obtenir mon complément/); assert.match(form, /\/api\/digital\/completion\/grant/);
+  assert.match(form, /localReviewAllowed\|\|freeCompletion\?\{\}:\{provider:selectedProvider\}/);
   assert.match(form, /localReviewAllowed=!copy.live&&localReview/);
 });

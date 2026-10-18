@@ -153,7 +153,7 @@ test("Admin review queries preserve uncorrelated financial receipts and interrup
   assert.match(cockpit, /events\."paymentId" IS NULL/);
   assert.match(cockpit, /orders\."status" = 'REFUNDED'[\s\S]*payments\."status" IN \('SUCCEEDED', 'PARTIALLY_REFUNDED'\)/);
   assert.match(notificationAdmin, /filter === "attention" \? adminNotificationAttentionWhere\(new Date\(\)\)/);
-  assert.match(adminService, /\$\{filter\}::text = 'attention'\s+OR \(orders\."hiddenFromCurrentViewsAt" IS NULL AND NOT EXISTS \([\s\S]*'MUSIC_ORDER'/);
+  assert.match(adminService, /\$\{filter\}::text IN \('attention', 'all'\)\s+OR \(orders\."hiddenFromCurrentViewsAt" IS NULL AND NOT EXISTS \([\s\S]*'MUSIC_ORDER'/);
   assert.match(shopService, /\$\{filter\}::text = 'attention'\s+OR NOT EXISTS \([\s\S]*'SHOP_ORDER'/);
 });
 
@@ -200,8 +200,8 @@ test("Cockpit queries are bounded and the action center exposes only authorized 
   assert.match(actionCenter, /Aucune décision métier n’est appliquée en lot/);
   assert.doesNotMatch(actionCenter, /<form|fetch\(|action=|server action/i);
   assert.doesNotMatch(page, /<form|<button|action=/);
-  assert.match(layout, /actionRequiredCounts=\{actionSummary\.actionRequiredCounts\}/);
-  assert.match(layout, /criticalActionRequiredCounts=\{actionSummary\.criticalActionRequiredCounts\}/);
+  assert.match(layout, /actionRequiredCounts=\{\{ \.\.\.actionSummary\.actionRequiredCounts, "\/admin\/commandes": work.items.length/);
+  assert.match(layout, /criticalActionRequiredCounts=\{\{ \.\.\.actionSummary\.criticalActionRequiredCounts, "\/admin\/commandes": creationCritical/);
   assert.match(cockpit, /const commanderCriticalTotal = commanderCritical \+ financialEvents/);
   assert.match(cockpit, /status: "PROCESSING",[\s\S]*leaseExpiresAt: null/);
   assert.match(cockpit, /refundStatus: "REQUIRES_REVIEW"/);

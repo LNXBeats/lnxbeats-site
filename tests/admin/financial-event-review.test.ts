@@ -42,8 +42,8 @@ test("cockpit and orphan Examiner target the exact event; history is available",
   const cockpit = await readFile(new URL("../../lib/admin/cockpit.ts", import.meta.url), "utf8");
   const list = await readFile(new URL("../../app/admin/commandes/page.tsx", import.meta.url), "utf8");
   assert.match(cockpit, /financialEventDetailPath\(row.id\)/);
-  assert.match(list, /financialEventDetailPath\(event.id\)/);
-  assert.match(list, /Historique des événements financiers/);
+  assert.doesNotMatch(list, /financialEventDetailPath\(event.id\)/);
+  assert.match(list, /Suivi financier et reçus/);
   assert.equal(financialEventDetailPath("fixture-id"), "/admin/evenements-financiers/fixture-id");
 });
 test("technical classification writes audit only, not receipt, payment, order or provider", async () => {

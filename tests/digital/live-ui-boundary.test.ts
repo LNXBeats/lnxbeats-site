@@ -72,9 +72,9 @@ test("digital payment uses Commander's visual cards but retains its own endpoint
   assert.doesNotMatch(checkout,/StripeCheckoutAction|PaypalCheckoutAction|type="radio"|\/api\/orders\//);
   assert.ok(checkout.includes('"/api/digital/checkout"'));
 });
-test("LIVE billing address requires its own unselected full-address confirmation, reset on residence changes",async()=>{
+test("billing defaults to the full declared address, while residence and legal choices remain explicit",async()=>{
   const checkout=await source("components/digital-checkout.tsx");
-  assert.ok(checkout.includes("[billingAddressSameAsResidence,setBillingAddressSameAsResidence]=useState(false)"));
+  assert.ok(checkout.includes("[billingAddressSameAsResidence,setBillingAddressSameAsResidence]=useState(true)"));
   assert.ok(checkout.includes("checked={billingAddressSameAsResidence}"));
   assert.ok(checkout.includes("Mon adresse de facturation est identique."));
   assert.ok(checkout.includes("Une adresse de facturation différente nécessite une vérification avant paiement."));
@@ -83,11 +83,12 @@ test("LIVE billing address requires its own unselected full-address confirmation
   assert.ok(checkout.includes('billingAddress:{countryCode:"FR",line1:billingLine1,city:billingCity,postalCode:billingPostalCode}'));
   assert.ok(checkout.includes("effectiveBillingPostalCode=billingAddressSameAsResidence?residencePostalCode:billingPostalCode"));
   assert.match(checkout,/const dirty=[^;]*saved\.address\.line1!==line1[^;]*saved\.address\.city!==city[^;]*saved\.address\.postalCode!==residencePostalCode[^;]*saved\.billingPostalCode!==effectiveBillingPostalCode/);
-  assert.ok(checkout.includes('residenceReady=!!saved&&!dirty&&residence?.reviewStatus==="VERIFIED"'));
-  assert.match(checkout,/function changed\(\)\{[^}]*setBillingAddressSameAsResidence\(false\)/);
+  assert.ok(checkout.includes('residenceReady=!!saved&&!dirty&&(residence?.checkoutEligible===true||residence?.reviewStatus==="VERIFIED")'));
+  assert.doesNotMatch(checkout,/function changed\(\)\{[^}]*setBillingAddressSameAsResidence\(false\)/);
   assert.match(checkout,/function changed\(\)\{[^}]*setResidenceConfirmed\(false\)/);
-  assert.match(checkout,/function hydrate\([^)]*\)\{[^}]*setBillingAddressSameAsResidence\(false\)/);
-  assert.match(checkout,/function hydrate\([^)]*\)\{[^}]*setResidenceConfirmed\(false\)/);
+  assert.match(checkout,/function hydrate\([^)]*preserveConfirmation=false\)\{if\(!preserveConfirmation\)setResidenceConfirmed\(false\)/);
+  assert.ok(checkout.includes("hydrate(value,true)"),"Saving does not discard the buyer's explicit confirmation");
+  assert.ok(checkout.includes("if(!preserveConfirmation){const same=value.declaration.address.postalCode===value.declaration.billingPostalCode"));
   const policy=await source("lib/digital/billing-address-policy.ts");
   assert.ok(policy.includes('throw new DigitalError("FRANCE_BILLING_ADDRESS_DIFFERENT_REQUIRES_REVIEW", 409)'));
   assert.ok(policy.includes("billingSnapshotHash(address) !== billingSnapshotHash(residenceAddress)"));

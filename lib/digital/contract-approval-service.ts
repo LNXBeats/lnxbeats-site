@@ -4,7 +4,8 @@ import { DigitalError } from "./domain";
 import { DIGITAL_FRANCE_LIVE_CONTRACT_VERSION, snapshotDigitalFranceLiveContractApproval,
   type DigitalFranceLiveContractApproval } from "./france-live-contract";
 import { normalizeDigitalFranceResidenceAddress, digitalFranceResidenceHash,
-  DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT, type DigitalFranceResidenceSnapshotV2 } from "./france-residence-v2-policy";
+  DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT } from "./france-residence-v2-policy";
+import type { DigitalCheckoutResidenceSnapshot } from "./address-checkout-policy";
 import { resolveDigitalContractBillingAddress } from "./billing-address-policy";
 import type { DigitalFranceMinimalAddress } from "./france-residence-v2-policy";
 
@@ -22,11 +23,11 @@ export async function approvedDigitalFranceContract(db: Pick<Prisma.TransactionC
   catch { throw new DigitalError("FR_LIVE_CONTRACT_APPROVAL_REQUIRED", 409); }
 }
 
-/** Pin only the address already declared and reviewed by this buyer. No identity
+/** Pin only the address already declared and server-assessed for this buyer. No identity
  * document, PSP lookup, unrelated purchase or historical address is collected.
  */
 export async function digitalLiveContractCustomer(db: Pick<Prisma.TransactionClient,"digitalEvent">,
-  userId:string,name:string|null,email:string,residence?:DigitalFranceResidenceSnapshotV2,billingAddressSameAsResidence=false,suppliedBillingAddress?:DigitalFranceMinimalAddress){
+  userId:string,name:string|null,email:string,residence?:DigitalCheckoutResidenceSnapshot,billingAddressSameAsResidence=false,suppliedBillingAddress?:DigitalFranceMinimalAddress){
   if(!name?.trim()||name.trim().length<2)throw new DigitalError("CUSTOMER_NAME_REQUIRED",409);
   if(!residence||residence.subjectUserId!==userId)throw new DigitalError("FRANCE_ADDRESS_DECLARATION_REQUIRED",409);
   const row=await db.digitalEvent.findFirst({where:{id:residence.residenceDeclarationId,actorId:userId,kind:DIGITAL_FRANCE_RESIDENCE_DECLARATION_EVENT},select:{details:true}});
