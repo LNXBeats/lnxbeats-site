@@ -14,6 +14,16 @@ const backLinks = new Map([
   ["app/admin/notifications/page.tsx", "/admin"],
 ]);
 
+test("music navigation is mode-neutral while real QA and order modes stay explicit", () => {
+  const navigation = readFileSync("components/admin-navigation.tsx", "utf8");
+  assert.match(navigation, /href: "\/admin\/musique", label: "Musique numérique",/);
+  assert.doesNotMatch(navigation, /Musique numérique · TEST/);
+  assert.match(navigation, /Changer de profil QA/);
+  const music = readFileSync("app/admin/musique/page.tsx", "utf8");
+  assert(music.includes('mode==="LIVE"?"LIVE":"local TEST"'));
+  assert(music.includes("o.mode"), "historical order modes remain visible");
+});
+
 test("every Admin subpage has one deterministic parent link while the root has none", () => {
   const component = readFileSync("components/admin-back-link.tsx", "utf8");
   assert.match(component, /href: "\/admin" \| `\/admin\/\$\{string\}`/);

@@ -11,7 +11,7 @@ const adminNavigation = [
   { href: "/admin", label: "Accueil", group: "Accueil" },
   { href: "/admin/creations", label: "Créations & collaborations", group: "Créations" },
   { href: "/admin/catalogue", label: "Catalogue & discographie", group: "Créations" },
-  { href: "/admin/musique", label: "Musique numérique · TEST", group: "Créations" },
+  { href: "/admin/musique", label: "Musique numérique", group: "Créations" },
   { href: "/admin/commandes", label: "Commandes musicales", group: "Créations" },
   { href: "/admin/boutique", label: "Produits", group: "Boutique" },
   { href: "/admin/boutique/commandes", label: "Commandes Boutique", group: "Boutique" },
