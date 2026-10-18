@@ -4,6 +4,15 @@ import type { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 import { mapDatabaseProject } from "@/lib/catalog/mapper";
 import { publicProjectStatuses, selectJukeboxProjects } from "@/lib/catalog/publication";
+import { loadDiscographyPreparation } from "@/lib/digital/discography-preparation";
+import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
+
+async function preparationView<T extends { slug: string; type: string; assets?: Array<{ role: string }> }>(rows: T[]) {
+  if (!discographyPreparationEnabled()) return rows;
+  const preparation = new Map((await loadDiscographyPreparation()).map(p => [p.slug, p]));
+  return rows.filter(row => row.type === "PROJECT" || preparation.get(row.slug)?.metadataPublicAllowed === true)
+    .map(row => row.type === "PROJECT" ? row : { ...row, assets: row.assets?.filter(a => a.role !== "AUDIO_PREVIEW") });
+}
 
 const publicProjectWhere = {
   publicVisible: true,
@@ -42,7 +51,7 @@ export async function listPublicProjects() {
     orderBy: [{ catalogPosition: "asc" }, { id: "asc" }],
     include: listInclude,
   });
-  return rows.map(mapDatabaseProject);
+  return (await preparationView(rows)).map(mapDatabaseProject);
 }
 
 export async function listDiscographyProjects() {
@@ -61,7 +70,7 @@ export async function getPublicProjectBySlug(slug: string) {
     where: { ...publicProjectWhere, slug },
     include: detailInclude,
   });
-  return row ? mapDatabaseProject(row) : null;
+  return row ? (await preparationView([row])).map(mapDatabaseProject)[0] ?? null : null;
 }
 
 export async function getFeaturedProject() {
@@ -70,7 +79,7 @@ export async function getFeaturedProject() {
     where: { featured: true, status: "PUBLISHED", publicVisible: true },
     include: listInclude,
   });
-  return row ? mapDatabaseProject(row) : null;
+  return row ? (await preparationView([row])).map(mapDatabaseProject)[0] ?? null : null;
 }
 
 export async function getHomepageProjects() {
@@ -84,14 +93,15 @@ export async function getHomepageProjects() {
       include: listInclude,
     }),
   ]);
-  return { lead, supporting: supportingRows.map(mapDatabaseProject) };
+  return { lead, supporting: (await preparationView(supportingRows)).map(mapDatabaseProject) };
 }
 
 export async function listSitemapProjects() {
   assertDatabaseConfigured();
-  return prisma.project.findMany({
+  const rows = await prisma.project.findMany({
     where: publicProjectWhere,
     orderBy: [{ catalogPosition: "asc" }, { id: "asc" }],
-    select: { slug: true, status: true, featured: true, updatedAt: true },
+    select: { slug: true, type: true, status: true, featured: true, updatedAt: true },
   });
+  return preparationView(rows);
 }

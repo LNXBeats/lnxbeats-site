@@ -1,5 +1,7 @@
 node_modules/
 .next/
+.next-v13/
+.next-v13-demo/
 out/
 /generated/prisma/
 .env

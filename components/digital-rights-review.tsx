@@ -5,8 +5,10 @@ import type { DigitalRightsReviewStatus, DigitalRightsReviewSummary } from "@/li
 import styles from "./digital.module.css";
 type Track = { masterId: string; title: string; version: number; strictReady: boolean; review: DigitalRightsReviewSummary };
 const labels: Record<DigitalRightsReviewStatus, string> = { DRAFT: "Brouillon", REVIEW_REQUIRED: "Revue nécessaire", APPROVED: "Droits vérifiés pour cette version", REJECTED: "Refusé", REVOKED: "Approbation révoquée" };
-export function DigitalRightsReview({ projectId, tracks }: { projectId: string; tracks: Track[] }) {
-  const router = useRouter(), [selected, setSelected] = useState<string[]>([]), [status, setStatus] = useState<DigitalRightsReviewStatus>("REVIEW_REQUIRED");
+export function DigitalRightsReview({ projectId, tracks, externalSelection, onRecorded }: { projectId: string; tracks: Track[]; externalSelection?: { ids: string[]; change: (ids: string[]) => void }; onRecorded?: () => void }) {
+  const router = useRouter(), [internalSelected, setInternalSelected] = useState<string[]>([]), [status, setStatus] = useState<DigitalRightsReviewStatus>("REVIEW_REQUIRED");
+  const selected = externalSelection?.ids ?? internalSelected;
+  function setSelected(value: string[] | ((previous: string[]) => string[])) { const next = typeof value === "function" ? value(selected) : value; if (externalSelection) externalSelection.change(next); else setInternalSelected(next); }
   const [reference, setReference] = useState(""), [sha, setSha] = useState(""), [attested, setAttested] = useState(false), [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [reviews, setReviews] = useState(tracks.map(track => track.review)), [requestId, setRequestId] = useState<string | null>(null);
   function changed() { setRequestId(null); setMessage(""); }
@@ -23,11 +25,12 @@ export function DigitalRightsReview({ projectId, tracks }: { projectId: string; 
         const value = await response.json() as { reviews?: DigitalRightsReviewSummary[]; error?: string };
         if (!response.ok || !value.reviews) throw new Error(value.error ?? "La revue n’a pas été enregistrée. Vérifiez la version et rechargez les états si nécessaire.");
         const updated = value.reviews; setReviews(previous => previous.map(review => updated.find(entry => entry.masterId === review.masterId) ?? review));
-        setRequestId(null); setSelected([]); setMessage("Revue ajoutée au journal, sans effacer les décisions précédentes. Aucun achat, document ou fichier historique modifié. L’offre et la fiscalité restent à vérifier séparément."); router.refresh();
+        setRequestId(null); setSelected([]); setMessage("Revue ajoutée au journal, sans effacer les décisions précédentes. Aucun achat, document ou fichier historique modifié. L’offre et la fiscalité restent à vérifier séparément."); router.refresh(); onRecorded?.();
       } catch (error) { setMessage(error instanceof Error ? error.message : "Résultat inconnu : ne recommencez pas avec une autre clé. Réessayez ce même enregistrement ou rechargez ses états."); }
       finally { setBusy(false); }
     }}>
-      <fieldset disabled={busy}><legend>Versions courantes à examiner — 100 maximum par lot</legend>
+      {externalSelection ? <p>{selected.length} version(s) explicitement sélectionnée(s) dans la liste ci-dessus. Ce circuit requiert vos justificatifs privés et ne suppose aucune absence de collaboration.</p> : null}
+      <fieldset disabled={busy} hidden={!!externalSelection}><legend>Versions courantes à examiner — 100 maximum par lot</legend>
         {!tracks.length ? <p>Aucun WAV importé. Importez et validez d’abord une version audio.</p> : tracks.map(track => { const review = reviews.find(entry => entry.masterId === track.masterId) ?? track.review; return <label key={track.masterId} className={styles.checkbox}>
           <input type="checkbox" disabled={!track.strictReady || busy} checked={selected.includes(track.masterId)} onChange={event => { changed(); setSelected(previous => event.target.checked ? [...previous, track.masterId] : previous.filter(id => id !== track.masterId)); }} />
           <span>{track.title} — V{track.version} · {track.strictReady ? labels[review.status] : "Ancienne preuve audio : nouvelle version strictement validée requise pour les nouvelles ventes"}</span>

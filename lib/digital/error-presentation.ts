@@ -1,5 +1,11 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
+  if(code==="GROUP_LISTENING_INCOMPLETE")return "Écoutez entièrement les extraits sélectionnés dans ce lecteur, puis confirmez personnellement votre choix. Une lecture partielle, une autre session ou une version différente ne suffit pas.";
+  if(code==="GROUP_ORIGINAL_EVIDENCE_REQUIRED")return "Renseignez les faits et références de votre déclaration d’originaux, puis confirmez toutes les autorisations. Collaborations, reprises, samples ou restrictions : utilisez le circuit de justificatifs particuliers.";
+  if(code==="GROUP_LIVE_PROJECT_PROTECTED")return "Ce projet contient des offres actives et reste protégé dans cette revue groupée. Ses validations et ses achats sont conservés.";
+  if(code==="GROUP_PARTICULAR_RIGHTS_REQUIRED")return "Une collaboration documentée, une restriction ou une décision de refus/révocation nécessite le circuit de justificatifs particuliers. La déclaration simplifiée d’originaux ne peut pas le remplacer.";
+  if(code==="GROUP_ATTESTATION_REQUIRED")return "Votre attestation personnelle explicite est obligatoire. La lecture ou la sélection seule n’enregistre aucune approbation.";
+  if(code.startsWith("GROUP_")||code==="INVALID_GROUP_REVIEW")return "La revue groupée n’a pas pu être enregistrée. Actualisez ses états avant de réessayer ; aucun fichier ni offre n’a été modifié.";
   if(code==="EXPRESS_DUPLICATE")return "Ce projet existe déjà. Recherchez-le dans Musique et reprenez sa fiche ; aucun doublon n’a été créé.";
   if(code==="EXPRESS_CHANGED"||code==="STALE_OFFER")return "La fiche ou un prix a changé. Rechargez les données avant d’enregistrer ; rien n’a été remplacé.";
   if(code==="EXPRESS_ACTIVE_OFFER")return "Cette fiche contient déjà une offre active. Utilisez les outils avancés pour la modifier sans changer involontairement les ventes en cours.";

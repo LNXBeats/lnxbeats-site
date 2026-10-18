@@ -1,10 +1,14 @@
 import { catalogAudioResponse } from "@/lib/catalog/audio-response";
 import { prisma } from "@/lib/prisma";
+import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
 
 export const runtime = "nodejs";
 
 async function publicAudioAsset(assetId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(assetId)) return null;
+  // Musical releases use the existing exact-master digital preview gate, not
+  // legacy project-level audio associations. Other historical projects remain unchanged.
+  if (discographyPreparationEnabled() && await prisma.projectAsset.count({ where: { assetId, role: "AUDIO_PREVIEW", project: { type: { in: ["ALBUM", "SINGLE"] } } } })) return null;
   return prisma.asset.findFirst({
     where: {
       id: assetId,

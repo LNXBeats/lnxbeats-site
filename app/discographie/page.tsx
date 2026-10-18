@@ -12,6 +12,8 @@ import { AddDigitalOffer } from "@/components/digital-catalog";
 import { DigitalCartNavigation, DigitalDemoBanner } from "@/components/digital-navigation";
 import { ProjectArtwork } from "@/components/project-artwork";
 import digitalStyles from "@/components/digital.module.css";
+import { loadDiscographyPreparation } from "@/lib/digital/discography-preparation";
+import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
 import "../v064-discography.css";
 
 export const metadata: Metadata = createPublicPageMetadata({
@@ -45,8 +47,10 @@ function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProj
 export default async function DiscographyPage() {
   const digitalMode = digitalRuntimeMode() ?? "TEST";
   const { projects } = await listDiscographyProjects();
+  const preparation = discographyPreparationEnabled() ? await loadDiscographyPreparation() : [];
+  const soon = new Set(preparation.filter(p => p.metadataPublicAllowed && p.activeOffers === 0).map(p => p.slug));
   const sceneProjects = visibleDiscographyProjects(discographyView(projects), "all", "editorial");
-  const digitalProjects = digitalEnabled() ? await Promise.all(projects.filter(p => p.status === "published")
+  const digitalProjects = digitalEnabled() ? await Promise.all(projects.filter(p => p.status === "published" || soon.has(p.slug))
     .map(async project => ({ project, view: await publicDigitalProject(project.slug) }))) : [];
 
   return (
@@ -64,10 +68,10 @@ export default async function DiscographyPage() {
           <div className={digitalStyles.heading}><div><p className="eyebrow">{digitalMode==="LIVE"?"LNX Beats · Musique à télécharger":"DCN-1.0 · revue locale"}</p><h2 id="digital-catalogue-title">La musique vous accompagne.</h2></div>
             <nav className={digitalStyles.tabs} aria-label="Achats numériques"><Link className="text-link" href="/musique/panier">Panier numérique</Link><Link className="text-link" href="/compte/musique">Ma musique</Link></nav></div>
           <p className={digitalStyles.note}>{digitalMode==="LIVE"?"Albums et titres à télécharger · WAV + MP3 inclus · usage privé.":"Albums et pistes à télécharger · tarifs QA uniquement · aucune vente LIVE."}</p>
-          <div className={digitalStyles.catalogueGrid}>{digitalProjects.filter(p => p.view?.album || p.view?.tracks.some(t=>t.offer)).map(({project,view}) => <article className={digitalStyles.panel} key={project.slug}>
+          <div className={digitalStyles.catalogueGrid}>{digitalProjects.filter(p => soon.has(p.project.slug) || p.view?.album || p.view?.tracks.some(t=>t.offer)).map(({project,view}) => <article className={digitalStyles.panel} key={project.slug}>
             <Link href={`/album/${project.slug}`} className={digitalStyles.coverLink}><ProjectArtwork project={project} sizes="(max-width: 768px) 45vw, 25vw" /><h3>{project.title}</h3></Link>
-            <p className={digitalStyles.muted}>{view?.tracks.length} pistes · extraits de 60 secondes maximum</p>
-            {view?.album ? <AddDigitalOffer id={view.album.id} priceCents={view.album.priceCents} label="Ajouter l’album" /> : <Link className="text-link" href={`/album/${project.slug}`}>Choisir les pistes</Link>}
+            {soon.has(project.slug) ? <p role="status">Arrive bientôt · vente et téléchargements indisponibles.</p> : <><p className={digitalStyles.muted}>{view?.tracks.length} pistes · extraits de 60 secondes maximum</p>
+            {view?.album ? <AddDigitalOffer id={view.album.id} priceCents={view.album.priceCents} label="Ajouter l’album" /> : <Link className="text-link" href={`/album/${project.slug}`}>Choisir les pistes</Link>}</>}
           </article>)}</div>
         </section> : null}
         <details className="discography-directory">

@@ -98,9 +98,9 @@ export function digitalRightsReviewInput(value: unknown): ReviewInput {
     attested: input.attested, reason, idempotencyKey: input.idempotencyKey };
 }
 /** New append-only facts only: no master, asset, offer, acquisition or prior event mutation. */
-export async function recordDigitalRightsReviews(actor: OrderActor, raw: unknown) {
+export async function recordDigitalRightsReviews(actor: OrderActor, raw: unknown, transaction?: Tx) {
   requireDigitalEnvironment(); const input = digitalRightsReviewInput(raw);
-  return prisma.$transaction(async db => {
+  const execute = async (db: Tx) => {
     await requireReviewer(db, actor.id);
     for (const id of input.masterIds) await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-rights-master:${id}`})) IS NULL AS locked`;
     const masters = await db.digitalMaster.findMany({ where: { id: { in: input.masterIds }, track: { projectId: input.projectId } }, include: masterInclude });
@@ -134,5 +134,6 @@ export async function recordDigitalRightsReviews(actor: OrderActor, raw: unknown
       await db.digitalEvent.create({ data: { kind: DIGITAL_RIGHTS_REVIEW_EVENT, actorId: actor.id, externalKey: record.externalKey, createdAt, details } });
     }
     return loadDigitalRightsReviews(db, masters);
-  });
+  };
+  return transaction ? execute(transaction) : prisma.$transaction(execute);
 }

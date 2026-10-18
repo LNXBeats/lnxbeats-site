@@ -27,6 +27,8 @@ import { getPublicProjectBySlug } from "@/lib/catalog/queries";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildProjectStructuredData } from "@/lib/seo/structured-data";
 import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
+import { loadDiscographyPreparation } from "@/lib/digital/discography-preparation";
+import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
 
 type AlbumPageProps = {
   params: Promise<{ slug: string }>;
@@ -63,6 +65,8 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   }
 
   const kind = getProjectKindLabel(project.type);
+  const preparation = discographyPreparationEnabled() ? (await loadDiscographyPreparation()).find(p => p.slug === project.slug) : null;
+  const comingSoon = !!preparation && preparation.metadataPublicAllowed && preparation.activeOffers === 0;
   const session = digitalEnabled() ? await getAuthSession() : null;
   const digital = digitalEnabled() ? await publicDigitalProject(project.slug, session?.user.status === "ACTIVE" && session.user.emailVerified ? session.user.id : undefined) : null;
   const digitalMode = digitalRuntimeMode() ?? "TEST";
@@ -85,6 +89,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
             <div className="album-hero__content" data-motion-layer="copy">
               <p className="album-status"><span>{kind}</span><span>{status}</span></p>
               <h1>{project.title}</h1>
+              {comingSoon ? <p role="status">Arrive bientôt. Cette fiche présente la sortie ; la vente et les téléchargements ne sont pas encore disponibles.</p> : null}
               {project.subtitle ? <p className="album-hero__subtitle">{project.subtitle}</p> : null}
               {digital ? project.shortDescription ? <p className="album-hero__description">{project.shortDescription}</p> : null : <p className="album-hero__description">{project.shortDescription || project.description}</p>}
               {digital ? <DigitalAlbumOffer album={digital.album}/> : null}
@@ -96,7 +101,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                 {project.genres.length > 0 ? <div><dt>Genres</dt><dd>{project.genres.join(" · ")}</dd></div> : null}
                 {project.credits.length > 0 ? (
                   <div>
-                    <dt>Crédits confirmés</dt>
+                    <dt>Crédits documentés</dt>
                     <dd>{project.credits.map((credit) => `${getCreditRoleLabel(credit.role)} : ${credit.name}${credit.detail ? ` (${credit.detail})` : ""}`).join(" · ")}</dd>
                   </div>
                 ) : null}

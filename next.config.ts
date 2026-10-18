@@ -4,6 +4,8 @@ import { contentSecurityPolicy } from "./lib/security/content-security-policy";
 import { ORDER_PHOTO_MULTIPART_MAX_BYTES } from "./data/order-photo-upload";
 
 const nextConfig: NextConfig = {
+  // The read-only V1.3 QA uses a separate cache/lock from the existing Express QA.
+  distDir: process.env.DCN_MODE === "TEST" && process.env.DCN_V13_QA_READONLY_MEDIA === "true" ? process.env.DCN_V13_DEMO === "true" ? ".next-v13-demo" : ".next-v13" : ".next",
   agentRules: false,
   poweredByHeader: false,
   reactStrictMode: true,
