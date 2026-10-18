@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DigitalRightsReviewStatus, DigitalRightsReviewSummary } from "@/lib/digital/rights-review-policy";
 import styles from "./digital.module.css";
+import { privateEvidenceFingerprint } from "@/lib/digital/review-technical-manifest";
 type Track = { masterId: string; title: string; version: number; strictReady: boolean; review: DigitalRightsReviewSummary };
 const labels: Record<DigitalRightsReviewStatus, string> = { DRAFT: "Brouillon", REVIEW_REQUIRED: "Revue nécessaire", APPROVED: "Droits vérifiés pour cette version", REJECTED: "Refusé", REVOKED: "Approbation révoquée" };
 export function DigitalRightsReview({ projectId, tracks, externalSelection, onRecorded }: { projectId: string; tracks: Track[]; externalSelection?: { ids: string[]; change: (ids: string[]) => void }; onRecorded?: () => void }) {
@@ -11,12 +12,13 @@ export function DigitalRightsReview({ projectId, tracks, externalSelection, onRe
   function setSelected(value: string[] | ((previous: string[]) => string[])) { const next = typeof value === "function" ? value(selected) : value; if (externalSelection) externalSelection.change(next); else setInternalSelected(next); }
   const [reference, setReference] = useState(""), [sha, setSha] = useState(""), [attested, setAttested] = useState(false), [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [reviews, setReviews] = useState(tracks.map(track => track.review)), [requestId, setRequestId] = useState<string | null>(null);
-  function changed() { setRequestId(null); setMessage(""); }
+  const [fingerprinting, setFingerprinting] = useState(false), fingerprintGeneration = useRef(0);
+  function changed() { fingerprintGeneration.current++; setFingerprinting(false); setAttested(false); setRequestId(null); setMessage(""); }
   return <section className={styles.panel} aria-labelledby="rights-review-title"><h2 id="rights-review-title">Droits et collaborateurs — par version audio</h2>
     <p>Avant toute nouvelle vente, vérifiez les autorisations de la composition, du master, des interprètes/collaborateurs, des samples ou reprises éventuels et de l’extrait. La simple case de l’offre ne constitue plus une preuve. Cette revue couvre la vente personnelle WAV/MP3 en France métropolitaine, Corse comprise.</p>
-    <p className={styles.note}>Conservez les documents dans votre archive privée. Saisissez seulement sa référence opaque et le SHA‑256 du justificatif ou du manifeste vérifié. Aucun document n’est publié ; le logiciel ne remplace pas votre examen juridique.</p>
+    <p className={styles.note}>Conservez vos justificatifs dans votre archive privée. Le calcul de leur empreinte est automatique et reste dans votre navigateur : aucun fichier n’est envoyé. Un manifeste technique identifie les versions, mais ne démontre pas à lui seul la propriété des droits.</p>
     <form className={`${styles.form} ${styles.rightsReview}`} onSubmit={async event => {
-      event.preventDefault(); if (busy) return; setBusy(true); setMessage("");
+      event.preventDefault(); if (busy || fingerprinting) return; setBusy(true); setMessage("");
       const key = requestId ?? crypto.randomUUID(); setRequestId(key);
       try {
         const response = await fetch("/api/admin/digital/rights-reviews", { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
@@ -40,11 +42,21 @@ export function DigitalRightsReview({ projectId, tracks, externalSelection, onRe
       <label>Décision de revue<select value={status} onChange={event => { changed(); setStatus(event.target.value as DigitalRightsReviewStatus); }} disabled={busy}>
         <option value="DRAFT">Brouillon</option><option value="REVIEW_REQUIRED">Revue nécessaire</option><option value="APPROVED">Approuver les droits de ces versions</option><option value="REJECTED">Refuser</option><option value="REVOKED">Révoquer l’approbation</option>
       </select></label>
-      <label>Référence d’archive privée<input value={reference} maxLength={197} placeholder="private-evidence:album/manifest-01" onChange={event => { changed(); setReference(event.target.value); }} required={status === "APPROVED"} disabled={busy} /></label>
-      <label>SHA‑256 du justificatif ou manifeste privé<input value={sha} minLength={64} maxLength={64} pattern="[a-f0-9]{64}" autoComplete="off" onChange={event => { changed(); setSha(event.target.value); }} required={status === "APPROVED"} disabled={busy} /></label>
+      <label>Choisir mon justificatif privé · calcul automatique du SHA‑256<input type="file" disabled={busy} onChange={async event => {
+        const file = event.currentTarget.files?.[0]; changed(); setSha(""); setReference(""); if (!file) return;
+        const generation = fingerprintGeneration.current; setFingerprinting(true);
+        try { const result = await privateEvidenceFingerprint(file); if (generation !== fingerprintGeneration.current) return; setSha(result.sha256); setReference(result.reference); setMessage("Empreinte calculée localement. Conservez ce justificatif privé sous cette référence ; il n’a pas été téléversé. Aucune décision enregistrée."); }
+        catch (error) { if (generation === fingerprintGeneration.current) setMessage(error instanceof Error ? error.message : "Empreinte indisponible. Aucun enregistrement effectué."); }
+        finally { if (generation === fingerprintGeneration.current) setFingerprinting(false); }
+      }}/></label>
+      {fingerprinting ? <p role="status">Calcul local de l’empreinte…</p> : null}
+      <details><summary>Référence et empreinte du justificatif · options avancées</summary>
+        <label>Référence d’archive privée<input value={reference} maxLength={197} placeholder="private-evidence:album/manifest-01" onChange={event => { changed(); setReference(event.target.value); }} required={status === "APPROVED"} disabled={busy} /></label>
+        <label>SHA‑256 calculé ou vérifié<input value={sha} minLength={64} maxLength={64} pattern="[a-f0-9]{64}" autoComplete="off" onChange={event => { changed(); setSha(event.target.value); }} required={status === "APPROVED"} disabled={busy} /></label>
+      </details>
       <label className={styles.checkbox}><input type="checkbox" checked={attested} required={status === "APPROVED"} disabled={busy} onChange={event => { changed(); setAttested(event.target.checked); }} /><span>J’ai examiné les preuves et vérifié toutes les autorisations composition/master/collaborateurs/interprètes/samples/reprises/extraits nécessaires à cette vente personnelle WAV/MP3 en France métropolitaine, Corse comprise. Aucune restriction incompatible n’est connue.</span></label>
       <label>Motif administratif, sans correspondance confidentielle<textarea value={reason} maxLength={500} required={status === "REJECTED" || status === "REVOKED"} disabled={busy} onChange={event => { changed(); setReason(event.target.value); }} /></label>
-      <button disabled={busy || !selected.length || selected.length > 100}>{busy ? "Enregistrement…" : `Enregistrer la revue de ${selected.length} version(s)`}</button><p role="status">{message}</p>
+      <button disabled={busy || fingerprinting || !selected.length || selected.length > 100 || status === "APPROVED" && (!sha || !reference || !attested)}>{busy ? "Enregistrement…" : `Enregistrer la revue de ${selected.length} version(s)`}</button><p role="status">{message}</p>
     </form>
   </section>;
 }

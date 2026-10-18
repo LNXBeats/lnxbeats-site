@@ -7,6 +7,7 @@ import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/
 import { DigitalRightsReview } from "./digital-rights-review";
 import common from "./digital.module.css";
 import styles from "./music-group-review.module.css";
+import { browserSha256, technicalReviewManifest } from "@/lib/digital/review-technical-manifest";
 const fields = { authors: "Auteur(s) des paroles", composers: "Compositeur(s)", masterOwner: "Titulaire et producteur du master", performers: "Voix / interprètes et autorisations", toolsLicenses: "Outils utilisés et licences applicables", evidenceReferences: "Références des preuves privées vérifiées" };
 const blank = Object.fromEntries(Object.keys(fields).map(k => [k, ""])) as Record<keyof typeof fields, string>;
 const duration = (ms: number | null) => ms === null ? "Non établie" : `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")} (${(ms / 1000).toLocaleString("fr-FR")} s)`;
@@ -27,6 +28,15 @@ export function MusicGroupReview({ initial }: { initial: GroupReviewView }) {
   async function refresh() {
     const response = await fetch(`/api/admin/digital/group-review?projectId=${project.id}`, { credentials: "same-origin", cache: "no-store" }); const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "États indisponibles"); setProject(body.project as GroupReviewView);
+  }
+  async function downloadManifest() {
+    try {
+      const manifest = technicalReviewManifest(project), body = JSON.stringify(manifest, null, 2) + "\n";
+      const sha256 = await browserSha256(new TextEncoder().encode(body).buffer);
+      const url = URL.createObjectURL(new Blob([body], { type: "application/json" })), link = document.createElement("a");
+      link.href = url; link.download = `DCN-versions-${project.id}-${sha256}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMessage(`Manifeste technique préparé sans écriture : SHA‑256 ${sha256}. Il ne prouve pas la propriété intellectuelle et n’approuve ni droits ni écoutes.`);
+    } catch { setMessage("Manifeste indisponible dans ce navigateur. Aucune donnée ni validation modifiée."); }
   }
   async function start() {
     const a = player.current; if (!a || !track?.masterId) return; announceMediaPlayback({ ownerId: "dcn-group-review", kind: "audio" });
@@ -69,6 +79,7 @@ export function MusicGroupReview({ initial }: { initial: GroupReviewView }) {
     <section className={common.panel}><div className={styles.summary}>{project.cover ? <Image className={styles.art} src={project.cover.url} unoptimized alt={`Pochette de ${project.title}`} width={96} height={96}/> : null}<div><h2>{project.title}</h2><p>{project.type === "ALBUM" ? "Album" : "Single"} · {project.tracks.length} pistes · pochette {project.cover?.rights ?? "à examiner"}</p></div></div>
       <p>Crédits documentés : {project.credits.length ? project.credits.map(c => `${c.role} : ${c.name} (${c.confidence})`).join(" · ") : "Non renseignés. Aucun rôle n’est attribué automatiquement."}</p>
       <p className={styles.small}>Les collaborateurs absents des crédits ne sont pas réputés inexistants. Leurs autorisations restent à vérifier dans les justificatifs particuliers.</p>
+      <button type="button" onClick={() => void downloadManifest()}>Télécharger le manifeste technique privé de ce projet</button><p className={styles.small}>IDs, versions et empreintes déjà établies sont préparés automatiquement, sans nouvelle analyse audio. Ce manifeste n’est pas une preuve indépendante des droits. Les originaux contrôlés utilisent déjà la déclaration groupée ci-dessous ; les cas particuliers conservent leurs justificatifs propres.</p>
       {project.protectedLive ? <p role="status">Projet déjà vendu : ses validations sont conservées et les nouvelles décisions sont désactivées dans cette interface.</p> : null}
     </section>
     <section className={styles.sticky} aria-label="Écoute continue"><h2>{track?.title ?? "Aucune piste"}</h2><p>{track?.ready ? `Titre ${track.position} · durée totale ${duration(track.durationMs)} · extrait ${duration(track.previewDurationMs)}` : "Version exacte non disponible — aucun import repris automatiquement."}</p>
@@ -80,11 +91,12 @@ export function MusicGroupReview({ initial }: { initial: GroupReviewView }) {
       <div className={styles.actions}><button type="button" onClick={() => { player.current?.pause(); setActive(Math.max(0, active - 1)); }} disabled={active === 0}>Précédent</button><button type="button" onClick={() => { player.current?.pause(); setActive(Math.min(project.tracks.length - 1, active + 1)); }} disabled={active >= project.tracks.length - 1}>Suivant</button></div>
     </section>
     <section className={common.panel}><h2>Versions réellement examinées</h2><p>La sélection seule n’approuve rien. Les écoutes sont liées à votre compte, au master et à l’empreinte de l’extrait. Une lecture déclarée par le navigateur n’est pas une preuve indépendante d’écoute humaine ; votre attestation personnelle reste obligatoire.</p>
+      <p className={styles.small}>Master prêt, extrait validé, droits confirmés et prix enregistré sont des étapes distinctes. La vérification finale dans Express contrôle aussi les crédits, la pochette et les autres autorisations ; aucune de ces actions ne publie une offre.</p>
       <div className={styles.actions}><button disabled={busy || uncertain || project.protectedLive} onClick={() => changeSelection(project.tracks.filter(t => t.ready).map(t => t.masterId!))}>Tout sélectionner pour examen</button><button disabled={busy || uncertain} onClick={() => changeSelection(project.tracks.filter(t => t.ready && t.listened && t.selection?.status !== "VALIDATED").map(t => t.masterId!))}>Sélectionner les extraits écoutés à valider</button><button disabled={busy || uncertain} onClick={() => changeSelection([])}>Tout désélectionner</button></div>
       <ol className={styles.list}>{project.tracks.map((t, i) => <li key={t.id} className={styles.track} data-active={i === active}><div className={styles.heading}><label><input type="checkbox" aria-label={`Examiner ${t.title}`} checked={!!t.masterId && selected.includes(t.masterId)} disabled={!t.ready || project.protectedLive || busy || uncertain} onChange={e => changeSelection(e.target.checked ? [...selected, t.masterId!] : selected.filter(id => id !== t.masterId))}/><strong>{t.position}. {t.title}</strong></label><button disabled={!t.previewUrl} onClick={() => { player.current?.pause(); setActive(i); }}>Afficher le lecteur</button></div>
-        <p className={styles.badges}><span>{t.ready ? `READY · V${t.version} · WAV + MP3` : "Identité/source à confirmer"}</span><span>{duration(t.durationMs)}</span><span>{t.selection?.status === "VALIDATED" ? "Extrait validé" : t.listened ? "Écouté · à valider personnellement" : "À écouter"}</span><span>Droits : {t.review?.status ?? "PENDING"}</span></p>
+        <p className={styles.badges}><span>{t.ready ? `Master prêt · V${t.version} · WAV + MP3` : t.sourceFormat === "MP3" ? "Source MP3 uniquement · brouillon privé" : "Identité/source à confirmer"}</span><span>{duration(t.durationMs)}</span><span>{t.selection?.status === "VALIDATED" ? "Extrait validé · aucune nouvelle écoute requise" : t.listened ? "Écouté · à valider personnellement" : "À écouter"}</span><span>Droits : {t.review?.status === "APPROVED" ? "confirmés pour cette version" : t.review?.status ?? "PENDING"}</span><span>Prix : {t.priceCents === null ? "à renseigner" : new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(t.priceCents / 100)}</span><span>{t.offerActive ? "Offre active · préservée" : "Décision commerciale distincte · offre inactive"}</span></p>
         <p className={styles.small}>Crédits piste : {t.credits.length ? t.credits.map(c => `${c.role} : ${c.name} (${c.confidence})`).join(" · ") : "Non documentés"} · Preuve de droits : {t.review?.reviewId ? `${t.review.reviewId} · ${t.review.reviewedAt ?? "date à vérifier"}` : "Aucune décision établie pour ce master"}</p>
-        <details><summary>Version et empreintes exactes</summary><div className={styles.proof}>Master : {t.masterId ?? "non associé"}<br/>WAV : {t.wavSha256 ?? "absent"}<br/>MP3 : {t.mp3Sha256 ?? "absent"}<br/>Extrait : {t.previewSha256 ?? "absent"}<br/>Début : {t.previewStartMs ?? "—"} ms · Trace d’écoute : {t.receiptId ?? "aucune"}</div></details>
+        <details><summary>Version et empreintes exactes</summary><div className={styles.proof}>Version : {t.masterId ?? "non associée"}<br/>Source : {t.sourceFormat ?? "absente"} · {t.sourceSha256 ?? "empreinte absente"}{t.sourceFormat === "MP3" ? " · source compressée, brouillon non commercialisable ; aucun WAV original" : ""}<br/>WAV : {t.wavSha256 ?? "absent"}<br/>MP3 dérivé : {t.mp3Sha256 ?? "absent"}<br/>Extrait : {t.previewSha256 ?? "absent"}<br/>Début : {t.previewStartMs ?? "—"} ms · Trace d’écoute : {t.receiptId ?? "aucune"}</div></details>
         <Link className="text-link" href={`/admin/musique/express?projet=${project.id}#${t.ready ? "droits" : "audio"}`}>Ouvrir la correction dans Express</Link>
       </li>)}</ol>
     </section>

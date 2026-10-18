@@ -33,18 +33,22 @@ async function receipt(db: DB, actorId: string, master: Awaited<ReturnType<typeo
 export async function loadGroupReview(actor: OrderActor, projectId: string, db: DB = prisma) {
   enabled(); const p = await projectForReview(db, actor, projectId);
   const data = await db.project.findUniqueOrThrow({ where: { id: p.id }, include: {
-    credits: true, assets: { where: { role: "COVER" }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 1, include: { asset: true } },
+    credits: true, digitalOffers: { select: { trackId: true, scope: true, priceCents: true, active: true } }, assets: { where: { role: "COVER" }, orderBy: [{ position: "asc" }, { createdAt: "desc" }], take: 1, include: { asset: true } },
     tracks: { orderBy: [{ position: "asc" }, { id: "asc" }], include: { credits: true, digitalMasters: { orderBy: { version: "desc" }, take: 1, include: digitalExcerptMasterInclude } } } } });
   const masters = data.tracks.flatMap(t => t.digitalMasters), reviews = await loadDigitalRightsReviews(db, masters);
   const tracks = [];
   for (const t of data.tracks) {
     const m = t.digitalMasters[0], ready = !!m && digitalCommercialAudioReady(m), selection = ready ? await loadDigitalExcerptSelection(db, m).catch(() => null) : null;
     const heard = ready ? await receipt(db, actor.id, m) : null;
+    const offer = data.digitalOffers.find(o => o.scope === "TRACK" && o.trackId === t.id);
     tracks.push({ id: t.id, title: t.title, position: t.position, masterId: m?.id ?? null, version: m?.version ?? null, ready,
       durationMs: m?.masterAsset.durationMs ?? null, previewDurationMs: m?.previewDurationMs ?? null, previewStartMs: m?.previewStartMs ?? null,
       previewUrl: ready && m.previewAssetId ? `/api/admin/digital/previews/${m.previewAssetId}` : null,
-      wavSha256: m?.masterAsset.checksumSha256 ?? null, mp3Sha256: m?.mp3Asset?.checksumSha256 ?? null, previewSha256: m?.previewAsset?.checksumSha256 ?? null,
+      sourceFormat: m?.codec === "wav" ? "WAV" as const : m?.codec === "mp3" ? "MP3" as const : null,
+      sourceSha256: m?.masterAsset.checksumSha256 ?? null,
+      wavSha256: m?.codec === "wav" ? m.masterAsset.checksumSha256 : null, mp3Sha256: m?.mp3Asset?.checksumSha256 ?? null, previewSha256: m?.previewAsset?.checksumSha256 ?? null,
       bindingHash: ready ? binding(m) : null,
+      priceCents: offer?.priceCents ?? null, offerActive: offer?.active ?? false,
       selection, listened: !!heard, receiptId: heard?.id ?? null, review: reviews.find(r => r.masterId === m?.id) ?? null,
       credits: t.credits.map(c => ({ name: c.name, role: c.role, confidence: c.confidence })) });
   }
