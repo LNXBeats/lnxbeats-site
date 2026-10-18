@@ -89,6 +89,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
             <div className="album-hero__content" data-motion-layer="copy">
               <p className="album-status"><span>{kind}</span><span>{status}</span></p>
               <h1>{project.title}</h1>
+              {project.primaryArtist ? <p className="eyebrow">Artiste principal · {project.primaryArtist}</p> : null}
               {comingSoon ? <p role="status">Arrive bientôt. Cette fiche présente la sortie ; la vente et les téléchargements ne sont pas encore disponibles.</p> : null}
               {project.subtitle ? <p className="album-hero__subtitle">{project.subtitle}</p> : null}
               {digital ? project.shortDescription ? <p className="album-hero__description">{project.shortDescription}</p> : null : <p className="album-hero__description">{project.shortDescription || project.description}</p>}

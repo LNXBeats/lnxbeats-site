@@ -27,7 +27,7 @@ export function Tracklist({ project }: { project: Project }) {
         {project.tracks.map((track) => (
           <li key={`${track.number}-${track.title}`}>
             <span className="tracklist__number">{String(track.number).padStart(2, "0")}</span>
-            <span className="tracklist__title">{track.title}</span>
+            <span className="tracklist__title">{track.title}{track.primaryArtist ? <small style={{ display: "block" }}>{track.primaryArtist}</small> : null}</span>
             {track.duration ? <span className="tracklist__duration">{track.duration}</span> : null}
           </li>
         ))}

@@ -24,6 +24,7 @@ export function AlbumCard({ project, priority = false, compact = false }: AlbumC
               {project.status !== "published" ? ` · ${getProjectStatusLabel(project.status)}` : ""}
             </p>
             <h3>{project.title}</h3>
+            {project.primaryArtist ? <p className="release-card__meta">{project.primaryArtist}</p> : null}
           </div>
           <span className="release-card__action" aria-hidden="true"><small>Entrer</small> <UiIcon name="arrow-right" /></span>
         </div>

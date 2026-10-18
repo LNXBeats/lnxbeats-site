@@ -7,7 +7,7 @@ import { digitalCommercialAudioReady } from "./formats";
 import { digitalRightsMasterBinding, digitalRightsReviewHash } from "./rights-review-policy";
 import { loadDigitalRightsReviews, recordDigitalRightsReviews } from "./rights-review-service";
 import { digitalExcerptMasterInclude, getCurrentDigitalExcerptMaster, loadDigitalExcerptSelection, recordDigitalExcerptSelection, requireDigitalExcerptAdmin } from "./excerpt-service";
-import { GROUP_LISTEN_RECEIPT, GROUP_ORIGINAL_DECLARATION, issueListeningTicket, listeningCoverage, listeningReceiptValid, originalFacts, requiresParticularRightsCase, reviewAttested, reviewMasterIds, reviewObject, verifyListeningTicket } from "./group-review-policy";
+import { GROUP_LISTEN_RECEIPT, GROUP_ORIGINAL_DECLARATION, issueListeningTicket, listeningCoverage, listeningReceiptValid, originalFacts, ownerOriginalConfirmation, artisticProvenance, requiresParticularRightsCase, reviewAttested, reviewMasterIds, reviewObject, verifyListeningTicket } from "./group-review-policy";
 type DB = Prisma.TransactionClient;
 function enabled() { requireDigitalEnvironment(); if (process.env.DCN_GROUP_REVIEW_ENABLED !== "true") throw new DigitalError("GROUP_REVIEW_UNAVAILABLE", 503); }
 function binding(master: Parameters<typeof digitalRightsMasterBinding>[0] & { previewStartMs: number; previewDurationMs: number | null }) {
@@ -17,7 +17,8 @@ async function projectForReview(db: DB, actor: OrderActor, id: string, writing =
   await requireDigitalExcerptAdmin(db, actor.id); assertDigitalUuid(id);
   const p = await db.project.findUnique({ where: { id }, include: { digitalOffers: { select: { active: true } } } });
   if (!p || !["ALBUM", "SINGLE"].includes(p.type)) throw new DigitalError("NOT_FOUND", 404);
-  if (writing && p.digitalOffers.some(o => o.active)) throw new DigitalError("GROUP_LIVE_PROJECT_PROTECTED", 409);
+  // Append-only decisions do not edit an active offer or an acquired edition.
+  void writing;
   return p;
 }
 async function currentMaster(db: DB, projectId: string, id: string) {
@@ -52,7 +53,7 @@ export async function loadGroupReview(actor: OrderActor, projectId: string, db: 
       selection, listened: !!heard, receiptId: heard?.id ?? null, review: reviews.find(r => r.masterId === m?.id) ?? null,
       credits: t.credits.map(c => ({ name: c.name, role: c.role, confidence: c.confidence })) });
   }
-  return { id: p.id, slug: p.slug, title: p.title, type: p.type, protectedLive: p.digitalOffers.some(o => o.active),
+  return { id: p.id, slug: p.slug, title: p.title, type: p.type, protectedLive: false, hasActiveOffers: p.digitalOffers.some(o => o.active),
     cover: data.assets[0] ? { url: `/api/admin/digital/covers/${data.assets[0].asset.id}`, rights: data.assets[0].asset.rightsStatus } : null,
     credits: data.credits.map(c => ({ name: c.name, role: c.role, confidence: c.confidence })), tracks };
 }
@@ -93,7 +94,7 @@ export async function mutateGroupReview(actor: OrderActor, raw: unknown) {
       const credits = await db.credit.findMany({ where: { OR: [{ projectId, trackId: null }, { trackId: { in: masters.map(m => m.trackId) } }] }, select: { role: true } });
       const prior = await loadDigitalRightsReviews(db, masters);
       if (requiresParticularRightsCase(credits.map(c => c.role), masters.flatMap(m => [m.masterAsset.rightsStatus, m.mp3Asset?.rightsStatus ?? "", m.previewAsset?.rightsStatus ?? ""]), prior.map(r => r.status))) throw new DigitalError("GROUP_PARTICULAR_RIGHTS_REQUIRED", 409);
-      const facts = originalFacts(input.facts);
+      const facts = input.operation === "original-rights" && reviewObject(input.facts).policy === "OWNER_ORIGINAL_CONFIRMATION_V1" ? ownerOriginalConfirmation(input.facts) : originalFacts(input.facts);
       const requestHash = digitalRightsReviewHash({ actorId: actor.id, projectId, ids, facts, bindings: masters.map(digitalRightsMasterBinding) });
       const externalKey = `dcn-originals:${input.idempotencyKey}`;
       const old = await db.digitalEvent.findUnique({ where: { externalKey }, select: { actorId: true, details: true } });
@@ -115,11 +116,14 @@ export async function mutateGroupReview(actor: OrderActor, raw: unknown) {
       for (const id of [...new Set(masters.map(m => m.trackId))].sort()) await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-track:${id}`})) IS NULL AS locked`;
       for (const id of ids) await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-excerpt:${id}`})) IS NULL AS locked`;
       masters = await Promise.all(ids.map(id => currentMaster(db, projectId, id))); checkBindings();
+      const provenance = artisticProvenance(input.provenance);
       const selections = [];
       for (const m of masters) {
-        if (!await receipt(db, actor.id, m)) throw new DigitalError("GROUP_LISTENING_INCOMPLETE", 409);
+        const heard = await receipt(db, actor.id, m);
+        if (provenance === "RECORDED_PLAYBACK" && !heard) throw new DigitalError("GROUP_LISTENING_INCOMPLETE", 409);
         const result = await recordDigitalExcerptSelection(actor, m.id, { action: requireDigitalEnvironment() === "LIVE" ? "validate-current" : "validate-prepared",
-          startMs: m.previewStartMs, expectedRevisionId: expected.find(e => e.masterId === m.id)!.revisionId, idempotencyKey: input.idempotencyKey, attested: true }, db);
+          startMs: m.previewStartMs, expectedRevisionId: expected.find(e => e.masterId === m.id)!.revisionId, idempotencyKey: input.idempotencyKey, attested: true,
+          provenance, receiptId: provenance === "RECORDED_PLAYBACK" ? heard!.id : null }, db);
         selections.push({ masterId: m.id, selection: result.selection });
       }
       return { selections, saleActivated: false };

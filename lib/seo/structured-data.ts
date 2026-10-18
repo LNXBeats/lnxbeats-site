@@ -1,5 +1,6 @@
 import { siteConfig } from "@/data/site";
 import type { PublicProject } from "@/lib/catalog/types";
+import { catalogPrimaryArtist } from "@/lib/catalog/artist-identity";
 import { canonicalPublicUrl } from "@/lib/seo/canonical";
 import { merchantMpnForProductSlug } from "@/lib/merchant/product-feed";
 import { isValidGtin, type MerchantMetadata } from "@/lib/merchant/metadata";
@@ -163,6 +164,9 @@ export function buildCreationStructuredData(creation: StructuredCreation) {
 }
 
 export function buildProjectStructuredData(project: PublicProject) {
+  const primaryArtist = project.primaryArtist ?? catalogPrimaryArtist(project.type);
+  const musicArtist = primaryArtist ? { "@type": "Person", "@id": `${canonicalPublicUrl()}#music-artist`, name: primaryArtist } : null;
+  const byArtist = musicArtist ? { "@id": musicArtist["@id"], name: musicArtist.name } : { "@id": LNX_ARTIST_ID };
   const pathname = `/album/${project.slug}`;
   const url = canonicalPublicUrl(pathname);
   const image = canonicalPublicUrl(project.cover ?? "/og.png");
@@ -185,19 +189,19 @@ export function buildProjectStructuredData(project: PublicProject) {
     ? {
         "@type": "MusicAlbum",
         ...common,
-        byArtist: { "@id": LNX_ARTIST_ID },
+        byArtist,
         ...(project.trackCount !== null ? { numTracks: project.trackCount } : {}),
         ...(project.tracks.length > 0 ? {
           track: project.tracks.map((track) => ({
             "@type": "MusicRecording",
             position: track.number,
             name: track.title,
-            byArtist: { "@id": LNX_ARTIST_ID },
+            byArtist,
           })),
         } : {}),
       }
     : project.type === "single"
-      ? { "@type": "MusicRecording", ...common, byArtist: { "@id": LNX_ARTIST_ID } }
+      ? { "@type": "MusicRecording", ...common, byArtist }
       : { "@type": "CreativeWork", ...common, author: { "@id": LNX_ARTIST_ID } };
 
   return {
@@ -208,6 +212,7 @@ export function buildProjectStructuredData(project: PublicProject) {
         { name: "Discographie", pathname: "/discographie" },
         { name: project.title, pathname },
       ]),
+      ...(musicArtist ? [musicArtist] : []),
       entity,
     ],
   };

@@ -98,6 +98,7 @@ export async function recordDigitalExcerptSelection(actor: OrderActor, masterId:
       requestId: input.action === "validate" ? previousDetails!.requestId : null,
       previousRevisionId: previous?.id ?? null, errorCode: null, attested: (input.action === "validate" || existingReview) && input.attested, requestHash,
       ...(existingReview ? { candidateOrigin: "EXISTING_PROVISIONAL" as const } : {}),
+      ...(input.provenance ? { provenance: input.provenance, receiptId: input.receiptId ?? null } : {}),
     });
     return { selection: digitalExcerptSelection(master, event) };
   };

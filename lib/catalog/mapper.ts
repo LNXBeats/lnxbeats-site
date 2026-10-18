@@ -1,4 +1,5 @@
 import { officialLinks } from "@/data/site";
+import { catalogPrimaryArtist, catalogSecondaryCredits } from "@/lib/catalog/artist-identity";
 import { deriveCatalogConfidence } from "@/lib/catalog/confidence";
 import { resolveCatalogCoverAlt } from "@/lib/catalog/cover-alt";
 import { automaticPlatformLabel, resolvePlatformLabel } from "@/lib/catalog/platform-label";
@@ -100,6 +101,7 @@ function legacyConfidenceSummary(project: DatabaseProject): ProjectDataConfidenc
 }
 
 export function mapDatabaseProject(project: DatabaseProject): Project {
+  const primaryArtist = catalogPrimaryArtist(project.type);
   const releaseDate = project.releaseDate?.toISOString().slice(0, 10) ?? null;
   const coverAsset = project.assets?.find(({ role }) => role === "COVER")?.asset;
   const audioAsset = project.assets?.find(({ role }) => role === "AUDIO_PREVIEW")?.asset;
@@ -117,6 +119,7 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
     legacy: legacyConfidenceSummary(project),
   });
   return {
+    primaryArtist,
     slug: project.slug,
     title: project.title,
     subtitle: project.subtitle ?? undefined,
@@ -139,12 +142,13 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
     jukeboxPosition: project.jukeboxPosition,
     catalogPosition: project.catalogPosition,
     genres: [],
-    credits: (project.credits ?? []).map((credit) => ({
+    credits: (primaryArtist ? catalogSecondaryCredits(project.credits ?? []) : project.credits ?? []).map((credit) => ({
       name: credit.name,
       role: creditRoleMap[credit.role] ?? "other",
       detail: credit.note ?? undefined,
     })),
     tracks: (project.tracks ?? []).map((track) => ({
+      primaryArtist,
       id: track.id,
       number: track.position,
       title: track.title,

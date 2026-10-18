@@ -8,6 +8,7 @@ export type DataConfidence = "confirmed" | "partial" | "placeholder" | "unknown"
 export type CreditRole = "artist" | "writer" | "composer" | "producer" | "featuring" | "other";
 
 export type ProjectTrack = {
+  readonly primaryArtist?: string;
   readonly id?: string;
   readonly number: number;
   readonly title: string;
@@ -43,6 +44,7 @@ export type ProjectDataConfidence = {
 };
 
 export type PublicProject = {
+  readonly primaryArtist?: string;
   readonly slug: string;
   readonly title: string;
   readonly subtitle?: string;

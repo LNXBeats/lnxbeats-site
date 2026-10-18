@@ -5,6 +5,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { OrderActor } from "@/lib/orders/domain";
 import { createCatalogProjectInTransaction, addCatalogTrackInTransaction, addCatalogCreditInTransaction } from "@/lib/catalog/service";
 import { normalizeCatalogSlug } from "@/lib/catalog/lifecycle";
+import { catalogArtistAlreadyDocumented } from "@/lib/catalog/artist-identity";
 import { DigitalError, assertDigitalUuid, requireDigitalEnvironment } from "./domain";
 import { EXPRESS_DEFAULTS, expressDefaults, expressDraft } from "./express-policy";
 import { saveOfferInTransaction, selections } from "./catalog";
@@ -28,8 +29,8 @@ export async function addExpressArtist(actor: OrderActor, input: { projectId: st
     await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-project:${input.projectId}`})) IS NULL AS locked`;
     if (!await db.project.findUnique({ where: { id: input.projectId } })) throw new DigitalError("NOT_FOUND", 404);
     if (await db.digitalOffer.findFirst({ where: { projectId: input.projectId, active: true } })) throw new DigitalError("EXPRESS_ACTIVE_OFFER", 409);
-    const existing = await db.credit.findFirst({ where: { projectId: input.projectId, role: "ARTIST", name: input.name.trim() } });
-    if (!existing) {
+    const existing = await db.credit.findMany({ where: { projectId: input.projectId, role: "ARTIST" }, select: { name: true, role: true } });
+    if (!catalogArtistAlreadyDocumented(existing, input.name)) {
       const credit = await addCatalogCreditInTransaction(db, input.projectId, { name: input.name, role: "artist", note: "Nom artistique explicitement renseigné en Admin Express ; ne démontre pas les droits d’auteur, d’interprétation ou de master." });
       await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_ARTIST_CREDIT", actorId: actor.id, details: { projectId: input.projectId, creditId: credit.id } } });
     }
@@ -66,7 +67,6 @@ export async function loadExpressProject(id: string, db: DB = prisma) {
     ...(p.status === "ARCHIVED" ? ["Projet archivé : revue préalable dans le Catalogue"] : []),
     ...(p.tracks.some(t => t.status === "UNLISTED") ? ["Pistes non listées : confirmez leur inclusion dans le Catalogue avant publication"] : []),
     ...(!cover || cover.rightsStatus !== "CLEARED" ? ["Pochette et droits de publication à vérifier"] : []),
-    ...(!p.credits.length ? ["Crédits artistiques à renseigner dans le Catalogue"] : []),
     ...tracks.flatMap(t => [!t.strictReady ? `${t.title} : WAV/MP3/extrait requis` : "", t.review?.status !== "APPROVED" ? `${t.title} : droits de cette version à confirmer` : "", t.artisticStatus !== "VALIDATED" ? `${t.title} : extrait à écouter et valider` : "", !t.offer?.priceCents ? `${t.title} : prix à renseigner` : ""].filter(Boolean)),
     ...(p.type === "ALBUM" && !album?.priceCents ? ["Prix de l’album à renseigner"] : []),
     ...(p.type !== "SINGLE" && p.type !== "ALBUM" ? ["Projet expert : publication depuis le Catalogue"] : []),
@@ -109,9 +109,8 @@ export async function saveExpressDraft(actor: OrderActor, raw: unknown) {
     await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-project:${projectId}`})) IS NULL AS locked`;
     const p = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { tracks: true, digitalOffers: true } });
     if (input.projectId && (p.updatedAt.toISOString() !== input.expectedUpdatedAt || p.type !== input.type)) throw new DigitalError("EXPRESS_CHANGED", 409);
-    if (p.digitalOffers.some(o => o.active)) throw new DigitalError("EXPRESS_ACTIVE_OFFER", 409);
     // Saving draft prices must not silently edit the public catalogue identity.
-    if (p.status === "PUBLISHED" && (input.title !== p.title || input.tracks.length !== p.tracks.length || input.tracks.some((t,i) => !p.tracks.some(old => old.id === t.id && old.title === t.title && old.position === i+1)))) throw new DigitalError("EXPRESS_PUBLIC_METADATA", 409);
+    if ((p.status === "PUBLISHED" || p.digitalOffers.some(o => o.active)) && (input.title !== p.title || input.tracks.length !== p.tracks.length || input.tracks.some((t,i) => !p.tracks.some(old => old.id === t.id && old.title === t.title && old.position === i+1)))) throw new DigitalError("EXPRESS_PUBLIC_METADATA", 409);
     if (p.tracks.some(t => !input.tracks.some(row => row.id === t.id))) throw new DigitalError("EXPRESS_TRACK_REMOVAL", 409);
     if (input.tracks.some(t => t.id && !p.tracks.some(row => row.id === t.id))) throw new DigitalError("NOT_FOUND", 404);
     // Temporary positions avoid unique-key collisions when reordering; no track is deleted.
@@ -125,11 +124,11 @@ export async function saveExpressDraft(actor: OrderActor, raw: unknown) {
     for (let i = 0; i < ids.length; i++) await db.track.update({ where: { id: ids[i] }, data: { position: i + 1 } });
     for (let i = 0; i < ids.length; i++) {
       const current = p.digitalOffers.find(o => o.trackId === ids[i]);
-      await saveOfferInTransaction(db, actor, { projectId, trackId: ids[i], priceCents: input.tracks[i].priceCents, expectedVersion: input.tracks[i].expectedOfferVersion, active: false, rightsConfirmed: current?.rightsConfirmed ?? false, distribution: current?.distribution ?? "UNRELEASED" }, true);
+      await saveOfferInTransaction(db, actor, { projectId, trackId: ids[i], priceCents: input.tracks[i].priceCents, expectedVersion: input.tracks[i].expectedOfferVersion, active: current?.active ?? false, rightsConfirmed: current?.rightsConfirmed ?? false, distribution: current?.distribution ?? "UNRELEASED" }, true);
     }
     if (input.type === "ALBUM") {
       const current = p.digitalOffers.find(o => o.scope === "ALBUM");
-      await saveOfferInTransaction(db, actor, { projectId, trackId: null, priceCents: input.albumPriceCents, expectedVersion: input.expectedAlbumOfferVersion, active: false, rightsConfirmed: current?.rightsConfirmed ?? false, distribution: current?.distribution ?? "UNRELEASED" }, true);
+      await saveOfferInTransaction(db, actor, { projectId, trackId: null, priceCents: input.albumPriceCents, expectedVersion: input.expectedAlbumOfferVersion, active: current?.active ?? false, rightsConfirmed: current?.rightsConfirmed ?? false, distribution: current?.distribution ?? "UNRELEASED" }, true);
     }
     await db.project.update({ where: { id: projectId }, data: { title: input.title, trackCount: ids.length } });
     await db.digitalEvent.create({ data: { actorId: actor.id, kind: "MUSIC_EXPRESS_DRAFT", externalKey, details: { projectId, requestHash, trackIds: ids } } });
@@ -163,8 +162,11 @@ export async function publishExpressProject(actor: OrderActor, input: { projectI
     await db.track.updateMany({ where: { projectId: input.projectId }, data: { status: "RELEASED" } });
     const p = await db.project.findUniqueOrThrow({ where: { id: input.projectId }, include: { digitalOffers: true } });
     const ids = [];
-    for (const offer of p.digitalOffers.filter(o => review.type === "ALBUM" || o.scope === "TRACK")) ids.push(await saveOfferInTransaction(db, actor, { projectId: p.id, trackId: offer.trackId,
-      priceCents: offer.priceCents, expectedVersion: offer.version, active: true, rightsConfirmed: true, distribution: offer.distribution }));
+    for (const offer of p.digitalOffers.filter(o => review.type === "ALBUM" || o.scope === "TRACK")) {
+      if (offer.active && offer.rightsConfirmed) ids.push(offer.id);
+      else ids.push(await saveOfferInTransaction(db, actor, { projectId: p.id, trackId: offer.trackId,
+        priceCents: offer.priceCents, expectedVersion: offer.version, active: true, rightsConfirmed: true, distribution: offer.distribution }));
+    }
     // Authoritative sales gates, including current versions/artistic approvals/live storage. All changes roll back on refusal.
     for (const id of ids) await selections([id], db);
     await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_PUBLISHED", actorId: actor.id, externalKey: key, details: { projectId: p.id, reviewToken: input.reviewToken, offerIds: ids } } });

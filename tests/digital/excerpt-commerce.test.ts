@@ -30,7 +30,7 @@ function fixture(scope: "TRACK" | "ALBUM" = "TRACK", count = 12) {
       track: { projectId, title: `Synthetic track ${position}` } };
   };
   const masters = Array.from({ length: count }, (_, i) => makeMaster(i + 1));
-  const tracks = masters.map((master, i) => ({ id: master.trackId, position: i + 1, title: master.track.title, digitalMasters: [master] }));
+  const tracks = masters.map((master, i) => ({ id: master.trackId, position: i + 1, status: "RELEASED", title: master.track.title, digitalMasters: [master] }));
   const offer = { id: offerId, scope, trackId: scope === "TRACK" ? tracks[0].id : null, active: true, rightsConfirmed: true, version: 1,
     priceCents: scope === "ALBUM" ? 990 : 129, project: { id: projectId, title: "Synthetic album", status: "PUBLISHED", publicVisible: true, tracks } };
   type Artistic = DigitalExcerptEvent & { masterId: string; externalKey?: string };
@@ -78,6 +78,12 @@ test("commercial excerpt gate: direct active track with cleared rights still ref
 test("commercial excerpt gate: album refuses one unvalidated included track without falling back", async () => {
   const f = fixture("ALBUM"); f.masters.slice(0, 11).forEach(master => f.approve(master));
   await assert.rejects(() => selections([f.offer.id], f.db), { code: "EXCERPT_ARTISTIC_VALIDATION_REQUIRED" }); assert.equal(f.writes(), 0);
+});
+test("album selection never silently omits an announced or missing recording", async () => {
+  const f = fixture("ALBUM"); f.masters.forEach(master => f.approve(master)); f.tracks[11].status = "ANNOUNCED";
+  await assert.rejects(() => selections([f.offer.id], f.db), { code: "NO_READY_MASTER" });
+  f.tracks[11].status = "RELEASED"; f.tracks[11].digitalMasters = [];
+  await assert.rejects(() => selections([f.offer.id], f.db), { code: "NO_READY_MASTER" });
 });
 test("commercial excerpt gate: track approval does not require unrelated unpurchased tracks", async () => {
   const f = fixture(); f.approve(); const selected = await selections([f.offer.id], f.db);

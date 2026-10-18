@@ -3,6 +3,17 @@ import { assertDigitalUuid, DigitalError } from "./domain";
 import { digitalRightsReviewHash } from "./rights-review-policy";
 export const GROUP_ORIGINAL_DECLARATION = "DCN_ORIGINALS_OWNER_DECLARATION_V1";
 export const GROUP_LISTEN_RECEIPT = "MUSIC_REVIEW_LISTENING_RECEIPT";
+import { OWNER_ORIGINAL_CONFIRMATION } from "./owner-declaration";
+export function ownerOriginalConfirmation(value: unknown) {
+  const v = reviewObject(value);
+  if (Object.keys(v).length !== 2 || v.policy !== "OWNER_ORIGINAL_CONFIRMATION_V1" || v.confirmed !== true) throw new DigitalError("GROUP_ORIGINAL_EVIDENCE_REQUIRED", 409);
+  return { policy: "OWNER_ORIGINAL_CONFIRMATION_V1", statement: OWNER_ORIGINAL_CONFIRMATION, confirmed: true };
+}
+export function artisticProvenance(value: unknown) {
+  if (value === undefined || value === "RECORDED_PLAYBACK") return "RECORDED_PLAYBACK" as const;
+  if (value === "OWNER_DECLARED") return "OWNER_DECLARED" as const;
+  throw new DigitalError("INVALID_GROUP_REVIEW");
+}
 export function requiresParticularRightsCase(roles: string[], assetRights: string[], reviewStatuses: string[]) {
   return roles.includes("FEATURING") || assetRights.includes("RESTRICTED") || reviewStatuses.some(s => s === "REJECTED" || s === "REVOKED");
 }

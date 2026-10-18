@@ -20,7 +20,7 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
   if (ids.length > 50 || new Set(ids).size !== ids.length) throw new DigitalError("INVALID_CART");
   ids.forEach(assertDigitalUuid);
   const offers = await db.digitalOffer.findMany({ where: { id: { in: ids } }, include: { project: { include: {
-    tracks: { where: { status: "RELEASED" }, orderBy: [{ position: "asc" }, { id: "asc" }], include: {
+    tracks: { orderBy: [{ position: "asc" }, { id: "asc" }], include: {
       digitalMasters: { orderBy: { version: "desc" }, take: 1, include: { masterAsset: true, previewAsset: true,mp3Asset:true } },
     } },
   } } } });
@@ -28,7 +28,7 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
   const selected = offers.map(offer => {
     if (!offer.active || !offer.rightsConfirmed || offer.project.status !== "PUBLISHED" || !offer.project.publicVisible) throw new DigitalError("OFFER_UNAVAILABLE", 409);
     const tracks = offer.scope === "ALBUM" ? offer.project.tracks : offer.project.tracks.filter(t => t.id === offer.trackId);
-    if (!tracks.length || tracks.some(t => { const m = t.digitalMasters[0]; return !m || !digitalCommercialAudioReady(m) || m.masterAsset.visibility !== "PRIVATE" || m.masterAsset.rightsStatus !== "CLEARED"
+    if (!tracks.length || tracks.some(t => { const m = t.digitalMasters[0]; return t.status !== "RELEASED" || !m || !digitalCommercialAudioReady(m) || m.masterAsset.visibility !== "PRIVATE" || m.masterAsset.rightsStatus !== "CLEARED"
       || m.masterAsset.mimeType!=="audio/wav"||!m.masterAsset.checksumSha256||!m.mp3AssetId||m.mp3Asset?.visibility!=="PRIVATE"
       ||m.mp3Asset.rightsStatus!=="CLEARED"||m.mp3Asset.mimeType!=="audio/mpeg"||!/^[a-f0-9]{64}$/.test(m.mp3Asset.checksumSha256??"")
       || m.previewAsset?.visibility !== "PUBLIC" || m.previewAsset.rightsStatus !== "CLEARED" || !m.previewDurationMs || m.previewDurationMs > 60000; })) throw new DigitalError("NO_READY_MASTER", 409);
@@ -103,21 +103,21 @@ export async function saveOfferInTransaction(tx: DB, actor: OrderActor, input: {
   if (input.active && (!input.priceCents || !input.rightsConfirmed)) throw new DigitalError("SALE_REQUIREMENTS", 409);
   if (!["UNRELEASED", "DISTRIBUTED"].includes(input.distribution)) throw new DigitalError("INVALID_DISTRIBUTION");
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-offer:${input.projectId}:${input.trackId ?? "album"}`})) IS NULL AS locked`;
-    const project = await tx.project.findUnique({ where: { id: input.projectId }, include: { tracks: { where: {status:"RELEASED",...(input.trackId?{id:input.trackId}:{})},include:{digitalMasters:{where:{status:"READY"},orderBy:{version:"desc"},take:1,include:{masterAsset:true,mp3Asset:true,previewAsset:true}}} } } });
+    const project = await tx.project.findUnique({ where: { id: input.projectId }, include: { tracks: { where: {...(input.trackId?{id:input.trackId}:{})},include:{digitalMasters:{orderBy:{version:"desc"},take:1,include:{masterAsset:true,mp3Asset:true,previewAsset:true}}} } } });
     const track = input.trackId ? await tx.track.findFirst({ where: { id: input.trackId, projectId: input.projectId } }) : null;
     if (!project || input.trackId && !track) throw new DigitalError("NOT_FOUND", 404);
     // Draft prices may be prepared without media. Opening a sale requires the actual
     // strict ingestion proof; an extension, MIME label or old READY flag is insufficient.
-    if(input.active && (project.status!=="PUBLISHED"||!project.publicVisible||!project.tracks.length
-      ||project.tracks.some(t=>!t.digitalMasters[0]||!digitalCommercialAudioReady(t.digitalMasters[0]))))throw new DigitalError("NO_READY_MASTER",409);
-    if(input.active){
+    if(input.active && !draftOnly && (project.status!=="PUBLISHED"||!project.publicVisible||!project.tracks.length
+      ||project.tracks.some(t=>t.status!=="RELEASED"||!t.digitalMasters[0]||!digitalCommercialAudioReady(t.digitalMasters[0]))))throw new DigitalError("NO_READY_MASTER",409);
+    if(input.active && !draftOnly){
       await assertDigitalRightsReviews(tx,project.tracks.map(track=>track.digitalMasters[0].id));
       await assertDigitalExcerptApprovals(tx,project.tracks.map(track=>track.digitalMasters[0]));
     }
     const current = await tx.digitalOffer.findFirst({ where: { projectId: input.projectId, trackId: input.trackId ?? null } });
-    if (draftOnly && (input.active || input.rightsConfirmed !== (current?.rightsConfirmed ?? false))) throw new DigitalError("SALE_REQUIREMENTS", 409);
-    if (draftOnly && current?.active) throw new DigitalError("EXPRESS_ACTIVE_OFFER", 409);
+    if (draftOnly && (input.active !== (current?.active ?? false) || input.rightsConfirmed !== (current?.rightsConfirmed ?? false) || input.distribution !== (current?.distribution ?? "UNRELEASED"))) throw new DigitalError("SALE_REQUIREMENTS", 409);
     if ((current?.version ?? 0) !== input.expectedVersion) throw new DigitalError("STALE_OFFER", 409);
+    if (current && current.priceCents === input.priceCents && current.active === input.active && current.rightsConfirmed === input.rightsConfirmed && current.distribution === input.distribution) return current.id;
     const data = { priceCents: input.priceCents, active: input.active, rightsConfirmed: input.rightsConfirmed, distribution: input.distribution, version: (current?.version ?? 0) + 1 };
     const offer = current ? await tx.digitalOffer.update({ where: { id: current.id }, data }) : await tx.digitalOffer.create({ data: { ...data, scope: input.trackId ? "TRACK" : "ALBUM", projectId: input.projectId, trackId: input.trackId ?? null } });
     // Upload alone grants no rights. This acknowledgement is explicit and audited.

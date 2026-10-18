@@ -16,6 +16,8 @@ export type DigitalExcerptDetails = {
   requestId: string | null; previousRevisionId: string | null; errorCode: string | null;
   attested: boolean; requestHash: string; recordHash: string;
   candidateOrigin?: "EXISTING_PROVISIONAL";
+  provenance?: "OWNER_DECLARED" | "RECORDED_PLAYBACK";
+  receiptId?: string | null;
 };
 export type DigitalExcerptEvent = { id: string; actorId: string | null; kind: string; details: unknown; createdAt: Date };
 export type DigitalExcerptSelection = { revisionId: string | null; status: DigitalExcerptStatus; startMs: number; previewDurationMs: number | null; candidateUrl: string | null; errorCode: string | null };
@@ -32,14 +34,17 @@ export function digitalExcerptBinding(master: DigitalExcerptMaster): DigitalExce
   return { masterId: master.id, trackId: master.trackId, version: master.version, sourceAssetId: master.masterAssetId,
     sourceSha256: master.masterAsset.checksumSha256!, durationMs: master.masterAsset.durationMs! };
 }
-export type DigitalExcerptInput = { action: "save" | "generate" | "validate" | "validate-existing" | "validate-current" | "validate-prepared"; startMs: number; expectedRevisionId: string | null; idempotencyKey: string; attested: boolean };
+export type DigitalExcerptInput = { action: "save" | "generate" | "validate" | "validate-existing" | "validate-current" | "validate-prepared"; startMs: number; expectedRevisionId: string | null; idempotencyKey: string; attested: boolean; provenance?: "OWNER_DECLARED" | "RECORDED_PLAYBACK"; receiptId?: string | null };
 export function digitalExcerptInput(value: unknown): DigitalExcerptInput {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new DigitalError("INVALID_EXCERPT");
   const input = value as Record<string, unknown>;
-  if (Object.keys(input).some(key => !["action", "startMs", "expectedRevisionId", "idempotencyKey", "attested"].includes(key))
+  if (Object.keys(input).some(key => !["action", "startMs", "expectedRevisionId", "idempotencyKey", "attested", "provenance", "receiptId"].includes(key))
     || !["save", "generate", "validate", "validate-existing", "validate-current", "validate-prepared"].includes(String(input.action)) || !Number.isSafeInteger(input.startMs) || Number(input.startMs) < 0
     || typeof input.attested !== "boolean") throw new DigitalError("INVALID_EXCERPT");
   assertDigitalUuid(input.idempotencyKey); if (input.expectedRevisionId !== null) assertDigitalUuid(input.expectedRevisionId);
+  if (input.provenance !== undefined && !["OWNER_DECLARED", "RECORDED_PLAYBACK"].includes(String(input.provenance))) throw new DigitalError("INVALID_EXCERPT");
+  if (input.provenance === "RECORDED_PLAYBACK") assertDigitalUuid(input.receiptId);
+  if (input.provenance === "OWNER_DECLARED" && input.receiptId !== null) throw new DigitalError("INVALID_EXCERPT");
   if (["validate", "validate-existing", "validate-current", "validate-prepared"].includes(String(input.action)) && input.attested !== true) throw new DigitalError("EXCERPT_ATTESTATION_REQUIRED", 409);
   return input as DigitalExcerptInput;
 }
@@ -52,6 +57,11 @@ export function digitalExcerptDetails(event: DigitalExcerptEvent, master: Digita
     || recordHash !== digitalExcerptHash({ actorId: event.actorId, ...proof }) || !/^[a-f0-9]{64}$/.test(d.requestHash)
     || typeof d.attested !== "boolean") throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);
   previewWindow(d.binding.durationMs, d.startMs);
+  if (d.provenance !== undefined) {
+    if (!["OWNER_DECLARED", "RECORDED_PLAYBACK"].includes(d.provenance)) throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);
+    if (d.provenance === "RECORDED_PLAYBACK") assertDigitalUuid(d.receiptId);
+    if (d.provenance === "OWNER_DECLARED" && d.receiptId !== null) throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);
+  }
   if (["READY", "VALIDATED"].includes(d.status)) {
     assertDigitalUuid(d.candidateAssetId); if (!/^[a-f0-9]{64}$/.test(d.candidateSha256 ?? "") || !Number.isSafeInteger(d.previewDurationMs)
       || d.previewDurationMs! < 1 || d.previewDurationMs! > 60_000 || d.status === "VALIDATED" && !d.attested) throw new DigitalError("EXCERPT_REVIEW_REQUIRED", 409);

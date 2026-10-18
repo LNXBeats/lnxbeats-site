@@ -4,7 +4,8 @@ import { expressDraft, type ExpressDraft } from "./express-policy";
 export type ExpressEditorTrack = { id: string | null; title: string; price: string; expectedOfferVersion: number };
 /** Disable editing until recovery completes, including in the server-rendered form. */
 export function expressEditorLocked(cacheReady: boolean, busy: boolean, active: boolean, uncertain: boolean) {
-  return !cacheReady || busy || active || uncertain;
+  void active; // Existing sales protect their identity, not unrelated draft offers/prices.
+  return !cacheReady || busy || uncertain;
 }
 /** Presentation only: the authoritative draft policy still validates the whole payload. */
 export function expressEditorTracks(type: "SINGLE" | "ALBUM", title: string, tracks: ExpressEditorTrack[], distinctSingleTitle: boolean) {
