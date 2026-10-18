@@ -191,7 +191,9 @@ test("Cockpit queries are bounded and the action center exposes only authorized 
   assert.doesNotMatch(cockpit, /admin_record_archives/);
   assert.doesNotMatch(cockpit, /recipient: true|customerName: true|customerEmail: true|displayName: true/);
   assert.match(actionCenter, /À traiter maintenant/);
-  assert.match(page, /cockpit\.actions\.map/);
+  assert.match(page, /otherActions\.map/);
+  assert.match(page, /<AdminCreationWorkCenter/);
+  assert.match(page, /domain !== "COMMANDER" && domain !== "FINANCIAL_EVENT"/);
   assert.match(page, /<AdminActionCenter/);
   assert.match(actionCenter, /data-priority=\{action\.priority\.toLowerCase\(\)\}/);
   assert.match(actionCenter, /selectedActions\.every\(\(action\) => action\.domain === selectedActions\[0\]\.domain && action\.label === selectedActions\[0\]\.label\)/);
