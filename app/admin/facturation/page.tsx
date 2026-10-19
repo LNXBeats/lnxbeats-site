@@ -5,6 +5,7 @@ import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
 import { listAdminInvoices } from "@/lib/billing/service";
 import { formatEuro } from "@/lib/orders/domain";
+import { listAdminDigitalInvoices } from "@/lib/admin/digital-invoices";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Facturation" };
@@ -12,7 +13,7 @@ export const metadata: Metadata = { title: "Facturation" };
 export default async function AdminBillingPage({ searchParams }: { searchParams: Promise<{ recherche?: string }> }) {
   await requireAdmin();
   const { recherche } = await searchParams;
-  const invoices = await listAdminInvoices(recherche);
+  const [invoices, digital] = await Promise.all([listAdminInvoices(recherche), listAdminDigitalInvoices(recherche)]);
   return <main className="admin-main">
     <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
     <header className="admin-page-heading"><div><p className="admin-section-label">Facturation</p><h1>Factures et avoirs.</h1></div><p>Documents immuables émis après confirmation serveur du paiement. Les paiements TEST restent identifiés comme tels dans leurs rendus.</p></header>
@@ -21,6 +22,14 @@ export default async function AdminBillingPage({ searchParams }: { searchParams:
       <input id="admin-billing-search" type="search" name="recherche" defaultValue={recherche} maxLength={120} placeholder="Facture, commande, client…" />
       <button className="admin-button" type="submit">RECHERCHER</button>
     </form>
+    <section className="admin-panel"><div className="admin-panel__heading"><p className="admin-section-label">Musique numérique</p><h2>{digital.rows.length} document{digital.rows.length === 1 ? "" : "s"}{digital.limited ? " les plus récents (vue limitée)" : ""}</h2></div>
+      <p>Factures et avoirs déjà émis pour les titres et albums. Les PDF et numéros d’origine sont conservés. <Link href="/admin/recettes">Voir toutes les recettes →</Link></p>
+      {digital.rows.length ? <ul className="admin-billing-digital-list">{digital.rows.map(d => <li key={d.id} style={{ paddingBlock: "1rem", borderBottom: "1px solid #ffffff20", overflowWrap: "anywhere" }}>
+        <strong>{d.number}</strong> · {d.kind === "INVOICE" ? "Facture" : "Avoir"} · {d.mode} · {d.status === "READY" ? "PDF prêt" : "PDF en préparation / à examiner"}
+        <p>{d.title} · {d.customer} · {Number.isSafeInteger(d.amountCents) ? formatEuro(d.amountCents!) : "Montant à vérifier"}</p>
+        <p>{d.createdAt.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })} · <Link href={`/admin/musique/achats/${d.orderId}`}>Ouvrir l’achat</Link>{d.status === "READY" ? <> · <a href={`/api/digital/documents/${d.id}`}>Télécharger le PDF privé</a></> : null}</p>
+      </li>)}</ul> : <p>Aucun document numérique dans cette recherche.</p>}
+    </section>
     <section className="admin-panel"><div className="admin-panel__heading"><p className="admin-section-label">Registre</p><h2>{invoices.length} facture{invoices.length === 1 ? "" : "s"}</h2></div>
       {invoices.length ? <>
         <div className="admin-table-wrap admin-desktop-records" tabIndex={0} role="region" aria-label="Registre des factures, défilement horizontal disponible">

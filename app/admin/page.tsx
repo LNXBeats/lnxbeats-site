@@ -10,6 +10,8 @@ import { getCreationWorkQueue } from "@/lib/admin/creation-work";
 import { orderAdminKpis } from "@/lib/admin/kpi-presentation";
 import { requireAdmin } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { loadRevenue } from "@/lib/admin/revenue";
+import { formatEuro } from "@/lib/orders/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +37,15 @@ const quickAccess: readonly { href: string; label: string; detail: string; icon:
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ suivi?: string }> }) {
   await requireAdmin();
-  const [cockpit, work, creationDrafts, invoiceCount, projectCount, params] = await Promise.all([
+  const [cockpit, work, creationDrafts, invoiceCount, digitalInvoiceCount, projectCount, params, revenue] = await Promise.all([
     getAdminCockpit(),
     getCreationWorkQueue(),
     prisma.creation.count({ where: { status: "DRAFT" } }),
     prisma.invoice.count(),
+    prisma.digitalDocument.count({ where: { kind: "INVOICE" } }),
     prisma.project.count(),
     searchParams,
+    loadRevenue().catch(() => null),
   ]);
   // Financial receipts retain their review state and original screen. They are
   // not creation jobs and are no longer mixed into this work center.
@@ -54,10 +58,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     { icon: "bell", title: "Notifications", count: cockpit.counts.notifications, caption: "à examiner", href: "/admin/notifications?filtre=attention", tone: "attention" },
     { icon: "video", title: "Créations", count: creationDrafts, caption: "brouillons", href: "/admin/creations?statut=DRAFT", tone: "neutral" },
     { icon: "file", title: "Contrats", count: cockpit.counts.rights, caption: "à traiter", href: "/admin/droits", tone: "attention" },
-    { icon: "file", title: "Factures", count: invoiceCount, caption: "émises", href: "/admin/facturation", tone: "neutral" },
+    { icon: "file", title: "Factures", count: invoiceCount + digitalInvoiceCount, caption: "émises · toutes activités", href: "/admin/facturation", tone: "neutral" },
     { icon: "audio", title: "Discographie", count: projectCount, caption: "projets", href: "/admin/catalogue", tone: "neutral" },
   ] satisfies { icon: AdminIconName; title: string; count: number; caption: string; href: string; tone: "attention" | "neutral" }[];
-  const orderedStats = orderAdminKpis(stats);
+  const orderedStats = orderAdminKpis(stats.filter(item => !["Factures", "Discographie"].includes(item.title)));
+  const accountingIndex = orderedStats.findIndex(item => item.tone === "neutral" || item.count === 0);
+  // Keep the requested Factures → Recettes → Discographie group together,
+  // even when one count is zero and operational cards are priority-sorted.
+  orderedStats.splice(accountingIndex < 0 ? orderedStats.length : accountingIndex, 0, stats.find(item => item.title === "Factures")!, stats.find(item => item.title === "Discographie")!);
 
   return (
     <div className="admin-main admin-v21-home">
@@ -67,7 +75,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </header>
 
       <section className="admin-v21-stats" aria-label="Indicateurs opérationnels">
-        {orderedStats.map((item) => <AdminStatCard key={item.title} {...item} />)}
+        {orderedStats.map((item) => <div key={item.title} style={{ display: "contents" }}><AdminStatCard {...item} />{item.title === "Factures" ? <AdminStatCard icon="file" title="Recettes" count={revenue?.rows.length ?? 0} displayValue={revenue ? formatEuro(revenue.allTimeBalanceCents) : "À vérifier"} caption={`Total enregistré · LIVE · ${revenue?.issues.length || revenue?.unmatchedReceipts ? "rapprochement à terminer" : "après remboursements, avant frais"}`} href="/admin/recettes" /> : null}</div>)}
       </section>
 
       <AdminCreationWorkCenter items={work.items} hidden={work.hidden} limited={work.limited} initialNow={work.now} notice={params.suivi} />

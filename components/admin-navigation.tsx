@@ -19,6 +19,7 @@ const adminNavigation = [
   { href: "/admin/boutique/logistique", label: "Logistique / configuration", group: "Boutique" },
   { href: "/admin/membres", label: "Membres", group: "Clients & documents" },
   { href: "/admin/facturation", label: "Factures & avoirs", group: "Clients & documents" },
+  { href: "/admin/recettes", label: "Recettes", group: "Clients & documents" },
   { href: "/admin/evenements-financiers", label: "Suivi financier · reçus", group: "Clients & documents" },
   { href: "/admin/soutiens", label: "Soutiens libres", group: "Clients & documents" },
   { href: "/admin/tarifs", label: "Tarifs & paramètres", group: "Réglages" },
