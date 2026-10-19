@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { artistBiography } from "../../data/artist";
 import { projects } from "../../data/discography";
 import { editorialMessages } from "../../lib/i18n/messages-editorial";
-import { editorialIdentityParts, editorialSafeTranslation } from "../../lib/i18n/editorial-content";
+import { editorialIdentityParts, editorialLookupText, editorialSafeTranslation } from "../../lib/i18n/editorial-content";
+import { messages, translate } from "../../lib/i18n/messages";
 
 test("existing editorial source and complete biography have five non-empty translations", () => {
   for (const source of [artistBiography.short, ...artistBiography.principal, artistBiography.press,
@@ -31,7 +32,11 @@ test("literal editorial protection handles original title punctuation and overla
 
 test("unknown live editorial content stays original French rather than gaining an invented translation", () => {
   const component = readFileSync(new URL("../../components/localized-editorial.tsx", import.meta.url), "utf8");
-  assert.match(component, /Object\.hasOwn\(messages, text\)/);
+  assert.match(component, /source = editorialLookupText\(text\)/);
+  assert.match(component, /Object\.hasOwn\(messages, source\)/);
+  const unknown = editorialLookupText("Texte inédit du propriétaire\r\nLNX Beats Studio");
+  assert.equal(Object.hasOwn(messages, unknown), false);
+  assert.equal(translate("ja", unknown), unknown);
   assert.match(component, /: "fr"/);
   assert.match(component, /OriginalName/);
   assert.doesNotMatch(component, /data\/discography/);

@@ -1,6 +1,11 @@
 // Quoted identities in existing editorial material, never catalogue data fallback.
 const EDITORIAL_IDENTITIES = ["LNX Beats Studio", "LNX Beats", "Ludovic Mathon", "Bienvenue dans le bordel familial", "J’ai adopté un humain", "J’ai adopté", "Chaos canin", "Miss Click", "Le Dernier Âge d’Or", "Ça va l’faire", "J’préfère le carton", "Madame Piécettes", "L’ADO"];
 
+/** HTML renders CRLF as LF. Normalize only lookup text, never stored catalogue data or names. */
+export function editorialLookupText(text: string) {
+  return text.replace(/\r\n?/g, "\n");
+}
+
 /** Literal matching, including punctuation or brackets, without regular expressions. */
 export function editorialIdentityParts(text: string, names: readonly string[] = []) {
   const identities = [...new Set([...EDITORIAL_IDENTITIES, ...names].filter(Boolean))].sort((a, b) => b.length - a.length);
