@@ -9,7 +9,7 @@ import ffmpeg from "ffmpeg-static";
 import { createAudioFixture } from "../audio/fixture";
 import { inspectDigitalWav } from "@/lib/digital/wav-validation";
 import { inspectDigitalMp3 } from "@/lib/digital/mp3-validation";
-import { validateDigitalAudio, validateDigitalMp3 } from "@/lib/digital/audio";
+import { generateDigitalSourceMp3Preview, inspectDigitalMp3Probe, validateDigitalAudio, validateDigitalMp3 } from "@/lib/digital/audio";
 import { DIGITAL_MP3_ENCODER_VERSION, digitalCommercialAudioReady, type DigitalCommercialAudioProof } from "@/lib/digital/formats";
 
 const exec = promisify(execFile);
@@ -71,6 +71,47 @@ test("real MP3 inspection rejects partial frames, missing complete frames, trail
     await assert.rejects(validateDigitalMp3(mp3, signal(), { durationMs: 3000, bitrateKbps: 320 }), { code: "MP3_RENDITION_INTEGRITY" });
     await assert.rejects(validateDigitalMp3(mp3, signal(), { durationMs: 1000 }), { code: "AUDIO_DURATION_MISMATCH" });
     const stopped = new AbortController(); stopped.abort(); await assert.rejects(validateDigitalMp3(mp3, stopped.signal), { code: "LEASE_LOST" });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("MP3 source accepts one bounded attached JPEG/PNG, never real video or extra streams", () => {
+  const audio = "  Stream #0:0: Audio: mp3, 48000 Hz, stereo, fltp, 180 kb/s";
+  const picture = "  Stream #0:1: Video: mjpeg (Baseline), yuvj420p(pc), 360x360 [SAR 1:1 DAR 1:1], 90k tbr (attached pic)";
+  const probe = (extra: string) => `Input #0, mp3, from 'private-source.mp3':\n  Duration: 00:03:53.83, start: 0.023021, bitrate: 181 kb/s\n${audio}\n${extra}\n`;
+  for (const cover of [picture, picture.replace("mjpeg (Baseline)", "png")]) {
+    assert.deepEqual(inspectDigitalMp3Probe(probe(cover), true), { durationMs: 233830, bitrateKbps: 180 });
+    assert.throws(() => inspectDigitalMp3Probe(probe(cover), false), { code: "MP3_RENDITION_INTEGRITY" }, "private renditions and public previews remain audio-only");
+  }
+  assert.deepEqual(inspectDigitalMp3Probe(probe(""), false), { durationMs: 233830, bitrateKbps: 180 });
+  for (const extra of [picture.replace(" (attached pic)", ""), picture.replace("mjpeg (Baseline)", "h264"),
+    picture.replace("360x360", "4097x360"), picture.replace("360x360", "360x0"), picture.replace("360x360", "unknown-size"),
+    `${picture}\n${picture.replace("#0:1", "#0:2")}`, `${picture}\n${audio.replace("#0:0", "#0:2")}`,
+    "  Stream #0:1: Subtitle: subrip", "  Stream #0:1: Data: bin_data", "  Stream #0:1: Attachment: ttf",
+    "  Stream #0:1: Unknown: opaque"]) {
+    assert.throws(() => inspectDigitalMp3Probe(probe(extra), true), { code: "MP3_RENDITION_INTEGRITY" });
+  }
+});
+
+test("real MP3 with attached JPEG/PNG strictly decodes as a private source without rewriting it", { timeout: 30000 }, async () => {
+  const root = await scratch();
+  try {
+    assert.ok(ffmpeg);
+    const audio = path.join(root, "audio.mp3");
+    await createAudioFixture({ seconds: 3, format: "mp3", outputPath: audio });
+    for (const codec of ["mjpeg", "png"]) {
+      const cover = path.join(root, `cover.${codec === "mjpeg" ? "jpg" : "png"}`), source = path.join(root, `source-${codec}.mp3`);
+      await exec(ffmpeg, ["-nostdin", "-v", "error", "-f", "lavfi", "-i", "color=c=gold:s=360x360", "-frames:v", "1", "-c:v", codec, "-y", cover], { timeout: 10000, maxBuffer: 65536 });
+      await exec(ffmpeg, ["-nostdin", "-v", "error", "-i", audio, "-i", cover, "-map", "0:a:0", "-map", "1:v:0", "-c", "copy", "-id3v2_version", "3", "-disposition:v:0", "attached_pic", "-y", source], { timeout: 10000, maxBuffer: 65536 });
+      const original = await readFile(source);
+      const result = await validateDigitalMp3(source, signal());
+      assert.equal(result.codec, "mp3"); assert.equal(result.bitrateKbps, 256);
+      assert.ok(Math.abs(result.decodedDurationMs - 3000) <= 100);
+      await assert.rejects(validateDigitalMp3(source, signal(), { durationMs: 3000, bitrateKbps: 256 }), { code: "MP3_RENDITION_INTEGRITY" });
+      const preview = path.join(root, `preview-${codec}.mp3`);
+      const excerpt = await generateDigitalSourceMp3Preview(source, preview, 0, signal());
+      await validateDigitalMp3(preview, signal(), { durationMs: excerpt.previewDurationMs, bitrateKbps: 192 });
+      assert.deepEqual(await readFile(source), original, "source audio and embedded artwork are never rewritten");
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

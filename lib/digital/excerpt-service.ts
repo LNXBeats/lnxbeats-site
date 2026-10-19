@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import type { OrderActor } from "@/lib/orders/domain";
 import { assertDigitalUuid, DigitalError, previewWindow, requireDigitalEnvironment } from "./domain";
 import { assertDigitalLiveObjectAssets } from "./live-media-policy";
+import { digitalCommercialAudioReady } from "./formats";
+import { isAuthorizedMp3OnlySource, MP3_ONLY_SOURCE } from "./mp3-only-policy";
 import { DIGITAL_EXCERPT_EVENT, DIGITAL_EXCERPT_POLICY, assertDigitalExcerptRevision, assertDigitalExcerptValidation,
   digitalExcerptBinding, digitalExcerptCandidateReady, digitalExistingExcerptReady, digitalExcerptDetails, digitalExcerptHash, digitalExcerptInput,
   digitalExcerptSelection, type DigitalExcerptDetails, type DigitalExcerptEvent, type DigitalExcerptMaster } from "./excerpt-policy";
@@ -72,7 +74,11 @@ export async function recordDigitalExcerptSelection(actor: OrderActor, masterId:
     await lockDigitalExcerpt(db, master); master = await getCurrentDigitalExcerptMaster(db, masterId);
     const binding = digitalExcerptBinding(master); previewWindow(binding.durationMs, input.startMs);
     if (recoveryReview) assertRecoveryExcerptReview(master.track.projectId);
-    if (currentReview) assertDigitalLiveObjectAssets(mode,[master.masterAsset,master.mp3Asset,master.previewAsset]);
+    if (currentReview) {
+      const mp3Only = master.codec === "mp3" && master.track.projectId === MP3_ONLY_SOURCE.projectId
+        && digitalCommercialAudioReady(master) && isAuthorizedMp3OnlySource(master.trackId, master.masterAsset);
+      assertDigitalLiveObjectAssets(mode,mp3Only?[master.masterAsset,master.previewAsset]:[master.masterAsset,master.mp3Asset,master.previewAsset]);
+    }
     const externalKey = `dcn-excerpt:${masterId}:${input.idempotencyKey}`, requestHash = digitalExcerptHash({ actorId: actor.id, binding, input });
     const duplicate = await db.digitalEvent.findUnique({ where: { externalKey }, select: { id: true, actorId: true, details: true, createdAt: true, kind: true } });
     if (duplicate) {

@@ -10,10 +10,11 @@ import { deleteMediaObject, getMediaObject, putMediaObject, sha256Hex, type Medi
 import { activeMediaStorage } from "@/lib/media/storage/config";
 import { assertDigitalUuid, DigitalError, requireDigitalEnvironment, signatureMatches } from "./domain";
 import { trackLock, recoverDigitalCompletion } from "./upload";
-import { generateDigitalMp3, validateDigitalAudio, validateDigitalMp3, DIGITAL_MP3_LIMIT_BYTES } from "./audio";
+import { generateDigitalMp3, generateDigitalSourceMp3Preview, validateDigitalAudio, validateDigitalMp3, DIGITAL_MP3_LIMIT_BYTES } from "./audio";
 import { expressDurationSeconds } from "./express-policy";
 import { digitalAudioUploadHeld, digitalAudioUploadHoldFilter } from "./audio-upload-holds";
 import { planDigitalMasterImport } from "./master-import-policy";
+import { isAuthorizedMp3OnlySource, MP3_ONLY_SOURCE, MP3_ONLY_SOURCE_POLICY } from "./mp3-only-policy";
 import { claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot, checkDigitalDisk, DIGITAL_WORK_LIMITS } from "./work-slots";
 
 export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;uploadId?:string;signal?:AbortSignal}={}) {
@@ -52,6 +53,46 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
     await hooks.afterSource?.();
     if (extension === "mp3") {
       const decoded = await validateDigitalMp3(source, stop.signal);
+      if (isAuthorizedMp3OnlySource(s.trackId, { checksumSha256: checksum, sizeBytes: s.sizeBytes })) {
+        const project = await prisma.project.findUnique({ where: { id: MP3_ONLY_SOURCE.projectId }, select: { type: true, tracks: { select: { id: true } } } });
+        if (project?.type !== "SINGLE" || project.tracks.length !== 1 || project.tracks[0].id !== s.trackId) throw new DigitalError("MP3_ONLY_SOURCE_SCOPE", 409);
+        const excerpt = await generateDigitalSourceMp3Preview(source, preview, s.previewStartMs, stop.signal), metadata = await stat(preview);
+        if (metadata.size < 1 || metadata.size > 3 * 1024 * 1024) throw new DigitalError("INVALID_PREVIEW_DURATION");
+        const bytes = await readFile(preview), previewId = slot.leaseToken, previewChecksum = sha256Hex(bytes), key = `catalog/audio-previews/${previewId}.mp3`;
+        const stored = await putMediaObject({ scope: "public", key, body: bytes, contentLength: bytes.length, contentType: "audio/mpeg", checksumSha256: previewChecksum });
+        generatedRefs.push({ storageKey: key, storageBackend: stored.storageBackend, storageProvider: stored.storageProvider, visibility: "PUBLIC" });
+        await prisma.$transaction(async tx => {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-project:${MP3_ONLY_SOURCE.projectId}`})) IS NULL AS locked`;
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-track:${s.trackId}`})) IS NULL AS locked`;
+          if (!await tx.digitalUpload.findFirst({ where: { id: s.id, status: "VALIDATING", leaseToken: slot.leaseToken, leaseUntil: { gt: new Date() } } })
+            || !await tx.digitalWorkSlot.findFirst({ where: { id: slot.id, leaseToken: slot.leaseToken, leaseUntil: { gt: new Date() } } })) throw new DigitalError("LEASE_LOST", 409);
+          const actor = await tx.user.findUnique({ where: { id: s.actorId }, select: { role: true, status: true, emailVerified: true } });
+          if (actor?.role !== "ADMIN" || actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("ADMIN_REQUIRED", 403);
+          const currentProject = await tx.project.findUnique({ where: { id: MP3_ONLY_SOURCE.projectId }, select: { type: true, tracks: { select: { id: true } } } });
+          if (currentProject?.type !== "SINGLE" || currentProject.tracks.length !== 1 || currentProject.tracks[0].id !== s.trackId
+            || !isAuthorizedMp3OnlySource(s.trackId, { checksumSha256: checksum, sizeBytes: s.sizeBytes })) throw new DigitalError("MP3_ONLY_SOURCE_SCOPE", 409);
+          const latest = await tx.digitalMaster.findFirst({ where: { trackId: s.trackId }, orderBy: { version: "desc" } });
+          if ((latest?.version ?? 0) !== s.expectedVersion) throw new DigitalError("MASTER_VERSION_CONFLICT", 409);
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-master-sha:${checksum}`})) IS NULL AS locked`;
+          if (await tx.digitalMaster.findFirst({ where: { masterAsset: { checksumSha256: checksum } }, select: { id: true } })) throw new DigitalError("DUPLICATE_MASTER_REVIEW_REQUIRED", 409);
+          await tx.asset.create({ data: { id: s.id, type: "AUDIO", storageKey: s.storageKey, storageBackend: driver.backend, storageProvider: driver.provider,
+            visibility: "PRIVATE", filename: s.filename, mimeType: "audio/mpeg", sizeBytes: s.sizeBytes, durationMs: decoded.durationMs, checksumSha256: checksum, rightsStatus: "PENDING", confidence: "CONFIRMED" } });
+          await tx.asset.create({ data: { id: previewId, type: "AUDIO_PREVIEW", storageKey: key, storageBackend: stored.storageBackend, storageProvider: stored.storageProvider,
+            visibility: "PUBLIC", filename: "preview.mp3", mimeType: "audio/mpeg", sizeBytes: BigInt(bytes.length), durationMs: excerpt.previewDurationMs,
+            checksumSha256: previewChecksum, rightsStatus: "PENDING", confidence: "CONFIRMED" } });
+          const master = await tx.digitalMaster.create({ data: { trackId: s.trackId, version: s.expectedVersion + 1, masterAssetId: s.id, codec: "mp3", status: "READY",
+            mp3AssetId: null, mp3BitrateKbps: null, encoderVersion: null, previewAssetId: previewId, previewStartMs: s.previewStartMs, previewDurationMs: excerpt.previewDurationMs } });
+          await tx.track.update({ where: { id: s.trackId }, data: { durationSeconds: expressDurationSeconds(decoded.durationMs) } });
+          await tx.digitalUpload.update({ where: { id: s.id }, data: { status: "READY", leaseUntil: null, leaseToken: null, errorCode: null } });
+          await tx.digitalEvent.create({ data: { actorId: s.actorId, kind: "MP3_ONLY_SOURCE_VALIDATED", details: { policy: MP3_ONLY_SOURCE_POLICY, authorization: MP3_ONLY_SOURCE.authorization,
+            projectId: MP3_ONLY_SOURCE.projectId, trackId: s.trackId, masterId: master.id, version: master.version, uploadId: s.id, sourceAssetId: s.id,
+            sourceSha256: checksum, sourceBytes: size, originalFormat: "MP3_LOSSY", sourceBitrateKbps: decoded.bitrateKbps, durationMs: decoded.durationMs,
+            previewAssetId: previewId, previewSha256: previewChecksum, previewStartMs: s.previewStartMs, previewDurationMs: excerpt.previewDurationMs,
+            formats: [...MP3_ONLY_SOURCE.formats], wavAvailable: false, fullSourceReencoded: false, artisticApproval: false, rightsReview: "PENDING", offerActivated: false, probe: decoded.probe } } });
+        });
+        generatedRefs.length = 0;
+        return { processed: true, ready: true, sourceFormat: "MP3", mp3Only: true, ffmpegRssPeak: excerpt.ffmpegRssPeak, ffmpegSamples: excerpt.ffmpegSamples };
+      }
       await trackLock(s.trackId, async tx => {
         if (!await tx.digitalUpload.findFirst({ where: { id: s.id, status: "VALIDATING", leaseToken: slot.leaseToken, leaseUntil: { gt: new Date() } } })
           || !await tx.digitalWorkSlot.findFirst({ where: { id: slot.id, leaseToken: slot.leaseToken, leaseUntil: { gt: new Date() } } })) throw new DigitalError("LEASE_LOST",409);
@@ -59,7 +100,7 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
         if (actor?.role !== "ADMIN" || actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("ADMIN_REQUIRED",403);
         const latest = await tx.digitalMaster.findFirst({ where: { trackId: s.trackId }, orderBy: { version: "desc" } });
         if ((latest?.version ?? 0) !== s.expectedVersion) throw new DigitalError("MASTER_VERSION_CONFLICT",409);
-        // MP3-only is a genuine lossy source, never a commercial READY master.
+        // Every other MP3 remains a lossy private draft, never a commercial READY master.
         // Replacing a current commercial version with such a draft would hide it.
         if (latest) throw new DigitalError("MP3_DRAFT_REPLACEMENT_REFUSED",409);
         await tx.asset.create({ data: { id: s.id, type: "AUDIO", storageKey: s.storageKey, storageBackend: driver.backend, storageProvider: driver.provider,

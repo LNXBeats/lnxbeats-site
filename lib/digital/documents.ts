@@ -13,6 +13,7 @@ import { checkDigitalAcquiredJurisdiction } from "./checkout-jurisdiction";
 import {checkDigitalAcquiredRightsReview} from "./rights-review-checkout";
 import { verifyDigitalPinnedMedia } from "./pinned-media";
 import { verifyDigitalCompletions } from "./completion";
+import { assertDigitalOrderFormatSupplement, type DigitalFormatSupplementSnapshot } from "./format-supplement";
 type Tx = Prisma.TransactionClient;
 const json = (v: unknown) => v as Prisma.InputJsonValue;
 
@@ -44,12 +45,13 @@ export async function prepareDigitalDocuments(tx: Tx, orderId: string) {
   // Legacy DCN-1.0 acquisitions retain access. Their missing historic contract is not invented.
   if (!o.contractSnapshot) return null;
   const s = verifyContractSnapshot(o.contractSnapshot, o.termsVersion, o.termsHash).snapshot;
+  assertDigitalOrderFormatSupplement(o.contractSnapshot,o.lines);
   if (createHash("sha256").update(s.terms.text).digest("hex") !== o.termsHash) throw new DigitalError("CONTRACT_REQUIRES_REVIEW");
   if(s.mode!==mode)throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);
   const date = new Date(), number = await sequence(tx, "INVOICE", date,mode);
   const masters=await tx.digitalMaster.findMany({where:{id:{in:o.lines.flatMap(l=>(l.trackSnapshot as Array<{masterId:string}>).map(t=>t.masterId))}},select:{id:true,version:true,codec:true,masterAsset:{select:{durationMs:true,checksumSha256:true}}}});
   const invoice = { invoiceNumber: number, issuedAt: date.toISOString(), paidAt: date.toISOString(), orderNumberSnapshot: o.id,
-    sellerSnapshot, customerSnapshot: s.customer, lineItemsSnapshot: o.lines.map(l => ({ description: `${l.scope === "ALBUM" ? "Album numérique" : "Titre numérique"} — ${l.title}${l.completionSnapshot?" — complément d’album, crédit d’achats antérieurs détaillé dans la confirmation":""}`, quantity: 1, unitPriceCents: l.priceCents, lineTotalCents: l.priceCents })),
+    sellerSnapshot, customerSnapshot: s.customer, lineItemsSnapshot: o.lines.map(l => ({ description: `${l.scope === "ALBUM" ? "Album numérique" : "Titre numérique"} — ${l.title}${s.formatSupplement&&(l.trackSnapshot as Array<{trackId:string}>).some(t=>s.formatSupplement!.tracks.some(b=>b.trackId===t.trackId))?" — MP3 uniquement":""}${l.completionSnapshot?" — complément d’album, crédit d’achats antérieurs détaillé dans la confirmation":""}`, quantity: 1, unitPriceCents: l.priceCents, lineTotalCents: l.priceCents })),
     currency: "EUR", subtotalCents: o.totalCents, shippingCents: 0, totalCents: o.totalCents, vatLegalNotice: digitalCommercialFiscalNotice(o.jurisdictionSnapshot,mode),
     paymentMethodLabel: `${o.attempts[0].provider}${mode==="TEST"?" TEST":""}`, termsVersion: o.termsVersion,
     acquired: o.lines.map(l => ({ id: l.id, offerId: l.offerId, version: l.offerVersion, content: l.trackSnapshot, tax: l.taxSnapshot,
@@ -133,10 +135,11 @@ export async function generateDigitalContractPdf(snapshot: Record<string, unknow
   if(free){const supply=snapshot.supply as {eligibleCents:number;appliedCreditCents:number;surplusCents:number};
     p.moveDown().text(`Montants éligibles : ${(supply.eligibleCents/100).toFixed(2)} EUR. Crédit appliqué plafonné : ${(supply.appliedCreditCents/100).toFixed(2)} EUR. Reste à payer : 0,00 EUR. Aucun solde, avoir monétaire ou crédit réutilisable créé, y compris pour l’excédent ${(supply.surplusCents/100).toFixed(2)} EUR.`);}
   const s = snapshot.contract as { customer: { name: string; email: string }; acceptedAt: string; earlyDelivery: { text: string }; withdrawal: { text: string };
-    terms?: { version?: string; hashSha256?: string; sections?: Array<{ title: string; paragraphs: string[]; boxed?: boolean }> } };
+    terms?: { version?: string; hashSha256?: string; sections?: Array<{ title: string; paragraphs: string[]; boxed?: boolean }> }; formatSupplement?:DigitalFormatSupplementSnapshot };
   p.moveDown().text(`${s.customer.name}\n${s.customer.email}\nConsentements recueillis le ${s.acceptedAt}`);
   if(s.terms?.version)p.moveDown(.5).text(`Version des conditions acceptée : ${s.terms.version}`);
   if(s.terms?.hashSha256)p.text(`Empreinte SHA-256 du texte accepté : ${s.terms.hashSha256}`);
+  if(s.formatSupplement){p.moveDown().font("Helvetica-Bold").text(s.formatSupplement.title).font("Helvetica");p.text(s.formatSupplement.text);p.text(`Version du complément : ${s.formatSupplement.version}\nEmpreinte SHA-256 : ${s.formatSupplement.hashSha256}\nAccepté le ${s.formatSupplement.acceptedAt}`);}
   for (const line of snapshot.lineItemsSnapshot as Array<{ description: string; lineTotalCents: number }>) p.moveDown(.5).text(`${line.description} : ${Math.floor(line.lineTotalCents / 100)},${String(line.lineTotalCents % 100).padStart(2, "0")} EUR`);
   p.moveDown().font("Helvetica-Bold").text("Contenu exact acquis, conservé indépendamment du catalogue courant").font("Helvetica");
   const versions=snapshot.versions as Array<{masterId:string;version:number;format:string}>;

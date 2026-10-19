@@ -27,6 +27,7 @@ import { digitalCompletionJurisdictionAllowed } from "./live-commerce-policy";
 import { digitalNewSalesAllowed } from "./runtime-policy";
 import { digitalCommercialFiscalNotice } from "./document-policy";
 import { assertDigitalLiveNewSale } from "./sales-control";
+import { assertDigitalOrderFormatSupplement, digitalFormatSupplementSnapshot } from "./format-supplement";
 
 function user(actor: OrderActor) { if (actor.status !== "ACTIVE" || !actor.emailVerified) throw new DigitalError("VERIFIED_ACCOUNT_REQUIRED", 403); }
 async function lock(tx: Prisma.TransactionClient, id: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-user:${id}`})) IS NULL AS locked`; }
@@ -41,12 +42,13 @@ function presentOrder(order: { id: string; status: string; totalCents: number; m
     providerOrderId: order.status === "PENDING" && attempt?.status === "OPEN" && attempt.provider === "PAYPAL" ? attempt.providerReference ?? null : null,
     needsReconciliation: order.status === "REQUIRES_REVIEW" || attempt?.status === "UNKNOWN" };
 }
-export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; termsAccepted?:boolean; earlyDelivery: boolean; withdrawalAcknowledged: boolean; jurisdiction?:DigitalCustomerTerritory;billingAddressSameAsResidence?:boolean;billingAddress?:DigitalFranceMinimalAddress;consentPresentation?:string }, suppliedGateway?: DigitalGateway, options?:{localReview?:true;localQaFixture?:true}) {
+export async function createDigitalCheckout(actor: OrderActor, input: { idempotencyKey: string; revision: number; provider: string; termsVersion: string; termsAccepted?:boolean; earlyDelivery: boolean; withdrawalAcknowledged: boolean; jurisdiction?:DigitalCustomerTerritory;billingAddressSameAsResidence?:boolean;billingAddress?:DigitalFranceMinimalAddress;consentPresentation?:string;formatSupplementHash?:string }, suppliedGateway?: DigitalGateway, options?:{localReview?:true;localQaFixture?:true}) {
   user(actor); const mode=requireDigitalEnvironment();
   if (!digitalNewSalesAllowed(mode) && !localDigitalReviewCheckoutAllowed(actor.email,suppliedGateway?.merchantId??"",options?.localReview===true)) throw new DigitalError("NEW_DIGITAL_PAYMENTS_CLOSED", 503);
   if(mode==="TEST"&&!suppliedGateway&&process.env.DCN_EXTERNAL_TEST_AUTHORIZED!=="true")throw new DigitalError("EXTERNAL_QA_AUTHORIZATION_REQUIRED",503);
   assertDigitalUuid(input.idempotencyKey);
   parseDigitalCheckoutConsentPresentation(input.consentPresentation);
+  if(input.formatSupplementHash!==undefined&&!/^[a-f0-9]{64}$/.test(input.formatSupplementHash))throw new DigitalError("INVALID_CHECKOUT");
   if (!Number.isSafeInteger(input.revision) || input.revision < 1 || !["STRIPE", "PAYPAL"].includes(input.provider)
     || !(mode==="LIVE"?[DIGITAL_FRANCE_LIVE_CONTRACT_VERSION]:[DIGITAL_TERMS_VERSION,DIGITAL_FRANCE_TERMS_VERSION]).includes(input.termsVersion)
     || [DIGITAL_FRANCE_TERMS_VERSION,DIGITAL_FRANCE_LIVE_CONTRACT_VERSION].includes(input.termsVersion)&&input.termsAccepted!==true
@@ -69,6 +71,8 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
       await checkDigitalResidenceRetry(input.jurisdiction,previous.jurisdictionSnapshot,tx,gateway.merchantId,actor.id);
       assertDigitalBillingAddressRetry(previous.contractSnapshot,input.billingAddressSameAsResidence===true,input.billingAddress);
       assertDigitalCheckoutConsentRetry(previous.contractSnapshot,input.consentPresentation);
+      assertDigitalOrderFormatSupplement(previous.contractSnapshot,previous.lines);
+      digitalFormatSupplementSnapshot(previous.lines.flatMap(l=>l.trackSnapshot as DigitalSelection["tracks"]),new Date(),input.formatSupplementHash);
       return { order: previous, attempt: previous.attempts[0], created: false };
     }
     if(input.termsVersion!==(mode==="LIVE"?DIGITAL_FRANCE_LIVE_CONTRACT_VERSION:DIGITAL_FRANCE_TERMS_VERSION))throw new DigitalError("CURRENT_DIGITAL_TERMS_REQUIRED",409);
@@ -85,6 +89,8 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
     const normalized = normalizeDigitalCart(chosen, owned);
     if (!normalized.lines.length) throw new DigitalError("EMPTY_CART", 409);
     if(!normalized.totalCents)throw new DigitalError("FREE_COMPLETION_SEPARATE_FLOW_REQUIRED",409);
+    const acceptedAt=new Date();
+    const formatSupplement=digitalFormatSupplementSnapshot(normalized.lines.flatMap(l=>l.tracks),acceptedAt,input.formatSupplementHash);
     const jurisdiction=await reserveDigitalJurisdiction(input.jurisdiction,tx,localQa,actor.id,input.termsVersion);
     digitalCommercialFiscalNotice(jurisdiction,mode);
     const customer=mode==="LIVE"?await digitalLiveContractCustomer(tx,actor.id,currentUser.displayName,currentUser.email,jurisdiction.franceResidenceV2,input.billingAddressSameAsResidence===true,input.billingAddress)
@@ -97,7 +103,7 @@ export async function createDigitalCheckout(actor: OrderActor, input: { idempote
       earlyDelivery: true, withdrawalAcknowledged: true, lines: { create: normalized.lines.map(l => ({ offerId: l.id, scope: l.scope, title: l.title, priceCents: l.priceCents,
         offerVersion: l.version, trackSnapshot: l.tracks, ...(l.completion?{completionSnapshot:l.completion}:{}),
         taxSnapshot: {status:jurisdiction.approvalScope==="LOCAL_QA"?"LOCAL_REVIEW_ONLY":"APPROVED_TERRITORY",...calculateDigitalTax({grossBeforeCreditCents:l.completion?.basePriceCents??l.priceCents,creditCents:l.completion?.creditCents??0},jurisdiction)} })) },
-      contractSnapshot: {...digitalContractSnapshot(customer, new Date(),input.termsVersion,{mode,approval,consentPresentation:input.consentPresentation}),rightsReviewPolicy:DIGITAL_RIGHTS_REVIEW_POLICY},
+      contractSnapshot: {...digitalContractSnapshot(customer, acceptedAt,input.termsVersion,{mode,approval,consentPresentation:input.consentPresentation}),rightsReviewPolicy:DIGITAL_RIGHTS_REVIEW_POLICY,...(formatSupplement?{formatSupplement}:{})},
     }, include: { user: true, lines: true } });
     for(const l of normalized.lines)if(l.completion)await reserveDigitalCompletion(tx,actor.id,order.lines.find(line=>line.offerId===l.id)!.id,l.completion);
     const attempt = await tx.digitalPaymentAttempt.create({ data: { orderId: order.id, provider: input.provider, idempotencyKey: `dcn:${order.id}:${randomUUID()}`, leaseUntil: new Date(Date.now() + 60000) } });

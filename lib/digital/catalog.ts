@@ -7,14 +7,19 @@ import { DigitalError, assertDigitalUuid, digitalPrice, normalizeDigitalCart, re
 import { DIGITAL_ACTIVE_RIGHTS_ORDER_STATES } from "./library-policy";
 import { applyDigitalCompletions } from "./completion";
 import { digitalOwnsExactAlbum } from "./album-ownership-policy";
-import { digitalCommercialAudioReady } from "./formats";
+import { acquiredAlbumFormats, digitalCommercialAudioReady } from "./formats";
+import { MP3_ONLY_SOURCE, MP3_ONLY_SOURCE_POLICY } from "./mp3-only-policy";
 import { assertDigitalRightsReviews } from "./rights-review-service";
 import { assertDigitalExcerptApprovals } from "./excerpt-commerce";
 import {digitalRuntimeMode} from "./runtime-policy";
 import {assertDigitalLiveObjectAssets} from "./live-media-policy";
 import { digitalPublicPreviewAllowed } from "./public-preview";
 type DB = Prisma.TransactionClient;
-export function selectionFingerprint(offer:DigitalSelection){return createHash("sha256").update(JSON.stringify([offer.id,offer.scope,offer.title,offer.version,offer.priceCents,offer.tracks.map(t=>[t.trackId,t.masterId,t.title,t.position,t.formats??null,t.wavAssetId??null,t.mp3AssetId??null]),offer.completion??null])).digest("hex");}
+export function selectionFingerprint(offer:DigitalSelection){return createHash("sha256").update(JSON.stringify([offer.id,offer.scope,offer.title,offer.version,offer.priceCents,offer.tracks.map(t=>{
+  const historical=[t.trackId,t.masterId,t.title,t.position,t.formats??null,t.wavAssetId??null,t.mp3AssetId??null];
+  // Preserve the exact historical WAV fingerprint. Only the new discriminated format adds a binding.
+  return t.formatPolicy===undefined?historical:[...historical,t.formatPolicy,t.sourceFormat??null,t.sourceSha256??null];
+}),offer.completion??null])).digest("hex");}
 
 export async function selections(ids: string[], db: DB = prisma): Promise<DigitalSelection[]> {
   if (ids.length > 50 || new Set(ids).size !== ids.length) throw new DigitalError("INVALID_CART");
@@ -29,14 +34,17 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
     if (!offer.active || !offer.rightsConfirmed || offer.project.status !== "PUBLISHED" || !offer.project.publicVisible) throw new DigitalError("OFFER_UNAVAILABLE", 409);
     const tracks = offer.scope === "ALBUM" ? offer.project.tracks : offer.project.tracks.filter(t => t.id === offer.trackId);
     if (!tracks.length || tracks.some(t => { const m = t.digitalMasters[0]; return t.status !== "RELEASED" || !m || !digitalCommercialAudioReady(m) || m.masterAsset.visibility !== "PRIVATE" || m.masterAsset.rightsStatus !== "CLEARED"
-      || m.masterAsset.mimeType!=="audio/wav"||!m.masterAsset.checksumSha256||!m.mp3AssetId||m.mp3Asset?.visibility!=="PRIVATE"
-      ||m.mp3Asset.rightsStatus!=="CLEARED"||m.mp3Asset.mimeType!=="audio/mpeg"||!/^[a-f0-9]{64}$/.test(m.mp3Asset.checksumSha256??"")
+      || (m.codec==="mp3" ? offer.scope!=="TRACK"||offer.project.type!=="SINGLE"||offer.project.id!==MP3_ONLY_SOURCE.projectId
+        ||t.id!==MP3_ONLY_SOURCE.trackId||offer.project.tracks.length!==1
+        : m.masterAsset.mimeType!=="audio/wav"||!m.masterAsset.checksumSha256||!m.mp3AssetId||m.mp3Asset?.visibility!=="PRIVATE"
+          ||m.mp3Asset.rightsStatus!=="CLEARED"||m.mp3Asset.mimeType!=="audio/mpeg"||!/^[a-f0-9]{64}$/.test(m.mp3Asset.checksumSha256??""))
       || m.previewAsset?.visibility !== "PUBLIC" || m.previewAsset.rightsStatus !== "CLEARED" || !m.previewDurationMs || m.previewDurationMs > 60000; })) throw new DigitalError("NO_READY_MASTER", 409);
-    assertDigitalLiveObjectAssets(digitalRuntimeMode(),tracks.flatMap(t=>{const m=t.digitalMasters[0];return[m.masterAsset,m.mp3Asset,m.previewAsset];}));
+    assertDigitalLiveObjectAssets(digitalRuntimeMode(),tracks.flatMap(t=>{const m=t.digitalMasters[0];return m.codec==="mp3"?[m.masterAsset,m.previewAsset]:[m.masterAsset,m.mp3Asset,m.previewAsset];}));
     return { id: offer.id, scope: offer.scope, title: offer.scope === "ALBUM" ? `${offer.project.title} — Album` : tracks[0].title,
       priceCents: digitalPrice(offer.priceCents), version: offer.version,
-      tracks: tracks.map(t => ({ trackId: t.id, masterId: t.digitalMasters[0].id, title: t.title, position: t.position,
-        formats:["WAV","MP3"] as ["WAV","MP3"],wavAssetId:t.digitalMasters[0].masterAssetId,mp3AssetId:t.digitalMasters[0].mp3AssetId! })) };
+      tracks: tracks.map((t):DigitalSelection["tracks"][number] => {const m=t.digitalMasters[0];return { trackId: t.id, masterId: m.id, title: t.title, position: t.position,
+        ...(m.codec==="mp3"?{formats:["MP3"] as ["MP3"],mp3AssetId:m.masterAssetId,sourceSha256:m.masterAsset.checksumSha256!,sourceFormat:"MP3_LOSSY" as const,formatPolicy:MP3_ONLY_SOURCE_POLICY}
+          :{formats:["WAV","MP3"] as ["WAV","MP3"],wavAssetId:m.masterAssetId,mp3AssetId:m.mp3AssetId!}) };}) };
   });
   if(selected.length) {
     await assertDigitalRightsReviews(db, selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
@@ -57,6 +65,7 @@ export async function quote(ids: string[], userId?: string) {
 }
 export function publicQuote(value: Awaited<ReturnType<typeof quote>>) {
   return { totalCents: value.totalCents, removed: value.removed, lines: value.lines.map(l => ({ id: l.id, scope: l.scope, title: l.title, priceCents: l.priceCents, version: l.version, trackCount: l.tracks.length,
+    formats:acquiredAlbumFormats(l.tracks),
     completion:l.completion?{basePriceCents:l.completion.basePriceCents,creditCents:l.completion.creditCents,creditedTrackCount:l.completion.sources.length}:null })) };
 }
 export async function publicDigitalProject(slug: string, userId?: string) {
@@ -82,12 +91,13 @@ export async function publicDigitalProject(slug: string, userId?: string) {
     if(c)completion={priceCents:q[0].priceCents,basePriceCents:c.basePriceCents,creditCents:c.creditCents,creditedTrackCount:c.sources.length,blockedReason:null};
   }catch(e){if(!(e instanceof DigitalError))throw e;completion={priceCents:album.priceCents,basePriceCents:album.priceCents,creditCents:0,creditedTrackCount:0,blockedReason:e.code};}}
   return { album: album ? { id: album.id, priceCents: album.priceCents, version: album.version,trackCount:album.tracks.length,
+    formats:acquiredAlbumFormats(album.tracks),
     owned: ownsAlbum, partiallyOwned: albumOwnedCount > 0 && !ownsAlbum,completion } : null,
     tracks: project.tracks.map(t => { const media = t.digitalMasters[0], offer = offers.find(o => o.tracks.length === 1 && o.scope === "TRACK" && o.tracks[0].trackId === t.id);
       return { id: t.id, title: t.title, position: t.position, publication:t.status, previewUrl: publicPreviews.has(t.id) && media?.previewAsset ? `/media/digital/previews/${media.previewAsset.id}` : null,
         previewDurationMs: t.status==="RELEASED"?media?.previewDurationMs??null:null,
         fullDurationMs: media?.masterAsset.durationMs ?? (t.durationSeconds == null ? null : t.durationSeconds * 1000), owned: owned.has(t.id),
-        offer: offer ? { id: offer.id, priceCents: offer.priceCents, version: offer.version } : null }; }) };
+        offer: offer ? { id: offer.id, priceCents: offer.priceCents, version: offer.version,formats:acquiredAlbumFormats(offer.tracks) } : null }; }) };
 }
 
 export async function saveOffer(actor: OrderActor, input: { projectId: string; trackId?: string | null; priceCents: number | null; active: boolean; rightsConfirmed: boolean; expectedVersion: number; distribution: string }) {
@@ -106,6 +116,12 @@ export async function saveOfferInTransaction(tx: DB, actor: OrderActor, input: {
     const project = await tx.project.findUnique({ where: { id: input.projectId }, include: { tracks: { where: {...(input.trackId?{id:input.trackId}:{})},include:{digitalMasters:{orderBy:{version:"desc"},take:1,include:{masterAsset:true,mp3Asset:true,previewAsset:true}}} } } });
     const track = input.trackId ? await tx.track.findFirst({ where: { id: input.trackId, projectId: input.projectId } }) : null;
     if (!project || input.trackId && !track) throw new DigitalError("NOT_FOUND", 404);
+    if(input.active && !draftOnly && project.tracks.some(t=>t.digitalMasters[0]?.codec==="mp3")){
+      // This query's tracks are filtered to input.trackId. Count the actual edition,
+      // not that filtered projection, before opening the one authorized single.
+      if(!input.trackId||project.type!=="SINGLE"||project.id!==MP3_ONLY_SOURCE.projectId||input.trackId!==MP3_ONLY_SOURCE.trackId
+        ||await tx.track.count({where:{projectId:project.id}})!==1)throw new DigitalError("NO_READY_MASTER",409);
+    }
     // Draft prices may be prepared without media. Opening a sale requires the actual
     // strict ingestion proof; an extension, MIME label or old READY flag is insufficient.
     if(input.active && !draftOnly && (project.status!=="PUBLISHED"||!project.publicVisible||!project.tracks.length

@@ -56,7 +56,8 @@ test("Admin preparation: unreleased 12-track album is sellable without a platfor
     assert.equal(track.wavAssetId, f.tracks[i].digitalMasters[0].masterAssetId);
     assert.equal(track.mp3AssetId, f.tracks[i].digitalMasters[0].mp3AssetId);
   }
-  assert.deepEqual((f.query() as { include: { project: { include: { tracks: { where: unknown } } } } }).include.project.include.tracks.where, { status: "RELEASED" });
+  // Load the whole edition: silently filtering out an announced/missing track would sell a truncated album.
+  assert.equal((f.query() as { include: { project: { include: { tracks: { where?: unknown } } } } }).include.project.include.tracks.where, undefined);
 });
 
 test("Admin preparation: single retains its independent price and only its own pinned edition", async () => {

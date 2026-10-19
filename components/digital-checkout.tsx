@@ -13,16 +13,19 @@ import { digitalRequest } from "./digital-cart";
 import { type DigitalCompletionView } from "./digital-catalog";
 import { DigitalPaypalButtons } from "./digital-paypal-buttons";
 import { digitalUiCopy, type DigitalUiMode } from "./digital-mode-copy";
+import { digitalFormatsLabel } from "@/lib/digital/format-presentation";
+import type { DigitalAudioFormat } from "@/lib/digital/formats";
 import styles from "./digital-checkout.module.css";
 
 type ResidenceState = { declaration: {id:string;address:{line1:string;postalCode:string;city:string;countryCode:"FR"};addressHash:string;billingPostalCode:string;createdAt:string}|null;reviewStatus:"VERIFIED"|"REVIEW"|"REVOKED";reviewId:string|null;paymentAllowed:boolean;checkoutEligible?:boolean;checkoutCode?:string|null };
 type CheckoutResult = {orderId:string;checkoutUrl?:string|null;providerOrderId?:string|null};
 export type DigitalCheckoutProps = {
-  revision:number;totalCents:number;lines:Array<{id:string;title:string;priceCents:number;trackCount:number;completion?:DigitalCompletionView|null}>;
+  revision:number;totalCents:number;lines:Array<{id:string;title:string;priceCents:number;trackCount:number;formats?:readonly DigitalAudioFormat[];completion?:DigitalCompletionView|null}>;
   providers:string[];termsVersion:string;termsHash?:string;earlyDeliveryText?:string;withdrawalText?:string;
   localReview?:boolean;mode?:DigitalUiMode;contractApproved?:boolean;newSalesOpen?:boolean;paypalClientId?:string|null;nonce?:string|null;
+  formatSupplement?:{version:string;title:string;text:string;hashSha256:string}|null;
 };
-export function DigitalCheckout({revision,totalCents,lines,providers,termsVersion,localReview=false,mode="TEST",contractApproved=false,newSalesOpen=false,paypalClientId=null,nonce=null}:DigitalCheckoutProps) {
+export function DigitalCheckout({revision,totalCents,lines,providers,termsVersion,localReview=false,mode="TEST",contractApproved=false,newSalesOpen=false,paypalClientId=null,nonce=null,formatSupplement=null}:DigitalCheckoutProps) {
   const { t, money } = useSiteLanguage();
   const copy=digitalUiCopy(mode),localReviewAllowed=!copy.live&&localReview,contractReady=!copy.live||contractApproved,salesReady=!copy.live||newSalesOpen;
   const freeCompletion=totalCents===0&&lines.length>0&&lines.every(line=>!!line.completion);
@@ -52,6 +55,7 @@ export function DigitalCheckout({revision,totalCents,lines,providers,termsVersio
     key.current??=crypto.randomUUID();
     return digitalRequest(freeCompletion?"/api/digital/completion/grant":localReviewAllowed?"/api/digital/local-review/checkout":"/api/digital/checkout",{
       revision,...(localReviewAllowed||freeCompletion?{}:{provider:selectedProvider}),idempotencyKey:key.current,termsAccepted,earlyDelivery:deliveryConsent,withdrawalAcknowledged:deliveryConsent,termsVersion,consentPresentation:DIGITAL_CHECKOUT_CONSENT_PRESENTATION,
+      ...(formatSupplement?{formatSupplementHash:formatSupplement.hashSha256}:{}),
       ...(copy.live?{billingAddressSameAsResidence,...(!billingAddressSameAsResidence?{billingAddress:{countryCode:"FR",line1:billingLine1,city:billingCity,postalCode:billingPostalCode}}:{})}:{}),
       jurisdiction:{countryCode:"FR",residenceCountryCode:"FR",billingCountryCode:"FR",customerType:"B2C",residencePostalCode,billingPostalCode:effectiveBillingPostalCode,residenceConfirmed,residenceDeclarationId:saved.id,addressHash:saved.addressHash}
     }) as Promise<CheckoutResult>;
@@ -64,8 +68,8 @@ export function DigitalCheckout({revision,totalCents,lines,providers,termsVersio
   return <div className={styles.checkout}>
     <aside className={styles.order} aria-labelledby="digital-order-heading">
       <div className={styles.sectionTitle}><span aria-hidden="true">1</span><h2 id="digital-order-heading"><T text="Votre commande"/></h2></div>
-      <p className={styles.subtle}><T text={lines.length === 1 ? "{count} article · WAV et MP3 inclus" : "{count} articles · WAV et MP3 inclus"} values={{ count: lines.length }}/></p>
-      <ul className={styles.items}>{lines.map(line=><li key={line.id}><div className={styles.itemCopy}><strong translate="no" className="notranslate">{line.title}</strong><small>{line.trackCount>1?<T text="Album · {count} pistes" values={{ count: line.trackCount }}/>:<T text="Titre individuel"/>}</small>{line.completion?<p><T text="Prix de l’album"/> {money(line.completion.basePriceCents)} · <T text="Crédit des titres éligibles déjà payés"/> : <span className={styles.money}>−{money(line.completion.creditCents)}</span></p>:null}</div><strong className={styles.money}>{money(line.priceCents)}</strong></li>)}</ul>
+      <p className={styles.subtle}><T text={lines.length === 1 ? "{count} article" : "{count} articles"} values={{ count: lines.length }}/> · <T text="Formats indiqués pour chaque article"/></p>
+      <ul className={styles.items}>{lines.map(line=><li key={line.id}><div className={styles.itemCopy}><strong translate="no" className="notranslate">{line.title}</strong><small>{line.trackCount>1?<T text="Album · {count} pistes" values={{ count: line.trackCount }}/>:<T text="Titre individuel"/>} · <T text={digitalFormatsLabel(line.formats)}/></small>{line.formats?.length===1&&line.formats[0]==="MP3"?<p><T text="Fichier source compressé. Aucun WAV ni amélioration de qualité inclus."/></p>:null}{line.completion?<p><T text="Prix de l’album"/> {money(line.completion.basePriceCents)} · <T text="Crédit des titres éligibles déjà payés"/> : <span className={styles.money}>−{money(line.completion.creditCents)}</span></p>:null}</div><strong className={styles.money}>{money(line.priceCents)}</strong></li>)}</ul>
       <div className={styles.total}><span>{copy.live?<T text="Total à payer"/>:<T text="Total de démonstration"/>}</span><strong className={styles.money}>{money(totalCents)}</strong></div>
       <Link className={styles.textLink} href="/musique/panier"><T text="Modifier mon panier"/></Link>
       <p className={styles.assurance}><T text="Téléchargements privés · Formats inclus sans supplément"/></p>
@@ -96,9 +100,10 @@ export function DigitalCheckout({revision,totalCents,lines,providers,termsVersio
       <section className={styles.panel} aria-labelledby="digital-consent-heading">
         <div className={styles.sectionTitle}><span aria-hidden="true">3</span><h2 id="digital-consent-heading"><T text="Vos confirmations"/></h2></div>
         <ContractLanguageNotice />
-        <label className={styles.check}><input type="checkbox" checked={termsAccepted} disabled={busy||!contractReady} onChange={e=>{key.current=null;setTermsAccepted(e.target.checked);}}/><span lang="fr" translate="no">J’accepte les CGV numériques.</span></label>
+        <label className={styles.check}><input type="checkbox" checked={termsAccepted} disabled={busy||!contractReady} onChange={e=>{key.current=null;setTermsAccepted(e.target.checked);}}/><span lang="fr" translate="no">J’accepte les CGV numériques.{formatSupplement?" J’accepte aussi le complément MP3 uniquement ci-dessous.":""}</span></label>
         <ContractReadingAid text="J’accepte les CGV numériques."/>
         <Link className={styles.termsLink} href="/musique/conditions#dcn-france-terms" target="_blank" rel="noopener"><T text="Consulter les CGV numériques"/><span className="sr-only">  <T text="— nouvel onglet"/></span></Link>
+        {formatSupplement?<details className={styles.notice}><summary><T text="Lire le complément MP3 uniquement"/></summary><div lang="fr" translate="no"><h3>{formatSupplement.title}</h3><p>{formatSupplement.text}</p><p>Version : {formatSupplement.version}</p><small style={{overflowWrap:"anywhere"}}>SHA-256 : {formatSupplement.hashSha256}</small></div></details>:null}
         <label className={styles.check}><input type="checkbox" checked={deliveryConsent} disabled={busy} onChange={e=>{key.current=null;setDeliveryConsent(e.target.checked);}}/><span lang="fr" translate="no">{DIGITAL_CHECKOUT_IMMEDIATE_CONSENT_TEXT}</span></label>
         <ContractReadingAid text={DIGITAL_CHECKOUT_IMMEDIATE_CONSENT_TEXT}/>
         <p className={styles.subtle}><T text="Usage privé uniquement. Vous conserverez vos conditions et confirmations dans votre compte."/></p>

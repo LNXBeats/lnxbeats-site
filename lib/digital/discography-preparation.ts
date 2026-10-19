@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { digitalCommercialAudioReady } from "./formats";
+import { isAuthorizedMp3OnlySource, MP3_ONLY_SOURCE } from "./mp3-only-policy";
 import { assessDigitalRightsReview, DIGITAL_RIGHTS_REVIEW_EVENT, digitalRightsReviewHash } from "./rights-review-policy";
 import { ANNOUNCEMENT_EVENT, announcementAllowed } from "./announcement-policy";
 import { digitalExcerptSelection, DIGITAL_EXCERPT_EVENT } from "./excerpt-policy";
@@ -37,7 +38,9 @@ export const loadDiscographyPreparation = cache(async () => {
       const technicalReady = !!m && digitalCommercialAudioReady(m);
       const event = m ? latest.get(`${DIGITAL_RIGHTS_REVIEW_EVENT}:${m.id}`) ?? null : null;
       const rightsApproved = !!m && assessDigitalRightsReview(m, event, actors.find(a => a.id === event?.actorId) ?? null).status === "APPROVED";
-      const mediaCleared = !!m && [m.masterAsset, m.mp3Asset, m.previewAsset].every(a => a?.rightsStatus === "CLEARED");
+      const mp3Only = !!m && m.codec==="mp3" && technicalReady && p.id===MP3_ONLY_SOURCE.projectId && p.type==="SINGLE"
+        && isAuthorizedMp3OnlySource(t.id,m.masterAsset);
+      const mediaCleared = !!m && (mp3Only?[m.masterAsset,m.previewAsset]:[m.masterAsset, m.mp3Asset, m.previewAsset]).every(a => a?.rightsStatus === "CLEARED");
       const artisticValidated = !!m && artistic.has(m.id);
       const track: PreparedTrack = { id: t.id, title: t.title, position: t.position, released: t.status === "RELEASED", masterId: m?.id ?? null, version: m?.version ?? null,
         durationMs: m?.masterAsset.durationMs ?? null, technicalReady, rightsApproved, mediaCleared, artisticValidated,

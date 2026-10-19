@@ -77,11 +77,11 @@ export default async function DiscographyPage() {
         {digitalEnabled() ? <section className={digitalStyles.panel} aria-labelledby="digital-catalogue-title">
           <div className={digitalStyles.heading}><div><p className="eyebrow"><T text={digitalMode==="LIVE"?"LNX Beats · Musique à télécharger":"DCN-1.0 · revue locale"}/></p><h2 id="digital-catalogue-title"><T text="La musique vous accompagne."/></h2></div>
             <nav className={digitalStyles.tabs} aria-label={serverT(locale, "Achats numériques")}><Link className="text-link" href="/musique/panier"><T text="Panier numérique"/></Link><Link className="text-link" href="/compte/musique"><T text="Ma musique"/></Link></nav></div>
-          <p className={digitalStyles.note}><T text={digitalMode==="LIVE"?"Albums et titres à télécharger · WAV + MP3 inclus · usage privé.":"Albums et pistes à télécharger · tarifs QA uniquement · aucune vente LIVE."}/></p>
+          <p className={digitalStyles.note}><T text={digitalMode==="LIVE"?"Albums et titres à télécharger · formats indiqués sur chaque fiche · usage privé.":"Albums et pistes à télécharger · tarifs QA uniquement · aucune vente LIVE."}/></p>
           <div className={digitalStyles.catalogueGrid}>{digitalProjects.filter(p => soon.has(p.project.slug) || p.view?.album || p.view?.tracks.some(t=>t.offer)).map(({project,view}) => <article className={digitalStyles.panel} key={project.slug}>
             <Link href={`/album/${project.slug}`} className={digitalStyles.coverLink}><ProjectArtwork project={project} sizes="(max-width: 768px) 45vw, 25vw" /><h3><OriginalName>{project.title}</OriginalName></h3></Link>
             {soon.has(project.slug) ? <p role="status"><T text="Arrive bientôt · vente et téléchargements indisponibles."/></p> : <><p className={digitalStyles.muted}><T text={view?.tracks.length === 1 ? "{count} piste · extraits de 60 secondes maximum" : "{count} pistes · extraits de 60 secondes maximum"} values={{count:view?.tracks.length ?? 0}}/></p>
-            {(() => { const offer = digitalCardOffer(project.type, view); return offer ? <AddDigitalOffer id={offer.id} priceCents={offer.priceCents} label={offer.label} /> : <Link className="text-link" href={`/album/${project.slug}`}><T text="Choisir les pistes"/></Link>; })()}</>}
+            {(() => { const offer = digitalCardOffer(project.type, view); return offer ? <AddDigitalOffer id={offer.id} priceCents={offer.priceCents} label={offer.label} formats={offer.formats} /> : <Link className="text-link" href={`/album/${project.slug}`}><T text="Choisir les pistes"/></Link>; })()}</>}
           </article>)}</div>
         </section> : null}
         <details className="discography-directory">

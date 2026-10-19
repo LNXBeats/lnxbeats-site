@@ -35,14 +35,14 @@ test("clearer missing-media labels retain every fail-closed readiness requiremen
 
 test("Admin integrates context labels while preserving private preview, independent offer inputs and explicit rights checks", async () => {
   const page = await readFile(new URL("../../app/admin/musique/[slug]/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /digitalAdminReleaseLabels\(p.type\)/); assert.match(page, /label=\{release.completeOffer\}/); assert.match(page, /label=\{release.individualOffer\}/);
+  assert.match(page, /digitalAdminReleaseLabels\(p.type, tracks.some\(t => t.codec === "mp3"\)\)/); assert.match(page, /label=\{release.completeOffer\}/); assert.match(page, /label=\{release.individualOffer\}/);
   assert.doesNotMatch(page, /Offre album|Exclue de l’album vendu|prix de fixture/);
   assert.match(page, /id="edition-preview"/); assert.match(page, /\/api\/admin\/digital\/previews\//); assert.match(page, /Image unoptimized/);
   assert.match(page, /Droits de cette version pour la vente/); assert.match(page, /DigitalRightsReview/);
   const offer = await readFile(new URL("../../components/digital-admin.tsx", import.meta.url), "utf8");
   assert.match(offer, /Prix \(EUR\) — TEST/); assert.match(offer, /sans montant par défaut/); assert.match(offer, /Laissez le champ vide et l’offre inactive/);
   assert.match(offer, /priceCents: price.trim\(\) \? parseEuroCents\(price\) : null/); assert.match(offer, /rightsConfirmed: rights/);
-  assert.match(offer, /publication et validation des droits/);
+  assert.match(offer, /contrôles serveur de publication, droits, extraits, contrat et disponibilité restent obligatoires/);
   const rights = await readFile(new URL("../../components/digital-rights-review.tsx", import.meta.url), "utf8");
   assert.match(rights, /Sélectionner les versions éligibles<\/button>/); assert.doesNotMatch(rights, /éligibles de cet album/);
   for (const requirement of ["composition/master/collaborateurs/interprètes/samples/reprises/extraits", "SHA‑256", "private-evidence:", 'required={status === "APPROVED"}']) assert.ok(rights.includes(requirement));

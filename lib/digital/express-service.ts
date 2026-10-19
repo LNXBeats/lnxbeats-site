@@ -63,7 +63,7 @@ export async function loadExpressProject(id: string, db: DB = prisma) {
     tracks.push({ id: t.id, title: t.title, position: t.position, durationSeconds: t.durationSeconds, durationMs: m?.masterAsset.durationMs ?? null, publication: t.status,
       version: m?.version ?? 0, masterId: m?.id ?? null, previewStartMs: m?.previewStartMs ?? 0, previewDurationMs: m?.previewDurationMs ?? null,
       previewUrl: m?.previewAssetId ? `/api/admin/digital/previews/${m.previewAssetId}` : null, strictReady: !!m && digitalCommercialAudioReady(m),
-      formats: !m ? "Aucun fichier" : m.codec === "mp3" ? "MP3 source uniquement — WAV original requis" : m.mp3AssetId ? "WAV + MP3" : "WAV — MP3 à préparer",
+      formats: !m ? "Aucun fichier" : m.codec === "mp3" ? digitalCommercialAudioReady(m) ? "MP3 uniquement — source compressée originale, sans WAV" : "MP3 source uniquement — brouillon privé non commercialisable" : m.mp3AssetId ? "WAV + MP3" : "WAV — MP3 à préparer",
       review, rightsAtPublication, artisticStatus: excerpt?.status ?? "TO_LISTEN",
       offer: offer ? { id: offer.id, priceCents: offer.priceCents, version: offer.version, active: offer.active, rightsConfirmed: offer.rightsConfirmed, distribution: offer.distribution } : null });
   }
@@ -72,7 +72,7 @@ export async function loadExpressProject(id: string, db: DB = prisma) {
     ...(p.status === "ARCHIVED" ? ["Projet archivé : revue préalable dans le Catalogue"] : []),
     ...(p.tracks.some(t => t.status === "UNLISTED") ? ["Pistes non listées : confirmez leur inclusion dans le Catalogue avant publication"] : []),
     ...(!cover || cover.rightsStatus !== "CLEARED" ? ["Pochette et droits de publication à vérifier"] : []),
-    ...tracks.flatMap(t => [!t.strictReady ? `${t.title} : WAV/MP3/extrait requis` : "", t.review?.status !== "APPROVED" && !t.rightsAtPublication ? `${t.title} : droits particuliers de cette version à vérifier` : "", t.artisticStatus !== "VALIDATED" ? `${t.title} : extrait à écouter et valider` : "", !t.offer?.priceCents ? `${t.title} : prix à renseigner` : ""].filter(Boolean)),
+    ...tracks.flatMap(t => [!t.strictReady ? `${t.title} : fichiers audio et extrait contrôlés requis` : "", t.review?.status !== "APPROVED" && !t.rightsAtPublication ? `${t.title} : droits particuliers de cette version à vérifier` : "", t.artisticStatus !== "VALIDATED" ? `${t.title} : extrait à écouter et valider` : "", !t.offer?.priceCents ? `${t.title} : prix à renseigner` : ""].filter(Boolean)),
     ...(p.type === "ALBUM" && !album?.priceCents ? ["Prix de l’album à renseigner"] : []),
     ...(p.type !== "SINGLE" && p.type !== "ALBUM" ? ["Projet expert : publication depuis le Catalogue"] : []),
     ...(p.type === "SINGLE" && p.tracks.length !== 1 ? ["Le single doit contenir une seule piste"] : []),

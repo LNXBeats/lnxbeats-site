@@ -11,12 +11,13 @@ import { deleteMediaObject, getMediaObject, putMediaObject, type MediaStorageRef
 import { DigitalError, requireDigitalEnvironment, assertDigitalUuid, type DigitalSelection } from "./domain";
 import { digitalZipStream, validateDigitalZip } from "./zip";
 import { verifiedDigitalStream } from "./stream-integrity";
-import { acquiredAlbumFormats, acquiredDigitalAssetId, type DigitalAudioFormat, type DigitalAcquiredTrack } from "./formats";
+import { acquiredAlbumFormats, acquiredDigitalAsset, isDigitalMp3OnlyTrack, type DigitalAudioFormat, type DigitalAcquiredTrack } from "./formats";
 import { checkDigitalDisk, claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot,DIGITAL_WORK_LIMITS } from "./work-slots";
 export async function ensureDigitalArchive(lineId: string, format: DigitalAudioFormat = "WAV") {
   const mode=requireDigitalEnvironment();
   const l = await prisma.digitalOrderLine.findUniqueOrThrow({ where: { id: lineId }, include: { order: true } });
   if (l.order.mode!==mode||l.scope !== "ALBUM" || !["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED", "GRANTED"].includes(l.order.status)) throw new DigitalError("ARCHIVE_UNAVAILABLE");
+  if((l.trackSnapshot as unknown as DigitalAcquiredTrack[]).some(isDigitalMp3OnlyTrack))throw new DigitalError("ARCHIVE_UNAVAILABLE",409);
   if (!acquiredAlbumFormats(l.trackSnapshot as unknown as DigitalAcquiredTrack[]).includes(format)) throw new DigitalError("FORMAT_NOT_ACQUIRED", 409);
   return prisma.digitalArchive.upsert({ where: { lineId_format: { lineId, format } }, create: { lineId, format, snapshotHash: billingSnapshotHash(l.trackSnapshot) }, update: {} });
 }
@@ -40,12 +41,12 @@ export async function processDigitalArchives(options: { afterChunk?: () => Promi
     const l = await prisma.digitalOrderLine.findUniqueOrThrow({ where: { id: row.lineId }, include: { entitlements: { include: { master: { include: { masterAsset: true, mp3Asset: true } } } } } });
     if (billingSnapshotHash(l.trackSnapshot) !== row.snapshotHash) throw new DigitalError("ARCHIVE_SNAPSHOT_CHANGED");
     const snapshot = l.trackSnapshot as unknown as DigitalSelection["tracks"];
+    if(snapshot.some(isDigitalMp3OnlyTrack))throw new DigitalError("ARCHIVE_UNAVAILABLE",409);
     if (!acquiredAlbumFormats(snapshot).includes(row.format as DigitalAudioFormat)) throw new DigitalError("FORMAT_NOT_ACQUIRED", 409);
     const entries = snapshot.map((t, i) => {
       const master = l.entitlements.find(e => e.masterId === t.masterId)?.master;
       if (!master) throw new DigitalError("ARCHIVE_INTEGRITY");
-      const id = acquiredDigitalAssetId(t, row.format as DigitalAudioFormat, master), a = row.format === "MP3" ? master.mp3Asset : master.masterAsset;
-      if (!a || a.id !== id || a.visibility !== "PRIVATE") throw new DigitalError("ARCHIVE_INTEGRITY");
+      const a = acquiredDigitalAsset(t, row.format as DigitalAudioFormat, master);
       return { name: `${String(i + 1).padStart(2, "0")}-${t.title}.${a.filename.split(".").pop()}`, size: Number(a.sizeBytes), open: async () => {
         const object = await getMediaObject(a); if (object.contentLength !== Number(a.sizeBytes)) throw new DigitalError("ARCHIVE_INTEGRITY"); return verifiedDigitalStream(object.body, Number(a.sizeBytes), a.checksumSha256 ?? "");
       } };

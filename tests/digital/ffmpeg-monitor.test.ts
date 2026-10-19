@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { catalogFfmpegPath } from "@/lib/catalog/ffmpeg";
-import { parseLinuxRss, readProcessRss, RssProcessExited, runMonitoredFfmpeg } from "@/lib/digital/ffmpeg-monitor";
+import { darwinExitPending, parseDarwinRss, parseLinuxRss, readProcessRss, RssProcessExited, runMonitoredFfmpeg } from "@/lib/digital/ffmpeg-monitor";
 import { DIGITAL_WORK_LIMITS } from "@/lib/digital/work-slots";
 
 const audioArgs = (seconds: string) => ["-v", "error", "-re", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", seconds, "-f", "null", "-"];
@@ -17,10 +19,38 @@ test("procfs KiB parsing is strict, positive and never substitutes unavailable R
     assert.throws(() => parseLinuxRss(value), { code: "WORKER_MONITOR_UNAVAILABLE" });
   assert.throws(() => parseLinuxRss("State:\tZ (zombie)\n"), RssProcessExited);
 });
+test("Darwin RSS parsing distinguishes a kernel zombie from unavailable or zero live RSS", () => {
+  assert.equal(parseDarwinRss("  S+ 12345\n"), 12345 * 1024);
+  assert.equal(parseDarwinRss("R 512"), 512 * 1024);
+  for (const status of ["Z 0", "Z+ 0", "Z 123"]) assert.throws(() => parseDarwinRss(status), RssProcessExited);
+  for (const status of ["", "S 0", "R -1", "R NaN", "R 1 MB", "unknown 123", "R 9007199254740992", "R 1\nS 2"])
+    assert.throws(() => parseDarwinRss(status), { code: "WORKER_MONITOR_UNAVAILABLE" });
+});
+test("only exact Darwin exiting ?E zero may wait; sleeping/running zero and malformed data fail synchronously", () => {
+  assert.equal(darwinExitPending("?E 0\n"), true);
+  assert.throws(() => parseDarwinRss("?E 0"), { code: "WORKER_MONITOR_UNAVAILABLE" });
+  for (const status of ["S 0", "R 0", "E 0", "? 0", "?E 1", "", "?E 0\nR 1", "permission denied"]) {
+    assert.equal(darwinExitPending(status), false);
+    if (status !== "?E 1") assert.throws(() => parseDarwinRss(status), { code: "WORKER_MONITOR_UNAVAILABLE" });
+  }
+});
 test("native RSS reader measures this real process without requiring ps on Linux", async () => {
   assert.ok(await readProcessRss(process.pid) > 0);
   await assert.rejects(readProcessRss(-1), { code: "WORKER_MONITOR_UNAVAILABLE" });
   await assert.rejects(readProcessRss(process.pid, "win32"), { code: "WORKER_MONITOR_UNAVAILABLE" });
+});
+test("Darwin reader recognizes an exited real child rather than inventing zero RSS", { skip: process.platform !== "darwin" }, async () => {
+  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  assert.ok(child.pid); await once(child, "close");
+  await assert.rejects(readProcessRss(child.pid), RssProcessExited);
+});
+test("short real Darwin FFmpeg jobs survive exit/sample races with only positive memory samples", { skip: process.platform !== "darwin", timeout: 10000 }, async () => {
+  const stats = { rssPeak: 0, samples: 0 };
+  for (let index = 0; index < 20; index++) {
+    await runMonitoredFfmpeg(catalogFfmpegPath(), audioArgs(String(.05 + index % 3 * .005)), signal(), 5000, DIGITAL_WORK_LIMITS, false, stats);
+  }
+  assert.ok(stats.samples > 0); assert.ok(stats.rssPeak > 0 && stats.rssPeak < DIGITAL_WORK_LIMITS.ffmpegRssBytes);
+  console.log(JSON.stringify({ platform: process.platform, shortFfmpegJobs: 20, realFfmpegRssPeakBytes: stats.rssPeak, samples: stats.samples }));
 });
 test("real FFmpeg finishes normally with positive RSS samples", async () => {
   const stats = { rssPeak: 0, samples: 0 };

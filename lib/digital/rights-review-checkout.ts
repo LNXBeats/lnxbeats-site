@@ -3,11 +3,13 @@ import type {Prisma} from "@/generated/prisma/client";
 import {DigitalError} from "./domain";
 import {DIGITAL_RIGHTS_REVIEW_POLICY} from "./rights-review-policy";
 import {assertDigitalRightsReviews} from "./rights-review-service";
+import {assertDigitalOrderFormatSupplement} from "./format-supplement";
 
 /** New checkouts stamp their contract at creation; historic contracts are not rewritten.
  * Recheck before capture/confirmation/first delivery, never on acquired re-downloads.
  */
 export async function checkDigitalAcquiredRightsReview(snapshot:unknown,lines:ReadonlyArray<{trackSnapshot:unknown}>,db:Prisma.TransactionClient){
+  assertDigitalOrderFormatSupplement(snapshot,lines);
   if(snapshot===null||snapshot===undefined)return;
   if(typeof snapshot!=="object"||Array.isArray(snapshot))throw new DigitalError("RIGHTS_REVIEW_POLICY_INVALID",409);
   if(!Object.prototype.hasOwnProperty.call(snapshot,"rightsReviewPolicy"))return;

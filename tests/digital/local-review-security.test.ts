@@ -23,7 +23,7 @@ test("The commercial France copy is isolated with the same exact UTC-only capabi
 });
 test("Local route accepts neither browser evidence nor external gateway/merchant fields", async () => {
   const route = await readFile(new URL("../../app/api/digital/local-review/checkout/route.ts", import.meta.url), "utf8");
-  assert.match(route, /digitalBody\(request,\["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction"\]\)/);
+  assert.match(route, /digitalBody\(request,\["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction","consentPresentation","formatSupplementHash"\]\)/);
   assert.match(route, /withDigitalApi/); assert.match(route, /localDigitalReviewCheckoutAllowed\(actor\.email/);
   assert.doesNotMatch(route, /fetch\(|new Stripe|digitalGateway\(/);
   assert.match(route, /eventId:`dcn12-local-paid-\$\{attempt\.id\}`/);

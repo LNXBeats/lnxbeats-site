@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { DigitalError, assertDigitalUuid } from "./domain";
 import { digitalCommercialAudioReady, type DigitalCommercialAudioProof } from "./formats";
+import { MP3_ONLY_SOURCE_POLICY } from "./mp3-only-policy";
 
 export const DIGITAL_RIGHTS_REVIEW_POLICY = "DCN_MASTER_RIGHTS_REVIEW_V1_FR_METROPOLITAN";
 export const DIGITAL_RIGHTS_REVIEW_EVENT = "DIGITAL_MASTER_RIGHTS_REVIEW";
@@ -10,7 +11,8 @@ export const DIGITAL_RIGHTS_ATTESTATION = "J’atteste avoir vérifié les droit
 export type DigitalRightsMaster = DigitalCommercialAudioProof & { id: string; trackId: string; version: number; masterAssetId: string; mp3AssetId: string | null; previewAssetId: string | null;
   masterAsset: DigitalCommercialAudioProof["masterAsset"] & { id: string }; mp3Asset: (NonNullable<DigitalCommercialAudioProof["mp3Asset"]> & { id: string }) | null;
   previewAsset: (NonNullable<DigitalCommercialAudioProof["previewAsset"]> & { id: string }) | null };
-export type DigitalRightsBinding = { masterId: string; trackId: string; version: number; wavAssetId: string; wavSha256: string; mp3AssetId: string; mp3Sha256: string; previewAssetId: string; previewSha256: string };
+export type DigitalRightsBinding = { masterId: string; trackId: string; version: number; mp3AssetId: string; mp3Sha256: string; previewAssetId: string; previewSha256: string } & (
+  { wavAssetId: string; wavSha256: string } | { formatPolicy: typeof MP3_ONLY_SOURCE_POLICY; sourceFormat: "MP3_LOSSY"; sourceAssetId: string; sourceSha256: string });
 export type DigitalRightsReviewDetails = { policy: string; binding: DigitalRightsBinding; status: DigitalRightsReviewStatus; privateEvidenceReference: string | null;
   evidenceSha256: string | null; attestation: string | null; reason: string | null; reviewedAt: string; requestHash: string; recordHash: string };
 export type DigitalRightsReviewEvent = { id: string; kind: string; actorId: string | null; details: unknown; createdAt: Date };
@@ -23,10 +25,15 @@ function canonical(value: unknown): unknown {
 }
 export function digitalRightsReviewHash(value: unknown) { return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex"); }
 export function digitalRightsMasterBinding(master: DigitalRightsMaster): DigitalRightsBinding {
-  for (const id of [master.id, master.trackId, master.masterAssetId, master.mp3AssetId, master.previewAssetId]) assertDigitalUuid(id);
+  for (const id of [master.id, master.trackId, master.masterAssetId, master.previewAssetId]) assertDigitalUuid(id);
   if (!digitalCommercialAudioReady(master) || !Number.isSafeInteger(master.version) || master.version < 1
-    || master.masterAsset.id !== master.masterAssetId || master.mp3Asset?.id !== master.mp3AssetId || master.previewAsset?.id !== master.previewAssetId)
+    || master.masterAsset.id !== master.masterAssetId || master.previewAsset?.id !== master.previewAssetId)
     throw new DigitalError("RIGHTS_MASTER_NOT_READY", 409);
+  if(master.codec==="mp3")return {masterId:master.id,trackId:master.trackId,version:master.version,
+    formatPolicy:MP3_ONLY_SOURCE_POLICY,sourceFormat:"MP3_LOSSY",sourceAssetId:master.masterAssetId,sourceSha256:master.masterAsset.checksumSha256!,
+    mp3AssetId:master.masterAssetId,mp3Sha256:master.masterAsset.checksumSha256!,previewAssetId:master.previewAssetId!,previewSha256:master.previewAsset!.checksumSha256!};
+  assertDigitalUuid(master.mp3AssetId);
+  if(master.mp3Asset?.id!==master.mp3AssetId)throw new DigitalError("RIGHTS_MASTER_NOT_READY",409);
   return { masterId: master.id, trackId: master.trackId, version: master.version, wavAssetId: master.masterAssetId, wavSha256: master.masterAsset.checksumSha256!,
     mp3AssetId: master.mp3AssetId!, mp3Sha256: master.mp3Asset!.checksumSha256!, previewAssetId: master.previewAssetId!, previewSha256: master.previewAsset!.checksumSha256! };
 }

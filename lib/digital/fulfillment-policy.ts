@@ -9,6 +9,7 @@ import { digitalFranceLiveContractByVersion, DIGITAL_FRANCE_LIVE_CONTRACT_VERSIO
 import type { DigitalMode } from "./runtime-policy";
 import { normalizeDigitalFranceResidenceAddress, type DigitalFranceMinimalAddress } from "./france-residence-v2-policy";
 import { digitalCheckoutConsentPresentation, validDigitalCheckoutConsentPresentation, type DigitalCheckoutConsentPresentation } from "./checkout-consents";
+import { validateSavedDigitalFormatSupplement, type DigitalFormatSupplementSnapshot } from "./format-supplement";
 
 export const DIGITAL_FISCAL_REVIEW_NOTICE = "TEST : fiscalité des contenus numériques à valider. Aucun régime ni taux réel présumé.";
 export const DIGITAL_CONTRACT_POLICY = "DCN-CONSOLIDATION-QA-EXPLICIT-RECEIPT";
@@ -36,6 +37,7 @@ type ContractSnapshot = {
   licenseStatus: string; fiscalStatus: string; approvedForLive?: boolean; liveApproval?: DigitalFranceLiveContractApprovalSnapshot;
   billingAddressSource?:"BUYER_CONFIRMED_SAME_AS_REVIEWED_RESIDENCE"|"BUYER_CONFIRMED_SAME_AS_SERVER_CHECKED_ADDRESS";
   checkoutConsentPresentation?:DigitalCheckoutConsentPresentation;
+  formatSupplement?:DigitalFormatSupplementSnapshot;
 };
 export function digitalContractSnapshot(customer: { email: string; name: string; billingAddress?:DigitalFranceMinimalAddress;billingAddressConfirmedAsResidence?:boolean;billingAddressSource?:ContractSnapshot["billingAddressSource"] }, acceptedAt: Date, termsVersion = DIGITAL_TERMS_VERSION,
   options?:{mode:DigitalMode;approval?:DigitalFranceLiveContractApprovalSnapshot;consentPresentation?:string}): ContractSnapshot {
@@ -68,6 +70,7 @@ export function digitalContractSnapshot(customer: { email: string; name: string;
 }
 export function verifyContractSnapshot(snapshot: unknown, termsVersion: string, termsHash: string) {
   const s = snapshot as ReturnType<typeof digitalContractSnapshot>;
+  if(s&&Object.prototype.hasOwnProperty.call(s,"formatSupplement")&&(!validateSavedDigitalFormatSupplement(s.formatSupplement)||s.formatSupplement!.acceptedAt!==s.acceptedAt))throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);
   if(s&&Object.prototype.hasOwnProperty.call(s,"checkoutConsentPresentation")&&!validDigitalCheckoutConsentPresentation(s.checkoutConsentPresentation!))throw new DigitalError("CONTRACT_REQUIRES_REVIEW",409);
   if(s?.mode==="LIVE"){
     const document=digitalFranceLiveContractByVersion(termsVersion),exact=digitalContractTerms(termsVersion);

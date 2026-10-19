@@ -8,9 +8,10 @@ import { parseDigitalCheckoutConsentPresentation } from "@/lib/digital/checkout-
 export const dynamic="force-dynamic";
 export async function POST(request:Request){return withDigitalApi(request,async actor=>{
   if(!localDigitalReviewCheckoutAllowed(actor.email,LOCAL_REVIEW_MERCHANT,true))throw new DigitalError("NOT_FOUND",404);
-  const b=await digitalBody(request,["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction","consentPresentation"]);
+  const b=await digitalBody(request,["idempotencyKey","revision","termsVersion","termsAccepted","earlyDelivery","withdrawalAcknowledged","jurisdiction","consentPresentation","formatSupplementHash"]);
   if(typeof b.idempotencyKey!=="string"||typeof b.termsVersion!=="string")throw new DigitalError("INVALID_CHECKOUT");
-  const order=await createDigitalCheckout(actor,{idempotencyKey:b.idempotencyKey,revision:Number(b.revision),provider:"STRIPE",termsVersion:b.termsVersion,termsAccepted:b.termsAccepted===true,earlyDelivery:b.earlyDelivery===true,withdrawalAcknowledged:b.withdrawalAcknowledged===true,jurisdiction:parseDigitalCustomerTerritory(b.jurisdiction),consentPresentation:parseDigitalCheckoutConsentPresentation(b.consentPresentation)},
+  if(b.formatSupplementHash!==undefined&&(typeof b.formatSupplementHash!=="string"||!/^[a-f0-9]{64}$/.test(b.formatSupplementHash)))throw new DigitalError("INVALID_CHECKOUT");
+  const order=await createDigitalCheckout(actor,{idempotencyKey:b.idempotencyKey,revision:Number(b.revision),provider:"STRIPE",termsVersion:b.termsVersion,termsAccepted:b.termsAccepted===true,earlyDelivery:b.earlyDelivery===true,withdrawalAcknowledged:b.withdrawalAcknowledged===true,jurisdiction:parseDigitalCustomerTerritory(b.jurisdiction),consentPresentation:parseDigitalCheckoutConsentPresentation(b.consentPresentation),...(b.formatSupplementHash===undefined?{}:{formatSupplementHash:b.formatSupplementHash as string})},
     {merchantId:LOCAL_REVIEW_MERCHANT,async create(_o,a){return{id:`dcn12-local-session-${a.id}`,url:"https://checkout.stripe.com/c/local_simulated_only"};},async recover(){return null;}},{localReview:true});
   const saved=await prisma.digitalOrder.findUniqueOrThrow({where:{id:order.orderId},include:{attempts:true}});
   const attempt=saved.attempts[0];

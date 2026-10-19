@@ -8,7 +8,8 @@ import { pipeline } from "node:stream/promises";
 import { prisma } from "@/lib/prisma";
 import { deleteMediaObject, getMediaObject, putMediaObject, sha256Hex, type MediaStorageReference } from "@/lib/media/storage";
 import { assertDigitalUuid, DigitalError, requireDigitalEnvironment } from "./domain";
-import { validateDigitalAudio } from "./audio";
+import { generateDigitalSourceMp3Preview, validateDigitalAudio } from "./audio";
+import { isAuthorizedMp3OnlySource, MP3_ONLY_SOURCE } from "./mp3-only-policy";
 import { checkDigitalDisk, DIGITAL_WORK_LIMITS, releaseDigitalSlot, renewDigitalSlot } from "./work-slots";
 import { DIGITAL_EXCERPT_EVENT, DIGITAL_EXCERPT_POLICY, digitalExcerptBinding, digitalExcerptDetails, digitalExcerptHash, type DigitalExcerptEvent } from "./excerpt-policy";
 import { appendDigitalExcerptEvent, getCurrentDigitalExcerptMaster, latestDigitalExcerptEvent, lockDigitalExcerpt, requireDigitalExcerptAdmin } from "./excerpt-service";
@@ -74,7 +75,10 @@ export async function processDigitalExcerpt(scope: Scope) {
   try {
     const sizeExpected = Number(master.masterAsset.sizeBytes);
     root = path.join(await checkDigitalDisk(sizeExpected + 3 * 1024 * 1024), `excerpt-${event.id}.${slot.leaseToken}`);
-    await mkdir(root, { mode: 0o700 }); const source = path.join(root, "source.wav"), output = path.join(root, "preview.mp3");
+    const mp3Only = master.codec === "mp3" && isAuthorizedMp3OnlySource(master.trackId, master.masterAsset)
+      && master.track.projectId === MP3_ONLY_SOURCE.projectId;
+    if (master.codec !== "wav" && !mp3Only) throw new DigitalError("EXCERPT_MASTER_UNAVAILABLE", 409);
+    await mkdir(root, { mode: 0o700 }); const source = path.join(root, mp3Only ? "source.mp3" : "source.wav"), output = path.join(root, "preview.mp3");
     const object = await getMediaObject(master.masterAsset);
     if (object.contentLength !== sizeExpected) throw new DigitalError("SIZE_MISMATCH", 409);
     const hash = createHash("sha256"); let received = 0;
@@ -84,7 +88,8 @@ export async function processDigitalExcerpt(scope: Scope) {
       hash.update(chunk); callback(null, chunk);
     } }), createWriteStream(source, { flags: "wx", mode: 0o600 }), { signal: AbortSignal.any([stop.signal, AbortSignal.timeout(5 * 60_000)]) });
     if (received !== sizeExpected || hash.digest("hex") !== details.binding.sourceSha256) throw new DigitalError("EXCERPT_SOURCE_CHANGED", 409);
-    const decoded = await validateDigitalAudio(source, output, details.startMs, stop.signal), metadata = await stat(output);
+    const decoded = mp3Only ? await generateDigitalSourceMp3Preview(source, output, details.startMs, stop.signal)
+      : await validateDigitalAudio(source, output, details.startMs, stop.signal), metadata = await stat(output);
     if (decoded.durationMs !== details.binding.durationMs || metadata.size < 1 || metadata.size > 3 * 1024 * 1024 || decoded.previewDurationMs > 60_000) throw new DigitalError("INVALID_PREVIEW_DURATION");
     // Only the bounded excerpt is buffered; the full WAV is always streamed.
     const bytes = await readFile(output), candidateId = randomUUID(), checksum = sha256Hex(bytes), key = `digital/derived/${master.id}/${candidateId}.mp3`;

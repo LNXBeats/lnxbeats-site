@@ -80,7 +80,7 @@ export function DigitalCartNavigation() {
       <Link className={styles.floatingLink} href="/musique/panier" aria-busy={checking} aria-label={`${t("Voir mon panier")}, ${status}${totalCents !== null && !checking ? `, ${money(totalCents)}` : ""}`}>
         <span className={styles.floatingIcon}><UiIcon name="bag"/>{count > 0 ? <span className={styles.floatingBadge} aria-hidden="true">{count}</span> : null}</span>
         <span className={styles.floatingCopy}><strong>{t("Mon panier musique")}</strong><span>{count ? status : t("Choisissez vos titres")}</span></span>
-        <span className={styles.floatingEnd}>{count > 0 && totalCents !== null && !checking ? <strong>{money(totalCents)}</strong> : <small>{t("WAV + MP3 inclus")}</small>}<UiIcon name="arrow-right"/></span>
+        <span className={styles.floatingEnd}>{count > 0 && totalCents !== null && !checking ? <strong>{money(totalCents)}</strong> : <small>{t("Formats selon le titre")}</small>}<UiIcon name="arrow-right"/></span>
       </Link>
     </aside></>, document.body
   ) : null}</>;

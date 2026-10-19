@@ -26,7 +26,8 @@ test("DCN abbreviated reference changes no order identity, navigation, download 
   const source = await readFile(new URL("../../components/digital-library.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("orders.map(o=>"));
   assert.ok(source.includes("key={o.id}"));
-  assert.ok(source.includes("Réf. abrégée {digitalLibraryPurchaseReference(o.id)}"));
+  // The label is translated, but the reference still uses the same immutable order ID.
+  assert.match(source, /<T text="Réf\. abrégée"\/>\s*\{digitalLibraryPurchaseReference\(o\.id\)\}/);
   assert.ok(source.includes("href={`/musique/confirmation/${o.id}`}"));
   assert.ok(source.includes('canDownload=o.accessReady&&["PAID","PARTIALLY_REFUNDED","REFUNDED","GRANTED"].includes(o.status)&&active.length>0'));
   assert.ok(source.includes("active.length===l.acquiredTrackCount"));

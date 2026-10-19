@@ -50,6 +50,7 @@
 .albumOffer>p { margin:.45rem 0; }
 .albumOffer>.offerActions { margin:.8rem 0; }
 .offerActions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:.75rem; min-width:0; }
+.offerActions>small { flex-basis:100%; min-width:0; overflow-wrap:anywhere; }
 .albumOffer .offerActions { justify-content:flex-start; }
 .price { color:#f1d385; white-space:nowrap; overflow-wrap:normal; word-break:normal; flex-shrink:0; font-variant-numeric:tabular-nums; font-size:1.15rem; }
 .completionSummary { display:grid; gap:.45rem; padding:.8rem 0; color:#d9cfba; font-size:.9rem; line-height:1.5; }

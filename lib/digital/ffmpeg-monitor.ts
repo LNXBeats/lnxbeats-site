@@ -12,6 +12,24 @@ export function parseLinuxRss(status: string) {
   if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
   return bytes;
 }
+/** BSD ps reports zero RSS for zombies; the kernel state, never zero alone, proves exit. */
+export function parseDarwinRss(statusAndRss: string) {
+  const match = statusAndRss.match(/^\s*([EIRSTUWZ][A-Za-z+<>-]*)\s+([0-9]+)\s*$/);
+  if (!match) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
+  if (match[1].startsWith("Z")) throw new RssProcessExited();
+  const bytes = Number(match[2]) * 1024;
+  if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
+  return bytes;
+}
+export function darwinExitPending(statusAndRss: string) {
+  return /^\s*\?E\s+0\s*$/.test(statusAndRss);
+}
+function assertDarwinProcessPresent(pid: number) {
+  try { process.kill(pid, 0); } catch (gone) {
+    if ((gone as NodeJS.ErrnoException).code === "ESRCH") throw new RssProcessExited();
+    throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
+  }
+}
 /** Linux needs no external executable; Darwin retains its native ps implementation. */
 export async function readProcessRss(pid: number, platform = process.platform): Promise<number> {
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
@@ -29,11 +47,25 @@ export async function readProcessRss(pid: number, platform = process.platform): 
     }
   }
   if (platform !== "darwin") throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
-  const result = await exec("ps", ["-o", "rss=", "-p", String(pid)], { timeout: 1000, maxBuffer: 1024 });
-  if (!/^\s*[0-9]+\s*$/.test(result.stdout)) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
-  const bytes = Number(result.stdout.trim()) * 1024;
-  if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
-  return bytes;
+  let exiting = false;
+  try {
+    const result = await exec("ps", ["-o", "stat=", "-o", "rss=", "-p", String(pid)], { timeout: 1000, maxBuffer: 1024 });
+    exiting = darwinExitPending(result.stdout);
+    return parseDarwinRss(result.stdout);
+  } catch (error) {
+    if (error instanceof RssProcessExited) throw error;
+    // Darwin can briefly expose "?E 0" while exiting, before Node reaps the child.
+    // Only that exact kernel state gets at most one sampler interval to settle.
+    // This async timer never blocks timeout/abort handlers or accepts zero RSS.
+    assertDarwinProcessPresent(pid);
+    if (exiting) {
+      await new Promise<void>(resolve => setTimeout(resolve, 25));
+      assertDarwinProcessPresent(pid);
+    }
+    // ESRCH or Node-observed close is still required. Live S/R zero, malformed
+    // output, missing ps and permissions fail closed without any grace period.
+    throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
+  }
 }
 
 type Stats = { rssPeak: number; samples: number };

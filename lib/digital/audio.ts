@@ -17,12 +17,30 @@ export function digitalMp3Bitrate(value = process.env.DCN_MP3_BITRATE_KBPS) {
 async function run(args: string[], signal: AbortSignal, timeoutMs: number, parseOnly = false,stats?:{rssPeak:number;samples:number}) {
   return runMonitoredFfmpeg(catalogFfmpegPath(), args, signal, timeoutMs, DIGITAL_WORK_LIMITS, parseOnly, stats);
 }
-function duration(stderr: string) {
+function duration(stderr: string, attachedPicture = false) {
   const match = stderr.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
-  if (!match || !/Audio:\s/.test(stderr) || /Video:\s/.test(stderr)) throw new DigitalError("INVALID_AUDIO");
+  if (!match || !/Audio:\s/.test(stderr) || (!attachedPicture && /Video:\s/.test(stderr))) throw new DigitalError("INVALID_AUDIO");
   const ms = Math.round((Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3])) * 1000);
   if (ms < 1 || ms > DIGITAL_WORK_LIMITS.durationMs) throw new DigitalError("AUDIO_DURATION_LIMIT");
   return ms;
+}
+/** Source ID3 artwork is not a video track. Renditions must remain audio-only. */
+export function inspectDigitalMp3Probe(probe: string, sourceOnly: boolean) {
+  const streams = probe.split(/\r?\n/).filter(line => /^\s*Stream #\d+:\d+/.test(line)).map(line => {
+    const stream = line.match(/:\s*(Audio|Video|Subtitle|Data|Attachment):\s*([^\r\n]*)$/);
+    return { type: stream?.[1], description: stream?.[2] ?? "" };
+  });
+  const audio = streams.filter(stream => stream.type === "Audio"), other = streams.filter(stream => stream.type !== "Audio");
+  const cover = other[0], dimensions = cover?.description.match(/,\s*(\d+)x(\d+)(?=[\s,\[]|$)/);
+  const width = Number(dimensions?.[1]), height = Number(dimensions?.[2]);
+  const attachedPicture = sourceOnly && other.length === 1 && cover.type === "Video"
+    && /^(?:mjpeg|png)(?=[\s,(]|$)/.test(cover.description) && /\(attached pic\)(?:\s|$)/.test(cover.description)
+    && Number.isSafeInteger(width) && Number.isSafeInteger(height) && width > 0 && height > 0
+    && width <= 4096 && height <= 4096 && width * height <= 16_777_216;
+  const bitrateKbps = Number(audio[0]?.description.match(/,\s*(\d+) kb\/s(?:[\s,]|$)/)?.[1]);
+  if (!/Input #0, mp3,/.test(probe) || audio.length !== 1 || !/^mp3(?=[\s,(]|$)/.test(audio[0].description)
+    || (other.length > 0 && !attachedPicture) || !Number.isFinite(bitrateKbps)) throw new DigitalError("MP3_RENDITION_INTEGRITY");
+  return { durationMs: duration(probe, attachedPicture), bitrateKbps };
 }
 /** Fail on decoder errors even when FFmpeg would otherwise recover and exit zero. */
 async function strictDecode(source: string, signal: AbortSignal, stats: { rssPeak: number; samples: number }) {
@@ -40,12 +58,10 @@ function assertDecodedDuration(decodedMs: number, declaredMs: number, toleranceM
 export async function validateDigitalMp3(source: string, signal: AbortSignal, expected?: { durationMs: number; bitrateKbps?: number }, stats = { rssPeak: 0, samples: 0 }) {
   const structure = await inspectDigitalMp3(source, signal);
   if (expected && structure.xingFrames === null) throw new DigitalError("MP3_RENDITION_INTEGRITY");
-  const probe = await run(["-i", source], signal, 15000, true, stats), durationMs = duration(probe);
-  const streams = Array.from(probe.matchAll(/Stream #\d+:\d+(?:\[[^\]]+\])?[^\n]*: (Audio|Video|Subtitle|Data):/g));
-  const bitrateKbps = Number(probe.match(/Audio:\s*mp3[^\n]*,\s*(\d+) kb\/s/)?.[1]);
-  if (!/Input #0, mp3,/.test(probe) || !/Audio:\s*mp3/.test(probe) || streams.length !== 1 || streams[0]?.[1] !== "Audio"
-    || !Number.isFinite(bitrateKbps) || (expected?.bitrateKbps !== undefined && (bitrateKbps !== expected.bitrateKbps
-      || structure.bitrates.some(bitrate => bitrate !== expected.bitrateKbps)))) throw new DigitalError("MP3_RENDITION_INTEGRITY");
+  const probe = await run(["-i", source], signal, 15000, true, stats);
+  const { durationMs, bitrateKbps } = inspectDigitalMp3Probe(probe, expected === undefined);
+  if (expected?.bitrateKbps !== undefined && (bitrateKbps !== expected.bitrateKbps
+    || structure.bitrates.some(bitrate => bitrate !== expected.bitrateKbps))) throw new DigitalError("MP3_RENDITION_INTEGRITY");
   const decodedDurationMs = await strictDecode(source, signal, stats);
   assertDecodedDuration(decodedDurationMs, durationMs);
   if (expected) assertDecodedDuration(decodedDurationMs, expected.durationMs);
@@ -64,6 +80,18 @@ export async function validateDigitalAudio(source: string, output: string, offse
   const previewDurationMs = (await validateDigitalMp3(output, signal, { durationMs: window.durationMs, bitrateKbps: 192 }, stats)).durationMs;
   if (previewDurationMs > 60000) throw new DigitalError("INVALID_PREVIEW_DURATION");
   return { durationMs, previewDurationMs,ffmpegRssPeak:stats.samples?stats.rssPeak:"NOT_MEASURED",ffmpegSamples:stats.samples };
+}
+
+/** A bounded listening excerpt only: never manufacture a WAV or upgrade a lossy full source. */
+export async function generateDigitalSourceMp3Preview(source: string, output: string, offsetMs: number, signal: AbortSignal) {
+  const stats = { rssPeak: 0, samples: 0 }, validated = await validateDigitalMp3(source, signal, undefined, stats);
+  const window = previewWindow(validated.durationMs, offsetMs);
+  await run(["-loglevel", "error", "-i", source, "-ss", (window.startMs / 1000).toFixed(3), "-t", (window.durationMs / 1000).toFixed(3),
+    "-map", "0:a:0", "-vn", "-sn", "-dn", "-map_metadata", "-1", "-map_chapters", "-1", "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "192k", "-threads", "1", "-fs", "3145728",
+    "-id3v2_version", "0", "-write_id3v1", "0", "-write_xing", "1", "-y", output], signal, 120000, false, stats);
+  const previewDurationMs = (await validateDigitalMp3(output, signal, { durationMs: window.durationMs, bitrateKbps: 192 }, stats)).durationMs;
+  if (previewDurationMs > 60000) throw new DigitalError("INVALID_PREVIEW_DURATION");
+  return { durationMs: validated.durationMs, previewDurationMs, ffmpegRssPeak: stats.samples ? stats.rssPeak : "NOT_MEASURED", ffmpegSamples: stats.samples };
 }
 
 /** Full private rendition, streamed from disk; no full-source/full-output Buffer. */

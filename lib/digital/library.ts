@@ -6,7 +6,7 @@ import { DigitalError, assertDigitalUuid, requireDigitalEnvironment, type Digita
 import { ensureDigitalArchive } from "./archive-worker";
 import { digitalAttachment, digitalByteRange, DIGITAL_DOWNLOAD_TTL_MS } from "./download-policy";
 import { digitalLibraryPagination } from "./presentation";
-import { acquiredAlbumFormats, acquiredDigitalFormats, acquiredDigitalAssetId, type DigitalAudioFormat, type DigitalAcquiredTrack } from "./formats";
+import { acquiredAlbumFormats, acquiredDigitalFormats, acquiredDigitalAssetId, acquiredDigitalAsset, type DigitalAudioFormat, type DigitalAcquiredTrack } from "./formats";
 import { DIGITAL_ACTIVE_RIGHTS_ORDER_STATES } from "./library-policy";
 async function ownedLine(userId:string,id:string){assertDigitalUuid(id);
   const line = await prisma.digitalOrderLine.findFirst({
@@ -63,7 +63,7 @@ export async function digitalDownloadResponse(userId:string,id:string,token:stri
   const headers={"Cache-Control":"private, no-store","X-Robots-Tag":"noindex, nofollow","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"};
   let ref:MediaStorageReference,size:number,filename:string,mime:string,checksum:string|null;
   if(ticket.masterId){const master=selected[0]?.master,track=(line.trackSnapshot as unknown as DigitalAcquiredTrack[]).find(t=>t.masterId===ticket.masterId);if(!master||!track)throw new DigitalError("NOT_FOUND",404);
-    const asset=ticket.format==="MP3"?master.mp3Asset:master.masterAsset,id=acquiredDigitalAssetId(track,ticket.format as DigitalAudioFormat,master);if(!asset||asset.id!==id||asset.visibility!=="PRIVATE")throw new DigitalError("NOT_FOUND",404);ref=asset;size=Number(asset.sizeBytes);mime=asset.mimeType;checksum=asset.checksumSha256;
+    const asset=acquiredDigitalAsset(track,ticket.format as DigitalAudioFormat,master);ref=asset;size=Number(asset.sizeBytes);mime=asset.mimeType;checksum=asset.checksumSha256;
     filename=`${track.title??"piste"}.${asset.filename.split(".").pop()}`;
   }else{if(!acquiredAlbumFormats(line.trackSnapshot as unknown as DigitalAcquiredTrack[]).includes(ticket.format as DigitalAudioFormat))throw new DigitalError("FORMAT_NOT_ACQUIRED",409);
     const archive=await prisma.digitalArchive.findUnique({where:{lineId_format:{lineId:line.id,format:ticket.format}}});if(!archive||archive.status!=="READY"||!archive.storageKey||!archive.storageBackend||!archive.storageProvider||!archive.sizeBytes)throw new DigitalError("ARCHIVE_PREPARING",409);

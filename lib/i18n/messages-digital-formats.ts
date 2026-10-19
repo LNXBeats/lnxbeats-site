@@ -1,0 +1,15 @@
+// Interface labels only. Contract supplements remain the exact versioned French original.
+export const digitalFormatMessages: Record<string, readonly [string, string, string, string, string]> = {
+  "MP3 uniquement": ["MP3 only", "Solo MP3", "Apenas MP3", "仅 MP3", "MP3 のみ"],
+  "WAV + MP3": ["WAV + MP3", "WAV + MP3", "WAV + MP3", "WAV + MP3", "WAV + MP3"],
+  "WAV": ["WAV", "WAV", "WAV", "WAV", "WAV"],
+  "Formats à vérifier": ["Formats to verify", "Formatos por verificar", "Formatos por verificar", "格式待核实", "形式を確認してください"],
+  "Formats selon le titre": ["Formats vary by track", "Formatos según la canción", "Formatos consoante a faixa", "格式因曲目而异", "形式は曲ごとに異なります"],
+  "Formats indiqués pour chaque article": ["Formats listed for each item", "Formatos indicados para cada artículo", "Formatos indicados para cada artigo", "各商品均标明格式", "商品ごとに形式を表示"],
+  "Formats indiqués pour chaque article. Panier séparé de la Boutique physique.": ["Formats are listed for each item. This cart is separate from the physical shop.", "Los formatos se indican para cada artículo. Este carrito es independiente de la tienda física.", "Os formatos são indicados para cada artigo. Este carrinho é separado da loja física.", "各商品均标明格式。此购物车与实物商店分开。", "商品ごとに形式を表示しています。実物商品とは別のカートです。"],
+  "Fichier source compressé. Aucun WAV ni amélioration de qualité inclus.": ["Compressed source file. No WAV or quality upgrade included.", "Archivo fuente comprimido. No incluye WAV ni mejora de calidad.", "Ficheiro de origem comprimido. Não inclui WAV nem melhoria de qualidade.", "压缩格式源文件。不含 WAV，也不提供音质提升。", "圧縮された元ファイルです。WAV や音質向上は含まれません。"],
+  "MP3 uniquement : fichier source compressé conservé, sans WAV ni amélioration de qualité annoncée.": ["MP3 only: the compressed source file is preserved, with no WAV or promised quality upgrade.", "Solo MP3: se conserva el archivo fuente comprimido, sin WAV ni promesa de mejora de calidad.", "Apenas MP3: o ficheiro de origem comprimido é preservado, sem WAV nem promessa de melhoria de qualidade.", "仅 MP3：保留压缩格式源文件，不含 WAV，也不承诺音质提升。", "MP3 のみ：圧縮された元ファイルを保持し、WAV や音質向上をお約束するものではありません。"],
+  "Téléchargements privés dans les formats indiqués pour cette offre.": ["Private downloads in the formats listed for this offer.", "Descargas privadas en los formatos indicados para esta oferta.", "Downloads privados nos formatos indicados para esta oferta.", "可私密下载此商品标明的格式。", "この商品の表示形式で非公開ダウンロードを利用できます。"],
+  "Albums et titres à télécharger · formats indiqués sur chaque fiche · usage privé.": ["Download albums and tracks · formats listed on each page · private use.", "Álbumes y canciones para descargar · formatos indicados en cada ficha · uso privado.", "Álbuns e faixas para download · formatos indicados em cada ficha · uso privado.", "专辑与单曲下载 · 各商品页标明格式 · 仅供私人使用。", "アルバムと曲のダウンロード・各ページに形式を表示・私的利用のみ。"],
+  "Lire le complément MP3 uniquement": ["Read the MP3-only supplement (French)", "Leer el complemento de solo MP3 (francés)", "Ler o complemento apenas MP3 (francês)", "阅读仅 MP3 补充条款（法语）", "MP3 のみの補足条件を読む（フランス語）"],
+};

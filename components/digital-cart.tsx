@@ -8,8 +8,10 @@ import { readDigitalCart, writeDigitalCart, type DigitalCompletionView } from ".
 import { DigitalRequestError } from "@/lib/digital/request-error";
 import styles from "./digital.module.css";
 import { digitalUiIsLive, type DigitalUiMode } from "./digital-mode-copy";
+import { digitalFormatsLabel } from "@/lib/digital/format-presentation";
+import type { DigitalAudioFormat } from "@/lib/digital/formats";
 
-type Quote = { totalCents: number; removed: string[]; lines: Array<{ id: string; title: string; scope: string; priceCents: number; trackCount: number; version: number; completion?: DigitalCompletionView | null }> };
+type Quote = { totalCents: number; removed: string[]; lines: Array<{ id: string; title: string; scope: string; priceCents: number; trackCount: number; version: number; formats?: readonly DigitalAudioFormat[]; completion?: DigitalCompletionView | null }> };
 export async function digitalRequest(path: string, body?: unknown) {
   const r = await fetch(path, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", headers: body === undefined ? {} : { "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const v = await r.json();
@@ -67,12 +69,12 @@ export function DigitalCart({ mode = "TEST" }: { mode?: DigitalUiMode }) {
   return <div className={`${styles.grid} ${styles.cartGrid}`}>
     <section className={`${styles.panel} ${styles.cartPanel}`} aria-labelledby="digital-cart-selection">
       <div className={styles.cartHeading}><h2 id="digital-cart-selection"><T text="Votre sélection"/></h2>{value ? <span><T text={value.lines.length === 1 ? "{count} article" : "{count} articles"} values={{ count: value.lines.length }}/></span> : null}</div>
-      <p className={styles.note}><T text="WAV + MP3 inclus. Panier séparé de la Boutique physique."/></p>
+      <p className={styles.note}><T text="Formats indiqués pour chaque article. Panier séparé de la Boutique physique."/></p>
       {error ? <p role="alert" className={styles.status}><T text={error}/></p> : null}
       <p className="sr-only" role="status" aria-live="polite">{notice === "Les titres inclus dans l’album ont été retirés : ils ne seront pas facturés deux fois." ? <T text={notice}/> : notice}</p>
       {value?.lines.length ? <ul className={styles.cartRows} aria-busy={updating}>{value.lines.map(l => <li className={styles.cartRow} key={l.id}>
         <span className={styles.cartIcon} aria-hidden="true">♪</span>
-        <div className={styles.cartIdentity}><strong translate="no" className="notranslate">{l.title}</strong><p>{l.scope === "ALBUM" ? <T text="{count} pistes · Album" values={{ count: l.trackCount }}/> : <T text="Titre individuel"/>} · WAV + MP3</p>{l.completion ? <div className={styles.cartCompletion}><span><T text="Prix de l’album"/> <span className={styles.cartAmount}>{money(l.completion.basePriceCents)}</span></span><span><T text="Titres déjà payés, après remboursements"/> <span className={styles.cartAmount}>−{money(l.completion.creditCents)}</span></span></div> : null}</div>
+        <div className={styles.cartIdentity}><strong translate="no" className="notranslate">{l.title}</strong><p>{l.scope === "ALBUM" ? <T text="{count} pistes · Album" values={{ count: l.trackCount }}/> : <T text="Titre individuel"/>} · <T text={digitalFormatsLabel(l.formats)}/></p>{l.formats?.length === 1 && l.formats[0] === "MP3" ? <p className={styles.muted}><T text="Fichier source compressé. Aucun WAV ni amélioration de qualité inclus."/></p> : null}{l.completion ? <div className={styles.cartCompletion}><span><T text="Prix de l’album"/> <span className={styles.cartAmount}>{money(l.completion.basePriceCents)}</span></span><span><T text="Titres déjà payés, après remboursements"/> <span className={styles.cartAmount}>−{money(l.completion.creditCents)}</span></span></div> : null}</div>
         <div className={styles.cartLineActions}><strong className={styles.cartAmount}>{money(l.priceCents)}</strong><button type="button" className={styles.cartRemove} aria-label={t("Retirer {title} du panier", { title: l.title })} disabled={busy || updating} onClick={() => remove(l.id, l.title)}><T text="Retirer"/></button></div>
       </li>)}</ul> : <p role="status">{value ? <T text="Votre panier numérique est vide."/> : error ? <T text="Sélection à vérifier avant tout paiement."/> : <T text="Vérification de votre sélection…"/>}</p>}
       {error ? <div className={styles.actions}><Link href="/contact" className="text-link"><T text="Contacter LNX Beats"/></Link><button type="button" className={styles.quiet} onClick={() => { try { writeDigitalCart([]); } catch { setError("Le navigateur n’a pas pu modifier le panier."); } }}><T text="Vider la sélection numérique"/></button><p className={styles.muted}><T text="Cela n’annule pas un paiement déjà engagé."/></p></div> : null}

@@ -34,7 +34,8 @@ export type DigitalCompletionSnapshot = { version: 1 | 2; basePriceCents: number
 export type DigitalSelection = { id: string; scope: string; title: string; priceCents: number; version: number;
   completion?: DigitalCompletionSnapshot;
   tracks: Array<{ trackId: string; masterId: string; title: string; position: number;
-    formats?: ["WAV", "MP3"]; wavAssetId?: string; mp3AssetId?: string }> };
+    formats?: ["WAV", "MP3"] | ["MP3"]; wavAssetId?: string; mp3AssetId?: string;
+    sourceSha256?: string; sourceFormat?: "MP3_LOSSY"; formatPolicy?: string }> };
 export function normalizeDigitalCart(selected: DigitalSelection[], ownedTracks: Set<string>) {
   if (selected.length > 50) throw new DigitalError("CART_TOO_LARGE");
   const unique = [...new Map(selected.map(s => [s.id, s])).values()];
