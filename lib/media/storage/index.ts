@@ -5,7 +5,7 @@ import type { Readable } from "node:stream";
 
 import { activeMediaStorage, mediaStorageForReference } from "@/lib/media/storage/config";
 export { activeStorageMetadata } from "@/lib/media/storage/config";
-import { mediaScopeForVisibility } from "@/lib/media/storage/policy";
+import { mediaScopeForReference } from "@/lib/media/storage/policy";
 import type {
   MediaObject,
   MediaObjectMetadata,
@@ -40,7 +40,7 @@ export function mediaReference(input: MediaStorageReference) {
 }
 
 export function getMediaObject(reference: MediaStorageReference, range?: { start: number; end: number }): Promise<MediaObject> {
-  const scope = mediaScopeForVisibility(reference.visibility);
+  const scope = mediaScopeForReference(reference);
   return mediaStorageForReference(reference).get({ scope, key: reference.storageKey, ...(range ? { range } : {}) });
 }
 
@@ -53,12 +53,12 @@ export async function readMediaObjectBytes(reference: MediaStorageReference, max
 }
 
 export function headMediaObject(reference: MediaStorageReference): Promise<MediaObjectMetadata> {
-  const scope = mediaScopeForVisibility(reference.visibility);
+  const scope = mediaScopeForReference(reference);
   return mediaStorageForReference(reference).head({ scope, key: reference.storageKey });
 }
 
 export function deleteMediaObject(reference: MediaStorageReference) {
-  const scope = mediaScopeForVisibility(reference.visibility);
+  const scope = mediaScopeForReference(reference);
   return mediaStorageForReference(reference).delete({ scope, key: reference.storageKey });
 }
 
@@ -72,6 +72,7 @@ export function createPublicMediaSignedUrl(
   input: Omit<MediaSignedUrlInput, "scope" | "key" | "operation">,
 ) {
   if (reference.visibility !== "PUBLIC") throw new Error("Public media signatures require a public asset.");
+  if (mediaScopeForReference(reference) !== "public") throw new Error("Studio audio requires application authorization, not a public signed URL.");
   return mediaStorageForReference(reference).createSignedUrl({
     ...input,
     scope: "public",

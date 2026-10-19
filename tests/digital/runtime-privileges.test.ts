@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Client } from "pg";
-import { DIGITAL_RUNTIME_TABLES, provisionDigitalRuntime } from "@/lib/digital/runtime-privileges";
+import { DIGITAL_RUNTIME_TABLES, DIGITAL_UPDATE_COLUMNS, provisionDigitalRuntime } from "@/lib/digital/runtime-privileges";
 
 function clientDouble(unsafeTable?: string) {
   const calls: Array<{ sql: string; values?: unknown[] }> = [];
@@ -30,7 +30,11 @@ test("DCN preserves the historical withdrawal grant without granting table-wide 
   assert.equal(calls.at(-1)?.sql, "COMMIT");
 });
 
-for (const table of ["digital_offers", "digital_events", "digital_country_tax_rules", "consumer_withdrawal_requests"]) {
+test("Studio artifacts stay append-only and job identity cannot be updated by runtime", () => {
+  assert.deepEqual(DIGITAL_UPDATE_COLUMNS.digital_studio_artifacts, []);
+  for (const identity of ["title", "album", "metadata", "trackId", "uploadId", "actorId", "attempt", "createdAt"]) assert.ok(!(DIGITAL_UPDATE_COLUMNS.digital_studio_jobs as readonly string[]).includes(identity));
+});
+for (const table of ["digital_offers", "digital_events", "digital_country_tax_rules", "consumer_withdrawal_requests", "digital_studio_jobs", "digital_studio_artifacts"]) {
   test(`unsafe effective privileges on ${table} roll back provisioning`, async () => {
     const { client, calls } = clientDouble(table);
     await assert.rejects(provisionDigitalRuntime(client, "dcn_release_runtime"));

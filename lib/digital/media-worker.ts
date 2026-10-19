@@ -16,18 +16,26 @@ import { digitalAudioUploadHeld, digitalAudioUploadHoldFilter } from "./audio-up
 import { planDigitalMasterImport } from "./master-import-policy";
 import { isAuthorizedMp3OnlySource, MP3_ONLY_SOURCE, MP3_ONLY_SOURCE_POLICY } from "./mp3-only-policy";
 import { claimDigitalSlot, releaseDigitalSlot, renewDigitalSlot, checkDigitalDisk, DIGITAL_WORK_LIMITS } from "./work-slots";
+import { processStudioImport } from "./studio-worker";
+import { studioEnabled } from "./studio-policy";
+import { processNextStudioExistingSource } from "./studio-existing-source";
 
 export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;uploadId?:string;signal?:AbortSignal}={}) {
   requireDigitalEnvironment(); const now=new Date();
   if(hooks.signal?.aborted)return{processed:false};
   if(hooks.uploadId!==undefined)assertDigitalUuid(hooks.uploadId);
   if(hooks.uploadId && digitalAudioUploadHeld(hooks.uploadId))return{processed:false};
-  const scope={...digitalAudioUploadHoldFilter(),...(hooks.uploadId?{id:hooks.uploadId}:{})};
+  const scope={...digitalAudioUploadHoldFilter(),...(hooks.uploadId?{id:hooks.uploadId}:{}),...(!studioEnabled()?{processingProfile:"LEGACY"}:{})};
   const recovery=await prisma.digitalUpload.findFirst({where:{...scope,status:"COMPLETING",leaseUntil:{lte:now}},orderBy:{createdAt:"asc"}});
   if(recovery && !digitalAudioUploadHeld(recovery.id)) { const c=await prisma.digitalUpload.updateMany({where:{...digitalAudioUploadHoldFilter(),id:recovery.id,status:"COMPLETING",leaseUntil:{lte:now}},data:{leaseUntil:new Date(Date.now()+60000)}});
     if(c.count) await recoverDigitalCompletion(recovery).catch(()=>undefined); }
   const s=await prisma.digitalUpload.findFirst({where:{...scope,OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},orderBy:{createdAt:"asc"}});
-  if(!s || digitalAudioUploadHeld(s.id)) return {processed:false};
+  if(!s || digitalAudioUploadHeld(s.id)) {
+    // Explicit upload invocations must never process a different job. Otherwise
+    // existing-source candidates share this worker and its bounded audio slots.
+    if (!hooks.uploadId && studioEnabled()) return processNextStudioExistingSource(hooks);
+    return {processed:false};
+  }
   const slot=await claimDigitalSlot("audio",s.id); if(!slot)return{processed:false};
   const leaseUntil=new Date(Date.now()+15*60000);
   const claim=await prisma.digitalUpload.updateMany({where:{...digitalAudioUploadHoldFilter(),id:s.id,OR:[{status:"QUARANTINE",OR:[{leaseUntil:null},{leaseUntil:{lte:now}}]},{status:"VALIDATING",leaseUntil:{lte:now}}]},data:{status:"VALIDATING",leaseUntil,leaseToken:slot.leaseToken}});
@@ -48,9 +56,12 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
     await pipeline(Readable.fromWeb(object.body as never),new Transform({transform(chunk,_,cb){ if(process.memoryUsage().rss>DIGITAL_WORK_LIMITS.nodeRssBytes)return cb(new DigitalError("WORKER_MEMORY_LIMIT"));size+=chunk.length; if(size>Number(s.sizeBytes)) return cb(new DigitalError("SIZE_MISMATCH",409)); hash.update(chunk); cb(null,chunk); }}),createWriteStream(source,{flags:"wx",mode:0o600}),{signal:AbortSignal.any([stop.signal,AbortSignal.timeout(5*60000)])});
     if(size!==Number(s.sizeBytes)) throw new DigitalError("SIZE_MISMATCH",409);
     const checksum=hash.digest("hex");
+    if(s.processingProfile==="STUDIO_V1"&&!(await prisma.digitalStudioJob.updateMany({where:{uploadId:s.id,status:{in:["QUEUED","PROCESSING"]},AND:[{OR:[{leaseToken:null},{leaseToken:slot.leaseToken}]},{OR:[{sourceSha256:null},{sourceSha256:checksum}]}]},data:{sourceSha256:checksum}})).count)throw new DigitalError("STUDIO_SOURCE_CHANGED",409);
     const fd=await open(source,"r"); const header=Buffer.alloc(12); try { await fd.read(header,0,12,0); } finally { await fd.close(); }
     if(!signatureMatches(header,extension)) throw new DigitalError("INVALID_SIGNATURE");
     await hooks.afterSource?.();
+    if (s.processingProfile === "STUDIO_V1") return await processStudioImport({ upload: s, source, outputDirectory: path.join(root, "studio"), checksum,
+      signal: stop.signal, leaseToken: slot.leaseToken });
     if (extension === "mp3") {
       const decoded = await validateDigitalMp3(source, stop.signal);
       if (isAuthorizedMp3OnlySource(s.trackId, { checksumSha256: checksum, sizeBytes: s.sizeBytes })) {
@@ -147,8 +158,9 @@ export async function processDigitalMedia(hooks:{afterSource?:()=>Promise<void>;
       await tx.digitalEvent.create({data:{actorId:s.actorId,kind:"MASTER_VALIDATED",details:{trackId:s.trackId,version:s.expectedVersion+1,checksum,durationMs:decoded.durationMs,previewDurationMs:decoded.previewDurationMs,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps,encoderVersion:rendition.encoderVersion,probe:rendition.probe,sourceProbe:"RIFF_CHUNKS_AND_FFMPEG_STRICT_DECODE",mp3Probe:"MPEG_LAYER_III_FRAMES_AND_FFMPEG_STRICT_DECODE",revalidation:importPlan.revalidation,rightsReview:"PENDING"}}});
     });
     generatedRefs.length=0; return {processed:true,ready:true,ffmpegRssPeak:decoded.ffmpegRssPeak,ffmpegSamples:decoded.ffmpegSamples,tempSourceBytes:size,tempJobBytesObserved:size+metadata.size+mp3Metadata.size,mp3Checksum,mp3BitrateKbps:rendition.bitrateKbps};
-  } catch(e) { const code=hooks.signal?.aborted?"WORKER_SHUTDOWN":e instanceof DigitalError?e.code:"VALIDATION_FAILED";const retry=hooks.signal?.aborted||["INSUFFICIENT_TEMP_DISK","WORKER_MEMORY_LIMIT","WORKER_MONITOR_UNAVAILABLE","LEASE_LOST"].includes(code);
+  } catch(e) { const code=hooks.signal?.aborted?"WORKER_SHUTDOWN":e instanceof DigitalError?e.code:"VALIDATION_FAILED";const retry=s.processingProfile!=="STUDIO_V1"&&(hooks.signal?.aborted||["INSUFFICIENT_TEMP_DISK","WORKER_MEMORY_LIMIT","WORKER_MONITOR_UNAVAILABLE","LEASE_LOST"].includes(code));
     await prisma.digitalUpload.updateMany({where:{id:s.id,status:"VALIDATING",leaseToken:slot.leaseToken},data:{status:retry?"QUARANTINE":"REJECTED",leaseUntil:retry?new Date(Date.now()+60000):null,leaseToken:null,errorCode:code}});
+    if(s.processingProfile==="STUDIO_V1")await prisma.digitalStudioJob.updateMany({where:{uploadId:s.id,status:{in:["QUEUED","PROCESSING"]},OR:[{leaseToken:null},{leaseToken:slot.leaseToken}]},data:{status:"FAILED",phase:"ERROR",errorCode:code,leaseToken:null,leaseUntil:null}});
     const failureType=e instanceof Error?e.name:"UNKNOWN",providerCode=e&&typeof e==="object"&&"code" in e&&typeof e.code==="string"&&/^[A-Z0-9_]{1,40}$/.test(e.code)?e.code:null;
     return {processed:true,ready:false,errorCode:code,failureType,providerCode}; }
   finally { hooks.signal?.removeEventListener("abort",shutdown);clearInterval(heartbeat);stop.abort();for(const generatedRef of generatedRefs)if(!await prisma.asset.findFirst({where:{storageKey:generatedRef.storageKey}}))await deleteMediaObject(generatedRef).catch(()=>undefined);if(root)await rm(root,{recursive:true,force:true});await releaseDigitalSlot(slot); }

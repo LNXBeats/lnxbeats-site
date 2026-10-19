@@ -9,14 +9,17 @@ import { processDigitalNotifications } from "@/lib/digital/notifications";
 import { createDigitalWorkerCycle, digitalWorkerMode, digitalMediaWorkerEnvironment } from "@/lib/digital/worker-cycle";
 import { digitalReconciliationDependencies } from "./digital-reconcile";
 import { digitalAudioUploadHoldFilter } from "@/lib/digital/audio-upload-holds";
+import { studioEnabled } from "@/lib/digital/studio-policy";
 
 async function mediaChild(kind: "audio" | "zip", signal: AbortSignal) {
   if (signal.aborted) return;
   const mode = requireDigitalEnvironment(), now = new Date();
-  const pending = kind === "audio" ? await prisma.digitalUpload.count({ where: { ...digitalAudioUploadHoldFilter(), OR: [
+  const studio = studioEnabled();
+  const pending = kind === "audio" ? await prisma.digitalUpload.count({ where: { ...digitalAudioUploadHoldFilter(), ...(!studio ? { processingProfile: "LEGACY" } : {}), OR: [
     { status: "QUARANTINE", OR: [{ leaseUntil: null }, { leaseUntil: { lte: now } }] },
     { status: { in: ["VALIDATING", "COMPLETING"] }, leaseUntil: { lte: now } },
-  ] } }) : await prisma.digitalArchive.count({ where: { line: { order: { mode } }, OR: [
+  ] } }) + (studio ? await prisma.digitalStudioJob.count({ where: { uploadId: null, preparationKey: { not: null }, binding: null, decision: "PENDING",
+    OR: [{ status: "QUEUED" }, { status: "PROCESSING", leaseUntil: { lte: now } }] } }) : 0) : await prisma.digitalArchive.count({ where: { line: { order: { mode } }, OR: [
     { status: "PENDING" }, { status: "PROCESSING", leaseUntil: { lte: now } },
   ] } });
   if (!pending || signal.aborted) return;

@@ -12,6 +12,8 @@ import { DELIVERY_PART_BYTES, verifyDeliveryParts } from "@/lib/orders/delivery-
 import type { OrderActor } from "@/lib/orders/domain";
 import { prisma } from "@/lib/prisma";
 import { DigitalError, assertDigitalUuid, requireDigitalEnvironment, uploadMetadata } from "./domain";
+import { requireStudioEnvironment } from "./studio-policy";
+import { requireDigitalExcerptAdmin } from "./excerpt-service";
 
 async function trackLock<T>(id: string, f: (tx: import("@/generated/prisma/client").Prisma.TransactionClient) => Promise<T>) {
   return prisma.$transaction(async tx => { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`digital-track:${id}`})) IS NULL AS locked`; return f(tx); });
@@ -46,16 +48,29 @@ export async function digitalUploadStatus(actor: OrderActor, trackId: string, to
 }
 export async function initDigitalUpload(actor: OrderActor, trackId: string, value: unknown) {
   requireDigitalEnvironment(); if (actor.role !== "ADMIN") throw new DigitalError("ADMIN_REQUIRED", 403); assertDigitalUuid(trackId);
-  const m = uploadMetadata(value), id = randomUUID(), token = newSessionToken(id);
+  const raw = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const studio = raw?.studio === true;
+  if (raw && "studio" in raw && typeof raw.studio !== "boolean") throw new DigitalError("INVALID_UPLOAD");
+  if (studio) requireStudioEnvironment();
+  const m = uploadMetadata(raw && "studio" in raw ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "studio")) : value), id = randomUUID(), token = newSessionToken(id);
   const s = await trackLock(trackId, async tx => {
+    if (studio) await requireDigitalExcerptAdmin(tx, actor.id);
     if (!await tx.track.findUnique({ where: { id: trackId } })) throw new DigitalError("NOT_FOUND", 404);
     const previous = await tx.digitalMaster.findFirst({ where: { trackId }, orderBy: { version: "desc" } });
     if ((previous?.version ?? 0) !== m.expectedVersion) throw new DigitalError("MASTER_VERSION_CONFLICT", 409);
     const active = await tx.digitalUpload.findFirst({ where: { trackId, status: { in: ["PREPARING", "UPLOADING", "COMPLETING", "QUARANTINE", "VALIDATING"] }, expiresAt: { gt: new Date() } } });
     if (active) throw new DigitalError("UPLOAD_ALREADY_ACTIVE", 409);
-    return tx.digitalUpload.create({ data: { id, actorId: actor.id, trackId, tokenHash: sessionTokenHash(token), filename: m.filename, mimeType: m.mimeType,
+    const upload = await tx.digitalUpload.create({ data: { id, actorId: actor.id, trackId, tokenHash: sessionTokenHash(token), filename: m.filename, mimeType: m.mimeType,
       sizeBytes: BigInt(m.sizeBytes), storageKey: `digital/masters/${trackId}/${id}.${m.extension}`, expectedVersion: m.expectedVersion, previewStartMs: m.previewStartMs,
-      expiresAt: new Date(Date.now()+3600000) } });
+      ...(studio ? { processingProfile: "STUDIO_V1" } : {}), expiresAt: new Date(Date.now()+3600000) } });
+    if (studio) {
+      const track = await tx.track.findUniqueOrThrow({ where: { id: trackId }, include: { credits: { orderBy: { id: "asc" } }, project: { include: { credits: { orderBy: { id: "asc" } } } } } });
+      await tx.digitalStudioJob.create({ data: { uploadId: id, actorId: actor.id, trackId, expectedVersion: m.expectedVersion, baseMasterId: previous?.id ?? null,
+        title: track.title, album: track.project.type === "ALBUM" ? track.project.title : null,
+        metadata: { credits: [...track.project.credits, ...track.credits].map(credit => ({ name: credit.name, role: credit.role, note: credit.note })),
+          ...(track.project.releaseDate ? { date: track.project.releaseDate.toISOString().slice(0, 10) } : {}) } } });
+    }
+    return upload;
   });
   try {
     const storage = activeMediaStorage();

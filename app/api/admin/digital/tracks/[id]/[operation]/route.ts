@@ -8,7 +8,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string;o
   const limits:Record<string,number>={init:50,"part-url":180,status:120,complete:50,abort:20};
   if(!Object.hasOwn(limits,operation))throw new DigitalError("NOT_FOUND",404);
   await digitalRateLimit(actor.id,`upload-${operation}`,limits[operation]);
-  if(operation==="init")return digitalJson(await initDigitalUpload(actor,id,await digitalBody(request,["filename","mimeType","sizeBytes","expectedVersion","previewStartMs","replaceConfirmed"])));
+  if(operation==="init")return digitalJson(await initDigitalUpload(actor,id,await digitalBody(request,["filename","mimeType","sizeBytes","expectedVersion","previewStartMs","replaceConfirmed","studio"])));
   const b=await digitalBody(request,operation==="part-url"?["sessionToken","partNumber"]:["sessionToken"]);if(typeof b.sessionToken!=="string")throw new DigitalError("INVALID_UPLOAD");
   if(operation==="part-url")return digitalJson(await digitalPartUrl(actor,id,b.sessionToken,Number(b.partNumber)));
   if(operation==="status")return digitalJson(await digitalUploadStatus(actor,id,b.sessionToken));

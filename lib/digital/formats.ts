@@ -3,6 +3,9 @@ import { isAuthorizedMp3OnlySource, MP3_ONLY_SOURCE, MP3_ONLY_SOURCE_POLICY } fr
 
 export const DIGITAL_AUDIO_FORMATS = ["WAV", "MP3"] as const;
 export const DIGITAL_MP3_ENCODER_VERSION = "ffmpeg-libmp3lame-cbr-v2-strict";
+// Distinct audited pipeline identity: never claim that Studio used the legacy
+// encoder. Only lossless-source Studio approval may create this master shape.
+export const DIGITAL_STUDIO_ENCODER_VERSION = "lnx-beats-studio-v1";
 type CommercialAudioAsset = { visibility: string; mimeType: string | null; checksumSha256: string | null; durationMs: number | null; sizeBytes: bigint | number | null };
 export type DigitalCommercialAudioProof = { trackId?: string; status: string; codec: string | null; encoderVersion: string | null; mp3BitrateKbps: number | null; mp3AssetId?: string | null; previewDurationMs: number | null;
   masterAsset: CommercialAudioAsset; mp3Asset: CommercialAudioAsset | null; previewAsset: CommercialAudioAsset | null };
@@ -18,7 +21,7 @@ export function digitalCommercialAudioReady(master: DigitalCommercialAudioProof)
     && asset(wav, "PRIVATE", "audio/mpeg", 96 * 1024 * 1024) && asset(preview, "PUBLIC", "audio/mpeg", 3 * 1024 * 1024 + 1)
     && Number.isSafeInteger(master.previewDurationMs) && master.previewDurationMs! > 0 && master.previewDurationMs! <= 60000
     && preview!.durationMs === master.previewDurationMs && preview!.durationMs! <= wav.durationMs! + 100;
-  return master.status === "READY" && master.codec === "wav" && master.encoderVersion === DIGITAL_MP3_ENCODER_VERSION
+  return master.status === "READY" && master.codec === "wav" && [DIGITAL_MP3_ENCODER_VERSION, DIGITAL_STUDIO_ENCODER_VERSION].includes(master.encoderVersion ?? "")
     && [192, 256, 320].includes(master.mp3BitrateKbps ?? 0) && asset(wav, "PRIVATE", "audio/wav", 512 * 1024 * 1024 + 1)
     && asset(mp3, "PRIVATE", "audio/mpeg", 96 * 1024 * 1024) && asset(preview, "PUBLIC", "audio/mpeg", 3 * 1024 * 1024 + 1)
     && Math.abs(wav.durationMs! - mp3!.durationMs!) <= 100 && Number.isSafeInteger(master.previewDurationMs)

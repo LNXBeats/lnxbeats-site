@@ -87,6 +87,8 @@ model DigitalMaster {
 }
 
 model DigitalUpload {
+  processingProfile String    @default("LEGACY") @db.VarChar(20)
+  studioJobs       DigitalStudioJob[]
   id               String    @id @default(uuid()) @db.Uuid
   actorId          String    @db.Uuid
   trackId          String    @db.Uuid
@@ -111,6 +113,66 @@ model DigitalUpload {
 
   @@index([status, leaseUntil])
   @@map("digital_uploads")
+}
+
+// Private preparation only. These candidates never become a current DigitalMaster
+// until an authenticated, explicit human approval appends a new master version.
+model DigitalStudioJob {
+  id               String   @id @default(uuid()) @db.Uuid
+  uploadId         String?  @db.Uuid
+  preparationKey   String?  @db.Char(64)
+  previewStartMs   Int?
+  attempt          Int      @default(1)
+  actorId          String   @db.Uuid
+  trackId          String   @db.Uuid
+  baseMasterId     String?  @db.Uuid
+  expectedVersion  Int      @default(0)
+  title            String   @db.VarChar(240)
+  album            String?  @db.VarChar(240)
+  metadata         Json
+  sourceAssetId    String?  @db.Uuid
+  sourceSha256     String?  @db.Char(64)
+  sourceLossy      Boolean  @default(false)
+  status           String   @default("QUEUED") @db.VarChar(20)
+  phase            String   @default("IMPORTED") @db.VarChar(20)
+  decision         String   @default("PENDING") @db.VarChar(20)
+  binding          String?  @db.Char(64)
+  report           Json?
+  errorCode        String?  @db.VarChar(80)
+  leaseToken       String?  @db.Uuid
+  leaseUntil       DateTime? @db.Timestamptz(3)
+  publishedMasterId String? @db.Uuid
+  allowExistingPurchases Boolean @default(false)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+  upload           DigitalUpload? @relation(fields: [uploadId], references: [id], onDelete: Restrict)
+  artifacts        DigitalStudioArtifact[]
+
+  @@unique([uploadId, attempt])
+  @@unique([preparationKey, attempt])
+  @@index([trackId, createdAt])
+  @@index([status, leaseUntil])
+  @@map("digital_studio_jobs")
+}
+
+model DigitalStudioArtifact {
+  id               String   @id @default(uuid()) @db.Uuid
+  jobId            String   @db.Uuid
+  role             String   @db.VarChar(24)
+  assetId          String   @db.Uuid
+  sampleRate       Int?
+  bitDepth         Int?
+  bitrateKbps      Int?
+  integratedLufs   Float?
+  truePeakDbtp     Float?
+  metadataVerified Boolean  @default(false)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  job              DigitalStudioJob @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  asset            Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([jobId, role])
+  @@index([assetId])
+  @@map("digital_studio_artifacts")
 }
 
 model DigitalCart {
@@ -1749,6 +1811,7 @@ model ConfidenceAnnotation {
 }
 
 model Asset {
+  studioArtifacts     DigitalStudioArtifact[]
   digitalMasters      DigitalMaster[]      @relation("DigitalMasterAsset")
   digitalMp3Masters   DigitalMaster[]      @relation("DigitalMp3Asset")
   digitalPreviews     DigitalMaster[]      @relation("DigitalPreviewAsset")

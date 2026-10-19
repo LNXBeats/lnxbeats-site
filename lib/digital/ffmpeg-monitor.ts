@@ -12,6 +12,57 @@ export function parseLinuxRss(status: string) {
   if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
   return bytes;
 }
+/**
+ * Linux sets PF_EXITING before exit_mm(), while task state can still be R.
+ * procfs then omits VmRSS because mm is already gone. Require the kernel exit
+ * flag AND a last thread with no address space; zero RSS alone is never exit.
+ * See Linux v6.18 include/linux/sched.h, kernel/exit.c and fs/proc/array.c.
+ */
+export function linuxAddressSpaceReleased(stat: string, pid: number) {
+  if (stat.length > 8192 || !Number.isSafeInteger(pid) || pid <= 0) return false;
+  // comm is parenthesized and can itself contain spaces and parentheses.
+  const end = stat.lastIndexOf(") ");
+  if (end < 0 || stat.slice(0, stat.indexOf(" (")) !== String(pid)) return false;
+  const fields = stat.slice(end + 2).trim().split(/\s+/);
+  if (fields.length < 22 || !/^[RSDTtXZPI]$/.test(fields[0]) || !/^\d+$/.test(fields[6])) return false;
+  const flags = Number(fields[6]);
+  return Number.isSafeInteger(flags) && (flags & 0x4) !== 0 && fields[17] === "1"
+    && fields[20] === "0" && fields[21] === "0";
+}
+type LinuxRssDependencies = {
+  readProc?: (path: string, signal: AbortSignal) => Promise<string>;
+  probeProcess?: (pid: number) => void;
+};
+export async function readLinuxProcessRss(pid: number, dependencies: LinuxRssDependencies = {}): Promise<number> {
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
+  const readProc = dependencies.readProc ?? ((path, signal) => readFile(path, { encoding: "utf8", signal }));
+  const probeProcess = dependencies.probeProcess ?? (processId => { process.kill(processId, 0); });
+  // Both reads share one existing deadline. No grace, polling or timeout increase.
+  const signal = AbortSignal.timeout(1000);
+  const assertGone = () => {
+    try { probeProcess(pid); } catch (gone) {
+      if ((gone as NodeJS.ErrnoException).code === "ESRCH") throw new RssProcessExited();
+    }
+  };
+  try {
+    const status = await readProc(`/proc/${pid}/status`, signal);
+    try { return parseLinuxRss(status); } catch (error) {
+      if (error instanceof RssProcessExited) throw error;
+      // A malformed/zero measurement must not enter the exit-proof path.
+      if (/^Vm[A-Za-z]+:/m.test(status) || !new RegExp(`^Pid:\\s+${pid}\\s*$`, "m").test(status)
+        || !/^Threads:\s+1\s*$/m.test(status) || !/^Kthread:\s+0\s*$/m.test(status)) throw error;
+      assertGone();
+      if (linuxAddressSpaceReleased(await readProc(`/proc/${pid}/stat`, signal), pid)) throw new RssProcessExited();
+      throw error;
+    }
+  } catch (error) {
+    if (error instanceof RssProcessExited) throw error;
+    // procfs can report either ENOENT or ESRCH during reaping. Neither alone
+    // proves exit (procfs itself could be missing); the kernel probe must agree.
+    if (["ENOENT", "ESRCH"].includes((error as NodeJS.ErrnoException).code ?? "")) assertGone();
+    throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
+  }
+}
 /** BSD ps reports zero RSS for zombies; the kernel state, never zero alone, proves exit. */
 export function parseDarwinRss(statusAndRss: string) {
   const match = statusAndRss.match(/^\s*([EIRSTUWZ][A-Za-z+<>-]*)\s+([0-9]+)\s*$/);
@@ -33,19 +84,7 @@ function assertDarwinProcessPresent(pid: number) {
 /** Linux needs no external executable; Darwin retains its native ps implementation. */
 export async function readProcessRss(pid: number, platform = process.platform): Promise<number> {
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
-  if (platform === "linux") {
-    try { return parseLinuxRss(await readFile(`/proc/${pid}/status`, { encoding: "utf8", signal: AbortSignal.timeout(1000) })); }
-    catch (error) {
-      if (error instanceof RssProcessExited) throw error;
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        // ENOENT alone could mean unavailable procfs. ESRCH proves this PID exited.
-        try { process.kill(pid, 0); } catch (gone) {
-          if ((gone as NodeJS.ErrnoException).code === "ESRCH") throw new RssProcessExited();
-        }
-      }
-      throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
-    }
-  }
+  if (platform === "linux") return readLinuxProcessRss(pid);
   if (platform !== "darwin") throw new DigitalError("WORKER_MONITOR_UNAVAILABLE");
   let exiting = false;
   try {

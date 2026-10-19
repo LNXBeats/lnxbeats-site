@@ -1,5 +1,13 @@
 /** Public explanations only: never include provider errors, credentials or raw input. */
 export function digitalErrorMessage(code:string,ownedTitles:readonly string[]=[]):string {
+  if(code==="STUDIO_DISABLED")return "La préparation Studio est désactivée. Aucun nouveau traitement n’est lancé ; les achats et téléchargements déjà acquis restent disponibles.";
+  if(code==="STUDIO_QA_ONLY")return "LNX Beats Studio est disponible uniquement dans la QA autorisée. Aucun traitement Studio ni changement Production n’a été lancé.";
+  if(code==="STUDIO_VERSION_CHANGED"||code==="STUDIO_CATALOGUE_CHANGED")return "Le fichier, ses métadonnées ou une décision ont changé. Actualisez l’atelier avant de décider ; vos anciennes versions sont conservées.";
+  if(code==="STUDIO_HUMAN_LISTENING_REQUIRED")return "Écoutez personnellement l’original et les versions préparées, puis confirmez votre validation audio. Ceci n’approuve ni les droits ni la publication.";
+  if(code==="STUDIO_REPLACEMENT_CONFIRMATION_REQUIRED"||code==="STUDIO_EXISTING_PURCHASES_CONFIRMATION_REQUIRED")return "Cette piste possède une version ou des achats existants. Confirmez explicitement l’opération : aucun fichier déjà acquis ne doit être remplacé.";
+  if(code==="STUDIO_LOSSY_COMMERCIAL_POLICY_REQUIRED")return "Les trois versions issues de cette source MP3 restent privées. Leur provenance avec pertes doit être prise en charge explicitement avant une offre commerciale ; aucun WAV original n’est revendiqué.";
+  if(code==="STUDIO_RESTORE_REQUIRES_RELEASE_REVIEW")return "Le retour à une version antérieure n’est pas encore activé pour ce module. Les fichiers approuvés et les achats existants restent conservés.";
+  if(code.startsWith("STUDIO_")||code==="INVALID_STUDIO_ACTION")return "L’atelier n’a pas enregistré cette opération. Vérifiez les contrôles techniques et l’état de cette version ; aucun droit, prix ou achat n’a été modifié.";
   if(code==="GROUP_LISTENING_INCOMPLETE")return "Écoutez entièrement les extraits sélectionnés dans ce lecteur, puis confirmez personnellement votre choix. Une lecture partielle, une autre session ou une version différente ne suffit pas.";
   if(code==="GROUP_ORIGINAL_EVIDENCE_REQUIRED")return "Renseignez les faits et références de votre déclaration d’originaux, puis confirmez toutes les autorisations. Collaborations, reprises, samples ou restrictions : utilisez le circuit de justificatifs particuliers.";
   if(code==="GROUP_LIVE_PROJECT_PROTECTED")return "Ce projet contient des offres actives et reste protégé dans cette revue groupée. Ses validations et ses achats sont conservés.";

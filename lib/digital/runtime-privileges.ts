@@ -19,6 +19,10 @@ export const DIGITAL_UPDATE_COLUMNS={
   digital_archives:["status","storageKey","storageBackend","storageProvider","sizeBytes","checksum","leaseToken","leaseUntil","attempts","errorCode"],
   digital_completion_credits:["status","updatedAt"],
   digital_country_tax_rules:[],
+  // Additive private Studio schema: workflow columns only, immutable identity
+  // and approved artifact bindings are also enforced by database triggers.
+  digital_studio_jobs:["status","phase","decision","binding","report","errorCode","leaseToken","leaseUntil","sourceAssetId","sourceSha256","sourceLossy","publishedMasterId","allowExistingPurchases","updatedAt"],
+  digital_studio_artifacts:[],
   consumer_withdrawal_requests:["publicReceiptTokenHash","status","eligibilityReview","reviewedAt","reviewedByUserId","reviewReason","acknowledgementStatus","acknowledgementSentAt","updatedAt"],
 } as const;
 // Tax/legal approvals are provisioned only by an owner-reviewed change. The
