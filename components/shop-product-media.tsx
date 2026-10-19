@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useSiteLanguage } from "@/components/site-language";
 
 type ShopProductImage = {
   id: string;
@@ -18,18 +19,19 @@ type ShopProductMediaProps = {
 };
 
 export function ShopProductMedia({ image, productTitle, priority = false, sizes }: ShopProductMediaProps) {
+  const { t } = useSiteLanguage();
   const source = image ? `/media/boutique/${image.id}` : null;
   const [failedSource, setFailedSource] = useState<string | null>(null);
 
   if (!image || !source || failedSource === source) {
     return (
       <span
-        aria-label={`Visuel indisponible pour ${productTitle}`}
+        aria-label={`${t("Visuel indisponible pour")} ${productTitle}`}
         className="shop-product-media shop-product-media--fallback"
         role="img"
       >
         <span className="shop-product-media__monogram" aria-hidden="true">LNX</span>
-        <span className="shop-product-media__fallback-copy" aria-hidden="true">Visuel à venir</span>
+        <span className="shop-product-media__fallback-copy" aria-hidden="true">{t("Visuel à venir")}</span>
       </span>
     );
   }

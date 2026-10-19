@@ -1,4 +1,6 @@
 "use client";
+import { T, ContractLanguageNotice, useSiteLanguage } from "@/components/site-language";
+
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -11,6 +13,7 @@ type SupportStatus = { status: string; amountCents: number; provider: string; mo
 const labels: Record<string, string> = { PAID: "Soutien confirmé", SUCCEEDED: "Soutien confirmé", PENDING: "Confirmation en attente", CREATED: "Paiement à confirmer", REFUND_PENDING: "Remboursement en cours", REFUNDED: "Soutien remboursé", FAILED: "Paiement non confirmé", REQUIRES_REVIEW: "Vérification en cours" };
 
 export function SupportConfirmation({ id }: { id: string }) {
+  const { t, money } = useSiteLanguage();
   const [status, setStatus] = useState<SupportStatus | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,31 +47,31 @@ export function SupportConfirmation({ id }: { id: string }) {
 
   const presentation = supportConfirmationPresentation(status?.status ?? "", status?.needsReconciliation);
   if (status && presentation.confirmed) return <div className={styles.thanks} aria-live="polite">
-    {status.mode === "TEST" ? <span className={styles.test}>Préversion · soutien TEST uniquement</span> : null}
-    <h1>MERCI <UiIcon name="heart" /></h1><h2>Votre soutien compte vraiment.</h2>
-    <p className={styles.confirmedAmount}>{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(status.amountCents / 100)} · Soutien confirmé</p>
-    <p>Merci de faire vivre LNX Beats et de contribuer aux prochaines histoires.</p>
+    {status.mode === "TEST" ? <span className={styles.test}><T text="Préversion · soutien TEST uniquement" /></span> : null}
+    <h1><T text="MERCI" /> <UiIcon name="heart" /></h1><h2><T text="Votre soutien compte vraiment." /></h2>
+    <p className={styles.confirmedAmount}>{money(status.amountCents)} · <T text="Soutien confirmé" /></p>
+    <p><T text="Merci de faire vivre LNX Beats et de contribuer aux prochaines histoires." /></p>
     <ul className={styles.acknowledgements}>
-      {status.emailProvided ? <li>{status.confirmationEmailStatus === "SENT" ? "Une confirmation vient de vous être envoyée." : "Votre demande de confirmation par e-mail est enregistrée ; son envoi reste en attente."}</li> : null}
-      {status.messageProvided ? <li>Votre message a bien été transmis à LNX Beats.</li> : null}
+      {status.emailProvided ? <li><T text={status.confirmationEmailStatus === "SENT" ? "Une confirmation vient de vous être envoyée." : "Votre demande de confirmation par e-mail est enregistrée ; son envoi reste en attente."}/></li> : null}
+      {status.messageProvided ? <li><T text="Votre message a bien été transmis à LNX Beats." /></li> : null}
     </ul>
-    <div className={styles.returnActions}><Link className="button button--primary" href="/">Revenir à l’accueil</Link><Link className="button button--secondary" href="/discographie">Découvrir la discographie</Link></div>
-    <p className={styles.legal}>{SUPPORT_CONFIRMATION_LEGAL}</p>
+    <div className={styles.returnActions}><Link className="button button--primary" href="/"><T text="Revenir à l’accueil" /></Link><Link className="button button--secondary" href="/discographie"><T text="Découvrir la discographie"/></Link></div>
+    <ContractLanguageNotice/><p className={styles.legal} lang="fr" translate="no">{SUPPORT_CONFIRMATION_LEGAL}</p>
   </div>;
   return <div aria-live="polite">
-    {status ? <><h2>{labels[status.status] ?? "Vérification du soutien"}</h2><p>{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(status.amountCents / 100)} · {status.provider}</p>
-      {status.needsReconciliation ? <p>Résultat à vérifier. Ne recommencez pas un paiement chez un autre prestataire.</p> : null}
-      {["PAID", "SUCCEEDED"].includes(status.status) ? <p>Merci pour votre soutien libre. Cette confirmation n’est ni une facture de vente ni un reçu fiscal. Aucun avantage ou droit ne découle de ce versement.</p> : <p>Seule la confirmation serveur du prestataire fait foi. Le retour sur cette page ne prouve pas un paiement réussi.</p>}
-      {status.provider === "PAYPAL" && ["CREATED", "PENDING"].includes(status.status) ? <button className="button button--primary" type="button" disabled={busy} onClick={() => void capture()}>Confirmer mon soutien PayPal</button> : null}
-      {presentation.actionable ? <><button className="button button--secondary" type="button" disabled={busy} onClick={() => { setError(""); void refresh().catch(() => setError("Statut temporairement indisponible.")); }}>Actualiser le statut</button>
+    {status ? <><h2><T text={labels[status.status] ?? "Vérification du soutien"}/></h2><p>{money(status.amountCents)} · {status.provider}</p>
+      {status.needsReconciliation ? <p><T text="Résultat à vérifier. Ne recommencez pas un paiement chez un autre prestataire." /></p> : null}
+      {["PAID", "SUCCEEDED"].includes(status.status) ? <><ContractLanguageNotice/><p lang="fr" translate="no">Merci pour votre soutien libre. Cette confirmation n’est ni une facture de vente ni un reçu fiscal. Aucun avantage ou droit ne découle de ce versement.</p></> : <p><T text="Seule la confirmation serveur du prestataire fait foi. Le retour sur cette page ne prouve pas un paiement réussi." /></p>}
+      {status.provider === "PAYPAL" && ["CREATED", "PENDING"].includes(status.status) ? <button className="button button--primary" type="button" disabled={busy} onClick={() => void capture()}><T text="Confirmer mon soutien PayPal" /></button> : null}
+      {presentation.actionable ? <><button className="button button--secondary" type="button" disabled={busy} onClick={() => { setError(""); void refresh().catch(() => setError("Statut temporairement indisponible.")); }}><T text="Actualiser le statut" /></button>
       <button className="button button--secondary" type="button" disabled={busy} onClick={() => {
         setBusy(true); setError("");
         void fetch(`/api/support/${encodeURIComponent(id)}/reconcile`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
           .then(r => { if (!r.ok) throw new Error("pending"); return refresh(); })
           .catch(() => setError("Vérification en attente. Aucun nouveau paiement n’a été demandé."))
           .finally(() => setBusy(false));
-      }}>Vérifier auprès du prestataire</button></> : null}
-    </> : <p>Lecture de la confirmation sécurisée…</p>}
-    {error ? <p role="alert">{error}</p> : null}
+      }}><T text="Vérifier auprès du prestataire" /></button></> : null}
+    </> : <p><T text="Lecture de la confirmation sécurisée…" /></p>}
+    {error ? <p role="alert">{t(error)}</p> : null}
   </div>;
 }

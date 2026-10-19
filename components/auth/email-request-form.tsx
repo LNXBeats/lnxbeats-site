@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/site-language";
+
 
 import { useState, type FormEvent } from "react";
 
@@ -36,12 +38,12 @@ export function EmailRequestForm({ kind }: { kind: "verification" | "password-re
   return (
     <form className="auth-form" onSubmit={handleSubmit}>
       <div className="auth-field">
-        <label htmlFor={`${kind}-email`}>Adresse email</label>
+        <label htmlFor={`${kind}-email`}><T text="Adresse email"/></label>
         <input id={`${kind}-email`} name="email" type="email" autoComplete="email" required maxLength={320} />
       </div>
-      {message ? <p className="auth-form__success" role="status">{message}</p> : null}
+      {message ? <p className="auth-form__success" role="status"><T text={message}/></p> : null}
       <button className="auth-submit" type="submit" disabled={pending}>
-        <span>{pending ? "Envoi…" : kind === "verification" ? "Renvoyer le message" : "Recevoir un lien"}</span>
+        <span>{pending ? <T text="Envoi…"/> : kind === "verification" ? <T text="Renvoyer le message"/> : <T text="Recevoir un lien"/>}</span>
         <span aria-hidden="true">→</span>
       </button>
     </form>

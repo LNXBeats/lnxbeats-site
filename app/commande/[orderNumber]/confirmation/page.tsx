@@ -3,6 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Container } from "@/components/container";
+import { T } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
+import { getSiteLocale, serverMoney, serverT } from "@/lib/i18n/server";
 import { orderIllustrationFormatLabel } from "@/data/order-illustration";
 import { ModifyUnpaidOrderAction } from "@/components/modify-unpaid-order-action";
 import { PaymentCheckoutActions } from "@/components/payment-checkout-actions";
@@ -10,7 +13,7 @@ import { PaymentReturnNotice } from "@/components/payment-return-notice";
 import { PaypalReturnCapture } from "@/components/paypal-return-capture";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import { clientPaymentState } from "@/lib/orders/checkout";
-import { formatEuro, type OrderActor } from "@/lib/orders/domain";
+import { type OrderActor } from "@/lib/orders/domain";
 import { getOrderForActor } from "@/lib/orders/service";
 import { paymentProvidersAvailable } from "@/lib/payments/availability";
 import { hasCurrentEarlyPerformanceConsent } from "@/lib/legal/early-performance-consent";
@@ -24,6 +27,8 @@ type ConfirmationPageProps = {
 };
 
 export default async function OrderConfirmationPage({ params, searchParams }: ConfirmationPageProps) {
+  const locale = await getSiteLocale();
+  const t = (source: string) => serverT(locale, source);
   const { orderNumber } = await params;
   const session = await requireVerifiedUser(`/commande/${orderNumber}/confirmation`);
   const actor: OrderActor = { id: session.user.id, email: session.user.email, name: session.user.name, role: session.user.role, status: "ACTIVE", emailVerified: true };
@@ -43,29 +48,29 @@ export default async function OrderConfirmationPage({ params, searchParams }: Co
   const canRetry = hasEarlyPerformanceConsent && (["ready", "failed", "expired"].includes(paymentState)
     || (returnState === "cancel" && paymentState === "confirming"));
   const illustrationOption = order.coverIncluded
-    ? `Illustration (${orderIllustrationFormatLabel(order.illustrationFormat)}${order.illustrationFormat === "CUSTOM" && order.illustrationFormatCustom ? ` · ${order.illustrationFormatCustom}` : ""})`
+    ? `${t("Illustration")} (${orderIllustrationFormatLabel(order.illustrationFormat).split(" — ").map(t).join(" — ")}${order.illustrationFormat === "CUSTOM" && order.illustrationFormatCustom ? ` · ${order.illustrationFormatCustom}` : ""})`
     : null;
 
   return (
     <section className="auth-shell order-confirmation-shell">
       <Container className="order-confirmation">
         <p className="eyebrow">{order.orderNumber}</p>
-        <h1>Suivi du paiement.</h1>
+        <h1><T text="Suivi du paiement."/></h1>
         <PaymentReturnNotice state={returnState} paymentState={paymentState} orderNumber={order.orderNumber} />
         {query.paiement === "paypal-retour" && query.token && paymentProviders.paypal ? (
           <PaypalReturnCapture orderNumber={order.orderNumber} providerOrderId={query.token} />
         ) : null}
         <dl className="order-confirmation__summary">
-          <div><dt>Projet</dt><dd>{order.title || order.recipient || "Votre création"}</dd></div>
-          <div><dt>Total</dt><dd>{formatEuro(order.totalCents)}</dd></div>
-          <div><dt>Options</dt><dd>{[illustrationOption, order.priorityProcessing ? "Priorité" : null].filter(Boolean).join(" · ") || "Aucune"}</dd></div>
+          <div><dt><T text="Projet"/></dt><dd>{order.title || order.recipient ? <OriginalName>{order.title || order.recipient}</OriginalName> : t("Votre création")}</dd></div>
+          <div><dt><T text="Total"/></dt><dd>{serverMoney(locale, order.totalCents)}</dd></div>
+          <div><dt><T text="Options"/></dt><dd>{[illustrationOption, order.priorityProcessing ? t("Priorité") : null].filter(Boolean).join(" · ") || t("Aucune")}</dd></div>
         </dl>
         {(paymentProviders.stripe || paymentProviders.paypal) && canRetry ? <PaymentCheckoutActions orderNumber={order.orderNumber} amountCents={order.totalCents} providers={paymentProviders} /> : null}
-        {!hasEarlyPerformanceConsent ? <p><strong>Paiement bloqué.</strong> Confirmez d’abord votre demande de commencement anticipé depuis Commander.</p> : null}
+        {!hasEarlyPerformanceConsent ? <p><strong><T text="Paiement bloqué."/></strong> <T text="Confirmez d’abord votre demande de commencement anticipé depuis Commander."/></p> : null}
         {paymentProviders.stripe && ["confirming", "failed"].includes(paymentState) ? <ModifyUnpaidOrderAction orderNumber={order.orderNumber} /> : null}
         <div className="form-navigation">
-          <Link className="form-button" href={`/compte/commandes/${encodeURIComponent(order.orderNumber)}`}>Voir ma commande</Link>
-          <Link className="form-button" href="/compte">Mon espace</Link>
+          <Link className="form-button" href={`/compte/commandes/${encodeURIComponent(order.orderNumber)}`}><T text="Voir ma commande"/></Link>
+          <Link className="form-button" href="/compte"><T text="Mon espace"/></Link>
         </div>
       </Container>
     </section>

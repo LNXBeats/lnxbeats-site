@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/components/site-language";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -22,5 +23,5 @@ export function RightsContactConfirmation({ requestNumber }: { requestNumber: st
       setBusy(false);
     }
   }
-  return <div className="rights-confirm-actions"><button type="button" className="form-button form-button--primary" disabled={busy} onClick={() => void confirm()}>{busy ? "GÉNÉRATION DU PROJET…" : "JE CONFIRME MES INFORMATIONS"}</button>{error ? <p className="form-message form-message--error" role="alert">{error}</p> : null}</div>;
+  return <div className="rights-confirm-actions"><button type="button" className="form-button form-button--primary" disabled={busy} onClick={() => void confirm()}>{busy ? <T text="GÉNÉRATION DU PROJET…" /> : <T text="JE CONFIRME MES INFORMATIONS" />}</button>{error ? <p className="form-message form-message--error" role="alert">{<T text={error} />}</p> : null}</div>;
 }

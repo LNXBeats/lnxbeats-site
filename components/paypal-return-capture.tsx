@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSiteLanguage } from "@/components/site-language";
 
 export function PaypalReturnCapture({
   orderNumber,
@@ -12,6 +13,7 @@ export function PaypalReturnCapture({
   providerOrderId: string;
   target?: "music" | "shop";
 }) {
+  const { t } = useSiteLanguage();
   const router = useRouter();
   const started = useRef(false);
   const [message, setMessage] = useState("Confirmation PayPal en cours…");
@@ -48,5 +50,5 @@ export function PaypalReturnCapture({
     })();
   }, [orderNumber, providerOrderId, router, target]);
 
-  return <p className="form-message" role="status">{message}</p>;
+  return <p className="form-message" role="status">{t(message)}</p>;
 }

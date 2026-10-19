@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/components/site-language";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -18,5 +19,5 @@ export function RightsInformationResponse({ requestNumber }: { requestNumber: st
     } catch (caught) { setError(caught instanceof Error ? caught.message : "La réponse n’a pas pu être transmise."); }
     finally { setBusy(false); }
   }
-  return <div className="rights-response"><label htmlFor="rights-response">Votre réponse</label><textarea id="rights-response" rows={6} maxLength={6000} required value={message} onChange={(event) => setMessage(event.target.value)} aria-describedby="rights-response-help" /><small id="rights-response-help">Répondez uniquement aux précisions demandées. Cet échange est historisé.</small><button className="form-button form-button--primary" type="button" disabled={busy || !message.trim()} onClick={() => void submit()}>{busy ? "ENVOI…" : "ENVOYER MA RÉPONSE"}</button>{error ? <p className="form-message form-message--error" role="alert">{error}</p> : null}</div>;
+  return <div className="rights-response"><label htmlFor="rights-response"><T text="Votre réponse" /></label><textarea id="rights-response" rows={6} maxLength={6000} required value={message} onChange={(event) => setMessage(event.target.value)} aria-describedby="rights-response-help" /><small id="rights-response-help"><T text="Répondez uniquement aux précisions demandées. Cet échange est historisé." /></small><button className="form-button form-button--primary" type="button" disabled={busy || !message.trim()} onClick={() => void submit()}>{busy ? "ENVOI…" : <T text="ENVOYER MA RÉPONSE" />}</button>{error ? <p className="form-message form-message--error" role="alert">{<T text={error} />}</p> : null}</div>;
 }

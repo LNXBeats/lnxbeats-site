@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/components/site-language";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -25,11 +26,11 @@ export function PartnershipPreauthorizationRevision({ requestNumber }: { request
 
   return (
     <div className="rights-confirm-actions">
-      <p>La version P01 reste archivée. Cette action crée une seule version P02 corrigée, sans paiement ni activation de droits.</p>
+      <p><T text="La version P01 reste archivée. Cette action crée une seule version P02 corrigée, sans paiement ni activation de droits." /></p>
       <button type="button" className="form-button form-button--primary" disabled={busy} onClick={() => void generate()}>
-        {busy ? "GÉNÉRATION DE P02…" : "GÉNÉRER LA VERSION P02"}
+        {busy ? <T text="GÉNÉRATION DE P02…" /> : <T text="GÉNÉRER LA VERSION P02" />}
       </button>
-      {error ? <p className="form-message form-message--error" role="alert">{error}</p> : null}
+      {error ? <p className="form-message form-message--error" role="alert">{<T text={error} />}</p> : null}
     </div>
   );
 }

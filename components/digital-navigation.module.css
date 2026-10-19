@@ -5,3 +5,18 @@
 .demo{margin:0 0 20px;padding:10px 14px;border-left:3px solid #e7c477;background:#e7c47710;color:#f0d38e;font-size:14px;line-height:1.6}.demo span{white-space:nowrap}
 @media(max-width:600px){.nav{justify-content:flex-start;gap:8px}.nav a{padding:8px 10px}.nav .cart{margin-left:auto}.demo span{display:block}}
 @media(max-width:390px){.nav .cart{margin-left:0}.nav{column-gap:6px}.nav a{font-size:13px;padding:8px}.cart .count{font-size:11px}}
+
+/* Portal outside transformed album sections; no second cart or checkout engine. */
+.floatingSpace{height:0}
+.floating{position:fixed;z-index:45;right:max(20px,env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));width:min(420px,calc(100vw - 40px));border:1px solid #e7c477a6;border-radius:20px;background:linear-gradient(125deg,#25221bef,#0d0e0df5);box-shadow:0 14px 44px #0009,0 0 0 4px #e7c4770b;backdrop-filter:blur(18px);isolation:isolate;animation:cartAppear 300ms ease-out both}
+.floatingLink{display:flex;align-items:center;gap:13px;min-height:82px;padding:14px 17px;text-decoration:none;color:#f8edcf;border-radius:inherit;transition:background-color 160ms ease,box-shadow 160ms ease}
+.floatingLink:hover{background:#e7c47710;box-shadow:0 0 24px #e7c47718}.floatingLink:focus-visible{outline:3px solid #f0d38e;outline-offset:5px}
+.floatingIcon{position:relative;display:grid;place-items:center;flex:none;width:43px;height:43px;border:1px solid #f4d78c55;border-radius:14px;background:#e7c477;color:#14130f;box-shadow:inset 0 1px 0 #fff5}.floatingIcon>svg{width:25px;height:25px}.floatingBadge{position:absolute;top:-7px;right:-7px;display:grid;place-items:center;min-width:22px;min-height:22px;padding:1px 4px;border:2px solid #181811;border-radius:999px;background:#fff1bf;color:#16140c;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+.floatingCopy{display:grid;flex:1;gap:5px;min-width:0}.floatingCopy strong{font-size:15px;line-height:1.25;font-weight:750;overflow-wrap:anywhere}.floatingCopy>span{color:#bdb5a2;font-size:12px;line-height:1.3;overflow-wrap:anywhere}.floatingEnd{display:flex;align-items:center;gap:11px;max-width:45%;color:#f1d28a}.floatingEnd>strong{font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}.floatingEnd>small{max-width:100px;font-size:11px;line-height:1.35;text-align:right}.floatingEnd>svg{flex:none;width:20px;height:20px}
+.justAdded{animation:cartAdded 760ms ease-out both}.justAdded .floatingIcon{animation:bagAdded 760ms ease-out both}
+@keyframes cartAppear{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cartAdded{0%,100%{transform:translateY(0);box-shadow:0 14px 44px #0009,0 0 0 4px #e7c4770b}35%{transform:translateY(-6px);box-shadow:0 18px 48px #0009,0 0 0 7px #e7c47726}}
+@keyframes bagAdded{0%,100%{transform:rotate(0)}35%{transform:rotate(-9deg)}60%{transform:rotate(6deg)}}
+@media(max-width:600px){.floating{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:calc(100vw - 24px);border-radius:17px}.floatingLink{min-height:76px;gap:10px;padding:12px 13px}.floatingCopy strong{font-size:14px}.floatingEnd>strong{font-size:17px}.floatingEnd{gap:7px}.floatingSpace{height:calc(130px + env(safe-area-inset-bottom,0px))}}
+@media(min-width:601px){.floatingSpace{height:112px}}
+@media(prefers-reduced-motion:reduce){.floating,.justAdded,.justAdded .floatingIcon{animation:none}.floatingLink{transition:none}}

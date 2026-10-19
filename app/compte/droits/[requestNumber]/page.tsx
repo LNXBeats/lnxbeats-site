@@ -1,3 +1,6 @@
+import { getSiteLocale, serverMoney, serverDate } from "@/lib/i18n/server";
+import { OriginalName } from "@/components/original-name";
+import { T } from "@/components/site-language";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -9,7 +12,7 @@ import { RightsRequestCloseActions } from "@/components/rights-request-close-act
 import { RightsWithdrawalForm } from "@/components/rights-withdrawal-form";
 import { requireVerifiedUser } from "@/lib/auth/session";
 import type { OrderActor } from "@/lib/orders/domain";
-import { formatRightsCurrency, humanRightsPlatform } from "@/lib/rights/document-presentation";
+import { humanRightsPlatform } from "@/lib/rights/document-presentation";
 import { rightsEventPresentation, rightsStatusPresentation } from "@/lib/rights/domain";
 import { getRightsRequestForActor } from "@/lib/rights/service";
 
@@ -26,6 +29,7 @@ const grantLabels: Record<string, string> = {
 const cancellable = new Set(["SUBMITTED", "INFORMATION_REQUIRED", "UNDER_REVIEW", "PREAUTHORIZATION_GENERATED", "CONTRACT_PREPARATION", "CONTRACT_READY"]);
 
 export default async function RightsRequestPage({ params }: { params: Promise<{ requestNumber: string }> }) {
+  const locale = await getSiteLocale();
   const { requestNumber } = await params;
   const session = await requireVerifiedUser(`/compte/droits/${requestNumber}`);
   const actor: OrderActor = { id: session.user.id, email: session.user.email, name: session.user.name, role: session.user.role, status: "ACTIVE", emailVerified: true };
@@ -59,60 +63,60 @@ export default async function RightsRequestPage({ params }: { params: Promise<{ 
   return (
     <section className="auth-shell rights-shell">
       <Container className="rights-detail">
-        <Link className="back-link" href={`/compte/commandes/${encodeURIComponent(request.orderNumber)}`}>← Retour à la commande</Link>
+        <Link className="back-link" href={`/compte/commandes/${encodeURIComponent(request.orderNumber)}`}><T text="← Retour à la commande" /></Link>
         <header>
           <p className="eyebrow">{request.requestNumber}</p>
-          <h1>{request.type === "PUBLICATION_LICENSE" ? "Licence de publication" : "Partenariat d’exploitation"}</h1>
-          <p>{presentation.action}</p>
-          <span className="rights-status">{presentation.label}</span>
+          <h1>{request.type === "PUBLICATION_LICENSE" ? <T text="Licence de publication" /> : <T text="Partenariat d’exploitation" />}</h1>
+          <p>{<T text={presentation.action} />}</p>
+          <span className="rights-status">{<T text={presentation.label} />}</span>
         </header>
         <dl className="order-detail__facts">
-          <div><dt>Identité</dt><dd>{expectedName || "À vérifier"}</dd></div>
-          <div><dt>Commande</dt><dd>{request.orderNumber}</dd></div>
-          <div><dt>Création</dt><dd>{request.workTitle}</dd></div>
-          <div><dt>Offre</dt><dd>{request.type === "PUBLICATION_LICENSE" ? "Licence de publication" : "Partenariat d’exploitation"}</dd></div>
-          <div><dt>Montant cible futur</dt><dd>{formatRightsCurrency(request.requestedPriceCents)}</dd></div>
-          <div><dt>{administrativeTerritories.length ? "Territoire retenu pour étude" : "Territoire souhaité"}</dt><dd>{administrativeTerritories.length ? administrativeTerritories.join(" ; ") : typeof project?.territory === "string" ? project.territory : "À définir"}</dd></div>
-          <div><dt>{administrativeDurations.length ? "Durée retenue pour étude" : "Durée souhaitée"}</dt><dd>{administrativeDurations.length ? administrativeDurations.join(" ; ") : typeof project?.duration === "string" ? project.duration : "À définir"}</dd></div>
-          <div><dt>Plateformes souhaitées</dt><dd>{Array.isArray(project?.platforms) ? project.platforms.filter((item): item is string => typeof item === "string").map(humanRightsPlatform).join(", ") : "À définir"}</dd></div>
-          <div><dt>Paiement</dt><dd>{winningPayment ? `${winningPayment.provider} · ${winningPayment.status}` : request.status === "READY_FOR_PAYMENT" ? "Dossier prêt · commerce fermé" : "Non confirmé"}</dd></div>
+          <div><dt><T text="Identité" /></dt><dd>{expectedName || "À vérifier"}</dd></div>
+          <div><dt><T text="Commande" /></dt><dd>{request.orderNumber}</dd></div>
+          <div><dt><T text="Création" /></dt><dd>{<OriginalName>{request.workTitle}</OriginalName>}</dd></div>
+          <div><dt><T text="Offre" /></dt><dd>{request.type === "PUBLICATION_LICENSE" ? <T text="Licence de publication" /> : <T text="Partenariat d’exploitation" />}</dd></div>
+          <div><dt><T text="Montant cible futur" /></dt><dd>{serverMoney(locale,request.requestedPriceCents)}</dd></div>
+          <div><dt>{administrativeTerritories.length ? <T text="Territoire retenu pour étude" /> : <T text="Territoire souhaité" />}</dt><dd>{administrativeTerritories.length ? administrativeTerritories.join(" ; ") : typeof project?.territory === "string" ? project.territory : <T text="À définir" />}</dd></div>
+          <div><dt>{administrativeDurations.length ? <T text="Durée retenue pour étude" /> : <T text="Durée souhaitée" />}</dt><dd>{administrativeDurations.length ? administrativeDurations.join(" ; ") : typeof project?.duration === "string" ? project.duration : <T text="À définir" />}</dd></div>
+          <div><dt><T text="Plateformes souhaitées" /></dt><dd>{Array.isArray(project?.platforms) ? project.platforms.filter((item): item is string => typeof item === "string").map(humanRightsPlatform).join(", ") : <T text="À définir" />}</dd></div>
+          <div><dt><T text="Paiement" /></dt><dd>{winningPayment ? `${winningPayment.provider} · ${winningPayment.status}` : request.status === "READY_FOR_PAYMENT" ? <T text="Dossier prêt · commerce fermé" /> : <T text="Non confirmé" />}</dd></div>
         </dl>
 
         {request.grants.length ? <section>
-          <h2>Paramètres de droits à vérifier</h2>
+          <h2><T text="Paramètres de droits à vérifier" /></h2>
           <ul className="rights-document-list">{request.grants.map((grant) => <li key={grant.kind}><div>
-            <strong>{grantLabels[grant.kind] ?? "Droit étudié"}</strong>
-            <small>{grant.authorized ? `${grant.exclusive ? "Exclusif" : "Non exclusif"} · ${grant.territory || "territoire à définir"} · ${grant.duration || "durée à définir"}` : "Non accordé"}</small>
-            {grant.authorized && grant.platforms.length ? <small>Supports : {grant.platforms.map(humanRightsPlatform).join(", ")}</small> : null}
-            {grant.restrictions ? <small>Restrictions : {grant.restrictions}</small> : null}
+            <strong>{<T text={grantLabels[grant.kind] ?? "Droit étudié"} />}</strong>
+            <small>{grant.authorized ? `${grant.exclusive ? "Exclusif" : "Non exclusif"} · ${grant.territory || "territoire à définir"} · ${grant.duration || "durée à définir"}` : <T text="Non accordé" />}</small>
+            {grant.authorized && grant.platforms.length ? <small><T text="Supports :" />{" "}{grant.platforms.map(humanRightsPlatform).join(", ")}</small> : null}
+            {grant.restrictions ? <small><T text="Restrictions :" />{" "}{grant.restrictions}</small> : null}
           </div></li>)}</ul>
-          <p>Tout droit non expressément autorisé reste non accordé.</p>
+          <p><T text="Tout droit non expressément autorisé reste non accordé." /></p>
         </section> : null}
 
-        {request.splitProposal ? <section className="rights-info-request"><h2>Proposition commerciale étudiée</h2><p>{request.splitProposal.clientSharePercent} % client / {request.splitProposal.lnxSharePercent} % LNX Beats.</p><p>Cette proposition n’est pas automatiquement une clé de répartition SACEM.</p></section> : null}
-        {request.needsInformationMessage ? <section className="rights-info-request"><h2>Informations complémentaires demandées</h2><p>{request.needsInformationMessage}</p><RightsInformationResponse requestNumber={request.requestNumber} /></section> : null}
-        {request.rejectionReason ? <section className="rights-info-request"><h2>Demande non retenue</h2><p>{request.rejectionReason}</p></section> : null}
+        {request.splitProposal ? <section className="rights-info-request"><h2><T text="Proposition commerciale étudiée" /></h2><p>{request.splitProposal.clientSharePercent} <T text="% client /" />{" "}{request.splitProposal.lnxSharePercent} <T text="% LNX Beats." /></p><p><T text="Cette proposition n’est pas automatiquement une clé de répartition SACEM." /></p></section> : null}
+        {request.needsInformationMessage ? <section className="rights-info-request"><h2><T text="Informations complémentaires demandées" /></h2><p>{request.needsInformationMessage}</p><RightsInformationResponse requestNumber={request.requestNumber} /></section> : null}
+        {request.rejectionReason ? <section className="rights-info-request"><h2><T text="Demande non retenue" /></h2><p>{request.rejectionReason}</p></section> : null}
 
         <section>
-          <h2>Documents privés</h2>
+          <h2><T text="Documents privés" /></h2>
           {request.documents.length ? <ul className="rights-document-list">{request.documents.map((document) => <li key={document.id}><div>
-            <strong>{document.kind === "PREAUTHORIZATION" ? "Projet de préautorisation" : document.kind === "CONTRACT" ? "Projet de contrat" : document.kind === "ACCEPTANCE_RECEIPT" ? "Preuve d’acceptation" : "Fiche de préparation SACEM"}{latestDocumentIds.has(document.id) ? " · Dernière version" : ""}</strong>
-            <small>{document.contractNumber} · {documentVersionLabel(document.contractNumber, document.documentVersion)} · {new Date(document.generatedAt).toLocaleDateString("fr-FR", { dateStyle: "long" })} · Projet non actif · hash {document.hashShort}</small>
-          </div><div><a className="form-button" href={`/api/rights/documents/${document.id}`} target="_blank" rel="noreferrer">CONSULTER</a><a className="text-link" href={`/api/rights/documents/${document.id}?telecharger=1`}>Télécharger</a></div></li>)}</ul> : <p>Aucun document généré.</p>}
+            <strong>{document.kind === "PREAUTHORIZATION" ? <T text="Projet de préautorisation" /> : document.kind === "CONTRACT" ? <T text="Projet de contrat" /> : document.kind === "ACCEPTANCE_RECEIPT" ? <T text="Preuve d’acceptation" /> : <T text="Fiche de préparation SACEM" />}{latestDocumentIds.has(document.id) ? <T text=" · Dernière version" /> : ""}</strong>
+            <small>{document.contractNumber} · {documentVersionLabel(document.contractNumber, document.documentVersion)} · {serverDate(locale, new Date(document.generatedAt), { dateStyle: "long" })} <T text="· Projet non actif · hash" />{" "}{document.hashShort}</small>
+          </div><div><a className="form-button" href={`/api/rights/documents/${document.id}`} target="_blank" rel="noreferrer"><T text="CONSULTER" /></a><a className="text-link" href={`/api/rights/documents/${document.id}?telecharger=1`}><T text="Télécharger" /></a></div></li>)}</ul> : <p><T text="Aucun document généré." /></p>}
           {canGeneratePartnershipP02 ? <PartnershipPreauthorizationRevision requestNumber={request.requestNumber} /> : null}
         </section>
         {latestContract?.status === "READY_FOR_CLIENT" && expectedName ? <ContractAcceptanceForm requestNumber={request.requestNumber} expectedName={expectedName} documentId={latestContract.id} documentVersion={latestContract.documentVersion} hashShort={latestContract.hashShort} /> : null}
-        {request.license ? <section className="rights-license-summary"><p className="auth-panel__label">Licence</p><h2>{request.license.status === "ACTIVE" ? "LICENCE DE PUBLICATION ACTIVE" : "PAIEMENT CONFIRMÉ · DÉLAI DE RÉTRACTATION"}</h2><dl className="order-detail__facts"><div><dt>Référence</dt><dd>{request.license.licenseNumber}</dd></div><div><dt>Fin du délai</dt><dd>{new Date(request.license.withdrawalEndsAt).toLocaleString("fr-FR")}</dd></div>{request.license.effectiveAt ? <div><dt>Prise d’effet</dt><dd>{new Date(request.license.effectiveAt).toLocaleString("fr-FR")}</dd></div> : null}{request.license.expiresAt ? <div><dt>Échéance</dt><dd>{new Date(request.license.expiresAt).toLocaleString("fr-FR")}</dd></div> : null}{request.invoice ? <div><dt>Facture</dt><dd>{request.invoice.invoiceNumber}</dd></div> : null}</dl></section> : null}
-        {request.withdrawal ? <section className="rights-info-request"><p className="eyebrow">Rétractation</p><h2>{request.withdrawal.status === "COMPLETED" ? "RÉTRACTATION TERMINÉE" : "RÉTRACTATION EN COURS"}</h2><dl className="order-detail__facts"><div><dt>Référence</dt><dd>{request.withdrawal.requestNumber}</dd></div><div><dt>Demandée le</dt><dd>{new Date(request.withdrawal.requestedAt).toLocaleString("fr-FR")}</dd></div><div><dt>État</dt><dd>{request.withdrawal.status}</dd></div></dl></section> : null}
+        {request.license ? <section className="rights-license-summary"><p className="auth-panel__label"><T text="Licence" /></p><h2>{request.license.status === "ACTIVE" ? <T text="LICENCE DE PUBLICATION ACTIVE" /> : <T text="PAIEMENT CONFIRMÉ · DÉLAI DE RÉTRACTATION" />}</h2><dl className="order-detail__facts"><div><dt><T text="Référence" /></dt><dd>{request.license.licenseNumber}</dd></div><div><dt><T text="Fin du délai" /></dt><dd>{serverDate(locale, new Date(request.license.withdrawalEndsAt), {dateStyle:"short",timeStyle:"short"})}</dd></div>{request.license.effectiveAt ? <div><dt><T text="Prise d’effet" /></dt><dd>{serverDate(locale, new Date(request.license.effectiveAt), {dateStyle:"short",timeStyle:"short"})}</dd></div> : null}{request.license.expiresAt ? <div><dt><T text="Échéance" /></dt><dd>{serverDate(locale, new Date(request.license.expiresAt), {dateStyle:"short",timeStyle:"short"})}</dd></div> : null}{request.invoice ? <div><dt><T text="Facture" /></dt><dd>{request.invoice.invoiceNumber}</dd></div> : null}</dl></section> : null}
+        {request.withdrawal ? <section className="rights-info-request"><p className="eyebrow"><T text="Rétractation" /></p><h2>{request.withdrawal.status === "COMPLETED" ? <T text="RÉTRACTATION TERMINÉE" /> : <T text="RÉTRACTATION EN COURS" />}</h2><dl className="order-detail__facts"><div><dt><T text="Référence" /></dt><dd>{request.withdrawal.requestNumber}</dd></div><div><dt><T text="Demandée le" /></dt><dd>{serverDate(locale, new Date(request.withdrawal.requestedAt), {dateStyle:"short",timeStyle:"short"})}</dd></div><div><dt><T text="État" /></dt><dd>{request.withdrawal.status}</dd></div></dl></section> : null}
         {!request.withdrawal && request.status === "PAID_WAITING_WITHDRAWAL_PERIOD" && winningPayment?.paidAt && request.license && new Date(request.license.withdrawalEndsAt) >= new Date()
           ? <RightsWithdrawalForm requestNumber={request.requestNumber} workTitle={request.workTitle} paidAt={winningPayment.paidAt} deadline={request.license.withdrawalEndsAt} />
           : null}
         {cancellable.has(request.status) ? <RightsRequestCloseActions requestNumber={request.requestNumber} orderNumber={request.orderNumber} draft={false} /> : null}
         <section>
-          <h2>Historique</h2>
-          <ol className="order-timeline">{request.events.map((event) => <li key={event.id}><span aria-hidden="true" /><div><time>{new Date(event.createdAt).toLocaleString("fr-FR")}</time><strong>{rightsEventPresentation[event.type]}</strong>{event.note ? <p>{event.note}</p> : null}</div></li>)}</ol>
+          <h2><T text="Historique" /></h2>
+          <ol className="order-timeline">{request.events.map((event) => <li key={event.id}><span aria-hidden="true" /><div><time>{serverDate(locale, new Date(event.createdAt), {dateStyle:"short",timeStyle:"short"})}</time><strong>{<T text={rightsEventPresentation[event.type]} />}</strong>{event.note ? <p>{event.note}</p> : null}</div></li>)}</ol>
         </section>
-        <p className="rights-form__warning">{request.status === "ACTIVE" ? "Seuls les droits expressément prévus par le contrat actif sont accordés." : "Aucun document non actif n’accorde de droit d’exploitation. Aucune déclaration SACEM n’est réalisée automatiquement."}</p>
+        <p className="rights-form__warning">{request.status === "ACTIVE" ? <T text="Seuls les droits expressément prévus par le contrat actif sont accordés." /> : <T text="Aucun document non actif n’accorde de droit d’exploitation. Aucune déclaration SACEM n’est réalisée automatiquement." />}</p>
       </Container>
     </section>
   );

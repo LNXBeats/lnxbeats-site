@@ -1,3 +1,6 @@
+
+import { T } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Container } from "@/components/container";
@@ -16,12 +19,17 @@ import digitalStyles from "@/components/digital.module.css";
 import { loadDiscographyPreparation } from "@/lib/digital/discography-preparation";
 import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
 import "../v064-discography.css";
+import { getSiteLocale, serverT } from "@/lib/i18n/server";
 
-export const metadata: Metadata = createPublicPageMetadata({
-  title: "Discographie et albums",
-  description: "Albums, singles et projets en développement de LNX Beats, avec des fiches qui distinguent les informations confirmées de celles encore inconnues.",
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getSiteLocale();
+  return createPublicPageMetadata({
+  title: serverT(locale, "Discographie et albums"),
+  description: serverT(locale, "Albums, singles et projets en développement de LNX Beats, avec des fiches qui distinguent les informations confirmées de celles encore inconnues."),
+  imageAlt: serverT(locale, "LNX Beats — Chaque histoire mérite sa musique."),
   pathname: "/discographie",
-});
+  });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +54,7 @@ function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProj
 }
 
 export default async function DiscographyPage() {
+  const locale = await getSiteLocale();
   const digitalMode = digitalRuntimeMode() ?? "TEST";
   const { projects } = await listDiscographyProjects();
   const preparation = discographyPreparationEnabled() ? await loadDiscographyPreparation() : [];
@@ -55,7 +64,7 @@ export default async function DiscographyPage() {
     .map(async project => ({ project, view: await publicDigitalProject(project.slug) }))) : [];
 
   return (
-    <section className="v064-discography-stage" aria-label="Discographie">
+    <section className="v064-discography-stage" aria-label={serverT(locale, "Discographie")}>
       <Container className="v064-discography-container">
         {digitalEnabled() ? <><DigitalCartNavigation/><DigitalDemoBanner mode={digitalMode}/></> : null}
         <ProjectJukebox
@@ -66,27 +75,27 @@ export default async function DiscographyPage() {
           eager
         />
         {digitalEnabled() ? <section className={digitalStyles.panel} aria-labelledby="digital-catalogue-title">
-          <div className={digitalStyles.heading}><div><p className="eyebrow">{digitalMode==="LIVE"?"LNX Beats · Musique à télécharger":"DCN-1.0 · revue locale"}</p><h2 id="digital-catalogue-title">La musique vous accompagne.</h2></div>
-            <nav className={digitalStyles.tabs} aria-label="Achats numériques"><Link className="text-link" href="/musique/panier">Panier numérique</Link><Link className="text-link" href="/compte/musique">Ma musique</Link></nav></div>
-          <p className={digitalStyles.note}>{digitalMode==="LIVE"?"Albums et titres à télécharger · WAV + MP3 inclus · usage privé.":"Albums et pistes à télécharger · tarifs QA uniquement · aucune vente LIVE."}</p>
+          <div className={digitalStyles.heading}><div><p className="eyebrow"><T text={digitalMode==="LIVE"?"LNX Beats · Musique à télécharger":"DCN-1.0 · revue locale"}/></p><h2 id="digital-catalogue-title"><T text="La musique vous accompagne."/></h2></div>
+            <nav className={digitalStyles.tabs} aria-label={serverT(locale, "Achats numériques")}><Link className="text-link" href="/musique/panier"><T text="Panier numérique"/></Link><Link className="text-link" href="/compte/musique"><T text="Ma musique"/></Link></nav></div>
+          <p className={digitalStyles.note}><T text={digitalMode==="LIVE"?"Albums et titres à télécharger · WAV + MP3 inclus · usage privé.":"Albums et pistes à télécharger · tarifs QA uniquement · aucune vente LIVE."}/></p>
           <div className={digitalStyles.catalogueGrid}>{digitalProjects.filter(p => soon.has(p.project.slug) || p.view?.album || p.view?.tracks.some(t=>t.offer)).map(({project,view}) => <article className={digitalStyles.panel} key={project.slug}>
-            <Link href={`/album/${project.slug}`} className={digitalStyles.coverLink}><ProjectArtwork project={project} sizes="(max-width: 768px) 45vw, 25vw" /><h3>{project.title}</h3></Link>
-            {soon.has(project.slug) ? <p role="status">Arrive bientôt · vente et téléchargements indisponibles.</p> : <><p className={digitalStyles.muted}>{view?.tracks.length} piste{view?.tracks.length === 1 ? "" : "s"} · extraits de 60 secondes maximum</p>
-            {(() => { const offer = digitalCardOffer(project.type, view); return offer ? <AddDigitalOffer id={offer.id} priceCents={offer.priceCents} label={offer.label} /> : <Link className="text-link" href={`/album/${project.slug}`}>Choisir les pistes</Link>; })()}</>}
+            <Link href={`/album/${project.slug}`} className={digitalStyles.coverLink}><ProjectArtwork project={project} sizes="(max-width: 768px) 45vw, 25vw" /><h3><OriginalName>{project.title}</OriginalName></h3></Link>
+            {soon.has(project.slug) ? <p role="status"><T text="Arrive bientôt · vente et téléchargements indisponibles."/></p> : <><p className={digitalStyles.muted}><T text={view?.tracks.length === 1 ? "{count} piste · extraits de 60 secondes maximum" : "{count} pistes · extraits de 60 secondes maximum"} values={{count:view?.tracks.length ?? 0}}/></p>
+            {(() => { const offer = digitalCardOffer(project.type, view); return offer ? <AddDigitalOffer id={offer.id} priceCents={offer.priceCents} label={offer.label} /> : <Link className="text-link" href={`/album/${project.slug}`}><T text="Choisir les pistes"/></Link>; })()}</>}
           </article>)}</div>
         </section> : null}
         <details className="discography-directory">
           <summary>
-            <span>Accès direct aux projets</span>
-            <small>{sceneProjects.length} fiche{sceneProjects.length > 1 ? "s" : ""}</small>
+            <span><T text="Accès direct aux projets"/></span>
+            <small><T text={sceneProjects.length === 1 ? "{count} fiche" : "{count} fiches"} values={{count:sceneProjects.length}}/></small>
           </summary>
-          <nav aria-label="Toutes les fiches de la discographie">
+          <nav aria-label={serverT(locale, "Toutes les fiches de la discographie")}>
             <ul>
               {sceneProjects.map((project) => (
                 <li key={project.slug}>
                   <Link href={`/album/${project.slug}`}>
-                    <span>{project.title}</span>
-                    <small>{project.type === "album" ? "Album" : project.type === "single" ? "Single" : "Projet"}{project.year ? ` · ${project.year}` : ""}</small>
+                    <OriginalName>{project.title}</OriginalName>
+                    <small><T text={project.type === "album" ? "Album" : project.type === "single" ? "Single" : "Projet"}/>{project.year ? ` · ${project.year}` : ""}</small>
                   </Link>
                 </li>
               ))}

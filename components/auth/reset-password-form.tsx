@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/site-language";
+
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -46,17 +48,17 @@ export function ResetPasswordForm({ token }: { token: string }) {
   return (
     <form className="auth-form" onSubmit={handleSubmit} aria-describedby={error ? "reset-error" : "reset-password-help"}>
       <div className="auth-field">
-        <label htmlFor="reset-password">Nouveau mot de passe</label>
+        <label htmlFor="reset-password"><T text="Nouveau mot de passe"/></label>
         <input id="reset-password" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
-        <p className="auth-field__help" id="reset-password-help">12 caractères minimum. Les phrases de passe sont acceptées.</p>
+        <p className="auth-field__help" id="reset-password-help"><T text="12 caractères minimum. Les phrases de passe sont acceptées."/></p>
       </div>
       <div className="auth-field">
-        <label htmlFor="reset-password-confirmation">Confirmer le mot de passe</label>
+        <label htmlFor="reset-password-confirmation"><T text="Confirmer le mot de passe"/></label>
         <input id="reset-password-confirmation" name="passwordConfirmation" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
       </div>
-      {error ? <p className="auth-form__error" id="reset-error" role="alert">{error}</p> : null}
+      {error ? <p className="auth-form__error" id="reset-error" role="alert"><T text={error}/></p> : null}
       <button className="auth-submit" type="submit" disabled={pending}>
-        <span>{pending ? "Mise à jour…" : "Choisir ce mot de passe"}</span>
+        <span>{pending ? <T text="Mise à jour…"/> : <T text="Choisir ce mot de passe"/>}</span>
         <span aria-hidden="true">→</span>
       </button>
     </form>

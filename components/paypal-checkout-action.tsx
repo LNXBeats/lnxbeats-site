@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSiteLanguage } from "@/components/site-language";
+import { formatEuro } from "@/lib/orders/domain";
 
 import { isAllowedPaypalApprovalRedirect } from "@/lib/payments/paypal-redirect";
 import { checkoutPaymentChoicePresentation, checkoutPaymentCtaLabel } from "@/lib/payments/presentation";
@@ -24,6 +26,7 @@ export function PaypalCheckoutAction({
   target?: "music" | "shop";
   termsAccepted?: boolean;
 }) {
+  const { t, money } = useSiteLanguage();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -75,10 +78,10 @@ export function PaypalCheckoutAction({
   return (
     <div className="checkout-action">
       <button className="form-button" type="button" onClick={startCheckout} disabled={pending}>
-        {pending ? "Préparation PayPal…" : checkoutPaymentCtaLabel("paypal", amountCents, target)}
+        {pending ? t("Préparation PayPal…") : t(checkoutPaymentCtaLabel("paypal", amountCents, target).replace(formatEuro(amountCents), "{amount}"), { amount: money(amountCents) })}
       </button>
-      <small>{checkoutPaymentChoicePresentation.paypal.assurance}</small>
-      {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}
+      <small>{t(checkoutPaymentChoicePresentation.paypal.assurance)}</small>
+      {message ? <p className="form-message form-message--error" role="alert">{t(message)}</p> : null}
     </div>
   );
 }

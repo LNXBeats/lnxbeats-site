@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/site-language";
+
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -37,16 +39,16 @@ export function EmailVerificationResult() {
   return (
     <>
       <div className="auth-intro">
-        <p className="eyebrow">Vérification</p>
-        <h1>{checking ? "Vérification du lien…" : confirmed ? "Adresse email confirmée." : "Lien inutilisable."}</h1>
-        <p>{checking ? "Un instant suffit pour confirmer cette adresse." : confirmed ? "Votre espace membre est maintenant actif. La première connexion peut commencer." : "Ce lien est invalide, expiré ou a déjà été utilisé."}</p>
+        <p className="eyebrow"><T text="Vérification"/></p>
+        <h1>{checking ? <T text="Vérification du lien…"/> : confirmed ? <T text="Adresse email confirmée."/> : <T text="Lien inutilisable."/>}</h1>
+        <p>{checking ? <T text="Un instant suffit pour confirmer cette adresse."/> : confirmed ? <T text="Votre espace membre est maintenant actif. La première connexion peut commencer."/> : <T text="Ce lien est invalide, expiré ou a déjà été utilisé."/>}</p>
       </div>
       <div className="auth-panel auth-panel--minimal" aria-live="polite">
-        <p className="auth-panel__label">Étape suivante</p>
+        <p className="auth-panel__label"><T text="Étape suivante"/></p>
         {checking ? (
-          <p role="status">Vérification en cours…</p>
+          <p role="status"><T text="Vérification en cours…"/></p>
         ) : (
-          <p>{confirmed ? <Link className="auth-inline-link" href="/connexion">Entrer dans mon espace →</Link> : <Link className="auth-inline-link" href="/renvoyer-verification">Demander un nouveau message →</Link>}</p>
+          <p>{confirmed ? <Link className="auth-inline-link" href="/connexion"><T text="Entrer dans mon espace →"/></Link> : <Link className="auth-inline-link" href="/renvoyer-verification"><T text="Demander un nouveau message →"/></Link>}</p>
         )}
       </div>
     </>

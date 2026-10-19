@@ -1,3 +1,5 @@
+
+import { T } from "@/components/site-language";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -22,14 +24,14 @@ export default async function RegistrationPage({ searchParams }: RegistrationPag
     <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
         <div className="auth-intro">
-          <p className="eyebrow">Espace membre</p>
-          <h1>Une adresse. Un code. Votre espace.</h1>
-          <p>La création commence par la preuve que cette adresse vous appartient. Votre mot de passe ne sera demandé qu’ensuite ; aucune commande ni aucun paiement ne sera créé ici.</p>
+          <p className="eyebrow"><T text="Espace membre"/></p>
+          <h1><T text="Une adresse. Un code. Votre espace."/></h1>
+          <p><T text="La création commence par la preuve que cette adresse vous appartient. Votre mot de passe ne sera demandé qu’ensuite ; aucune commande ni aucun paiement ne sera créé ici."/></p>
         </div>
         <div className="auth-panel">
-          <p className="auth-panel__label">Inscription</p>
+          <p className="auth-panel__label"><T text="Inscription"/></p>
           <RegistrationForm returnTo={returnTo} />
-          <p className="auth-panel__note">Déjà membre&nbsp;? <Link href={`/connexion?retour=${encodeURIComponent(returnTo)}`}>Revenir à la connexion</Link>.</p>
+          <p className="auth-panel__note"><T text="Déjà membre ?"/> <Link href={`/connexion?retour=${encodeURIComponent(returnTo)}`}><T text="Revenir à la connexion"/></Link>.</p>
         </div>
       </Container>
     </section>

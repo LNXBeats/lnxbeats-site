@@ -1,3 +1,6 @@
+
+import { T } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UiIcon } from "@/components/ui-icon";
@@ -12,6 +15,8 @@ import { getPublicCreation, listPublicCreations } from "@/lib/creations/queries"
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildCreationStructuredData } from "@/lib/seo/structured-data";
 import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
+import { LocalizedEditorial } from "@/components/localized-editorial";
+import { getSiteLocale, serverT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +44,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 export default async function CreationPage({ params }: { params: Promise<{ slug: string }> }) {
+  const locale = await getSiteLocale();
   const { slug } = await params;
   const [creation, allCreations] = await Promise.all([getPublicCreation(slug), listPublicCreations()]);
   if (!creation) {
@@ -71,23 +77,23 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
   return (
     <article className="creation-detail-page">
       <Container className="creation-detail-page__container">
-        <nav className="creation-detail-page__breadcrumb" aria-label="Fil d’Ariane">
-          <Link href="/creations">Créations</Link><span aria-hidden="true">/</span><span>{creation.title}</span>
+        <nav className="creation-detail-page__breadcrumb" aria-label={serverT(locale, "Fil d’Ariane")}>
+          <Link href="/creations"><T text="Créations"/></Link><span aria-hidden="true">/</span><OriginalName>{creation.title}</OriginalName>
         </nav>
         <CreationMediaStage creations={[creation]} showRail={false} showGrid={false} headingLevel="h1" />
 
         <div className="creation-detail-content">
           {creation.description ? (
             <section>
-              <p className="creation-detail-content__label">Le projet</p>
-              <h2>À propos de cette création.</h2>
-              <div className="creation-detail-content__prose">{creation.description}</div>
+              <p className="creation-detail-content__label"><T text="Le projet"/></p>
+              <h2><T text="À propos de cette création."/></h2>
+              <div className="creation-detail-content__prose"><LocalizedEditorial text={creation.description} names={[creation.title, ...(creation.collaborators ?? []).map(c => c.displayName)]}/></div>
             </section>
           ) : null}
           {creation.credits || creation.links.length ? (
             <aside>
-              {creation.credits ? <div><p className="creation-detail-content__label">Crédits</p><p className="creation-detail-content__credits">{creation.credits}</p></div> : null}
-              {creation.links.length ? <div><p className="creation-detail-content__label">Prolonger</p><ul>{creation.links.map((link) => <li key={link.id}><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}<span aria-hidden="true"><UiIcon name="arrow-up-right" /></span></a></li>)}</ul></div> : null}
+              {creation.credits ? <div><p className="creation-detail-content__label"><T text="Crédits"/></p><p className="creation-detail-content__credits">{creation.credits}</p></div> : null}
+              {creation.links.length ? <div><p className="creation-detail-content__label"><T text="Prolonger"/></p><ul>{creation.links.map((link) => <li key={link.id}><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}<span aria-hidden="true"><UiIcon name="arrow-up-right" /></span></a></li>)}</ul></div> : null}
             </aside>
           ) : null}
         </div>
@@ -96,8 +102,8 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
 
         {related.length ? (
           <section className="creation-related" aria-labelledby="creation-related-title">
-            <div><p className="creation-detail-content__label">À suivre</p><h2 id="creation-related-title">D’autres rencontres.</h2></div>
-            <div>{related.map((item) => <Link href={`/creations/${item.slug}`} key={item.slug}><span>{item.category || "Création"}</span><strong>{item.title}</strong><small>Découvrir <span aria-hidden="true"><UiIcon name="arrow-right" /></span></small></Link>)}</div>
+            <div><p className="creation-detail-content__label"><T text="À suivre"/></p><h2 id="creation-related-title"><T text="D’autres rencontres."/></h2></div>
+            <div>{related.map((item) => <Link href={`/creations/${item.slug}`} key={item.slug}><span><T text={item.category || "Création"}/></span><strong><OriginalName>{item.title}</OriginalName></strong><small><T text="Découvrir"/> <span aria-hidden="true"><UiIcon name="arrow-right" /></span></small></Link>)}</div>
           </section>
         ) : null}
       </Container>

@@ -1,3 +1,5 @@
+
+import { T } from "@/components/site-language";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,5 +12,5 @@ export const dynamic = "force-dynamic";
 export default async function ConfirmationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) notFound();
-  return <section className={styles.hero}><Container><div className={`${styles.panel} ${styles.confirmation}`}><p className="eyebrow">Soutenir LNX Beats</p><SupportConfirmation id={id} /><p><Link href="/contact">Une question ? Contacter LNX Beats</Link></p></div></Container></section>;
+  return <section className={styles.hero}><Container><div className={`${styles.panel} ${styles.confirmation}`}><p className="eyebrow"><T text="Soutenir LNX Beats" /></p><SupportConfirmation id={id} /><p><Link href="/contact"><T text="Une question ? Contacter LNX Beats" /></Link></p></div></Container></section>;
 }

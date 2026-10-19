@@ -3,6 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { UiIcon } from "@/components/ui-icon";
+import { T, useSiteLanguage } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
+import { LocalizedEditorial } from "@/components/localized-editorial";
+import { editorialSafeTranslation } from "@/lib/i18n/editorial-content";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -92,13 +96,14 @@ function CreationArtwork({
   className?: string;
   asset?: PublicCreationAsset | null;
 }) {
+  const { t } = useSiteLanguage();
   const artwork = asset ?? creationArtwork(creation);
   return (
     <div className={`creation-artwork ${className}`} data-has-artwork={Boolean(artwork)}>
       {artwork ? (
         <Image
           src={artwork.url}
-          alt={artwork.alt || `Visuel de ${creation.title}`}
+          alt={artwork.alt ? editorialSafeTranslation(artwork.alt, t(artwork.alt), [creation.title]) : t("Visuel de {title}", { title: creation.title })}
           fill
           unoptimized
           priority={priority}
@@ -106,9 +111,9 @@ function CreationArtwork({
           sizes="(max-width: 820px) 92vw, (max-width: 1440px) 58vw, 900px"
         />
       ) : (
-        <div className="creation-artwork__fallback" aria-label={`Visuel de ${creation.title}`}>
-          <span>LNX</span>
-          <strong>{creation.title}</strong>
+        <div className="creation-artwork__fallback" aria-label={t("Visuel de {title}", { title: creation.title })}>
+          <OriginalName>LNX</OriginalName>
+          <strong><OriginalName>{creation.title}</OriginalName></strong>
         </div>
       )}
     </div>
@@ -146,6 +151,7 @@ export function CreationMediaStage({
   showGrid = true,
   headingLevel = "h2",
 }: CreationMediaStageProps) {
+  const { t } = useSiteLanguage();
   const safeInitialIndex = Math.max(0, creations.findIndex((creation) => creation.slug === initialSlug));
   const initialCreation = creations[safeInitialIndex] ?? creations[0];
   const initialMode = initialCreation ? primaryPresentationMedia(initialCreation) : "cover";
@@ -435,7 +441,7 @@ export function CreationMediaStage({
                 poster={selected.poster?.url ?? selected.cover?.url ?? undefined}
                 tabIndex={videoVisible ? 0 : -1}
                 aria-hidden={!videoVisible}
-                aria-label={`Vidéo de ${loadedMedia.video ? creations.find((creation) => creation.slug === loadedMedia.video)?.title ?? selected.title : selected.title}`}
+                aria-label={t("Vidéo de {title}", { title: loadedMedia.video ? creations.find((creation) => creation.slug === loadedMedia.video)?.title ?? selected.title : selected.title })}
                 onLoadedMetadata={(event) => restoreRememberedPosition("video", event.currentTarget)}
                 onCanPlay={() => {
                   const slug = loadedRef.current.video;
@@ -466,14 +472,14 @@ export function CreationMediaStage({
                   if (slug && !recoverExpiredMedia("video")) setFailedMedia(mediaKey(slug, "video"));
                 }}
               >
-                Votre navigateur ne peut pas lire cette vidéo MP4.
+                <T text="Votre navigateur ne peut pas lire cette vidéo MP4."/>
               </video>
             ) : null}
             {state.selectedMedia === "video" && selected.video && !videoVisible ? (
               <button
                 className="creation-stage__launch"
                 type="button"
-                aria-label={`Lire la vidéo de ${selected.title}`}
+                aria-label={t("Lire la vidéo de {title}", { title: selected.title })}
                 onClick={() => void play("video", selected)}
               >
                 <UiIcon name="play" />
@@ -482,7 +488,7 @@ export function CreationMediaStage({
           </div>
 
           {selectedMediaKinds.length > 1 ? (
-            <div className="creation-stage__media-tabs" role="group" aria-label={`Médias de ${selected.title}`}>
+            <div className="creation-stage__media-tabs" role="group" aria-label={t("Médias de {title}", { title: selected.title })}>
               {selectedMediaKinds.map((kind) => (
                 <button
                   type="button"
@@ -490,7 +496,7 @@ export function CreationMediaStage({
                   aria-pressed={state.selectedMedia === kind}
                   onClick={() => selectMedia(kind, selected)}
                 >
-                  {mediaLabel(kind)}
+                  {t(mediaLabel(kind))}
                 </button>
               ))}
             </div>
@@ -498,15 +504,15 @@ export function CreationMediaStage({
 
           {state.selectedMedia === "audio" && selected.audio ? (
             <div className="creation-stage__audio-player">
-              <button className="creation-stage__audio-toggle" type="button" onClick={() => void play("audio", displayedAudio)} aria-label={displayedAudioActive ? `Mettre en pause ${displayedAudio.title}` : `Lire ${displayedAudio.title}`}>
+              <button className="creation-stage__audio-toggle" type="button" onClick={() => void play("audio", displayedAudio)} aria-label={t(displayedAudioActive ? "Mettre en pause {title}" : "Lire {title}", { title: displayedAudio.title })}>
                 <UiIcon name={displayedAudioActive ? "pause" : "play"} />
               </button>
               <div className="creation-stage__audio-metadata">
-                <strong>{displayedAudio.title}</strong>
-                <span>{creationCollaboratorNames(displayedAudio).length ? `avec ${creationCollaboratorNames(displayedAudio).join(", ")}` : "LNX Beats"}</span>
+                <strong><OriginalName>{displayedAudio.title}</OriginalName></strong>
+                <span>{creationCollaboratorNames(displayedAudio).length ? <T text="avec {names}" values={{ names: creationCollaboratorNames(displayedAudio).join(", ") }}/> : <OriginalName>LNX Beats</OriginalName>}</span>
               </div>
               <div className="creation-stage__audio-progress"><label>
-                <span className="visually-hidden">Position dans l’audio de {displayedAudio.title}</span>
+                <span className="visually-hidden"><T text="Position dans l’audio de {title}" values={{ title: displayedAudio.title }}/></span>
                 <input
                   type="range"
                   min="0"
@@ -523,30 +529,30 @@ export function CreationMediaStage({
           ) : null}
           {state.selectedMedia === "audio" && selected.audio && displayedAudio.slug !== selected.slug ? (
             <button className="creation-stage__play-selection" type="button" onClick={() => void play("audio", selected)}>
-              Lire la sélection : {selected.title} <UiIcon name="play" />
+              <T text="Lire la sélection : {title}" values={{ title: selected.title }}/> <UiIcon name="play" />
             </button>
           ) : null}
           {(state.selectedMedia === "audio" || state.selectedMedia === "video")
             && failedMedia === mediaKey(selected.slug, state.selectedMedia)
-            ? <p className="creation-stage__error" role="status">Ce média ne peut pas être lu pour le moment.</p>
+            ? <p className="creation-stage__error" role="status"><T text="Ce média ne peut pas être lu pour le moment."/></p>
             : null}
         </div>
 
         <div className="creation-stage__copy">
-          <p className="creation-stage__eyebrow">{selected.category || "Création originale"}</p>
-          <Heading id={headingId}>{selected.title}</Heading>
-          {creationCollaboratorNames(selected).length ? <p className="creation-stage__collaborator">Avec <strong>{creationCollaboratorNames(selected).join(" · ")}</strong></p> : null}
-          <p className="creation-stage__summary">{selected.summary}</p>
+          <p className="creation-stage__eyebrow"><LocalizedEditorial text={selected.category || "Création originale"}/></p>
+          <Heading id={headingId}><OriginalName>{selected.title}</OriginalName></Heading>
+          {creationCollaboratorNames(selected).length ? <p className="creation-stage__collaborator"><T text="Avec"/> <strong><OriginalName>{creationCollaboratorNames(selected).join(" · ")}</OriginalName></strong></p> : null}
+          <p className="creation-stage__summary"><LocalizedEditorial text={selected.summary} names={[selected.title, ...creationCollaboratorNames(selected)]}/></p>
           <p className={state.activeMedia ? "creation-stage__playing-state" : "visually-hidden"} aria-live="polite">
             <span aria-hidden="true" data-playing={Boolean(state.activeMedia)} />
-            {mediaStateLabel}
+            {state.activeMedia && activeCreation ? <T text="{kind} en lecture · {title}" values={{ kind: t(state.activeMedia.kind === "video" ? "Vidéo" : "Audio"), title: activeCreation.title }}/> : <T text={mediaStateLabel}/>}
           </p>
           {activeCreation && activeCreation.slug !== selected.slug ? (
-            <p className="creation-stage__selection-note">Vous regardez <strong>{selected.title}</strong> pendant que <strong>{activeCreation.title}</strong> reste en lecture.</p>
+            <p className="creation-stage__selection-note"><T text="Vous regardez {selected} pendant que {active} reste en lecture." values={{ selected: selected.title, active: activeCreation.title }}/></p>
           ) : null}
           {showGrid ? (
             <div className="creation-stage__actions">
-              <Link href={`/creations/${selected.slug}`}>Découvrir la création <UiIcon name="arrow-right" /></Link>
+              <Link href={`/creations/${selected.slug}`}><T text="Découvrir la création"/> <UiIcon name="arrow-right" /></Link>
             </div>
           ) : null}
         </div>
@@ -598,7 +604,7 @@ export function CreationMediaStage({
       />
 
       {showGrid ? (
-        <div className="creation-filters" role="group" aria-label="Filtrer les créations">
+        <div className="creation-filters" role="group" aria-label={t("Filtrer les créations")}>
           {creationFilters.map((filter) => (
             <button
               type="button"
@@ -610,15 +616,15 @@ export function CreationMediaStage({
                 if (next && !matchesCreationFilter(selected, filter.id)) selectCreation(next);
               }}
             >
-              <span>{filter.label}</span>
-              <small aria-label={`${filterCounts[filter.id]} créations`}>{filterCounts[filter.id]}</small>
+              <span>{t(filter.label)}</span>
+              <small aria-label={t("{count} créations", { count: filterCounts[filter.id] })}>{filterCounts[filter.id]}</small>
             </button>
           ))}
         </div>
       ) : null}
 
       {showRail && filteredCreations.length > 1 ? (
-        <div className="creation-rail" ref={railRef} role="group" aria-label="Parcourir les créations" onKeyDown={railKeyboard}>
+        <div className="creation-rail" ref={railRef} role="group" aria-label={t("Parcourir les créations")} onKeyDown={railKeyboard}>
           {filteredCreations.map((creation) => {
             const itemArtwork = creationArtwork(creation);
             return (
@@ -630,10 +636,10 @@ export function CreationMediaStage({
                 onClick={() => selectCreation(creation)}
               >
                 <span className="creation-rail__art">
-                  {itemArtwork ? <Image src={itemArtwork.url} alt="" fill unoptimized sizes="160px" /> : <span>LNX</span>}
+                  {itemArtwork ? <Image src={itemArtwork.url} alt="" fill unoptimized sizes="160px" /> : <OriginalName>LNX</OriginalName>}
                 </span>
-                <span className="creation-rail__copy"><strong>{creation.title}</strong><small>{creation.category || "Création"}</small></span>
-                <span className="creation-rail__media" aria-label={[creation.audio ? "audio" : null, creation.video ? "vidéo" : null].filter(Boolean).join(" et ")}>{creation.audio ? <UiIcon name="music" /> : null}{creation.video ? <UiIcon name="play" /> : null}</span>
+                <span className="creation-rail__copy"><strong><OriginalName>{creation.title}</OriginalName></strong><small><LocalizedEditorial text={creation.category || "Création"}/></small></span>
+                <span className="creation-rail__media" aria-label={[creation.audio ? t("Audio") : null, creation.video ? t("Vidéo") : null].filter(Boolean).join(` ${t("et")} `)}>{creation.audio ? <UiIcon name="music" /> : null}{creation.video ? <UiIcon name="play" /> : null}</span>
               </button>
             );
           })}
@@ -642,20 +648,20 @@ export function CreationMediaStage({
 
       {showGrid ? (
         <div className="creation-catalogue">
-          <div className="creation-catalogue__heading"><p>Le répertoire</p><h2>Toutes les créations.</h2></div>
+          <div className="creation-catalogue__heading"><p><T text="Le répertoire"/></p><h2><T text="Toutes les créations."/></h2></div>
           {filteredCreations.length ? <div className="creation-catalogue__grid">
             {filteredCreations.map((creation) => (
               <Link href={`/creations/${creation.slug}`} key={creation.slug} className="creation-card">
                 <CreationArtwork creation={creation} />
                 <span className="creation-card__body">
-                  <small>{creation.category || "Création"}{creationCollaboratorNames(creation).length ? ` · avec ${creationCollaboratorNames(creation).join(", ")}` : ""}</small>
-                  <strong>{creation.title}</strong>
-                  <span>{creation.audio ? "Audio" : ""}{creation.audio && creation.video ? " + " : ""}{creation.video ? "Vidéo" : ""}</span>
+                  <small><LocalizedEditorial text={creation.category || "Création"}/>{creationCollaboratorNames(creation).length ? <> · <T text="avec {names}" values={{ names: creationCollaboratorNames(creation).join(", ") }}/></> : null}</small>
+                  <strong><OriginalName>{creation.title}</OriginalName></strong>
+                  <span>{creation.audio ? t("Audio") : ""}{creation.audio && creation.video ? " + " : ""}{creation.video ? t("Vidéo") : ""}</span>
                 </span>
               </Link>
             ))}
           </div> : (
-            <p className="creation-catalogue__empty" role="status">Aucune création ne correspond à ce filtre pour le moment.</p>
+            <p className="creation-catalogue__empty" role="status"><T text="Aucune création ne correspond à ce filtre pour le moment."/></p>
           )}
         </div>
       ) : null}

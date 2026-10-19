@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSiteLanguage } from "@/components/site-language";
+import { formatEuro } from "@/lib/orders/domain";
 
 import { checkoutPaymentChoicePresentation, checkoutPaymentCtaLabel } from "@/lib/payments/presentation";
 
@@ -25,6 +27,7 @@ export function StripeCheckoutAction({
   target?: "music" | "shop";
   termsAccepted?: boolean;
 }) {
+  const { t, money } = useSiteLanguage();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -74,10 +77,10 @@ export function StripeCheckoutAction({
   return (
     <div className={compact ? "checkout-action checkout-action--compact" : "checkout-action"}>
       <button className="form-button form-button--primary" type="button" onClick={startCheckout} disabled={pending}>
-        {pending ? "Préparation sécurisée…" : checkoutPaymentCtaLabel("stripe", amountCents, target)}
+        {pending ? t("Préparation sécurisée…") : t(checkoutPaymentCtaLabel("stripe", amountCents, target).replace(formatEuro(amountCents), "{amount}"), { amount: money(amountCents) })}
       </button>
-      <small>{checkoutPaymentChoicePresentation.stripe.assurance}</small>
-      {message ? <p className="form-message form-message--error" role="alert">{message}</p> : null}
+      <small>{t(checkoutPaymentChoicePresentation.stripe.assurance)}</small>
+      {message ? <p className="form-message form-message--error" role="alert">{t(message)}</p> : null}
     </div>
   );
 }

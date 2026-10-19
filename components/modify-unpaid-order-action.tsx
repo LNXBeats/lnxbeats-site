@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/components/site-language";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -21,5 +22,5 @@ export function ModifyUnpaidOrderAction({ orderNumber }: { orderNumber: string }
       setPending(false);
     }
   }
-  return <div className="modify-unpaid-order"><button className="form-button" type="button" onClick={prepareEdit} disabled={pending}>{pending ? "Fermeture du paiement…" : "Modifier ma commande"}</button>{error ? <p role="alert">{error}</p> : null}</div>;
+  return <div className="modify-unpaid-order"><button className="form-button" type="button" onClick={prepareEdit} disabled={pending}>{pending ? <T text="Fermeture du paiement…" /> : <T text="Modifier ma commande" />}</button>{error ? <p role="alert">{<T text={error} />}</p> : null}</div>;
 }

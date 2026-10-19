@@ -68,7 +68,7 @@ test("mobile cart: prices cannot break while long titles can shrink, and all rem
   assert.match(css, /\.cartIdentity\s*\{[^}]*min-width:0/);
   assert.match(css, /\.cartAmount\s*\{[^}]*white-space:nowrap;[^}]*overflow-wrap:normal;[^}]*word-break:normal;[^}]*flex-shrink:0/);
   assert.match(css, /\.cartRemove\s*\{[^}]*min-height:44px/);
-  assert.match(cart, /aria-label=\{`Retirer \$\{l\.title\} du panier`\}/);
+  assert.match(cart, /aria-label=\{t\("Retirer \{title\} du panier", \{ title: l\.title \}\)\}/);
   assert.ok(cart.includes('window.location.assign("/musique/checkout")'));
   assert.ok(!cart.includes('router.push("/musique/checkout")'));
   assert.ok(cart.includes('href="/discographie"'));
@@ -79,7 +79,9 @@ test("mobile cart: navigation uses normalized quote counts and preserves public/
   const nav = await source("components/digital-navigation.tsx"), footer = await source("components/site-footer.tsx"), library = await source("components/digital-library.tsx");
   assert.ok(nav.includes('fetch("/api/digital/quote"'));
   assert.ok(nav.includes('JSON.stringify(readDigitalCart()) !== key'));
-  assert.ok(nav.includes('if (confirmed !== key) writeDigitalCart(quoted)'));
+  assert.ok(nav.includes('if (confirmed !== key) writeDigitalCart(quoted.ids)'));
+  assert.ok(nav.includes('if (!ids.length) { confirmed = ""; setTotalCents(null); setChecking(false); return; }'));
+  assert.match(nav, /if \(key === confirmed\)[\s\S]*?confirmed = "";\s*setTotalCents\(null\)/);
   assert.ok(nav.includes('aria-busy={checking}'));
   assert.ok(nav.includes('role="status" aria-live="polite"'));
   assert.ok(nav.includes('href="/discographie"'));

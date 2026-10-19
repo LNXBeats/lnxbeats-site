@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/site-language";
+
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -168,8 +170,8 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
   if (stage === "complete") {
     return (
       <div className="auth-form" aria-live="polite">
-        <p className="auth-form__success">{message}</p>
-        <Link className="auth-submit" href={`/connexion?retour=${encodeURIComponent(returnTo)}`}><span>Me connecter et reprendre</span><span aria-hidden="true">→</span></Link>
+        <p className="auth-form__success"><T text={message}/></p>
+        <Link className="auth-submit" href={`/connexion?retour=${encodeURIComponent(returnTo)}`}><span><T text="Me connecter et reprendre"/></span><span aria-hidden="true">→</span></Link>
       </div>
     );
   }
@@ -177,9 +179,9 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
   if (stage === "existing") {
     return (
       <div className="auth-form" aria-live="polite">
-        <p className="auth-form__success">{message}</p>
-        <Link className="auth-submit" href={`/connexion?retour=${encodeURIComponent(returnTo)}`}><span>Revenir à la connexion</span><span aria-hidden="true">→</span></Link>
-        <p className="auth-panel__note"><Link href="/mot-de-passe-oublie">Mot de passe oublié&nbsp;?</Link></p>
+        <p className="auth-form__success"><T text={message}/></p>
+        <Link className="auth-submit" href={`/connexion?retour=${encodeURIComponent(returnTo)}`}><span><T text="Revenir à la connexion"/></span><span aria-hidden="true">→</span></Link>
+        <p className="auth-panel__note"><Link href="/mot-de-passe-oublie"><T text="Mot de passe oublié ?"/></Link></p>
       </div>
     );
   }
@@ -188,19 +190,19 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
     return (
       <form className="auth-form" onSubmit={handleCode} aria-describedby={error ? "registration-error" : undefined}>
         <div className="auth-form__heading">
-          <h2>Entrez le code reçu.</h2>
-          <p>Six chiffres, valables dix minutes. Le dernier envoi remplace les précédents.</p>
+          <h2><T text="Entrez le code reçu."/></h2>
+          <p><T text="Six chiffres, valables dix minutes. Le dernier envoi remplace les précédents."/></p>
         </div>
         <div className="auth-field auth-field--code">
-          <label htmlFor="registration-code">Code de vérification</label>
+          <label htmlFor="registration-code"><T text="Code de vérification"/></label>
           <input key="registration-code" ref={firstFieldRef} id="registration-code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required />
         </div>
-        {error ? <p className="auth-form__error" id="registration-error" role="alert">{error}</p> : null}
-        {message ? <p className="auth-form__success" role="status">{message}</p> : null}
-        <button className="auth-submit" type="submit" disabled={pending}><span>{pending ? "Vérification…" : "Valider le code"}</span><span aria-hidden="true">→</span></button>
+        {error ? <p className="auth-form__error" id="registration-error" role="alert"><T text={error}/></p> : null}
+        {message ? <p className="auth-form__success" role="status"><T text={message}/></p> : null}
+        <button className="auth-submit" type="submit" disabled={pending}><span>{pending ? <T text="Vérification…"/> : <T text="Valider le code"/>}</span><span aria-hidden="true">→</span></button>
         <div className="auth-form__secondary-actions">
-          <button type="button" onClick={handleResend} disabled={pending}>Recevoir un nouveau code</button>
-          <button type="button" onClick={() => { resetFeedback(); setStage("email"); }} disabled={pending}>Changer d’adresse</button>
+          <button type="button" onClick={handleResend} disabled={pending}><T text="Recevoir un nouveau code"/></button>
+          <button type="button" onClick={() => { resetFeedback(); setStage("email"); }} disabled={pending}><T text="Changer d’adresse"/></button>
         </div>
       </form>
     );
@@ -210,20 +212,20 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
     return (
       <form className="auth-form" onSubmit={handlePassword} aria-describedby={error ? "registration-error" : "registration-password-help"}>
         <div className="auth-form__heading">
-          <h2>Votre adresse est vérifiée.</h2>
-          <p>{maskedEmail}. Il reste à protéger votre espace.</p>
+          <h2><T text="Votre adresse est vérifiée."/></h2>
+          <p><span translate="no" className="notranslate">{maskedEmail}</span>. <T text="Il reste à protéger votre espace."/></p>
         </div>
         <div className="auth-field">
-          <label htmlFor="registration-password">Mot de passe</label>
+          <label htmlFor="registration-password"><T text="Mot de passe"/></label>
           <input key="registration-password" ref={firstFieldRef} id="registration-password" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
-          <p className="auth-field__help" id="registration-password-help">12 à 128 caractères. Une phrase de passe est acceptée.</p>
+          <p className="auth-field__help" id="registration-password-help"><T text="12 à 128 caractères. Une phrase de passe est acceptée."/></p>
         </div>
         <div className="auth-field">
-          <label htmlFor="registration-password-confirmation">Confirmer le mot de passe</label>
+          <label htmlFor="registration-password-confirmation"><T text="Confirmer le mot de passe"/></label>
           <input id="registration-password-confirmation" name="passwordConfirmation" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
         </div>
-        {error ? <p className="auth-form__error" id="registration-error" role="alert">{error}</p> : null}
-        <button className="auth-submit" type="submit" disabled={pending}><span>{pending ? "Création…" : "Créer mon espace"}</span><span aria-hidden="true">→</span></button>
+        {error ? <p className="auth-form__error" id="registration-error" role="alert"><T text={error}/></p> : null}
+        <button className="auth-submit" type="submit" disabled={pending}><span>{pending ? <T text="Création…"/> : <T text="Créer mon espace"/>}</span><span aria-hidden="true">→</span></button>
       </form>
     );
   }
@@ -231,15 +233,15 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
   return (
     <form className="auth-form" onSubmit={handleEmail} aria-describedby={error ? "registration-error" : "registration-email-help"}>
       <div className="auth-form__heading">
-        <h2>Commençons par votre adresse.</h2>
-        <p id="registration-email-help">Aucun compte n’est créé avant sa vérification.</p>
+        <h2><T text="Commençons par votre adresse."/></h2>
+        <p id="registration-email-help"><T text="Aucun compte n’est créé avant sa vérification."/></p>
       </div>
       <div className="auth-field">
-        <label htmlFor="registration-email">Adresse email</label>
+        <label htmlFor="registration-email"><T text="Adresse email"/></label>
         <input key="registration-email" ref={firstFieldRef} id="registration-email" name="email" type="email" autoComplete="email" required maxLength={320} defaultValue={email} />
       </div>
-      {error ? <p className="auth-form__error" id="registration-error" role="alert">{error}</p> : null}
-      <button className="auth-submit" type="submit" disabled={pending}><span>{pending ? "Préparation…" : "Recevoir mon code"}</span><span aria-hidden="true">→</span></button>
+      {error ? <p className="auth-form__error" id="registration-error" role="alert"><T text={error}/></p> : null}
+      <button className="auth-submit" type="submit" disabled={pending}><span>{pending ? <T text="Préparation…"/> : <T text="Recevoir mon code"/>}</span><span aria-hidden="true">→</span></button>
     </form>
   );
 }

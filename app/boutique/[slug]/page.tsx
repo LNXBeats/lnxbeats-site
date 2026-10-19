@@ -7,12 +7,15 @@ import { ShopAddButton } from "@/components/shop-add-button";
 import { JsonLd } from "@/components/json-ld";
 import { Container } from "@/components/container";
 import { ShopProductMedia } from "@/components/shop-product-media";
-import { formatShopMoney } from "@/lib/shop/order-presentation";
 import { getPublicShopProduct } from "@/lib/shop/order-service";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildProductStructuredData } from "@/lib/seo/structured-data";
 import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
 import { automaticSeoSummary } from "@/lib/seo/summary";
+import { T } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
+import { getSiteLocale, serverMoney } from "@/lib/i18n/server";
+import { LocalizedEditorial } from "@/components/localized-editorial";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,7 @@ export async function generateMetadata({ params }: Context): Promise<Metadata> {
 }
 
 export default async function ShopProductPage({ params }: Context) {
+  const locale = await getSiteLocale();
   const { slug } = await params;
   const product = await getPublicShopProduct(slug);
   if (!product) {
@@ -45,7 +49,7 @@ export default async function ShopProductPage({ params }: Context) {
     <div className="shop-commerce-shell shop-product-page">
       <JsonLd id="lnx-product-structured-data" data={buildProductStructuredData(product)} />
       <Container>
-        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Retour à la Boutique</Link>
+        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> <T text="Retour à la Boutique" /></Link>
         <article className="shop-product-detail">
           <div className="shop-product-detail__image">
             <ShopProductMedia
@@ -56,24 +60,24 @@ export default async function ShopProductPage({ params }: Context) {
             />
           </div>
           <div className="shop-product-detail__copy">
-            <p className="eyebrow">Édition LNX Beats</p>
-            <h1>{product.title}</h1>
-            <p className="shop-product-detail__description">{product.description}</p>
-            {product.merchantColor ? <p>Couleur : {product.merchantColor}</p> : null}
-            <strong className="shop-product-detail__price">{formatShopMoney(product.priceCents)}</strong>
+            <p className="eyebrow"><T text="Édition LNX Beats" /></p>
+            <h1><OriginalName>{product.title}</OriginalName></h1>
+            <p className="shop-product-detail__description"><LocalizedEditorial text={product.description} names={[product.title]}/></p>
+            {product.merchantColor ? <p><T text="Couleur :" /> {product.merchantColor}</p> : null}
+            <strong className="shop-product-detail__price">{serverMoney(locale, product.priceCents)}</strong>
             <p className="shop-product-detail__availability">
-              {product.availabilityState === "SOLD_OUT"
+              <T text={product.availabilityState === "SOLD_OUT"
                 ? "Ce produit est épuisé."
                 : product.availabilityState === "TEMPORARILY_UNAVAILABLE"
                   ? "Indisponible temporairement : les derniers exemplaires sont réservés pendant un paiement."
-                : "Disponible."}
+                : "Disponible."}/>
             </p>
             {product.shippingRequired ? (
               <p className="shop-product-detail__shipping">
-                <strong>Livraison Colissimo à domicile avec signature</strong>
-                <span>France métropolitaine uniquement · frais calculés selon le poids du panier.</span>
+                <strong><T text="Livraison Colissimo à domicile avec signature" /></strong>
+                <span><T text="France métropolitaine uniquement · frais calculés selon le poids du panier." /></span>
               </p>
-            ) : <p className="shop-product-detail__shipping">Aucun envoi postal requis.</p>}
+            ) : <p className="shop-product-detail__shipping"><T text="Aucun envoi postal requis." /></p>}
             <ShopAddButton
               disabled={product.soldOut}
               maxQuantity={product.availableQuantity}
@@ -81,7 +85,7 @@ export default async function ShopProductPage({ params }: Context) {
               showQuantity
               unavailableLabel={product.availabilityState === "TEMPORARILY_UNAVAILABLE" ? "Temporairement indisponible" : "Épuisé"}
             />
-            <p className="shop-product-detail__notice">Votre panier ne déclenche aucun paiement. Prix, poids, livraison et stock seront revérifiés par le serveur lors de la préparation de la commande.</p>
+            <p className="shop-product-detail__notice"><T text="Votre panier ne déclenche aucun paiement. Prix, poids, livraison et stock seront revérifiés par le serveur lors de la préparation de la commande." /></p>
           </div>
         </article>
       </Container>

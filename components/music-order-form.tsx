@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { ContractLanguageNotice, T, useSiteLanguage } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
+import { localeIntl } from "@/lib/i18n/config";
 import { UiIcon } from "@/components/ui-icon";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -14,14 +17,12 @@ import { earlyPerformanceConsentWording, orderOffer, orderPricingForVersion } fr
 import { personalUseTerms } from "@/data/rights-offer";
 import {
   calculateOrderPrice,
-  formatEuro,
   orderTextLimits,
   type OrderDraftInput,
   validateOrderForSubmission,
 } from "@/lib/orders/domain";
 import type { SerializedOrder, SerializedOrderPhoto } from "@/lib/orders/types";
 import { photoSelectionError, uploadOrderPhoto, uploadPhotoQueue, type PhotoUploadState } from "@/lib/orders/photo-upload-client";
-import { getOrderProductionSummary } from "@/lib/orders/production-summary";
 import type { PaymentProviderAvailability } from "@/lib/payments/availability";
 
 const musicalDirections = [
@@ -127,6 +128,25 @@ export function MusicOrderForm({
   paymentProviders: PaymentProviderAvailability;
   resumeJourney?: boolean;
 }) {
+  const { t, locale, money } = useSiteLanguage();
+  const numberLocale = localeIntl(locale);
+  const text = (source: string, values: Record<string, string | number>) => t(source).replace(/\{(\w+)\}/g, (token, key: string) => String(values[key] ?? token));
+  const displayMessage = (source: string) => {
+    const restored = /^Commande (.+) reprise\.$/.exec(source);
+    if (restored) return text("Commande {number} reprise.", { number: restored[1] });
+    const minimum = /^(?:Racontez l’histoire en au moins|L’histoire doit contenir au moins) (\d+) caractères\.$/.exec(source);
+    if (minimum) return text("Racontez l’histoire en au moins {count} caractères.", { count: minimum[1] });
+    const limit = /^Ce champ dépasse la limite de (.+) caractères\.$/.exec(source);
+    if (limit) return text("Ce champ dépasse la limite de {count} caractères.", { count: limit[1] });
+    return t(source);
+  };
+  const illustrationLabel = () => {
+    const option = orderIllustrationFormatOptions.find(({ value }) => value === form.illustrationFormat);
+    if (!option) return t(form.illustrationFormat ? "Non reconnu dans cette commande" : "Non précisé à la commande");
+    return option.value === "CUSTOM"
+      ? `${t(option.label)} — ${form.illustrationFormatCustom || t("précision non renseignée")}`
+      : `${t(option.label)} — ${option.ratio}`;
+  };
   const router = useRouter();
   const journey = useOrderJourneyMemory();
   const remembered = journey.memory;
@@ -175,18 +195,18 @@ export function MusicOrderForm({
   const errorBelongsToCurrentStep = errorField !== null && errorFieldSteps[errorField] === step;
   const liveSummaryContent = (
     <div className="order-aside__content">
-      <p className="eyebrow">Récapitulatif en temps réel</p>
+      <p className="eyebrow"><T text="Récapitulatif en temps réel"/></p>
       <dl className="order-aside__summary">
-        <div><dt>Création personnelle</dt><dd>{formatEuro(pricing.basePriceCents)}</dd></div>
-        <div><dt>Illustration personnalisée</dt><dd>{form.coverIncluded ? `+ ${formatEuro(pricing.coverPriceCents)}` : "Non sélectionnée"}</dd></div>
-        {form.coverIncluded ? <div><dt>Format de l’illustration</dt><dd>{getOrderProductionSummary(form).formatLabel}</dd></div> : null}
-        <div><dt>Traitement prioritaire</dt><dd>{form.priorityProcessing ? `+ ${formatEuro(pricing.priorityPriceCents)}` : "Non sélectionné"}</dd></div>
+        <div><dt><T text="Création personnelle"/></dt><dd>{money(pricing.basePriceCents)}</dd></div>
+        <div><dt><T text="Illustration personnalisée"/></dt><dd>{form.coverIncluded ? `+ ${money(pricing.coverPriceCents)}` : t("Non sélectionnée")}</dd></div>
+        {form.coverIncluded ? <div><dt><T text="Format de l’illustration"/></dt><dd>{illustrationLabel()}</dd></div> : null}
+        <div><dt><T text="Traitement prioritaire"/></dt><dd>{form.priorityProcessing ? `+ ${money(pricing.priorityPriceCents)}` : t("Non sélectionné")}</dd></div>
       </dl>
-      <div className="order-aside__total"><span>Total actualisé</span><strong>{formatEuro(pricing.totalCents)}</strong></div>
-      <p className="order-aside__maximum">Total maximum : {formatEuro(maximumPriceCents)}</p>
+      <div className="order-aside__total"><span><T text="Total actualisé"/></span><strong>{money(pricing.totalCents)}</strong></div>
+      <p className="order-aside__maximum"><T text="Total maximum :"/> {money(maximumPriceCents)}</p>
       <div className="order-aside__assurance">
-        <strong>{hasPaymentProvider ? "Paiement sécurisé" : "Données protégées"}</strong>
-        <span>{hasPaymentProvider ? "Votre brief et vos références restent protégés." : "Aucun paiement n’est proposé tant qu’aucun moyen sécurisé n’est disponible."}</span>
+        <strong>{hasPaymentProvider ? t("Paiement sécurisé") : t("Données protégées")}</strong>
+        <span>{hasPaymentProvider ? t("Votre brief et vos références restent protégés.") : t("Aucun paiement n’est proposé tant qu’aucun moyen sécurisé n’est disponible.")}</span>
       </div>
     </div>
   );
@@ -573,7 +593,7 @@ export function MusicOrderForm({
   }
 
   async function deleteDraft() {
-    if (!orderNumber || orderStatus !== "DRAFT" || !window.confirm("Supprimer définitivement ce brouillon et ses références privées ?")) return;
+    if (!orderNumber || orderStatus !== "DRAFT" || !window.confirm(t("Supprimer définitivement ce brouillon et ses références privées ?"))) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}`, { method: "DELETE" });
@@ -608,19 +628,19 @@ export function MusicOrderForm({
 
   return (
     <>
-    <aside className="order-aside order-aside--live" aria-label="Récapitulatif de la création">
+    <aside className="order-aside order-aside--live" aria-label={t("Récapitulatif de la création")}>
       <div className="order-aside__desktop">{liveSummaryContent}</div>
       <details className="order-aside__disclosure order-aside__mobile">
-        <summary><span>Repères du projet</span><strong>{formatEuro(pricing.totalCents)}</strong></summary>
+        <summary><span><T text="Repères du projet"/></span><strong>{money(pricing.totalCents)}</strong></summary>
         {liveSummaryContent}
       </details>
     </aside>
     <form className="order-form order-form--connected order-form--premium" aria-busy={busy} onSubmit={(event) => event.preventDefault()}>
-      <nav className="order-progress-shell" aria-label="Étapes de la commande">
+      <nav className="order-progress-shell" aria-label={t("Étapes de la commande")}>
         <p className="order-progress__summary" aria-live="polite">
-          <span>Étape {step + 1} sur {steps.length}</span>
-          <strong>{steps[step]}</strong>
-          <progress max={steps.length} value={step + 1} aria-label={`Progression : étape ${step + 1} sur ${steps.length}`} />
+          <span><T text="Étape"/> {step + 1} <T text="sur"/> {steps.length}</span>
+          <strong>{t(steps[step])}</strong>
+          <progress max={steps.length} value={step + 1} aria-label={text("Progression : étape {v0} sur {v1}", { v0: step + 1, v1: steps.length })} />
         </p>
         <div className="order-progress" ref={progressRef}>
         {steps.map((label, index) => (
@@ -630,12 +650,12 @@ export function MusicOrderForm({
             className="order-progress__item"
             data-state={index < step ? "complete" : index === step ? "current" : "future"}
             aria-current={index === step ? "step" : undefined}
-            aria-label={index < step ? `Revenir à l’étape ${index + 1} : ${label}` : `Étape ${index + 1} : ${label}`}
+            aria-label={index < step ? text("Revenir à l’étape {v0} : {v1}", { v0: index + 1, v1: t(label) }) : text("Étape {v0} : {v1}", { v0: index + 1, v1: t(label) })}
             onClick={() => { if (index < step) moveToStep(index); }}
             disabled={busy || Boolean(finalizedOrder) || index >= step}
           >
             <span className="order-progress__number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-            <span className="order-progress__label">{label}</span>
+            <span className="order-progress__label">{t(label)}</span>
           </button>
         ))}
         </div>
@@ -644,15 +664,15 @@ export function MusicOrderForm({
       {account.authenticated && !finalizedOrder && saveState !== "idle" ? (
         <div className="order-save-status" aria-live="polite">
           <span>{saveState === "saving"
-            ? "Enregistrement du brouillon…"
+            ? t("Enregistrement du brouillon…")
             : saveState === "saved"
-              ? orderStatus === "AWAITING_PAYMENT" ? "Commande enregistrée" : "Brouillon enregistré"
+              ? orderStatus === "AWAITING_PAYMENT" ? t("Commande enregistrée") : t("Brouillon enregistré")
               : saveState === "error"
-                ? "Enregistrement interrompu"
-                : "Modifications non enregistrées"}</span>
+                ? t("Enregistrement interrompu")
+                : t("Modifications non enregistrées")}</span>
           {saveState === "dirty" || saveState === "error" ? (
             <button type="button" className="order-save-status__action" onClick={() => void saveDraft()} disabled={busy}>
-              {orderStatus === "AWAITING_PAYMENT" ? "Enregistrer les modifications" : "Enregistrer le brouillon"}
+              {orderStatus === "AWAITING_PAYMENT" ? t("Enregistrer les modifications") : t("Enregistrer le brouillon")}
             </button>
           ) : null}
         </div>
@@ -664,27 +684,27 @@ export function MusicOrderForm({
             <header className="order-step-heading">
               <span className="order-step-heading__index" aria-hidden="true">01</span>
               <div>
-                <p className="eyebrow">Le projet</p>
-                <h2 ref={headingRef} tabIndex={-1}>Donnons un premier repère à votre création.</h2>
-                <p className="form-step__intro">Quelques informations suffisent pour commencer. Le nom du projet vous aidera à retrouver la commande, sans devenir automatiquement le titre du morceau.</p>
+                <p className="eyebrow"><T text="Le projet"/></p>
+                <h2 ref={headingRef} tabIndex={-1}><T text="Donnons un premier repère à votre création."/></h2>
+                <p className="form-step__intro"><T text="Quelques informations suffisent pour commencer. Le nom du projet vous aidera à retrouver la commande, sans devenir automatiquement le titre du morceau."/></p>
               </div>
             </header>
             <div className="field">
-              <label htmlFor="order-title">Nom du projet <span>(facultatif)</span></label>
-              <input id="order-title" maxLength={orderTextLimits.title} value={form.title} placeholder="Ex. Une chanson pour nos vingt ans" onChange={(event) => setField("title", event.target.value)} />
-              <span className="field__hint">Un repère privé visible dans votre compte et dans l’espace Admin.</span>
+              <label htmlFor="order-title"><T text="Nom du projet"/> <span><T text="(facultatif)"/></span></label>
+              <input id="order-title" maxLength={orderTextLimits.title} value={form.title} placeholder={t("Ex. Une chanson pour nos vingt ans")} onChange={(event) => setField("title", event.target.value)} />
+              <span className="field__hint"><T text="Un repère privé visible dans votre compte et dans l’espace Admin."/></span>
             </div>
             <div className="field-grid">
               <div className="field">
-                <label htmlFor="order-recipient">Personne ou situation concernée *</label>
-                <input id="order-recipient" required aria-invalid={errorField === "recipient"} aria-describedby={errorField === "recipient" ? "order-recipient-error" : "order-recipient-hint"} maxLength={orderTextLimits.recipient} value={form.recipient} placeholder="Ex. Camille, notre famille, un nouveau départ…" onChange={(event) => setField("recipient", event.target.value)} />
-                <span className="field__hint" id="order-recipient-hint">À qui — ou à quoi — cette histoire est-elle destinée ?</span>
-                {errorField === "recipient" ? <span className="field__error" id="order-recipient-error" role="alert">{error}</span> : null}
+                <label htmlFor="order-recipient"><T text="Personne ou situation concernée *"/></label>
+                <input id="order-recipient" required aria-invalid={errorField === "recipient"} aria-describedby={errorField === "recipient" ? "order-recipient-error" : "order-recipient-hint"} maxLength={orderTextLimits.recipient} value={form.recipient} placeholder={t("Ex. Camille, notre famille, un nouveau départ…")} onChange={(event) => setField("recipient", event.target.value)} />
+                <span className="field__hint" id="order-recipient-hint"><T text="À qui — ou à quoi — cette histoire est-elle destinée ?"/></span>
+                {errorField === "recipient" ? <span className="field__error" id="order-recipient-error" role="alert">{displayMessage(error)}</span> : null}
               </div>
               <div className="field">
-                <label htmlFor="order-occasion">Occasion ou contexte</label>
-                <input id="order-occasion" maxLength={orderTextLimits.occasion} value={form.occasion} placeholder="Ex. Anniversaire, mariage, souvenir…" onChange={(event) => setField("occasion", event.target.value)} />
-                <span className="field__hint">Facultatif, mais utile pour ajuster l’intention.</span>
+                <label htmlFor="order-occasion"><T text="Occasion ou contexte"/></label>
+                <input id="order-occasion" maxLength={orderTextLimits.occasion} value={form.occasion} placeholder={t("Ex. Anniversaire, mariage, souvenir…")} onChange={(event) => setField("occasion", event.target.value)} />
+                <span className="field__hint"><T text="Facultatif, mais utile pour ajuster l’intention."/></span>
               </div>
             </div>
           </>
@@ -695,26 +715,25 @@ export function MusicOrderForm({
             <header className="order-step-heading">
               <span className="order-step-heading__index" aria-hidden="true">02</span>
               <div>
-                <p className="eyebrow">Votre histoire</p>
-                <h2 ref={headingRef} tabIndex={-1}>Racontez ce qui ne doit pas être perdu.</h2>
-                <p className="form-step__intro">Écrivez naturellement, comme si vous me racontiez l’histoire. Vous apportez les souvenirs et l’intention ; LNX Beats choisit les mots et construit la création musicale.</p>
+                <p className="eyebrow"><T text="Votre histoire"/></p>
+                <h2 ref={headingRef} tabIndex={-1}><T text="Racontez ce qui ne doit pas être perdu."/></h2>
+                <p className="form-step__intro"><T text="Écrivez naturellement, comme si vous me racontiez l’histoire. Vous apportez les souvenirs et l’intention ; LNX Beats choisit les mots et construit la création musicale."/></p>
               </div>
             </header>
             <div className="order-story-panel order-story-panel--primary">
               <div className="field">
-                <label htmlFor="order-brief">Histoire principale *</label>
-                <textarea className="order-story-textarea" id="order-brief" required aria-invalid={errorField === "brief"} aria-describedby={errorField === "brief" ? "order-brief-counter order-brief-error" : "order-brief-counter"} minLength={orderTextLimits.briefMin} maxLength={orderTextLimits.brief} value={form.brief} placeholder="Les moments importants, les traits de caractère, les souvenirs, les mots que vous aimeriez transmettre…" onChange={(event) => setField("brief", event.target.value)} />
+                <label htmlFor="order-brief"><T text="Histoire principale *"/></label>
+                <textarea className="order-story-textarea" id="order-brief" required aria-invalid={errorField === "brief"} aria-describedby={errorField === "brief" ? "order-brief-counter order-brief-error" : "order-brief-counter"} minLength={orderTextLimits.briefMin} maxLength={orderTextLimits.brief} value={form.brief} placeholder={t("Les moments importants, les traits de caractère, les souvenirs, les mots que vous aimeriez transmettre…")} onChange={(event) => setField("brief", event.target.value)} />
                 <span className="field__counter" id="order-brief-counter" data-invalid={form.brief.length > 0 && form.brief.trim().length < orderTextLimits.briefMin}>
-                  {form.brief.length.toLocaleString("fr-FR")} / {orderTextLimits.brief.toLocaleString("fr-FR")} · minimum {orderTextLimits.briefMin} caractères
-                </span>
-                {errorField === "brief" ? <span className="field__error" id="order-brief-error" role="alert">{error}</span> : null}
+                  {form.brief.length.toLocaleString(numberLocale)} / {orderTextLimits.brief.toLocaleString(numberLocale)} <T text="· minimum"/> {orderTextLimits.briefMin} <T text="caractères"/> </span>
+                {errorField === "brief" ? <span className="field__error" id="order-brief-error" role="alert">{displayMessage(error)}</span> : null}
               </div>
             </div>
             <div className="order-story-panel order-story-panel--secondary">
               <div className="field">
-                <label htmlFor="order-details">Détails à préserver <span>(facultatif)</span></label>
-                <textarea id="order-details" aria-describedby="order-details-counter" maxLength={orderTextLimits.importantDetails} value={form.importantDetails} placeholder="Une date, une phrase, un lieu, une anecdote ou un détail de prononciation…" onChange={(event) => setField("importantDetails", event.target.value)} />
-                <span className="field__counter" id="order-details-counter">{form.importantDetails.length.toLocaleString("fr-FR")} / {orderTextLimits.importantDetails.toLocaleString("fr-FR")}</span>
+                <label htmlFor="order-details"><T text="Détails à préserver"/> <span><T text="(facultatif)"/></span></label>
+                <textarea id="order-details" aria-describedby="order-details-counter" maxLength={orderTextLimits.importantDetails} value={form.importantDetails} placeholder={t("Une date, une phrase, un lieu, une anecdote ou un détail de prononciation…")} onChange={(event) => setField("importantDetails", event.target.value)} />
+                <span className="field__counter" id="order-details-counter">{form.importantDetails.length.toLocaleString(numberLocale)} / {orderTextLimits.importantDetails.toLocaleString(numberLocale)}</span>
               </div>
             </div>
           </>
@@ -725,45 +744,45 @@ export function MusicOrderForm({
             <header className="order-step-heading">
               <span className="order-step-heading__index" aria-hidden="true">03</span>
               <div>
-                <p className="eyebrow">Direction & options</p>
-                <h2 ref={headingRef} tabIndex={-1}>Choisissez la couleur et les options.</h2>
-                <p className="form-step__intro">Indiquez une direction, une émotion et les options utiles. Le total reste lisible à chaque décision.</p>
+                <p className="eyebrow"><T text="Direction & options"/></p>
+                <h2 ref={headingRef} tabIndex={-1}><T text="Choisissez la couleur et les options."/></h2>
+                <p className="form-step__intro"><T text="Indiquez une direction, une émotion et les options utiles. Le total reste lisible à chaque décision."/></p>
               </div>
             </header>
             <fieldset className="fieldset order-direction-fieldset" id="order-musical-direction" tabIndex={-1} aria-invalid={errorField === "musicalDirection"} aria-describedby={errorField === "musicalDirection" ? "order-musical-direction-error" : undefined}>
-              <legend>Direction musicale *</legend>
-              <p className="fieldset__intro">Choisissez un univers ou laissez LNX Beats décider selon votre histoire.</p>
+              <legend><T text="Direction musicale *"/></legend>
+              <p className="fieldset__intro"><T text="Choisissez un univers ou laissez LNX Beats décider selon votre histoire."/></p>
               <div className="order-direction-grid">
                 {musicalDirections.map((direction) => (
                   <label className="order-direction-choice" data-selected={form.musicalDirection === direction} key={direction}>
                     <input required type="radio" name="musicalDirection" checked={form.musicalDirection === direction} onChange={() => setField("musicalDirection", direction)} />
-                    <span className="order-direction-choice__copy"><strong>{direction}</strong>{direction === "Je laisse LNX Beats choisir" ? <small>Une direction cohérente sera définie à partir du brief.</small> : null}</span>
+                    <span className="order-direction-choice__copy"><strong>{t(direction)}</strong>{direction === "Je laisse LNX Beats choisir" ? <small><T text="Une direction cohérente sera définie à partir du brief."/></small> : null}</span>
                   </label>
                 ))}
               </div>
-              {errorField === "musicalDirection" ? <span className="field__error" id="order-musical-direction-error" role="alert">{error}</span> : null}
+              {errorField === "musicalDirection" ? <span className="field__error" id="order-musical-direction-error" role="alert">{displayMessage(error)}</span> : null}
             </fieldset>
             <div className="field order-emotion-field">
-              <label htmlFor="order-emotion">Ce que la musique doit faire ressentir</label>
-              <input id="order-emotion" maxLength={orderTextLimits.emotion} value={form.emotion} placeholder="Ex. Tendre, lumineux, intense, nostalgique…" onChange={(event) => setField("emotion", event.target.value)} />
-              <span className="field__hint">Une sensation suffit ; elle guidera l’écriture et l’interprétation.</span>
+              <label htmlFor="order-emotion"><T text="Ce que la musique doit faire ressentir"/></label>
+              <input id="order-emotion" maxLength={orderTextLimits.emotion} value={form.emotion} placeholder={t("Ex. Tendre, lumineux, intense, nostalgique…")} onChange={(event) => setField("emotion", event.target.value)} />
+              <span className="field__hint"><T text="Une sensation suffit ; elle guidera l’écriture et l’interprétation."/></span>
             </div>
             <fieldset className="fieldset order-options-fieldset">
-              <legend>Options de création</legend>
+              <legend><T text="Options de création"/></legend>
               <div className="order-option-grid">
                 <div className="order-option-stack order-option-stack--illustration" data-selected={form.coverIncluded}>
                   <label className="order-option-card" data-selected={form.coverIncluded}>
                     <input type="checkbox" checked={form.coverIncluded} onChange={(event) => setIllustrationEnabled(event.target.checked)} />
                     <span className="order-option-card__copy">
-                      <strong>Illustration personnalisée</strong>
-                      <small>Un visuel original préparé dans le format de votre choix.</small>
+                      <strong><T text="Illustration personnalisée"/></strong>
+                      <small><T text="Un visuel original préparé dans le format de votre choix."/></small>
                     </span>
-                    <span className="order-option-card__price">+ {formatEuro(orderOffer.coverCents)}</span>
+                    <span className="order-option-card__price">+ {money(orderOffer.coverCents)}</span>
                   </label>
                   {form.coverIncluded ? (
                     <fieldset className="illustration-format-panel" id="order-illustration-format" tabIndex={-1} aria-invalid={errorField === "illustrationFormat"} aria-describedby={errorField === "illustrationFormat" ? "order-illustration-format-error" : "order-illustration-format-hint"}>
-                      <legend>Format de l’illustration *</legend>
-                      <p id="order-illustration-format-hint">Le format ne change pas le prix.</p>
+                      <legend><T text="Format de l’illustration *"/></legend>
+                      <p id="order-illustration-format-hint"><T text="Le format ne change pas le prix."/></p>
                       <div className="illustration-format-grid">
                         {orderIllustrationFormatOptions.map((option) => (
                           <label className="illustration-format-choice" data-selected={form.illustrationFormat === option.value} key={option.value}>
@@ -775,14 +794,14 @@ export function MusicOrderForm({
                               checked={form.illustrationFormat === option.value}
                               onChange={() => setIllustrationFormat(option.value)}
                             />
-                            <span><strong>{option.label}</strong><b>{option.ratio}</b><small>{option.description}</small></span>
+                            <span><strong>{t(option.label)}</strong><b>{t(option.ratio)}</b><small>{t(option.description)}</small></span>
                           </label>
                         ))}
                       </div>
-                      {errorField === "illustrationFormat" ? <span className="field__error" id="order-illustration-format-error" role="alert">{error}</span> : null}
+                      {errorField === "illustrationFormat" ? <span className="field__error" id="order-illustration-format-error" role="alert">{displayMessage(error)}</span> : null}
                       {form.illustrationFormat === "CUSTOM" ? (
                         <div className="field illustration-format-custom">
-                          <label htmlFor="order-illustration-format-custom">Dimensions ou usage attendu *</label>
+                          <label htmlFor="order-illustration-format-custom"><T text="Dimensions ou usage attendu *"/></label>
                           <input
                             id="order-illustration-format-custom"
                             required
@@ -790,11 +809,11 @@ export function MusicOrderForm({
                             value={form.illustrationFormatCustom}
                             aria-invalid={errorField === "illustrationFormatCustom"}
                             aria-describedby={errorField === "illustrationFormatCustom" ? "order-illustration-format-custom-error" : "order-illustration-format-custom-hint"}
-                            placeholder="Ex. Bannière 2560 × 1440 px"
+                            placeholder={t("Ex. Bannière 2560 × 1440 px")}
                             onChange={(event) => setField("illustrationFormatCustom", event.target.value)}
                           />
-                          <span className="field__hint" id="order-illustration-format-custom-hint">{form.illustrationFormatCustom.length} / {orderTextLimits.illustrationFormatCustom} caractères</span>
-                          {errorField === "illustrationFormatCustom" ? <span className="field__error" id="order-illustration-format-custom-error" role="alert">{error}</span> : null}
+                          <span className="field__hint" id="order-illustration-format-custom-hint">{form.illustrationFormatCustom.length} / {orderTextLimits.illustrationFormatCustom} <T text="caractères"/></span>
+                          {errorField === "illustrationFormatCustom" ? <span className="field__error" id="order-illustration-format-custom-error" role="alert">{displayMessage(error)}</span> : null}
                         </div>
                       ) : null}
                     </fieldset>
@@ -804,23 +823,23 @@ export function MusicOrderForm({
                   <label className="order-option-card" data-selected={form.priorityProcessing}>
                     <input type="checkbox" checked={form.priorityProcessing} onChange={(event) => setField("priorityProcessing", event.target.checked)} />
                     <span className="order-option-card__copy">
-                      <strong>Traitement prioritaire</strong>
-                      <small>{orderOffer.priorityDelay}</small>
+                      <strong><T text="Traitement prioritaire"/></strong>
+                      <small>{t(orderOffer.priorityDelay)}</small>
                     </span>
-                    <span className="order-option-card__price">+ {formatEuro(orderOffer.priorityCents)}</span>
+                    <span className="order-option-card__price">+ {money(orderOffer.priorityCents)}</span>
                   </label>
                 </div>
               </div>
             </fieldset>
 
             <div className="order-total order-total--compact order-total--breakdown" aria-live="polite">
-              <div className="order-total__heading"><span>Total de votre création</span><strong>{formatEuro(pricing.totalCents)}</strong></div>
+              <div className="order-total__heading"><span><T text="Total de votre création"/></span><strong>{money(pricing.totalCents)}</strong></div>
               <dl>
-                <div><dt>Création personnelle</dt><dd>{formatEuro(pricing.basePriceCents)}</dd></div>
-                {form.coverIncluded ? <div><dt>Illustration personnalisée</dt><dd>+ {formatEuro(pricing.coverPriceCents)}</dd></div> : null}
-                {form.priorityProcessing ? <div><dt>Traitement prioritaire</dt><dd>+ {formatEuro(pricing.priorityPriceCents)}</dd></div> : null}
+                <div><dt><T text="Création personnelle"/></dt><dd>{money(pricing.basePriceCents)}</dd></div>
+                {form.coverIncluded ? <div><dt><T text="Illustration personnalisée"/></dt><dd>+ {money(pricing.coverPriceCents)}</dd></div> : null}
+                {form.priorityProcessing ? <div><dt><T text="Traitement prioritaire"/></dt><dd>+ {money(pricing.priorityPriceCents)}</dd></div> : null}
               </dl>
-              <small><strong>Total maximum : {formatEuro(maximumPriceCents)}</strong> · Le total est recalculé et vérifié par LNX Studio lors de l’enregistrement.</small>
+              <small><strong><T text="Total maximum :"/> {money(maximumPriceCents)}</strong> <T text="· Le total est recalculé et vérifié par LNX Studio lors de l’enregistrement."/></small>
             </div>
           </>
         ) : null}
@@ -830,67 +849,67 @@ export function MusicOrderForm({
             <header className="order-step-heading">
               <span className="order-step-heading__index" aria-hidden="true">04</span>
               <div>
-                <p className="eyebrow">Références privées</p>
-                <h2 ref={headingRef} tabIndex={-1}>Ajoutez les images qui éclairent votre histoire.</h2>
-                <p className="form-step__intro">Cette étape est facultative. Les références restent privées et servent uniquement à mieux comprendre l’univers de votre création.</p>
+                <p className="eyebrow"><T text="Références privées"/></p>
+                <h2 ref={headingRef} tabIndex={-1}><T text="Ajoutez les images qui éclairent votre histoire."/></h2>
+                <p className="form-step__intro"><T text="Cette étape est facultative. Les références restent privées et servent uniquement à mieux comprendre l’univers de votre création."/></p>
               </div>
             </header>
             <section className="order-photo-panel" aria-labelledby="order-photo-title">
               <div className="order-photo-panel__intro">
-                <p className="auth-panel__label">Espace strictement privé</p>
-                <h3 id="order-photo-title">Quelques images suffisent.</h3>
-                <p>JPEG, PNG ou WebP · 10 Mio (10 485 760 octets) maximum par image · 10 images maximum. Chaque fichier est vérifié, réencodé et débarrassé de ses métadonnées avant stockage.</p>
-                <p>Après un rechargement, les photos enregistrées restent disponibles. Resélectionnez uniquement les fichiers manquants : le navigateur ne conserve pas les fichiers non envoyés.</p>
+                <p className="auth-panel__label"><T text="Espace strictement privé"/></p>
+                <h3 id="order-photo-title"><T text="Quelques images suffisent."/></h3>
+                <p><T text="JPEG, PNG ou WebP · 10 Mio (10 485 760 octets) maximum par image · 10 images maximum. Chaque fichier est vérifié, réencodé et débarrassé de ses métadonnées avant stockage."/></p>
+                <p><T text="Après un rechargement, les photos enregistrées restent disponibles. Resélectionnez uniquement les fichiers manquants : le navigateur ne conserve pas les fichiers non envoyés."/></p>
               </div>
               <div className="field order-upload-field">
                 <label className="order-upload-zone" htmlFor="order-photos">
-                  <span className="order-upload-zone__title">Choisir des images</span>
-                  <span className="order-upload-zone__meta">JPEG, PNG ou WebP · jusqu’à 10 Mio chacune</span>
-                  <span className="form-button">Parcourir mes fichiers</span>
+                  <span className="order-upload-zone__title"><T text="Choisir des images"/></span>
+                  <span className="order-upload-zone__meta"><T text="JPEG, PNG ou WebP · jusqu’à 10 Mio chacune"/></span>
+                  <span className="form-button"><T text="Parcourir mes fichiers"/></span>
                 </label>
                 <input className="order-upload-input" id="order-photos" type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => { selectPhotos(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
               </div>
               <label className="choice choice--full order-reference-confirmation">
                 <input ref={photoRightsRef} id="order-photo-rights" aria-invalid={Boolean(photoError) && !photoRightsConfirmed} aria-describedby={photoError ? "order-photo-error" : undefined} type="checkbox" checked={photoRightsConfirmed} onChange={(event) => { setPhotoRightsConfirmed(event.target.checked); setPhotoError(""); }} />
-                <span>Je dispose du droit de communiquer ces photos à LNX Beats pour cette commande.</span>
+                <span><T text="Je dispose du droit de communiquer ces photos à LNX Beats pour cette commande."/></span>
               </label>
-              {photoError ? <p className="field__error" id="order-photo-error" role="alert">{photoError}</p> : null}
-              {account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>{photoDecisionRequired ? "Réessayer les photos restantes" : "Enregistrer les photos"}</button> : <p className="field__hint">Les fichiers sélectionnés seront conservés en mémoire pendant la connexion depuis ce parcours. Aucun envoi avant votre connexion et votre confirmation des droits.</p>}
+              {photoError ? <p className="field__error" id="order-photo-error" role="alert">{displayMessage(photoError)}</p> : null}
+              {account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos()} disabled={busy || !pendingFiles.length}>{photoDecisionRequired ? t("Réessayer les photos restantes") : t("Enregistrer les photos")}</button> : <p className="field__hint"><T text="Les fichiers sélectionnés seront conservés en mémoire pendant la connexion depuis ce parcours. Aucun envoi avant votre connexion et votre confirmation des droits."/></p>}
               {pendingFiles.length || photoStates.size ? (
                 <div className="order-pending-files order-photo-queue">
-                  <strong role="status">{photos.length} photo{photos.length === 1 ? "" : "s"} enregistrée{photos.length === 1 ? "" : "s"} · {pendingFiles.length} à confirmer</strong>
+                  <strong role="status">{text("{saved} photo(s) enregistrée(s) · {pending} à confirmer", { saved: photos.length, pending: pendingFiles.length })}</strong>
                   <ul>{Array.from(new Set([...photoStates.keys(), ...pendingFiles])).map((file, index) => {
                     const state = photoStates.get(file) ?? { stage: "waiting" };
                     const labels = { waiting: "En attente", uploading: "Envoi en cours", processing: "Traitement et enregistrement", saved: "Enregistré", failed: "Échec ou confirmation interrompue" };
                     return <li key={index} data-state={state.stage}>
-                      <strong>{file.name}</strong>
-                      <span>{(file.size / 1024 / 1024).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} Mio</span>
-                      <span role="status">{labels[state.stage]}</span>
-                      {state.stage === "uploading" && state.progress ? <span>{state.progress.sent.toLocaleString("fr-FR")} / {state.progress.total.toLocaleString("fr-FR")} octets envoyés</span> : null}
-                      {state.error ? <p>{state.error}</p> : null}
-                      {state.stage === "failed" && account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos(undefined, file)} disabled={busy}>Réessayer cette photo</button> : null}
+                      <strong><OriginalName>{file.name}</OriginalName></strong>
+                      <span>{(file.size / 1024 / 1024).toLocaleString(numberLocale, { maximumFractionDigits: 2 })} <T text="Mio"/></span>
+                      <span role="status">{t(labels[state.stage])}</span>
+                      {state.stage === "uploading" && state.progress ? <span>{state.progress.sent.toLocaleString(numberLocale)} / {state.progress.total.toLocaleString(numberLocale)} <T text="octets envoyés"/></span> : null}
+                      {state.error ? <p>{displayMessage(state.error)}</p> : null}
+                      {state.stage === "failed" && account.authenticated ? <button type="button" className="form-button" onClick={() => void uploadPhotos(undefined, file)} disabled={busy}><T text="Réessayer cette photo"/></button> : null}
                     </li>;
                   })}</ul>
                 </div>
               ) : null}
-              {photoNotice ? <p className="field__hint" role="status">{photoNotice}</p> : null}
-              {confirmedPhotoNames.length ? <ul className="order-photo-confirmed">{confirmedPhotoNames.map((name, index) => <li key={index}>{name} — Enregistrée</li>)}</ul> : null}
+              {photoNotice ? <p className="field__hint" role="status">{displayMessage(photoNotice)}</p> : null}
+              {confirmedPhotoNames.length ? <ul className="order-photo-confirmed">{confirmedPhotoNames.map((name, index) => <li key={index}><OriginalName>{name}</OriginalName> <T text="— Enregistrée"/></li>)}</ul> : null}
               {pendingFiles.length ? <div className="order-photo-recovery">
-                <p>Les photos sont facultatives. Continuer sans les fichiers non enregistrés conserve toutes les photos déjà sauvegardées ; leur état sera vérifié avant de poursuivre.</p>
-                <button type="button" className="form-button" onClick={() => void continueWithoutPendingPhotos()} disabled={busy}>Continuer sans les photos non enregistrées</button>
+                <p><T text="Les photos sont facultatives. Continuer sans les fichiers non enregistrés conserve toutes les photos déjà sauvegardées ; leur état sera vérifié avant de poursuivre."/></p>
+                <button type="button" className="form-button" onClick={() => void continueWithoutPendingPhotos()} disabled={busy}><T text="Continuer sans les photos non enregistrées"/></button>
               </div> : null}
               {photos.length ? (
                 <ul className="order-photo-list">
                   {photos.map((photo) => (
                     <li key={photo.id}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/api/orders/${encodeURIComponent(orderNumber)}/photos/${photo.id}`} alt={`Photo de référence ${photo.position + 1}`} />
-                      <span className="order-photo-list__meta">Enregistrée · {photo.width} × {photo.height} · {Math.ceil(photo.sizeBytes / 1024)} Kio</span>
-                      <button type="button" aria-label={`Supprimer la photo de référence ${photo.position + 1}`} onClick={() => void removePhoto(photo.id)} disabled={busy}>Supprimer</button>
+                      <img src={`/api/orders/${encodeURIComponent(orderNumber)}/photos/${photo.id}`} alt={text("Photo de référence {v0}", { v0: photo.position + 1 })} />
+                      <span className="order-photo-list__meta"><T text="Enregistrée ·"/> {photo.width} × {photo.height} · {Math.ceil(photo.sizeBytes / 1024)} <T text="Kio"/></span>
+                      <button type="button" aria-label={text("Supprimer la photo de référence {v0}", { v0: photo.position + 1 })} onClick={() => void removePhoto(photo.id)} disabled={busy}><T text="Supprimer"/></button>
                     </li>
                   ))}
                 </ul>
-              ) : <p className="field__hint">Aucune photo enregistrée. Cette étape reste facultative.</p>}
+              ) : <p className="field__hint"><T text="Aucune photo enregistrée. Cette étape reste facultative."/></p>}
             </section>
           </>
         ) : null}
@@ -900,24 +919,24 @@ export function MusicOrderForm({
             <header className="order-step-heading">
               <span className="order-step-heading__index" aria-hidden="true">05</span>
               <div>
-                <p className="eyebrow">Votre compte</p>
-                <h2 ref={headingRef} tabIndex={-1}>{account.authenticated ? "Votre espace sécurisé est prêt." : "Connectez-vous pour protéger votre brief."}</h2>
-                <p className="form-step__intro">Votre compte rattache la commande, les références privées, le paiement et la livraison à une seule identité vérifiée.</p>
+                <p className="eyebrow"><T text="Votre compte"/></p>
+                <h2 ref={headingRef} tabIndex={-1}>{account.authenticated ? t("Votre espace sécurisé est prêt.") : t("Connectez-vous pour protéger votre brief.")}</h2>
+                <p className="form-step__intro"><T text="Votre compte rattache la commande, les références privées, le paiement et la livraison à une seule identité vérifiée."/></p>
               </div>
             </header>
             {account.authenticated ? (
               <div className="order-auth-note order-auth-note--verified">
-                <span className="order-auth-note__status">Compte vérifié</span>
+                <span className="order-auth-note__status"><T text="Compte vérifié"/></span>
                 <p className="order-auth-note__identity"><strong>{account.name}</strong><span>{account.email}</span></p>
-                <p>La commande, ses références privées et son paiement seront rattachés uniquement à ce compte.</p>
+                <p><T text="La commande, ses références privées et son paiement seront rattachés uniquement à ce compte."/></p>
               </div>
             ) : (
               <div className="order-auth-note" id="order-auth-panel" tabIndex={-1}>
-                <p><strong>Votre brief et vos photos sélectionnées restent en mémoire pendant ce parcours de connexion.</strong></p>
-                <p>Aucune histoire ni référence privée n’est placée dans l’adresse de la page ou conservée durablement dans le navigateur.</p>
+                <p><strong><T text="Votre brief et vos photos sélectionnées restent en mémoire pendant ce parcours de connexion."/></strong></p>
+                <p><T text="Aucune histoire ni référence privée n’est placée dans l’adresse de la page ou conservée durablement dans le navigateur."/></p>
                 <div className="order-auth-actions">
-                  <button className="form-button form-button--primary" type="button" onClick={() => preserveAndNavigate("/connexion")}>Me connecter</button>
-                  <button className="form-button" type="button" onClick={() => preserveAndNavigate("/inscription")}>Créer mon compte</button>
+                  <button className="form-button form-button--primary" type="button" onClick={() => preserveAndNavigate("/connexion")}><T text="Me connecter"/></button>
+                  <button className="form-button" type="button" onClick={() => preserveAndNavigate("/inscription")}><T text="Créer mon compte"/></button>
                 </div>
               </div>
             )}
@@ -929,101 +948,103 @@ export function MusicOrderForm({
             <header className="order-step-heading">
               <span className="order-step-heading__index" aria-hidden="true">06</span>
               <div>
-                <p className="eyebrow">Récapitulatif & paiement</p>
+                <p className="eyebrow"><T text="Récapitulatif & paiement"/></p>
                 <h2 ref={headingRef} tabIndex={-1}>{finalizedOrder
-                  ? hasPaymentProvider ? "Votre commande est prête à être payée." : "Votre commande est enregistrée."
-                  : hasPaymentProvider ? "Une dernière relecture avant le paiement." : "Une dernière relecture avant l’enregistrement."}</h2>
-                <p className="form-step__intro">Vérifiez l’histoire, les choix créatifs et le total. Vous pourrez revenir aux étapes précédentes tant que la commande n’est pas finalisée.</p>
+                  ? hasPaymentProvider ? t("Votre commande est prête à être payée.") : t("Votre commande est enregistrée.")
+                  : hasPaymentProvider ? t("Une dernière relecture avant le paiement.") : t("Une dernière relecture avant l’enregistrement.")}</h2>
+                <p className="form-step__intro"><T text="Vérifiez l’histoire, les choix créatifs et le total. Vous pourrez revenir aux étapes précédentes tant que la commande n’est pas finalisée."/></p>
               </div>
             </header>
             <div className="order-review-grid">
               <section className="order-review-card order-review-card--wide">
-                <h3 className="order-review-card__label">Projet & histoire</h3>
+                <h3 className="order-review-card__label"><T text="Projet & histoire"/></h3>
                 <dl className="summary order-summary">
-                  <div><dt>Projet</dt><dd>{form.title || "Sans titre de repère"}</dd></div>
-                  <div><dt>Destinataire</dt><dd>{form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
-                  <div><dt>Histoire</dt><dd className="summary__long">{form.brief}</dd></div>
-                  {form.importantDetails ? <div><dt>Détails à préserver</dt><dd className="summary__long">{form.importantDetails}</dd></div> : null}
+                  <div><dt><T text="Projet"/></dt><dd>{form.title ? <OriginalName>{form.title}</OriginalName> : t("Sans titre de repère")}</dd></div>
+                  <div><dt><T text="Destinataire"/></dt><dd translate="no">{form.recipient}{form.occasion ? ` · ${form.occasion}` : ""}</dd></div>
+                  <div><dt><T text="Histoire"/></dt><dd className="summary__long" translate="no">{form.brief}</dd></div>
+                  {form.importantDetails ? <div><dt><T text="Détails à préserver"/></dt><dd className="summary__long" translate="no">{form.importantDetails}</dd></div> : null}
                 </dl>
               </section>
               <section className="order-review-card">
-                <h3 className="order-review-card__label">Direction artistique</h3>
+                <h3 className="order-review-card__label"><T text="Direction artistique"/></h3>
                 <dl className="summary order-summary">
-                  <div><dt>Direction</dt><dd>{form.musicalDirection}</dd></div>
-                  <div><dt>Émotion</dt><dd>{form.emotion || "Libre interprétation"}</dd></div>
-                  <div><dt>Délai indicatif</dt><dd>{orderOffer.indicativeDelay}</dd></div>
+                  <div><dt><T text="Direction"/></dt><dd>{t(form.musicalDirection)}</dd></div>
+                  <div><dt><T text="Émotion"/></dt><dd>{form.emotion || t("Libre interprétation")}</dd></div>
+                  <div><dt><T text="Délai indicatif"/></dt><dd>{t(orderOffer.indicativeDelay)}</dd></div>
                 </dl>
               </section>
               <section className="order-review-card">
-                <h3 className="order-review-card__label">Options & références</h3>
+                <h3 className="order-review-card__label"><T text="Options & références"/></h3>
                 <dl className="summary order-summary">
-                  <div><dt>Illustration personnalisée</dt><dd>{form.coverIncluded ? "Oui" : "Non"}</dd></div>
-                  {form.coverIncluded ? <div><dt>Format de l’illustration</dt><dd>{getOrderProductionSummary(form).formatLabel}</dd></div> : null}
-                  <div><dt>Traitement prioritaire</dt><dd>{form.priorityProcessing ? "Oui" : "Non"}</dd></div>
-                  <div><dt>Références privées</dt><dd>{photos.length + pendingFiles.length}{pendingFiles.length ? " sélectionnée(s), en attente d’enregistrement" : " enregistrée(s)"}</dd></div>
+                  <div><dt><T text="Illustration personnalisée"/></dt><dd>{form.coverIncluded ? t("Oui") : t("Non")}</dd></div>
+                  {form.coverIncluded ? <div><dt><T text="Format de l’illustration"/></dt><dd>{illustrationLabel()}</dd></div> : null}
+                  <div><dt><T text="Traitement prioritaire"/></dt><dd>{form.priorityProcessing ? t("Oui") : t("Non")}</dd></div>
+                  <div><dt><T text="Références privées"/></dt><dd>{photos.length + pendingFiles.length}{pendingFiles.length ? t(" sélectionnée(s), en attente d’enregistrement") : t(" enregistrée(s)")}</dd></div>
                 </dl>
               </section>
               <section className="order-review-card order-review-card--wide">
-                <h3 className="order-review-card__label">Compte & usage</h3>
+                <h3 className="order-review-card__label"><T text="Compte & usage"/></h3>
                 <dl className="summary order-summary">
-                  <div><dt>Compte</dt><dd>{account.authenticated ? `${account.name} · ${account.email}` : "Connexion requise"}</dd></div>
-                  <div><dt>Usage compris</dt><dd>Personnel</dd></div>
+                  <div><dt><T text="Compte"/></dt><dd>{account.authenticated ? `${account.name} · ${account.email}` : t("Connexion requise")}</dd></div>
+                  <div><dt><T text="Usage compris"/></dt><dd><T text="Personnel"/></dd></div>
                 </dl>
               </section>
             </div>
             <div className="order-total order-total--breakdown order-total--final" aria-live="polite">
-              <div className="order-total__heading"><span>Total de la création</span><strong>{formatEuro(pricing.totalCents)}</strong></div>
+              <div className="order-total__heading"><span><T text="Total de la création"/></span><strong>{money(pricing.totalCents)}</strong></div>
               <dl>
-                <div><dt>Création personnelle</dt><dd>{formatEuro(pricing.basePriceCents)}</dd></div>
-                {form.coverIncluded ? <div><dt>Illustration personnalisée</dt><dd>+ {formatEuro(pricing.coverPriceCents)}</dd></div> : null}
-                {form.priorityProcessing ? <div><dt>Traitement prioritaire</dt><dd>+ {formatEuro(pricing.priorityPriceCents)}</dd></div> : null}
+                <div><dt><T text="Création personnelle"/></dt><dd>{money(pricing.basePriceCents)}</dd></div>
+                {form.coverIncluded ? <div><dt><T text="Illustration personnalisée"/></dt><dd>+ {money(pricing.coverPriceCents)}</dd></div> : null}
+                {form.priorityProcessing ? <div><dt><T text="Traitement prioritaire"/></dt><dd>+ {money(pricing.priorityPriceCents)}</dd></div> : null}
               </dl>
-              <small><strong>Total maximum : {formatEuro(maximumPriceCents)}</strong> · {finalizedOrder ? "Total vérifié lors de l’enregistrement de la commande." : "Le total sera recalculé et vérifié lors de l’enregistrement."}</small>
+              <small><strong><T text="Total maximum :"/> {money(maximumPriceCents)}</strong> · {finalizedOrder ? t("Total vérifié lors de l’enregistrement de la commande.") : t("Le total sera recalculé et vérifié lors de l’enregistrement.")}</small>
             </div>
 
             {!finalizedOrder ? (
               <>
                 <fieldset className="order-confirmations" aria-describedby={errorField === "confirmations" ? "order-confirmations-error" : undefined}>
-                  <legend>Vos confirmations</legend>
+                  <legend><T text="Vos confirmations"/></legend>
+                  <ContractLanguageNotice />
+                  {locale !== "fr" ? <details className="site-language-notice"><summary>{t("Comprendre les confirmations (aide à la lecture)")}</summary><p>{t("Vous confirmez votre récapitulatif et un usage personnel. LNX Beats peut refuser les contenus illicites ou portant atteinte aux droits de tiers. Vous demandez un commencement avant 14 jours ; après exécution complète, le droit de rétractation ne peut plus être exercé. Les quatre textes français ci-dessous sont les déclarations acceptées.")}</p></details> : null}
                   <label className="choice choice--full">
                     <input id="order-summary-confirmed" type="checkbox" aria-invalid={errorField === "confirmations" && !summaryConfirmed} checked={summaryConfirmed} onChange={(event) => { setSummaryConfirmed(event.target.checked); setError(""); setErrorField(null); }} />
-                    <span>J’ai relu l’histoire, les options et le total de cette commande.</span>
+                    <span lang="fr" translate="no">J’ai relu l’histoire, les options et le total de cette commande.</span>
                   </label>
                   <label className="choice choice--full">
                     <input id="order-content-confirmed" type="checkbox" aria-invalid={errorField === "confirmations" && !contentConfirmed} checked={contentConfirmed} onChange={(event) => { setContentConfirmed(event.target.checked); setError(""); setErrorField(null); }} />
-                    <span>Je comprends que LNX Beats peut refuser une demande illégale, haineuse, diffamatoire, harcelante ou portant atteinte aux droits d’un tiers.</span>
+                    <span lang="fr" translate="no">Je comprends que LNX Beats peut refuser une demande illégale, haineuse, diffamatoire, harcelante ou portant atteinte aux droits d’un tiers.</span>
                   </label>
                   <label className="choice choice--full">
                     <input id="order-personal-use-confirmed" type="checkbox" aria-invalid={errorField === "confirmations" && !personalUseTermsConfirmed} checked={personalUseTermsConfirmed} onChange={(event) => { setPersonalUseTermsConfirmed(event.target.checked); setError(""); setErrorField(null); }} />
-                    <span><strong>Usage personnel.</strong> {personalUseTerms.text}</span>
+                    <span lang="fr" translate="no"><strong>Usage personnel.</strong> {personalUseTerms.text}</span>
                   </label>
                   <label className="choice choice--full">
                     <input id="order-early-performance-consent" type="checkbox" aria-invalid={errorField === "confirmations" && !earlyPerformanceConsentConfirmed} checked={earlyPerformanceConsentConfirmed} onChange={(event) => { setEarlyPerformanceConsentConfirmed(event.target.checked); setError(""); setErrorField(null); }} />
-                    <span><strong>Commencement avant 14 jours.</strong> {earlyPerformanceConsentWording}</span>
+                    <span lang="fr" translate="no"><strong>Commencement avant 14 jours.</strong> {earlyPerformanceConsentWording}</span>
                   </label>
-                  {errorField === "confirmations" ? <span className="field__error" id="order-confirmations-error" role="alert">{error}</span> : null}
+                  {errorField === "confirmations" ? <span className="field__error" id="order-confirmations-error" role="alert">{displayMessage(error)}</span> : null}
                 </fieldset>
-                <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy}>{hasPaymentProvider ? "Enregistrer et passer au paiement" : "Enregistrer la commande"}</button>
+                <button className="form-button form-button--primary order-create-button" type="button" onClick={() => void finalize()} disabled={busy}>{hasPaymentProvider ? t("Enregistrer et passer au paiement") : t("Enregistrer la commande")}</button>
               </>
             ) : hasPaymentProvider ? (
               <div className="order-checkout-panel">
-                <p>Vous allez quitter temporairement LNX Studio pour le moyen de paiement choisi. Le retour sur le site ne suffit pas à confirmer le paiement.</p>
+                <p><T text="Vous allez quitter temporairement LNX Studio pour le moyen de paiement choisi. Le retour sur le site ne suffit pas à confirmer le paiement."/></p>
                 <PaymentCheckoutActions orderNumber={finalizedOrder.orderNumber} amountCents={finalizedOrder.totalCents} providers={paymentProviders} />
               </div>
             ) : (
-              <div className="order-checkout-panel"><p><strong>Paiement temporairement indisponible.</strong> Votre commande reste enregistrée dans votre espace.</p><Link className="form-button" href={`/compte/commandes/${encodeURIComponent(finalizedOrder.orderNumber)}`}>Voir ma commande</Link></div>
+              <div className="order-checkout-panel"><p><strong><T text="Paiement temporairement indisponible."/></strong> <T text="Votre commande reste enregistrée dans votre espace."/></p><Link className="form-button" href={`/compte/commandes/${encodeURIComponent(finalizedOrder.orderNumber)}`}><T text="Voir ma commande"/></Link></div>
             )}
           </>
         ) : null}
 
-        {error && (!errorField || !errorBelongsToCurrentStep || errorField === "account") ? <p className="form-message form-message--error" role="alert">{error}</p> : null}
-        {message ? <p className="form-message" role="status">{message}</p> : null}
+        {error && (!errorField || !errorBelongsToCurrentStep || errorField === "account") ? <p className="form-message form-message--error" role="alert">{displayMessage(error)}</p> : null}
+        {message ? <p className="form-message" role="status">{displayMessage(message)}</p> : null}
 
         <div className="form-navigation">
-          {step > 0 && !finalizedOrder ? <button className="form-button" type="button" onClick={() => moveToStep(step - 1)} disabled={busy}><UiIcon name="arrow-left" /> Étape précédente</button> : <span />}
-          {step < steps.length - 1 ? <button className="form-button form-button--primary" type="button" onClick={() => void nextStep()} disabled={busy}>Étape suivante <UiIcon name="arrow-right" /></button> : null}
+          {step > 0 && !finalizedOrder ? <button className="form-button" type="button" onClick={() => moveToStep(step - 1)} disabled={busy}><UiIcon name="arrow-left" /> <T text="Étape précédente"/></button> : <span />}
+          {step < steps.length - 1 ? <button className="form-button form-button--primary" type="button" onClick={() => void nextStep()} disabled={busy}><T text="Étape suivante"/> <UiIcon name="arrow-right" /></button> : null}
         </div>
-        {orderNumber && orderStatus === "DRAFT" ? <button className="order-delete-draft" type="button" onClick={() => void deleteDraft()} disabled={busy}>Supprimer ce brouillon</button> : null}
+        {orderNumber && orderStatus === "DRAFT" ? <button className="order-delete-draft" type="button" onClick={() => void deleteDraft()} disabled={busy}><T text="Supprimer ce brouillon"/></button> : null}
       </fieldset>
     </form>
     </>

@@ -1,3 +1,6 @@
+
+import { T } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
 import type { Metadata } from "next";
 import { EditorialAdSlot } from "@/components/editorial-ad-slot";
 import Link from "next/link";
@@ -29,6 +32,9 @@ import { buildProjectStructuredData } from "@/lib/seo/structured-data";
 import { resolveLegacyPublicSlug } from "@/lib/seo/legacy-slugs";
 import { loadDiscographyPreparation } from "@/lib/digital/discography-preparation";
 import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
+import { LocalizedEditorial } from "@/components/localized-editorial";
+import { getSiteLocale } from "@/lib/i18n/server";
+import { localeIntl } from "@/lib/i18n/config";
 
 type AlbumPageProps = {
   params: Promise<{ slug: string }>;
@@ -55,6 +61,7 @@ export async function generateMetadata({ params }: AlbumPageProps): Promise<Meta
 }
 
 export default async function AlbumPage({ params }: AlbumPageProps) {
+  const locale = await getSiteLocale();
   const { slug } = await params;
   const project = await getPublicProjectBySlug(slug);
 
@@ -73,7 +80,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   const status = getProjectStatusLabel(project.status);
   const confidence = getProjectConfidenceLabel(project.dataConfidence.overall);
   const documentedDate = project.releaseDate
-    ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${project.releaseDate}T00:00:00.000Z`))
+    ? new Intl.DateTimeFormat(localeIntl(locale), { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${project.releaseDate}T00:00:00.000Z`))
     : project.year;
 
   return (
@@ -82,28 +89,28 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
       <header className={`album-hero${digital ? ` ${digitalStyles.albumHero}` : ""}`} data-motion-scene="album">
         <div className="album-hero__backdrop" aria-hidden="true" />
         <Container className="album-hero__inner">
-          <Link className="back-link" href="/discographie"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Retour à la discographie</Link>
+          <Link className="back-link" href="/discographie"><span aria-hidden="true"><UiIcon name="arrow-left" /></span>  <T text="Retour à la discographie"/></Link>
           {digital ? <><DigitalDemoBanner mode={digitalMode}/><DigitalCartNavigation/></> : null}
           <div className={`album-hero__grid${digital ? ` ${digitalStyles.albumHeroGrid}` : ""}`}>
             <div data-motion-layer="media"><ProjectArtwork project={project} priority sizes={digital ? "(max-width: 620px) 60vw, 280px" : "(max-width: 820px) 100vw, 48vw"} className="album-hero__art" /></div>
             <div className="album-hero__content" data-motion-layer="copy">
-              <p className="album-status"><span>{kind}</span><span>{status}</span></p>
-              <h1>{project.title}</h1>
-              {project.primaryArtist ? <p className="eyebrow">Artiste principal · {project.primaryArtist}</p> : null}
-              {comingSoon ? <p role="status">Arrive bientôt. Cette fiche présente la sortie ; la vente et les téléchargements ne sont pas encore disponibles.</p> : null}
-              {project.subtitle ? <p className="album-hero__subtitle">{project.subtitle}</p> : null}
-              {digital ? project.shortDescription ? <p className="album-hero__description">{project.shortDescription}</p> : null : <p className="album-hero__description">{project.shortDescription || project.description}</p>}
+              <p className="album-status"><T text={kind}/><T text={status}/></p>
+              <h1><OriginalName>{project.title}</OriginalName></h1>
+              {project.primaryArtist ? <p className="eyebrow"><T text="Artiste principal"/> · <OriginalName>{project.primaryArtist}</OriginalName></p> : null}
+              {comingSoon ? <p role="status"><T text="Arrive bientôt. Cette fiche présente la sortie ; la vente et les téléchargements ne sont pas encore disponibles."/></p> : null}
+              {project.subtitle ? <p className="album-hero__subtitle"><LocalizedEditorial text={project.subtitle} names={[project.title]}/></p> : null}
+              {digital ? project.shortDescription ? <p className="album-hero__description"><LocalizedEditorial text={project.shortDescription} names={[project.title]}/></p> : null : <p className="album-hero__description"><LocalizedEditorial text={project.shortDescription || project.description} names={[project.title]}/></p>}
               {digital ? <DigitalAlbumOffer album={digital.album}/> : null}
               <dl className={`album-facts${digital ? ` ${digitalStyles.albumFacts}` : ""}`}>
-                <div><dt>Type</dt><dd>{kind}</dd></div>
-                <div><dt>Date</dt><dd>{documentedDate ?? "Non documentée"}</dd></div>
-                <div><dt>Statut</dt><dd>{status}</dd></div>
-                <div><dt>Données</dt><dd>{confidence}</dd></div>
-                {project.genres.length > 0 ? <div><dt>Genres</dt><dd>{project.genres.join(" · ")}</dd></div> : null}
+                <div><dt><T text="Type"/></dt><dd><T text={kind}/></dd></div>
+                <div><dt><T text="Date"/></dt><dd>{documentedDate ?? <T text="Non documentée"/>}</dd></div>
+                <div><dt><T text="Statut"/></dt><dd><T text={status}/></dd></div>
+                <div><dt><T text="Données"/></dt><dd><T text={confidence}/></dd></div>
+                {project.genres.length > 0 ? <div><dt><T text="Genres"/></dt><dd>{project.genres.join(" · ")}</dd></div> : null}
                 {project.credits.length > 0 ? (
                   <div>
-                    <dt>Crédits documentés</dt>
-                    <dd>{project.credits.map((credit) => `${getCreditRoleLabel(credit.role)} : ${credit.name}${credit.detail ? ` (${credit.detail})` : ""}`).join(" · ")}</dd>
+                    <dt><T text="Crédits documentés"/></dt>
+                    <dd>{project.credits.map((credit, index) => <span key={`${credit.role}-${credit.name}-${index}`}>{index ? " · " : ""}<T text={getCreditRoleLabel(credit.role)}/> : <OriginalName>{credit.name}</OriginalName>{credit.detail ? ` (${credit.detail})` : ""}</span>)}</dd>
                   </div>
                 ) : null}
               </dl>
@@ -113,7 +120,7 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                   title={project.title}
                   durationMs={project.audioPreview.durationMs}
                 />
-                {project.platforms.length ? <p>Écouter le titre complet</p> : null}
+                {project.platforms.length ? <p><T text="Écouter le titre complet"/></p> : null}
               </div> : null}
               <ProjectPlatforms platforms={project.platforms} />
             </div>
@@ -125,9 +132,9 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
         <Container className={`${digital ? digitalStyles.albumDetails : "album-details__grid"} motion-reveal motion-reveal--soft`}>
           {digital ? <DigitalTracklist view={digital} mode={digitalMode} /> : null}
           <aside className={`album-editorial-note${digital ? ` ${digitalStyles.albumEditorial}` : ""}`}>
-            <p className="eyebrow">Derrière le projet</p>
-            <h2>{project.description ? "L’histoire qui ouvre la musique." : "Le récit viendra trouver sa place."}</h2>
-            <p>{project.description || "Aucun récit éditorial n’est publié pour ce projet à ce jour."}</p>
+            <p className="eyebrow"><T text="Derrière le projet"/></p>
+            <h2><T text={project.description ? "L’histoire qui ouvre la musique." : "Le récit viendra trouver sa place."}/></h2>
+            <p><LocalizedEditorial text={project.description || "Aucun récit éditorial n’est publié pour ce projet à ce jour."} names={[project.title, project.primaryArtist ?? ""]}/></p>
           </aside>
           {!digital ? <Tracklist project={project} /> : null}
         </Container>

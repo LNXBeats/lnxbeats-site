@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { cookies, headers } from "next/headers";
+import { SiteLanguageProvider, T } from "@/components/site-language";
+import { LANGUAGE_COOKIE, siteLocale } from "@/lib/i18n/config";
 import { ADSENSE_CLIENT_ID } from "@/data/adsense";
 import { googleCmpConfigured } from "@/lib/ads/policy";
 import { GoogleCmpNavigationBoundary } from "@/components/google-cmp-navigation-boundary";
@@ -27,6 +30,7 @@ import "./v120-ui-conformance-v2-reference.css";
 import "./v130-ui-refinement.css";
 import "./v132-fluid-motion.css";
 import "./premium-public-vfinal.css";
+import "./languages.css";
 
 const siteUrl = CANONICAL_SITE_ORIGIN;
 const socialImage = new URL("/og.png", siteUrl).toString();
@@ -65,20 +69,25 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const preference = siteLocale((await cookies()).get(LANGUAGE_COOKIE)?.value);
+  const languagesEnabled = process.env.SITE_LANGUAGES_ENABLED === "true";
+  const locale = languagesEnabled ? siteLocale((await headers()).get("x-lnx-ui-language") ?? preference) : "fr";
   return (
-    <html lang="fr">
+    <html lang={locale === "zh" ? "zh-Hans" : locale}>
       <body>
+        <SiteLanguageProvider initialLocale={preference} enabled={languagesEnabled}>
         <GoogleCmpNavigationBoundary enabled={googleCmpConfigured(process.env)} />
-        <a className="skip-link" href="#contenu">Aller au contenu</a>
+        <a className="skip-link" href="#contenu"><T text="Aller au contenu" /></a>
         <OrderJourneyProvider>
           <SiteHeader supportAvailable={isSupportEnabled()} />
           <QuickAccessBar />
-          <main id="contenu">{children}</main>
+          <main id="contenu" lang={locale === "zh" ? "zh-Hans" : locale}>{children}</main>
           <SiteFooter />
           <SiteMotion />
         </OrderJourneyProvider>
         <JsonLd id="lnx-site-identity" data={buildSiteStructuredData()} />
+        </SiteLanguageProvider>
       </body>
     </html>
   );

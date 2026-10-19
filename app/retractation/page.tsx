@@ -1,3 +1,5 @@
+
+import { T, ContractLanguageNotice } from "@/components/site-language";
 import type { Metadata } from "next";
 
 import { Container } from "@/components/container";
@@ -22,12 +24,13 @@ export default async function WithdrawalPage({ searchParams }: { searchParams: P
     <section className="withdrawal-page">
       <Container className="withdrawal-page__container">
         <header>
-          <p className="eyebrow">Démarche en ligne</p>
-          <h1>Exercer mon droit de rétractation</h1>
-          <p>Lorsque ce droit s’applique, vous pouvez notifier votre décision ici, sans connexion obligatoire et sans avoir à fournir de motif.</p>
-          <p className="legal-document__warning" role="note">Le formulaire enregistre une déclaration et son heure de réception. Il ne décide pas automatiquement de son éligibilité et ne déclenche aucun remboursement.</p>
+          <p className="eyebrow"><T text="Démarche en ligne"/></p>
+          <h1><T text="Exercer mon droit de rétractation"/></h1>
+          <p><T text="Lorsque ce droit s’applique, vous pouvez notifier votre décision ici, sans connexion obligatoire et sans avoir à fournir de motif."/></p>
+          <p className="legal-document__warning" role="note"><T text="Le formulaire enregistre une déclaration et son heure de réception. Il ne décide pas automatiquement de son éligibilité et ne déclenche aucun remboursement."/></p>
+          <ContractLanguageNotice/>
         </header>
-        <div className="legal-document__sections withdrawal-page__information" aria-label="Informations sur la rétractation">
+        <div className="legal-document__sections withdrawal-page__information" lang="fr" translate="no" aria-label="Informations sur la rétractation">
           {notice.sections.map((section) => (
             <section key={section.title}>
               <h2>{section.title}</h2>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { useShopCart } from "@/components/shop-cart-provider";
+import { useSiteLanguage } from "@/components/site-language";
 
 const MAX_QUANTITY = 20;
 
@@ -20,6 +21,7 @@ export function ShopAddButton({
   maxQuantity?: number | null;
 }) {
   const { add, lines, ready } = useShopCart();
+  const { t } = useSiteLanguage();
   const [announcement, setAnnouncement] = useState("");
   const [quantity, setQuantity] = useState(1);
   const existingQuantity = ready
@@ -40,14 +42,14 @@ export function ShopAddButton({
         onClick={() => {
           add(productId, showQuantity ? selectedQuantity : 1);
           setAnnouncement(showQuantity && selectedQuantity > 1
-            ? `${selectedQuantity} produits ajoutés au panier.`
-            : "Produit ajouté au panier.");
+            ? t("{count} produits ajoutés au panier.", { count: selectedQuantity })
+            : t("Produit ajouté au panier."));
         }}
         type="button"
       >
-        {disabled ? unavailableLabel : limitReached ? "Maximum au panier" : "Ajouter au panier"}
+        {t(disabled ? unavailableLabel : limitReached ? "Maximum au panier" : "Ajouter au panier")}
       </button>
-      <span className="sr-only" aria-live="polite">{announcement}</span>
+      <span className="sr-only" aria-live="polite">{t(announcement)}</span>
     </>
   );
 
@@ -55,7 +57,7 @@ export function ShopAddButton({
   return (
     <div className="shop-product-purchase">
       <label>
-        <span>Quantité</span>
+        <span>{t("Quantité")}</span>
         <select
           disabled={buttonDisabled}
           onChange={(event) => setQuantity(Number(event.target.value))}

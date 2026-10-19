@@ -1,4 +1,6 @@
 "use client";
+import { T, useSiteLanguage } from "@/components/site-language";
+
 
 import { useEffect, useId, useRef, useState } from "react";
 import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
@@ -26,6 +28,7 @@ export function AudioPreviewPlayer({
   onTimeUpdate?: (timeSeconds: number) => void;
   onDuration?: (durationSeconds: number) => void;
 }) {
+  const { t } = useSiteLanguage();
   const reactId = useId();
   const playerId = `audio-${reactId}`;
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -92,22 +95,22 @@ export function AudioPreviewPlayer({
         className={styles.toggle}
         type="button"
         aria-label={playing
-          ? `Mettre en pause l’extrait de ${title}`
+          ? `${t("Mettre en pause l’extrait de")} ${title}`
           : ended
-            ? `Relire l’extrait de ${title}`
-            : `Lire l’extrait de ${title}`}
+            ? `${t("Relire l’extrait de")} ${title}`
+            : `${t("Lire l’extrait de")} ${title}`}
         onClick={() => void toggle()}
         disabled={loading}
       >
         <StudioVinylControl state={(loading ? "loading" : playing ? "pause" : ended ? "replay" : "play") satisfies StudioVinylControlState} />
       </button>
       <div className={styles.body}>
-        <strong>{title}</strong>
-        <span>Extrait audio</span>
+        <strong translate="no" className="notranslate">{title}</strong>
+        <span><T text="Extrait audio"/></span>
       </div>
       <div className={styles.progress}>
         <label>
-          <span className="sr-only">Position dans l’extrait de {title}</span>
+          <span className="sr-only"><T text="Position dans l’extrait de"/> {title}</span>
           <input
             type="range"
             min="0"
@@ -127,8 +130,8 @@ export function AudioPreviewPlayer({
         </label>
         <output className={styles.time} aria-live="off">{timeLabel(currentTime)} / {timeLabel(duration)}</output>
       </div>
-      {loading ? <span className={styles.status}>Chargement…</span> : null}
-      {failed ? <span className={styles.error} role="status">Impossible de lire cet extrait.</span> : null}
+      {loading ? <span className={styles.status}><T text="Chargement…"/></span> : null}
+      {failed ? <span className={styles.error} role="status"><T text="Impossible de lire cet extrait."/></span> : null}
     </div>
   );
 }

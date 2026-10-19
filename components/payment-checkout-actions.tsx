@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { ContractLanguageNotice, T, useSiteLanguage } from "@/components/site-language";
 import { PaypalCheckoutAction } from "@/components/paypal-checkout-action";
 import { StripeCheckoutAction } from "@/components/stripe-checkout-action";
 import type { PaymentProviderAvailability } from "@/lib/payments/availability";
@@ -31,6 +32,7 @@ export function PaymentCheckoutActions({
   providers: PaymentProviderAvailability;
   target?: "music" | "shop";
 }) {
+  const { t, locale } = useSiteLanguage();
   const [termsAccepted, setTermsAccepted] = useState(false);
   const enabledProviders = enabledCheckoutPaymentProviders(providers);
   if (enabledProviders.length === 0) return null;
@@ -38,9 +40,11 @@ export function PaymentCheckoutActions({
   return (
     <section className="payment-methods" aria-labelledby={`payment-methods-${orderNumber}`}>
       <div>
-        <p className="auth-panel__label">Moyen de paiement</p>
-        <h3 id={`payment-methods-${orderNumber}`}>Choisissez un parcours sécurisé.</h3>
-        <p>Une seule confirmation de paiement peut valider cette commande. Le retour sur le site ne suffit pas.</p>
+        <p className="auth-panel__label"><T text="Moyen de paiement"/></p>
+        <h3 id={`payment-methods-${orderNumber}`}><T text="Choisissez un parcours sécurisé."/></h3>
+        <p><T text="Une seule confirmation de paiement peut valider cette commande. Le retour sur le site ne suffit pas."/></p>
+        {target === "shop" ? <ContractLanguageNotice/> : null}
+        {target === "shop" && locale !== "fr" ? <p className="field__hint"><T text="Pour continuer, cochez la déclaration française ci-dessous après avoir lu les conditions de vente de la Boutique."/></p> : null}
         {target === "shop" ? (
           <label className="choice payment-methods__terms">
             <input
@@ -48,7 +52,7 @@ export function PaymentCheckoutActions({
               checked={termsAccepted}
               onChange={(event) => setTermsAccepted(event.target.checked)}
             />
-            <span>
+            <span lang="fr" translate="no">
               J’ai lu et j’accepte les <Link href="/cgv/boutique" target="_blank" rel="noreferrer">Conditions Générales de Vente de la Boutique</Link>.
             </span>
           </label>
@@ -80,11 +84,11 @@ export function PaymentCheckoutActions({
                   />
                 )}
                 <span className="payment-methods__choice-title">
-                  {provider === "stripe" ? <strong id={headingId}>{presentation.title}</strong> : null}
-                  <span id={provider === "paypal" ? headingId : undefined}>{presentation.providerLabel}</span>
+                  {provider === "stripe" ? <strong id={headingId}>{t(presentation.title)}</strong> : null}
+                  <span id={provider === "paypal" ? headingId : undefined}>{t(presentation.providerLabel)}</span>
                 </span>
               </header>
-              <p className="payment-methods__choice-details">{presentation.details}</p>
+              <p className="payment-methods__choice-details">{t(presentation.details)}</p>
               {provider === "stripe"
                 ? <StripeCheckoutAction orderNumber={orderNumber} amountCents={amountCents} target={target} termsAccepted={termsAccepted} />
                 : <PaypalCheckoutAction orderNumber={orderNumber} amountCents={amountCents} target={target} termsAccepted={termsAccepted} />}

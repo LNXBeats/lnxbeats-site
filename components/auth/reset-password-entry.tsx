@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/site-language";
+
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -20,9 +22,9 @@ export function ResetPasswordEntry({ confirmed }: { confirmed: boolean }) {
   }, [confirmed]);
 
   if (confirmed) {
-    return <p className="auth-form__success" role="status">Le changement est confirmé. <Link href="/connexion">Vous pouvez vous reconnecter</Link>.</p>;
+    return <p className="auth-form__success" role="status"><T text="Le changement est confirmé."/> <Link href="/connexion"><T text="Vous pouvez vous reconnecter"/></Link>.</p>;
   }
-  if (token === undefined) return <p role="status">Vérification du lien…</p>;
+  if (token === undefined) return <p role="status"><T text="Vérification du lien…"/></p>;
   if (token) return <ResetPasswordForm token={token} />;
-  return <p className="auth-form__error" role="alert">Ce lien n’est plus utilisable. <Link href="/mot-de-passe-oublie">Demandez-en un nouveau</Link>.</p>;
+  return <p className="auth-form__error" role="alert"><T text="Ce lien n’est plus utilisable."/> <Link href="/mot-de-passe-oublie"><T text="Demandez-en un nouveau"/></Link>.</p>;
 }

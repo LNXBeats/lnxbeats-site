@@ -8,6 +8,7 @@ import { navigation, quickAccessPlatforms } from "@/data/site";
 import { Container } from "@/components/container";
 import { UiIcon } from "@/components/ui-icon";
 import styles from "./site-header.module.css";
+import { LanguageSelector, T, useSiteLanguage } from "./site-language";
 
 const HEADER_COMPACT_SCROLL_THRESHOLD = 72;
 
@@ -17,6 +18,7 @@ const routeIcons = {
 } as const;
 
 export function SiteHeader({ supportAvailable = false }: { supportAvailable?: boolean }) {
+  const { t } = useSiteLanguage();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -68,7 +70,7 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
       }
 
       if (event.key !== "Tab") return;
-      const controls = Array.from(dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex="0"]'));
+      const controls = Array.from(dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), select:not([disabled]), [tabindex="0"]'));
       const first = controls[0];
       const last = controls.at(-1);
       if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
@@ -142,16 +144,16 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
   return (
     <header className={`site-header ${pathname === "/" ? "site-header--home" : ""} ${compact && !open ? "site-header--compact" : ""}`}>
       <Container className="site-header__inner">
-        <Link className="brand" href="/" aria-label="LNX Beats — accueil" onClick={() => setOpen(false)}>
+        <Link className="brand notranslate" translate="no" href="/" aria-label={t("LNX Beats — accueil")} onClick={() => setOpen(false)}>
           <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} priority />
         </Link>
 
-        <Link className="mobile-account-link" href="/compte" aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}>
+        <Link className="mobile-account-link" href="/compte" aria-label={t("Compte")} aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}>
           <UiIcon name="user" className={styles.accountIcon} />
-          <span>Compte</span>
+          <span>{t("Compte")}</span>
         </Link>
 
-        <nav ref={desktopNavigationRef} className="desktop-navigation" aria-label="Navigation principale">
+        <nav ref={desktopNavigationRef} className="desktop-navigation" aria-label={t("Navigation principale")}>
           {navigation.map((item) => (
             <Link
               key={item.href}
@@ -160,7 +162,7 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
               aria-current={isActive(item.href) ? "page" : undefined}
               data-nav-active={isActive(item.href)}
             >
-              {item.label}
+              {t(item.label)}
             </Link>
           ))}
           <Link
@@ -169,21 +171,22 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
             aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}
             data-nav-active={isActive("/connexion") || isActive("/compte")}
           >
-            Compte
+            {t("Compte")}
           </Link>
           <span className="desktop-navigation__active-indicator" aria-hidden="true" />
         </nav>
 
+        <LanguageSelector />
         <button
           ref={menuButtonRef}
           className="menu-button"
           type="button"
-          aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
+          aria-label={t(open ? "Fermer le menu" : "Ouvrir le menu")}
           aria-expanded={open}
           aria-controls="mobile-navigation"
           onClick={() => setOpen(true)}
         >
-          <span className="menu-button__label">Menu</span>
+          <span className="menu-button__label">{t("Menu")}</span>
           <span className={`menu-button__icon ${open ? "is-open" : ""}`} aria-hidden="true">
             <span />
             <span />
@@ -195,31 +198,32 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
         ref={dialogRef}
         id="mobile-navigation"
         className={styles.dialog}
-        aria-label="Menu principal"
+        aria-label={t("Menu principal")}
         aria-modal="true"
         onCancel={(event) => { event.preventDefault(); closeMenu(); }}
       >
         <div className={styles.dialogHeader}>
-          <button ref={closeButtonRef} className={styles.closeButton} type="button" aria-label="Fermer le menu" onClick={closeMenu}>
+          <button ref={closeButtonRef} className={styles.closeButton} type="button" aria-label={t("Fermer le menu")} onClick={closeMenu}>
             <UiIcon name="close" />
           </button>
-          <Link className={styles.dialogBrand} href="/" aria-label="LNX Beats — accueil" onClick={closeMenu}>
+          <Link className={`${styles.dialogBrand} notranslate`} translate="no" href="/" aria-label={t("LNX Beats — accueil")} onClick={closeMenu}>
             <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} sizes="148px" />
           </Link>
         </div>
         <div className={styles.dialogBody}>
-          <nav className={styles.navigation} aria-label="Navigation mobile">
+          <LanguageSelector menu />
+          <nav className={styles.navigation} aria-label={t("Navigation mobile")}>
             {groups.map((group) => (
-              <section className={styles.group} key={group.label} aria-label={group.label}>
-                <p className={styles.groupLabel}>{group.label}</p>
+              <section className={styles.group} key={group.label} aria-label={t(group.label)}>
+                <p className={styles.groupLabel}>{t(group.label)}</p>
                 {group.label === "Autour du projet" && supportAvailable ? (
                   <Link className={styles.menuLink} href="/soutenir" aria-current={isActive("/soutenir") ? "page" : undefined} onClick={closeMenu}>
-                    <UiIcon name="heart" /><span>Soutenir LNX Beats</span><UiIcon name="chevron-right" />
+                    <UiIcon name="heart" /><T text="Soutenir LNX Beats"/><UiIcon name="chevron-right" />
                   </Link>
                 ) : null}
                 {group.items.map((item) => (
                   <Link key={item.href} className={styles.menuLink} href={item.href} aria-current={isActive(item.href) ? "page" : undefined} onClick={closeMenu}>
-                    <UiIcon name={routeIcons[item.href]} /><span>{item.label}</span><UiIcon name="chevron-right" />
+                    <UiIcon name={routeIcons[item.href]} /><span>{t(item.label)}</span><UiIcon name="chevron-right" />
                   </Link>
                 ))}
               </section>
@@ -227,17 +231,17 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
           </nav>
           <div className={styles.account}>
             <Link className={styles.menuLink} href="/compte" aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined} onClick={closeMenu}>
-              <UiIcon name="user" /><span>Mon compte</span><UiIcon name="chevron-right" />
+              <UiIcon name="user" /><span>{t("Compte")}</span><UiIcon name="chevron-right" />
             </Link>
           </div>
-          <div className={styles.socials} aria-label="Plateformes officielles">
+          <div className={styles.socials} aria-label={t("Plateformes officielles")}>
             {quickAccessPlatforms.map(({ name, url, icon }) => (
-              <a key={name} href={url} target="_blank" rel="noopener noreferrer" aria-label={`${name} — nouvel onglet`}>
+              <a key={name} href={url} target="_blank" rel="noopener noreferrer" aria-label={t("{name} — nouvel onglet", { name })}>
                 <Image src={icon} alt="" width={22} height={22} />
               </a>
             ))}
           </div>
-          <p className={styles.signature}>Chaque histoire mérite sa musique.</p>
+          <p className={styles.signature}>{t("Chaque histoire mérite sa musique.")}</p>
         </div>
       </dialog>
     </header>

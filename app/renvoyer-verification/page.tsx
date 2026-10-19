@@ -1,3 +1,5 @@
+
+import { T } from "@/components/site-language";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -17,14 +19,14 @@ export default function ResendVerificationPage() {
     <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
         <div className="auth-intro">
-          <p className="eyebrow">Adresse à confirmer</p>
-          <h1>Recevoir un nouveau lien.</h1>
-          <p>Demandez un nouvel email de vérification. Le résultat reste identique pour toutes les adresses afin de protéger l’existence des comptes.</p>
+          <p className="eyebrow"><T text="Adresse à confirmer"/></p>
+          <h1><T text="Recevoir un nouveau lien."/></h1>
+          <p><T text="Demandez un nouvel email de vérification. Le résultat reste identique pour toutes les adresses afin de protéger l’existence des comptes."/></p>
         </div>
         <div className="auth-panel">
-          <p className="auth-panel__label">Nouvel envoi</p>
+          <p className="auth-panel__label"><T text="Nouvel envoi"/></p>
           <EmailRequestForm kind="verification" />
-          <p className="auth-panel__note"><Link href="/connexion">Revenir à la connexion</Link>.</p>
+          <p className="auth-panel__note"><Link href="/connexion"><T text="Revenir à la connexion"/></Link>.</p>
         </div>
       </Container>
     </section>

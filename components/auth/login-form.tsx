@@ -1,4 +1,6 @@
 "use client";
+import { T } from "@/components/site-language";
+
 
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type FormEvent } from "react";
@@ -44,16 +46,16 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   return (
     <form method="post" className="auth-form" onSubmit={handleSubmit} aria-describedby={error ? "login-error" : undefined}>
       <div className="auth-field">
-        <label htmlFor="email">Adresse email</label>
+        <label htmlFor="email"><T text="Adresse email"/></label>
         <input id="email" name="email" type="email" autoComplete="username" required maxLength={320} />
       </div>
       <div className="auth-field">
-        <label htmlFor="password">Mot de passe</label>
+        <label htmlFor="password"><T text="Mot de passe"/></label>
         <input id="password" name="password" type="password" autoComplete="current-password" required minLength={12} maxLength={128} />
       </div>
-      {error ? <p className="auth-form__error" id="login-error" role="alert">{error}</p> : null}
+      {error ? <p className="auth-form__error" id="login-error" role="alert"><T text={error}/></p> : null}
       <button className="auth-submit" type="submit" disabled={pending || !hydrated}>
-        <span>{pending ? "Connexion…" : "Entrer dans mon espace"}</span>
+        <span>{pending ? <T text="Connexion…"/> : <T text="Entrer dans mon espace"/>}</span>
         <span aria-hidden="true">→</span>
       </button>
     </form>

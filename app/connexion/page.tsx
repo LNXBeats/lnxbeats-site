@@ -1,3 +1,5 @@
+
+import { T } from "@/components/site-language";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -34,16 +36,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
         <div className="auth-intro">
-          <p className="eyebrow">Espace membre</p>
-          <h1>Accéder à votre espace.</h1>
-          <p>Votre compte protège votre profil, vos brouillons et le suivi de vos commandes. Si vous arrivez depuis Commander, votre parcours reprend à l’étape où vous l’avez laissé.</p>
+          <p className="eyebrow"><T text="Espace membre"/></p>
+          <h1><T text="Accéder à votre espace."/></h1>
+          <p><T text="Votre compte protège votre profil, vos brouillons et le suivi de vos commandes. Si vous arrivez depuis Commander, votre parcours reprend à l’étape où vous l’avez laissé."/></p>
         </div>
         <div className="auth-panel">
-          <p className="auth-panel__label">Connexion</p>
+          <p className="auth-panel__label"><T text="Connexion"/></p>
           <LoginForm returnTo={returnTo} />
           <div className="auth-panel__links auth-panel__links--login">
-            <Link className="auth-panel__forgotten" href="/mot-de-passe-oublie">Mot de passe oublié&nbsp;?</Link>
-            <p>Première visite&nbsp;? <Link href={`/inscription?retour=${encodeURIComponent(returnTo)}`}>Créer un espace membre</Link></p>
+            <Link className="auth-panel__forgotten" href="/mot-de-passe-oublie"><T text="Mot de passe oublié ?"/></Link>
+            <p><T text="Première visite ?"/> <Link href={`/inscription?retour=${encodeURIComponent(returnTo)}`}><T text="Créer un espace membre"/></Link></p>
           </div>
         </div>
       </Container>

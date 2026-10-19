@@ -1,3 +1,5 @@
+
+import { T } from "@/components/site-language";
 import type { Metadata } from "next";
 
 import { ResetPasswordEntry } from "@/components/auth/reset-password-entry";
@@ -23,12 +25,12 @@ export default async function ResetPasswordPage({ searchParams }: ResetPageProps
     <section className="auth-shell auth-shell--entry">
       <Container className="auth-shell__inner">
         <div className="auth-intro">
-          <p className="eyebrow">Sécurité</p>
-          <h1>{confirmed ? "Mot de passe modifié." : "Choisir un nouveau mot de passe."}</h1>
-          <p>{confirmed ? "Le mot de passe a été remplacé et toutes les anciennes sessions ont été révoquées." : "Choisissez une phrase secrète longue, personnelle et différente de vos autres accès."}</p>
+          <p className="eyebrow"><T text="Sécurité"/></p>
+          <h1>{confirmed ? <T text="Mot de passe modifié."/> : <T text="Choisir un nouveau mot de passe."/>}</h1>
+          <p>{confirmed ? <T text="Le mot de passe a été remplacé et toutes les anciennes sessions ont été révoquées."/> : <T text="Choisissez une phrase secrète longue, personnelle et différente de vos autres accès."/>}</p>
         </div>
         <div className="auth-panel">
-          <p className="auth-panel__label">Nouveau mot de passe</p>
+          <p className="auth-panel__label"><T text="Nouveau mot de passe"/></p>
           <ResetPasswordEntry confirmed={confirmed} />
         </div>
       </Container>

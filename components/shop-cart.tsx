@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useShopCart } from "@/components/shop-cart-provider";
-import { formatShopMoney, shopShippingMethodLabel } from "@/lib/shop/order-presentation";
+import { shopShippingMethodLabel } from "@/lib/shop/order-presentation";
+import { T, useSiteLanguage } from "@/components/site-language";
+import { OriginalName } from "@/components/original-name";
 
 type CartProduct = Readonly<{
   id: string;
@@ -62,6 +64,7 @@ export function ShopCart({
   purchasesEnabled: boolean;
 }) {
   const router = useRouter();
+  const { t, money, locale } = useSiteLanguage();
   const { lines, ready, setQuantity, remove, clear } = useShopCart();
   const [busy, setBusy] = useState(false);
   const [quotingKey, setQuotingKey] = useState<string | null>(null);
@@ -239,28 +242,28 @@ export function ShopCart({
     }
   }
 
-  if (!ready) return <p className="shop-cart-loading">Chargement du panier…</p>;
+  if (!ready) return <p className="shop-cart-loading">{t("Chargement du panier…")}</p>;
   if (!lines.length) {
     return (
       <div className="shop-cart-empty">
-        <h2>Votre panier est vide.</h2>
-        <p>Parcourez les éditions LNX Beats disponibles.</p>
-        <Link className="button button--primary" href="/boutique">Retour à la Boutique</Link>
+        <h2>{t("Votre panier est vide.")}</h2>
+        <p><T text="Parcourez les éditions LNX Beats disponibles."/></p>
+        <Link className="button button--primary" href="/boutique">{t("Retour à la Boutique")}</Link>
       </div>
     );
   }
 
   return (
-    <form className="shop-cart" onChange={resetOrderPreparation} onSubmit={submit}>
+    <form className="shop-cart" lang={locale === "zh" ? "zh-Hans" : locale} onChange={resetOrderPreparation} onSubmit={submit}>
       <div className="shop-cart__content">
         <section className="shop-cart__lines" aria-labelledby="shop-cart-lines-title">
-          <h2 id="shop-cart-lines-title">Votre sélection</h2>
+          <h2 id="shop-cart-lines-title">{t("Votre sélection")}</h2>
           <ul>
             {cartLines.map(({ productId, quantity, product }) => (
               <li className={changedProductId === productId ? "shop-cart__line--changed" : undefined} key={productId}>
                 <div className="shop-cart__product">
                   {product?.image ? (
-                    <Link aria-label={`Voir ${product.title}`} href={`/boutique/${encodeURIComponent(product.slug)}`}>
+                    <Link aria-label={`${t("Voir")} ${product.title}`} href={`/boutique/${encodeURIComponent(product.slug)}`}>
                       <Image
                         alt={product.image.alt}
                         height={64}
@@ -270,22 +273,22 @@ export function ShopCart({
                     </Link>
                   ) : null}
                   <div>
-                    <strong>{product?.title ?? "Produit indisponible"}</strong>
-                    <small>{product ? formatShopMoney(product.priceCents) : "Retirez cette ligne pour continuer."}</small>
-                    {product?.availabilityState === "SOLD_OUT" ? <em>Épuisé</em> : null}
-                    {product?.availabilityState === "TEMPORARILY_UNAVAILABLE" ? <em>Temporairement indisponible</em> : null}
+                    <strong>{product ? <OriginalName>{product.title}</OriginalName> : t("Produit indisponible")}</strong>
+                    <small>{product ? money(product.priceCents) : t("Retirez cette ligne pour continuer.")}</small>
+                    {product?.availabilityState === "SOLD_OUT" ? <em>{t("Épuisé")}</em> : null}
+                    {product?.availabilityState === "TEMPORARILY_UNAVAILABLE" ? <em>{t("Temporairement indisponible")}</em> : null}
                     {product?.availableQuantity !== null && product && quantity > product.availableQuantity
-                      ? <em>Quantité disponible : {product.availableQuantity}</em>
+                      ? <em>{t("Quantité disponible :")} {product.availableQuantity}</em>
                       : null}
                     {changedProductId === productId
-                      ? <em>Prix ou disponibilité modifié : vérifiez cette ligne.</em>
+                      ? <em>{t("Prix ou disponibilité modifié : vérifiez cette ligne.")}</em>
                       : null}
                   </div>
                 </div>
                 <label>
-                  <span>Quantité</span>
+                  <span>{t("Quantité")}</span>
                   <input
-                    aria-label={`Quantité pour ${product?.title ?? "le produit indisponible"}`}
+                    aria-label={`${t("Quantité pour")} ${product?.title ?? t("le produit indisponible")}`}
                     disabled={!product}
                     max={Math.min(20, product?.availableQuantity ?? 20)}
                     min="1"
@@ -294,8 +297,8 @@ export function ShopCart({
                     value={quantity}
                   />
                 </label>
-                <strong>{product ? formatShopMoney(product.priceCents * quantity) : "—"}</strong>
-                <button className="text-link" onClick={() => remove(productId)} type="button">Retirer</button>
+                <strong>{product ? money(product.priceCents * quantity) : "—"}</strong>
+                <button className="text-link" onClick={() => remove(productId)} type="button">{t("Retirer")}</button>
               </li>
             ))}
           </ul>
@@ -303,23 +306,23 @@ export function ShopCart({
 
         {shippingRequired && authenticated && memberAllowed ? (
           <fieldset className="shop-cart__address">
-            <legend>Adresse de livraison</legend>
-            <p>Elle est transmise au serveur uniquement lorsque vous préparez la commande et n’est jamais enregistrée dans le panier local.</p>
+            <legend>{t("Adresse de livraison")}</legend>
+            <p>{t("Elle est transmise au serveur uniquement lorsque vous préparez la commande et n’est jamais enregistrée dans le panier local.")}</p>
             <div className="shop-cart__field-grid">
-              <label><span>Prénom</span><input autoComplete="given-name" maxLength={100} name="firstName" required /></label>
-              <label><span>Nom</span><input autoComplete="family-name" maxLength={100} name="lastName" required /></label>
-              <label className="shop-cart__field-wide"><span>Adresse</span><input autoComplete="address-line1" maxLength={240} name="addressLine1" required /></label>
-              <label className="shop-cart__field-wide"><span>Complément <small>(facultatif)</small></span><input autoComplete="address-line2" maxLength={240} name="addressLine2" /></label>
-              <label><span>Code postal</span><input autoComplete="postal-code" maxLength={32} name="postalCode" required /></label>
-              <label><span>Ville</span><input autoComplete="address-level2" maxLength={120} name="city" required /></label>
+              <label><span>{t("Prénom")}</span><input autoComplete="given-name" maxLength={100} name="firstName" required /></label>
+              <label><span>{t("Nom")}</span><input autoComplete="family-name" maxLength={100} name="lastName" required /></label>
+              <label className="shop-cart__field-wide"><span>{t("Adresse")}</span><input autoComplete="address-line1" maxLength={240} name="addressLine1" required /></label>
+              <label className="shop-cart__field-wide"><span>{t("Complément")} <small>{t("(facultatif)")}</small></span><input autoComplete="address-line2" maxLength={240} name="addressLine2" /></label>
+              <label><span>{t("Code postal")}</span><input autoComplete="postal-code" maxLength={32} name="postalCode" required /></label>
+              <label><span>{t("Ville")}</span><input autoComplete="address-level2" maxLength={120} name="city" required /></label>
               {franceOnly ? (
                 <div className="shop-cart__field-wide shop-cart__fixed-field">
-                  <span>Pays</span>
-                  <strong>France</strong>
+                  <span>{t("Pays")}</span>
+                  <strong>{t("France")}</strong>
                   <input name="countryCode" type="hidden" value="FR" />
                 </div>
               ) : (
-                <label className="shop-cart__field-wide"><span>Pays</span><select autoComplete="country" name="countryCode" required>{allowedCountries.map((country) => <option key={country} value={country}>{country}</option>)}</select></label>
+                <label className="shop-cart__field-wide"><span>{t("Pays")}</span><select autoComplete="country" name="countryCode" required>{allowedCountries.map((country) => <option key={country} value={country}>{country}</option>)}</select></label>
               )}
             </div>
           </fieldset>
@@ -327,23 +330,23 @@ export function ShopCart({
       </div>
 
       <aside className="shop-cart__summary" aria-busy={quoting} aria-labelledby="shop-cart-summary-title">
-        <p className="eyebrow">Récapitulatif</p>
-        <h2 id="shop-cart-summary-title">Commande Boutique</h2>
+        <p className="eyebrow">{t("Récapitulatif")}</p>
+        <h2 id="shop-cart-summary-title">{t("Commande Boutique")}</h2>
         <dl>
-          <div><dt>Sous-total</dt><dd>{formatShopMoney(quote?.subtotalCents ?? subtotalCents)}</dd></div>
-          <div><dt>Expédition</dt><dd>{quote ? formatShopMoney(quote.shippingCents) : quoting ? "Calcul…" : memberProfileRequired ? "Compte membre requis" : "Indisponible"}</dd></div>
-          <div className="shop-cart__total"><dt>Total</dt><dd>{quote ? formatShopMoney(quote.totalCents) : quoting ? "Calcul…" : "—"}</dd></div>
-          {quote?.shippingRequired ? <><div><dt>Mode de livraison</dt><dd>{shopShippingMethodLabel(quote.shippingMethod)}</dd></div><div><dt>Destination</dt><dd>France</dd></div></> : null}
+          <div><dt>{t("Sous-total")}</dt><dd>{money(quote?.subtotalCents ?? subtotalCents)}</dd></div>
+          <div><dt>{t("Expédition")}</dt><dd>{quote ? money(quote.shippingCents) : quoting ? t("Calcul…") : memberProfileRequired ? t("Compte membre requis") : t("Indisponible")}</dd></div>
+          <div className="shop-cart__total"><dt>{t("Total")}</dt><dd>{quote ? money(quote.totalCents) : quoting ? t("Calcul…") : "—"}</dd></div>
+          {quote?.shippingRequired ? <><div><dt>{t("Mode de livraison")}</dt><dd>{t(shopShippingMethodLabel(quote.shippingMethod))}</dd></div><div><dt>{t("Destination")}</dt><dd>{t("France")}</dd></div></> : null}
         </dl>
-        {quoting ? <p className="shop-cart__pending" role="status">Calcul automatique de la livraison en cours…</p> : null}
-        <p>Aucun paiement n’est déclenché par le devis. Le serveur revérifie prix, disponibilité, poids et livraison avant de réserver le stock.</p>
-        {!purchasesEnabled ? <p className="shop-cart__pending" role="status"><strong>Achats temporairement indisponibles.</strong> Vous pouvez consulter le catalogue et conserver votre panier ; aucune réservation de stock ni tentative de paiement ne sera créée.</p> : null}
+        {quoting ? <p className="shop-cart__pending" role="status">{t("Calcul automatique de la livraison en cours…")}</p> : null}
+        <p>{t("Aucun paiement n’est déclenché par le devis. Le serveur revérifie prix, disponibilité, poids et livraison avant de réserver le stock.")}</p>
+        {!purchasesEnabled ? <p className="shop-cart__pending" role="status"><strong>{t("Achats temporairement indisponibles.")}</strong> {t("Vous pouvez consulter le catalogue et conserver votre panier ; aucune réservation de stock ni tentative de paiement ne sera créée.")}</p> : null}
         {displayedError ? (
           <div className="shop-cart__error" role="alert">
-            <p>{displayedError}</p>
+            <p>{t(displayedError)}</p>
             {error && authenticated && memberAllowed && !invalid ? (
               <button className="text-link" onClick={() => setQuoteAttempt((attempt) => attempt + 1)} type="button">
-                Réessayer le calcul
+                {t("Réessayer le calcul")}
               </button>
             ) : null}
           </div>
@@ -356,12 +359,12 @@ export function ShopCart({
               formNoValidate={!memberAllowed}
               type="submit"
             >
-              {busy ? "Préparation…" : purchasesEnabled ? "Préparer ma commande" : "Achats temporairement indisponibles"}
+              {t(busy ? "Préparation…" : purchasesEnabled ? "Préparer ma commande" : "Achats temporairement indisponibles")}
             </button>
           </div>
         ) : (
           <Link className="button button--primary" href="/connexion?retour=%2Fboutique%2Fpanier">
-            Se connecter pour continuer
+            {t("Se connecter pour continuer")}
           </Link>
         )}
       </aside>

@@ -5,6 +5,7 @@ import { nonceCspEnabled } from "@/lib/ads/policy";
 import { contentSecurityPolicy } from "@/lib/security/content-security-policy";
 import { CSP_NONCE_HEADER } from "@/lib/security/csp-nonce";
 import { digitalPaypalCheckoutPath, digitalPaypalSdkConfiguration } from "@/lib/digital/paypal-sdk-config";
+import { LANGUAGE_COOKIE, siteLocale } from "@/lib/i18n/config";
 
 // This one streaming upload already enforces Admin/origin and 80 MiB limits.
 // Canonical policy returns "none" for it; do not clone/truncate its multipart
@@ -24,6 +25,7 @@ export function proxy(request: NextRequest) {
   // Never trust client-supplied nonce/CSP headers: Next reads request CSP to
   // nonce its framework scripts. Only this proxy may supply that policy.
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-lnx-ui-language", request.nextUrl.pathname.startsWith("/admin") ? "fr" : siteLocale(request.cookies.get(LANGUAGE_COOKIE)?.value));
   requestHeaders.delete(CSP_NONCE_HEADER);
   requestHeaders.delete("content-security-policy");
   requestHeaders.delete("content-security-policy-report-only");

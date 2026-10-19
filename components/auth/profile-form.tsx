@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/components/site-language";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -42,11 +43,11 @@ export function ProfileForm({ initialName }: { initialName: string }) {
   return (
     <form className="auth-form" onSubmit={handleSubmit}>
       <div className="auth-field">
-        <label htmlFor="profile-display-name">Nom d’affichage</label>
+        <label htmlFor="profile-display-name"><T text="Nom d’affichage" /></label>
         <input id="profile-display-name" name="displayName" type="text" autoComplete="nickname" required maxLength={120} defaultValue={initialName} />
       </div>
-      {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
-      {message ? <p className="auth-form__success" role="status">{message}</p> : null}
+      {error ? <p className="auth-form__error" role="alert">{<T text={error} />}</p> : null}
+      {message ? <p className="auth-form__success" role="status">{<T text={message} />}</p> : null}
       <button className="auth-submit auth-submit--secondary" type="submit" disabled={pending}>
         <span>{pending ? "Enregistrement…" : "Enregistrer"}</span>
         <span aria-hidden="true">→</span>

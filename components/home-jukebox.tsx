@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { OriginalName } from "@/components/original-name";
+import { T, useSiteLanguage } from "@/components/site-language";
 import { UiIcon } from "@/components/ui-icon";
 import {
   type PointerEvent as ReactPointerEvent,
@@ -72,9 +74,9 @@ const sortOptions: ReadonlyArray<{ value: DiscographySort; label: string }> = [
   { value: "oldest", label: "Plus ancien" },
 ];
 
-function projectMeta(project: JukeboxProject) {
-  const kind = getProjectKindLabel(project.type);
-  if (project.status === "in-development") return `${kind} · ${getProjectStatusLabel(project.status)}`;
+function projectMeta(project: JukeboxProject, t: (source: string) => string) {
+  const kind = t(getProjectKindLabel(project.type));
+  if (project.status === "in-development") return `${kind} · ${t(getProjectStatusLabel(project.status))}`;
   return project.year ? `${kind} · ${project.year}` : kind;
 }
 
@@ -92,6 +94,7 @@ function centerRailItem(rail: HTMLElement, item: HTMLElement, behavior: ScrollBe
 }
 
 export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager = false }: ProjectJukeboxProps) {
+  const { t } = useSiteLanguage();
   const safeInitialIndex = Math.min(Math.max(initialIndex, 0), Math.max(projects.length - 1, 0));
   const initialSlug = projects[safeInitialIndex]?.slug ?? "";
   const [playerState, dispatchPlayerState] = useReducer(
@@ -434,40 +437,40 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   >
     <div className="home-jukebox__background" aria-hidden="true" data-motion-layer="background" />
     <div className="home-jukebox__heading">
-      <div><p className="section-index">{eyebrow}</p><h1 id={regionId}>{heading}</h1></div>
+      <div><p className="section-index"><T text={eyebrow}/></p><h1 id={regionId}>{t(heading)}</h1></div>
       <output aria-live="polite" aria-atomic="true">
-        <span className="visually-hidden">Projet actif : {active.title}. </span>
-        {playingProject ? <span className="visually-hidden">En lecture : {playingProject.title}. </span> : null}
-        <span className="home-jukebox__counter"><span>Projet</span> <strong>{currentVisibleIndex + 1}</strong> <span>sur</span> <strong>{visibleProjects.length}</strong></span>
+        <span className="visually-hidden">{t("Projet actif")} : <OriginalName>{active.title}</OriginalName>. </span>
+        {playingProject ? <span className="visually-hidden">{t("En lecture")} : <OriginalName>{playingProject.title}</OriginalName>. </span> : null}
+        <span className="home-jukebox__counter"><span>{t("Projet")}</span> <strong>{currentVisibleIndex + 1}</strong> <span>{t("sur")}</span> <strong>{visibleProjects.length}</strong></span>
       </output>
     </div>
 
     <div className="discography-jukebox__toolbar">
-      <div className="discography-jukebox__filters" role="group" aria-label="Filtrer la discographie">
+      <div className="discography-jukebox__filters" role="group" aria-label={t("Filtrer la discographie")}>
         {filterOptions.map((option) => <button
           type="button"
           key={option.value}
-          aria-label={`${option.label} · ${counts[option.value]} projet${counts[option.value] > 1 ? "s" : ""}`}
+          aria-label={`${t(option.label)} · ${counts[option.value]}`}
           aria-pressed={filter === option.value}
           disabled={counts[option.value] === 0}
           onClick={() => applyFilter(option.value)}
         >
-          <span className="discography-jukebox__filter-label discography-jukebox__filter-label--desktop">{option.label}</span>
-          <span className="discography-jukebox__filter-label discography-jukebox__filter-label--mobile" aria-hidden="true">{option.mobileLabel ?? option.label}</span>
+          <span className="discography-jukebox__filter-label discography-jukebox__filter-label--desktop">{t(option.label)}</span>
+          <span className="discography-jukebox__filter-label discography-jukebox__filter-label--mobile" aria-hidden="true">{t(option.mobileLabel ?? option.label)}</span>
           <strong aria-hidden="true">{counts[option.value]}</strong>
         </button>)}
       </div>
       <label className="discography-jukebox__sort">
-        <span className="visually-hidden">Trier la discographie</span>
+        <span className="visually-hidden">{t("Trier la discographie")}</span>
         <select value={sort} onChange={(event) => applySort(event.target.value as DiscographySort)}>
-          {sortOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+          {sortOptions.map((option) => <option value={option.value} key={option.value}>{t(option.label)}</option>)}
         </select>
       </label>
     </div>
 
     <div className="home-jukebox__scene">
-      {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--previous" type="button" onClick={() => selectVisible(currentVisibleIndex - 1)} disabled={currentVisibleIndex === 0} aria-label="Projet précédent">{leftArrow}</button> : null}
-      <ul className="home-jukebox__rail" ref={railRef} aria-label={`${eyebrow} — projets à parcourir`}>
+      {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--previous" type="button" onClick={() => selectVisible(currentVisibleIndex - 1)} disabled={currentVisibleIndex === 0} aria-label={t("Projet précédent")}>{leftArrow}</button> : null}
+      <ul className="home-jukebox__rail" ref={railRef} aria-label={t("Projets à parcourir")}>
         {visibleProjects.map((project, index) => {
           const distance = index - currentVisibleIndex;
           const position = distance === 0 ? "is-active" : distance === -1 ? "is-previous" : distance === 1 ? "is-next" : distance === -2 ? "is-far-previous" : distance === 2 ? "is-far-next" : distance < 0 ? "is-hidden-before" : "is-hidden-after";
@@ -481,14 +484,14 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
               <div className="discography-card__art">
                 {artwork}
                 {playingSlug === project.slug && project.audioPreview ? <>
-                  <span className="discography-card__playing" aria-hidden="true">En lecture</span>
+                  <span className="discography-card__playing" aria-hidden="true">{t("En lecture")}</span>
                   <span className="home-jukebox__progress" style={{ transform: `scaleX(${progress})` }} aria-hidden="true" />
                 </> : null}
               </div>
               <div className="discography-card__body">
-                <p>{projectMeta(project)}</p>
-                <h3>{project.title}</h3>
-                {distance === 0 ? <Link className="discography-card__link" href={`/album/${project.slug}`} aria-label={`Entrer dans le projet ${project.title}`} data-active-control="true">Entrer <span aria-hidden="true"><UiIcon name="arrow-right" /></span></Link> : null}
+                <p>{projectMeta(project, t)}</p>
+                <h3><OriginalName>{project.title}</OriginalName></h3>
+                {distance === 0 ? <Link className="discography-card__link" href={`/album/${project.slug}`} aria-label={`${t("Entrer dans le projet")} ${project.title}`} data-active-control="true">{t("Entrer")} <span aria-hidden="true"><UiIcon name="arrow-right" /></span></Link> : null}
               </div>
               {distance !== 0 ? <button
                 className="discography-card__select-hit"
@@ -496,27 +499,27 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onClick={() => handleCoverClick(globalIndex)}
-                aria-label={`Afficher ${project.title}`}
+                aria-label={`${t("Afficher")} ${project.title}`}
                 tabIndex={outsideScene ? -1 : 0}
               /> : null}
             </article>
           </li>;
         })}
       </ul>
-      {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--next" type="button" onClick={() => selectVisible(currentVisibleIndex + 1)} disabled={currentVisibleIndex === visibleProjects.length - 1} aria-label="Projet suivant">{rightArrow}</button> : null}
+      {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--next" type="button" onClick={() => selectVisible(currentVisibleIndex + 1)} disabled={currentVisibleIndex === visibleProjects.length - 1} aria-label={t("Projet suivant")}>{rightArrow}</button> : null}
     </div>
-    {visibleProjects.length > 1 ? <p className="home-jukebox__navigation-hint" aria-hidden="true"><span><UiIcon name="arrow-left" /> Faites défiler les projets <UiIcon name="arrow-right" /></span><span>Glissez pour parcourir</span></p> : null}
+    {visibleProjects.length > 1 ? <p className="home-jukebox__navigation-hint" aria-hidden="true"><span><UiIcon name="arrow-left" /> {t("Faites défiler les projets")} <UiIcon name="arrow-right" /></span><span>{t("Glissez pour parcourir")}</span></p> : null}
     <div className="discography-jukebox__player-context" data-player-context>
       <div className="discography-jukebox__player-copy">
-        <span>{playing ? "En lecture" : "Extrait sélectionné"}</span>
-        <strong>{playerProject.title}</strong>
-        <small>{playerProject.audioPreview ? `Extrait · ${previewDuration(playerProject.audioPreview.durationMs)}` : "Aucun extrait disponible"}</small>
+        <span>{t(playing ? "En lecture" : "Extrait sélectionné")}</span>
+        <strong><OriginalName>{playerProject.title}</OriginalName></strong>
+        <small>{playerProject.audioPreview ? `${t("Extrait")} · ${previewDuration(playerProject.audioPreview.durationMs)}` : t("Aucun extrait disponible")}</small>
       </div>
-      {playingProject && playingProject.slug !== active.slug ? <p className="discography-jukebox__selected-context">Sélection affichée <strong>{active.title}</strong></p> : null}
+      {playingProject && playingProject.slug !== active.slug ? <p className="discography-jukebox__selected-context">{t("Sélection affichée")} <strong><OriginalName>{active.title}</OriginalName></strong></p> : null}
       <button
         type="button"
         className="discography-jukebox__player-toggle"
-        aria-label={playing ? `Mettre en pause l’extrait de ${playerProject.title}` : selectedHasEnded ? `Relire l’extrait de ${playerProject.title}` : `Lire l’extrait de ${playerProject.title}`}
+        aria-label={`${t(playing ? "Mettre en pause l’extrait de" : selectedHasEnded ? "Relire l’extrait de" : "Lire l’extrait de")} ${playerProject.title}`}
         disabled={!playerProject.audioPreview}
         onClick={() => { if (playing) pauseCurrent(); else void togglePlay(); }}
       >
@@ -525,7 +528,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       <span className="discography-jukebox__player-progress" aria-hidden="true"><span style={{ transform: `scaleX(${progress})` }} /></span>
     </div>
     {playingProject && playingProject.slug !== active.slug && active.audioPreview ? <button className="discography-jukebox__play-selection" type="button" onClick={() => void togglePlay()}>
-      Lire la sélection : {active.title} <UiIcon name="play" />
+      {t("Lire la sélection")} : <OriginalName>{active.title}</OriginalName> <UiIcon name="play" />
     </button> : null}
     <audio
       ref={audioRef}

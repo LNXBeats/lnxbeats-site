@@ -1,9 +1,10 @@
 "use client";
+import { T, useSiteLanguage } from "@/components/site-language";
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { readDigitalCart, writeDigitalCart, digitalMoney, type DigitalCompletionView } from "./digital-catalog";
-import { digitalArticleCount } from "@/lib/digital/cart-presentation";
+import { readDigitalCart, writeDigitalCart, type DigitalCompletionView } from "./digital-catalog";
 import { DigitalRequestError } from "@/lib/digital/request-error";
 import styles from "./digital.module.css";
 import { digitalUiIsLive, type DigitalUiMode } from "./digital-mode-copy";
@@ -17,6 +18,7 @@ export async function digitalRequest(path: string, body?: unknown) {
 }
 
 export function DigitalCart({ mode = "TEST" }: { mode?: DigitalUiMode }) {
+  const { t, money } = useSiteLanguage();
   const [value, setValue] = useState<Quote | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [updating, setUpdating] = useState(true), [notice, setNotice] = useState("");
   const serial = useRef({ value: 0 });
@@ -45,7 +47,7 @@ export function DigitalCart({ mode = "TEST" }: { mode?: DigitalUiMode }) {
   }, [refresh]);
 
   function remove(id: string, title: string) {
-    try { writeDigitalCart(readDigitalCart().filter(item => item !== id)); setNotice(`${title} a été retiré du panier.`); }
+    try { writeDigitalCart(readDigitalCart().filter(item => item !== id)); setNotice(t("{title} a été retiré du panier.", { title })); }
     catch { setError("Le navigateur n’a pas pu modifier le panier. Réessayez."); }
   }
   async function continueCheckout() {
@@ -64,24 +66,24 @@ export function DigitalCart({ mode = "TEST" }: { mode?: DigitalUiMode }) {
   }
   return <div className={`${styles.grid} ${styles.cartGrid}`}>
     <section className={`${styles.panel} ${styles.cartPanel}`} aria-labelledby="digital-cart-selection">
-      <div className={styles.cartHeading}><h2 id="digital-cart-selection">Votre sélection</h2>{value ? <span>{digitalArticleCount(value.lines.length)}</span> : null}</div>
-      <p className={styles.note}>WAV + MP3 inclus. Panier séparé de la Boutique physique.</p>
-      {error ? <p role="alert" className={styles.status}>{error}</p> : null}
-      <p className="sr-only" role="status" aria-live="polite">{notice}</p>
+      <div className={styles.cartHeading}><h2 id="digital-cart-selection"><T text="Votre sélection"/></h2>{value ? <span><T text={value.lines.length === 1 ? "{count} article" : "{count} articles"} values={{ count: value.lines.length }}/></span> : null}</div>
+      <p className={styles.note}><T text="WAV + MP3 inclus. Panier séparé de la Boutique physique."/></p>
+      {error ? <p role="alert" className={styles.status}><T text={error}/></p> : null}
+      <p className="sr-only" role="status" aria-live="polite">{notice === "Les titres inclus dans l’album ont été retirés : ils ne seront pas facturés deux fois." ? <T text={notice}/> : notice}</p>
       {value?.lines.length ? <ul className={styles.cartRows} aria-busy={updating}>{value.lines.map(l => <li className={styles.cartRow} key={l.id}>
         <span className={styles.cartIcon} aria-hidden="true">♪</span>
-        <div className={styles.cartIdentity}><strong>{l.title}</strong><p>{l.scope === "ALBUM" ? `${l.trackCount} pistes · Album` : "Titre individuel"} · WAV + MP3</p>{l.completion ? <div className={styles.cartCompletion}><span>Prix de l’album <span className={styles.cartAmount}>{digitalMoney(l.completion.basePriceCents)}</span></span><span>Titres déjà payés, après remboursements <span className={styles.cartAmount}>−{digitalMoney(l.completion.creditCents)}</span></span></div> : null}</div>
-        <div className={styles.cartLineActions}><strong className={styles.cartAmount}>{digitalMoney(l.priceCents)}</strong><button type="button" className={styles.cartRemove} aria-label={`Retirer ${l.title} du panier`} disabled={busy || updating} onClick={() => remove(l.id, l.title)}>Retirer</button></div>
-      </li>)}</ul> : <p role="status">{value ? "Votre panier numérique est vide." : error ? "Sélection à vérifier avant tout paiement." : "Vérification de votre sélection…"}</p>}
-      {error ? <div className={styles.actions}><Link href="/contact" className="text-link">Contacter LNX Beats</Link><button type="button" className={styles.quiet} onClick={() => { try { writeDigitalCart([]); } catch { setError("Le navigateur n’a pas pu modifier le panier."); } }}>Vider la sélection numérique</button><p className={styles.muted}>Cela n’annule pas un paiement déjà engagé.</p></div> : null}
-      <Link className={styles.cartBack} href="/discographie">Continuer à découvrir la musique</Link>
+        <div className={styles.cartIdentity}><strong translate="no" className="notranslate">{l.title}</strong><p>{l.scope === "ALBUM" ? <T text="{count} pistes · Album" values={{ count: l.trackCount }}/> : <T text="Titre individuel"/>} · WAV + MP3</p>{l.completion ? <div className={styles.cartCompletion}><span><T text="Prix de l’album"/> <span className={styles.cartAmount}>{money(l.completion.basePriceCents)}</span></span><span><T text="Titres déjà payés, après remboursements"/> <span className={styles.cartAmount}>−{money(l.completion.creditCents)}</span></span></div> : null}</div>
+        <div className={styles.cartLineActions}><strong className={styles.cartAmount}>{money(l.priceCents)}</strong><button type="button" className={styles.cartRemove} aria-label={t("Retirer {title} du panier", { title: l.title })} disabled={busy || updating} onClick={() => remove(l.id, l.title)}><T text="Retirer"/></button></div>
+      </li>)}</ul> : <p role="status">{value ? <T text="Votre panier numérique est vide."/> : error ? <T text="Sélection à vérifier avant tout paiement."/> : <T text="Vérification de votre sélection…"/>}</p>}
+      {error ? <div className={styles.actions}><Link href="/contact" className="text-link"><T text="Contacter LNX Beats"/></Link><button type="button" className={styles.quiet} onClick={() => { try { writeDigitalCart([]); } catch { setError("Le navigateur n’a pas pu modifier le panier."); } }}><T text="Vider la sélection numérique"/></button><p className={styles.muted}><T text="Cela n’annule pas un paiement déjà engagé."/></p></div> : null}
+      <Link className={styles.cartBack} href="/discographie"><T text="Continuer à découvrir la musique"/></Link>
     </section>
     <aside className={`${styles.panel} ${styles.cartPanel}`} aria-labelledby="digital-cart-summary">
-      <h2 id="digital-cart-summary">Récapitulatif</h2>
-      <div className={styles.cartTotal} aria-busy={updating}><span>Total à payer{value ? <small>{digitalArticleCount(value.lines.length)}</small> : null}</span><strong className={styles.cartAmount}>{value ? digitalMoney(value.totalCents) : "—"}</strong></div>
-      <p className={styles.muted}>Les titres inclus dans un album ne sont pas facturés deux fois. Un complément d’album déduit seulement les achats éligibles déjà payés, après remboursements.</p>
-      <p className={styles.note}>{!digitalUiIsLive(mode) ? "Tarifs de test, non définitifs. " : ""}France métropolitaine et Corse, sous réserve d’éligibilité.</p>
-      <div className={styles.cartCheckoutActions}><button className={styles.button} type="button" disabled={busy || updating || !value?.lines.length || !!error} onClick={() => void continueCheckout()}>{busy ? "Vérification…" : "Passer au paiement"}</button><Link className="text-link" href="/connexion?retour=%2Fmusique%2Fpanier">Se connecter</Link></div>
+      <h2 id="digital-cart-summary"><T text="Récapitulatif"/></h2>
+      <div className={styles.cartTotal} aria-busy={updating}><span><T text="Total à payer"/>{value ? <small><T text={value.lines.length === 1 ? "{count} article" : "{count} articles"} values={{ count: value.lines.length }}/></small> : null}</span><strong className={styles.cartAmount}>{value ? money(value.totalCents) : "—"}</strong></div>
+      <p className={styles.muted}><T text="Les titres inclus dans un album ne sont pas facturés deux fois. Un complément d’album déduit seulement les achats éligibles déjà payés, après remboursements."/></p>
+      <p className={styles.note}>{!digitalUiIsLive(mode) ? <T text="Tarifs de test, non définitifs."/> : ""}<T text="France métropolitaine et Corse, sous réserve d’éligibilité."/></p>
+      <div className={styles.cartCheckoutActions}><button className={styles.button} type="button" disabled={busy || updating || !value?.lines.length || !!error} onClick={() => void continueCheckout()}>{busy ? <T text="Vérification…"/> : <T text="Passer au paiement"/>}</button><Link className="text-link" href="/connexion?retour=%2Fmusique%2Fpanier"><T text="Se connecter"/></Link></div>
     </aside>
   </div>;
 }

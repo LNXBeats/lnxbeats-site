@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/components/site-language";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -31,9 +32,9 @@ export function LogoutButton() {
   return (
     <span className="auth-logout">
       <button className="auth-text-button" type="button" onClick={logout} disabled={pending}>
-        {pending ? "Fermeture…" : "Fermer la session"}
+        {pending ? <T text="Fermeture…" /> : <T text="Fermer la session" />}
       </button>
-      {error ? <span className="auth-form__error" role="alert">{error}</span> : null}
+      {error ? <span className="auth-form__error" role="alert">{<T text={error} />}</span> : null}
     </span>
   );
 }

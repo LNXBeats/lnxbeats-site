@@ -8,6 +8,7 @@ import { Container } from "@/components/container";
 import { getAuthSession } from "@/lib/auth/session";
 import { parseShopConfiguration } from "@/lib/shop/config";
 import { listPublicShopProducts } from "@/lib/shop/order-service";
+import { T } from "@/components/site-language";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,11 @@ export default async function ShopCartPage() {
   return (
     <div className="shop-commerce-shell shop-cart-page">
       <Container>
-        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> Continuer mes achats</Link>
+        <Link className="text-link shop-back-link" href="/boutique"><span aria-hidden="true"><UiIcon name="arrow-left" /></span> <T text="Continuer mes achats" /></Link>
         <header className="shop-cart-page__heading">
-          <p className="eyebrow">Boutique LNX Beats</p>
-          <h1>Votre panier.</h1>
-          <p>Vérifiez votre sélection, votre livraison et le total avant de préparer la commande.</p>
+          <p className="eyebrow"><T text="Boutique LNX Beats" /></p>
+          <h1><T text="Votre panier." /></h1>
+          <p><T text="Vérifiez votre sélection, votre livraison et le total avant de préparer la commande." /></p>
         </header>
         <ShopCart
           allowedCountries={configuration.allowedCountries}
