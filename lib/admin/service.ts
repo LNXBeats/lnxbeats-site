@@ -385,6 +385,7 @@ export async function listAdminMembers(query = "") {
       role: true,
       status: true,
       emailVerified: true,
+      lastLoginAt: true,
       createdAt: true,
       _count: { select: { orders: true, shopOrders: true } },
     },

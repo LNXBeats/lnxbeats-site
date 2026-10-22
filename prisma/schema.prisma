@@ -1424,6 +1424,7 @@ model User {
   image                              String?                           @db.VarChar(500)
   role                               UserRole                          @default(MEMBER)
   status                             UserStatus                        @default(PENDING)
+  lastLoginAt                        DateTime?                         @db.Timestamptz(3)
   createdAt                          DateTime                          @default(now()) @db.Timestamptz(3)
   updatedAt                          DateTime                          @updatedAt @db.Timestamptz(3)
   customerProfile                    Customer?

@@ -8,6 +8,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { sendPasswordResetEmail } from "@/lib/auth/email-delivery";
 import { issueEmailVerification } from "@/lib/auth/email-verification";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/environment";
+import { recordSuccessfulLogin } from "@/lib/auth/last-login";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
@@ -130,6 +131,9 @@ export const auth = betterAuth({
             select: { status: true },
           });
           return user?.status === "ACTIVE";
+        },
+        async after(session, context) {
+          await recordSuccessfulLogin(session, context, prisma.user);
         },
       },
     },
