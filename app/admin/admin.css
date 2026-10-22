@@ -1288,7 +1288,11 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-v21-member-card dl > div { min-width: 0; padding: .55rem .65rem; border: 1px solid rgba(244,240,232,.09); border-radius: 8px; }
 .admin-v21-member-card dt { color: #99968f; font-size: .57rem; }
 .admin-v21-member-card dd { margin: .2rem 0 0; overflow-wrap: anywhere; font-size: .72rem; font-weight: 750; }
-.admin-v21-member-card > small { color: #99968f; font-size: .6rem; }
+.admin-v21-member-card__dates { display: grid; min-width: 0; gap: .55rem; line-height: 1.5; }
+.admin-v21-member-card__dates > small { color: #99968f; font-size: .6rem; }
+.admin-v21-member-card__last-login { display: grid; gap: .15rem; margin: 0; color: #b9b5ad; font-size: .65rem; }
+.admin-v21-member-card__last-login > time { color: #e8d3a4; font-weight: 650; overflow-wrap: anywhere; }
+.admin-v21-member-card__timezone { color: #b9b5ad; font-size: .6rem; font-weight: 400; }
 .admin-v21-member-card__action { display: inline-flex; width: fit-content; min-height: 44px; align-items: center; color: #e5c982; font-size: .66rem; font-weight: 750; }
 
 @media (min-width: 1121px) {
@@ -1303,7 +1307,7 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
   .admin-v21-member-card__heading > .admin-v21-status { margin-left: .2rem; }
   .admin-v21-member-card dl { grid-template-columns: repeat(4,minmax(0,1fr)); gap: .15rem; }
   .admin-v21-member-card dl > div { padding: .25rem .4rem; border: 0; }
-  .admin-v21-member-card > small { max-width: 18ch; }
+  .admin-v21-member-card__dates { max-width: 28ch; }
   .admin-v21-member-card__action { justify-self: end; white-space: nowrap; }
 }
 @media (max-width: 1300px) {
