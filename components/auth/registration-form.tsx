@@ -1,5 +1,7 @@
 "use client";
-import { T } from "@/components/site-language";
+import { T, useSiteLanguage } from "@/components/site-language";
+import { DEFAULT_RELEASE_ALERT_CHOICES } from "@/lib/release-notifications/domain";
+import { releaseAlertCopy } from "@/lib/release-notifications/messages";
 
 
 import Link from "next/link";
@@ -33,6 +35,8 @@ async function readPayload(response: Response) {
 }
 
 export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }) {
+  const { locale } = useSiteLanguage(), alertCopy = releaseAlertCopy(locale);
+  const [releaseAlerts, setReleaseAlerts] = useState(DEFAULT_RELEASE_ALERT_CHOICES);
   const [stage, setStage] = useState<Stage>("email");
   const [email, setEmail] = useState("");
   const [attemptId, setAttemptId] = useState("");
@@ -138,7 +142,7 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
       const response = await fetch("/api/auth/registration/complete", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password, passwordConfirmation }),
+        body: JSON.stringify({ password, passwordConfirmation, releaseAlerts: { ...releaseAlerts, locale } }),
       });
       const payload = await readPayload(response);
       if (!response.ok || !payload.completed) throw new Error(payload.error || "Votre espace n’a pas pu être finalisé.");
@@ -224,6 +228,11 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
           <label htmlFor="registration-password-confirmation"><T text="Confirmer le mot de passe"/></label>
           <input id="registration-password-confirmation" name="passwordConfirmation" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
         </div>
+        <fieldset className="registration-release-alerts" style={{border:"1px solid #b69b5655",borderRadius:12,padding:"1rem",display:"grid",gap:".8rem"}}>
+          <legend>{alertCopy.heading}</legend><p>{alertCopy.intro}</p>
+          {(["music", "shop", "editorial"] as const).map(category => <label key={category} style={{display:"flex",gap:".7rem",alignItems:"start"}}><input type="checkbox" checked={releaseAlerts[category]} onChange={event => setReleaseAlerts(current => ({...current,[category]:event.target.checked}))} /><span>{alertCopy[category]}</span></label>)}
+          <p className="auth-panel__note">{alertCopy.privacy}</p>
+        </fieldset>
         {error ? <p className="auth-form__error" id="registration-error" role="alert"><T text={error}/></p> : null}
         <button className="auth-submit" type="submit" disabled={pending}><span>{pending ? <T text="Création…"/> : <T text="Créer mon espace"/>}</span><span aria-hidden="true">→</span></button>
       </form>

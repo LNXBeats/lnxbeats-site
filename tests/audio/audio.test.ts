@@ -57,20 +57,17 @@ test("a complete WAV generates the public MP3 without source metadata", async ()
   } finally { await source.cleanup(); }
 });
 
-test("short sources and offsets near the end adjust to remaining duration", () => {
+test("new public previews always start at zero and short sources adjust to their end", () => {
   assert.deepEqual(resolvedAudioExcerpt(42_000, "0", "60000"), {
     offsetMs: 0, requestedDurationMs: 60_000, durationMs: 42_000, adjustedToSourceEnd: true,
   });
-  assert.deepEqual(resolvedAudioExcerpt(150_000, "145000", "60000"), {
-    offsetMs: 145_000, requestedDurationMs: 60_000, durationMs: 5_000, adjustedToSourceEnd: true,
-  });
-  assert.deepEqual(resolvedAudioExcerpt(150_000, "45000", "60000"), {
-    offsetMs: 45_000, requestedDurationMs: 60_000, durationMs: 60_000, adjustedToSourceEnd: false,
+  assert.deepEqual(resolvedAudioExcerpt(150_000, "0", "60000"), {
+    offsetMs: 0, requestedDurationMs: 60_000, durationMs: 60_000, adjustedToSourceEnd: false,
   });
 });
 
 test("invalid offset and duration fail closed", () => {
-  for (const offset of ["-1", "150000", "hello"]) assert.throws(() => resolvedAudioExcerpt(150_000, offset, "60000"), CatalogAudioError);
+  for (const offset of ["-1", "1", "45000", "145000", "150000", "hello"]) assert.throws(() => resolvedAudioExcerpt(150_000, offset, "60000"), CatalogAudioError);
   for (const duration of ["0", "60001", "hello"]) assert.throws(() => resolvedAudioExcerpt(150_000, "0", duration), CatalogAudioError);
 });
 

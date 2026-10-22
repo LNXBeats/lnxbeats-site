@@ -32,7 +32,9 @@ test("Batch stop prevents new starts, and page parsing never accepts an arbitrar
 });
 test("Admin import keeps batch selection explicit and preserves prior rows; mutations stay authenticated", async () => {
   const ui = await readFile(new URL("../../components/digital-admin.tsx", import.meta.url), "utf8");
-  assert.match(ui, /\[\.\.\.old, \.\.\.unique\.map/); assert.match(ui, /Choisir explicitement/); assert.match(ui, /saved\.previewStartMs === startMs/); assert.match(ui, /state !== "ready"/);
+  assert.match(ui, /appendLocalAudioFiles\(old\.map\(entry => entry\.file\), incoming\)/);
+  assert.match(ui, /return \[\.\.\.old, \.\.\.latest\.files\.filter\(file => !present\.has\(file\)\)/);
+  assert.match(ui, /Choisir explicitement/); assert.match(ui, /saved\.previewStartMs === startMs/); assert.match(ui, /state !== "ready"/);
   const route = await readFile(new URL("../../app/api/admin/digital/projects/[id]/tracks/route.ts", import.meta.url), "utf8");
   assert.match(route, /digitalActor\(request, true\)/); assert.match(route, /digitalBody/); assert.match(route, /updateCatalogTrack/); assert.match(route, /moveCatalogTrack/);
 });

@@ -1,3 +1,5 @@
+import { parseReleaseAlertChoices } from "@/lib/release-notifications/domain";
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const PASSWORD_MIN_LENGTH = 12;
@@ -71,7 +73,8 @@ export function isAllowedRegistrationCodePayload(value: unknown) {
 export function isAllowedRegistrationCompletionPayload(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const payload = value as Record<string, unknown>;
-  return Object.keys(payload).every((key) => key === "password" || key === "passwordConfirmation")
+  return Object.keys(payload).every((key) => key === "password" || key === "passwordConfirmation" || key === "releaseAlerts")
+    && (payload.releaseAlerts === undefined || parseReleaseAlertChoices(payload.releaseAlerts) !== null)
     && typeof payload.password === "string"
     && typeof payload.passwordConfirmation === "string"
     && validateRegistrationPassword({

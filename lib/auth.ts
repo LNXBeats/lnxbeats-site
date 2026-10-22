@@ -9,6 +9,7 @@ import { sendPasswordResetEmail } from "@/lib/auth/email-delivery";
 import { issueEmailVerification } from "@/lib/auth/email-verification";
 import { shouldUseSecureAuthCookies } from "@/lib/auth/environment";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { recordSuccessfulSignIn } from "@/lib/auth/last-sign-in";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
 
 const authBaseUrl = process.env.AUTH_URL ?? process.env.SITE_URL ?? "http://localhost:3000";
@@ -130,6 +131,9 @@ export const auth = betterAuth({
             select: { status: true },
           });
           return user?.status === "ACTIVE";
+        },
+        async after(session, context) {
+          await recordSuccessfulSignIn(prisma, session, context?.path);
         },
       },
     },

@@ -98,10 +98,12 @@ export function uploadMetadata(input: unknown) {
   // fabricates a WAV, and the commercial WAV+MP3 gate remains unchanged.
   const mimes: Record<string, string[]> = { wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "application/octet-stream", ""], mp3: ["audio/mpeg", "audio/mp3", "application/octet-stream", ""] };
   if (!mimes[extension]?.includes(String(v.mimeType ?? "")) || !Number.isSafeInteger(v.sizeBytes) || Number(v.sizeBytes) < 12 || Number(v.sizeBytes) > DIGITAL_MASTER_LIMIT_BYTES) throw new DigitalError("INVALID_UPLOAD");
-  if (!Number.isSafeInteger(v.expectedVersion) || Number(v.expectedVersion) < 0 || !Number.isSafeInteger(v.previewStartMs) || Number(v.previewStartMs) < 0) throw new DigitalError("INVALID_UPLOAD");
+  // New imports always preview from the beginning. Existing sessions and their
+  // immutable historical offsets are still read by the workers unchanged.
+  if (!Number.isSafeInteger(v.expectedVersion) || Number(v.expectedVersion) < 0 || v.previewStartMs !== undefined && v.previewStartMs !== 0) throw new DigitalError("INVALID_UPLOAD");
   if (Number(v.expectedVersion) > 0 && v.replaceConfirmed !== true) throw new DigitalError("REPLACEMENT_CONFIRMATION_REQUIRED", 409);
   return { filename: v.filename, extension, mimeType: extension === "wav" ? "audio/wav" : extension === "mp3" ? "audio/mpeg" : "audio/flac",
-    sizeBytes: Number(v.sizeBytes), expectedVersion: Number(v.expectedVersion), previewStartMs: Number(v.previewStartMs) };
+    sizeBytes: Number(v.sizeBytes), expectedVersion: Number(v.expectedVersion), previewStartMs: 0 };
 }
 export function signatureMatches(bytes: Uint8Array, extension: string) {
   const b = Buffer.from(bytes);

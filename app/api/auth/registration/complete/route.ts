@@ -2,6 +2,7 @@ import { isAllowedRegistrationCompletionPayload } from "@/lib/auth/input";
 import { isSameOriginMutation } from "@/lib/auth/origin";
 import { readRegistrationJson, registrationError, registrationJson } from "@/lib/auth/registration-http";
 import { clearRegistrationProofCookie, completeRegistration, registrationClientAddress } from "@/lib/auth/registration";
+import type { ReleaseAlertChoices } from "@/lib/release-notifications/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload = body as { password: string; passwordConfirmation: string };
+    const payload = body as { password: string; passwordConfirmation: string; releaseAlerts?: ReleaseAlertChoices };
     await completeRegistration({
       password: payload.password,
       cookieHeader: request.headers.get("cookie"),
       clientAddress: registrationClientAddress(request),
+      releaseAlerts: payload.releaseAlerts,
     });
     return registrationJson(
       { completed: true, message: "Votre espace est prêt. Vous pouvez maintenant vous connecter." },

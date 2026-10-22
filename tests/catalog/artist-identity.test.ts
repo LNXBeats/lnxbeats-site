@@ -27,6 +27,21 @@ test("known artist spellings do not create a second self credit; composer is nev
   assert(!catalogArtistAlreadyDocumented([{ role: "COMPOSER", name: "MATHON Ludovic Mickaël" }], CATALOG_PRIMARY_ARTIST));
   assert(!catalogArtistAlreadyDocumented([{ role: "ARTIST", name: "Un collaborateur" }], CATALOG_PRIMARY_ARTIST));
 });
+test("the owner's full legal name is an artist alias only, without rewriting legal roles or source rows", () => {
+  const credits = [
+    { role: "ARTIST", name: "Ludovic Mickaël Mathon" },
+    { role: "COMPOSER", name: "Ludovic Mickaël Mathon" },
+    { role: "WRITER", name: "Ludovic Mickaël Mathon" },
+    { role: "PRODUCER", name: "Ludovic Mickaël Mathon" },
+    { role: "ARTIST", name: "Autre artiste" },
+  ];
+  const before = JSON.stringify(credits);
+  assert.deepEqual(catalogSecondaryCredits(credits), credits.slice(1));
+  assert(catalogArtistAlreadyDocumented(credits, CATALOG_PRIMARY_ARTIST));
+  assert(catalogArtistAlreadyDocumented([{ role: "ARTIST", name: "LNX Beats" }], "Ludovic Mickae\u0308l Mathon"));
+  assert(!catalogArtistAlreadyDocumented([{ role: "COMPOSER", name: "Ludovic Mickaël Mathon" }], CATALOG_PRIMARY_ARTIST));
+  assert.equal(JSON.stringify(credits), before);
+});
 const source = () => ({ slug: "qa-identite", title: "QA identité", subtitle: null, type: "ALBUM", status: "PUBLISHED", publicVisible: true, jukeboxPlacement: null, jukeboxPosition: null,
   catalogPosition: 1, shortDescription: null, description: null, releaseDate: null, highlighted: false, trackCount: 1, artworkTone: "gold", seoTitle: null, seoDescription: null, confidence: "PARTIAL",
   tracks: [{ id: "track", position: 1, title: "Titre QA", durationSeconds: 100, status: "RELEASED" }],

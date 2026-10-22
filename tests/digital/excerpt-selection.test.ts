@@ -37,7 +37,7 @@ function fixture() {
     },
     asset: { async findUnique({ where }: { where: { id: string } }) { return assets.get(where.id) ?? null; } },
   } as unknown as Prisma.TransactionClient;
-  const input = (action: "save" | "generate" | "validate" = "save", startMs = 1_234) => ({ action, startMs, expectedRevisionId: events.at(-1)?.id ?? null, idempotencyKey: randomUUID(), attested: action === "validate" });
+  const input = (action: "save" | "generate" | "validate" = "save", startMs = 0) => ({ action, startMs, expectedRevisionId: events.at(-1)?.id ?? null, idempotencyKey: randomUUID(), attested: action === "validate" });
   function generated() {
     const queued = events.at(-1)!; assert.equal((queued.details as DigitalExcerptDetails).status, "QUEUED");
     const candidateId = randomUUID(), candidate = asset(candidateId, "audio/mpeg", "PRIVATE", 59_950); assets.set(candidateId, candidate);
@@ -82,8 +82,8 @@ test("excerpt: input rejects browser actor/binding/status and requires explicit 
 test("excerpt: draft save then reload is persistent, narrowly projected, precise and append-only", async () => {
   const f = fixture(), before = structuredClone(f.master);
   await isolated(f.db, async () => {
-    const saved = await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 12_345));
-    assert.equal(saved.selection.status, "DRAFT"); assert.equal(saved.selection.startMs, 12_345); assert.equal(saved.selection.candidateUrl, null);
+    const saved = await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 0));
+    assert.equal(saved.selection.status, "DRAFT"); assert.equal(saved.selection.startMs, 0); assert.equal(saved.selection.candidateUrl, null);
     assert.deepEqual((await getDigitalExcerptSelection(f.actor, f.master.id)).selection, saved.selection);
     assert.equal(JSON.stringify(saved).includes("sourceSha256"), false); assert.equal(JSON.stringify(saved).includes("storageKey"), false);
     assert.ok(f.locks.includes(`digital-track:${f.master.trackId}`)); assert.ok(f.locks.includes(`digital-excerpt:${f.master.id}`));
@@ -91,11 +91,11 @@ test("excerpt: draft save then reload is persistent, narrowly projected, precise
   assert.deepEqual(f.master, before); assert.equal(f.events.length, 1);
 });
 
-test("excerpt: offset bounds use source duration, not a permissive client or 60-second request", async () => {
+test("excerpt: all new draft and generation requests start at zero, never a client-selected offset", async () => {
   const f = fixture(); await isolated(f.db, async () => {
-    for (const start of [125_960, 125_961, 1_800_000]) await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, f.input("generate", start)), { code: "INVALID_EXCERPT" });
+    for (const start of [1, 1_234, 125_959, 125_960, 125_961, 1_800_000]) for (const action of ["save","generate"] as const) await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, f.input(action, start)), { code: "INVALID_EXCERPT" });
     assert.equal(f.events.length, 0);
-    await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 125_959)); assert.equal(f.events.length, 1);
+    await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 0)); assert.equal(f.events.length, 1);
   });
 });
 
@@ -111,22 +111,22 @@ test("excerpt: CAS refuses stale decisions, duplicates append once, changed idem
 
 test("excerpt: generation queues only, no new master, asset or original preview writes in web request", async () => {
   const f = fixture(); await isolated(f.db, async () => {
-    const result = await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("generate", 15_123));
+    const result = await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("generate", 0));
     assert.equal(result.selection.status, "QUEUED"); assert.equal(result.selection.candidateUrl, null); assert.equal(f.assets.size, 0);
     assert.equal(f.events.length, 1); assert.equal(f.master.previewStartMs, 0);
-    await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, f.input("validate", 15_123)), { code: "EXCERPT_NOT_READY" });
+    await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, f.input("validate", 0)), { code: "EXCERPT_NOT_READY" });
   });
 });
 
-test("excerpt: READY candidate requires explicit separate validation; re-edit invalidates only current artistic choice", async () => {
+test("excerpt: READY candidate keeps separate artistic validation; a new draft preserves prior approvals", async () => {
   const f = fixture(); await isolated(f.db, async () => {
-    await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("generate", 9_876)); const candidate = f.generated();
+    await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("generate", 0)); const candidate = f.generated();
     const ready = await getDigitalExcerptSelection(f.actor, f.master.id); assert.equal(ready.selection.status, "READY");
-    await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, { ...f.input("validate", 9_876), attested: false }), { code: "EXCERPT_ATTESTATION_REQUIRED" });
-    await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, f.input("validate", 9_877)), { code: "EXCERPT_NOT_READY" });
-    const input = f.input("validate", 9_876), validated = await recordDigitalExcerptSelection(f.actor, f.master.id, input);
+    await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, { ...f.input("validate", 0), attested: false }), { code: "EXCERPT_ATTESTATION_REQUIRED" });
+    await assert.rejects(() => recordDigitalExcerptSelection(f.actor, f.master.id, f.input("validate", 1)), { code: "EXCERPT_NOT_READY" });
+    const input = f.input("validate", 0), validated = await recordDigitalExcerptSelection(f.actor, f.master.id, input);
     assert.equal(validated.selection.status, "VALIDATED"); assert.deepEqual(await recordDigitalExcerptSelection(f.actor, f.master.id, input), validated);
-    const saved = await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 11_111));
+    const saved = await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 0));
     assert.equal(saved.selection.status, "DRAFT"); assert.equal(saved.selection.candidateUrl, null); assert.ok(f.assets.has(candidate.id));
     assert.equal((f.events[2].details as DigitalExcerptDetails).status, "VALIDATED");
     assert.equal(f.master.previewStartMs, 0); assert.equal(f.master.previewDurationMs, 59_950);
@@ -171,9 +171,25 @@ test("excerpt: canonical integrity survives JSONB key ordering but rejects chang
 test("excerpt: same-tick edits advance monotonically, never UUID-dependent", async () => {
   const f = fixture(), now = Date.now; Date.now = () => 1_792_056_000_000;
   try { await isolated(f.db, async () => {
-    await recordDigitalExcerptSelection(f.actor, f.master.id, f.input()); await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 2_000));
-    assert.equal(f.events[1].createdAt.getTime(), f.events[0].createdAt.getTime() + 1); assert.equal((await getDigitalExcerptSelection(f.actor, f.master.id)).selection.startMs, 2_000);
+    await recordDigitalExcerptSelection(f.actor, f.master.id, f.input()); await recordDigitalExcerptSelection(f.actor, f.master.id, f.input("save", 0));
+    assert.equal(f.events[1].createdAt.getTime(), f.events[0].createdAt.getTime() + 1); assert.equal((await getDigitalExcerptSelection(f.actor, f.master.id)).selection.startMs, 0);
   }); } finally { Date.now = now; }
+});
+
+test("excerpt: historical nonzero candidate remains readable and can retain its exact approval",async()=>{
+  const f=fixture();await isolated(f.db,async()=>{
+    await recordDigitalExcerptSelection(f.actor,f.master.id,f.input("generate",0));f.generated();
+    // Ephemeral repository double representing an already prepared historical
+    // candidate; no real metadata, file or database is changed by this test.
+    const event=f.events.at(-1)!,proof={...(event.details as DigitalExcerptDetails),startMs:1234};
+    delete (proof as Partial<DigitalExcerptDetails>).recordHash;
+    event.details={...proof,recordHash:digitalExcerptHash({actorId:f.actor.id,...proof})};
+    assert.equal((await getDigitalExcerptSelection(f.actor,f.master.id)).selection.startMs,1234);
+    const input=f.input("validate",1234),validated=await recordDigitalExcerptSelection(f.actor,f.master.id,input);
+    assert.equal(validated.selection.startMs,1234);assert.equal(validated.selection.status,"VALIDATED");
+    assert.deepEqual(await recordDigitalExcerptSelection(f.actor,f.master.id,input),validated);
+    assert.equal(f.master.previewStartMs,0);
+  });
 });
 
 test("excerpt: TEST fail-closed remains independent from prices, rights or validated selection", async () => {

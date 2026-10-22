@@ -1,4 +1,5 @@
 import "server-only";
+import { enqueueReleasePublication } from "@/lib/release-notifications/publications";
 
 import { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -238,6 +239,7 @@ export async function publishAdminCreation(creationId: string, expectedLockVersi
       data: { status: "PUBLISHED", publishedAt: new Date(), lockVersion: { increment: 1 } },
     });
     if (update.count !== 1) throw new CreationServiceError("La publication est entrée en conflit.", "CONFLICT");
+    await enqueueReleasePublication(transaction, { kind: "EDITORIAL", resourceId: creationId });
     return transaction.creation.findUniqueOrThrow({ where: { id: creationId } });
   });
 }

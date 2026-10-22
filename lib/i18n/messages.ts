@@ -12,11 +12,12 @@ import { supportLegalMessages } from "./messages-support-legal";
 import { seoMessages } from "./messages-seo";
 import { editorialLiveMessages } from "./messages-editorial-live";
 import { digitalFormatMessages } from "./messages-digital-formats";
+import { memberMessages } from "./messages-members";
 // Editorial UI translations. No remote translator, catalogue rewrite, legal
 // approval, tax/residence decision or historical document is derived from this.
 // Tuple order: English, Spanish, Portuguese (Portugal), simplified Chinese, Japanese.
 export const messages: Record<string, readonly [string, string, string, string, string]> = {
-  ...accountMessages, ...shopCartMessages, ...digitalMessages, ...commanderMessages, ...publicMessages, ...editorialMessages, ...paymentMessages, ...digitalExtraMessages, ...digitalStatusMessages, ...supportLegalMessages, ...seoMessages, ...editorialLiveMessages, ...digitalFormatMessages,
+  ...accountMessages, ...shopCartMessages, ...digitalMessages, ...commanderMessages, ...publicMessages, ...editorialMessages, ...paymentMessages, ...digitalExtraMessages, ...digitalStatusMessages, ...supportLegalMessages, ...seoMessages, ...editorialLiveMessages, ...digitalFormatMessages, ...memberMessages,
   "LNX Beats · Discographie": ["LNX Beats · Discography", "LNX Beats · Discografía", "LNX Beats · Discografia", "LNX Beats · 音乐作品", "LNX Beats · ディスコグラフィー"],
   "Projet actif": ["Active project", "Proyecto activo", "Projeto ativo", "当前项目", "選択中の作品"],
   "En lecture": ["Now playing", "Reproduciendo", "A reproduzir", "正在播放", "再生中"],

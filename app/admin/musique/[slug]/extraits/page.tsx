@@ -11,7 +11,7 @@ import { DigitalExcerptReview } from "@/components/digital-excerpt-review";
 import styles from "@/components/digital-excerpt-review.module.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Choisir les extraits — Admin", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Écouter les extraits — Admin", robots: { index: false, follow: false } };
 
 export default async function Page({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ courants?: string }> }) {
   let mode; try { mode=requireDigitalEnvironment(); } catch { notFound(); }
@@ -39,8 +39,8 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const available = tracks.filter((track): track is NonNullable<typeof track> => track !== null);
   return <div className={`admin-main ${styles.shell}`}>
     <Link className="admin-row-action" href={currentOnly ? `/admin/musique/express?projet=${project.id}` : `/admin/musique/${project.slug}`}>Retour à la préparation de la musique</Link>
-    <header className="admin-page-heading"><div><p className="admin-kicker">{mode==="LIVE"?"Écoute privée · Administration":"Écoute privée · QA locale"}</p><h1>{existingOnly ? "Écouter et valider les extraits" : "Choisir les extraits"}</h1><p className={styles.subtitle}>{project.title}</p></div></header>
-    <p className={styles.notice}>{mode==="LIVE"||currentOnly?"Écoutez puis validez le fichier exact de chaque version. Le début de l’extrait est choisi lors de l’import du master ; un autre passage nécessite une nouvelle version préparée avec ce début. La validation artistique ne valide pas les droits et n’active aucune offre. Les fichiers déjà acquis sont conservés.":existingOnly ? "Écoutez les 12 extraits conservés, puis validez personnellement chaque fichier. Aucun début ne peut être modifié et aucun fichier ne sera régénéré. Les accords historiques restent des preuves distinctes. Aucune validation ne publie un extrait, n’approuve un droit ou n’ouvre une vente." : "Écoutez les masters privés et choisissez vos passages, à votre rythme. Enregistrer un brouillon ou valider un extrait ne publie rien, n’approuve aucun droit et n’ouvre aucune vente. Les extraits provisoires et les versions déjà acquises sont conservés."}</p>
+    <header className="admin-page-heading"><div><p className="admin-kicker">{mode==="LIVE"?"Écoute privée · Administration":"Écoute privée · QA locale"}</p><h1>Écouter et valider les extraits</h1><p className={styles.subtitle}>{project.title}</p></div></header>
+    <p className={styles.notice}>{mode==="LIVE"||currentOnly?"Écoutez puis validez le fichier exact de chaque version. Les nouveaux extraits commencent toujours au début du morceau. La validation artistique ne valide pas les droits et n’active aucune offre. Les fichiers et validations historiques sont conservés.":existingOnly ? "Écoutez les 12 extraits conservés, puis validez personnellement chaque fichier. Aucun début ne peut être modifié et aucun fichier ne sera régénéré. Les accords historiques restent des preuves distinctes. Aucune validation ne publie un extrait, n’approuve un droit ou n’ouvre une vente." : "Les nouveaux extraits commencent au début du morceau. Écoutez le master privé ou l’extrait généré. Aucun nouveau choix ne publie une offre ni ne modifie les fichiers et validations historiques."}</p>
     {available.length !== project.tracks.length ? <p className={styles.notice} role="status">{project.tracks.length - available.length} piste(s) ne disposent pas encore d’une version audio strictement validée. Leur sélection d’extrait reste bloquée.</p> : null}
     {available.length ? <DigitalExcerptReview tracks={available} existingOnly={existingOnly} live={mode==="LIVE"} prepared={currentOnly && mode==="TEST"} /> : <p>Aucune piste prête pour cette écoute privée.</p>}
   </div>;

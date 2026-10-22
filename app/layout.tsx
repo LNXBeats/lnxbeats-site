@@ -11,6 +11,7 @@ import { OrderJourneyProvider } from "@/components/order-journey-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SiteMotion } from "@/components/site-motion";
+import { MemberInvitation } from "@/components/member-invitation";
 import { CANONICAL_SITE_ORIGIN } from "@/lib/seo/canonical";
 import { buildSiteStructuredData } from "@/lib/seo/structured-data";
 import { isSupportEnabled } from "@/lib/support/config";
@@ -85,6 +86,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <main id="contenu" lang={locale === "zh" ? "zh-Hans" : locale}>{children}</main>
           <SiteFooter />
           <SiteMotion />
+          <MemberInvitation />
         </OrderJourneyProvider>
         <JsonLd id="lnx-site-identity" data={buildSiteStructuredData()} />
         </SiteLanguageProvider>

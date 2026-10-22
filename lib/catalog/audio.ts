@@ -63,7 +63,9 @@ export function resolvedAudioExcerpt(sourceDurationMs: number, rawOffsetMs: unkn
   if (!Number.isSafeInteger(sourceDurationMs) || sourceDurationMs <= 0) throw new CatalogAudioError("UNREADABLE_AUDIO");
   const offsetMs = parseInteger(rawOffsetMs, "INVALID_OFFSET");
   const requestedDurationMs = parseInteger(rawRequestedDurationMs, "INVALID_DURATION");
-  if (offsetMs < 0 || offsetMs >= sourceDurationMs) throw new CatalogAudioError("INVALID_OFFSET");
+  // Only newly generated previews use this resolver. Stored previews are not
+  // rewritten, and their historical playback remains unchanged.
+  if (offsetMs !== 0) throw new CatalogAudioError("INVALID_OFFSET");
   if (requestedDurationMs <= 0 || requestedDurationMs > CATALOG_AUDIO_PREVIEW_MAXIMUM_DURATION_MS) {
     throw new CatalogAudioError("INVALID_DURATION");
   }

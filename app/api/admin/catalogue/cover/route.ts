@@ -5,6 +5,7 @@ import { isSameOriginMutation } from "@/lib/auth/origin";
 import { requireAdmin } from "@/lib/auth/session";
 import { CatalogCoverConflictError, CatalogCoverError, replaceCatalogCover } from "@/lib/catalog/cover";
 import { CatalogCoverRequestError, readCatalogCoverFormData } from "@/lib/catalog/cover-request";
+import { EXPRESS_COVER_OWNER_POLICY, catalogCoverDeclaration } from "@/lib/catalog/cover-owner-policy";
 
 export const runtime = "nodejs";
 
@@ -49,6 +50,7 @@ function coverErrorState(error: unknown) {
   if (error.code === "UNREADABLE_IMAGE") return "cover-illisible";
   if (error.code === "TOO_MANY_PIXELS") return "cover-dimensions";
   if (error.code === "INVALID_VERSION") return "cover-invalide";
+  if (error.code === "OWNER_DECLARATION_UNAVAILABLE") return "cover-droits";
   return "cover-format";
 }
 
@@ -65,7 +67,7 @@ function refresh(slug: string) {
 export async function POST(request: Request) {
   const baseUrl = process.env.AUTH_URL ?? process.env.SITE_URL ?? "http://127.0.0.1:3000";
   if (!isSameOriginMutation(request, baseUrl)) return new Response(null, { status: 403 });
-  await requireAdmin();
+  const session = await requireAdmin();
 
   let formData: FormData;
   try {
@@ -82,7 +84,8 @@ export async function POST(request: Request) {
     return NextResponse.redirect(new URL("/admin/catalogue", baseUrl), 303);
   }
 
-  if (formData.get("rightsConfirmed") !== "on") {
+  const declaration = catalogCoverDeclaration(formData);
+  if (!declaration) {
     return result(request, baseUrl, slug, "cover-droits");
   }
   const file = formData.get("cover");
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await replaceCatalogCover(projectId, formData.get("expectedCoverAssetId"), file, formData.get("alt"));
+    await replaceCatalogCover(projectId, formData.get("expectedCoverAssetId"), file, formData.get("alt"), declaration === EXPRESS_COVER_OWNER_POLICY ? { actorId: session.user.id, policy: declaration } : undefined);
   } catch (error) {
     return result(
       request, baseUrl, slug, coverErrorState(error), error instanceof CatalogCoverConflictError ? 409 : 422,

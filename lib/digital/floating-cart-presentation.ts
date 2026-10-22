@@ -14,5 +14,5 @@ export function floatingDigitalCartQuote(value: unknown, requested: string[]) {
 export function showFloatingDigitalCart(pathname: string) {
   // A checkout, account, physical shop or confirmation must not gain another
   // overlaid action. This component already has a visible navigation there.
-  return pathname === "/discographie" || pathname.startsWith("/album/");
+  return pathname === "/discographie" || pathname === "/avant-premieres" || pathname.startsWith("/album/");
 }

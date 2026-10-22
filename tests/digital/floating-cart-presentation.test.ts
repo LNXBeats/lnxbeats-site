@@ -21,6 +21,7 @@ test("unknown, duplicate or untrusted totals never appear as authoritative price
 
 test("floating digital CTA is restricted to public music discovery, never physical checkout", () => {
   assert.equal(showFloatingDigitalCart("/discographie"), true);
+  assert.equal(showFloatingDigitalCart("/avant-premieres"), true);
   assert.equal(showFloatingDigitalCart("/album/vie-de-chien"), true);
   for (const path of ["/admin", "/boutique", "/boutique/panier", "/musique/panier", "/musique/checkout", "/musique/confirmation/123", "/compte/musique", "/"]) assert.equal(showFloatingDigitalCart(path), false);
 });

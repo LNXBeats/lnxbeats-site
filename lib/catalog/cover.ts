@@ -15,6 +15,7 @@ import {
   normalizeAdminImage,
 } from "@/lib/media/admin-image";
 import type { MediaStorageReference } from "@/lib/media/storage";
+import { EXPRESS_COVER_OWNER_POLICY, expressOwnerCoverEligible } from "./cover-owner-policy";
 
 export const CATALOG_COVER_MAXIMUM_BYTES = ADMIN_IMAGE_MAXIMUM_BYTES;
 export const CATALOG_COVER_MAXIMUM_PIXELS = ADMIN_IMAGE_MAXIMUM_PIXELS;
@@ -26,7 +27,8 @@ export type CatalogCoverErrorCode =
   | "MIME_MISMATCH"
   | "UNREADABLE_IMAGE"
   | "TOO_MANY_PIXELS"
-  | "INVALID_VERSION";
+  | "INVALID_VERSION"
+  | "OWNER_DECLARATION_UNAVAILABLE";
 
 export class CatalogCoverError extends Error {
   constructor(readonly code: CatalogCoverErrorCode) {
@@ -58,6 +60,9 @@ async function lockedCoverState(transaction: Prisma.TransactionClient, projectId
     where: { id: projectId },
     select: {
       title: true,
+      status: true,
+      publicVisible: true,
+      digitalOffers: { where: { active: true }, select: { id: true }, take: 1 },
       assets: {
         where: { role: "COVER" },
         orderBy: [{ position: "asc" }, { createdAt: "desc" }],
@@ -69,17 +74,30 @@ async function lockedCoverState(transaction: Prisma.TransactionClient, projectId
   if (!project) throw new CatalogCoverError("INVALID_VERSION");
   return {
     title: project.title,
+    status: project.status,
+    publicVisible: project.publicVisible,
+    hasActiveOffers: project.digitalOffers.length > 0,
     currentCoverAssetId: project.assets[0]?.asset.id ?? null,
     currentCoverReference: project.assets[0]?.asset ?? null,
   };
 }
 
-async function assertCurrentCoverVersion(projectId: string, expectedCoverAssetId: string | null) {
+type OwnerCoverDeclaration = { actorId: string; policy: typeof EXPRESS_COVER_OWNER_POLICY };
+async function assertOwnerCoverDeclaration(transaction: Prisma.TransactionClient, projectId: string, state: Awaited<ReturnType<typeof lockedCoverState>>, declaration?: OwnerCoverDeclaration) {
+  if (!declaration) return;
+  const event = await transaction.digitalEvent.findFirst({ where: { kind: "MUSIC_EXPRESS_DRAFT", details: { path: ["projectId"], equals: projectId } }, select: { id: true } });
+  if (declaration.policy !== EXPRESS_COVER_OWNER_POLICY || !expressOwnerCoverEligible({ ...state, expressDraft: !!event })) {
+    throw new CatalogCoverError("OWNER_DECLARATION_UNAVAILABLE");
+  }
+}
+
+async function assertCurrentCoverVersion(projectId: string, expectedCoverAssetId: string | null, declaration?: OwnerCoverDeclaration) {
   return prisma.$transaction(async (transaction) => {
     const state = await lockedCoverState(transaction, projectId);
     if (!catalogCoverVersionMatches(expectedCoverAssetId, state.currentCoverAssetId)) {
       throw new CatalogCoverConflictError(state.currentCoverAssetId);
     }
+    await assertOwnerCoverDeclaration(transaction, projectId, state, declaration);
     return state;
   });
 }
@@ -93,13 +111,13 @@ export async function normalizeCatalogCover(file: File) {
   }
 }
 
-export async function replaceCatalogCover(projectId: string, rawExpectedCoverAssetId: unknown, file: File, rawAlt: unknown) {
+export async function replaceCatalogCover(projectId: string, rawExpectedCoverAssetId: unknown, file: File, rawAlt: unknown, declaration?: OwnerCoverDeclaration) {
   const expectedCoverAssetId = parseExpectedCoverAssetId(rawExpectedCoverAssetId);
   const requestedAlt = optionalText(rawAlt, "Le texte alternatif", 500);
   // Fail before image normalization and media storage when the observed cover
   // is already stale. The guarded comparison is repeated during activation to
   // close the race between this preflight and the final transaction.
-  await assertCurrentCoverVersion(projectId, expectedCoverAssetId);
+  await assertCurrentCoverVersion(projectId, expectedCoverAssetId, declaration);
   const normalized = await normalizeCatalogCover(file);
   const storageKey = `catalog/covers/${randomUUID()}.webp`;
   const safeBase = path.basename(file.name || "cover").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 180);
@@ -111,6 +129,7 @@ export async function replaceCatalogCover(projectId: string, rawExpectedCoverAss
       if (!catalogCoverVersionMatches(expectedCoverAssetId, state.currentCoverAssetId)) {
         throw new CatalogCoverConflictError(state.currentCoverAssetId);
       }
+      await assertOwnerCoverDeclaration(transaction, projectId, state, declaration);
       const alt = catalogCoverAltOverride(requestedAlt, state.title);
       oldReference = state.currentCoverReference;
       if (state.currentCoverAssetId) {
@@ -127,6 +146,10 @@ export async function replaceCatalogCover(projectId: string, rawExpectedCoverAss
         },
       });
       await transaction.projectAsset.create({ data: { projectId, assetId: asset.id, role: "COVER", position: 0 } });
+      if (declaration) await transaction.digitalEvent.create({ data: { actorId: declaration.actorId, kind: "MUSIC_EXPRESS_COVER_DECLARATION", details: {
+        projectId, assetId: asset.id, sha256: stored.checksumSha256, replacedAssetId: state.currentCoverAssetId,
+        policy: declaration.policy, provenance: "OWNER_STANDING_DECLARATION_EXPLICIT_UPLOAD", independentRightsEvidence: false,
+      } } });
       await transaction.project.update({ where: { id: projectId }, data: { legacySourceVersion: null } });
     });
   } catch (error) {

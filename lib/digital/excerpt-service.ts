@@ -86,6 +86,9 @@ export async function recordDigitalExcerptSelection(actor: OrderActor, masterId:
       if (duplicate.actorId !== actor.id || d.requestHash !== requestHash) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);
       return { selection: await loadDigitalExcerptSelection(db, master) };
     }
+    // A new choice always starts at zero. Keep historical candidates,
+    // approvals and their idempotent replays verifiable at their actual offset.
+    if ((input.action === "save" || input.action === "generate") && input.startMs !== 0) throw new DigitalError("INVALID_EXCERPT");
     const previous = await latestDigitalExcerptEvent(db, master.id), selection = digitalExcerptSelection(master, previous);
     assertDigitalExcerptRevision(selection, input.expectedRevisionId); assertDigitalExcerptValidation(selection, input);
     const previousDetails = previous ? digitalExcerptDetails(previous, master) : null;

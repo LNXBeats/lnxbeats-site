@@ -35,7 +35,7 @@ export function digitalImportStartMs(value: string) {
 export function digitalBatchAssociationIssue(rows: Array<{ trackId: string; valid: boolean; state: string }>) {
   const pending = rows.filter(row => row.state !== "ready");
   if (!pending.length) return "Aucun fichier en attente dans ce lot.";
-  if (pending.some(row => !row.trackId || !row.valid)) return "Associez chaque fichier en attente, vérifiez le début d’extrait et confirmez les nouvelles versions avant le lot.";
+  if (pending.some(row => !row.trackId || !row.valid)) return "Associez chaque fichier en attente et confirmez les remplacements de version avant le lot.";
   const associated = rows.filter(row => row.trackId);
   if (new Set(associated.map(row => row.trackId)).size !== associated.length) return "Deux fichiers sont associés à la même piste. Corrigez cette association avant l’envoi.";
   return null;

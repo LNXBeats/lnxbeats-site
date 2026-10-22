@@ -152,7 +152,7 @@ export async function readCatalogAudioUpload(request: Request): Promise<CatalogA
       slug: fields.get("slug") ?? "",
       expectedAudioAssetId: fields.get("expectedAudioAssetId") || null,
       rightsConfirmed: fields.get("rightsConfirmed") ?? "",
-      offsetMs: fields.get("offsetMs") ?? "",
+      offsetMs: fields.get("offsetMs") ?? "0",
       requestedDurationMs: fields.get("requestedDurationMs") ?? "",
       source: completedSource,
     };

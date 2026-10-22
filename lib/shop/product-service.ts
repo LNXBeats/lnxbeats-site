@@ -1,4 +1,5 @@
 import "server-only";
+import { enqueueReleasePublication } from "@/lib/release-notifications/publications";
 
 import { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -294,6 +295,7 @@ export async function publishAdminProduct(productId: string, expectedLockVersion
     await transaction.productAuditEvent.create({
       data: { productId, action: "PUBLISHED", actorAdminId: actorUserId, metadata: auditPayload({ publishedAt: publishedAt.toISOString() }) },
     });
+    await enqueueReleasePublication(transaction, { kind: "SHOP", resourceId: productId });
     return transaction.product.findUniqueOrThrow({ where: { id: productId } });
   });
 }

@@ -64,8 +64,6 @@ export function CatalogAudioForm({
   const [selectedFile, setSelectedFile] = useState<{ count: number; size: number; file: File } | null>(null);
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const [sourceDurationSeconds, setSourceDurationSeconds] = useState(0);
-  const [currentSourceTime, setCurrentSourceTime] = useState(0);
-  const [offsetSeconds, setOffsetSeconds] = useState(0);
   const [previewDurationSeconds, setPreviewDurationSeconds] = useState(60);
   const [expectedAudioAssetId, setExpectedAudioAssetId] = useState(currentAudioAssetId);
   const [conflictingAudio, setConflictingAudio] = useState<{ known: boolean; assetId: string | null }>({ known: false, assetId: null });
@@ -94,7 +92,7 @@ export function CatalogAudioForm({
       setState("audio-droits");
       return;
     }
-    if (!sourceDurationSeconds || offsetSeconds < 0 || offsetSeconds >= sourceDurationSeconds) {
+    if (!sourceDurationSeconds) {
       setState("audio-debut");
       return;
     }
@@ -107,7 +105,7 @@ export function CatalogAudioForm({
       body.set("slug", slug);
       body.set("expectedAudioAssetId", expectedAudioAssetId ?? "");
       body.set("rightsConfirmed", "on");
-      body.set("offsetMs", String(Math.round(offsetSeconds * 1_000)));
+      body.set("offsetMs", "0");
       body.set("requestedDurationMs", String(Math.round(previewDurationSeconds * 1_000)));
       body.set("audio", file, file.name);
       const result = await fetch(endpoint, {
@@ -180,8 +178,6 @@ export function CatalogAudioForm({
               setSelectedFile(file ? { count: event.currentTarget.files?.length ?? 0, size: file.size, file } : null);
               setLocalUrl(file ? URL.createObjectURL(file) : null);
               setSourceDurationSeconds(0);
-              setCurrentSourceTime(0);
-              setOffsetSeconds(0);
               setPreviewDurationSeconds(60);
               setState((current) => current === "audio-conflit" ? current : undefined);
             }}
@@ -193,7 +189,6 @@ export function CatalogAudioForm({
           <AudioPreviewPlayer
             src={localUrl}
             title={`Source locale de ${title}`}
-            onTimeUpdate={setCurrentSourceTime}
             onDuration={(seconds) => {
               setSourceDurationSeconds(seconds);
               setPreviewDurationSeconds(Math.min(60, Math.max(1, Math.floor(seconds))));
@@ -201,17 +196,11 @@ export function CatalogAudioForm({
           />
           <div className="admin-audio-selection-grid">
             <label>
-              <span>Début de l’extrait</span>
-              <input type="number" min="0" max={Math.max(0, Math.floor(sourceDurationSeconds) - 1)} step="1" value={offsetSeconds} onChange={(event) => setOffsetSeconds(Math.max(0, Number(event.currentTarget.value) || 0))} />
-              <small>{timeLabel(offsetSeconds)}</small>
-            </label>
-            <label>
               <span>Durée de l’extrait</span>
               <input type="number" min="1" max="60" step="1" value={previewDurationSeconds} onChange={(event) => setPreviewDurationSeconds(Math.min(60, Math.max(1, Number(event.currentTarget.value) || 1)))} />
               <small>{previewDurationSeconds} s maximum ; ajustée automatiquement à la fin du morceau.</small>
             </label>
           </div>
-          <button type="button" onClick={() => setOffsetSeconds(Math.floor(currentSourceTime))}>Utiliser la position actuelle comme début</button>
         </div> : null}
         <label className="admin-checkbox">
           <input name="rightsConfirmed" type="checkbox" required />

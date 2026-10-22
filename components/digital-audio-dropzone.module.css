@@ -1,0 +1,28 @@
+.root {
+  min-width: 0;
+  margin-block: 1rem;
+  border: 1px dashed rgba(218, 182, 96, .65);
+  border-radius: 1rem;
+  padding: 1.2rem;
+  background: linear-gradient(135deg, rgba(218, 182, 96, .09), rgba(5, 8, 9, .7));
+  color: #f6f1e4;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+.root h3 { margin: 0 0 .75rem; font-size: 1rem; color: #ead293; }
+.pick { position: relative; display: flex; min-height: 8rem; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; padding: .6rem; border-radius: .65rem; text-align: center; cursor: pointer; overflow-wrap: anywhere; }
+.pick strong { max-width: 100%; font-size: 1rem; line-height: 1.45; }
+.icon { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border: 1px solid #daba68; border-radius: .7rem; font-size: 1.6rem; color: #ead293; }
+.choose { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border: 1px solid #daba68; border-radius: .6rem; padding: .45rem .9rem; color: #f7dfa1; font-weight: 650; }
+.input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pick:focus-within { outline: 2px solid #f0d58a; outline-offset: 3px; }
+.help { margin: .8rem 0 0; color: #c9c5ba; font-size: .85rem; line-height: 1.55; overflow-wrap: anywhere; }
+.dragging { border-color: #ffe6a5; background: rgba(218, 182, 96, .17); box-shadow: 0 0 0 2px rgba(218, 182, 96, .2); }
+.compact { padding: .8rem; }
+.compact .pick { min-height: 6rem; }
+.root[data-disabled="true"] { opacity: .65; }
+.root[data-disabled="true"] .pick { cursor: not-allowed; }
+@media (max-width: 375px) { .root { padding: .8rem; } .pick { padding-inline: .2rem; } .pick strong { font-size: .95rem; } }
+@media (prefers-reduced-motion: reduce) { .root { transition: none; } }
+.root.minimal { width: fit-content; max-width: 100%; margin-block: .25rem; padding: 0; border: 0; border-radius: .6rem; background: none; }
+.minimal .pick { min-height: 44px; padding: 0; gap: 0; }
+.minimal .choose { box-sizing: border-box; max-width: 100%; }

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { announceMediaPlayback, listenForOtherMediaPlayback } from "@/lib/media/playback-coordinator";
 import { studioApprovalAvailable, studioAuditionGains, studioAuditionTime, studioExistingSourceRequest, studioFormatLabel, studioJobPending, studioPhaseLabel, studioPrivateAudioUrl, studioReplacementConfirmed, studioRestoreRequest, type StudioArtifactRole, type StudioArtifactView, type StudioExistingSourceView, type StudioJobView } from "@/lib/digital/studio-presentation";
 import styles from "./studio-review.module.css";
@@ -16,7 +17,7 @@ function auditionArtifact(role: StudioArtifactRole, artifacts: StudioArtifactVie
   return (encoded && (role === "WAV_24" || role === "WAV_CD") ? artifacts.find(a => a.role === `AUDITION_${role}`) : null) ?? artifacts.find(a => a.role === role);
 }
 
-export function StudioJob({ job, onChanged }: { job: StudioJobView; onChanged: () => Promise<void> }) {
+export function StudioJob({ job, onChanged, compact = false }: { job: StudioJobView; onChanged: () => Promise<void>; compact?: boolean }) {
   const ownerId = `studio-${useId()}`, players = useRef(new Map<StudioArtifactRole, HTMLAudioElement>()), inFlight = useRef(false);
   const [listened, setListened] = useState(false), [replacement, setReplacement] = useState(false), [purchases, setPurchases] = useState(false);
   const [restoreConfirmed, setRestoreConfirmed] = useState(false);
@@ -48,11 +49,12 @@ export function StudioJob({ job, onChanged }: { job: StudioJobView; onChanged: (
     const target = role === "ORIGINAL" ? "ORIGINAL" : comparison, other = players.current.get(role === "ORIGINAL" ? comparison : "ORIGINAL");
     seek(target, other?.currentTime ?? 0, true);
   }
-  async function mutate(action: Action) {
-    if (inFlight.current || action === "approve" && (!ready || !listened || !replacementConfirmed) || action === "restore" && !restoreRequest) return;
+  async function mutate(action: Action, explicitListeningConfirmation = false) {
+    const humanListened = listened || compact && explicitListeningConfirmation;
+    if (inFlight.current || action === "approve" && (!ready || !humanListened || !replacementConfirmed) || action === "restore" && !restoreRequest) return;
     inFlight.current = true; setBusy(true); setMessage("");
     try {
-      const request = action === "restore" ? restoreRequest : { action, jobId: job.id, expectedBinding: job.binding, confirmReplacement: replacement, confirmExistingPurchases: purchases, humanListened: listened };
+      const request = action === "restore" ? restoreRequest : { action, jobId: job.id, expectedBinding: job.binding, confirmReplacement: replacement, confirmExistingPurchases: purchases, humanListened };
       const response = await fetch("/api/admin/digital/studio", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
       const value = await response.json(); if (!response.ok) throw Error(value.error ?? "Cette décision n’a pas été enregistrée.");
       setListened(false); setReplacement(false); setPurchases(false); setRestoreConfirmed(false); await onChanged();
@@ -60,6 +62,27 @@ export function StudioJob({ job, onChanged }: { job: StudioJobView; onChanged: (
     } catch (error) { setMessage(`${error instanceof Error ? error.message : "Résultat à vérifier"} Actualisez l’état avant toute autre décision ; aucun nouveau paiement n’est demandé.`); }
     finally { inFlight.current = false; setBusy(false); }
   }
+  if (compact) return <article className={styles.compactJob} aria-label={`Fichiers audio — ${job.title}`}>
+    <p className={styles.compactStatus} role="status">{job.approved ? "Fichiers prêts — écoute validée" : rejected ? "Versions refusées" : studioPhaseLabel(job.phase ?? job.status)}</p>
+    {job.sourceLossy ? <p className={styles.compactNotice}>Source MP3 · le WAV est une conversion, pas un original sans perte.</p> : null}
+    {job.errorCode ? <p role="alert">Traitement à vérifier : {job.errorCode}. Votre fichier reste conservé.</p> : null}
+    <div className={styles.compactPlayers}>{(["MP3", "WAV_CD"] as const).map(role => {
+      const actual = job.artifacts.find(a => a.role === role);
+      if (!actual) return null;
+      const audition = auditionArtifact(role, job.artifacts, encoded.includes(role)), url = studioPrivateAudioUrl(audition?.audioUrl);
+      const fallback = role === "WAV_CD" && job.artifacts.some(a => a.role === "AUDITION_WAV_CD");
+      const label = role === "MP3" ? "MP3" : encoded.includes(role) ? "Écoute compatible du WAV" : job.sourceLossy ? "WAV converti" : "WAV";
+      return <section className={styles.compactPlayer} key={role}><h4>{label} <span>· {duration(actual.durationMs)} · fichier entier</span></h4>
+        {url ? <audio key={`${url}:${encoded.includes(role)}`} ref={node => { if (node) players.current.set(role, node); else players.current.delete(role); }} controls preload="metadata" src={url} aria-label={`Écouter le fichier entier ${label} de ${job.title}`} onPlay={() => { for (const [otherRole, other] of players.current) if (otherRole !== role) other.pause(); announceMediaPlayback({ ownerId, kind: "audio" }); }} onError={() => setMessage(`Lecture ${label} indisponible dans ce navigateur.${fallback ? " Essayez l’écoute compatible du WAV." : " Aucun fichier n’est approuvé."}`)} /> : <p>Lecture privée indisponible.</p>}
+        {fallback ? <button className={styles.compactFallback} type="button" onClick={() => setEncoded(old => old.includes(role) ? old.filter(value => value !== role) : [...old, role])}>{encoded.includes(role) ? "Revenir au WAV" : "Écoute compatible du WAV"}</button> : null}
+      </section>;
+    })}</div>
+    {!job.approved && !rejected && job.baseMasterId ? <label className={styles.confirm}><input type="checkbox" checked={replacement} disabled={busy} onChange={event => setReplacement(event.target.checked)} /> Remplacer le choix courant, en conservant les versions et achats antérieurs.</label> : null}
+    {!job.approved && !rejected && (job.baseMasterId || job.hasAcquisitions) ? <label className={styles.confirm}><input type="checkbox" checked={purchases} disabled={busy} onChange={event => setPurchases(event.target.checked)} /> {job.hasAcquisitions ? "Je confirme la conservation des fichiers déjà achetés." : "Autoriser les formats supplémentaires aux achats de la source strictement identique (facultatif)."}</label> : null}
+    <div className={styles.actions}>{!job.approved && !rejected ? <button type="button" disabled={busy || !ready || !replacementConfirmed} onClick={() => void mutate("approve", true)}>{busy ? "Enregistrement…" : "J’ai écouté — utiliser ces fichiers"}</button> : null}{["FAILED", "ERROR", "REJECTED"].includes(job.status) || rejected ? <button type="button" disabled={busy} onClick={() => void mutate("retry")}>Réessayer le traitement</button> : null}</div>
+    <details className={styles.compactDetails}><summary>Détails audio</summary><p>Les lecteurs lisent les fichiers complets privés. L’extrait public reste distinct. Utiliser ces fichiers enregistre votre confirmation d’écoute, sans publication automatique.</p><pre className={styles.report}>{JSON.stringify(job.report ?? { statut: "Rapport pas encore disponible" }, null, 2)}</pre></details>
+    {message ? <p role="status" aria-live="polite">{message}</p> : null}
+  </article>;
   return <article className={styles.job} aria-label={`Atelier audio — ${job.title}`}>
     <div className={styles.heading}><h3 translate="no" className="notranslate">{job.title}</h3><span className={styles.badge}>{rejected ? studioPhaseLabel("REJECTED") : job.approved ? "Validation d’écoute enregistrée" : studioPhaseLabel(job.phase ?? job.status)}</span></div>
     {Number.isSafeInteger(job.attempt) && job.attempt! > 0 ? <p>Tentative {job.attempt}</p> : null}
@@ -104,27 +127,47 @@ export function StudioExistingSource({ source, onQueued }: { source: StudioExist
   return <article className={styles.job}><h3 translate="no" className="notranslate">{source.title}</h3><p>Fichier actuel · version {source.expectedVersion}. L’original privé est réutilisé sans nouvel envoi et sans remplacer les versions déjà acquises.</p><button type="button" disabled={busy || !request} onClick={() => void prepare()}>{busy ? "Préparation demandée…" : "Préparer les formats depuis le fichier actuel"}</button><p role="status" aria-live="polite">{message}</p></article>;
 }
 
-export function StudioReview({ projectId, refreshRevision = 0, onAvailability, onSaved }: { projectId: string; refreshRevision?: number; onAvailability: (enabled: boolean) => void; onSaved: () => Promise<void> }) {
+export function StudioReview({ projectId, refreshRevision = 0, onAvailability, onSaved, onJobsChanged, trackTargetPrefix }: { projectId: string; refreshRevision?: number; onAvailability: (enabled: boolean) => void; onSaved: () => Promise<void>; onJobsChanged?: (jobs: StudioJobView[]) => void; trackTargetPrefix?: string }) {
   const [jobs, setJobs] = useState<StudioJobView[]>([]), [enabled, setEnabled] = useState(false), [message, setMessage] = useState("");
   const [existingSources, setExistingSources] = useState<StudioExistingSourceView[]>([]);
+  const [targets, setTargets] = useState<Record<string, HTMLElement>>({});
   const loading = useRef(false), alive = useRef(true);
   const refresh = useCallback(async () => {
     if (loading.current) return; loading.current = true;
     try {
       const response = await fetch(`/api/admin/digital/studio?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store", credentials: "same-origin" });
       const value = await response.json(); if (!response.ok) throw Error(value.error ?? "Atelier indisponible");
-      if (alive.current) { const available = value.enabled === true; setEnabled(available); onAvailability(available); setJobs(available && Array.isArray(value.jobs) ? value.jobs : []); setExistingSources(available && Array.isArray(value.existingSources) ? value.existingSources : []); setMessage(""); }
+      if (alive.current) { const available = value.enabled === true, availableJobs = available && Array.isArray(value.jobs) ? value.jobs as StudioJobView[] : []; setEnabled(available); onAvailability(available); setJobs(availableJobs); onJobsChanged?.(availableJobs); setExistingSources(available && Array.isArray(value.existingSources) ? value.existingSources : []); setMessage(""); }
     } catch { if (alive.current) { setMessage("L’état de l’atelier ne peut pas être actualisé. Aucun traitement ni validation n’a été déclenché."); } }
     finally { loading.current = false; }
-  }, [projectId, onAvailability]);
+  }, [projectId, onAvailability, onJobsChanged]);
   useEffect(() => { alive.current = true; const timer = setTimeout(() => void refresh(), 0); return () => { clearTimeout(timer); alive.current = false; }; }, [refresh, refreshRevision]);
-  const pending = jobs.some(job => studioJobPending(job.status));
+  const reviewJobs = trackTargetPrefix ? jobs.filter((job, index) => jobs.findIndex(candidate => candidate.trackId === job.trackId) === index) : jobs;
+  const pending = reviewJobs.some(job => studioJobPending(job.status));
   useEffect(() => {
     if (!pending) return;
     const timer = setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 5000);
     const visible = () => { if (document.visibilityState === "visible") void refresh(); };
     document.addEventListener("visibilitychange", visible); return () => { clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
   }, [pending, refresh]);
+  useEffect(() => {
+    if (!trackTargetPrefix) return;
+    const timer = setTimeout(() => {
+      const next: Record<string, HTMLElement> = {};
+      for (const job of jobs) {
+        const target = document.getElementById(`${trackTargetPrefix}${job.trackId}`);
+        if (target) next[job.trackId] = target;
+      }
+      setTargets(current => Object.keys(current).length === Object.keys(next).length && Object.keys(next).every(id => current[id] === next[id]) ? current : next);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [jobs, trackTargetPrefix, refreshRevision]);
   if (!enabled) return message ? <p role="status">{message}</p> : null;
+  if (trackTargetPrefix) {
+    return <>{reviewJobs.map(job => {
+      const player = <StudioJob compact job={job} onChanged={async () => { await refresh(); await onSaved(); }} />;
+      return targets[job.trackId] ? createPortal(player, targets[job.trackId], `${job.id}:${job.binding}`) : <div key={`${job.id}:${job.binding}`}><h3 translate="no" className="notranslate">{job.title}</h3>{player}</div>;
+    })}{message ? <p role="status">{message}</p> : null}</>;
+  }
   return <section className={styles.root} aria-label="LNX Beats Studio"><header className={styles.heading}><div><p className={styles.kicker}>LNX Beats Studio · préparation privée</p><h2>Écouter, comparer, puis décider</h2></div><button type="button" onClick={() => void refresh()}>Actualiser l’atelier</button></header><p>Aucun morceau existant n’est retraité sans action explicite. Un traitement réussi ne publie rien et ne remplace pas une validation humaine.</p>{existingSources.length ? <details><summary>Préparer depuis les fichiers privés actuels</summary><p>Chaque bouton prépare uniquement la version exacte affichée. Aucun lancement collectif ou remplacement automatique.</p>{existingSources.map(source => <StudioExistingSource key={`${source.masterId}:${source.expectedMetadataHash}`} source={source} onQueued={async () => { await refresh(); await onSaved(); }} />)}</details> : null}{jobs.length ? jobs.map(job => <StudioJob key={`${job.id}:${job.binding}:${job.restoreCurrent?.binding ?? "no-current-binding"}`} job={job} onChanged={async () => { await refresh(); await onSaved(); }} />) : <p>Aucun traitement Studio pour ce projet. Activez l’atelier avant de choisir les prochains fichiers à importer.</p>}<p role="status">{message}</p></section>;
 }

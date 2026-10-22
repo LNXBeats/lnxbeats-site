@@ -24,10 +24,14 @@ test("download names and official tags preserve exact Unicode titles and real su
   assert.equal(studioDownloadName(title, "MP3"), `${title}.mp3`);
   assert.equal(studioDownloadName(title, "WAV_CD"), `${title}.wav`);
   assert.equal(studioDownloadName(title, "WAV_24"), `${title}.wav`);
-  const tags = studioOfficialTags(title, undefined, { album: "unrelated old album", composer: "Compositeur réel", producer: "Producteur réel", isrc: "FR0000000001" });
+  const preserved = Object.freeze({ album: "unrelated old album", artist: "Ancienne identité", album_artist: "Ancienne identité album", composer: "Compositeur réel", lyricist: "Auteur réel", producer: "Producteur réel", featuring: "Collaborateur réel", copyright: "Titulaire documenté", isrc: "FR0000000001" });
+  const tags = studioOfficialTags(title, undefined, preserved);
   assert.equal(tags.album, undefined); assert.equal(tags.composer, "Compositeur réel");
-  assert.equal(tags.artist, "LNX Beats"); assert.equal(tags.studio, "LNX Beats Studio"); assert.equal(tags.isrc, "FR0000000001");
+  assert.equal(tags.artist, "LNX Beats Studio"); assert.equal(tags.album_artist, "LNX Beats Studio"); assert.equal(tags.studio, "LNX Beats Studio"); assert.equal(tags.isrc, "FR0000000001");
   assert.equal(tags.producer, "Producteur réel"); assert.equal(tags.production_studio, "LNX Beats Studio");
+  assert.equal(tags.lyricist, "Auteur réel"); assert.equal(tags.featuring, "Collaborateur réel"); assert.equal(tags.copyright, "Titulaire documenté");
+  assert.equal(preserved.artist, "Ancienne identité"); assert.equal(preserved.album_artist, "Ancienne identité album");
+  assert.equal(studioOfficialTags(title, "Album — 東京", preserved).album, "Album — 東京");
   assert.throws(() => studioDownloadName("../title", "MP3"));
 });
 test("metadata rereading is lossless and incomplete measurement logs cannot pass", () => {

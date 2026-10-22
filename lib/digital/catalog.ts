@@ -70,7 +70,7 @@ export function publicQuote(value: Awaited<ReturnType<typeof quote>>) {
 }
 export async function publicDigitalProject(slug: string, userId?: string) {
   const project = await prisma.project.findFirst({ where: { slug, publicVisible: true, status: "PUBLISHED" }, select: {
-    id: true, digitalOffers: { select: { id: true, scope: true, trackId: true } }, tracks: { where: { status: {in:["RELEASED","ANNOUNCED"]} }, orderBy: [{position:"asc"},{id:"asc"}], select: {
+    id: true, membersPreviewEnabled: true, digitalOffers: { select: { id: true, scope: true, trackId: true } }, tracks: { where: { status: {in:["RELEASED","ANNOUNCED"]} }, orderBy: [{position:"asc"},{id:"asc"}], select: {
       id: true, title: true, position: true, status:true, durationSeconds: true, digitalMasters: { orderBy: { version: "desc" }, take: 1,
         include: { masterAsset: true, mp3Asset: true, previewAsset: true } },
     } },
@@ -79,7 +79,7 @@ export async function publicDigitalProject(slug: string, userId?: string) {
   const offers: DigitalSelection[] = [];
   for (const entry of project.digitalOffers) { try { offers.push((await selections([entry.id]))[0]); } catch (e) { if (!(e instanceof DigitalError)) throw e; } }
   const publicPreviews = new Set<string>();
-  for (const track of project.tracks) if (track.status === "RELEASED" && await digitalPublicPreviewAllowed(prisma, track.digitalMasters[0])) publicPreviews.add(track.id);
+  for (const track of project.tracks) if (!project.membersPreviewEnabled && track.status === "RELEASED" && await digitalPublicPreviewAllowed(prisma, track.digitalMasters[0])) publicPreviews.add(track.id);
   if(!offers.length&&!publicPreviews.size)return null;
   const album = offers.find(o => o.scope === "ALBUM");
   const owned = userId ? await ownedTrackIds(userId) : new Set<string>();
@@ -90,7 +90,7 @@ export async function publicDigitalProject(slug: string, userId?: string) {
   if(album&&userId&&albumOwnedCount){try{const q=await applyDigitalCompletions(prisma,userId,[album],owned),c=q[0].completion;
     if(c)completion={priceCents:q[0].priceCents,basePriceCents:c.basePriceCents,creditCents:c.creditCents,creditedTrackCount:c.sources.length,blockedReason:null};
   }catch(e){if(!(e instanceof DigitalError))throw e;completion={priceCents:album.priceCents,basePriceCents:album.priceCents,creditCents:0,creditedTrackCount:0,blockedReason:e.code};}}
-  return { album: album ? { id: album.id, priceCents: album.priceCents, version: album.version,trackCount:album.tracks.length,
+  return { membersPreviewOnly: !!project.membersPreviewEnabled, album: album ? { id: album.id, priceCents: album.priceCents, version: album.version,trackCount:album.tracks.length,
     formats:acquiredAlbumFormats(album.tracks),
     owned: ownsAlbum, partiallyOwned: albumOwnedCount > 0 && !ownsAlbum,completion } : null,
     tracks: project.tracks.map(t => { const media = t.digitalMasters[0], offer = offers.find(o => o.tracks.length === 1 && o.scope === "TRACK" && o.tracks[0].trackId === t.id);

@@ -1,4 +1,5 @@
 import "server-only";
+import { enqueueReleasePublication } from "@/lib/release-notifications/publications";
 
 import { Prisma } from "@/generated/prisma/client";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -169,7 +170,7 @@ export async function createCatalogProjectInTransaction(transaction: Transaction
       if (await transaction.project.findUnique({ where: { catalogPosition }, select: { id: true } })) {
         throw new CatalogLifecycleError("Cette position catalogue est déjà utilisée.", "POSITION_TAKEN");
       }
-      return transaction.project.create({
+      const created = await transaction.project.create({
         data: {
           ...values,
           catalogPosition,
@@ -180,6 +181,8 @@ export async function createCatalogProjectInTransaction(transaction: Transaction
           legacySourceVersion: null,
         },
       });
+      await enqueueReleasePublication(transaction, { kind: "MUSIC", resourceId: created.id });
+      return created;
   } catch (error) {
     if (error instanceof CatalogLifecycleError) throw error;
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -348,6 +351,9 @@ export async function updateCatalogProject(projectId: string, input: Record<stri
       },
     });
     if (result.count !== 1) throw new CatalogConflictError();
+    if (status === "published" && publicVisible && (current.status !== "PUBLISHED" || !current.publicVisible)) {
+      await enqueueReleasePublication(transaction, { kind: "MUSIC", resourceId: projectId });
+    }
     return transaction.project.findUniqueOrThrow({ where: { id: projectId } });
   });
 }

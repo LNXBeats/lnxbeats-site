@@ -35,7 +35,7 @@ for (const kind of ["wav16", "wav24", "mp3", "mono", "hot", "antiphase", "silenc
       if (kind === "silence") { assert.equal(result.source.measurements.integratedLufs, null); assert.equal(result.plan.measurable, false); assert.ok(result.report.warnings.some(value => value.startsWith("LOUDNESS_NOT_MEASURABLE"))); }
       for (const output of Object.values(result.formats)) {
         assert.equal(output.filename, `Ça l'fait — 東京, 你好 !.${output.format === "MP3" ? "mp3" : "wav"}`);
-        assert.equal(output.tags.title, "Ça l'fait — 東京, 你好 !"); assert.equal(output.tags.artist, "LNX Beats");
+        assert.equal(output.tags.title, "Ça l'fait — 東京, 你好 !"); assert.equal(output.tags.artist, "LNX Beats Studio"); assert.equal(output.tags.album_artist, "LNX Beats Studio");
         assert.equal(output.tags.studio, "LNX Beats Studio"); assert.equal(output.tags.production_studio, "LNX Beats Studio");
         assert.equal(output.tags.producer, "Producteur réel"); assert.equal(output.tags.composer, "Compositeur documenté"); assert.equal(output.tags.collaborator, "Collaboration documentée");
         assert.equal(output.tags.engineer, "Ingénieur documenté"); assert.notEqual(output.tags.ieng, "LNX Beats Studio");

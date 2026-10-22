@@ -8,6 +8,7 @@ import type {
 import type { NotificationDeploymentEnvironment } from "@/lib/notifications/config";
 import { normalizeNotificationRecipient, recipientHash } from "@/lib/notifications/domain";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { processReleaseWebhook } from "@/lib/release-notifications/webhook";
 
 export const RESEND_WEBHOOK_EVENT_TYPES = [
   "email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed",
@@ -328,6 +329,11 @@ export async function processVerifiedResendWebhookEvent(event: VerifiedResendWeb
     }
 
     if (!notification) {
+      const release = await processReleaseWebhook(transaction, event);
+      if (release) {
+        await recordEvent(release);
+        return { outcome: release.outcome, duplicate: Boolean(existingEvent) } as const;
+      }
       const outcome = authAudit && event.type !== "email.failed" ? "PROCESSED" : "REQUIRES_REVIEW";
       await recordEvent({
         outcome,

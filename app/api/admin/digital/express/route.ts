@@ -27,10 +27,11 @@ export async function POST(request: Request) {
     if (b.operation === "publish") {
       if (!b.input || typeof b.input !== "object" || Array.isArray(b.input)) throw new DigitalError("EXPRESS_INVALID");
       const v = b.input as Record<string, unknown>;
-      if (Object.keys(v).some(k => !["projectId", "reviewToken", "confirmed", "idempotencyKey", "rightsDeclaration"].includes(k)) || typeof v.reviewToken !== "string" || v.rightsDeclaration !== undefined && typeof v.rightsDeclaration !== "string") throw new DigitalError("EXPRESS_INVALID");
-      const result = await publishExpressProject(actor, { projectId: v.projectId as string, reviewToken: v.reviewToken, confirmed: v.confirmed === true, idempotencyKey: v.idempotencyKey as string, rightsDeclaration: v.rightsDeclaration as string | undefined });
+      if (Object.keys(v).some(k => !["projectId", "reviewToken", "confirmed", "idempotencyKey", "rightsDeclaration", "artisticDeclaration", "publishMode"].includes(k)) || typeof v.reviewToken !== "string" || v.rightsDeclaration !== undefined && typeof v.rightsDeclaration !== "string" || v.artisticDeclaration !== undefined && typeof v.artisticDeclaration !== "string"
+        || v.publishMode !== undefined && v.publishMode !== "PREMIERE" && v.publishMode !== "SALE") throw new DigitalError("EXPRESS_INVALID");
+      const result = await publishExpressProject(actor, { projectId: v.projectId as string, reviewToken: v.reviewToken, confirmed: v.confirmed === true, idempotencyKey: v.idempotencyKey as string, rightsDeclaration: v.rightsDeclaration as string | undefined, artisticDeclaration: v.artisticDeclaration as string | undefined, publishMode: v.publishMode as "PREMIERE" | "SALE" | undefined });
       const project = await loadExpressProject(v.projectId as string);
-      for (const path of ["/", "/discographie", "/admin/musique", `/album/${project.slug}`, "/sitemap.xml"]) revalidatePath(path);
+      for (const path of ["/", "/discographie", "/avant-premieres", "/admin/musique", `/album/${project.slug}`, "/sitemap.xml"]) revalidatePath(path);
       return digitalJson({ ...result, project });
     }
     throw new DigitalError("EXPRESS_INVALID");

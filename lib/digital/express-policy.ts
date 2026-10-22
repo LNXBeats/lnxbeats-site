@@ -3,7 +3,7 @@ import { DigitalError, assertDigitalUuid, digitalPrice } from "./domain";
 export const EXPRESS_DEFAULTS = { trackPriceCents: 129, albumPriceCents: 990, artistName: "LNX Beats Studio" };
 export type ExpressDefaults = typeof EXPRESS_DEFAULTS;
 export type ExpressDraft = {
-  projectId: string | null; expectedUpdatedAt: string | null; title: string; type: "SINGLE" | "ALBUM";
+  projectId: string | null; expectedUpdatedAt: string | null; title: string; type: "SINGLE" | "ALBUM"; releaseDate?: string | null; membersPreviewEnabled?: boolean; hasCollaborations?: boolean;
   tracks: Array<{ id: string | null; title: string; priceCents: number; expectedOfferVersion: number }>;
   albumPriceCents: number; expectedAlbumOfferVersion: number; idempotencyKey: string;
 };
@@ -19,6 +19,14 @@ function version(value: unknown) {
   if (!Number.isSafeInteger(value) || Number(value) < 0) throw new DigitalError("EXPRESS_INVALID");
   return Number(value);
 }
+/** Optional for old clients: absence preserves the existing date; null clears it explicitly. */
+export function expressReleaseDate(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new DigitalError("EXPRESS_INVALID");
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new DigitalError("EXPRESS_INVALID");
+  return value;
+}
 export function expressDefaults(value: unknown): ExpressDefaults {
   const v = object(value);
   if (Object.keys(v).some(k => !["trackPriceCents", "albumPriceCents", "artistName"].includes(k))) throw new DigitalError("EXPRESS_INVALID");
@@ -26,7 +34,9 @@ export function expressDefaults(value: unknown): ExpressDefaults {
 }
 export function expressDraft(value: unknown): ExpressDraft {
   const v = object(value);
-  if (Object.keys(v).some(k => !["projectId", "expectedUpdatedAt", "title", "type", "tracks", "albumPriceCents", "expectedAlbumOfferVersion", "idempotencyKey"].includes(k))) throw new DigitalError("EXPRESS_INVALID");
+  if (Object.keys(v).some(k => !["projectId", "expectedUpdatedAt", "title", "type", "releaseDate", "membersPreviewEnabled", "hasCollaborations", "tracks", "albumPriceCents", "expectedAlbumOfferVersion", "idempotencyKey"].includes(k))) throw new DigitalError("EXPRESS_INVALID");
+  if (Object.hasOwn(v, "membersPreviewEnabled") && typeof v.membersPreviewEnabled !== "boolean") throw new DigitalError("EXPRESS_INVALID");
+  if (Object.hasOwn(v, "hasCollaborations") && typeof v.hasCollaborations !== "boolean") throw new DigitalError("EXPRESS_INVALID");
   assertDigitalUuid(v.idempotencyKey);
   if (v.projectId !== null) assertDigitalUuid(v.projectId);
   if (v.projectId === null ? v.expectedUpdatedAt !== null : typeof v.expectedUpdatedAt !== "string" || !Number.isFinite(Date.parse(v.expectedUpdatedAt))) throw new DigitalError("EXPRESS_INVALID");
@@ -40,7 +50,10 @@ export function expressDraft(value: unknown): ExpressDraft {
   });
   const ids = tracks.flatMap(t => t.id ? [t.id] : []);
   if (new Set(ids).size !== ids.length) throw new DigitalError("EXPRESS_INVALID");
-  return { projectId: v.projectId as string | null, expectedUpdatedAt: v.expectedUpdatedAt as string | null, title: title(v.title), type: v.type as ExpressDraft["type"], tracks,
+  return { projectId: v.projectId as string | null, expectedUpdatedAt: v.expectedUpdatedAt as string | null, title: title(v.title), type: v.type as ExpressDraft["type"],
+    ...(Object.hasOwn(v, "releaseDate") ? { releaseDate: expressReleaseDate(v.releaseDate) } : {}),
+    ...(Object.hasOwn(v, "membersPreviewEnabled") ? { membersPreviewEnabled: v.membersPreviewEnabled as boolean } : {}), tracks,
+    ...(Object.hasOwn(v, "hasCollaborations") ? { hasCollaborations: v.hasCollaborations as boolean } : {}),
     albumPriceCents: digitalPrice(v.albumPriceCents as number), expectedAlbumOfferVersion: version(v.expectedAlbumOfferVersion), idempotencyKey: v.idempotencyKey as string };
 }
 export function expressName(value: string) {

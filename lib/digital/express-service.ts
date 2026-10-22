@@ -14,7 +14,13 @@ import { loadDigitalRightsReviews } from "./rights-review-service";
 import { loadDigitalExcerptSelection, requireDigitalExcerptAdmin } from "./excerpt-service";
 import { requiresParticularRightsCase } from "./group-review-policy";
 import { loadGroupReview, mutateGroupReview } from "./group-review-service";
-import { OWNER_PUBLICATION_POLICY } from "./owner-declaration";
+import { OWNER_EXCERPTS_AT_PUBLICATION_POLICY, OWNER_PUBLICATION_POLICY } from "./owner-declaration";
+import { assertMemberPremiereReady, authorizeMemberPremiereExcerpts } from "@/lib/members/previews";
+import { enqueueReleasePublication } from "@/lib/release-notifications/publications";
+import { premiereVoteSummary } from "@/lib/members/votes";
+import { memberPremiereBinding } from "@/lib/members/premiere-policy";
+import { EXPRESS_OWNER_CREDIT_POLICY, expressHasCollaborationCredits, expressOwnerCreditPlan } from "./express-owner-defaults";
+import { expressArtisticAtPublication } from "./express-artistic-publication";
 
 type DB = Prisma.TransactionClient;
 const include = { tracks: { orderBy: { position: "asc" as const }, include: { credits: true, digitalMasters: { orderBy: { version: "desc" as const }, take: 1, include: { masterAsset: true, mp3Asset: true, previewAsset: true } } } },
@@ -54,33 +60,41 @@ export async function loadExpressProject(id: string, db: DB = prisma) {
   assertDigitalUuid(id);
   const p = await db.project.findUnique({ where: { id }, include });
   if (!p) throw new DigitalError("NOT_FOUND", 404);
+  const latestDraft = await db.digitalEvent.findFirst({ where: { kind: "MUSIC_EXPRESS_DRAFT", AND: [{ details: { path: ["projectId"], equals: id } }, { OR: [{ details: { path: ["hasCollaborations"], equals: true } }, { details: { path: ["hasCollaborations"], equals: false } }] }] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { details: true } });
+  const draftDetails = latestDraft?.details as { hasCollaborations?: boolean } | undefined;
+  const hasCollaborations = draftDetails?.hasCollaborations === true || expressHasCollaborationCredits([...p.credits, ...p.tracks.flatMap(t => t.credits)]);
   const masters = p.tracks.flatMap(t => t.digitalMasters), reviews = await loadDigitalRightsReviews(db, masters);
   const tracks = [];
   for (const t of p.tracks) {
     const m = t.digitalMasters[0], offer = p.digitalOffers.find(o => o.trackId === t.id), excerpt = m ? await loadDigitalExcerptSelection(db, m).catch(() => null) : null;
     const review = reviews.find(r => r.masterId === m?.id) ?? null;
-    const rightsAtPublication = !!m && digitalCommercialAudioReady(m) && !requiresParticularRightsCase([...p.credits, ...t.credits].map(c => c.role), [m.masterAsset, m.mp3Asset, m.previewAsset].flatMap(a => a ? [a.rightsStatus] : []), review ? [review.status] : []);
+    const artisticAtPublication = expressArtisticAtPublication(m, excerpt, { reviewStatus: review?.status,
+      assetRights: m ? [m.masterAsset, m.mp3Asset, m.previewAsset].flatMap(a => a ? [a.rightsStatus] : []) : [] });
+    const rightsAtPublication = !hasCollaborations && !!m && digitalCommercialAudioReady(m) && !requiresParticularRightsCase([...p.credits, ...t.credits].map(c => c.role), [m.masterAsset, m.mp3Asset, m.previewAsset].flatMap(a => a ? [a.rightsStatus] : []), review ? [review.status] : []);
     tracks.push({ id: t.id, title: t.title, position: t.position, durationSeconds: t.durationSeconds, durationMs: m?.masterAsset.durationMs ?? null, publication: t.status,
       version: m?.version ?? 0, masterId: m?.id ?? null, previewStartMs: m?.previewStartMs ?? 0, previewDurationMs: m?.previewDurationMs ?? null,
       previewUrl: m?.previewAssetId ? `/api/admin/digital/previews/${m.previewAssetId}` : null, strictReady: !!m && digitalCommercialAudioReady(m),
       formats: !m ? "Aucun fichier" : m.codec === "mp3" ? digitalCommercialAudioReady(m) ? "MP3 uniquement — source compressée originale, sans WAV" : "MP3 source uniquement — brouillon privé non commercialisable" : m.mp3AssetId ? "WAV + MP3" : "WAV — MP3 à préparer",
-      review, rightsAtPublication, artisticStatus: excerpt?.status ?? "TO_LISTEN",
+      review, rightsAtPublication, artisticAtPublication, artisticStatus: excerpt?.status ?? "TO_LISTEN",
       offer: offer ? { id: offer.id, priceCents: offer.priceCents, version: offer.version, active: offer.active, rightsConfirmed: offer.rightsConfirmed, distribution: offer.distribution } : null });
   }
   const cover = p.assets[0]?.asset, album = p.digitalOffers.find(o => o.scope === "ALBUM");
   const blockers = [
     ...(p.status === "ARCHIVED" ? ["Projet archivé : revue préalable dans le Catalogue"] : []),
     ...(p.tracks.some(t => t.status === "UNLISTED") ? ["Pistes non listées : confirmez leur inclusion dans le Catalogue avant publication"] : []),
-    ...(!cover || cover.rightsStatus !== "CLEARED" ? ["Pochette et droits de publication à vérifier"] : []),
-    ...tracks.flatMap(t => [!t.strictReady ? `${t.title} : fichiers audio et extrait contrôlés requis` : "", t.review?.status !== "APPROVED" && !t.rightsAtPublication ? `${t.title} : droits particuliers de cette version à vérifier` : "", t.artisticStatus !== "VALIDATED" ? `${t.title} : extrait à écouter et valider` : "", !t.offer?.priceCents ? `${t.title} : prix à renseigner` : ""].filter(Boolean)),
+    ...(!cover ? ["Ajoutez une pochette"] : cover.rightsStatus !== "CLEARED" ? ["Droits de publication de la pochette à vérifier"] : []),
+    ...tracks.flatMap(t => [!t.strictReady ? `${t.title} : fichiers audio et extrait contrôlés requis` : "", t.review?.status !== "APPROVED" && !t.rightsAtPublication ? `${t.title} : droits particuliers de cette version à vérifier` : "", t.artisticStatus !== "VALIDATED" && !t.artisticAtPublication ? `${t.title} : extrait à écouter et valider` : "", !t.offer?.priceCents ? `${t.title} : prix à renseigner` : ""].filter(Boolean)),
     ...(p.type === "ALBUM" && !album?.priceCents ? ["Prix de l’album à renseigner"] : []),
     ...(p.type !== "SINGLE" && p.type !== "ALBUM" ? ["Projet expert : publication depuis le Catalogue"] : []),
     ...(p.type === "SINGLE" && p.tracks.length !== 1 ? ["Le single doit contenir une seule piste"] : []),
   ];
-  const result = { id: p.id, slug: p.slug, title: p.title, type: p.type, updatedAt: p.updatedAt.toISOString(), status: p.status, publicVisible: p.publicVisible,
-    cover: cover ? { id: cover.id, url: `/api/admin/digital/covers/${cover.id}`, alt: cover.alt ?? p.title } : null,
+  const result = { id: p.id, slug: p.slug, title: p.title, type: p.type, releaseDate: p.releaseDate?.toISOString().slice(0, 10) ?? null, membersPreviewEnabled: p.membersPreviewEnabled ?? false, updatedAt: p.updatedAt.toISOString(), status: p.status, publicVisible: p.publicVisible,
+    cover: cover ? { id: cover.id, url: `/api/admin/digital/covers/${cover.id}`, alt: cover.alt ?? p.title } : null, hasCollaborations,
     tracks, credits: p.credits.map(c => ({ name: c.name, role: c.role })), albumOffer: album ? { id: album.id, priceCents: album.priceCents, version: album.version, active: album.active } : null, blockers };
-  return { ...result, reviewToken: hash(result) };
+  // Survey results never enter the legal/artistic review token: a visitor vote
+  // cannot invalidate an Admin review or grant a publication right.
+  const premiereVotes = p.membersPreviewEnabled ? await premiereVoteSummary(db, p.id, memberPremiereBinding(p)) : { up: 0, down: 0 };
+  return { ...result, premiereVotes, reviewToken: hash(result) };
 }
 /** Private technical inventory, deliberately distinct from legal ownership evidence. */
 export async function loadExpressManifest(projectId: string) {
@@ -114,6 +128,8 @@ export async function saveExpressDraft(actor: OrderActor, raw: unknown) {
     await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-project:${projectId}`})) IS NULL AS locked`;
     const p = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { tracks: true, digitalOffers: true } });
     if (input.projectId && (p.updatedAt.toISOString() !== input.expectedUpdatedAt || p.type !== input.type)) throw new DigitalError("EXPRESS_CHANGED", 409);
+    // Enabling a private premiere cannot suspend or reinterpret existing sales.
+    if (input.membersPreviewEnabled === true && !p.membersPreviewEnabled && p.digitalOffers.some(o => o.active)) throw new DigitalError("EXPRESS_ACTIVE_OFFER", 409);
     // Saving draft prices must not silently edit the public catalogue identity.
     if ((p.status === "PUBLISHED" || p.digitalOffers.some(o => o.active)) && (input.title !== p.title || input.tracks.length !== p.tracks.length || input.tracks.some((t,i) => !p.tracks.some(old => old.id === t.id && old.title === t.title && old.position === i+1)))) throw new DigitalError("EXPRESS_PUBLIC_METADATA", 409);
     if (p.tracks.some(t => !input.tracks.some(row => row.id === t.id))) throw new DigitalError("EXPRESS_TRACK_REMOVAL", 409);
@@ -135,14 +151,42 @@ export async function saveExpressDraft(actor: OrderActor, raw: unknown) {
       const current = p.digitalOffers.find(o => o.scope === "ALBUM");
       await saveOfferInTransaction(db, actor, { projectId, trackId: null, priceCents: input.albumPriceCents, expectedVersion: input.expectedAlbumOfferVersion, active: current?.active ?? false, rightsConfirmed: current?.rightsConfirmed ?? false, distribution: current?.distribution ?? "UNRELEASED" }, true);
     }
-    await db.project.update({ where: { id: projectId }, data: { title: input.title, trackCount: ids.length } });
-    await db.digitalEvent.create({ data: { actorId: actor.id, kind: "MUSIC_EXPRESS_DRAFT", externalKey, details: { projectId, requestHash, trackIds: ids } } });
+    // A platform-release date is metadata only, never a publication schedule or
+    // distributor instruction. Omitted input from older clients preserves it.
+    const previousReleaseDate = p.releaseDate?.toISOString().slice(0, 10) ?? null, previousMembersPreviewEnabled = p.membersPreviewEnabled ?? false;
+    // Only explicit saves of new/private Express drafts get future defaults.
+    // Published identities, old catalogue entries and historical contracts are
+    // never rewritten. The existing idempotency event covers the added rows too.
+    const ownerCreditIds: string[] = [];
+    const privateDraft = p.status === "DRAFT" && !p.publicVisible && !p.digitalOffers.some(o => o.active);
+    const previousExpressDraft = input.projectId && privateDraft && input.hasCollaborations !== undefined
+      ? await db.digitalEvent.findFirst({ where: { kind: "MUSIC_EXPRESS_DRAFT", details: { path: ["projectId"], equals: projectId } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { details: true } }) : null;
+    const applyOwnerDefaults = !input.projectId || privateDraft && input.hasCollaborations !== undefined && !!previousExpressDraft;
+    if (applyOwnerDefaults) {
+      const existing = await db.credit.findMany({ where: { OR: [{ projectId }, { trackId: { in: ids } }] }, select: { name: true, role: true } });
+      const collaborations = input.hasCollaborations === true || expressHasCollaborationCredits(existing);
+      for (const credit of expressOwnerCreditPlan(existing, collaborations)) {
+        const row = await addCatalogCreditInTransaction(db, projectId, { ...credit, role: credit.role.toLowerCase(), note: `Crédit déclaré par le propriétaire dans Admin Express (${EXPRESS_OWNER_CREDIT_POLICY}). Ne constitue pas une preuve indépendante des droits. Contributions tierces conservées ; aucun rôle de parolier, interprète ou producteur déduit.` });
+        ownerCreditIds.push(row.id);
+      }
+    }
+    await db.project.update({ where: { id: projectId }, data: { title: input.title, trackCount: ids.length,
+      ...(input.releaseDate === undefined ? {} : { releaseDate: input.releaseDate === null ? null : new Date(`${input.releaseDate}T00:00:00.000Z`) }),
+      ...(input.membersPreviewEnabled === undefined ? {} : { membersPreviewEnabled: input.membersPreviewEnabled }) } });
+    await db.digitalEvent.create({ data: { actorId: actor.id, kind: "MUSIC_EXPRESS_DRAFT", externalKey, details: { projectId, requestHash, trackIds: ids,
+      ...(!input.projectId || input.hasCollaborations !== undefined ? { hasCollaborations: input.hasCollaborations ?? false } : {}),
+      ...(applyOwnerDefaults ? { ownerCredits: { policy: EXPRESS_OWNER_CREDIT_POLICY, creditIds: ownerCreditIds, independentRightsEvidence: false } } : {}),
+      ...(input.releaseDate !== undefined && input.releaseDate !== previousReleaseDate ? { releaseDateChange: { from: previousReleaseDate, to: input.releaseDate, purpose: "PLATFORM_RELEASE_METADATA_ONLY" } } : {}),
+      ...(input.membersPreviewEnabled !== undefined && input.membersPreviewEnabled !== previousMembersPreviewEnabled ? { membersPreviewChange: { from: previousMembersPreviewEnabled, to: input.membersPreviewEnabled, salesActivated: false } } : {}) } } });
     return { projectId, duplicate: false };
   }, { timeout: 30_000 });
 }
-export async function publishExpressProject(actor: OrderActor, input: { projectId: string; reviewToken: string; confirmed: boolean; idempotencyKey: string; rightsDeclaration?: string }) {
+export async function publishExpressProject(actor: OrderActor, input: { projectId: string; reviewToken: string; confirmed: boolean; idempotencyKey: string; rightsDeclaration?: string; artisticDeclaration?: string; publishMode?: "PREMIERE" | "SALE" }) {
   requireDigitalEnvironment(); assertDigitalUuid(input.projectId); assertDigitalUuid(input.idempotencyKey);
+  if (input.publishMode !== undefined && !["PREMIERE", "SALE"].includes(input.publishMode)) throw new DigitalError("EXPRESS_INVALID");
   if (input.confirmed !== true || !/^[a-f0-9]{64}$/.test(input.reviewToken)) throw new DigitalError("EXPRESS_CONFIRMATION_REQUIRED", 409);
+  const requestHash = hash({ projectId: input.projectId, reviewToken: input.reviewToken, confirmed: input.confirmed, idempotencyKey: input.idempotencyKey,
+    rightsDeclaration: input.rightsDeclaration ?? null, artisticDeclaration: input.artisticDeclaration ?? null, publishMode: input.publishMode ?? null });
   return prisma.$transaction(async db => {
     await requireDigitalExcerptAdmin(db, actor.id);
     // Same lifecycle lock order as Catalogue; cover replacement cannot race publication.
@@ -150,8 +194,12 @@ export async function publishExpressProject(actor: OrderActor, input: { projectI
     await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`catalog-project:${input.projectId}`})) IS NULL AS locked`;
     const key = `music-express-publish:${input.idempotencyKey}`, previous = await db.digitalEvent.findUnique({ where: { externalKey: key } });
     if (previous) {
-      const details = previous.details as { projectId: string; reviewToken: string };
-      if (previous.actorId !== actor.id || details.projectId !== input.projectId || details.reviewToken !== input.reviewToken) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);
+      const details = previous.details as { projectId: string; reviewToken: string; requestedMode?: string | null; artisticDeclaration?: string | null; requestHash?: string };
+      if (previous.actorId !== actor.id || details.projectId !== input.projectId || details.reviewToken !== input.reviewToken || (details.requestedMode ?? null) !== (input.publishMode ?? null)
+        || (details.artisticDeclaration ?? null) !== (input.artisticDeclaration ?? null)
+        // Existing publication records remain replayable without fabricated fields.
+        // New records bind every supplied declaration, including rights, exactly.
+        || details.requestHash !== undefined && details.requestHash !== requestHash) throw new DigitalError("IDEMPOTENCY_CONFLICT", 409);
       return { ok: true, duplicate: true };
     }
     const prepared = await db.project.findUniqueOrThrow({ where: { id: input.projectId }, include });
@@ -163,6 +211,9 @@ export async function publishExpressProject(actor: OrderActor, input: { projectI
     const review = await loadExpressProject(input.projectId, db);
     if (review.reviewToken !== input.reviewToken) throw new DigitalError("EXPRESS_CHANGED", 409);
     if (review.blockers.length) throw new DigitalError("SALE_REQUIREMENTS", 409);
+    const pendingArtistic = review.tracks.filter(t => t.artisticStatus !== "VALIDATED");
+    if (pendingArtistic.length && (input.artisticDeclaration !== OWNER_EXCERPTS_AT_PUBLICATION_POLICY || pendingArtistic.some(t => !t.artisticAtPublication)))
+      throw new DigitalError("EXCERPT_ATTESTATION_REQUIRED", 409);
     // One explicit publication confirmation, not an approval on upload/read or a
     // blanket exemption for unknown files. Existing refusals/revocations stay blocked.
     const pendingRights = review.tracks.filter(t => t.review?.status !== "APPROVED");
@@ -173,6 +224,32 @@ export async function publishExpressProject(actor: OrderActor, input: { projectI
       await mutateGroupReview(actor, { operation: "original-rights", projectId: input.projectId, masterIds: tracks.map(t => t.masterId),
         expectedBindings: tracks.map(t => ({ masterId: t.masterId, bindingHash: t.bindingHash })), expectedReviews: tracks.map(t => ({ masterId: t.masterId, reviewId: t.review?.reviewId ?? null })),
         facts: { policy: "OWNER_ORIGINAL_CONFIRMATION_V1", confirmed: true }, attested: true, idempotencyKey: input.idempotencyKey }, db);
+    }
+    if (pendingArtistic.length) {
+      const current = await loadGroupReview(actor, input.projectId, db);
+      const tracks = current.tracks.filter(t => pendingArtistic.some(p => p.masterId === t.masterId));
+      if (tracks.length !== pendingArtistic.length) throw new DigitalError("EXPRESS_CHANGED", 409);
+      await mutateGroupReview(actor, { operation: "artistic", projectId: input.projectId, masterIds: tracks.map(t => t.masterId),
+        expectedBindings: tracks.map(t => ({ masterId: t.masterId, bindingHash: t.bindingHash })),
+        expectedSelections: tracks.map(t => ({ masterId: t.masterId, revisionId: t.selection?.revisionId ?? null })),
+        provenance: "OWNER_DECLARED", attested: true, idempotencyKey: input.idempotencyKey }, db);
+    }
+    if (input.publishMode === "PREMIERE" && !review.membersPreviewEnabled) throw new DigitalError("EXPRESS_INVALID");
+    let premiere: { binding: string } | null = null;
+    if (review.membersPreviewEnabled) {
+      await authorizeMemberPremiereExcerpts(db, input.projectId, actor.id);
+      premiere = await assertMemberPremiereReady(db, input.projectId);
+    }
+    if (review.membersPreviewEnabled && input.publishMode !== "SALE") {
+      // A member premiere is a separate, explicit metadata/excerpt publication.
+      // Its future date never activates offers or alters a track's existing state.
+      await db.project.update({ where: { id: input.projectId }, data: { status: "PUBLISHED", publicVisible: true } });
+      await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_PREMIERE_PUBLISHED", actorId: actor.id, externalKey: key,
+        details: { projectId: input.projectId, reviewToken: input.reviewToken, requestedMode: input.publishMode ?? null, requestHash, premiereBinding: premiere!.binding, releaseDate: review.releaseDate, memberOnly: true,
+          offerIds: [], salesActivated: false, rightsDeclaration: pendingRights.length ? OWNER_PUBLICATION_POLICY : null,
+          artisticDeclaration: input.artisticDeclaration ?? null, artisticMasterIds: pendingArtistic.map(t => t.masterId), artisticProvenance: pendingArtistic.length ? "OWNER_DECLARED" : null } } });
+      await enqueueReleasePublication(db, { kind: "MUSIC", resourceId: input.projectId });
+      return { ok: true, duplicate: false, published: true, premiere: true };
     }
     await db.project.update({ where: { id: input.projectId }, data: { status: "PUBLISHED", publicVisible: true } });
     await db.track.updateMany({ where: { projectId: input.projectId }, data: { status: "RELEASED" } });
@@ -185,7 +262,13 @@ export async function publishExpressProject(actor: OrderActor, input: { projectI
     }
     // Authoritative sales gates, including current versions/artistic approvals/live storage. All changes roll back on refusal.
     for (const id of ids) await selections([id], db);
-    await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_PUBLISHED", actorId: actor.id, externalKey: key, details: { projectId: p.id, reviewToken: input.reviewToken, offerIds: ids, rightsDeclaration: pendingRights.length ? OWNER_PUBLICATION_POLICY : null } } });
+    if (premiere) await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_PREMIERE_PUBLISHED", actorId: actor.id, externalKey: `${key}:premiere`,
+      details: { projectId: p.id, premiereBinding: premiere.binding, releaseDate: review.releaseDate, memberOnly: true, salesActivated: true,
+        workflow: "EXPLICIT_SALE_WITH_MEMBER_EXCERPTS", offerIds: ids, delivery: "IMMEDIATE_AFTER_CONFIRMED_PAYMENT" } } });
+    await enqueueReleasePublication(db, { kind: "MUSIC", resourceId: p.id });
+    await db.digitalEvent.create({ data: { kind: "MUSIC_EXPRESS_PUBLISHED", actorId: actor.id, externalKey: key, details: { projectId: p.id, reviewToken: input.reviewToken, requestedMode: input.publishMode ?? null, requestHash, offerIds: ids,
+      delivery: "IMMEDIATE_AFTER_CONFIRMED_PAYMENT", rightsDeclaration: pendingRights.length ? OWNER_PUBLICATION_POLICY : null,
+      artisticDeclaration: input.artisticDeclaration ?? null, artisticMasterIds: pendingArtistic.map(t => t.masterId), artisticProvenance: pendingArtistic.length ? "OWNER_DECLARED" : null } } });
     return { ok: true, duplicate: false };
   }, { timeout: 30_000 });
 }

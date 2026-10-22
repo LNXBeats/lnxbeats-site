@@ -1,7 +1,7 @@
 /** Owner's site display decision. Not a copyright, performer or distribution claim. */
 export const CATALOG_PRIMARY_ARTIST = "LNX Beats Studio";
 export const CATALOG_ARTIST_DISPLAY_POLICY = "LNX_SITE_PRIMARY_ARTIST_20261018_V1";
-const ownerArtistNames = new Set(["lnx beats", "lnx beats studio", "ludovic mathon", "mathon ludovic mickael"]);
+const ownerArtistNames = new Set(["lnx beats", "lnx beats studio", "ludovic mathon", "ludovic mickael mathon", "mathon ludovic mickael"]);
 function folded(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").trim().replace(/\s+/g, " ").toLocaleLowerCase("fr");
 }

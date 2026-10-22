@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AdminBackLink } from "@/components/admin-back-link";
 import { requireAdmin } from "@/lib/auth/session";
+import { adminMusicEditorHref } from "@/lib/catalog/admin-music-entry";
 import { getAdminCatalogPage } from "@/lib/catalog/service";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
   return (
     <div className="admin-main">
       <AdminBackLink href="/admin">Retour à l’Administration</AdminBackLink>
-      <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue PostgreSQL</p><h1>La discographie, éditable.</h1></div><div className="admin-page-heading__actions"><p>Les pages publiques et cette administration lisent désormais la même source. Chaque enregistrement reste explicite et contrôlé.</p><Link className="admin-primary-action" href="/admin/catalogue/nouveau"><span aria-hidden="true">+</span> Nouveau projet</Link></div></header>
+      <header className="admin-page-heading"><div><p className="admin-kicker">Catalogue</p><h1>La discographie, éditable.</h1></div><div className="admin-page-heading__actions"><p>Ajoutez ou préparez vos singles et albums dans Express. Les réglages historiques restent accessibles séparément.</p><Link className="admin-primary-action" href="/admin/catalogue/nouveau"><span aria-hidden="true">+</span> Ajouter un single ou un album</Link><Link className="admin-row-action" href="/admin/catalogue/nouveau?avance=1">Créer une fiche avancée</Link></div></header>
 
       <nav className="admin-v2-section-hub" aria-label="Espaces de création">
         <Link href="/admin/creations"><strong>Créations & collaborations</strong><span>Médias, collaborateurs et liens externes</span></Link>
@@ -55,7 +56,7 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
         <div className="admin-list-window__heading"><h2 id="catalogue-title">Catalogue LNX Beats</h2><span>{catalogue.total} projet{catalogue.total === 1 ? "" : "s"} · page {catalogue.page}/{catalogue.pageCount}</span></div>
         {projects.length ? <ul className="admin-catalogue-list">
           {projects.map((project) => <li key={project.id}>
-            <div><strong><Link href={`/admin/catalogue/${project.slug}`}>{project.title}</Link></strong><small>{project.slug} · {statusLabels[project.status]}</small></div>
+            <div><strong><Link href={adminMusicEditorHref(project)}>{project.title}</Link></strong><small>{project.slug} · {statusLabels[project.status]}</small></div>
             <dl>
               <div><dt>Type</dt><dd>{project.type === "ALBUM" ? "Album" : project.type === "SINGLE" ? "Single" : "Projet"}</dd></div>
               <div><dt>Cover</dt><dd>{project.assets.some(({ role }) => role === "COVER") ? "Officielle" : "Manquante"}</dd></div>
@@ -63,7 +64,7 @@ export default async function AdminCataloguePage({ searchParams }: { searchParam
               <div><dt>Liens directs</dt><dd>{project._count.platformLinks}</dd></div>
               <div><dt>Tracklist</dt><dd>{project._count.tracks || project.trackCount || "Non documentée"}</dd></div>
             </dl>
-            <Link className="admin-row-action" href={`/admin/catalogue/${project.slug}`}>Modifier <span aria-hidden="true">→</span></Link>
+            <div className="admin-inline-actions"><Link className="admin-row-action" href={adminMusicEditorHref(project)}>{project.type === "ALBUM" || project.type === "SINGLE" ? "Ouvrir Express" : "Modifier"} <span aria-hidden="true">→</span></Link>{project.type === "ALBUM" || project.type === "SINGLE" ? <Link className="admin-row-action" href={`/admin/catalogue/${project.slug}`}>Avancé / historique</Link> : null}</div>
           </li>)}
         </ul> : <div className="admin-empty"><h2>Aucun projet ne correspond.</h2><p>Modifiez la recherche ou le filtre de statut.</p></div>}
         {catalogue.pageCount > 1 ? <nav className="admin-pagination" aria-label="Pagination de la discographie">

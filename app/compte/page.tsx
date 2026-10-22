@@ -23,6 +23,7 @@ import { listRightsRequestsForActor } from "@/lib/rights/service";
 import { effectiveShopOrderStatus, shopFulfillmentLabel } from "@/lib/shop/order-presentation";
 import { listMemberShopOrders } from "@/lib/shop/order-service";
 import { digitalEnabled } from "@/lib/digital/domain";
+import { ReleaseAlertPreferences } from "@/components/release-alert-preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,8 @@ export default async function AccountPage() {
           </div>
         </div>
         <div className="auth-account-stack">
+          <section className="member-orders" aria-labelledby="member-premieres-title"><h2 id="member-premieres-title"><T text="Les avant-premières." /></h2><p><T text="Des extraits réservés aux membres, publiés personnellement par LNX Beats." /></p><Link className="button button--quiet" href="/avant-premieres"><T text="Écouter les avant-premières" /></Link></section>
+          <div className="member-orders" id="mes-alertes"><ReleaseAlertPreferences /></div>
           {digitalEnabled() ? <section className="member-orders"><h2><T text="Ma musique." /></h2><p><T text="Vos albums et titres numériques, distincts des commandes Boutique et des créations sur mesure." /></p><Link className="button button--quiet" href="/compte/musique"><T text="Ouvrir ma bibliothèque" /></Link></section> : null}
           <section className="member-orders" aria-labelledby="member-orders-title">
             <div className="member-orders__heading">

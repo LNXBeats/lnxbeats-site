@@ -3,7 +3,7 @@ import { syntheticExistingExcerptApproval } from "./fixtures/excerpt-approval";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import type { Prisma } from "@/generated/prisma/client";
-import { selections, saveOffer } from "@/lib/digital/catalog";
+import { selections, saveOffer, publicDigitalProject } from "@/lib/digital/catalog";
 import { digitalSalesReadiness } from "@/lib/digital/admin";
 import { DIGITAL_MP3_ENCODER_VERSION } from "@/lib/digital/formats";
 import { prisma } from "@/lib/prisma";
@@ -30,7 +30,8 @@ function fixture(scope: "ALBUM" | "TRACK" = "ALBUM") {
         previewAsset: { ...asset(previewId, "audio/mpeg", "PUBLIC"), durationMs: 59_900 }, previewDurationMs: 59_900 }] };
   });
   const offer = { id, scope, trackId: scope === "TRACK" ? tracks[0].id : null, active: true, rightsConfirmed: true, priceCents: scope === "ALBUM" ? 990 : 129,
-    version: 2, distribution: "UNRELEASED", project: { id: projectId, title: "Synthetic unreleased album", type: scope === "ALBUM" ? "ALBUM" : "SINGLE", status: "PUBLISHED", publicVisible: true, tracks } };
+    version: 2, distribution: "UNRELEASED", project: { id: projectId, title: "Synthetic unreleased album", type: scope === "ALBUM" ? "ALBUM" : "SINGLE", status: "PUBLISHED", publicVisible: true,
+      membersPreviewEnabled: false, releaseDate: new Date("2030-01-02T00:00:00.000Z"), tracks } };
   let query: unknown;
   const reviewerId = randomUUID();
   // Explicit immutable synthetic artistic proofs; never approvals on a real catalogue.
@@ -63,6 +64,60 @@ test("Admin preparation: unreleased 12-track album is sellable without a platfor
 test("Admin preparation: single retains its independent price and only its own pinned edition", async () => {
   const f = fixture("TRACK"), chosen = (await selections([f.id], f.db))[0];
   assert.equal(chosen.priceCents, 129); assert.equal(chosen.tracks.length, 1); assert.equal(chosen.tracks[0].trackId, f.tracks[0].id);
+});
+
+test("Early sale: a future platform date and member-only excerpts do not block an explicitly active, cleared album offer", async () => {
+  const f = fixture(); f.offer.project.membersPreviewEnabled = true;
+  const before = structuredClone(f.offer), chosen = (await selections([f.id], f.db))[0];
+  assert.equal(chosen.priceCents, 990); assert.equal(chosen.tracks.length, 12);
+  assert.ok(chosen.tracks.every(track => track.formats?.join(",") === "WAV,MP3"));
+  assert.deepEqual(f.offer, before); // Eligibility alone never creates a sale, payment, right or altered offer.
+});
+
+test("Early sale: a future date/member flag never substitutes activation, exact rights/artistic approval or private cleared files", async () => {
+  for (const change of ["inactive", "unconfirmed", "pendingWav", "pendingMp3", "pendingPreview", "missingRights", "missingArtistic", "announcedTrack", "quarantine"] as const) {
+    const f = fixture(); f.offer.project.membersPreviewEnabled = true;
+    const master = f.tracks[0].digitalMasters[0];
+    if (change === "inactive") f.offer.active = false; if (change === "unconfirmed") f.offer.rightsConfirmed = false;
+    if (change === "pendingWav") master.masterAsset.rightsStatus = "PENDING";
+    if (change === "pendingMp3") master.mp3Asset.rightsStatus = "PENDING";
+    if (change === "pendingPreview") master.previewAsset.rightsStatus = "PENDING";
+    if (change === "announcedTrack") f.tracks[0].status = "ANNOUNCED";
+    if (change === "quarantine") master.status = "QUARANTINED";
+    if (change === "missingRights") f.db.digitalEvent.findFirst = (async () => null) as typeof f.db.digitalEvent.findFirst;
+    if (change === "missingArtistic") {
+      const original = f.db.$queryRaw;
+      f.db.$queryRaw = (async (parts: TemplateStringsArray, ...values: unknown[]) => parts.join("?").includes("dcn-excerpt-latest-artistic-events") ? [] : original(parts, ...values)) as typeof original;
+    }
+    await assert.rejects(selections([f.id], f.db), { code: ["inactive", "unconfirmed"].includes(change) ? "OFFER_UNAVAILABLE"
+      : change === "missingRights" ? "RIGHTS_REVIEW_REQUIRED" : change === "missingArtistic" ? "EXCERPT_ARTISTIC_VALIDATION_REQUIRED" : "NO_READY_MASTER" }, change);
+  }
+});
+
+async function isolatedPublicProjection<T>(f: ReturnType<typeof fixture>, run: () => Promise<T>) {
+  const resets: Array<() => void> = [];
+  const replace = (target: object, key: string, value: unknown) => { const object = target as Record<string, unknown>, previous = object[key]; object[key] = value; resets.push(() => { object[key] = previous; }); };
+  replace(prisma, "$queryRaw", f.db.$queryRaw);
+  replace(prisma.project, "findFirst", async () => ({ ...f.offer.project, digitalOffers: [{ id: f.id, scope: f.offer.scope, trackId: f.offer.trackId }] }));
+  for (const model of ["digitalMaster", "digitalOffer", "digitalEvent", "user"] as const)
+    for (const method of ["findMany", "findFirst", "findUnique"] as const) {
+      const replacement = (f.db[model] as unknown as Record<string, unknown>)[method]; if (replacement) replace(prisma[model], method, replacement);
+    }
+  try { return await run(); } finally { resets.reverse().forEach(reset => reset()); }
+}
+test("Early sale: public catalogue exposes the approved offer but no member excerpt or full audio URL", async () => {
+  const f = fixture(); f.offer.project.membersPreviewEnabled = true;
+  await isolatedPublicProjection(f, async () => {
+    const view = await publicDigitalProject("synthetic-members-early-sale");
+    assert.equal(view?.membersPreviewOnly, true); assert.equal(view?.album?.id, f.id); assert.equal(view?.album?.priceCents, 990);
+    assert.ok(view?.tracks.every(track => track.previewUrl === null));
+    const serialized = JSON.stringify(view);
+    for (const track of f.tracks) for (const assetId of [track.digitalMasters[0].masterAssetId, track.digitalMasters[0].mp3AssetId, track.digitalMasters[0].previewAssetId])
+      assert.equal(serialized.includes(assetId!), false, "Only the catalogue/offer IDs, never audio IDs, are projected");
+    assert.doesNotMatch(serialized, /storageKey|\/media\/digital\/previews|downloadUrl/);
+    f.offer.active = false;
+    assert.equal(await publicDigitalProject("synthetic-members-early-sale"), null); // Flag/date alone never opens a purchase.
+  });
 });
 
 test("Admin selection: rightsConfirmed flag cannot replace a bound current rights review", async () => {

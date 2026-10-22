@@ -9,6 +9,8 @@ import { hashPassword } from "@/lib/auth/password";
 import { REGISTRATION_CODE_TTL_MS } from "@/lib/auth/registration-policy";
 import { createOpaqueToken, hashOpaqueToken, isOpaqueToken } from "@/lib/auth/tokens";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
+import { saveReleaseAlertPreferencesInTransaction } from "@/lib/release-notifications/preferences";
+import { parseReleaseAlertChoices, type ReleaseAlertChoices } from "@/lib/release-notifications/domain";
 
 export { REGISTRATION_CODE_TTL_MS };
 export const REGISTRATION_PROOF_TTL_MS = 10 * 60_000;
@@ -250,8 +252,10 @@ export async function completeRegistration(input: {
   password: string;
   cookieHeader: string | null;
   clientAddress: string;
+  releaseAlerts?: ReleaseAlertChoices;
 }) {
   assertDatabaseConfigured();
+  if (input.releaseAlerts !== undefined && !parseReleaseAlertChoices(input.releaseAlerts)) throw new RegistrationServiceError("Choix d’alertes invalides.", 400, "INVALID_RELEASE_ALERT_CHOICES");
   const parsed = parseProofCookie(input.cookieHeader);
   if (!parsed) throw new RegistrationServiceError("Cette vérification n’est plus valable. Demandez un nouveau code.", 400, "PROOF_INVALID");
   await enforceLimits([
@@ -306,6 +310,7 @@ export async function completeRegistration(input: {
         password: passwordHash,
       },
     });
+    if (input.releaseAlerts) await saveReleaseAlertPreferencesInTransaction(transaction, user.id, input.releaseAlerts, "REGISTRATION", now);
     await transaction.registrationAttempt.update({ where: { id: attempt.id }, data: { consumedAt: now } });
     return { completed: true as const };
   });

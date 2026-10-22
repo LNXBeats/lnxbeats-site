@@ -1408,6 +1408,10 @@ enum ProviderEventOutcome {
 }
 
 model User {
+  memberPremiereVotes                MemberPremiereVote[]
+  releaseAlertPreference             ReleaseAlertPreference?
+  releaseAlertPreferenceEvents       ReleaseAlertPreferenceEvent[]
+  releaseAlertDeliveries             ReleaseAlertDelivery[]
   digitalCompletionCredits           DigitalCompletionCredit[]
   digitalOrders                      DigitalOrder[]
   digitalCart                        DigitalCart?
@@ -1418,6 +1422,7 @@ model User {
   email                              String                            @unique @db.VarChar(320)
   emailVerified                      Boolean                           @default(false)
   emailVerifiedAt                    DateTime?                         @db.Timestamptz(3)
+  lastSignedInAt                     DateTime?                         @db.Timestamptz(3)
   displayName                        String                            @default("") @db.VarChar(120)
   firstName                          String?                           @db.VarChar(100)
   lastName                           String?                           @db.VarChar(100)
@@ -1475,6 +1480,83 @@ model User {
 
   @@index([role, status])
   @@map("users")
+}
+
+// Optional marketing preferences. Never used to enable/disable transactional mail.
+model ReleaseAlertPreference {
+  userId              String    @id @db.Uuid
+  music               Boolean   @default(false)
+  shop                Boolean   @default(false)
+  editorial           Boolean   @default(false)
+  musicConsentedAt    DateTime? @db.Timestamptz(3)
+  shopConsentedAt     DateTime? @db.Timestamptz(3)
+  editorialConsentedAt DateTime? @db.Timestamptz(3)
+  consentVersion      String    @db.VarChar(64)
+  locale              String    @default("fr") @db.VarChar(2)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("release_alert_preferences")
+}
+
+model ReleaseAlertPreferenceEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  source         String   @db.VarChar(24)
+  consentVersion String   @db.VarChar(64)
+  preferences    Json
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("release_alert_preference_events")
+}
+
+// One marker per resource, not per publication click: republication never resends.
+model ReleasePublication {
+  id              String   @id @default(uuid()) @db.Uuid
+  kind            String   @db.VarChar(12)
+  resourceId      String   @db.Uuid
+  title           String   @db.VarChar(240)
+  path            String   @db.VarChar(500)
+  baseline        Boolean  @default(false)
+  expanded        Boolean  @default(false)
+  recipientCursor String?  @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  deliveries      ReleaseAlertDelivery[]
+
+  @@unique([kind, resourceId])
+  @@index([baseline, expanded, createdAt])
+  @@map("release_publications")
+}
+
+// Independent marketing outbox on the existing worker/Resend adapter, no fake order.
+model ReleaseAlertDelivery {
+  id                    String   @id @default(uuid()) @db.Uuid
+  publicationId         String   @db.Uuid
+  userId                String   @db.Uuid
+  recipient             String   @db.VarChar(320)
+  deploymentEnvironment String   @db.VarChar(16)
+  status                String   @default("PENDING") @db.VarChar(24)
+  attempts              Int      @default(0)
+  availableAt           DateTime @default(now()) @db.Timestamptz(3)
+  firstAttemptAt        DateTime? @db.Timestamptz(3)
+  leaseToken            String?  @db.Uuid
+  leaseUntil            DateTime? @db.Timestamptz(3)
+  providerMessageId     String?  @unique @db.VarChar(255)
+  lastErrorCode         String?  @db.VarChar(80)
+  sentAt                DateTime? @db.Timestamptz(3)
+  deliveredAt           DateTime? @db.Timestamptz(3)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+  publication           ReleasePublication @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  user                  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([publicationId, userId])
+  @@index([status, availableAt])
+  @@index([status, leaseUntil])
+  @@map("release_alert_deliveries")
 }
 
 // Independent voluntary support: never an Order, invoice, entitlement or credit.
@@ -1693,6 +1775,7 @@ model Customer {
 }
 
 model Project {
+  memberPremiereVotes   MemberPremiereVote[]
   digitalOffers         DigitalOffer[]
   id                    String                   @id @default(uuid()) @db.Uuid
   slug                  String                   @unique @db.VarChar(160)
@@ -1709,6 +1792,7 @@ model Project {
   shortDescription      String?                  @db.Text
   description           String?                  @db.Text
   releaseDate           DateTime?                @db.Date
+  membersPreviewEnabled Boolean                  @default(false)
   featured              Boolean                  @default(false)
   trackCount            Int?
   artworkTone           String                   @default("graphite") @db.VarChar(32)
@@ -1730,6 +1814,23 @@ model Project {
   @@index([publicVisible, status, catalogPosition])
   @@index([publicVisible, jukeboxPlacement, jukeboxPosition, catalogPosition])
   @@map("projects")
+}
+
+// Non-commercial, per-account survey on the exact version presented to members.
+// A withdrawal keeps a null choice; changing audio/metadata starts a new binding.
+model MemberPremiereVote {
+  projectId String   @db.Uuid
+  userId    String   @db.Uuid
+  binding   String   @db.Char(64)
+  choice    String?  @db.VarChar(4)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId, binding])
+  @@index([projectId, binding, choice])
+  @@map("member_premiere_votes")
 }
 
 model Track {

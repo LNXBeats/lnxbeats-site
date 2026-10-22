@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { EXPRESS_COVER_OWNER_POLICY } from "@/lib/catalog/cover-owner-policy";
 
 const coverFeedback: Record<string, string> = {
   "cover-enregistree": "Cover enregistrée.",
@@ -38,6 +39,7 @@ export function CatalogCoverForm({
   returnTo,
   preparedFile,
   onSaved,
+  ownerDeclarationAtUpload = false,
 }: {
   projectId: string;
   slug: string;
@@ -49,6 +51,7 @@ export function CatalogCoverForm({
   returnTo?: string;
   preparedFile?: File | null;
   onSaved?: () => Promise<void>;
+  ownerDeclarationAtUpload?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +75,7 @@ export function CatalogCoverForm({
     }
 
     const rights = form.elements.namedItem("rightsConfirmed");
-    if (!(rights instanceof HTMLInputElement) || !rights.checked) {
+    if (!ownerDeclarationAtUpload && (!(rights instanceof HTMLInputElement) || !rights.checked)) {
       setState("cover-droits");
       return;
     }
@@ -94,7 +97,8 @@ export function CatalogCoverForm({
       body.set("projectId", projectId);
       body.set("slug", slug);
       body.set("expectedCoverAssetId", expectedCoverAssetId ?? "");
-      body.set("rightsConfirmed", "on");
+      if (ownerDeclarationAtUpload) body.set("ownerDeclaration", EXPRESS_COVER_OWNER_POLICY);
+      else body.set("rightsConfirmed", "on");
       body.set("alt", altInput instanceof HTMLInputElement ? altInput.value : "");
       body.set("cover", uploadFile, uploadFile.name);
       const response = await fetch(coverUploadEndpoint, {
@@ -137,7 +141,7 @@ export function CatalogCoverForm({
         data-selected-file-count={selectedFile?.count ?? 0}
         data-selected-file-size={selectedFile?.size ?? 0}
       >
-        {preparedFile && !selectedFile ? <p>Pochette sélectionnée : {preparedFile.name}. Confirmez ses droits puis ajoutez-la ; aucun envoi automatique.</p> : null}
+        {preparedFile && !selectedFile ? <p>Pochette sélectionnée : {preparedFile.name}.</p> : null}
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="slug" value={slug} />
         <input type="hidden" name="expectedCoverAssetId" value={expectedCoverAssetId ?? ""} />
@@ -157,10 +161,10 @@ export function CatalogCoverForm({
               }}
             />
           </label>
-          <label className="admin-checkbox admin-form-wide">
+          {!ownerDeclarationAtUpload ? <label className="admin-checkbox admin-form-wide">
             <input name="rightsConfirmed" type="checkbox" required />
             <span>Je confirme disposer des droits nécessaires pour publier cette image.</span>
-          </label>
+          </label> : null}
         </div>
         <details className="admin-secondary-fields">
           <summary>Options avancées</summary>

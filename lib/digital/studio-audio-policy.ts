@@ -26,7 +26,7 @@ export function studioDownloadName(title: string, format: StudioFormat) {
 export function studioOfficialTags(title: string, album?: string, preserved: Record<string, string> = {}) {
   studioDownloadName(title, "MP3");
   if (album !== undefined && (!album || album.length > 500 || /[\u0000-\u001f\u007f]/.test(album))) throw new Error("STUDIO_INVALID_ALBUM");
-  const tags = { ...preserved, title, artist: "LNX Beats", album_artist: "LNX Beats", studio: "LNX Beats Studio", production_studio: "LNX Beats Studio", comment: "Création LNX Beats Studio" };
+  const tags = { ...preserved, title, artist: "LNX Beats Studio", album_artist: "LNX Beats Studio", studio: "LNX Beats Studio", production_studio: "LNX Beats Studio", comment: "Création LNX Beats Studio" };
   // An old embedded album is not evidence of the actual catalogue association.
   delete (tags as Record<string, string>).album;
   if (album !== undefined) (tags as Record<string, string>).album = album;
