@@ -20,13 +20,14 @@ test("VFinal visual layer remains public-only, with an explicit responsive compo
   assert.match(css, /\.discography-card\[data-active\] \.discography-card__body h3 \{ padding-right: 5\.6rem/);
 });
 
-test("home uses real catalogue content, official platform links and an unmodified source signature", async () => {
+test("home uses real catalogue content, official platform links and the shared supplied signature", async () => {
   const home = await source("app/page.tsx");
   assert.match(home, /getHomepageProjects\(\)/);
   assert.match(home, /leadProject\.title/);
   assert.match(home, /leadProject\.description/);
   assert.match(home, /quickAccessPlatforms\.map/);
-  assert.match(home, /signature-source-apple-artist\.jpg[^>]+unoptimized/);
+  assert.equal((home.match(/<BrandSignature\b/g) ?? []).length, 2);
+  assert.doesNotMatch(home, /signature-source-apple-artist\.jpg/);
   assert.doesNotMatch(home, /dangerouslySetInnerHTML|autoPlay|setInterval/);
 });
 

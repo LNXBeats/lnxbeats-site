@@ -55,7 +55,7 @@ test("V3 preserves both exact pack assets and derives a real transparent Apple A
   assert.equal(publicAssets.some((name) => /DOG_REFERENCE|FACE_REFERENCE|IDENTITY_REFERENCE/i.test(name)), false);
 });
 
-test("V3 drives the shared public identity while retaining V2 as the lower stylesheet layer", async () => {
+test("the supplied animated signature replaces public wordmarks while retaining V2/V3 styling", async () => {
   const [layout, home, header, footer] = await Promise.all([
     source("app/layout.tsx"),
     source("app/page.tsx"),
@@ -70,15 +70,12 @@ test("V3 drives the shared public identity while retaining V2 as the lower style
 
   assert.match(home, /\/assets\/v3\/hero-main-ludovic-dog-exact\.jpg/);
   for (const [name, fileSource] of [["Home", home], ["header", header], ["footer", footer]] as const) {
-    assert.match(fileSource, /\/assets\/v3\/lnx-beats-signature-transparent\.png/, `${name} must use the transparent Apple Artist wordmark`);
-    assert.doesNotMatch(fileSource, /lnx-beats-signature-user-transparent/, `${name} must not retain the rejected replacement signature`);
-    if (name !== "Home") {
-      assert.doesNotMatch(fileSource, /lnx-beats-signature-source-apple-artist/, `${name} keeps the transparent shared navigation identity`);
-    }
+    assert.match(fileSource, /<BrandSignature\b/, `${name} must use the shared supplied signature`);
+    assert.doesNotMatch(fileSource, /lnx-beats-signature-(?:user-transparent|transparent|source-apple-artist)/, `${name} must not display the superseded wordmark`);
   }
-  // VFinal explicitly reuses the exact supplied JPEG in an editorial signature,
-  // not in the hero or the navigation. No regeneration or image transform.
-  assert.match(home, /styles.signature[\s\S]*signature-source-apple-artist\.jpg[^>]+unoptimized/);
+  // The historical source assets remain preserved by the SHA checks above;
+  // the owner's new supplied signature now also replaces the editorial JPEG.
+  assert.match(home, /styles.signature[\s\S]*<BrandSignature className=\{styles.signatureMark\}/);
 });
 
 test("V3 follows the page rules without inventing catalogue or Commander behavior", async () => {

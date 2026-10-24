@@ -1,0 +1,6 @@
+.signature { display: block; max-width: 100%; line-height: 0; }
+.image { display: block; width: 100%; height: auto; aspect-ratio: 4 / 1; object-fit: contain; }
+.motionToggle { display: inline-flex; align-items: center; min-height: 44px; padding: .4rem 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: .75rem; line-height: 1.4; text-align: start; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+.motionToggle:focus-visible { outline: 2px solid var(--gold-light, #ffe09a); outline-offset: 4px; }
+.motionToggle:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .motionToggle { display: none; } }

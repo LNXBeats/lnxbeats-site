@@ -1136,6 +1136,8 @@ main#contenu:has(.admin-shell) { min-height: 100svh; }
 .admin-header__brand > a span:first-child { margin: 0; color: var(--admin-gold); font-size: 1.15rem; }
 .admin-header__brand > a span:last-child { color: #f4f0e8; font-size: .62rem; }
 .admin-header__brand p { color: #8e918f; font-size: .62rem; }
+.admin-header__brand > a.admin-header__signature { width: 148px; max-width: 100%; min-width: 0; flex-shrink: 0; gap: .3rem; }
+.admin-header__signature > span { margin: 0; font-size: .62rem; letter-spacing: .15em; }
 .admin-header__nav { gap: .2rem; }
 .admin-header__nav-group { position: relative; display: block; min-width: 0; }
 .admin-header__group-heading { border-radius: 11px; }

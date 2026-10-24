@@ -4,7 +4,7 @@ import { OriginalName } from "@/components/original-name";
 import { LocalizedEditorial } from "@/components/localized-editorial";
 import { getSiteLocale, serverT } from "@/lib/i18n/server";
 import Link from "next/link";
-import Image from "next/image";
+import { BrandMotionToggle, BrandSignature } from "@/components/brand-signature";
 import { Container } from "@/components/container";
 import { ExternalLinkIcon } from "@/components/link-icons";
 import { navigation, siteConfig } from "@/data/site";
@@ -17,7 +17,7 @@ export async function SiteFooter() {
     <footer className="site-footer" lang={locale === "zh" ? "zh-Hans" : locale}>
       <Container>
         <div className="site-footer__signature" aria-hidden="true">
-          <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} />
+          <BrandSignature />
         </div>
         <div className="site-footer__top">
           <div className="site-footer__statement">
@@ -104,6 +104,7 @@ export async function SiteFooter() {
             <Link href="/retractation"><T text="Rétractation"/></Link>
             <Link href="/contact"><T text="Contact"/></Link>
             <a href="https://www.cm2c.net/" target="_blank" rel="noopener noreferrer"><T text="Médiation CM2C"/></a>
+            <BrandMotionToggle />
           </nav>
         </div>
       </Container>

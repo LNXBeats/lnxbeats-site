@@ -9,6 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { Container } from "@/components/container";
+import { BrandSignature } from "@/components/brand-signature";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { UiIcon } from "@/components/ui-icon";
 import { quickAccessPlatforms } from "@/data/site";
@@ -38,7 +39,7 @@ export default async function HomePage() {
       <Container className={styles.heroGrid}>
         <div className={styles.heroCopy}>
           <p className={styles.eyebrow}><T text="Des histoires. Des personnages."/><br /><T text="Des morceaux qui restent."/></p>
-          <h1 id="home-hero-title" className={styles.wordmark}><span className="visually-hidden"><OriginalName>LNX Beats</OriginalName></span><Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} priority /></h1>
+          <h1 id="home-hero-title" className={styles.wordmark}><span className="visually-hidden"><OriginalName>LNX Beats</OriginalName></span><BrandSignature priority /></h1>
           <p className={styles.slogan}><T text="Les histoires"/> <br /><T text="deviennent musique."/></p>
           <p className={styles.lead}><T text="Chaque histoire mérite sa musique."/></p>
         </div>
@@ -78,7 +79,7 @@ export default async function HomePage() {
     <section className={`${styles.section} ${styles.platforms}`} aria-labelledby="home-platforms-title"><Container>
       <div className={styles.heading}><h2 id="home-platforms-title"><T text="L’écoute continue."/></h2><Link href="/contact#plateformes"><T text="Toutes les plateformes"/> <UiIcon name="arrow-right" /></Link></div>
       <ul className={styles.platformIcons} aria-label={serverT(locale, "Écouter et suivre LNX Beats")}>{quickAccessPlatforms.map(({ name, url, icon }) => <li key={name}><a href={url} target="_blank" rel="noopener noreferrer" aria-label={serverT(locale, "{name} — nouvel onglet", { name })} title={name}><Image src={icon} alt="" width={28} height={28} /><span className="visually-hidden"><OriginalName>{name}</OriginalName></span></a></li>)}</ul>
-      <div className={styles.signature}><p><T text="Merci à tous ceux qui écoutent, partagent et soutiennent."/><br /><T text="Vous faites vivre cette aventure."/></p><Image src="/assets/v3/lnx-beats-signature-source-apple-artist.jpg" alt={serverT(locale, "LNX Beats — signature officielle")} width={1536} height={614} unoptimized /></div>
+      <div className={styles.signature}><p><T text="Merci à tous ceux qui écoutent, partagent et soutiennent."/><br /><T text="Vous faites vivre cette aventure."/></p><BrandSignature className={styles.signatureMark} alt="LNX Beats" /></div>
     </Container></section>
     <EditorialAdSlot pathname="/" slot="footer" />
   </div>;

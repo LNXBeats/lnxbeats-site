@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { navigation, quickAccessPlatforms } from "@/data/site";
 import { Container } from "@/components/container";
 import { UiIcon } from "@/components/ui-icon";
+import { BrandSignature } from "@/components/brand-signature";
 import styles from "./site-header.module.css";
 import { LanguageSelector, T, useSiteLanguage } from "./site-language";
 
@@ -145,7 +146,7 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
     <header className={`site-header ${pathname === "/" ? "site-header--home" : ""} ${compact && !open ? "site-header--compact" : ""}`}>
       <Container className="site-header__inner">
         <Link className="brand notranslate" translate="no" href="/" aria-label={t("LNX Beats — accueil")} onClick={() => setOpen(false)}>
-          <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} priority />
+          <BrandSignature priority />
         </Link>
 
         <Link className="mobile-account-link" href="/compte" aria-label={t("Compte")} aria-current={isActive("/connexion") || isActive("/compte") ? "page" : undefined}>
@@ -207,7 +208,7 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
             <UiIcon name="close" />
           </button>
           <Link className={`${styles.dialogBrand} notranslate`} translate="no" href="/" aria-label={t("LNX Beats — accueil")} onClick={closeMenu}>
-            <Image src="/assets/v3/lnx-beats-signature-transparent.png" alt="" width={1501} height={348} sizes="148px" />
+            <BrandSignature />
           </Link>
         </div>
         <div className={styles.dialogBody}>

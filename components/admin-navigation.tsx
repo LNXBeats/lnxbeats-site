@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { AdminIcon, type AdminIconName } from "@/components/admin-icons";
 import { ExternalLinkIcon } from "@/components/link-icons";
+import { BrandMotionToggle, BrandSignature } from "@/components/brand-signature";
 
 const adminNavigation = [
   { href: "/admin", label: "Accueil", group: "Accueil" },
@@ -93,7 +94,7 @@ export function AdminNavigation({
   return (
     <header className="admin-header">
       <div className="admin-header__brand">
-        <Link href="/admin" aria-label="LNX Admin — vue d’ensemble"><span>LNX</span><span>Admin</span></Link>
+        <Link className="admin-header__signature notranslate" translate="no" href="/admin" aria-label="LNX Beats — Administration"><BrandSignature priority /><span>Admin</span></Link>
         <p>{identity ? `${identity} · Administrateur` : "Administration privée"}</p>
       </div>
       <button
@@ -145,6 +146,7 @@ export function AdminNavigation({
         </div>;})}
         {qaProfileSwitchAvailable ? <Link href="/qa/access" onClick={closeNavigation}>Changer de profil QA</Link> : null}
         <Link className="admin-header__site-link" href="/" onClick={closeNavigation}>Retour au site <ExternalLinkIcon /></Link>
+        <BrandMotionToggle />
       </nav>
     </header>
   );
