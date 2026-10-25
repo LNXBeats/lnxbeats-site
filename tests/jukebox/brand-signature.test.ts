@@ -142,7 +142,8 @@ test("the animation control is a named keyboard button in each of the six UI lan
   assert.match(component, /disabled=\{!ready\}/);
   assert.match(component, /\{paused \? controlLabels\[locale\]\.resume : controlLabels\[locale\]\.pause\}/);
   assert.match(header, /aria-label=\{t\("LNX Beats — accueil"\)\}/);
-  assert.match(home, /<OriginalName>LNX Beats<\/OriginalName><\/span><BrandSignature priority/);
+  assert.match(home, /<OriginalName>LNX Beats Studio<\/OriginalName>/);
+  assert.match(home, /<BrandSignature className=\{styles\.stageSignature\} alt="LNX Beats" priority/);
   assert.match(home, /<BrandSignature[^>]*alt="LNX Beats"/);
   assert.match(admin, /aria-label="LNX Beats — Administration"><BrandSignature priority\s*\/><span>Admin<\/span>/);
 });

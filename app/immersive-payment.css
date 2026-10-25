@@ -1,0 +1,215 @@
+/* Studio immersive — presentation only. Provider SDK, price, consent and
+ * reconciliation remain owned by the existing checkout components. */
+
+.payment-methods .payment-methods__actions {
+  gap: clamp(1rem, 2.5vw, 1.5rem);
+}
+
+.payment-methods .payment-methods__choice {
+  --payment-edge: rgba(225, 193, 125, 0.36);
+  position: relative;
+  isolation: isolate;
+  gap: 1rem;
+  padding: clamp(1.2rem, 2.7vw, 1.8rem);
+  /* The official PayPal UI must never be clipped or moved by its shell. */
+  overflow: visible;
+  border: 1px solid var(--payment-edge);
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse at 50% 0, var(--payment-accent-muted), transparent 65%),
+    linear-gradient(150deg, #17191b, #0b0c0e 72%);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24), inset 0 1px rgba(255, 255, 255, 0.045);
+  transition: border-color 220ms ease, box-shadow 320ms ease;
+}
+
+.payment-methods .payment-methods__choice::before {
+  z-index: -1;
+  top: -1px;
+  right: 18%;
+  left: 18%;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--payment-accent), transparent);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.payment-methods .payment-methods__choice--paypal {
+  --payment-edge: rgba(111, 158, 235, 0.34);
+  --payment-accent: #9cbeff;
+  --payment-accent-muted: rgba(45, 84, 145, 0.18);
+}
+
+.payment-methods .payment-methods__choice:focus-within {
+  border-color: var(--payment-accent);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24), 0 0 0 1px var(--payment-edge), inset 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.payment-methods .payment-methods__choice-heading {
+  min-height: 5.2rem;
+  align-content: center;
+  gap: 0.75rem;
+}
+
+.payment-methods .payment-methods__choice-icon {
+  width: 3.4rem;
+  height: 3rem;
+  border-radius: 12px;
+  border-color: rgba(230, 202, 145, 0.36);
+  background: linear-gradient(135deg, rgba(233, 205, 148, 0.13), rgba(233, 205, 148, 0.025));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.payment-methods .payment-methods__choice-title > strong {
+  font-size: clamp(1rem, 1.5vw, 1.15rem);
+  line-height: 1.3;
+  letter-spacing: -0.025em;
+  text-transform: none;
+}
+
+.payment-methods .payment-methods__choice-title > span {
+  font-size: 0.65rem;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+.payment-methods .payment-methods__choice-details {
+  max-width: 30rem;
+  color: #babbbd;
+  font-size: 0.76rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.payment-methods .payment-methods__choice .checkout-action {
+  gap: 0.7rem;
+  min-width: 0;
+  align-content: end;
+}
+
+.payment-methods .payment-methods__choice .checkout-action .form-button {
+  min-height: 54px;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  letter-spacing: 0.015em;
+  text-transform: none;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  transition: background-position 520ms ease, border-color 200ms ease, box-shadow 220ms ease;
+}
+
+.payment-methods .payment-methods__choice--stripe .checkout-action .form-button {
+  border-color: #e8cb87;
+  background: linear-gradient(115deg, #c9a455, #f3dfa0 40%, #e1bf71 60%, #c9a455);
+  background-size: 220% 100%;
+  background-position: 15% 50%;
+  color: #13110b;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.35), 0 7px 20px rgba(182, 133, 46, 0.12);
+}
+
+.payment-methods .payment-methods__choice--paypal .checkout-action .form-button {
+  /* The legacy hosted PayPal redirect remains a real PayPal action. This
+   * rule does not select or restyle the official SDK button or its iframe. */
+  border-color: #83a9ec;
+  background: linear-gradient(115deg, #14253e, #213b60);
+  color: #f7f9ff;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.payment-methods .payment-methods__choice .checkout-action .form-button:focus-visible {
+  outline: 3px solid #f8edd0;
+  outline-offset: 4px;
+}
+
+.payment-methods .payment-methods__choice .checkout-action .form-button:disabled {
+  border-color: #655c46;
+  background: #38342b;
+  background-size: 100% 100%;
+  color: #d4cbbb;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+  transition: none;
+}
+
+.payment-methods .payment-methods__choice .checkout-action small {
+  min-height: 0;
+  max-width: 35rem;
+  justify-self: center;
+  color: #a9abad;
+  font-size: 0.69rem;
+  line-height: 1.65;
+}
+
+.payment-methods .checkout-action [role="status"],
+.payment-methods .checkout-action [role="alert"] {
+  font-size: 0.78rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.payment-methods .checkout-action [role="status"] button {
+  min-height: 44px;
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--payment-edge);
+  border-radius: 8px;
+  background: #172231;
+  color: #f5f7ff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.payment-methods .checkout-action [role="status"] button:focus-visible {
+  outline: 3px solid #f8edd0;
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .payment-methods .payment-methods__choice:hover {
+    border-color: var(--payment-accent);
+    box-shadow: 0 22px 48px rgba(0, 0, 0, 0.3), inset 0 1px rgba(255, 255, 255, 0.065);
+  }
+  .payment-methods .payment-methods__choice--stripe .checkout-action .form-button:not(:disabled):hover {
+    border-color: #fff0be;
+    background-position: 85% 50%;
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.4), 0 8px 26px rgba(182, 133, 46, 0.22);
+  }
+  .payment-methods .payment-methods__choice--paypal .checkout-action .form-button:not(:disabled):hover {
+    border-color: #c3d8ff;
+    background: linear-gradient(115deg, #1c3150, #2b4c7c);
+  }
+}
+
+@media (max-width: 430px) {
+  .payment-methods .payment-methods__choice {
+    padding: 1.1rem 0.9rem;
+    border-radius: 17px;
+  }
+  .payment-methods .payment-methods__choice-heading { min-height: 0; }
+  .payment-methods .payment-methods__choice .checkout-action .form-button {
+    padding-inline: 0.75rem;
+    font-size: 0.74rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-methods .payment-methods__choice,
+  .payment-methods .payment-methods__choice .checkout-action .form-button {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .payment-methods .payment-methods__choice { border-color: CanvasText; }
+  .payment-methods .payment-methods__choice::before { content: none; }
+  .payment-methods .payment-methods__choice .checkout-action .form-button {
+    border: 2px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+    box-shadow: none;
+  }
+}

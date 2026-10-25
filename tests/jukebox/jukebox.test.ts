@@ -86,16 +86,16 @@ test("discography renders one exhaustive scene with a compact crawlable director
   assert.match(discography, /sceneProjects\.map\(\(project\)/);
   assert.match(discography, /href=\{`\/album\/\$\{project\.slug\}`\}/);
   assert.doesNotMatch(discography, /developmentJukebox\.length \?/);
-  assert.match(discography, /const sceneProjects = visibleDiscographyProjects\(discographyView\(projects\), "all", "editorial"\)/);
+  assert.match(discography, /const sceneProjects = visibleDiscographyProjects\(discographyView\(projects, digitalViews\), "all", "editorial"\)/);
   assert.match(discography, /jukeboxPosition: project\.jukeboxPosition/);
   assert.doesNotMatch(discography, /eligibleSlugs|publishedJukeboxProjects|developmentJukeboxProjects/);
   assert.match(discography, /projects=\{sceneProjects\}/);
   assert.match(discography, /initialIndex=\{0\}/);
   assert.doesNotMatch(discography, /jukeboxInitialIndex\(sceneProjects/);
-  assert.match(discography, /audioPreview: project\.audioPreview/);
+  assert.match(discography, /audioPreview: jukeboxPublicPreview\(project, digitalViews\.get\(project\.slug\) \?\? null\)/);
   assert.doesNotMatch(discography, /project\.status === "published" && project\.audioPreview/);
   assert.doesNotMatch(discography, /page-hero|v064-discography-hero/);
-  assert.match(component, /<h1 id=\{regionId\}>\{heading\}<\/h1>/);
+  assert.match(component, /<h1 id=\{regionId\}>\{t\(heading\)\}<\/h1>/);
 });
 
 test("changing the sort resets the scene to the first project in the selected order", async () => {
@@ -126,7 +126,7 @@ test("the jukebox keeps explicit selected, playing and player-metadata identitie
   assert.match(component, /const attemptPlayback = useCallback/);
   assert.match(component, /const playRequestRef = useRef\(0\);/);
   assert.match(component, /const pendingPlayRef = useRef/);
-  assert.match(component, /if \(!playerStateRef\.current\.playingSlug\) syncTrackMedia\(next\);/);
+  assert.match(component, /pauseCurrent\(true, false\);[\s\S]*?syncTrackMedia\(next\);[\s\S]*?if \(continueListening && nextProject\.audioPreview\) void attemptPlayback\(next\);/);
   assert.match(component, /data-selected-project=\{active\.slug\}/);
   assert.match(component, /data-playing-project=\{playingSlug \?\? ""\}/);
   assert.match(component, /data-player-project=\{playerProject\.slug\}/);
@@ -178,7 +178,7 @@ test("the jukebox uses a single shared audio element and explicit user-triggered
   assert.doesNotMatch(component, /\bautoPlay\b/);
   assert.doesNotMatch(component, /\bcontrols\b/);
   assert.match(component, /pauseCurrent\(\)/);
-  assert.match(component, /catch \{/);
+  assert.match(component, /catch \(error\) \{/);
   assert.doesNotMatch(component, /audio\.play\(\)\.catch/);
 });
 
@@ -190,8 +190,8 @@ test("navigation is bounded and exposes symmetric accessible 48px controls plus 
   assert.match(component, /const selectVisible = useCallback/);
   assert.match(component, /if \(globalIndex !== undefined\) select\(globalIndex, fromGesture\);/);
   assert.match(component, /const selectionChanged = nextProject\.slug !== playerStateRef\.current\.selectedSlug;/);
-  assert.match(component, /aria-label="Projet précédent"/);
-  assert.match(component, /aria-label="Projet suivant"/);
+  assert.match(component, /aria-label=\{t\("Projet précédent"\)\}/);
+  assert.match(component, /aria-label=\{t\("Projet suivant"\)\}/);
   assert.match(component, /disabled={currentVisibleIndex === 0}/);
   assert.match(component, /disabled={currentVisibleIndex === visibleProjects\.length - 1}/);
   assert.equal((component.match(/home-jukebox__arrow-track/g)?.length ?? 0), 2);

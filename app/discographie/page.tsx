@@ -7,6 +7,7 @@ import { Container } from "@/components/container";
 import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
 import { visibleDiscographyProjects } from "@/lib/catalog/jukebox";
+import { jukeboxPublicPreview } from "@/lib/catalog/jukebox-preview";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { digitalEnabled } from "@/lib/digital/domain";
 import { digitalRuntimeMode } from "@/lib/digital/runtime-policy";
@@ -33,7 +34,10 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export const dynamic = "force-dynamic";
 
-function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProjects>>["projects"]): JukeboxProject[] {
+function discographyView(
+  projects: Awaited<ReturnType<typeof listDiscographyProjects>>["projects"],
+  digitalViews: ReadonlyMap<string, Awaited<ReturnType<typeof publicDigitalProject>>>,
+): JukeboxProject[] {
   return projects.map((project) => ({
     slug: project.slug,
     title: project.title,
@@ -44,9 +48,7 @@ function discographyView(projects: Awaited<ReturnType<typeof listDiscographyProj
     cover: project.cover,
     coverAlt: project.coverAlt,
     artworkTone: project.artworkTone,
-    audioPreview: project.audioPreview
-      ? { url: project.audioPreview.url, durationMs: project.audioPreview.durationMs }
-      : null,
+    audioPreview: jukeboxPublicPreview(project, digitalViews.get(project.slug) ?? null),
     featured: project.featured,
     catalogPosition: project.catalogPosition,
     jukeboxPosition: project.jukeboxPosition,
@@ -59,9 +61,10 @@ export default async function DiscographyPage() {
   const { projects } = await listDiscographyProjects();
   const preparation = discographyPreparationEnabled() ? await loadDiscographyPreparation() : [];
   const soon = new Set(preparation.filter(p => p.metadataPublicAllowed && p.activeOffers === 0).map(p => p.slug));
-  const sceneProjects = visibleDiscographyProjects(discographyView(projects), "all", "editorial");
   const digitalProjects = digitalEnabled() ? await Promise.all(projects.filter(p => p.status === "published" || soon.has(p.slug))
     .map(async project => ({ project, view: await publicDigitalProject(project.slug) }))) : [];
+  const digitalViews = new Map(digitalProjects.map(({ project, view }) => [project.slug, view]));
+  const sceneProjects = visibleDiscographyProjects(discographyView(projects, digitalViews), "all", "editorial");
 
   return (
     <section className="v064-discography-stage" aria-label={serverT(locale, "Discographie")}>

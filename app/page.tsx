@@ -10,10 +10,11 @@ import Link from "next/link";
 import { AudioPreviewPlayer } from "@/components/audio-preview-player";
 import { Container } from "@/components/container";
 import { BrandSignature } from "@/components/brand-signature";
+import { ImmersiveScene } from "@/components/immersive-scene";
 import { ProjectArtwork } from "@/components/project-artwork";
 import { UiIcon } from "@/components/ui-icon";
 import { quickAccessPlatforms } from "@/data/site";
-import { getHomepageProjects } from "@/lib/catalog/queries";
+import { getHomepageProjects, listDiscographyProjects } from "@/lib/catalog/queries";
 import { isSupportEnabled } from "@/lib/support/config";
 import styles from "./home-v4.module.css";
 
@@ -33,17 +34,25 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const locale = await getSiteLocale();
-  const { lead: leadProject } = await getHomepageProjects();
-  return <div className={styles.home}>
+  const [{ lead: leadProject, supporting }, { projects }] = await Promise.all([getHomepageProjects(), listDiscographyProjects()]);
+  const stageProjects = [leadProject, ...supporting, ...projects]
+    .filter(project => project !== null)
+    .filter((project, index, collection) => Boolean(project.cover) && collection.findIndex(item => item.slug === project.slug) === index)
+    .slice(0, 3);
+  return <div className={styles.home} data-immersive-home>
     <section className={styles.hero} aria-labelledby="home-hero-title" data-v4-hero>
       <Container className={styles.heroGrid}>
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}><T text="Des histoires. Des personnages."/><br /><T text="Des morceaux qui restent."/></p>
-          <h1 id="home-hero-title" className={styles.wordmark}><span className="visually-hidden"><OriginalName>LNX Beats</OriginalName></span><BrandSignature priority /></h1>
-          <p className={styles.slogan}><T text="Les histoires"/> <br /><T text="deviennent musique."/></p>
+          <p className={styles.eyebrow}><OriginalName>LNX Beats Studio</OriginalName></p>
+          <h1 id="home-hero-title" className={styles.slogan}><T text="La vie."/><br /><span className={styles.outline}><T text="En grand."/></span><br className={styles.outlineBreak}/><em><T text="En musique."/></em></h1>
           <p className={styles.lead}><T text="Chaque histoire mérite sa musique."/></p>
         </div>
-        <div className={styles.heroPhoto}><Image src="/assets/v3/hero-main-ludovic-dog-exact.jpg" alt={serverT(locale, "Ludovic et son chien, l’univers LNX Beats")} width={1254} height={1254} priority sizes="(max-width: 760px) calc(100vw - 36px), 55vw" /></div>
+        <div className={styles.heroStage}>
+          <div className={styles.portal} aria-hidden="true" />
+          <BrandSignature className={styles.stageSignature} alt="LNX Beats" priority />
+          <div className={styles.stageFallback} aria-hidden="true">{stageProjects.map(project => <div key={project.slug}><ProjectArtwork project={project} sizes="(max-width: 760px) 36vw, 240px" /></div>)}</div>
+          <ImmersiveScene covers={stageProjects.map(project => project.cover ?? "")} className={styles.canvas} mode="hero" />
+        </div>
         <div className={styles.heroActions}>
           <Link className={styles.primary} href="/discographie"><UiIcon name="play" /><span><T text="Découvrir la musique"/></span><UiIcon name="arrow-right" /></Link>
           <Link className={styles.secondary} href="/commander"><span><T text="Commander une création"/></span><UiIcon name="arrow-right" /></Link>
@@ -59,6 +68,10 @@ export default async function HomePage() {
         {leadProject.audioPreview ? <div className={styles.featuredPlayer}><AudioPreviewPlayer src={leadProject.audioPreview.url} title={leadProject.title} durationMs={leadProject.audioPreview.durationMs} compact /></div> : null}
       </article>
     </Container></section> : null}
+    <section className={`${styles.section} ${styles.story}`} aria-labelledby="home-story-title"><Container className={styles.storyGrid}>
+      <div className={styles.portrait}><Image src="/assets/v3/hero-main-ludovic-dog-exact.jpg" alt={serverT(locale, "Ludovic et son chien, l’univers LNX Beats")} width={1254} height={1254} sizes="(max-width: 760px) calc(100vw - 60px), 40vw" /><span><OriginalName>LNX Beats Studio</OriginalName></span></div>
+      <div><p className={styles.eyebrow}><T text="Derrière LNX Beats"/></p><h2 id="home-story-title"><T text="Faire du quotidien une œuvre musicale."/></h2><p><T text="Des récits en musique, inspirés par la vie."/></p><Link className={styles.textLink} href="/a-propos"><T text="À propos"/><UiIcon name="arrow-right"/></Link></div>
+    </Container></section>
     <section className={styles.section} aria-labelledby="home-universe-title"><Container>
       <div className={styles.heading}><h2 id="home-universe-title"><T text="LNX en trois regards."/></h2></div>
       <div className={styles.doors} data-v4-doors>

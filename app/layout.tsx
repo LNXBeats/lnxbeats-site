@@ -11,6 +11,7 @@ import { OrderJourneyProvider } from "@/components/order-journey-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SiteMotion } from "@/components/site-motion";
+import { ImmersiveExperience } from "@/components/immersive-experience";
 import { MemberInvitation } from "@/components/member-invitation";
 import { CANONICAL_SITE_ORIGIN } from "@/lib/seo/canonical";
 import { buildSiteStructuredData } from "@/lib/seo/structured-data";
@@ -32,6 +33,8 @@ import "./v130-ui-refinement.css";
 import "./v132-fluid-motion.css";
 import "./premium-public-vfinal.css";
 import "./languages.css";
+import "./immersive-public.css";
+import "./immersive-payment.css";
 
 const siteUrl = CANONICAL_SITE_ORIGIN;
 const socialImage = new URL("/og.png", siteUrl).toString();
@@ -86,6 +89,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <main id="contenu" lang={locale === "zh" ? "zh-Hans" : locale}>{children}</main>
           <SiteFooter />
           <SiteMotion />
+          <ImmersiveExperience />
           <MemberInvitation />
         </OrderJourneyProvider>
         <JsonLd id="lnx-site-identity" data={buildSiteStructuredData()} />

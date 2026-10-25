@@ -10,7 +10,9 @@ test("V4 home has compact whole-card destinations, no duplicate CTA row or cropp
   assert.match(css, /grid-template-columns: 46px minmax\(0, 1fr\) 20px/);
   assert.match(css, /min-height: 108px/);
   assert.match(css, /font-size: 15px; line-height: 1.5/);
-  assert.doesNotMatch(css, /!important|line-clamp|100vh|scale\(/);
+  assert.doesNotMatch(css, /!important|line-clamp|100vh/);
+  // Perspective scaling is confined to decorative cover fallbacks, never copy.
+  for (const rule of css.matchAll(/\.heroCopy[^{}]*\{([^}]+)\}/g)) assert.doesNotMatch(rule[1], /scale\(/);
   assert.doesNotMatch(home, /home-universe-vfinal__link|aria-hidden="true">[→↗▶♥]/);
 });
 
@@ -37,6 +39,6 @@ test("V4 jukebox has one play control per source and no opaque control over a co
   assert.doesNotMatch(component, /discography-card__play-hit|const playBadge/);
   assert.equal((component.match(/className="discography-jukebox__player-toggle"/g) ?? []).length, 1);
   assert.match(component, /playingProject && playingProject\.slug !== active\.slug && active\.audioPreview \? <button/);
-  assert.match(component, /Lire la sélection : \{active\.title\}/);
+  assert.match(component, /t\("Lire la sélection"\)/);
   assert.match(component, /onClick=\{\(\) => handleCoverClick\(globalIndex\)\}/);
 });

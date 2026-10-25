@@ -39,6 +39,7 @@ function subscribe(listener: () => void) {
 // motion always wins through <picture>, independently of the saved preference.
 const serverPaused = () => true;
 const usePaused = () => useSyncExternalStore(subscribe, isPaused, serverPaused);
+export { usePaused as useBrandMotionPaused };
 const subscribeReady = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
@@ -59,12 +60,12 @@ export function BrandSignature({ alt = "", className, priority = false }: {
 }
 
 const controlLabels: Record<SiteLocale, { pause: string; resume: string }> = {
-  fr: { pause: "Mettre le logo en pause", resume: "Animer le logo" },
-  en: { pause: "Pause logo animation", resume: "Animate logo" },
-  es: { pause: "Pausar la animación del logo", resume: "Animar el logo" },
-  pt: { pause: "Pausar a animação do logótipo", resume: "Animar o logótipo" },
-  zh: { pause: "暂停标志动画", resume: "播放标志动画" },
-  ja: { pause: "ロゴのアニメーションを停止", resume: "ロゴをアニメーション表示" },
+  fr: { pause: "Mettre les animations en pause", resume: "Activer les animations" },
+  en: { pause: "Pause animations", resume: "Enable animations" },
+  es: { pause: "Pausar las animaciones", resume: "Activar las animaciones" },
+  pt: { pause: "Pausar as animações", resume: "Ativar as animações" },
+  zh: { pause: "暂停动画", resume: "开启动画" },
+  ja: { pause: "アニメーションを停止", resume: "アニメーションを有効にする" },
 };
 
 /** One persistent, keyboard-accessible control pauses every shared signature. */

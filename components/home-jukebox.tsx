@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { ProjectArtwork } from "@/components/project-artwork";
+import { ImmersiveScene } from "@/components/immersive-scene";
 import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
 import {
   discographyFilterCounts,
@@ -107,6 +108,8 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const [ended, setEnded] = useState(false);
   const [progress, setProgress] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [playbackFailure, setPlaybackFailure] = useState<"blocked" | "unavailable" | null>(null);
+  const [playbackLoading, setPlaybackLoading] = useState(false);
 
   const railRef = useRef<HTMLUListElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -118,9 +121,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const pendingFocusIndexRef = useRef<number | null>(null);
   const playRequestRef = useRef(0);
   const pendingPlayRef = useRef<{ requestId: number; slug: string } | null>(null);
+  const continuousListeningRef = useRef(false);
   const externallyPausedSourceRef = useRef<string | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const pointerDraggedRef = useRef(false);
+  const sceneSwipeRef = useRef<{ x: number; y: number } | null>(null);
   const regionId = useId();
   const playerId = `jukebox-${regionId}`;
   const activeSlug = playerState.selectedSlug;
@@ -138,6 +143,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     () => visibleDiscographyProjects(projects, filter, sort),
     [filter, projects, sort],
   );
+  const sceneCovers = useMemo(() => visibleProjects.map(project => project.cover ?? ""), [visibleProjects]);
   const visibleActiveIndex = visibleProjects.findIndex(({ slug }) => slug === activeSlug);
   const globalIndexBySlug = useMemo(
     () => new Map(projects.map((project, index) => [project.slug, index])),
@@ -151,12 +157,17 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     return next;
   }, []);
 
-  const pauseCurrent = useCallback((resetPosition = true) => {
+  const pauseCurrent = useCallback((resetPosition = true, disableContinuity = true) => {
     const audio = audioRef.current;
     if (!audio) return;
 
     playRequestRef.current += 1;
     pendingPlayRef.current = null;
+    setPlaybackLoading(false);
+    if (disableContinuity) {
+      continuousListeningRef.current = false;
+      setAudioUnlocked(false);
+    }
     if (!audio.paused) audio.pause();
     if (resetPosition) {
       audio.currentTime = 0;
@@ -228,18 +239,32 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
 
     const requestId = ++playRequestRef.current;
     pendingPlayRef.current = { requestId, slug: target.slug };
+    setPlaybackFailure(null);
+    setPlaybackLoading(true);
     try {
       announceMediaPlayback({ ownerId: playerId, kind: "audio" });
       await audio.play();
-      if (requestId !== playRequestRef.current || loadedSlugRef.current !== target.slug || audio.paused) return false;
+      if (requestId !== playRequestRef.current || loadedSlugRef.current !== target.slug) return false;
+      if (audio.paused) {
+        pendingPlayRef.current = null;
+        continuousListeningRef.current = false;
+        setAudioUnlocked(false);
+        setPlaybackLoading(false);
+        return false;
+      }
       pendingPlayRef.current = null;
       transitionPlayerState({ type: "play", slug: target.slug });
+      continuousListeningRef.current = true;
       setAudioUnlocked(true);
+      setPlaybackLoading(false);
       return true;
-    } catch {
+    } catch (error) {
       if (requestId !== playRequestRef.current || loadedSlugRef.current !== target.slug) return false;
       pendingPlayRef.current = null;
+      continuousListeningRef.current = false;
       setAudioUnlocked(false);
+      setPlaybackLoading(false);
+      setPlaybackFailure(error instanceof Error && error.name === "NotAllowedError" ? "blocked" : "unavailable");
       transitionPlayerState({ type: "pause", slug: target.slug });
       return false;
     }
@@ -252,8 +277,12 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     if (!nextProject) return;
     const selectionChanged = nextProject.slug !== playerStateRef.current.selectedSlug;
     if (selectionChanged) {
+      const continueListening = continuousListeningRef.current;
+      pauseCurrent(true, false);
       transitionPlayerState({ type: "select", slug: nextProject.slug });
-      if (!playerStateRef.current.playingSlug) syncTrackMedia(next);
+      setPlaybackFailure(null);
+      syncTrackMedia(next);
+      if (continueListening && nextProject.audioPreview) void attemptPlayback(next);
     }
 
     if (programmatic) {
@@ -264,7 +293,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     } else {
       clearProgrammaticTimer();
     }
-  }, [clearProgrammaticTimer, projects, scheduleProgrammaticRelease, syncTrackMedia, transitionPlayerState]);
+  }, [attemptPlayback, clearProgrammaticTimer, pauseCurrent, projects, scheduleProgrammaticRelease, syncTrackMedia, transitionPlayerState]);
 
   const selectVisible = useCallback((index: number, fromGesture = true) => {
     const project = visibleProjects[index];
@@ -296,6 +325,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio || !active.audioPreview) return;
+
+    if (pendingPlayRef.current) {
+      pauseCurrent();
+      return;
+    }
 
     if (playingSlug === active.slug && !audio.paused) {
       pauseCurrent();
@@ -400,7 +434,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   if (!active || !playerProject) return null;
 
   const selectedHasEnded = !playing && playerMetadataSlug === active.slug && ended;
-  const playbackState: StudioVinylControlState = playing ? "pause" : selectedHasEnded ? "replay" : "play";
+  const playbackState: StudioVinylControlState = playbackLoading ? "loading" : playing ? "pause" : selectedHasEnded ? "replay" : "play";
   const leftArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-line" /><span className="home-jukebox__arrow-symbol" /></span>;
   const rightArrow = <span className="home-jukebox__arrow-track" aria-hidden="true"><span className="home-jukebox__arrow-symbol" /><span className="home-jukebox__arrow-line" /></span>;
   const currentVisibleIndex = visibleActiveIndex >= 0 ? visibleActiveIndex : 0;
@@ -419,6 +453,8 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     data-player-project={playerProject.slug}
     data-player-source={playerProject.audioPreview?.url ?? ""}
     data-playing={playing}
+    data-playback-loading={playbackLoading}
+    data-playback-failure={playbackFailure ?? ""}
     data-playing-project={playingSlug ?? ""}
     data-selection-playing-mismatch={playingProject && playingProject.slug !== active.slug ? true : undefined}
     data-selected-project={active.slug}
@@ -468,7 +504,22 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </label>
     </div>
 
-    <div className="home-jukebox__scene">
+    <div className="home-jukebox__scene"
+      onPointerDown={event => {
+        if (event.button !== 0 || (event.target as HTMLElement).closest("a,button,input,select")) return;
+        if (event.currentTarget.querySelector<HTMLCanvasElement>("canvas")?.dataset.sceneReady !== "true") return;
+        sceneSwipeRef.current = { x: event.clientX, y: event.clientY };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => { sceneSwipeRef.current = null; }}
+      onPointerUp={event => {
+        const start = sceneSwipeRef.current;
+        sceneSwipeRef.current = null;
+        if (!start) return;
+        const dx = event.clientX - start.x, dy = event.clientY - start.y;
+        if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) selectVisible(currentVisibleIndex + (dx < 0 ? 1 : -1));
+      }}>
+      <ImmersiveScene covers={sceneCovers} index={currentVisibleIndex} mode="gallery" className="immersive-jukebox__webgl" />
       {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--previous" type="button" onClick={() => selectVisible(currentVisibleIndex - 1)} disabled={currentVisibleIndex === 0} aria-label={t("Projet précédent")}>{leftArrow}</button> : null}
       <ul className="home-jukebox__rail" ref={railRef} aria-label={t("Projets à parcourir")}>
         {visibleProjects.map((project, index) => {
@@ -509,6 +560,9 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--next" type="button" onClick={() => selectVisible(currentVisibleIndex + 1)} disabled={currentVisibleIndex === visibleProjects.length - 1} aria-label={t("Projet suivant")}>{rightArrow}</button> : null}
     </div>
     {visibleProjects.length > 1 ? <p className="home-jukebox__navigation-hint" aria-hidden="true"><span><UiIcon name="arrow-left" /> {t("Faites défiler les projets")} <UiIcon name="arrow-right" /></span><span>{t("Glissez pour parcourir")}</span></p> : null}
+    <p className="discography-jukebox__continuity"><T text={audioUnlocked
+      ? "Écoute continue activée · changez d’album pour découvrir un nouvel extrait."
+      : "Lancez un extrait pour activer l’écoute au changement d’album."}/></p>
     <div className="discography-jukebox__player-context" data-player-context>
       <div className="discography-jukebox__player-copy">
         <span>{t(playing ? "En lecture" : "Extrait sélectionné")}</span>
@@ -519,7 +573,8 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       <button
         type="button"
         className="discography-jukebox__player-toggle"
-        aria-label={`${t(playing ? "Mettre en pause l’extrait de" : selectedHasEnded ? "Relire l’extrait de" : "Lire l’extrait de")} ${playerProject.title}`}
+        aria-label={`${t(playing || playbackLoading ? "Mettre en pause l’extrait de" : selectedHasEnded ? "Relire l’extrait de" : "Lire l’extrait de")} ${playerProject.title}`}
+        aria-busy={playbackLoading}
         disabled={!playerProject.audioPreview}
         onClick={() => { if (playing) pauseCurrent(); else void togglePlay(); }}
       >
@@ -527,12 +582,16 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </button>
       <span className="discography-jukebox__player-progress" aria-hidden="true"><span style={{ transform: `scaleX(${progress})` }} /></span>
     </div>
+    {playbackFailure ? <p className="discography-jukebox__playback-message" role="status"><T text={playbackFailure === "blocked"
+      ? "Votre navigateur demande une action : touchez le bouton de lecture pour écouter cet extrait."
+      : "Impossible de lire cet extrait. Vous pouvez réessayer avec le bouton de lecture."}/></p> : null}
     {playingProject && playingProject.slug !== active.slug && active.audioPreview ? <button className="discography-jukebox__play-selection" type="button" onClick={() => void togglePlay()}>
       {t("Lire la sélection")} : <OriginalName>{active.title}</OriginalName> <UiIcon name="play" />
     </button> : null}
     <audio
       ref={audioRef}
       preload="metadata"
+      controlsList="nodownload noplaybackrate"
       onPlay={(event) => {
         const sourceSlug = loadedSlugRef.current;
         const pendingPlay = pendingPlayRef.current;
@@ -548,6 +607,14 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       onPause={(event) => {
         const sourceSlug = loadedSlugRef.current;
         if (!sourceSlug || !event.currentTarget.paused) return;
+        // A system/media-control pause is a real request to stop continuous
+        // listening. Switching sources has already cleared playingSlug, and
+        // the natural end of a preview must not disable album navigation.
+        if (!event.currentTarget.ended && !pendingPlayRef.current && playerStateRef.current.playingSlug === sourceSlug) {
+          continuousListeningRef.current = false;
+          setAudioUnlocked(false);
+          setPlaybackLoading(false);
+        }
         transitionPlayerState({ type: "pause", slug: sourceSlug });
       }}
       onEnded={(event) => {
@@ -556,6 +623,11 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
         transitionPlayerState({ type: "pause", slug: sourceSlug });
         setProgress(0);
         setEnded(playerStateRef.current.selectedSlug === sourceSlug);
+      }}
+      onError={(event) => {
+        if (!event.currentTarget.error || !event.currentTarget.getAttribute("src")) return;
+        pauseCurrent(false);
+        setPlaybackFailure("unavailable");
       }}
       onTimeUpdate={(event) => {
         const metadataSlug = jukeboxPlayerMetadataSlug(playerStateRef.current);
