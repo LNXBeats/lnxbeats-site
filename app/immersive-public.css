@@ -55,3 +55,44 @@ html[data-visual-motion="paused"] body:has(.site-header) :is(.motion-reveal,[dat
   .immersive-experience-control { display: none; }
   body:has(.site-header) :is(.button,.form-button,.btn,.album-hero__art) { transition: none; transform: none; }
 }
+
+/* A full-width gallery: the covers keep the stage and the compact listening
+ * controls remain underneath. Background light never overlays the artwork. */
+@media (min-width: 1000px) {
+  body main#contenu .v064-discography-container { width: 100%; max-width: none; padding-inline: clamp(24px, 3.2vw, 72px); }
+  .discography-jukebox.home-jukebox:has(canvas[data-scene-ready="true"]) { --immersive-canvas-height: clamp(440px, 38vw, 940px); display: block; }
+  body main#contenu .discography-jukebox__toolbar { width: 100%; }
+  body main#contenu .discography-jukebox .home-jukebox__scene:has(canvas[data-scene-ready="true"]) { min-height: calc(var(--immersive-canvas-height) + 118px) !important; height: calc(var(--immersive-canvas-height) + 118px); margin: 8px 0 0; }
+  body main#contenu .discography-jukebox .home-jukebox__scene:has(canvas[data-scene-ready="true"]) .home-jukebox__rail { height: calc(var(--immersive-canvas-height) + 118px) !important; }
+  .discography-jukebox .immersive-jukebox__webgl { inset: 0 0 auto; width: 100%; height: var(--immersive-canvas-height); }
+  .discography-jukebox .home-jukebox__background { inset: 140px -3vw 90px; opacity: .9; filter: blur(30px); background: radial-gradient(ellipse at 18% 30%, #d6a74630, transparent 40%), radial-gradient(ellipse at 80% 36%, #598aaf40, transparent 43%), radial-gradient(ellipse at 50% 80%, #d9a65326, transparent 42%); animation: discography-backlight-drift 18s ease-in-out infinite alternate; }
+  .discography-jukebox .discography-jukebox__continuity { width: min(650px, 100%); max-width: 650px; margin: 8px auto 10px; text-align: center; }
+  .discography-jukebox .discography-jukebox__player-context { width: min(640px, 100%); min-width: 0; margin: 0 auto; padding: 18px 22px; border: 1px solid #c9ad713d; box-shadow: 0 24px 70px #0004; }
+  .discography-jukebox:has(canvas[data-scene-ready="true"]) .discography-jukebox__player-context { grid-template-columns: minmax(0, 1fr) 52px; align-items: center; gap: 14px; }
+  .discography-jukebox:has(canvas[data-scene-ready="true"]) .discography-jukebox__player-toggle { position: static; top: auto; right: auto; transform: none; }
+  .discography-jukebox:has(canvas[data-scene-ready="true"]) .discography-jukebox__selected-context { grid-column: 1 / -1; }
+  .discography-jukebox .discography-jukebox__playback-message, .discography-jukebox .discography-jukebox__play-selection { width: min(640px, 100%); margin: 14px auto 0; }
+  /* Controls sit beside the low platform, clear of covers and the title. */
+  body main#contenu .discography-jukebox .home-jukebox__scene:has(canvas[data-scene-ready="true"]) .home-jukebox__arrow { --jukebox-arrow-vertical: -50%; top: calc(var(--immersive-canvas-height) * .78); bottom: auto; width: 64px; min-height: 64px; opacity: 1; }
+  body main#contenu .discography-jukebox .home-jukebox__scene:has(canvas[data-scene-ready="true"]) .home-jukebox__arrow--previous { right: calc(50% + clamp(190px, 25vw, 600px)); left: auto; }
+  body main#contenu .discography-jukebox .home-jukebox__scene:has(canvas[data-scene-ready="true"]) .home-jukebox__arrow--next { left: calc(50% + clamp(190px, 25vw, 600px)); right: auto; }
+  .discography-jukebox .home-jukebox__arrow-track { min-height: 64px; }
+  .discography-jukebox .home-jukebox__arrow-symbol { flex-basis: 64px; width: 64px; height: 64px; border-color: #f2d79ba6; color: #ffe7b4; background: radial-gradient(circle at 30% 20%, #80632d4d, transparent 70%), #101c24e8; box-shadow: 0 0 22px #e8bc5a29, inset 0 0 20px #e8bc5a0d; animation: discography-control-glow 4s ease-in-out infinite alternate; }
+  .discography-jukebox .home-jukebox__arrow-symbol::before { width: 10px; height: 10px; border: 0; border-top: 2px solid currentColor; border-right: 2px solid currentColor; }
+  .discography-jukebox .home-jukebox__arrow:is(:hover, :focus-visible):not(:disabled) .home-jukebox__arrow-symbol { border-color: #ffe6aa; background-color: #3b3020; box-shadow: 0 0 36px #edc66b66, 0 12px 30px #0006; animation: none; }
+  body main#contenu .discography-jukebox .home-jukebox__arrow:focus-visible { outline: 3px solid #ffe6aa; outline-offset: 5px; border-radius: 50%; }
+  body main#contenu .discography-jukebox .home-jukebox__scene:has(canvas[data-scene-ready="true"]) .home-jukebox__arrow:disabled { opacity: .28; }
+  .discography-jukebox .home-jukebox__arrow:disabled .home-jukebox__arrow-symbol { animation: none; box-shadow: none; }
+}
+@keyframes discography-backlight-drift {
+  from { transform: translate3d(-1.5%, -1%, 0); }
+  to { transform: translate3d(1.5%, 2%, 0); }
+}
+@keyframes discography-control-glow {
+  from { box-shadow: 0 0 18px #e8bc5a26, inset 0 0 20px #e8bc5a0d; }
+  to { box-shadow: 0 0 34px #e8bc5a52, inset 0 0 20px #e8bc5a1a; }
+}
+html[data-visual-motion="paused"] .discography-jukebox .home-jukebox__arrow-symbol { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .discography-jukebox :is(.home-jukebox__background, .home-jukebox__arrow-symbol) { animation: none !important; }
+}

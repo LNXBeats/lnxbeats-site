@@ -559,7 +559,6 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </ul>
       {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--next" type="button" onClick={() => selectVisible(currentVisibleIndex + 1)} disabled={currentVisibleIndex === visibleProjects.length - 1} aria-label={t("Projet suivant")}>{rightArrow}</button> : null}
     </div>
-    {visibleProjects.length > 1 ? <p className="home-jukebox__navigation-hint" aria-hidden="true"><span><UiIcon name="arrow-left" /> {t("Faites défiler les projets")} <UiIcon name="arrow-right" /></span><span>{t("Glissez pour parcourir")}</span></p> : null}
     <p className="discography-jukebox__continuity"><T text={audioUnlocked
       ? "Écoute continue activée · changez d’album pour découvrir un nouvel extrait."
       : "Lancez un extrait pour activer l’écoute au changement d’album."}/></p>

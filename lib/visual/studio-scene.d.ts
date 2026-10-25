@@ -1,5 +1,7 @@
 export type StudioSceneMode = "hero" | "gallery";
 
+export type StudioProjectedBounds = {left: number; right: number; top: number; bottom: number; width: number; height: number};
+
 export type StudioSceneStats = {
   available: boolean;
   renderer?: string;
@@ -24,6 +26,19 @@ export type StudioSceneStats = {
   averageCpuMs?: number | null;
   estimatedFps?: number | null;
   timingSamples?: number;
+  desktopAtmosphere?: boolean;
+  facets?: number;
+  framing?: {
+    mode: StudioSceneMode;
+    aspect: number;
+    fovDegrees: number;
+    sideX: number;
+    plateauWidthScale: number;
+    orbitalHalos: number;
+    covers: Array<StudioProjectedBounds | null>;
+    coverGroup: StudioProjectedBounds | null;
+    plateau: StudioProjectedBounds | null;
+  } | null;
 };
 
 export interface StudioScene {
