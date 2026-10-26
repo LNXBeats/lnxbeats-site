@@ -1,4 +1,5 @@
 export const MEMBER_INVITATION_DELAY_MS = 12_000;
+export const MEMBER_INVITATION_RETRY_MS = 1_000;
 export const MEMBER_INVITATION_DISMISS_KEY = "lnx-member-invitation-dismissed-until-v1";
 export const MEMBER_INVITATION_DISMISS_MS = 30 * 24 * 60 * 60_000;
 

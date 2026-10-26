@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth/client";
-import { memberInvitationDismissed, memberInvitationPathAllowed, MEMBER_INVITATION_DELAY_MS, MEMBER_INVITATION_DISMISS_KEY, MEMBER_INVITATION_DISMISS_MS } from "@/lib/members/invitation-policy";
+import { memberInvitationDismissed, memberInvitationPathAllowed, MEMBER_INVITATION_DELAY_MS, MEMBER_INVITATION_DISMISS_KEY, MEMBER_INVITATION_DISMISS_MS, MEMBER_INVITATION_RETRY_MS } from "@/lib/members/invitation-policy";
 import { T, useSiteLanguage } from "@/components/site-language";
 import styles from "./member-invitation.module.css";
 
@@ -24,14 +24,22 @@ export function MemberInvitation() {
     if (!allowed || isPending || error || session?.user || offered.current) return;
     try { if (memberInvitationDismissed(window.localStorage.getItem(MEMBER_INVITATION_DISMISS_KEY))) return; } catch { /* No storage is required to browse. */ }
     let timer: number | undefined;
+    const offer = () => {
+      window.clearTimeout(timer);
+      if (document.visibilityState !== "visible" || offered.current) return;
+      const modalVisible = Array.from(document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"]')).some(element => element.getClientRects().length > 0);
+      if (modalVisible || document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) {
+        // A menu, consent or form defers this invitation; it must not silently
+        // consume the only attempt. Cleanup and visibility still cancel retries.
+        timer = window.setTimeout(offer, MEMBER_INVITATION_RETRY_MS);
+        return;
+      }
+      offered.current = true; setOpen(true);
+    };
     const schedule = () => {
       window.clearTimeout(timer);
       if (document.visibilityState !== "visible" || offered.current) return;
-      timer = window.setTimeout(() => {
-        const modalVisible = Array.from(document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"]')).some(element => element.getClientRects().length > 0);
-        if (document.visibilityState !== "visible" || modalVisible || document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) return;
-        offered.current = true; setOpen(true);
-      }, MEMBER_INVITATION_DELAY_MS);
+      timer = window.setTimeout(offer, MEMBER_INVITATION_DELAY_MS);
     };
     schedule();
     document.addEventListener("visibilitychange", schedule);

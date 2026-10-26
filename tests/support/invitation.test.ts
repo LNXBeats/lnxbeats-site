@@ -82,5 +82,15 @@ test("signup and support both yield to the other non-modal dialog, including del
     assert.match(source, /getClientRects\(\)\.length > 0/);
     assert.match(source, /aria-modal="false"/);
   }
-  assert.match(member, /if \(document\.visibilityState !== "visible" \|\| modalVisible/);
+  assert.match(member, /if \(modalVisible \|\| document\.activeElement\?\.matches/);
+  assert.match(member, /setTimeout\(offer, MEMBER_INVITATION_RETRY_MS\)/);
+});
+
+test("a closed header dialog cannot make support invisible on desktop or mobile", async () => {
+  const header = await readFile(new URL("../../components/site-header.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../../components/support-invitation.module.css", import.meta.url), "utf8");
+  assert.match(header,/id="mobile-navigation"/);
+  assert.match(header,/aria-modal="true"/);
+  assert.match(css,/:global\(body:has\(dialog\[open\]\)\) \.invitation\{display:none\}/);
+  assert.doesNotMatch(css,/:has\(\[aria-modal="true"\]\)/);
 });

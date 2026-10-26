@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { memberInvitationPathAllowed, memberInvitationDismissed, MEMBER_INVITATION_DISMISS_MS } from "@/lib/members/invitation-policy";
+import { memberInvitationPathAllowed, memberInvitationDismissed, MEMBER_INVITATION_DISMISS_MS, MEMBER_INVITATION_DELAY_MS, MEMBER_INVITATION_RETRY_MS } from "@/lib/members/invitation-policy";
 import { isAllowedRegistrationCompletionPayload } from "@/lib/auth/input";
 import { DEFAULT_RELEASE_ALERT_CHOICES } from "@/lib/release-notifications/domain";
 import { memberMessages } from "@/lib/i18n/messages-members";
@@ -22,6 +22,17 @@ test("a closed mobile menu is not an active modal and returning to the tab re-ar
   assert.match(source, /addEventListener\("visibilitychange", schedule\)/);
   assert.match(source, /removeEventListener\("visibilitychange", schedule\)/);
   assert.match(source, /aria-modal="false"/);
+});
+test("a visible dialog or focused form defers signup instead of consuming its only attempt", async () => {
+  const source = await readFile(new URL("../../components/member-invitation.tsx", import.meta.url), "utf8");
+  assert.equal(MEMBER_INVITATION_DELAY_MS,12_000);
+  assert.equal(MEMBER_INVITATION_RETRY_MS,1_000);
+  assert.match(source,/const offer = \(\) =>/);
+  assert.match(source,/if \(modalVisible \|\| document\.activeElement\?\.matches/);
+  assert.match(source,/setTimeout\(offer, MEMBER_INVITATION_RETRY_MS\)/);
+  assert.match(source,/setTimeout\(offer, MEMBER_INVITATION_DELAY_MS\)/);
+  assert.ok(source.indexOf("setTimeout(offer, MEMBER_INVITATION_RETRY_MS)") < source.indexOf("offered.current = true; setOpen(true)"));
+  assert.match(source,/if \(!allowed \|\| isPending \|\| error \|\| session\?\.user \|\| offered\.current\) return/);
 });
 const passwords = {password:"A synthetic phrase only 2026!",passwordConfirmation:"A synthetic phrase only 2026!"};
 test("account creation remains possible without optional release alerts", () => {

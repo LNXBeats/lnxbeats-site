@@ -7,5 +7,6 @@
 @keyframes arrive{from{opacity:0;transform:translateY(.9rem) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media(min-width:900px){.invitation{bottom:1.75rem;right:1.75rem}}
 @media(prefers-reduced-motion:reduce){.invitation{animation:none}.support,.close{transition:none}.support:hover{transform:none}}
-/* A subsequently opened navigation/consent modal takes precedence, too. */
-:global(body:has(dialog[open])) .invitation,:global(body:has([aria-modal="true"])) .invitation{display:none}
+/* The header's closed dialog keeps aria-modal="true" in the DOM. Only an
+   actually open native dialog may hide the invitation after it was shown. */
+:global(body:has(dialog[open])) .invitation{display:none}
