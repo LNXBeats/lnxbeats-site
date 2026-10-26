@@ -13,6 +13,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteMotion } from "@/components/site-motion";
 import { ImmersiveExperience } from "@/components/immersive-experience";
 import { MemberInvitation } from "@/components/member-invitation";
+import { SupportInvitation } from "@/components/support-invitation";
 import { CANONICAL_SITE_ORIGIN } from "@/lib/seo/canonical";
 import { buildSiteStructuredData } from "@/lib/seo/structured-data";
 import { isSupportEnabled } from "@/lib/support/config";
@@ -91,6 +92,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <SiteMotion />
           <ImmersiveExperience />
           <MemberInvitation />
+          <SupportInvitation enabled={isSupportEnabled()} />
         </OrderJourneyProvider>
         <JsonLd id="lnx-site-identity" data={buildSiteStructuredData()} />
         </SiteLanguageProvider>

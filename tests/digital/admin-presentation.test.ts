@@ -11,7 +11,7 @@ test("single, album and project Admin labels distinguish the whole edition from 
   assert.match(single.offerExplanation, /offres distinctes/); assert.match(single.offerExplanation, /prix ne s’additionnent pas/);
   for (const labels of [single, album, project]) {
     assert.equal(labels.individualOffer, "Offre du titre à l’unité");
-    assert.match(labels.completeAvailability, /TEST/); assert.match(labels.excludedTrack, /annoncée ou non listée/);
+    assert.doesNotMatch(labels.completeAvailability, /TEST/); assert.match(labels.excludedTrack, /annoncée ou non listée/);
     assert.match(labels.formats, /WAV original et MP3 privé/); assert.match(labels.formats, /Deux ZIP séparés/); assert.match(labels.formats, /Aucun fichier complet/);
   }
 });
@@ -35,7 +35,7 @@ test("clearer missing-media labels retain every fail-closed readiness requiremen
 
 test("Admin integrates context labels while preserving private preview, independent offer inputs and explicit rights checks", async () => {
   const page = await readFile(new URL("../../app/admin/musique/[slug]/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /digitalAdminReleaseLabels\(p.type, tracks.some\(t => t.codec === "mp3"\)\)/); assert.match(page, /label=\{release.completeOffer\}/); assert.match(page, /label=\{release.individualOffer\}/);
+  assert.match(page, /digitalAdminReleaseLabels\(p.type, tracks.some\(t => t.codec === "mp3"\), mode\)/); assert.match(page, /label=\{release.completeOffer\}/); assert.match(page, /label=\{release.individualOffer\}/);
   assert.doesNotMatch(page, /Offre album|Exclue de l’album vendu|prix de fixture/);
   assert.match(page, /id="edition-preview"/); assert.match(page, /\/api\/admin\/digital\/previews\//); assert.match(page, /Image unoptimized/);
   assert.match(page, /Droits de cette version pour la vente/); assert.match(page, /DigitalRightsReview/);
@@ -46,6 +46,18 @@ test("Admin integrates context labels while preserving private preview, independ
   const rights = await readFile(new URL("../../components/digital-rights-review.tsx", import.meta.url), "utf8");
   assert.match(rights, /Sélectionner les versions éligibles<\/button>/); assert.doesNotMatch(rights, /éligibles de cet album/);
   for (const requirement of ["composition/master/collaborateurs/interprètes/samples/reprises/extraits", "SHA‑256", "private-evidence:", 'required={status === "APPROVED"}']) assert.ok(rights.includes(requirement));
+});
+
+test("advanced Admin points exact existing versions to the single Express confirmation without approving anything on read", async () => {
+  assert.equal(digitalAdminReleaseLabels("ALBUM", false, "LIVE").completeAvailability, "Album complet");
+  assert.equal(digitalAdminReleaseLabels("ALBUM", false, "TEST").completeAvailability, "Album complet — TEST");
+  const page = await readFile(new URL("../../app/admin/musique/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /id="finaliser-vente"/);
+  assert.match(page, /\/admin\/musique\/express\?projet=\$\{p.id\}&verification=vente#verification/);
+  assert.match(page, /Aucun réimport ni justificatif à ressaisir/);
+  assert.match(page, /sans les attribuer automatiquement au nouveau fichier/);
+  assert.match(page, /Les versions et contenus déjà acquis restent inchangés/);
+  assert.doesNotMatch(page, /publishExpressProject|recordDigitalRightsReviews|\.update\(|\.create\(/);
 });
 
 test("rights review alone can shrink its grid, fieldset and long consent text without hiding information", async () => {

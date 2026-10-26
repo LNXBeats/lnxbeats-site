@@ -1,8 +1,9 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { DigitalError, assertDigitalUuid } from "./domain";
-import { DIGITAL_EXCERPT_EVENT, digitalExcerptBinding, digitalExcerptCandidateReady, digitalExcerptDetails, digitalExcerptHash,
+import { DIGITAL_EXCERPT_EVENT, digitalExcerptBinding, digitalExcerptDetails, digitalExcerptHash,
   type DigitalExcerptEvent, type DigitalExcerptMaster } from "./excerpt-policy";
+import { digitalExcerptApprovalMatches } from "./excerpt-approval-policy";
 
 const blocked = () => new DigitalError("EXCERPT_ARTISTIC_VALIDATION_REQUIRED", 409);
 type LatestMaster = { id: string; trackId: string };
@@ -58,8 +59,8 @@ export async function assertDigitalExcerptApprovals(db: Prisma.TransactionClient
     .map(entry => entry.details.candidateAssetId!))];
   const candidates = candidateIds.length ? await db.asset.findMany({ where: { id: { in: candidateIds } } }) : [];
   const byCandidate = new Map(candidates.map(asset => [asset.id, asset]));
-  for (const { details } of prepared) if (details.candidateOrigin !== "EXISTING_PROVISIONAL") {
-    const candidate = byCandidate.get(details.candidateAssetId!);
-    if (!candidate || !digitalExcerptCandidateReady(candidate, details)) throw blocked();
+  for (const { master } of prepared) {
+    const event = byMaster.get(master.id)!;
+    if (!digitalExcerptApprovalMatches(master, event, event.actorId ? byActor.get(event.actorId) : undefined, byCandidate)) throw blocked();
   }
 }

@@ -15,7 +15,6 @@ import {
   useState,
 } from "react";
 import { ProjectArtwork } from "@/components/project-artwork";
-import { ImmersiveScene } from "@/components/immersive-scene";
 import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
 import {
   discographyFilterCounts,
@@ -110,8 +109,13 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [playbackFailure, setPlaybackFailure] = useState<"blocked" | "unavailable" | null>(null);
   const [playbackLoading, setPlaybackLoading] = useState(false);
+  const [machineVisible, setMachineVisible] = useState(true);
+  const [machineEngaged, setMachineEngaged] = useState(false);
+  const [seatedRecordSlug, setSeatedRecordSlug] = useState<string | null>(null);
+  const [motionSuppressed, setMotionSuppressed] = useState(false);
 
   const railRef = useRef<HTMLUListElement>(null);
+  const machineRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const playerStateRef = useRef(playerState);
   const loadedSlugRef = useRef(initialSlug);
@@ -143,7 +147,6 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     () => visibleDiscographyProjects(projects, filter, sort),
     [filter, projects, sort],
   );
-  const sceneCovers = useMemo(() => visibleProjects.map(project => project.cover ?? ""), [visibleProjects]);
   const visibleActiveIndex = visibleProjects.findIndex(({ slug }) => slug === activeSlug);
   const globalIndexBySlug = useMemo(
     () => new Map(projects.map((project, index) => [project.slug, index])),
@@ -189,7 +192,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       pendingFocusIndexRef.current = null;
       if (focusIndex === null) return;
       const nextItem = railRef.current?.querySelector<HTMLElement>(`[data-project-index="${focusIndex}"]`);
-      const nextControl = nextItem?.querySelector<HTMLElement>("[data-active-control='true']");
+      const nextControl = machineRef.current?.querySelector<HTMLElement>(".mechanical-jukebox__project-link");
       (nextControl ?? nextItem)?.focus({ preventScroll: true });
     }, 360);
   }, []);
@@ -254,6 +257,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       }
       pendingPlayRef.current = null;
       transitionPlayerState({ type: "play", slug: target.slug });
+      setMachineEngaged(true);
       continuousListeningRef.current = true;
       setAudioUnlocked(true);
       setPlaybackLoading(false);
@@ -277,6 +281,8 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     if (!nextProject) return;
     const selectionChanged = nextProject.slug !== playerStateRef.current.selectedSlug;
     if (selectionChanged) {
+      setSeatedRecordSlug(motionSuppressed ? nextProject.slug : null);
+      setMachineEngaged(true);
       const continueListening = continuousListeningRef.current;
       pauseCurrent(true, false);
       transitionPlayerState({ type: "select", slug: nextProject.slug });
@@ -293,7 +299,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     } else {
       clearProgrammaticTimer();
     }
-  }, [attemptPlayback, clearProgrammaticTimer, pauseCurrent, projects, scheduleProgrammaticRelease, syncTrackMedia, transitionPlayerState]);
+  }, [attemptPlayback, clearProgrammaticTimer, motionSuppressed, pauseCurrent, projects, scheduleProgrammaticRelease, syncTrackMedia, transitionPlayerState]);
 
   const selectVisible = useCallback((index: number, fromGesture = true) => {
     const project = visibleProjects[index];
@@ -406,20 +412,41 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   }, [pauseCurrent, playerId]);
 
   useEffect(() => {
-    const rail = railRef.current;
-    if (!rail || !window.matchMedia("(max-width: 700px)").matches) return;
+    const machine = machineRef.current;
+    if (!machine) return;
+    let intersects = true;
+    const syncVisibility = () => setMachineVisible(intersects && !document.hidden);
+    const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(entries => {
+      intersects = entries[0]?.isIntersecting ?? true;
+      syncVisibility();
+    }, { threshold: .02 });
+    observer?.observe(machine);
+    document.addEventListener("visibilitychange", syncVisibility);
+    syncVisibility();
+    return () => {
+      observer?.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
+    };
+  }, []);
 
-    const observer = new IntersectionObserver((entries) => {
-      const candidate = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-      const index = Number((candidate?.target as HTMLElement | undefined)?.dataset.projectIndex);
-      if (!programmaticRef.current && Number.isInteger(index)) select(index, false);
-    }, { root: rail, threshold: [0.55, 0.7] });
-
-    rail.querySelectorAll<HTMLElement>("[data-project-index]").forEach((item) => observer.observe(item));
-    return () => observer.disconnect();
-  }, [filter, select, sort, visibleProjects.length]);
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncPreference = () => {
+      const suppressed = preference.matches || document.documentElement.dataset.visualMotion === "paused";
+      setMotionSuppressed(suppressed);
+      // With motion disabled, the record is already displayed on its platter.
+      // Remember this so re-enabling motion cannot restart a completed transfer.
+      if (suppressed) setSeatedRecordSlug(playerStateRef.current.selectedSlug);
+    };
+    const observer = new MutationObserver(syncPreference);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-visual-motion"] });
+    syncPreference();
+    preference.addEventListener("change", syncPreference);
+    return () => {
+      observer.disconnect();
+      preference.removeEventListener("change", syncPreference);
+    };
+  }, []);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -440,7 +467,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
   const currentVisibleIndex = visibleActiveIndex >= 0 ? visibleActiveIndex : 0;
 
   return <section
-    className="home-jukebox discography-jukebox motion-reveal"
+    className="home-jukebox discography-jukebox mechanical-jukebox motion-reveal"
     aria-labelledby={regionId}
     aria-roledescription="carrousel"
     data-motion-scene="jukebox"
@@ -453,6 +480,9 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     data-player-project={playerProject.slug}
     data-player-source={playerProject.audioPreview?.url ?? ""}
     data-playing={playing}
+    data-machine-engaged={machineEngaged}
+    data-record-seated={seatedRecordSlug === active.slug || motionSuppressed}
+    data-tonearm-engaged={playingSlug === active.slug && (seatedRecordSlug === active.slug || motionSuppressed)}
     data-playback-loading={playbackLoading}
     data-playback-failure={playbackFailure ?? ""}
     data-playing-project={playingSlug ?? ""}
@@ -504,10 +534,9 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </label>
     </div>
 
-    <div className="home-jukebox__scene"
+    <div className="home-jukebox__scene" ref={machineRef} data-machine-visible={machineVisible}
       onPointerDown={event => {
         if (event.button !== 0 || (event.target as HTMLElement).closest("a,button,input,select")) return;
-        if (event.currentTarget.querySelector<HTMLCanvasElement>("canvas")?.dataset.sceneReady !== "true") return;
         sceneSwipeRef.current = { x: event.clientX, y: event.clientY };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
@@ -519,16 +548,66 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
         const dx = event.clientX - start.x, dy = event.clientY - start.y;
         if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) selectVisible(currentVisibleIndex + (dx < 0 ? 1 : -1));
       }}>
-      <ImmersiveScene covers={sceneCovers} index={currentVisibleIndex} mode="gallery" className="immersive-jukebox__webgl" />
+      <div className="mechanical-jukebox__hardware" aria-hidden="true">
+        <div className="mechanical-jukebox__nameplate"><span translate="no">LNX BEATS</span><i /> <span>STUDIO SELECTOR</span></div>
+        <span className="mechanical-jukebox__serial">{String(currentVisibleIndex + 1).padStart(2, "0")} / {String(visibleProjects.length).padStart(2, "0")}</span>
+        <div className="mechanical-jukebox__rack-light" />
+        <div className="mechanical-jukebox__rack-base" />
+        <div className="mechanical-jukebox__deck"><span className="mechanical-jukebox__deck-line" /><span className="mechanical-jukebox__deck-mark">LNX · DIRECT DRIVE</span><i className="mechanical-jukebox__dial mechanical-jukebox__dial--one" /><i className="mechanical-jukebox__dial mechanical-jukebox__dial--two" /></div>
+        <div className="mechanical-jukebox__platter"><i /><i /><i /></div>
+        {/* The arm and record share one projected coordinate system. The fixed
+            pivot never moves; the connected tube, cartridge and diamond do. */}
+        <svg className="mechanical-jukebox__tonearm" viewBox="0 0 400 400" focusable="false">
+          <defs>
+            <linearGradient id={`${playerId}-chrome`} x1="0" y1="0" x2="0.35" y2="1"><stop stopColor="#fafaf3" /><stop offset=".24" stopColor="#99a4a7" /><stop offset=".45" stopColor="#eff4f2" /><stop offset=".65" stopColor="#637078" /><stop offset="1" stopColor="#c5cdcb" /></linearGradient>
+          </defs>
+          <g className="mechanical-jukebox__tonearm-base">
+            <ellipse cx="470" cy="113" rx="39" ry="37" fill="#1b2225" />
+            <circle cx="470" cy="105" r="37" fill={`url(#${playerId}-chrome)`} stroke="#f1eee0" strokeWidth="2" />
+            <circle cx="470" cy="105" r="24" fill="#555f63" stroke="#aab4b4" strokeWidth="5" />
+            <circle cx="470" cy="105" r="12" fill="#20292d" />
+            <path d="M479 245V317M465 265H490" stroke="#a5afac" strokeWidth="9" strokeLinecap="round" />
+          </g>
+          <g className="mechanical-jukebox__tonearm-swing">
+            <g className="mechanical-jukebox__tonearm-lift">
+              <path d="M493 72L470 105" stroke="#58676c" strokeWidth="16" strokeLinecap="round" />
+              <path d="M493 72L470 105" stroke={`url(#${playerId}-chrome)`} strokeWidth="11" strokeLinecap="round" />
+              <path d="M470 105C463 144 426 154 422 192S408 240 363 268L338 287" className="mechanical-jukebox__tonearm-rod" fill="none" stroke={`url(#${playerId}-chrome)`} strokeWidth="12" strokeLinecap="round" />
+              <path d="M468 108C459 144 423 153 419 192S405 237 360 265" fill="none" stroke="#ffffffb3" strokeWidth="2" strokeLinecap="round" />
+              <rect x="478" y="51" width="35" height="39" rx="9" transform="rotate(35 495 71)" fill={`url(#${playerId}-chrome)`} stroke="#6d797d" strokeWidth="2" />
+              <path d="M346 268L321 291L335 305L362 280Z" className="mechanical-jukebox__tonearm-head" fill={`url(#${playerId}-chrome)`} stroke="#5f6d70" strokeWidth="2" />
+              <path d="M330 291L335 299L347 291L342 284Z" fill="#367b51" stroke="#153b29" strokeWidth="2" />
+              <path d="M340 289L335 290" stroke="#f5db9a" strokeWidth="2" />
+              <circle cx="335" cy="290" r="2" fill="#fff3ce" data-tonearm-stylus />
+              <path d="M351 269L366 256" stroke="#dce2dc" strokeWidth="4" strokeLinecap="round" />
+            </g>
+          </g>
+        </svg>
+        <div key={`carrier-${active.slug}`} className="mechanical-jukebox__carrier"><span className="mechanical-jukebox__carrier-rail" /><span className="mechanical-jukebox__carrier-neck" /><span className="mechanical-jukebox__claw" /></div>
+        <div key={`record-${active.slug}`} className="mechanical-jukebox__record" data-record-transport data-record-slug={active.slug}
+          onAnimationEnd={event => {
+            if (event.target !== event.currentTarget || !event.animationName.startsWith("studio-record-transfer")) return;
+            const slug = event.currentTarget.dataset.recordSlug;
+            if (slug === playerStateRef.current.selectedSlug) setSeatedRecordSlug(slug);
+          }}>
+          <div className="mechanical-jukebox__record-spin"><span className="mechanical-jukebox__grooves" /><span className="mechanical-jukebox__record-label"><ProjectArtwork project={active} sizes="110px" /></span><span className="mechanical-jukebox__spindle" /></div>
+        </div>
+        <span className="mechanical-jukebox__power"><i />{t(playing ? "En lecture" : playbackLoading ? "Chargement…" : "Extrait sélectionné")}</span>
+        <span className="mechanical-jukebox__screw mechanical-jukebox__screw--one" /><span className="mechanical-jukebox__screw mechanical-jukebox__screw--two" />
+        <span className="mechanical-jukebox__screw mechanical-jukebox__screw--three" /><span className="mechanical-jukebox__screw mechanical-jukebox__screw--four" />
+      </div>
       {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--previous" type="button" onClick={() => selectVisible(currentVisibleIndex - 1)} disabled={currentVisibleIndex === 0} aria-label={t("Projet précédent")}>{leftArrow}</button> : null}
       <ul className="home-jukebox__rail" ref={railRef} aria-label={t("Projets à parcourir")}>
         {visibleProjects.map((project, index) => {
           const distance = index - currentVisibleIndex;
+          // Only three actual covers are mounted. Native responsive images stay
+          // crisp without a permanent gallery canvas, textures, or render loop.
+          if (Math.abs(distance) > 1) return null;
           const position = distance === 0 ? "is-active" : distance === -1 ? "is-previous" : distance === 1 ? "is-next" : distance === -2 ? "is-far-previous" : distance === 2 ? "is-far-next" : distance < 0 ? "is-hidden-before" : "is-hidden-after";
           const preloadCover = Math.abs(distance) <= 1;
           const outsideScene = Math.abs(distance) > 2;
           const globalIndex = globalIndexBySlug.get(project.slug) ?? 0;
-          const artwork = <ProjectArtwork project={project} priority={eager && preloadCover} sizes="(max-width: 700px) 86vw, (max-width: 1000px) 42vw, (max-width: 1440px) 430px, (max-width: 2200px) 20vw, 500px" className="discography-card__artwork" />;
+          const artwork = <ProjectArtwork project={project} priority={eager && preloadCover} sizes="(max-width: 600px) 58vw, (max-width: 1200px) 24vw, (max-width: 1799px) 420px, 512px" className="discography-card__artwork" />;
 
           return <li className={`home-jukebox__item ${position}`} data-project-index={globalIndex} aria-hidden={outsideScene || undefined} tabIndex={distance === 0 ? -1 : undefined} key={project.slug}>
             <article className="discography-card" data-active={distance === 0 || undefined} aria-current={distance === 0 ? "true" : undefined}>
@@ -558,14 +637,10 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
         })}
       </ul>
       {visibleProjects.length > 1 ? <button className="home-jukebox__arrow home-jukebox__arrow--next" type="button" onClick={() => selectVisible(currentVisibleIndex + 1)} disabled={currentVisibleIndex === visibleProjects.length - 1} aria-label={t("Projet suivant")}>{rightArrow}</button> : null}
-    </div>
-    <p className="discography-jukebox__continuity"><T text={audioUnlocked
-      ? "Écoute continue activée · changez d’album pour découvrir un nouvel extrait."
-      : "Lancez un extrait pour activer l’écoute au changement d’album."}/></p>
     <div className="discography-jukebox__player-context" data-player-context>
       <div className="discography-jukebox__player-copy">
         <span>{t(playing ? "En lecture" : "Extrait sélectionné")}</span>
-        <strong><OriginalName>{playerProject.title}</OriginalName></strong>
+        <Link className="mechanical-jukebox__project-link" href={`/album/${playerProject.slug}`} aria-label={`${t("Entrer dans le projet")} ${playerProject.title}`}><strong><OriginalName>{playerProject.title}</OriginalName></strong><UiIcon name="arrow-right" /></Link>
         <small>{playerProject.audioPreview ? `${t("Extrait")} · ${previewDuration(playerProject.audioPreview.durationMs)}` : t("Aucun extrait disponible")}</small>
       </div>
       {playingProject && playingProject.slug !== active.slug ? <p className="discography-jukebox__selected-context">{t("Sélection affichée")} <strong><OriginalName>{active.title}</OriginalName></strong></p> : null}
@@ -581,6 +656,10 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       </button>
       <span className="discography-jukebox__player-progress" aria-hidden="true"><span style={{ transform: `scaleX(${progress})` }} /></span>
     </div>
+    </div>
+    <p className="discography-jukebox__continuity"><T text={audioUnlocked
+      ? "Écoute continue activée · changez d’album pour découvrir un nouvel extrait."
+      : "Lancez un extrait pour activer l’écoute au changement d’album."}/></p>
     {playbackFailure ? <p className="discography-jukebox__playback-message" role="status"><T text={playbackFailure === "blocked"
       ? "Votre navigateur demande une action : touchez le bouton de lecture pour écouter cet extrait."
       : "Impossible de lire cet extrait. Vous pouvez réessayer avec le bouton de lecture."}/></p> : null}

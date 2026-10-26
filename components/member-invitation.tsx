@@ -28,7 +28,7 @@ export function MemberInvitation() {
       window.clearTimeout(timer);
       if (document.visibilityState !== "visible" || offered.current) return;
       timer = window.setTimeout(() => {
-        const modalVisible = Array.from(document.querySelectorAll('dialog[open], [aria-modal="true"]')).some(element => element.getClientRects().length > 0);
+        const modalVisible = Array.from(document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"]')).some(element => element.getClientRects().length > 0);
         if (document.visibilityState !== "visible" || modalVisible || document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) return;
         offered.current = true; setOpen(true);
       }, MEMBER_INVITATION_DELAY_MS);

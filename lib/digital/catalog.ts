@@ -15,6 +15,12 @@ import {digitalRuntimeMode} from "./runtime-policy";
 import {assertDigitalLiveObjectAssets} from "./live-media-policy";
 import { digitalPublicPreviewAllowed } from "./public-preview";
 type DB = Prisma.TransactionClient;
+const selectionInclude = { project: { include: {
+  tracks: { orderBy: [{ position: "asc" as const }, { id: "asc" as const }], include: {
+    digitalMasters: { orderBy: { version: "desc" as const }, take: 1, include: { masterAsset: true, previewAsset: true, mp3Asset: true } },
+  } },
+} } } satisfies Prisma.DigitalOfferInclude;
+export type DigitalSelectionOffer = Prisma.DigitalOfferGetPayload<{ include: typeof selectionInclude }>;
 export function selectionFingerprint(offer:DigitalSelection){return createHash("sha256").update(JSON.stringify([offer.id,offer.scope,offer.title,offer.version,offer.priceCents,offer.tracks.map(t=>{
   const historical=[t.trackId,t.masterId,t.title,t.position,t.formats??null,t.wavAssetId??null,t.mp3AssetId??null];
   // Preserve the exact historical WAV fingerprint. Only the new discriminated format adds a binding.
@@ -24,13 +30,20 @@ export function selectionFingerprint(offer:DigitalSelection){return createHash("
 export async function selections(ids: string[], db: DB = prisma): Promise<DigitalSelection[]> {
   if (ids.length > 50 || new Set(ids).size !== ids.length) throw new DigitalError("INVALID_CART");
   ids.forEach(assertDigitalUuid);
-  const offers = await db.digitalOffer.findMany({ where: { id: { in: ids } }, include: { project: { include: {
-    tracks: { orderBy: [{ position: "asc" }, { id: "asc" }], include: {
-      digitalMasters: { orderBy: { version: "desc" }, take: 1, include: { masterAsset: true, previewAsset: true,mp3Asset:true } },
-    } },
-  } } } });
+  const offers = await db.digitalOffer.findMany({ where: { id: { in: ids } }, include: selectionInclude });
   if (offers.length !== ids.length) throw new DigitalError("OFFER_UNAVAILABLE", 409);
-  const selected = offers.map(offer => {
+  const selected = offers.map(digitalSelectionFromOffer);
+  if(selected.length) {
+    await assertDigitalRightsReviews(db, selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
+    const masterIds = new Set(selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
+    await assertDigitalExcerptApprovals(db, offers.flatMap(offer => offer.project.tracks.flatMap(track => track.digitalMasters)).filter(master => masterIds.has(master.id)));
+  }
+  return selected;
+}
+
+/** Shared structural/format gate. Callers must ALSO verify the exact rights and
+ * artistic proofs: a structurally prepared offer is never an authorization. */
+export function digitalSelectionFromOffer(offer: DigitalSelectionOffer): DigitalSelection {
     if (!offer.active || !offer.rightsConfirmed || offer.project.status !== "PUBLISHED" || !offer.project.publicVisible) throw new DigitalError("OFFER_UNAVAILABLE", 409);
     const tracks = offer.scope === "ALBUM" ? offer.project.tracks : offer.project.tracks.filter(t => t.id === offer.trackId);
     if (!tracks.length || tracks.some(t => { const m = t.digitalMasters[0]; return t.status !== "RELEASED" || !m || !digitalCommercialAudioReady(m) || m.masterAsset.visibility !== "PRIVATE" || m.masterAsset.rightsStatus !== "CLEARED"
@@ -45,13 +58,6 @@ export async function selections(ids: string[], db: DB = prisma): Promise<Digita
       tracks: tracks.map((t):DigitalSelection["tracks"][number] => {const m=t.digitalMasters[0];return { trackId: t.id, masterId: m.id, title: t.title, position: t.position,
         ...(m.codec==="mp3"?{formats:["MP3"] as ["MP3"],mp3AssetId:m.masterAssetId,sourceSha256:m.masterAsset.checksumSha256!,sourceFormat:"MP3_LOSSY" as const,formatPolicy:MP3_ONLY_SOURCE_POLICY}
           :{formats:["WAV","MP3"] as ["WAV","MP3"],wavAssetId:m.masterAssetId,mp3AssetId:m.mp3AssetId!}) };}) };
-  });
-  if(selected.length) {
-    await assertDigitalRightsReviews(db, selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
-    const masterIds = new Set(selected.flatMap(selection => selection.tracks.map(track => track.masterId)));
-    await assertDigitalExcerptApprovals(db, offers.flatMap(offer => offer.project.tracks.flatMap(track => track.digitalMasters)).filter(master => masterIds.has(master.id)));
-  }
-  return selected;
 }
 export async function ownedTrackIds(userId: string, db: DB = prisma) {
   const mode = requireDigitalEnvironment();

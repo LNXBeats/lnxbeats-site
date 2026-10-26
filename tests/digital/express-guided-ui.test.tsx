@@ -16,7 +16,26 @@ registerHooks({ load(url, context, next) {
 const { MusicExpress } = await import("../../components/music-express");
 type Project = NonNullable<Parameters<typeof MusicExpress>[0]["initial"]>;
 const noNavigation = () => { throw Error("SSR must not navigate, submit or prefetch"); };
-const render = (initial: Project | null) => renderToStaticMarkup(<AppRouterContext.Provider value={{ back: noNavigation, forward: noNavigation, refresh: noNavigation, push: noNavigation, replace: noNavigation, prefetch: noNavigation, bfcacheId: "synthetic-ssr-only" }}><MusicExpress initial={initial} defaults={EXPRESS_DEFAULTS} mode="TEST" ownerId="synthetic-ui-only"/></AppRouterContext.Provider>);
+const render = (initial: Project | null, reviewOnOpen = false) => renderToStaticMarkup(<AppRouterContext.Provider value={{ back: noNavigation, forward: noNavigation, refresh: noNavigation, push: noNavigation, replace: noNavigation, prefetch: noNavigation, bfcacheId: "synthetic-ssr-only" }}><MusicExpress initial={initial} defaults={EXPRESS_DEFAULTS} mode="TEST" ownerId="synthetic-ui-only" reviewOnOpen={reviewOnOpen}/></AppRouterContext.Provider>);
+test("saved-edition shortcut renders a single unchecked confirmation, without saving, navigating or bypassing blockers", async () => {
+  const initial = { id: "synthetic-final-review", slug: "synthetic-final-review", title: "Édition enregistrée", type: "ALBUM", releaseDate: null, membersPreviewEnabled: false,
+    updatedAt: "2026-10-25T10:00:00.000Z", publicVisible: true, status: "PUBLISHED", tracks: [], credits: [], cover: null,
+    albumOffer: { priceCents: 990, version: 1, active: true }, blockers: [], reviewToken: "a".repeat(64) } as unknown as Project;
+  const html = render(initial, true);
+  assert.match(html, /Tous les contrôles techniques sont prêts/);
+  assert.match(html, /Je confirme la publication de cette édition/);
+  assert.match(html, /<button disabled="">Enregistrement…/); // hydration/recovery must finish first
+  assert.match(html, /type="checkbox"[^>]*disabled=""\/><span>Je confirme la publication/);
+  assert.match(render({ ...initial, blockers: ["Fichier incomplet"] }, true), /Fichier incomplet/);
+  assert.doesNotMatch(render(null, true), /Je confirme la publication de cette édition/);
+  const page = await readFile(new URL("../../app/admin/musique/express/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /reviewOnOpen=\{!!projet && verification === "vente"\}/);
+  assert.doesNotMatch(page, /saveExpressDraft|publishExpressProject/);
+  const source = await readFile(new URL("../../components/music-express.tsx", import.meta.url), "utf8");
+  assert.match(source, /setReviewing\(false\); setConfirmed\(false\);\s*setTitle\(cached.title\)/);
+  assert.match(source, /if \(attempt\) \{\s*setReviewing\(false\); setConfirmed\(false\)/);
+  assert.match(source, /if \(!cacheReady \|\| inFlight.current/);
+});
 test("A new ordinary single starts with one title, editable default price, date and an unchecked member-preview choice", () => {
   const html = render(null);
   assert.match(html, /Single · un titre/); assert.match(html, /Album · plusieurs titres/);

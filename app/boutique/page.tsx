@@ -19,6 +19,7 @@ import { getSiteLocale, serverMoney, serverT } from "@/lib/i18n/server";
 import { listPublicExternalProducts } from "@/lib/shop/external-product-service";
 import { listPublicShopProducts } from "@/lib/shop/order-service";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
+import { isSupportEnabled } from "@/lib/support/config";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ function DistroKidMerchSection({ soft = false }: { soft?: boolean }) {
   );
 }
 
-function ShopTeaser() {
+function ShopTeaser({ supportAvailable }: { supportAvailable: boolean }) {
   return (
     <>
       <header className="page-hero page-hero--shop">
@@ -61,6 +62,7 @@ function ShopTeaser() {
           <div className="page-hero__visual page-hero__visual--shop" aria-hidden="true"><span><T text="Hors scène"/></span></div>
         </Container>
       </header>
+      {supportAvailable ? <section className="section"><Container><div className="shop-product-grid"><ShopSupportCard /></div></Container></section> : null}
       <DistroKidMerchSection />
       <section className="section section--soft">
         <Container className="content-columns motion-reveal">
@@ -102,16 +104,17 @@ function ShopEmptyState() {
 
 export default async function ShopPage() {
   const locale = await getSiteLocale();
+  const supportAvailable = isSupportEnabled();
   let shopEnabled = false;
   try {
     shopEnabled = parseShopConfiguration().enabled;
   } catch {
     shopEnabled = false;
   }
-  if (!shopEnabled) return <ShopTeaser />;
+  if (!shopEnabled) return <ShopTeaser supportAvailable={supportAvailable} />;
 
   const [products, externalProducts] = await Promise.all([listPublicShopProducts(), listPublicExternalProducts()]);
-  if (!products.length && !externalProducts.length) return <ShopEmptyState />;
+  if (!products.length && !externalProducts.length && !supportAvailable) return <ShopEmptyState />;
   const collection = [
     ...products.map((product) => ({ kind: "internal" as const, id: product.id, position: product.position, product })),
     ...externalProducts.map((product) => ({ kind: "external" as const, id: product.id, position: product.position, product })),
@@ -137,6 +140,7 @@ export default async function ShopPage() {
             <Link className="text-link" href="/boutique/panier"><T text="Voir le panier"/> <span aria-hidden="true"><UiIcon name="arrow-right" /></span></Link>
           </div>
           <div className="shop-product-grid">
+            {supportAvailable ? <ShopSupportCard /> : null}
             {collection.map((item) => item.kind === "internal" ? (
               <Fragment key={`internal:${item.id}`}>
               <article className="shop-product-card" data-motion-tilt="shop-product">
@@ -172,7 +176,6 @@ export default async function ShopPage() {
               </article>
               </Fragment>
             ) : <ShopExternalProductCard key={`external:${item.id}`} product={item.product} />)}
-            <ShopSupportCard />
           </div>
           {externalProducts.length ? <p className="shop-external-product-disclosure"><T text="Pour les produits externes, prix et conditions définitifs affichés sur DistroKid."/></p> : null}
         </Container>

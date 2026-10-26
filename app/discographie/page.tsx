@@ -12,6 +12,7 @@ import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { digitalEnabled } from "@/lib/digital/domain";
 import { digitalRuntimeMode } from "@/lib/digital/runtime-policy";
 import { publicDigitalProject } from "@/lib/digital/catalog";
+import { publicDigitalProjects } from "@/lib/digital/public-catalog";
 import { digitalCardOffer } from "@/lib/digital/catalog-card";
 import { AddDigitalOffer } from "@/components/digital-catalog";
 import { DigitalCartNavigation, DigitalDemoBanner } from "@/components/digital-navigation";
@@ -61,9 +62,9 @@ export default async function DiscographyPage() {
   const { projects } = await listDiscographyProjects();
   const preparation = discographyPreparationEnabled() ? await loadDiscographyPreparation() : [];
   const soon = new Set(preparation.filter(p => p.metadataPublicAllowed && p.activeOffers === 0).map(p => p.slug));
-  const digitalProjects = digitalEnabled() ? await Promise.all(projects.filter(p => p.status === "published" || soon.has(p.slug))
-    .map(async project => ({ project, view: await publicDigitalProject(project.slug) }))) : [];
-  const digitalViews = new Map(digitalProjects.map(({ project, view }) => [project.slug, view]));
+  const candidates = digitalEnabled() ? projects.filter(p => p.status === "published" || soon.has(p.slug)) : [];
+  const digitalViews = await publicDigitalProjects(candidates.map(project => project.slug));
+  const digitalProjects = candidates.map(project => ({ project, view: digitalViews.get(project.slug) ?? null }));
   const sceneProjects = visibleDiscographyProjects(discographyView(projects, digitalViews), "all", "editorial");
 
   return (

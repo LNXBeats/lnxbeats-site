@@ -15,7 +15,7 @@ test("the wide gallery uses the viewport without shrinking it into a sidebar", a
 
 test("the expanded cover scene is opt-in and the listening controls stay below it", async () => {
   const source = await readFile(new URL("../../app/immersive-public.css", import.meta.url), "utf8");
-  const desktop = source.slice(source.indexOf("/* A full-width gallery"));
+  const desktop = source.slice(source.indexOf("/* A full-width gallery"), source.indexOf("/* Studio Selector:"));
   assert.match(desktop, /\.home-jukebox__scene:has\(canvas\[data-scene-ready="true"\]\) \{ min-height:/);
   assert.match(desktop, /\.discography-jukebox__player-context \{ width: min\(640px, 100%\); min-width: 0; margin: 0 auto/);
   assert.doesNotMatch(desktop, /\.home-jukebox__scene \{ min-height:|display: none|visibility: hidden/);

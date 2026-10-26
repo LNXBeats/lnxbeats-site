@@ -63,7 +63,7 @@ test("immersive jukebox source contract keeps one audio element, explicit start 
 test("immersive discography uses only the already approved digital projection and keeps crawlable real links", async () => {
   const source = await readFile(new URL("../../app/discographie/page.tsx", import.meta.url), "utf8");
   assert.match(source, /audioPreview: jukeboxPublicPreview\(project, digitalViews\.get\(project\.slug\) \?\? null\)/);
-  assert.match(source, /const digitalViews = new Map\(digitalProjects\.map/);
+  assert.match(source, /const digitalViews = await publicDigitalProjects\(candidates\.map\(project => project\.slug\)\)/);
   assert.match(source, /<details className="discography-directory">/);
   assert.doesNotMatch(source, /masterAssetId|mp3AssetId|storageKey|createSignedUrl/);
 });

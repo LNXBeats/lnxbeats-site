@@ -6,7 +6,7 @@ import type { loadExpressProject } from "@/lib/digital/express-service";
 import { EXPRESS_DEFAULTS, type ExpressDefaults, type ExpressDraft } from "@/lib/digital/express-policy";
 import { CATALOG_PRIMARY_ARTIST } from "@/lib/catalog/artist-identity";
 import { parseEuroCents } from "@/lib/digital/domain";
-import { expressEditorLocked, expressEditorTracks, expressDurationLabel, hasDistinctSingleTitle, recoverExpressAttempt, type ExpressEditorTrack } from "@/lib/digital/express-presentation";
+import { expressCachedSnapshotMatches, expressEditorLocked, expressEditorTracks, expressDurationLabel, hasDistinctSingleTitle, recoverExpressAttempt, type ExpressEditorTrack } from "@/lib/digital/express-presentation";
 import { DigitalAdminPreview, DigitalBatchUpload } from "./digital-admin";
 import { DigitalRightsReview } from "./digital-rights-review";
 import { OWNER_EXCERPTS_AT_PUBLICATION_POLICY, OWNER_PUBLICATION_POLICY } from "@/lib/digital/owner-declaration";
@@ -42,15 +42,17 @@ async function api<T>(operation: string, input: unknown): Promise<T> {
   } return v;
 }
 class ExpressResponseError extends Error {}
-export function MusicExpress({ initial, defaults: initialDefaults, mode, ownerId }: { initial: Project | null; defaults: ExpressDefaults; mode: string; ownerId: string }) {
+export function MusicExpress({ initial, defaults: initialDefaults, mode, ownerId, reviewOnOpen = false }: { initial: Project | null; defaults: ExpressDefaults; mode: string; ownerId: string; reviewOnOpen?: boolean }) {
   const [project, setProject] = useState(initial), [defaults, setDefaults] = useState(initialDefaults), [title, setTitle] = useState(initial?.title ?? ""), [type, setType] = useState<"SINGLE" | "ALBUM">(initial?.type === "ALBUM" ? "ALBUM" : "SINGLE");
   const [releaseDate, setReleaseDate] = useState(initial?.releaseDate ?? "");
   const [membersPreviewEnabled, setMembersPreviewEnabled] = useState(initial?.membersPreviewEnabled ?? false);
   const [hasCollaborations, setHasCollaborations] = useState(initial?.hasCollaborations ?? false);
   const initialRows = (p: Project): Row[] => p.tracks.map(t => ({ id: t.id, title: t.title, price: euros(t.offer?.priceCents ?? EXPRESS_DEFAULTS.trackPriceCents), expectedOfferVersion: t.offer?.version ?? 0 }));
   const [tracks, setTracks] = useState<Row[]>(initial ? initialRows(initial) : [row(defaults.trackPriceCents)]), [count, setCount] = useState(String(initial?.tracks.length ?? 1)), [albumPrice, setAlbumPrice] = useState(initial?.albumOffer?.priceCents == null ? euros(defaults.albumPriceCents) : euros(initial.albumOffer.priceCents));
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [reviewing, setReviewing] = useState(false), [confirmed, setConfirmed] = useState(false), [cacheReady, setCacheReady] = useState(false);
-  const [publishMode, setPublishMode] = useState<"PREMIERE" | "SALE">("PREMIERE");
+  // The shortcut reviews only the already-saved server snapshot. GET/render
+  // never saves a draft or restores a consent; the final action remains explicit.
+  const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [reviewing, setReviewing] = useState(!!initial && reviewOnOpen), [confirmed, setConfirmed] = useState(false), [cacheReady, setCacheReady] = useState(false);
+  const [publishMode, setPublishMode] = useState<"PREMIERE" | "SALE">(reviewOnOpen ? "SALE" : "PREMIERE");
   const [publicationAttempt, setPublicationAttempt] = useState<PublicationAttempt | null>(null);
   const [defaultTrack, setDefaultTrack] = useState(euros(defaults.trackPriceCents)), [defaultAlbum, setDefaultAlbum] = useState(euros(defaults.albumPriceCents)), [profileName, setProfileName] = useState(defaults.artistName);
   const [artistName, setArtistName] = useState(CATALOG_PRIMARY_ARTIST);
@@ -75,7 +77,9 @@ export function MusicExpress({ initial, defaults: initialDefaults, mode, ownerId
     try {
       const cached = JSON.parse(localStorage.getItem(key) ?? "null");
       if (cached && cached.updatedAt === revision && typeof cached.title === "string" && ["SINGLE", "ALBUM"].includes(cached.type) && Array.isArray(cached.tracks) && cached.tracks.length > 0 && cached.tracks.length <= 100
-        && cached.tracks.every((t: Row) => t && typeof t.title === "string" && typeof t.price === "string")) {
+        && cached.tracks.every((t: Row) => t && typeof t.title === "string" && typeof t.price === "string")
+        && !(reviewOnOpen && initial && expressCachedSnapshotMatches(cached, initial, initialDefaults))) {
+        setReviewing(false); setConfirmed(false);
         setTitle(cached.title); setType(cached.type); setTracks(cached.tracks.map((track: Row) => ({ id: track.id, title: track.title, price: track.price, expectedOfferVersion: track.expectedOfferVersion }))); setCount(typeof cached.count === "string" ? cached.count : String(cached.tracks.length)); setAlbumPrice(cached.albumPrice);
         if (typeof cached.releaseDate === "string") setReleaseDate(cached.releaseDate);
         if (typeof cached.hasCollaborations === "boolean") setHasCollaborations(cached.hasCollaborations);
@@ -84,6 +88,7 @@ export function MusicExpress({ initial, defaults: initialDefaults, mode, ownerId
       }
       const attempt = recoverExpressAttempt(JSON.parse(localStorage.getItem(attemptKey) ?? "null"), project?.id ?? null);
       if (attempt) {
+        setReviewing(false); setConfirmed(false);
         pending.current = attempt; setUncertain(true); setTitle(attempt.title); setType(attempt.type);
         setTracks(attempt.tracks.map(t => ({ ...t, price: euros(t.priceCents) }))); setCount(String(attempt.tracks.length)); setAlbumPrice(euros(attempt.albumPriceCents));
         if (attempt.releaseDate !== undefined) setReleaseDate(attempt.releaseDate ?? "");
@@ -96,7 +101,7 @@ export function MusicExpress({ initial, defaults: initialDefaults, mode, ownerId
     setCacheReady(true);
     }, 0);
     return () => clearTimeout(timer);
-  }, [key, revision, attemptKey, project?.id]);
+  }, [key, revision, attemptKey, project?.id, reviewOnOpen, initial, initialDefaults]);
   useEffect(() => {
     if (!cacheReady) return;
     try { localStorage.setItem(key, JSON.stringify({ title, type, releaseDate, hasCollaborations, tracks: tracks.map(({ id, title, price, expectedOfferVersion }) => ({ id, title, price, expectedOfferVersion })), count, albumPrice, distinctSingleTitle, updatedAt: revision })); } catch { /* Server saving remains available. */ }
@@ -156,7 +161,7 @@ export function MusicExpress({ initial, defaults: initialDefaults, mode, ownerId
     setPublishMode(mode); setReviewing(true); setConfirmed(false); document.getElementById("verification")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   async function confirmPublication() {
-    if (inFlight.current || !project || !confirmed || project.blockers.length) return;
+    if (!cacheReady || inFlight.current || !project || !confirmed || project.blockers.length) return;
     const input = publicationAttempt ?? { projectId: project.id, reviewToken: project.reviewToken, confirmed, publishMode, rightsDeclaration: OWNER_PUBLICATION_POLICY,
       ...(project.tracks.some(track => track.artisticAtPublication && track.artisticStatus !== "VALIDATED") ? { artisticDeclaration: OWNER_EXCERPTS_AT_PUBLICATION_POLICY } : {}), idempotencyKey: crypto.randomUUID() };
     inFlight.current = true; setBusy(true);
@@ -221,7 +226,7 @@ export function MusicExpress({ initial, defaults: initialDefaults, mode, ownerId
     </details>
     <section id="verification" className={styles.card}><h2>Prévisualisation privée</h2>{project ? <><div className={styles.preview}>{project.cover ? <Image unoptimized width={240} height={240} src={project.cover.url} alt={project.cover.alt} /> : <span className={styles.badge}>Pochette à ajouter</span>}<div><h3>{project.title}</h3><p>{project.membersPreviewEnabled ? active ? "Préachat · paiement et téléchargement immédiats" : "Avant-première réservée aux membres · aucune offre activée" : project.type === "ALBUM" ? `Album · ${project.tracks.length} pistes · ${project.albumOffer?.priceCents ? money(project.albumOffer.priceCents) : "prix à compléter"}` : "Single · une seule offre titre"}</p><span className={styles.badge}>{project.publicVisible ? project.membersPreviewEnabled ? "Disponible aux membres" : "Déjà public" : project.membersPreviewEnabled ? "Avant-première en brouillon" : "Brouillon privé"}</span></div></div><div className={styles.summary}>{project.tracks.map(previewTrack)}</div>
       {reviewing ? <><h3>{premiereOnly ? "Derniers contrôles de l’avant-première" : project.membersPreviewEnabled ? "Derniers contrôles de la vente avant sortie" : "Derniers contrôles"}</h3>
-        <ExpressPublicationConfirmation blockers={project.blockers} coverMissing={!project.cover} premiereOnly={premiereOnly} earlySale={!!project.membersPreviewEnabled && !premiereOnly} pendingExcerpts={project.tracks.filter(track => track.artisticAtPublication && track.artisticStatus !== "VALIDATED").length} missingRights={project.tracks.some(track => track.review?.status !== "APPROVED")} confirmed={confirmed} busy={busy} retrying={!!publicationAttempt} onConfirm={setConfirmed} onPublish={() => void confirmPublication()} className={styles.check} /></> : <p className={styles.muted}>{project.membersPreviewEnabled ? "Choisissez l’avant-première seule ou la vente avant sortie. Chaque action enregistre le brouillon et demande sa propre confirmation ; aucun achat différé." : "« Vérifier et publier » enregistre d’abord le brouillon puis présente les blocages. Aucune ouverture sans confirmation."}</p>}</> : <p>Votre fiche apparaîtra ici après le premier enregistrement.</p>}</section>
+        <ExpressPublicationConfirmation blockers={project.blockers} coverMissing={!project.cover} premiereOnly={premiereOnly} earlySale={!!project.membersPreviewEnabled && !premiereOnly} pendingExcerpts={project.tracks.filter(track => track.artisticAtPublication && track.artisticStatus !== "VALIDATED").length} missingRights={project.tracks.some(track => track.review?.status !== "APPROVED")} confirmed={confirmed} busy={busy || !cacheReady} retrying={!!publicationAttempt} onConfirm={setConfirmed} onPublish={() => void confirmPublication()} className={styles.check} /></> : <p className={styles.muted}>{project.membersPreviewEnabled ? "Choisissez l’avant-première seule ou la vente avant sortie. Chaque action enregistre le brouillon et demande sa propre confirmation ; aucun achat différé." : "« Vérifier et publier » enregistre d’abord le brouillon puis présente les blocages. Aucune ouverture sans confirmation."}</p>}</> : <p>Votre fiche apparaîtra ici après le premier enregistrement.</p>}</section>
     </> : null}
     <details className={styles.card}><summary>Options avancées</summary><label className={styles.check}><input type="checkbox" checked={hasCollaborations} disabled={locked} onChange={event => { dirty(); setHasCollaborations(event.target.checked); }} /> Cette sortie comporte une collaboration ou des crédits particuliers.</label>{project && (hasCollaborations || project.hasCollaborations) ? <ExpressCollaborations projectId={project.id} disabled={locked} onSaved={refreshFiles} /> : null}<details><summary>Paramètres pour les prochaines créations</summary><p>Ces valeurs préremplissent uniquement les nouvelles fiches. Aucun tarif existant ni droit ne sera modifié.</p><div className={styles.grid}><label>Titre par défaut (€)<input inputMode="decimal" value={defaultTrack} onChange={e => setDefaultTrack(e.target.value)} /></label><label>Album par défaut (€)<input inputMode="decimal" value={defaultAlbum} onChange={e => setDefaultAlbum(e.target.value)} /></label><label>Nom du profil interne (pas un crédit)<input value={profileName} maxLength={240} onChange={e => setProfileName(e.target.value)} /></label></div><div className={styles.actions}><button className={styles.secondary} disabled={busy} onClick={async () => { setBusy(true); try { const v = await api<{ defaults: ExpressDefaults }>("defaults", { trackPriceCents: parseEuroCents(defaultTrack), albumPriceCents: parseEuroCents(defaultAlbum), artistName: profileName }); setDefaults(v.defaults); setMessage("Paramètres enregistrés pour les prochaines créations seulement."); } catch (e) { setMessage(e instanceof Error ? e.message : "Paramètres refusés."); } finally { setBusy(false); } }}>Enregistrer les paramètres</button><button className={styles.secondary} onClick={() => { setDefaultTrack(euros(EXPRESS_DEFAULTS.trackPriceCents)); setDefaultAlbum(euros(EXPRESS_DEFAULTS.albumPriceCents)); setProfileName(EXPRESS_DEFAULTS.artistName); }}>Rétablir les valeurs par défaut</button></div></details>
     <details className={styles.card}><summary>Outils avancés et historique</summary><p>Crédits détaillés, dates, liens, équivalences, diagnostics et audits restent disponibles sans dupliquer le Catalogue.</p><div className={styles.actions}><Link href={project ? `/admin/catalogue/${project.slug}` : "/admin/catalogue"}>Catalogue historique</Link>{project ? <Link href={`/admin/musique/${project.slug}`}>Masters, offres et audits</Link> : null}</div></details>

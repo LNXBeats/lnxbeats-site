@@ -1,10 +1,10 @@
 /** Admin wording only. These labels never change an offer scope or a sale requirement. */
-export function digitalAdminReleaseLabels(type: string, includesMp3Only = false) {
+export function digitalAdminReleaseLabels(type: string, includesMp3Only = false, mode?: "LIVE" | "TEST") {
   const kind = type === "SINGLE" ? "Single" : type === "ALBUM" ? "Album" : "Projet";
   return {
     kind,
     completeOffer: type === "SINGLE" ? "Offre du single complet" : type === "ALBUM" ? "Offre de l’album complet" : "Offre du projet complet",
-    completeAvailability: `${kind} complet — TEST`,
+    completeAvailability: `${kind} complet${mode === "TEST" ? " — TEST" : ""}`,
     individualOffer: "Offre du titre à l’unité",
     offerExplanation: type === "SINGLE"
       ? "Le single complet et ses titres à l’unité sont des offres distinctes. Choisissez celles à proposer ; leurs prix ne s’additionnent pas."
