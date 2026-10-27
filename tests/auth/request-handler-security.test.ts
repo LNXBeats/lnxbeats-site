@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import test from "node:test";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { NextRequest } from "next/server";
 
 import { handleBoundedAuthRequest } from "@/lib/auth/request-handler";
 
@@ -67,6 +68,74 @@ function post(path: string, body: string, contentType = "application/json", orig
     body,
   });
 }
+
+// Next App Router exposes public getters/methods on the real request through a
+// Proxy. Its identity is still unsuitable for native Request private slots.
+function appRouterRequest(request: NextRequest) {
+  return new Proxy(request, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+for (const encoding of ["json", "form"] as const) {
+  test(`App Router proxied ${encoding} sign-in and SDK-shaped JSON logout preserve the real session lifecycle`, async () => {
+    const fixture = authFixture();
+    const body = encoding === "json" ? JSON.stringify({ email, password }) : new URLSearchParams({ email, password }).toString();
+    const response = await fixture.handle(appRouterRequest(new NextRequest(`${baseURL}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { origin: baseURL, "content-type": encoding === "json" ? "application/json" : "application/x-www-form-urlencoded" },
+      body,
+    })));
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).user.id, fixture.userId);
+    const cookie = response.headers.getSetCookie().map(value => value.split(";", 1)[0]).join("; ");
+    assert.ok(cookie);
+    const session = await fixture.handle(new Request(`${baseURL}/api/auth/get-session`, { headers: { cookie } }));
+    assert.equal((await session.json()).user.id, fixture.userId);
+    const logout = await fixture.handle(appRouterRequest(new NextRequest(`${baseURL}/api/auth/sign-out`, {
+      method: "POST", headers: { origin: baseURL, cookie, "content-type": "application/json" }, body: "{}",
+    })));
+    assert.equal(logout.status, 200);
+    assert.equal((await logout.json()).success, true);
+    assert.ok(logout.headers.getSetCookie().some(value => /max-age=0/i.test(value)));
+    const afterLogout = await fixture.handle(new Request(`${baseURL}/api/auth/get-session`, { headers: { cookie } }));
+    assert.equal(await afterLogout.json(), null);
+    assert.deepEqual(fixture.capturedEmails, []);
+  });
+}
+
+test("App Router forwarding keeps bounded octets, request metadata and in-flight cancellation", async () => {
+  const controller = new AbortController();
+  const raw = "email=proxy-fixture%40example.test&password=synthetic%2Bvalue+with%20spaces%26equals%3D";
+  const url = `${baseURL}/api/auth/sign-in/email?retour=%2Fadmin`;
+  const incoming = new NextRequest(url, {
+    method: "POST", body: raw, signal: controller.signal,
+    headers: { origin: baseURL, "content-type": "application/x-www-form-urlencoded; charset=UTF-8", cookie: "synthetic-session=fixture-only", "x-synthetic-marker": "preserved" },
+    cache: "no-store", credentials: "include", mode: "same-origin", redirect: "manual",
+    referrer: `${baseURL}/connexion`, referrerPolicy: "same-origin", integrity: "", keepalive: true,
+  });
+  const expectedHeaders = [...incoming.headers.entries()];
+  let calls = 0;
+  const response = await handleBoundedAuthRequest(appRouterRequest(incoming), async (forwarded) => {
+    calls++;
+    assert.equal(forwarded.url, incoming.url);
+    assert.equal(forwarded.method, incoming.method);
+    assert.deepEqual([...forwarded.headers.entries()], expectedHeaders);
+    for (const key of ["cache", "credentials", "integrity", "keepalive", "mode", "redirect", "referrer", "referrerPolicy"] as const) {
+      assert.equal(forwarded[key], incoming[key], key);
+    }
+    assert.deepEqual(new Uint8Array(await forwarded.arrayBuffer()), new TextEncoder().encode(raw));
+    assert.equal(forwarded.signal.aborted, false);
+    controller.abort();
+    assert.equal(forwarded.signal.aborted, true);
+    return Response.json({ status: true });
+  }, baseURL);
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+});
 
 for (const encoding of ["json", "form"] as const) {
   test(`bounded auth preserves a real ${encoding} credential sign-in, session cookie and logout`, async () => {

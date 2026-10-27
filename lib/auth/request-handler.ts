@@ -61,9 +61,24 @@ export async function handleBoundedAuthRequest(
         && (body === null || typeof body !== "object" || Array.isArray(body))) {
         return jsonResponse(GENERIC_ACTION_ERROR, 400);
       }
-      // No clone/tee of an unbounded stream, no JSON re-encoding of form data.
-      // URL, headers, cookies, method and signal metadata remain unchanged.
-      forwarded = new Request(request, { body: new Uint8Array(parsed.body).buffer });
+      // App Router can wrap NextRequest in a Proxy. Passing that object to the
+      // native constructor accesses Request private slots on the Proxy and
+      // throws, even though its public getters are valid. Rebuild from the URL
+      // and explicit metadata after the one bounded body read instead.
+      forwarded = new Request(request.url, {
+        method: request.method,
+        headers: new Headers(request.headers),
+        signal: request.signal,
+        body: new Uint8Array(parsed.body).buffer,
+        cache: request.cache,
+        credentials: request.credentials,
+        integrity: request.integrity,
+        keepalive: request.keepalive,
+        mode: request.mode,
+        redirect: request.redirect,
+        referrer: request.referrer,
+        referrerPolicy: request.referrerPolicy,
+      });
     }
   }
   if (pathname === "/api/auth/update-user" && !isAllowedProfilePayload(body)) {
