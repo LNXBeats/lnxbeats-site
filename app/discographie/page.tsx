@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Container } from "@/components/container";
 import { ProjectJukebox, type JukeboxProject } from "@/components/home-jukebox";
 import { listDiscographyProjects } from "@/lib/catalog/queries";
-import { visibleDiscographyProjects } from "@/lib/catalog/jukebox";
+import { DEFAULT_DISCOGRAPHY_SORT, visibleDiscographyProjects } from "@/lib/catalog/jukebox";
 import { jukeboxPublicPreview } from "@/lib/catalog/jukebox-preview";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { digitalEnabled } from "@/lib/digital/domain";
@@ -22,6 +22,9 @@ import { loadDiscographyPreparation } from "@/lib/digital/discography-preparatio
 import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
 import "../v064-discography.css";
 import { getSiteLocale, serverT } from "@/lib/i18n/server";
+import { getAuthSession } from "@/lib/auth/session";
+import { listMemberPremieres } from "@/lib/members/previews";
+import { jukeboxMemberPremierePreview } from "@/lib/members/premiere-presentation";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getSiteLocale();
@@ -38,6 +41,8 @@ export const dynamic = "force-dynamic";
 function discographyView(
   projects: Awaited<ReturnType<typeof listDiscographyProjects>>["projects"],
   digitalViews: ReadonlyMap<string, Awaited<ReturnType<typeof publicDigitalProject>>>,
+  actor: Parameters<typeof listMemberPremieres>[0],
+  premieres: Awaited<ReturnType<typeof listMemberPremieres>>,
 ): JukeboxProject[] {
   return projects.map((project) => ({
     slug: project.slug,
@@ -49,7 +54,9 @@ function discographyView(
     cover: project.cover,
     coverAlt: project.coverAlt,
     artworkTone: project.artworkTone,
-    audioPreview: jukeboxPublicPreview(project, digitalViews.get(project.slug) ?? null),
+    audioPreview: jukeboxPublicPreview(project, digitalViews.get(project.slug) ?? null)
+      ?? jukeboxMemberPremierePreview(actor, project.slug, premieres),
+    membersPreviewOnly: digitalViews.get(project.slug)?.membersPreviewOnly ?? false,
     featured: project.featured,
     catalogPosition: project.catalogPosition,
     jukeboxPosition: project.jukeboxPosition,
@@ -59,13 +66,16 @@ function discographyView(
 export default async function DiscographyPage() {
   const locale = await getSiteLocale();
   const digitalMode = digitalRuntimeMode() ?? "TEST";
-  const { projects } = await listDiscographyProjects();
+  const { projects: publicProjects } = await listDiscographyProjects();
+  const projects = visibleDiscographyProjects(publicProjects, "all", DEFAULT_DISCOGRAPHY_SORT);
   const preparation = discographyPreparationEnabled() ? await loadDiscographyPreparation() : [];
   const soon = new Set(preparation.filter(p => p.metadataPublicAllowed && p.activeOffers === 0).map(p => p.slug));
   const candidates = digitalEnabled() ? projects.filter(p => p.status === "published" || soon.has(p.slug)) : [];
   const digitalViews = await publicDigitalProjects(candidates.map(project => project.slug));
   const digitalProjects = candidates.map(project => ({ project, view: digitalViews.get(project.slug) ?? null }));
-  const sceneProjects = visibleDiscographyProjects(discographyView(projects, digitalViews), "all", "editorial");
+  const session = digitalEnabled() ? await getAuthSession() : null;
+  const premieres = session ? await listMemberPremieres(session.user) : [];
+  const sceneProjects = discographyView(projects, digitalViews, session?.user, premieres);
 
   return (
     <section className="v064-discography-stage" aria-label={serverT(locale, "Discographie")}>

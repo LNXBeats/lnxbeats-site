@@ -86,7 +86,9 @@ test("discography renders one exhaustive scene with a compact crawlable director
   assert.match(discography, /sceneProjects\.map\(\(project\)/);
   assert.match(discography, /href=\{`\/album\/\$\{project\.slug\}`\}/);
   assert.doesNotMatch(discography, /developmentJukebox\.length \?/);
-  assert.match(discography, /const sceneProjects = visibleDiscographyProjects\(discographyView\(projects, digitalViews\), "all", "editorial"\)/);
+  assert.match(discography, /const \{ projects: publicProjects \} = await listDiscographyProjects\(\)/);
+  assert.match(discography, /const projects = visibleDiscographyProjects\(publicProjects, "all", DEFAULT_DISCOGRAPHY_SORT\)/);
+  assert.match(discography, /const sceneProjects = discographyView\(projects, digitalViews, session\?\.user, premieres\)/);
   assert.match(discography, /jukeboxPosition: project\.jukeboxPosition/);
   assert.doesNotMatch(discography, /eligibleSlugs|publishedJukeboxProjects|developmentJukeboxProjects/);
   assert.match(discography, /projects=\{sceneProjects\}/);
@@ -96,6 +98,36 @@ test("discography renders one exhaustive scene with a compact crawlable director
   assert.doesNotMatch(discography, /project\.status === "published" && project\.audioPreview/);
   assert.doesNotMatch(discography, /page-hero|v064-discography-hero/);
   assert.match(component, /<h1 id=\{regionId\}>\{t\(heading\)\}<\/h1>/);
+});
+
+test("server scene, purchase cards and client start with the same newest-first collection", async () => {
+  const [discography, component] = await Promise.all([
+    readFile(new URL("../../app/discographie/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(discography, /const projects = visibleDiscographyProjects\(publicProjects, "all", DEFAULT_DISCOGRAPHY_SORT\)/);
+  assert.match(discography, /const candidates = digitalEnabled\(\) \? projects\.filter\(/);
+  assert.match(discography, /const digitalProjects = candidates\.map\(/);
+  assert.match(discography, /const sceneProjects = discographyView\(projects, digitalViews, session\?\.user, premieres\)/);
+  assert.match(component, /useState<DiscographySort>\(DEFAULT_DISCOGRAPHY_SORT\)/);
+  assert.match(component, /value: "newest", label: "Plus récent"/);
+  assert.match(component, /value: "editorial", label: "Ordre éditorial"/);
+  assert.doesNotMatch(discography, /project\.jukeboxPlacement\s*===|project\.jukeboxPosition\s*[<>]/);
+});
+
+test("member listening is a separately gated fallback and unavailable member audio keeps an access link", async () => {
+  const [discography, component] = await Promise.all([
+    readFile(new URL("../../app/discographie/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(discography, /export const dynamic = "force-dynamic"/);
+  assert.match(discography, /const session = digitalEnabled\(\) \? await getAuthSession\(\) : null/);
+  assert.match(discography, /const premieres = session \? await listMemberPremieres\(session.user\) : \[\]/);
+  assert.match(discography, /jukeboxPublicPreview\(project, digitalViews.get\(project.slug\) \?\? null\)\s*\?\? jukeboxMemberPremierePreview\(actor, project.slug, premieres\)/);
+  assert.match(component, /!playerProject.audioPreview && playerProject.membersPreviewOnly/);
+  assert.match(component, /href=\{`\/avant-premieres#\$\{playerProject.slug\}`\}/);
+  assert.match(component, /Extrait réservé aux membres/);
+  assert.match(component, /disabled=\{!playerProject.audioPreview\}/);
 });
 
 test("changing the sort resets the scene to the first project in the selected order", async () => {
@@ -182,7 +214,7 @@ test("the jukebox uses a single shared audio element and explicit user-triggered
   assert.doesNotMatch(component, /audio\.play\(\)\.catch/);
 });
 
-test("navigation is bounded and exposes symmetric accessible 48px controls plus a hint", async () => {
+test("navigation is bounded and exposes symmetric accessible 48px controls without the retired decorative hints", async () => {
   const [component, css] = await Promise.all([
     readFile(new URL("../../components/home-jukebox.tsx", import.meta.url), "utf8"),
     readFile(new URL("../../app/globals.css", import.meta.url), "utf8"),
@@ -197,8 +229,7 @@ test("navigation is bounded and exposes symmetric accessible 48px controls plus 
   assert.equal((component.match(/home-jukebox__arrow-track/g)?.length ?? 0), 2);
   assert.equal((component.match(/home-jukebox__arrow-line/g)?.length ?? 0), 2);
   assert.equal((component.match(/home-jukebox__arrow-symbol/g)?.length ?? 0), 2);
-  assert.match(component, /Faites défiler les projets/);
-  assert.match(component, /Glissez pour parcourir/);
+  assert.doesNotMatch(component, /Faites défiler les projets|Glissez pour parcourir|home-jukebox__navigation-hint/);
   assert.match(css, /\.home-jukebox__arrow-symbol[\s\S]*?width: 48px;[\s\S]*?height: 48px;/);
   assert.match(css, /--jukebox-arrow-vertical: -50%;/);
   assert.match(css, /\.home-jukebox__arrow--previous:hover:not\(:disabled\),[\s\S]*?transform: translateY\(var\(--jukebox-arrow-vertical\)\);/);

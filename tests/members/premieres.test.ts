@@ -210,6 +210,16 @@ test("member premiere: approvals alone without an explicit exact publication rec
   assert.equal(await memberPremiereAudioAsset(member, f.masters[0].previewAssetId, f.tx, now), null);
   assert.equal(f.writes(), 0);
 });
+test("member premiere: album-scoped lookup retains publication gates, is read-only and filters by exact slug", async () => {
+  const f = fixture(); f.approve();
+  assert.deepEqual(await listMemberPremieres(member, f.tx, now, { slug: f.project.slug }), []);
+  f.publish();
+  const result = await listMemberPremieres(member, f.tx, now, { slug: f.project.slug });
+  assert.equal(result.length, 1); assert.equal(result[0].slug, f.project.slug);
+  const query = f.queries[0] as { where: Record<string, unknown> };
+  assert.deepEqual(query.where, { membersPreviewEnabled: true, status: "PUBLISHED", publicVisible: true, releaseDate: { gt: now }, slug: f.project.slug });
+  assert.equal(f.writes(), 0);
+});
 test("member premiere: safe projection contains only bounded member audio and cover routes, never full assets, prices or evidence", async () => {
   const f = fixture(2); f.approve(); f.publish();
   const view = await listMemberPremieres(member, f.tx, now); assert.equal(view.length, 1); assert.equal(view[0].title, f.project.title);

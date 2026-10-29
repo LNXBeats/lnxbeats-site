@@ -73,9 +73,10 @@ export async function publishedMemberPremiereBinding(db: DB, projectId: string, 
   const project = await db.project.findUnique({ where: { id: projectId }, include });
   return await publishedPremiere(db, project, now) ? memberPremiereBinding(project!) : null;
 }
-export async function listMemberPremieres(actor: Member, db: DB = prisma, now = new Date()) {
+export async function listMemberPremieres(actor: Member, db: DB = prisma, now = new Date(), options: { slug?: string } = {}) {
   if (!premiereMemberAllowed(actor) || !digitalEnabled()) return [];
-  const projects = await db.project.findMany({ where: { membersPreviewEnabled: true, status: "PUBLISHED", publicVisible: true, releaseDate: { gt: now } }, include,
+  const projects = await db.project.findMany({ where: { membersPreviewEnabled: true, status: "PUBLISHED", publicVisible: true, releaseDate: { gt: now },
+    ...(options.slug !== undefined ? { slug: options.slug } : {}) }, include,
     orderBy: [{ releaseDate: "asc" }, { id: "asc" }], take: 50 });
   const result = [];
   for (const project of projects) if (await publishedPremiere(db, project, now)) result.push({ id: project.id, slug: project.slug, title: project.title, type: project.type, binding: memberPremiereBinding(project),

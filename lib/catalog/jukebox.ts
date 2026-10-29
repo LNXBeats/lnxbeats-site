@@ -3,6 +3,9 @@ import type { PublicProject } from "@/lib/catalog/types";
 export type DiscographyFilter = "all" | "albums" | "singles" | "development";
 export type DiscographySort = "editorial" | "newest" | "oldest";
 
+/** Shared by the server catalogue and the client selector; never rewrites dates or placements. */
+export const DEFAULT_DISCOGRAPHY_SORT: DiscographySort = "newest";
+
 type DiscographyProjectRecord = Pick<
   PublicProject,
   "catalogPosition" | "releaseDate" | "slug" | "status" | "type"

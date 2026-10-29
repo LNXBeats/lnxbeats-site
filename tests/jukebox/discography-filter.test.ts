@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DEFAULT_DISCOGRAPHY_SORT,
   discographyFilterCounts,
   filterDiscographyProjects,
   sortDiscographyProjects,
@@ -89,6 +90,54 @@ test("date sorting keeps undated projects last and uses editorial order as its s
     "project-development",
     "single-development",
   ]);
+});
+
+test("the default puts a new single or album first without requiring a manual jukebox position", () => {
+  assert.equal(DEFAULT_DISCOGRAPHY_SORT, "newest");
+  for (const type of ["album", "single"] as const) {
+    const input: FixtureProject[] = [
+      { ...projects[1], slug: "older-position-one", jukeboxPosition: 1 },
+      { ...projects[0], slug: "latest", type, releaseDate: "2026-10-29", catalogPosition: 300, jukeboxPosition: null },
+    ];
+    const before = JSON.stringify(input);
+    assert.deepEqual(visibleDiscographyProjects(input, "all", DEFAULT_DISCOGRAPHY_SORT).map(p => p.slug), ["latest", "older-position-one"]);
+    assert.deepEqual(visibleDiscographyProjects(input, "all", "editorial").map(p => p.slug), ["older-position-one", "latest"]);
+    assert.equal(JSON.stringify(input), before);
+  }
+});
+
+test("equal and missing dates retain a stable fallback without changing the recorded dates", () => {
+  const input: FixtureProject[] = [
+    { ...projects[1], slug: "undated-first-position", releaseDate: null, jukeboxPosition: 1 },
+    { ...projects[0], slug: "b", catalogPosition: 10, jukeboxPosition: 2 },
+    { ...projects[0], slug: "a", catalogPosition: 10, jukeboxPosition: 2 },
+    { ...projects[0], slug: "same-date-position-one", catalogPosition: 20, jukeboxPosition: 1 },
+    { ...projects[1], slug: "undated-no-position", releaseDate: null, catalogPosition: 5, jukeboxPosition: null },
+  ];
+  const before = JSON.stringify(input);
+  const expected = ["same-date-position-one", "a", "b", "undated-first-position", "undated-no-position"];
+  assert.deepEqual(visibleDiscographyProjects(input, "all", DEFAULT_DISCOGRAPHY_SORT).map(p => p.slug), expected);
+  assert.deepEqual(visibleDiscographyProjects([...input].reverse(), "all", DEFAULT_DISCOGRAPHY_SORT).map(p => p.slug), expected);
+  assert.equal(JSON.stringify(input), before);
+});
+
+test("future release dates sort normally but never publish a draft or bypass the existing filters", () => {
+  const input: FixtureProject[] = [
+    ...projects,
+    { ...projects[0], slug: "future-single", releaseDate: "2030-12-01", catalogPosition: 100, jukeboxPosition: null },
+    { ...projects[1], slug: "future-album", releaseDate: "2030-11-01", catalogPosition: 101, jukeboxPosition: null },
+    { ...projects[0], slug: "private-draft", status: "draft", releaseDate: "2099-01-01" },
+    { ...projects[0], slug: "archived", status: "archive", releaseDate: "2099-01-01" },
+  ];
+  const before = JSON.stringify(input);
+  const all = visibleDiscographyProjects(input, "all", DEFAULT_DISCOGRAPHY_SORT).map(p => p.slug);
+  assert.deepEqual(all.slice(0, 2), ["future-single", "future-album"]);
+  assert(!all.includes("private-draft"));
+  assert(!all.includes("archived"));
+  assert.equal(visibleDiscographyProjects(input, "albums", DEFAULT_DISCOGRAPHY_SORT)[0].slug, "future-album");
+  assert.equal(visibleDiscographyProjects(input, "singles", DEFAULT_DISCOGRAPHY_SORT)[0].slug, "future-single");
+  assert.deepEqual(visibleDiscographyProjects(input, "development", DEFAULT_DISCOGRAPHY_SORT).map(p => p.slug), ["project-development", "single-development"]);
+  assert.equal(JSON.stringify(input), before);
 });
 
 test("filtering and sorting never mutate the PostgreSQL-derived input order", () => {

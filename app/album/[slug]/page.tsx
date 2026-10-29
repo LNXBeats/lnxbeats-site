@@ -35,6 +35,8 @@ import { discographyPreparationEnabled } from "@/lib/digital/discography-prepara
 import { LocalizedEditorial } from "@/components/localized-editorial";
 import { getSiteLocale } from "@/lib/i18n/server";
 import { localeIntl } from "@/lib/i18n/config";
+import { listMemberPremieres } from "@/lib/members/previews";
+import { withMemberPremierePreviews } from "@/lib/members/premiere-presentation";
 
 type AlbumPageProps = {
   params: Promise<{ slug: string }>;
@@ -75,7 +77,9 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
   const preparation = discographyPreparationEnabled() ? (await loadDiscographyPreparation()).find(p => p.slug === project.slug) : null;
   const comingSoon = !!preparation && preparation.metadataPublicAllowed && preparation.activeOffers === 0;
   const session = digitalEnabled() ? await getAuthSession() : null;
-  const digital = digitalEnabled() ? await publicDigitalProject(project.slug, session?.user.status === "ACTIVE" && session.user.emailVerified ? session.user.id : undefined) : null;
+  const publicDigital = digitalEnabled() ? await publicDigitalProject(project.slug, session?.user.status === "ACTIVE" && session.user.emailVerified ? session.user.id : undefined) : null;
+  const premieres = publicDigital?.membersPreviewOnly ? await listMemberPremieres(session?.user, undefined, undefined, { slug: project.slug }) : [];
+  const digital = publicDigital ? withMemberPremierePreviews(session?.user, project.slug, publicDigital, premieres) : null;
   const digitalMode = digitalRuntimeMode() ?? "TEST";
   const status = getProjectStatusLabel(project.status);
   const confidence = getProjectConfidenceLabel(project.dataConfidence.overall);

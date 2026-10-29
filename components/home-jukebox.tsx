@@ -17,6 +17,7 @@ import {
 import { ProjectArtwork } from "@/components/project-artwork";
 import { StudioVinylControl, type StudioVinylControlState } from "@/components/studio-vinyl-control";
 import {
+  DEFAULT_DISCOGRAPHY_SORT,
   discographyFilterCounts,
   visibleDiscographyProjects,
   type DiscographyFilter,
@@ -48,6 +49,7 @@ export type JukeboxProject = {
   coverAlt?: string;
   artworkTone: ArtworkTone;
   audioPreview: { url: string; durationMs: number } | null;
+  membersPreviewOnly?: boolean;
   featured: boolean;
   catalogPosition: number;
   jukeboxPosition: number | null;
@@ -69,9 +71,9 @@ const filterOptions: ReadonlyArray<{ value: DiscographyFilter; label: string; mo
 ];
 
 const sortOptions: ReadonlyArray<{ value: DiscographySort; label: string }> = [
-  { value: "editorial", label: "Ordre éditorial" },
   { value: "newest", label: "Plus récent" },
   { value: "oldest", label: "Plus ancien" },
+  { value: "editorial", label: "Ordre éditorial" },
 ];
 
 function projectMeta(project: JukeboxProject, t: (source: string) => string) {
@@ -103,7 +105,7 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
     initialJukeboxPlayerState,
   );
   const [filter, setFilter] = useState<DiscographyFilter>("all");
-  const [sort, setSort] = useState<DiscographySort>("editorial");
+  const [sort, setSort] = useState<DiscographySort>(DEFAULT_DISCOGRAPHY_SORT);
   const [ended, setEnded] = useState(false);
   const [progress, setProgress] = useState(0);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -641,7 +643,8 @@ export function ProjectJukebox({ projects, initialIndex, eyebrow, heading, eager
       <div className="discography-jukebox__player-copy">
         <span>{t(playing ? "En lecture" : "Extrait sélectionné")}</span>
         <Link className="mechanical-jukebox__project-link" href={`/album/${playerProject.slug}`} aria-label={`${t("Entrer dans le projet")} ${playerProject.title}`}><strong><OriginalName>{playerProject.title}</OriginalName></strong><UiIcon name="arrow-right" /></Link>
-        <small>{playerProject.audioPreview ? `${t("Extrait")} · ${previewDuration(playerProject.audioPreview.durationMs)}` : t("Aucun extrait disponible")}</small>
+        <small>{playerProject.audioPreview ? `${t("Extrait")} · ${previewDuration(playerProject.audioPreview.durationMs)}` : t(playerProject.membersPreviewOnly ? "Extrait réservé aux membres" : "Aucun extrait disponible")}</small>
+        {!playerProject.audioPreview && playerProject.membersPreviewOnly ? <Link className="text-link" href={`/avant-premieres#${playerProject.slug}`}>{t("Écouter les extraits réservés aux membres")}</Link> : null}
       </div>
       {playingProject && playingProject.slug !== active.slug ? <p className="discography-jukebox__selected-context">{t("Sélection affichée")} <strong><OriginalName>{active.title}</OriginalName></strong></p> : null}
       <button
