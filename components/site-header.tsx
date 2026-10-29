@@ -14,7 +14,7 @@ import { LanguageSelector, T, useSiteLanguage } from "./site-language";
 const HEADER_COMPACT_SCROLL_THRESHOLD = 72;
 
 const routeIcons = {
-  "/": "home", "/discographie": "disc", "/creations": "music",
+  "/": "home", "/avant-premieres": "headphones", "/discographie": "disc", "/creations": "music",
   "/commander": "pen", "/boutique": "bag", "/a-propos": "info", "/contact": "mail",
 } as const;
 
@@ -135,7 +135,7 @@ export function SiteHeader({ supportAvailable = false }: { supportAvailable?: bo
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
   const closeMenu = () => setOpen(false);
   const groups = [
-    { label: "Découvrir", items: navigation.filter(({ href }) => ["/", "/discographie", "/creations"].includes(href)) },
+    { label: "Découvrir", items: navigation.filter(({ href }) => ["/", "/avant-premieres", "/discographie", "/creations"].includes(href)) },
     { label: "Créer et acheter", items: navigation.filter(({ href }) => ["/commander", "/boutique"].includes(href)) },
     { label: "Autour du projet", items: navigation.filter(({ href }) => ["/a-propos", "/contact"].includes(href)) },
   ];

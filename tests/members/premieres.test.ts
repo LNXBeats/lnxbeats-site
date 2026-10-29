@@ -340,7 +340,14 @@ test("member premiere: infrastructure failures do not become grants and page/rou
   const f = fixture(); f.approve(); f.publish(); f.db.project.findMany = async () => { throw Error("SYNTHETIC_REPOSITORY_UNAVAILABLE"); };
   await assert.rejects(listMemberPremieres(member, f.tx, now), /SYNTHETIC_REPOSITORY_UNAVAILABLE/);
   const page = await readFile(new URL("../../app/avant-premieres/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /requireVerifiedUser\("\/avant-premieres"\)/); assert.match(page, /robots: \{ index: false, follow: false \}/);
-  assert.match(page, /preload="none" src=\{track\.previewUrl\}/); assert.doesNotMatch(page, /masterAssetId|storageKey|createSignedUrl|checkout/);
-  assert.match(page, /OriginalName/);
+  const experience = await readFile(new URL("../../components/premiere-experience.tsx", import.meta.url), "utf8");
+  const player = await readFile(new URL("../../components/digital-catalog.tsx", import.meta.url), "utf8");
+  assert.match(page, /getAuthSession\(\)/); assert.match(page, /loadPremierePageData\(session\?\.user, now\)/);
+  assert.match(page, /premiereMemberAllowed\(session\?\.user\)/); assert.match(page, /robots: \{ index: false, follow: false \}/);
+  assert.match(page, /member && premiere \? \{ voteBinding: premiere\.binding \} : \{\}/);
+  assert.match(experience, /member && !!project\.voteBinding/);
+  assert.match(experience, /listeningAllowed \? <div className=\{styles\.voteRoom\}><PremiereVote/);
+  assert.match(player, /preload="none"/); assert.match(player, /src=\{track\.previewUrl \?\? undefined\}/);
+  assert.doesNotMatch(page + experience, /masterAssetId|storageKey|createSignedUrl|checkout/);
+  assert.match(experience, /OriginalName/);
 });

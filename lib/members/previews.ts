@@ -73,17 +73,31 @@ export async function publishedMemberPremiereBinding(db: DB, projectId: string, 
   const project = await db.project.findUnique({ where: { id: projectId }, include });
   return await publishedPremiere(db, project, now) ? memberPremiereBinding(project!) : null;
 }
-export async function listMemberPremieres(actor: Member, db: DB = prisma, now = new Date(), options: { slug?: string } = {}) {
-  if (!premiereMemberAllowed(actor) || !digitalEnabled()) return [];
+async function listPublishedPremiereProjects(db: DB, now: Date, options: { slug?: string } = {}) {
+  if (!digitalEnabled()) return [];
   const projects = await db.project.findMany({ where: { membersPreviewEnabled: true, status: "PUBLISHED", publicVisible: true, releaseDate: { gt: now },
     ...(options.slug !== undefined ? { slug: options.slug } : {}) }, include,
     orderBy: [{ releaseDate: "asc" }, { id: "asc" }], take: 50 });
-  const result = [];
-  for (const project of projects) if (await publishedPremiere(db, project, now)) result.push({ id: project.id, slug: project.slug, title: project.title, type: project.type, binding: memberPremiereBinding(project),
+  const result: Project[] = [];
+  for (const project of projects) if (await publishedPremiere(db, project, now)) result.push(project);
+  return result;
+}
+/** Metadata only. The public page additionally intersects this exact approved
+ * publication with the public catalogue's presentation permissions. No member
+ * identity is fabricated, and no audio URL or documentary binding is projected. */
+export async function listPublishedPremiereAnnouncements(db: DB = prisma, now = new Date()) {
+  return (await listPublishedPremiereProjects(db, now)).map(project => ({
+    id: project.id, slug: project.slug, title: project.title, type: project.type,
+    releaseDate: project.releaseDate!.toISOString().slice(0, 10), trackCount: project.tracks.length,
+    coverUrl: `/media/catalog/${project.assets[0].assetId}`,
+  }));
+}
+export async function listMemberPremieres(actor: Member, db: DB = prisma, now = new Date(), options: { slug?: string } = {}) {
+  if (!premiereMemberAllowed(actor) || !digitalEnabled()) return [];
+  return (await listPublishedPremiereProjects(db, now, options)).map(project => ({ id: project.id, slug: project.slug, title: project.title, type: project.type, binding: memberPremiereBinding(project),
     releaseDate: project.releaseDate!.toISOString().slice(0,10), coverUrl: `/media/members-premieres/covers/${project.assets[0].assetId}`,
     tracks: project.tracks.map(track => ({ id: track.id, title: track.title, position: track.position, durationMs: track.digitalMasters[0].previewDurationMs,
-      previewUrl: `/media/members-premieres/${track.digitalMasters[0].previewAssetId}` })) });
-  return result;
+      previewUrl: `/media/members-premieres/${track.digitalMasters[0].previewAssetId}` })) }));
 }
 /** HEAD, Range and conditional requests all pass the same member/version gates.
  * No original, complete MP3/WAV, bucket URL or signed URL is returned. */
