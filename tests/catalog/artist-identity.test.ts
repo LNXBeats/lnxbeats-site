@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { CATALOG_PRIMARY_ARTIST, catalogArtistAlreadyDocumented, catalogPrimaryArtist, catalogSecondaryCredits } from "@/lib/catalog/artist-identity";
 import { mapDatabaseProject } from "@/lib/catalog/mapper";
 import { buildProjectStructuredData } from "@/lib/seo/structured-data";
@@ -50,7 +51,34 @@ const source = () => ({ slug: "qa-identite", title: "QA identité", subtitle: nu
 test("public mapper inherits the stage identity for each track without changing stored source credits", () => {
   const raw = source(), before = JSON.stringify(raw), p = mapDatabaseProject(raw);
   assert.equal(p.primaryArtist, CATALOG_PRIMARY_ARTIST); assert.equal(p.tracks[0].primaryArtist, CATALOG_PRIMARY_ARTIST);
-  assert.deepEqual(p.credits, [{ role: "composer", name: "MATHON Ludovic Mickaël", detail: "Preuve conservée" }]); assert.equal(JSON.stringify(raw), before);
+  assert.deepEqual(p.credits, [{ role: "composer", name: "MATHON Ludovic Mickaël" }]); assert.equal(JSON.stringify(raw), before);
+});
+test("all public project types exclude internal credit notes from HTML/client data without altering names, roles or stored notes", () => {
+  const note = "Crédit déclaré par le propriétaire dans Admin Express (EXPRESS_OWNER_CREDITS_20261022_V1). Ne constitue pas une preuve indépendante des droits.";
+  for (const type of ["ALBUM", "SINGLE", "PROJECT"]) {
+    const raw = { ...source(), type, credits: [
+      { name: "Ludovic Mickaël Mathon", role: "COMPOSER", note },
+      { name: "Artiste invité", role: "FEATURING", note: "Justificatif privé du collaborateur" },
+      { name: "Autrice invitée", role: "WRITER", note: null },
+    ] };
+    const before = JSON.stringify(raw), hash = digitalRightsReviewHash(raw.credits);
+    const publicProject = mapDatabaseProject(raw);
+    assert.deepEqual(publicProject.credits, [
+      { name: "Ludovic Mickaël Mathon", role: "composer" },
+      { name: "Artiste invité", role: "featuring" },
+      { name: "Autrice invitée", role: "writer" },
+    ]);
+    assert.doesNotMatch(JSON.stringify(publicProject), /EXPRESS_OWNER_CREDITS|preuve indépendante|Justificatif privé|"detail"|"note"/);
+    assert.equal(JSON.stringify(raw), before);
+    assert.equal(digitalRightsReviewHash(raw.credits), hash);
+  }
+});
+test("the shared public album/single page never renders an internal credit detail", async () => {
+  const page = await readFile(new URL("../../app/album/[slug]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /<T text="Crédits"\/>/);
+  assert.match(page, /getCreditRoleLabel\(credit\.role\)/);
+  assert.match(page, /<OriginalName>\{credit\.name\}<\/OriginalName>/);
+  assert.doesNotMatch(page, /Crédits documentés|credit\.(detail|note)/);
 });
 test("an uncredited project gets a byline but no invented documentary credit or approval", () => {
   const p = mapDatabaseProject({ ...source(), credits: [] }); assert.equal(p.primaryArtist, CATALOG_PRIMARY_ARTIST); assert.deepEqual(p.credits, []);

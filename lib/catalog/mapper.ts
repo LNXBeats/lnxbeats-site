@@ -142,10 +142,11 @@ export function mapDatabaseProject(project: DatabaseProject): Project {
     jukeboxPosition: project.jukeboxPosition,
     catalogPosition: project.catalogPosition,
     genres: [],
+    // Credit notes are internal provenance, not public copy (including client/RSC props).
+    // Keep the stored records untouched for Admin, audit and rights bindings.
     credits: (primaryArtist ? catalogSecondaryCredits(project.credits ?? []) : project.credits ?? []).map((credit) => ({
       name: credit.name,
       role: creditRoleMap[credit.role] ?? "other",
-      detail: credit.note ?? undefined,
     })),
     tracks: (project.tracks ?? []).map((track) => ({
       primaryArtist,

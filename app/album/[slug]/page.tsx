@@ -109,8 +109,8 @@ export default async function AlbumPage({ params }: AlbumPageProps) {
                 {project.genres.length > 0 ? <div><dt><T text="Genres"/></dt><dd>{project.genres.join(" · ")}</dd></div> : null}
                 {project.credits.length > 0 ? (
                   <div>
-                    <dt><T text="Crédits documentés"/></dt>
-                    <dd>{project.credits.map((credit, index) => <span key={`${credit.role}-${credit.name}-${index}`}>{index ? " · " : ""}<T text={getCreditRoleLabel(credit.role)}/> : <OriginalName>{credit.name}</OriginalName>{credit.detail ? ` (${credit.detail})` : ""}</span>)}</dd>
+                    <dt><T text="Crédits"/></dt>
+                    <dd>{project.credits.map((credit, index) => <span key={`${credit.role}-${credit.name}-${index}`}>{index ? " · " : ""}<T text={getCreditRoleLabel(credit.role)}/> : <OriginalName>{credit.name}</OriginalName></span>)}</dd>
                   </div>
                 ) : null}
               </dl>
