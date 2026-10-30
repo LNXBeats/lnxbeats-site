@@ -6,6 +6,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { sendRegistrationCodeEmail } from "@/lib/auth/email-delivery";
 import { isPersistentLocalPreview } from "@/lib/auth/environment";
 import { hashPassword } from "@/lib/auth/password";
+import { validateRegistrationIdentity } from "@/lib/auth/input";
 import { REGISTRATION_CODE_TTL_MS } from "@/lib/auth/registration-policy";
 import { createOpaqueToken, hashOpaqueToken, isOpaqueToken } from "@/lib/auth/tokens";
 import { assertDatabaseConfigured, prisma } from "@/lib/prisma";
@@ -249,11 +250,15 @@ export async function registrationContinuationState(cookieHeader: string | null)
 }
 
 export async function completeRegistration(input: {
+  firstName: string;
+  lastName: string;
   password: string;
   cookieHeader: string | null;
   clientAddress: string;
   releaseAlerts?: ReleaseAlertChoices;
 }) {
+  const identity = validateRegistrationIdentity(input);
+  if (!identity.ok) throw new RegistrationServiceError(identity.message, 400, "INVALID_REGISTRATION_NAME");
   assertDatabaseConfigured();
   if (input.releaseAlerts !== undefined && !parseReleaseAlertChoices(input.releaseAlerts)) throw new RegistrationServiceError("Choix d’alertes invalides.", 400, "INVALID_RELEASE_ALERT_CHOICES");
   const parsed = parseProofCookie(input.cookieHeader);
@@ -297,7 +302,7 @@ export async function completeRegistration(input: {
         email: attempt.email,
         emailVerified: true,
         emailVerifiedAt: now,
-        displayName: "Membre LNX",
+        ...identity.value,
         role: "MEMBER",
         status: "ACTIVE",
       },

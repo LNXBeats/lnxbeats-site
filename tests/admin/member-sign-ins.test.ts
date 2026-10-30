@@ -18,7 +18,7 @@ test("member connection dates are private to an active ADMIN", async () => {
 
 test("member projection never exposes session tokens, IPs, user agents or the session collection", async () => {
   const at = new Date("2026-10-22T16:30:00Z");
-  const member = { id: "member", displayName: "Synthetic", email: "synthetic@example.test", role: "MEMBER" as const, status: "ACTIVE" as const, emailVerified: true, createdAt: at, _count: { orders: 0, shopOrders: 0 } };
+  const member = { id: "member", displayName: "Synthetic", firstName: null, lastName: null, email: "synthetic@example.test", role: "MEMBER" as const, status: "ACTIVE" as const, emailVerified: true, createdAt: at, _count: { orders: 0, shopOrders: 0 } };
   const db = { async members() { return [member]; }, async signIns(ids: string[]) { assert.deepEqual(ids, ["member"]); return [{ id: "member", lastSignedInAt: null, sessions: [{ createdAt: at }] }]; } };
   const result = await listAdminMembersWithSignIns({ role: "ADMIN", status: "ACTIVE" }, "", db);
   assert.equal(result[0].lastSignIn.source, "RETAINED_SESSION");

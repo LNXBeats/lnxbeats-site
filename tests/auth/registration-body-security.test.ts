@@ -34,6 +34,8 @@ test("the bounded registration reader preserves the six-digit code including lea
 
 test("the bounded registration reader preserves passwords and exact independent alert choices", async () => {
   const payload = {
+    firstName: "Marie",
+    lastName: "Dupont",
     password: "synthetic registration password",
     passwordConfirmation: "synthetic registration password",
     releaseAlerts: { music: false, shop: true, editorial: false, locale: "fr" },

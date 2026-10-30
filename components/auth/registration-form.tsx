@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   validateRegistrationCode,
   validateRegistrationEmail,
+  validateRegistrationIdentity,
   validateRegistrationPassword,
 } from "@/lib/auth/input";
 
@@ -43,6 +44,7 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
   const [maskedEmail, setMaskedEmail] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [nameError, setNameError] = useState<"firstName" | "lastName" | null>(null);
   const [pending, setPending] = useState(false);
   const firstFieldRef = useRef<HTMLInputElement>(null);
 
@@ -65,6 +67,7 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
 
   function resetFeedback() {
     setError("");
+    setNameError(null);
     setMessage("");
   }
 
@@ -133,6 +136,12 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
     event.preventDefault();
     resetFeedback();
     const form = new FormData(event.currentTarget);
+    const identity = validateRegistrationIdentity({ firstName: form.get("firstName"), lastName: form.get("lastName") });
+    if (!identity.ok) {
+      setNameError(identity.field);
+      (event.currentTarget.elements.namedItem(identity.field) as HTMLInputElement | null)?.focus();
+      return setError(identity.message);
+    }
     const password = String(form.get("password") ?? "");
     const passwordConfirmation = String(form.get("passwordConfirmation") ?? "");
     const validation = validateRegistrationPassword({ password, passwordConfirmation });
@@ -142,7 +151,7 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
       const response = await fetch("/api/auth/registration/complete", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password, passwordConfirmation, releaseAlerts: { ...releaseAlerts, locale } }),
+        body: JSON.stringify({ firstName: identity.value.firstName, lastName: identity.value.lastName, password, passwordConfirmation, releaseAlerts: { ...releaseAlerts, locale } }),
       });
       const payload = await readPayload(response);
       if (!response.ok || !payload.completed) throw new Error(payload.error || "Votre espace n’a pas pu être finalisé.");
@@ -220,8 +229,16 @@ export function RegistrationForm({ returnTo = "/compte" }: { returnTo?: string }
           <p><span translate="no" className="notranslate">{maskedEmail}</span>. <T text="Il reste à protéger votre espace."/></p>
         </div>
         <div className="auth-field">
+          <label htmlFor="registration-first-name"><T text="Prénom"/></label>
+          <input key="registration-first-name" ref={firstFieldRef} id="registration-first-name" name="firstName" type="text" autoComplete="given-name" required maxLength={100} aria-invalid={nameError === "firstName" || undefined} aria-describedby={nameError === "firstName" ? "registration-error" : undefined} />
+        </div>
+        <div className="auth-field">
+          <label htmlFor="registration-last-name"><T text="Nom de famille"/></label>
+          <input id="registration-last-name" name="lastName" type="text" autoComplete="family-name" required maxLength={100} aria-invalid={nameError === "lastName" || undefined} aria-describedby={nameError === "lastName" ? "registration-error" : undefined} />
+        </div>
+        <div className="auth-field">
           <label htmlFor="registration-password"><T text="Mot de passe"/></label>
-          <input key="registration-password" ref={firstFieldRef} id="registration-password" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
+          <input key="registration-password" id="registration-password" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} />
           <p className="auth-field__help" id="registration-password-help"><T text="12 à 128 caractères. Une phrase de passe est acceptée."/></p>
         </div>
         <div className="auth-field">

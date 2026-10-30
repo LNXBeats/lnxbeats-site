@@ -5,6 +5,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 export const DISPLAY_NAME_MAX_LENGTH = 120;
+export const REGISTRATION_NAME_MAX_LENGTH = 100;
 export const REGISTRATION_CODE_LENGTH = 6;
 
 export function normalizeEmail(value: string) {
@@ -46,6 +47,22 @@ export function validateRegistrationPassword(input: { password: string; password
   return { ok: true as const, value: input.password };
 }
 
+/** Names are declared by the member, not verified identities. Keep Unicode,
+ * accents, apostrophes and compound names; never infer them from an email. */
+export function validateRegistrationIdentity(input: { firstName?: unknown; lastName?: unknown }) {
+  const normalize = (value: unknown) => {
+    if (typeof value !== "string" || /[\u0000-\u001f\u007f<>]/u.test(value)) return null;
+    const name = normalizeDisplayName(value.normalize("NFC"));
+    return name && name.length <= REGISTRATION_NAME_MAX_LENGTH && /\p{L}/u.test(name) ? name : null;
+  };
+  const firstName = normalize(input.firstName), lastName = normalize(input.lastName);
+  if (!firstName) return { ok: false as const, field: "firstName" as const, message: "Saisissez votre prénom (100 caractères maximum)." };
+  if (!lastName) return { ok: false as const, field: "lastName" as const, message: "Saisissez votre nom de famille (100 caractères maximum)." };
+  // The full separate fields remain intact even when the display label is long.
+  const displayName = Array.from(`${firstName} ${lastName}`).slice(0, DISPLAY_NAME_MAX_LENGTH).join("");
+  return { ok: true as const, value: { firstName, lastName, displayName } };
+}
+
 export function validateProfileName(value: string) {
   const displayName = normalizeDisplayName(value);
   if (!displayName || displayName.length > DISPLAY_NAME_MAX_LENGTH) return null;
@@ -73,7 +90,8 @@ export function isAllowedRegistrationCodePayload(value: unknown) {
 export function isAllowedRegistrationCompletionPayload(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const payload = value as Record<string, unknown>;
-  return Object.keys(payload).every((key) => key === "password" || key === "passwordConfirmation" || key === "releaseAlerts")
+  return Object.keys(payload).every((key) => key === "password" || key === "passwordConfirmation" || key === "releaseAlerts" || key === "firstName" || key === "lastName")
+    && validateRegistrationIdentity(payload).ok
     && (payload.releaseAlerts === undefined || parseReleaseAlertChoices(payload.releaseAlerts) !== null)
     && typeof payload.password === "string"
     && typeof payload.passwordConfirmation === "string"

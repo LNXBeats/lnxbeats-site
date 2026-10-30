@@ -374,6 +374,8 @@ export async function listAdminMembers(query = "") {
   return prisma.user.findMany({
     where: search ? { OR: [
       { displayName: { contains: search, mode: "insensitive" } },
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
       { email: { contains: search, mode: "insensitive" } },
     ] } : undefined,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -381,6 +383,8 @@ export async function listAdminMembers(query = "") {
     select: {
       id: true,
       displayName: true,
+      firstName: true,
+      lastName: true,
       email: true,
       role: true,
       status: true,

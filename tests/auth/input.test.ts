@@ -42,8 +42,8 @@ test("password completion enforces length, equality and a closed payload", () =>
   assert.deepEqual(validateRegistrationPassword({ password, passwordConfirmation: password }), { ok: true, value: password });
   assert.equal(validateRegistrationPassword({ password: "short", passwordConfirmation: "short" }).ok, false);
   assert.equal(validateRegistrationPassword({ password, passwordConfirmation: "a different long passphrase" }).ok, false);
-  assert.equal(isAllowedRegistrationCompletionPayload({ password, passwordConfirmation: password }), true);
-  assert.equal(isAllowedRegistrationCompletionPayload({ password, passwordConfirmation: password, role: "ADMIN" }), false);
+  assert.equal(isAllowedRegistrationCompletionPayload({ firstName: "Marie", lastName: "Dupont", password, passwordConfirmation: password }), true);
+  assert.equal(isAllowedRegistrationCompletionPayload({ firstName: "Marie", lastName: "Dupont", password, passwordConfirmation: password, role: "ADMIN" }), false);
 });
 
 test("profile validation accepts only a bounded display name", () => {

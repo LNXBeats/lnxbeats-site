@@ -145,7 +145,7 @@ async function complete(password: string, proofCookie: string | undefined, ip: s
   const response = await completeRegistrationRoute(request("/api/auth/registration/complete", {
     method: "POST",
     headers: proofCookie ? { cookie: proofCookie } : undefined,
-    body: JSON.stringify({ password, passwordConfirmation: password, ...extra }),
+    body: JSON.stringify({ firstName: "Marie", lastName: "Dupont", password, passwordConfirmation: password, ...extra }),
   }, ip));
   return { response, body: await json(response) };
 }

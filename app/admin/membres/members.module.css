@@ -14,3 +14,36 @@
   margin-top: 0.3rem;
   line-height: 1.5;
 }
+.counterHelp {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+
+.countDetail {
+  display: block;
+  margin-top: .3rem;
+  font-size: .75rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.audioPurchases {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+:global(.admin-v21-member-card) .commerce {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .5rem;
+}
+
+:global(.admin-v21-member-card) .commerce dt {
+  font-size: .75rem;
+  line-height: 1.4;
+}
+
+:global(.admin-v21-member-card) .commerce dd {
+  font-size: .95rem;
+}

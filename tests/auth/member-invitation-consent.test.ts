@@ -34,7 +34,7 @@ test("a visible dialog or focused form defers signup instead of consuming its on
   assert.ok(source.indexOf("setTimeout(offer, MEMBER_INVITATION_RETRY_MS)") < source.indexOf("offered.current = true; setOpen(true)"));
   assert.match(source,/if \(!allowed \|\| isPending \|\| error \|\| session\?\.user \|\| offered\.current\) return/);
 });
-const passwords = {password:"A synthetic phrase only 2026!",passwordConfirmation:"A synthetic phrase only 2026!"};
+const passwords = {firstName:"Marie",lastName:"Dupont",password:"A synthetic phrase only 2026!",passwordConfirmation:"A synthetic phrase only 2026!"};
 test("account creation remains possible without optional release alerts", () => {
   assert.equal(isAllowedRegistrationCompletionPayload(passwords),true);
   assert.equal(isAllowedRegistrationCompletionPayload({...passwords,releaseAlerts:DEFAULT_RELEASE_ALERT_CHOICES}),true);
