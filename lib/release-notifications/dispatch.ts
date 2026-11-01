@@ -12,6 +12,7 @@ import { releasePublicationSource } from "@/lib/release-notifications/publicatio
 import { releaseAlertTemplate } from "@/lib/release-notifications/template";
 import { releaseAlertUnsubscribeToken } from "@/lib/release-notifications/token";
 import { markReleaseAlertSent } from "@/lib/release-notifications/webhook";
+import { releaseAlertDispatchActivation } from "@/lib/release-notifications/activation";
 
 export const RELEASE_ALERT_MAX_AGE_MS = 24 * 60 * 60_000;
 export type ReleaseAlertMessage = { id: string; recipient: string; idempotencyKey: string; unsubscribeUrl: string;
@@ -20,6 +21,11 @@ export type ReleaseAlertSender = (message: ReleaseAlertMessage) => Promise<strin
 function samePublicationAudience(path: string, sourcePath: string) {
   // A pending member-premiere alert cannot turn into a different public release.
   return !path.startsWith("/avant-premieres#") || sourcePath.startsWith("/avant-premieres#");
+}
+
+function prospectivePublication(publication: { baseline: boolean; createdAt: Date }, activationAt: Date, now: Date) {
+  return publication.baseline === false && publication.createdAt > activationAt && publication.createdAt <= now
+    && now.getTime() - publication.createdAt.getTime() <= RELEASE_ALERT_MAX_AGE_MS;
 }
 
 function marketingSender(configuration: NotificationConfiguration): ReleaseAlertSender {
@@ -44,12 +50,14 @@ function marketingSender(configuration: NotificationConfiguration): ReleaseAlert
 }
 
 /** Bounded fan-out. No historical-catalogue scan and no send on the publication HTTP request. */
-async function expandPublications(database: PrismaClient, configuration: NotificationConfiguration, now: Date) {
-  const pending = await database.releasePublication.findMany({ where: { baseline: false, expanded: false }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 5, select: { id: true } });
+async function expandPublications(database: PrismaClient, configuration: NotificationConfiguration, activationAt: Date, now: Date) {
+  // Old markers/deliveries are preserved, never turned into a campaign at activation.
+  const pending = await database.releasePublication.findMany({ where: { baseline: false, expanded: false,
+    createdAt: { gt: activationAt, lte: now } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 5, select: { id: true } });
   for (const item of pending) await database.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`release-publication:${item.id}`})) IS NULL AS locked`;
     const publication = await tx.releasePublication.findUniqueOrThrow({ where: { id: item.id } });
-    if (publication.expanded || publication.baseline) return;
+    if (publication.expanded || publication.baseline || publication.createdAt <= activationAt || publication.createdAt > now) return;
     const source = await releasePublicationSource(tx, publication.kind, publication.resourceId);
     if (now.getTime() - publication.createdAt.getTime() > RELEASE_ALERT_MAX_AGE_MS || !source || !samePublicationAudience(publication.path, source.path)) {
       await tx.releasePublication.update({ where: { id: item.id }, data: { expanded: true } }); return;
@@ -57,7 +65,7 @@ async function expandPublications(database: PrismaClient, configuration: Notific
     const category = publication.kind === "MUSIC" ? "music" : publication.kind === "SHOP" ? "shop" : "editorial";
     const preferences = await tx.releaseAlertPreference.findMany({ where: {
       ...(publication.recipientCursor ? { userId: { gt: publication.recipientCursor } } : {}),
-      [category]: true, [`${category}ConsentedAt`]: { lte: publication.createdAt },
+      [category]: true, [`${category}ConsentedAt`]: { lt: publication.createdAt },
       user: { status: "ACTIVE", emailVerified: true },
     }, include: { user: { select: { email: true } } }, orderBy: { userId: "asc" }, take: 100 });
     if (preferences.length) await tx.releaseAlertDelivery.createMany({ data: preferences.map(preference => ({ publicationId: publication.id,
@@ -71,14 +79,17 @@ export async function dispatchReleaseAlerts(limit = 25, injectedSender?: Release
   environment: Readonly<Record<string, string | undefined>> = process.env) {
   const result = { claimed: 0, delivered: 0, failed: 0, skipped: 0 };
   // A separate operator switch: transactional email flags never subscribe members.
-  if (environment.RELEASE_ALERT_EMAIL_ENABLED !== "true" || !configuration.emailEnabled || !configuration.workerEnabled
-    || !configuration.canonicalUrl || (environment.AUTH_SECRET?.length ?? 0) < 32) return result;
   const now = new Date();
-  await expandPublications(database, configuration, now);
+  const activationAt = releaseAlertDispatchActivation(configuration, environment, now);
+  if (!activationAt) return result;
+  await expandPublications(database, configuration, activationAt, now);
   const candidates = await database.releaseAlertDelivery.findMany({ where: { deploymentEnvironment: configuration.deploymentEnvironment,
+    publication: { baseline: false, createdAt: { gt: activationAt, lte: now } },
     availableAt: { lte: now }, OR: [{ status: { in: ["PENDING", "FAILED_RETRYABLE"] } }, { status: "PROCESSING", leaseUntil: { lte: now } }] },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: Math.max(1, Math.min(limit, 25)), select: { id: true } });
   for (const candidate of candidates) {
+    // A slow earlier provider call must not consume this delivery's lease.
+    const now = new Date();
     const claim = await database.$transaction(async tx => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`release-alert:${candidate.id}`})) IS NULL AS locked`;
       const row = await tx.releaseAlertDelivery.findUniqueOrThrow({ where: { id: candidate.id }, include: { publication: true, user: { include: { releaseAlertPreference: true } } } });
@@ -88,9 +99,9 @@ export async function dispatchReleaseAlerts(limit = 25, injectedSender?: Release
       const source = await releasePublicationSource(tx, row.publication.kind, row.publication.resourceId);
       const recipient = row.user.email.toLowerCase();
       const suppression = await tx.notificationSuppression.findUnique({ where: { channel_recipient: { channel: "EMAIL", recipient } }, select: { active: true } });
-      if (row.user.status !== "ACTIVE" || !row.user.emailVerified || recipient !== row.recipient || !source || !samePublicationAudience(row.publication.path, source.path) || suppression?.active
-        || !releaseAlertEligible(preference, row.publication.kind, row.publication.createdAt)
-        || now.getTime() - row.publication.createdAt.getTime() > RELEASE_ALERT_MAX_AGE_MS) {
+      if (!prospectivePublication(row.publication, activationAt, now)
+        || row.user.status !== "ACTIVE" || !row.user.emailVerified || recipient !== row.recipient || !source || !samePublicationAudience(row.publication.path, source.path) || suppression?.active
+        || !releaseAlertEligible(preference, row.publication.kind, row.publication.createdAt)) {
         await tx.releaseAlertDelivery.update({ where: { id: row.id }, data: { status: "CANCELED", lastErrorCode: "PUBLICATION_OR_CONSENT_UNAVAILABLE", leaseUntil: null, leaseToken: null } }); return null;
       }
       if (row.attempts >= 5 || row.attempts > 0 && !row.firstAttemptAt || row.firstAttemptAt && !automaticNotificationRetryIsSafe(row.firstAttemptAt, now)) {
@@ -105,11 +116,15 @@ export async function dispatchReleaseAlerts(limit = 25, injectedSender?: Release
     try {
       // Recheck after claiming: withdrawal/depublication during queueing prevents delivery.
       const current = await database.user.findUnique({ where: { id: claim.userId }, include: { releaseAlertPreference: true } });
-      const source = await database.$transaction(tx => releasePublicationSource(tx, claim.publication.kind, claim.publication.resourceId));
+      const currentPublication = await database.releasePublication.findUnique({ where: { id: claim.publicationId } });
+      const source = currentPublication
+        ? await database.$transaction(tx => releasePublicationSource(tx, currentPublication.kind, currentPublication.resourceId)) : null;
       const suppression = await database.notificationSuppression.findUnique({ where: { channel_recipient: { channel: "EMAIL", recipient: claim.recipient } }, select: { active: true } });
       const preference = current?.releaseAlertPreference;
-      if (!current?.emailVerified || current.status !== "ACTIVE" || current.email.toLowerCase() !== claim.recipient || !source || !samePublicationAudience(claim.publication.path, source.path) || suppression?.active
-        || !releaseAlertEligible(preference, claim.publication.kind, claim.publication.createdAt)) {
+      if (!currentPublication || !prospectivePublication(currentPublication, activationAt, new Date())
+        || currentPublication.kind !== claim.publication.kind || currentPublication.resourceId !== claim.publication.resourceId
+        || !current?.emailVerified || current.status !== "ACTIVE" || current.email.toLowerCase() !== claim.recipient || !source || !samePublicationAudience(currentPublication.path, source.path) || suppression?.active
+        || !releaseAlertEligible(preference, currentPublication.kind, currentPublication.createdAt)) {
         await database.releaseAlertDelivery.updateMany({ where: { id: claim.id, leaseToken: claim.leaseToken }, data: { status: "CANCELED", lastErrorCode: "CONSENT_WITHDRAWN", leaseToken: null, leaseUntil: null } }); result.skipped++; continue;
       }
       const token = releaseAlertUnsubscribeToken(claim.userId, environment.AUTH_SECRET);

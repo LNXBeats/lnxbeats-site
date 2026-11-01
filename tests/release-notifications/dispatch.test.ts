@@ -4,19 +4,19 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { dispatchReleaseAlerts, type ReleaseAlertMessage } from "@/lib/release-notifications/dispatch";
 import { parseNotificationConfiguration } from "@/lib/notifications/config";
 
-const environment = { RELEASE_ALERT_EMAIL_ENABLED: "true", AUTH_SECRET: "synthetic-secret-used-only-for-unit-tests-32", NOTIFICATION_DEPLOYMENT_ENV: "development", NOTIFICATION_EMAIL_TRANSPORT: "capture", NOTIFICATION_WORKER_ENABLED: "true", NOTIFICATION_WORKER_SECRET: "synthetic-worker-secret-at-least-32", APP_CANONICAL_URL: "http://127.0.0.1:3165" };
+const environment = { RELEASE_ALERT_EMAIL_ENABLED: "true", RELEASE_ALERT_ACTIVATED_AT: "2000-01-01T00:00:00.000Z", AUTH_SECRET: "synthetic-secret-used-only-for-unit-tests-32", NOTIFICATION_DEPLOYMENT_ENV: "development", NOTIFICATION_EMAIL_TRANSPORT: "capture", NOTIFICATION_WORKER_ENABLED: "true", NOTIFICATION_WORKER_SECRET: "synthetic-worker-secret-at-least-32", APP_CANONICAL_URL: "http://127.0.0.1:3165" };
 const configuration = parseNotificationConfiguration(environment);
-function fixture(options: { active?: boolean; verified?: boolean; music?: boolean; lateConsent?: boolean; suppressed?: boolean; public?: boolean; emailChanged?: boolean; expiredRetry?: boolean; withdrawAfterClaim?: boolean } = {}) {
+function fixture(options: { active?: boolean; verified?: boolean; music?: boolean; lateConsent?: boolean; suppressed?: boolean; public?: boolean; emailChanged?: boolean; expiredRetry?: boolean; withdrawAfterClaim?: boolean; baselineAfterClaim?: boolean } = {}) {
   const pubTime = new Date(Date.now() - 60_000), before = new Date(pubTime.getTime() - 60_000);
   const preference = { music: options.music ?? true, shop: false, editorial: false, musicConsentedAt: options.lateConsent ? new Date() : before, shopConsentedAt: null, editorialConsentedAt: null, locale: "fr" };
   const user = { id: "3dfde946-d72b-465b-b53c-a7878cac9d37", email: options.emailChanged ? "changed@example.test" : "member@example.test", status: options.active === false ? "SUSPENDED" : "ACTIVE", emailVerified: options.verified ?? true, releaseAlertPreference: preference };
-  const publication = { id: "synthetic-publication", kind: "MUSIC", resourceId: "synthetic-project", title: "Titre original", path: "/album/titre-original", createdAt: pubTime };
+  const publication = { id: "synthetic-publication", kind: "MUSIC", resourceId: "synthetic-project", title: "Titre original", path: "/album/titre-original", baseline: false, createdAt: pubTime };
   const row = { id: "synthetic-delivery", userId: user.id, recipient: "member@example.test", publicationId: publication.id, deploymentEnvironment: "development", status: "PENDING", attempts: options.expiredRetry ? 1 : 0, firstAttemptAt: options.expiredRetry ? new Date(Date.now() - 13 * 3600_000) : null, leaseUntil: null, leaseToken: null, availableAt: before, publication, user } as Record<string, unknown> & { status: string };
   let suppressed = options.suppressed ?? false, publicVisible = options.public ?? true;
   const calls: ReleaseAlertMessage[] = [];
   const tx = {
     $queryRaw: async () => [],
-    releasePublication: { findMany: async () => [] },
+    releasePublication: { findMany: async () => [], findUnique: async () => ({ ...publication, baseline: options.baselineAfterClaim ?? publication.baseline }) },
     releaseAlertDelivery: { findMany: async () => ["PENDING", "FAILED_RETRYABLE", "PROCESSING"].includes(row.status) ? [{ id: row.id }] : [], findUniqueOrThrow: async () => row,
       update: async ({ data }: { data: { status?: string } }) => { Object.assign(row, data); if (options.withdrawAfterClaim && data.status === "PROCESSING") preference.music = false; return row; }, updateMany: async ({ where, data }: { where: { leaseToken: string }; data: object }) => {
         if (row.leaseToken !== where.leaseToken) return { count: 0 }; Object.assign(row, data); return { count: 1 };
@@ -28,11 +28,71 @@ function fixture(options: { active?: boolean; verified?: boolean; music?: boolea
   };
   const database = { ...tx, $transaction: async (operation: (db: typeof tx) => unknown) => operation(tx) } as unknown as PrismaClient;
   const send = async (message: ReleaseAlertMessage) => { calls.push(message); return "synthetic-provider-id"; };
-  return { row, user, preference, database, send, calls, suppress: () => { suppressed = true; }, hide: () => { publicVisible = false; } };
+  return { row, publication, user, preference, database, send, calls, suppress: () => { suppressed = true; }, hide: () => { publicVisible = false; } };
 }
 test("dedicated marketing switch defaults closed and does not touch database or provider", async () => {
   const result = await dispatchReleaseAlerts(25, async () => { throw new Error("MUST_NOT_SEND"); }, configuration, {} as PrismaClient, {});
   assert.deepEqual(result, { claimed: 0, delivered: 0, failed: 0, skipped: 0 });
+});
+test("activation watermark is mandatory, strict UTC and cannot be in the future", async () => {
+  for (const value of [undefined, "", "not-a-date", "2026-02-30T00:00:00.000Z", "2000-01-01", "2000-01-01T00:00:00+00:00", "2999-01-01T00:00:00.000Z"]) {
+    const result = await dispatchReleaseAlerts(25, async () => { throw new Error("MUST_NOT_SEND"); }, configuration,
+      {} as PrismaClient, { ...environment, RELEASE_ALERT_ACTIVATED_AT: value });
+    assert.equal(result.claimed, 0); assert.equal(result.delivered, 0);
+  }
+});
+test("baseline, pre-activation, boundary, future and expired publications cannot send even from an existing delivery", async () => {
+  for (const change of [
+    { baseline: true }, { createdAt: new Date("1999-12-31T23:59:59.999Z") },
+    { createdAt: new Date(environment.RELEASE_ALERT_ACTIVATED_AT) },
+    { createdAt: new Date(Date.now() + 3600_000) }, { createdAt: new Date(Date.now() - 25 * 3600_000) },
+  ]) {
+    const f = fixture(); Object.assign(f.publication, change);
+    await dispatchReleaseAlerts(25, f.send, configuration, f.database, environment);
+    assert.equal(f.calls.length, 0); assert.equal(f.row.status, "CANCELED");
+  }
+});
+test("publication baseline is fetched again after the lease, immediately before sending", async () => {
+  const f = fixture({ baselineAfterClaim: true });
+  await dispatchReleaseAlerts(25, f.send, configuration, f.database, environment);
+  assert.equal(f.row.status, "CANCELED"); assert.equal(f.calls.length, 0);
+});
+test("fan-out filters prospectively, preserves old baseline markers, and requires consent before publication", async () => {
+  const activationAt = new Date(Date.now() - 120_000), publicationAt = new Date(Date.now() - 60_000);
+  const activeEnvironment = { ...environment, RELEASE_ALERT_ACTIVATED_AT: activationAt.toISOString() };
+  const publications = [
+    { id: "old", baseline: false, createdAt: new Date(activationAt.getTime() - 1) },
+    { id: "baseline", baseline: true, createdAt: publicationAt },
+    { id: "new", baseline: false, createdAt: publicationAt },
+  ].map(row => ({ ...row, expanded: false, kind: "SHOP", resourceId: row.id, path: "/boutique/new-product", recipientCursor: null }));
+  const updated: string[] = [], deliveries: unknown[] = [];
+  const tx = {
+    $queryRaw: async () => [],
+    releasePublication: {
+      findMany: async ({ where }: { where: { baseline: boolean; createdAt: { gt: Date; lte: Date } } }) => {
+        assert.equal(where.baseline, false); assert.deepEqual(where.createdAt.gt, activationAt);
+        return publications; // Deliberately include ineligible rows to exercise the locked recheck.
+      },
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => publications.find(row => row.id === where.id),
+      update: async ({ where }: { where: { id: string } }) => { updated.push(where.id); },
+    },
+    product: { findUnique: async () => ({ title: "New", slug: "new-product", status: "PUBLISHED" }) },
+    releaseAlertPreference: { findMany: async ({ where }: { where: Record<string, unknown> }) => {
+      assert.equal(where.shop, true); assert.deepEqual(where.shopConsentedAt, { lt: publicationAt });
+      assert.deepEqual(where.user, { status: "ACTIVE", emailVerified: true });
+      return [{ userId: "member-id", user: { email: "member@example.test" } }];
+    } },
+    releaseAlertDelivery: {
+      createMany: async ({ data, skipDuplicates }: { data: unknown[]; skipDuplicates: boolean }) => { assert.equal(skipDuplicates, true); deliveries.push(...data); },
+      findMany: async ({ where }: { where: { publication: { baseline: boolean; createdAt: { gt: Date } } } }) => {
+        assert.equal(where.publication.baseline, false); assert.deepEqual(where.publication.createdAt.gt, activationAt); return [];
+      },
+    },
+  };
+  const database = { ...tx, $transaction: async (operation: (db: typeof tx) => unknown) => operation(tx) } as unknown as PrismaClient;
+  await dispatchReleaseAlerts(25, async () => { throw new Error("NO_SEND_DURING_FANOUT_TEST"); }, configuration, database, activeEnvironment);
+  assert.deepEqual(updated, ["new"]); assert.equal(deliveries.length, 1);
+  assert.equal((deliveries[0] as { publicationId: string }).publicationId, "new");
 });
 test("one eligible verified subscriber receives exactly one outbox delivery and a scoped unsubscribe link", async () => {
   const f = fixture();

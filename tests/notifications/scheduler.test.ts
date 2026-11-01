@@ -65,6 +65,27 @@ test("un tick armé exécute exactement un lot borné et accepte les échecs ind
   assert.deepEqual(current.error, []);
 });
 
+test("scheduler adds one release-only Web call after the existing local transactional batch", async () => {
+  const calls: string[] = [];
+  const current = harness(async () => { calls.push("transactions"); return { claimed: 1, delivered: 1, failed: 0, skipped: 0 }; });
+  const result = await runNotificationSchedulerTick(stagingEnvironment, { ...current.dependencies,
+    dispatchReleases: async env => { assert.equal(env, stagingEnvironment); calls.push("releases-web"); return { claimed: 2, delivered: 2, failed: 0, skipped: 0 }; },
+  });
+  assert.deepEqual(calls, ["transactions", "releases-web"]); assert.equal(result.delivered, 3);
+  const source = await readFile("lib/notifications/scheduler.ts", "utf8");
+  assert.match(source, /dispatchPendingOrderNotifications\(limit, \{ releaseAlerts: false \}\)/);
+});
+
+test("remote failure does not repeat transactional dispatch or erase already delivered counters", async () => {
+  let calls = 0;
+  const current = harness(async () => { calls++; return { claimed: 1, delivered: 1, failed: 0, skipped: 0 }; });
+  const result = await runNotificationSchedulerTick(stagingEnvironment, { ...current.dependencies,
+    dispatchReleases: async () => { throw new Error("private release failure"); },
+  });
+  assert.equal(calls, 1); assert.equal(result.exitCode, 1); assert.equal(result.delivered, 1);
+  assert.equal(current.error[0].stage, "releases"); assert.doesNotMatch(JSON.stringify(current.error), /private release failure/);
+});
+
 test("worker désactivé termine en no-op sans réclamer ni contacter un provider", async () => {
   let calls = 0;
   const current = harness(async () => {

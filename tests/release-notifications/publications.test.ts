@@ -4,6 +4,23 @@ import type { Prisma } from "@/generated/prisma/client";
 import { enqueueReleasePublication, releasePublicationSource } from "@/lib/release-notifications/publications";
 import { DIGITAL_MP3_ENCODER_VERSION } from "@/lib/digital/formats";
 
+test("publishing while disabled or before activation creates a permanent silent baseline, never a later backlog", async () => {
+  const now = new Date("2026-11-01T12:00:00.000Z");
+  const armed = { RELEASE_ALERT_EMAIL_ENABLED: "true", RELEASE_ALERT_ACTIVATED_AT: "2026-11-01T11:59:59.999Z" };
+  for (const environment of [{}, { ...armed, RELEASE_ALERT_EMAIL_ENABLED: "false" },
+    { ...armed, RELEASE_ALERT_ACTIVATED_AT: "invalid" }, { ...armed, RELEASE_ALERT_ACTIVATED_AT: now.toISOString() }, armed]) {
+    let saved: { baseline: boolean; expanded: boolean } | undefined;
+    const tx = { product: { findUnique: async () => ({ title: "Nouveau produit", slug: "nouveau-produit", status: "PUBLISHED" }) },
+      releasePublication: { createMany: async ({ data, skipDuplicates }: { data: Array<{ baseline: boolean; expanded: boolean }>; skipDuplicates: boolean }) => {
+        assert.equal(skipDuplicates, true); saved ??= data[0];
+      } } } as unknown as Prisma.TransactionClient;
+    await enqueueReleasePublication(tx, { kind: "SHOP", resourceId: "future-product" }, environment, now);
+    assert.equal(saved?.baseline, environment !== armed); assert.equal(saved?.expanded, environment !== armed);
+    await enqueueReleasePublication(tx, { kind: "SHOP", resourceId: "future-product" }, armed, now);
+    assert.equal(saved?.baseline, environment !== armed); assert.equal(saved?.expanded, environment !== armed);
+  }
+});
+
 test("only a genuinely published, visible source queues once; drafts/private and external stores never queue", async () => {
   let publicVisible = false, status = "PUBLISHED", type = "ALBUM";
   const publications = new Map<string, unknown>();

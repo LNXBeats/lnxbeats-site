@@ -24,7 +24,7 @@ export function releaseAlertEligible(preference: Preference | null | undefined, 
   const category = kind === "MUSIC" ? "music" : kind === "SHOP" ? "shop" : kind === "EDITORIAL" ? "editorial" : null;
   if (!category || !preference[category]) return false;
   const consentedAt = preference[`${category}ConsentedAt`];
-  return Boolean(consentedAt && consentedAt <= publicationAt);
+  return Boolean(consentedAt && consentedAt < publicationAt);
 }
 
 export function releaseAlertPreferenceData(previous: Preference | null, choices: ReleaseAlertChoices, now: Date) {

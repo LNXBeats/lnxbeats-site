@@ -4,6 +4,7 @@ import { releaseAlertPublicPath, type ReleaseAlertKind } from "@/lib/release-not
 import { publishedMemberPremiereSource } from "@/lib/members/previews";
 import { discographyPreparationEnabled } from "@/lib/digital/discography-preparation-policy";
 import { digitalCommercialAudioReady } from "@/lib/digital/formats";
+import { releaseAlertActivationAt } from "@/lib/release-notifications/activation";
 
 /** Exact metadataPublicAllowed condition for an already PUBLISHED music source,
  * as classified by the existing discography policy. Only this project is read,
@@ -43,10 +44,14 @@ export async function releasePublicationSource(tx: Prisma.TransactionClient, kin
   return null;
 }
 
-export async function enqueueReleasePublication(tx: Prisma.TransactionClient, input: { kind: ReleaseAlertKind; resourceId: string }) {
+export async function enqueueReleasePublication(tx: Prisma.TransactionClient, input: { kind: ReleaseAlertKind; resourceId: string },
+  environment: Readonly<Record<string, string | undefined>> = process.env, now = new Date()) {
   const source = await releasePublicationSource(tx, input.kind, input.resourceId);
   if (!source) return;
   // Permanent unique marker: retries, double clicks and re-publications cannot re-send.
   // Existing public resources are marked baseline by the additive migration, without mail.
-  await tx.releasePublication.createMany({ data: [{ ...input, ...source }], skipDuplicates: true });
+  // Publications made while disarmed stay baseline forever, even after reactivation.
+  const activationAt = releaseAlertActivationAt(environment);
+  const baseline = environment.RELEASE_ALERT_EMAIL_ENABLED !== "true" || !activationAt || now <= activationAt;
+  await tx.releasePublication.createMany({ data: [{ ...input, ...source, baseline, expanded: baseline }], skipDuplicates: true });
 }

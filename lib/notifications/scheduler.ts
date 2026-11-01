@@ -2,6 +2,7 @@ import "server-only";
 
 import { NOTIFICATION_SCHEDULER_MODE, parseNotificationConfiguration } from "@/lib/notifications/config";
 import { dispatchPendingNotifications as dispatchPendingOrderNotifications } from "@/lib/notifications/combined-dispatch";
+import { dispatchReleaseAlertsViaWeb } from "@/lib/release-notifications/worker";
 
 export const NOTIFICATION_SCHEDULER_BATCH_SIZE = 25;
 export type NotificationSchedulerResult = Readonly<{
@@ -26,13 +27,15 @@ type SchedulerLog = Readonly<Record<string, string | number | boolean>>;
 
 export type NotificationSchedulerDependencies = Readonly<{
   dispatch(limit: number): Promise<DispatchResult>;
+  dispatchReleases?(environment: Record<string, string | undefined>): Promise<DispatchResult>;
   now(): number;
   info(entry: SchedulerLog): void;
   error(entry: SchedulerLog): void;
 }>;
 
 const defaultDependencies: NotificationSchedulerDependencies = {
-  dispatch: dispatchPendingOrderNotifications,
+  dispatch: limit => dispatchPendingOrderNotifications(limit, { releaseAlerts: false }),
+  dispatchReleases: dispatchReleaseAlertsViaWeb,
   now: Date.now,
   info: (entry) => console.info(JSON.stringify(entry)),
   error: (entry) => console.error(JSON.stringify(entry)),
@@ -69,7 +72,8 @@ export async function runNotificationSchedulerTick(
     batchLimit: NOTIFICATION_SCHEDULER_BATCH_SIZE,
   });
 
-  let stage: "configuration" | "dispatch" = "configuration";
+  let stage: "configuration" | "dispatch" | "releases" = "configuration";
+  let completedDispatch: DispatchResult = { claimed: 0, delivered: 0, failed: 0, skipped: 0 };
   try {
     const mode = schedulerMode(environment);
     const configuration = parseNotificationConfiguration(environment);
@@ -107,11 +111,17 @@ export async function runNotificationSchedulerTick(
 
     stage = "dispatch";
     const dispatch = await dependencies.dispatch(NOTIFICATION_SCHEDULER_BATCH_SIZE);
+    completedDispatch = dispatch;
+    stage = "releases";
+    const releases = await (dependencies.dispatchReleases ?? dispatchReleaseAlertsViaWeb)(environment);
     const result = tickResult({
       exitCode: 0,
       outcome: "completed",
       environment: environmentName,
-      ...dispatch,
+      claimed: dispatch.claimed + releases.claimed,
+      delivered: dispatch.delivered + releases.delivered,
+      failed: dispatch.failed + releases.failed,
+      skipped: dispatch.skipped + releases.skipped,
     }, startedAt, dependencies.now);
     dependencies.info({ event: "notification.scheduler.completed", ...result });
     return result;
@@ -120,10 +130,7 @@ export async function runNotificationSchedulerTick(
       exitCode: 1,
       outcome: "failed",
       environment: environmentName,
-      claimed: 0,
-      delivered: 0,
-      failed: 0,
-      skipped: 0,
+      ...completedDispatch,
     }, startedAt, dependencies.now);
     dependencies.error({
       event: "notification.scheduler.failed",
@@ -131,6 +138,7 @@ export async function runNotificationSchedulerTick(
       stage,
       exitCode: result.exitCode,
       durationMs: result.durationMs,
+      ...completedDispatch,
     });
     return result;
   }

@@ -33,6 +33,7 @@ test("an opt-in never authorizes past publications, other categories, invalid ki
   assert.equal(releaseAlertEligible(preference, "INVALID", published), false);
   assert.equal(releaseAlertEligible(null, "MUSIC", published), false);
   assert.equal(releaseAlertEligible({ ...preference, musicConsentedAt: null }, "MUSIC", published), false);
+  assert.equal(releaseAlertEligible({ ...preference, musicConsentedAt: published }, "MUSIC", published), false);
 });
 test("unsubscribe is signed, user-specific, scope-separated, forgery-safe and unavailable without secret", () => {
   const token = releaseAlertUnsubscribeToken(id, secret);
