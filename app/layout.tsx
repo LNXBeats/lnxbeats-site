@@ -5,6 +5,8 @@ import { LANGUAGE_COOKIE, siteLocale } from "@/lib/i18n/config";
 import { ADSENSE_CLIENT_ID } from "@/data/adsense";
 import { googleCmpConfigured } from "@/lib/ads/policy";
 import { GoogleCmpNavigationBoundary } from "@/components/google-cmp-navigation-boundary";
+import { SiteAnalytics } from "@/components/site-analytics";
+import { resolveAnalyticsConfiguration } from "@/lib/analytics/policy";
 import { QuickAccessBar } from "@/components/quick-access-bar";
 import { JsonLd } from "@/components/json-ld";
 import { OrderJourneyProvider } from "@/components/order-journey-provider";
@@ -89,6 +91,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <QuickAccessBar />
           <main id="contenu" lang={locale === "zh" ? "zh-Hans" : locale}>{children}</main>
           <SiteFooter />
+          <SiteAnalytics configuration={resolveAnalyticsConfiguration(process.env)} />
           <SiteMotion />
           <ImmersiveExperience />
           <MemberInvitation />

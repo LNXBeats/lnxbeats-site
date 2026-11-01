@@ -6,6 +6,7 @@ import { contentSecurityPolicy } from "@/lib/security/content-security-policy";
 import { CSP_NONCE_HEADER } from "@/lib/security/csp-nonce";
 import { digitalPaypalCheckoutPath, digitalPaypalSdkConfiguration } from "@/lib/digital/paypal-sdk-config";
 import { LANGUAGE_COOKIE, siteLocale } from "@/lib/i18n/config";
+import { ANALYTICS_CANONICAL_ORIGIN, allowsAnalyticsPath, resolveAnalyticsConfiguration } from "@/lib/analytics/policy";
 
 // This one streaming upload already enforces Admin/origin and 80 MiB limits.
 // Canonical policy returns "none" for it; do not clone/truncate its multipart
@@ -31,9 +32,18 @@ export function proxy(request: NextRequest) {
   requestHeaders.delete("content-security-policy-report-only");
   const digitalCheckout = digitalPaypalCheckoutPath(request.nextUrl.pathname);
   const paypal = digitalCheckout ? digitalPaypalSdkConfiguration(process.env) : null;
-  const nonce = ["GET", "HEAD"].includes(request.method) && (digitalCheckout || nonceCspEnabled(request.nextUrl.pathname, process.env))
+  const analytics = resolveAnalyticsConfiguration(process.env) !== null
+    && request.nextUrl.origin === ANALYTICS_CANONICAL_ORIGIN
+    && allowsAnalyticsPath(request.nextUrl.pathname);
+  const existingNonceRoute = digitalCheckout || nonceCspEnabled(request.nextUrl.pathname, process.env);
+  const nonce = ["GET", "HEAD"].includes(request.method) && (existingNonceRoute || analytics)
     ? randomBytes(32).toString("base64") : undefined;
-  const csp = nonce ? contentSecurityPolicy(process.env, nonce, { digitalPaypalMode: paypal?.mode }) : undefined;
+  const csp = nonce ? contentSecurityPolicy(process.env, nonce, {
+    digitalPaypalMode: paypal?.mode,
+    analyticsPathname: analytics ? request.nextUrl.pathname : undefined,
+    // New Analytics-only pages must not inherit AdSense/CMP network permissions.
+    googleCmpAllowed: existingNonceRoute,
+  }) : undefined;
   if (nonce && csp) {
     requestHeaders.set(CSP_NONCE_HEADER, nonce);
     requestHeaders.set("Content-Security-Policy", csp);
