@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import test from "node:test";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -10,6 +10,8 @@ import { handleBoundedAuthRequest } from "@/lib/auth/request-handler";
 const baseURL = "http://127.0.0.1:3199";
 const email = "bounded-auth-fixture@example.test";
 const password = "synthetic-correct-password";
+// Deterministic test digest only; production continues to use Argon2id.
+const syntheticDigest = (value: string) => `synthetic:${createHash("sha256").update(value).digest("hex")}`;
 
 // Each test has its own in-memory adapter. No Prisma, real account, database,
 // provider, network request or email delivery is used by this regression suite.
@@ -19,7 +21,7 @@ function authFixture() {
   const user = { id: userId, name: "Synthetic security fixture", email, emailVerified: true, createdAt: now, updatedAt: now };
   const memory = {
     user: [user],
-    account: [{ id: "ff875dc7-d0bc-4945-92fa-cfddf210c39c", userId, accountId: userId, providerId: "credential", password: "synthetic-digest-only", createdAt: now, updatedAt: now }],
+    account: [{ id: "ff875dc7-d0bc-4945-92fa-cfddf210c39c", userId, accountId: userId, providerId: "credential", password: syntheticDigest(password), createdAt: now, updatedAt: now }],
     session: [],
     verification: [],
   };
@@ -32,10 +34,11 @@ function authFixture() {
       enabled: true,
       disableSignUp: true,
       requireEmailVerification: true,
+      revokeSessionsOnPasswordReset: true,
       // Deliberately synthetic credential implementation, not production crypto.
       password: {
-        hash: async () => "synthetic-digest-only",
-        verify: async ({ hash, password: candidate }) => hash === "synthetic-digest-only" && candidate === password,
+        hash: async (candidate) => syntheticDigest(candidate),
+        verify: async ({ hash, password: candidate }) => hash === syntheticDigest(candidate),
       },
       async sendResetPassword({ url }) { capturedEmails.push(url); },
     },
@@ -44,6 +47,7 @@ function authFixture() {
       async sendVerificationEmail({ url }) { capturedEmails.push(url); },
     },
     session: { expiresIn: 3600, updateAge: 0, cookieCache: { enabled: false } },
+    verification: { storeIdentifier: "hashed" },
     rateLimit: { enabled: false },
     logger: { level: "error" },
   });
@@ -317,4 +321,36 @@ test("genuine password-reset handling captures its email in memory and keeps the
   const captured = new URL(fixture.capturedEmails[0]);
   assert.equal(captured.origin, baseURL);
   assert.match(captured.pathname, /^\/api\/auth\/reset-password\//);
+});
+
+test("a real single-use password reset revokes existing sessions and replaces only the synthetic credential", async () => {
+  const fixture = authFixture();
+  const signIn = (candidate: string) => fixture.handle(post("/sign-in/email", JSON.stringify({ email, password: candidate })));
+  const signedIn = await signIn(password);
+  assert.equal(signedIn.status, 200);
+  const cookie = signedIn.headers.getSetCookie().map(value => value.split(";", 1)[0]).join("; ");
+  assert.ok(cookie);
+  const session = () => fixture.handle(new Request(`${baseURL}/api/auth/get-session`, { headers: { cookie } }));
+  assert.equal((await (await session()).json()).user.id, fixture.userId);
+
+  const requested = await fixture.handle(post("/request-password-reset", JSON.stringify({ email, redirectTo: "/reinitialiser-mot-de-passe" })));
+  assert.equal(requested.status, 200);
+  assert.equal(fixture.capturedEmails.length, 1);
+  const callback = new URL(fixture.capturedEmails[0]);
+  const callbackResponse = await fixture.handle(new Request(callback));
+  assert.equal(callbackResponse.status, 302);
+  const redirected = new URL(callbackResponse.headers.get("location")!, baseURL);
+  assert.equal(redirected.origin, baseURL);
+  assert.equal(redirected.pathname, "/reinitialiser-mot-de-passe");
+  const token = redirected.searchParams.get("token");
+  assert.ok(token);
+  const newPassword = "synthetic-replacement-password";
+  const resetBody = JSON.stringify({ token, newPassword });
+  const reset = await fixture.handle(post("/reset-password", resetBody));
+  assert.equal(reset.status, 200);
+  assert.equal(await (await session()).json(), null);
+  assert.equal((await signIn(password)).status, 401);
+  assert.equal((await signIn(newPassword)).status, 200);
+  assert.equal((await fixture.handle(post("/reset-password", resetBody))).status, 400);
+  assert.equal(fixture.capturedEmails.length, 1);
 });

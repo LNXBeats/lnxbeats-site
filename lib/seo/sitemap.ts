@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { canonicalPublicUrl } from "@/lib/seo/canonical";
 
-export const PUBLIC_SITEMAP_PATHS = ["", "/discographie", "/creations", "/commander", "/boutique", "/a-propos", "/contact"] as const;
+export const PUBLIC_SITEMAP_PATHS = ["", "/avant-premieres", "/discographie", "/creations", "/commander", "/boutique", "/a-propos", "/contact"] as const;
 
 export function buildPublicSitemap(
   projects: readonly Readonly<{ slug: string; status: string; featured: boolean; updatedAt?: Date | string | null }>[],

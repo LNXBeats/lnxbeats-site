@@ -53,6 +53,8 @@ test("sitemap contains only canonical public project and product URLs", () => {
   assert.equal(entries.find((entry) => entry.url === "https://www.lnxbeats.fr/boutique/cd-test")?.lastModified, productUpdatedAt);
   assert.ok(entries.every((entry) => entry.url.startsWith(`${CANONICAL_SITE_ORIGIN}/`)));
   assert.ok(entries.every((entry) => !/(railway|localhost|\/admin|\/api)/i.test(entry.url)));
+  assert.equal(entries.filter((entry) => entry.url === "https://www.lnxbeats.fr/avant-premieres").length, 1);
+  assert.ok(entries.every((entry) => !/(\/compte|\/media\/|\/connexion)/i.test(entry.url)));
 });
 
 test("apex and exact public Railway hosts redirect while preserving path and query", () => {

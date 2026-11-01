@@ -11,8 +11,10 @@ import { digitalRuntimeMode } from "@/lib/digital/runtime-policy";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
-  const locale = await getSiteLocale();
-  return { title: serverT(locale, "Avant-premières"), alternates: { canonical: "/avant-premieres" }, robots: { index: false, follow: false } };
+  const [locale, session] = await Promise.all([getSiteLocale(), getAuthSession()]);
+  // Only the already-authorized public presentation is indexable. Personalized
+  // member pages and the independently protected audio routes remain private.
+  return { title: serverT(locale, "Avant-premières"), alternates: { canonical: "/avant-premieres" }, robots: { index: !session?.user, follow: true } };
 }
 export default async function MemberPremieresPage() {
   const now = new Date(), session = await getAuthSession();

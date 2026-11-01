@@ -306,7 +306,10 @@ test("member premiere: missing rights/artistic approval prevents even the limite
     await assert.rejects(authorizeMemberPremiereExcerpts(f.tx, f.project.id, f.reviewer.id, now)); assert.equal(f.writes(), 0);
   }
 });
-test("member premiere route: actual GET/HEAD/Range bytes stay private and repeat member/version gates before conditional responses", async () => {
+test("member premiere route: actual GET/HEAD/Range bytes stay private and repeat member/version gates before conditional responses", async (t) => {
+  // The real route uses the current date; keep this synthetic premiere before
+  // its release date instead of letting this access-control test expire.
+  t.mock.timers.enable({ apis: ["Date"], now });
   const f = fixture(); f.approve(); f.publish(); const id = f.masters[0].previewAssetId, params = { params: Promise.resolve({ id }) };
   await withRepositories(f, async () => {
     context.__memberPremiereTestSession = { user: member };
@@ -343,7 +346,9 @@ test("member premiere: infrastructure failures do not become grants and page/rou
   const experience = await readFile(new URL("../../components/premiere-experience.tsx", import.meta.url), "utf8");
   const player = await readFile(new URL("../../components/digital-catalog.tsx", import.meta.url), "utf8");
   assert.match(page, /getAuthSession\(\)/); assert.match(page, /loadPremierePageData\(session\?\.user, now\)/);
-  assert.match(page, /premiereMemberAllowed\(session\?\.user\)/); assert.match(page, /robots: \{ index: false, follow: false \}/);
+  assert.match(page, /premiereMemberAllowed\(session\?\.user\)/);
+  assert.match(page, /robots: \{ index: !session\?\.user, follow: true \}/);
+  assert.match(page, /Promise\.all\(\[getSiteLocale\(\), getAuthSession\(\)\]\)/);
   assert.match(page, /member && premiere \? \{ voteBinding: premiere\.binding \} : \{\}/);
   assert.match(experience, /member && !!project\.voteBinding/);
   assert.match(experience, /listeningAllowed \? <div className=\{styles\.voteRoom\}><PremiereVote/);
