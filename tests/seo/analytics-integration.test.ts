@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 import { proxy } from "@/proxy";
 import { contentSecurityPolicy } from "@/lib/security/content-security-policy";
 import { CSP_NONCE_HEADER, isScriptNonce } from "@/lib/security/csp-nonce";
-import { ANALYTICS_CONNECT_ORIGINS } from "@/lib/analytics/policy";
+import { ANALYTICS_CONNECT_ORIGINS, mayLoadAnalytics, resolveAnalyticsConfiguration } from "@/lib/analytics/policy";
 
 const env = {
   NODE_ENV: "production", SITE_URL: "https://www.lnxbeats.fr", RAILWAY_ENVIRONMENT_NAME: "production",
@@ -52,14 +52,57 @@ test("no analytics CSP on private/unknown/API/transactional routes even when ena
   }
 });
 
-test("no analytics permission on POST or noncanonical/QA origin", t => {
+test("no analytics permission on POST or noncanonical/QA host", t => {
   t.mock.property(process, "env", { ...env });
   for (const request of [
     new NextRequest(`${env.SITE_URL}/`, { method: "POST" }),
     new NextRequest("http://127.0.0.1:3194/"),
     new NextRequest("https://preview.up.railway.app/"),
-    new NextRequest("http://www.lnxbeats.fr/"),
   ]) assert.doesNotMatch(proxy(request).headers.get("content-security-policy") ?? "", analyticsPattern);
+});
+
+test("canonical Host behind an internal HTTP reverse proxy receives the public Analytics CSP", t => {
+  t.mock.property(process, "env", { ...env });
+  for (const method of ["GET", "HEAD"]) for (const path of ["/", "/discographie", "/avant-premieres"]) for (const host of ["www.lnxbeats.fr", "WWW.LNXBEATS.FR", "www.lnxbeats.fr:443"]) {
+    const request = new NextRequest(`http://127.0.0.1:3000${path}`, { method, headers: { host } });
+    assert.notEqual(request.nextUrl.origin, env.SITE_URL);
+    const response = proxy(request);
+    const generated = response.headers.get(`x-middleware-request-${CSP_NONCE_HEADER}`);
+    assert.ok(isScriptNonce(generated));
+    assert.match(response.headers.get("content-security-policy")!, analyticsPattern);
+    assert.equal(response.headers.get("x-middleware-request-content-security-policy"), response.headers.get("content-security-policy"));
+    assert.equal(response.headers.get("location"), null);
+  }
+  // Host permission is not a transport/consent grant in a real HTTP/QA browser.
+  const configuration = resolveAnalyticsConfiguration(env);
+  for (const origin of ["http://www.lnxbeats.fr", "http://127.0.0.1:3000"]) {
+    assert.equal(mayLoadAnalytics({ configuration, origin, pathname: "/", consent: "granted" }), false);
+  }
+});
+
+test("reverse-proxy support never trusts a false or forwarded Host, nor an apex redirect", t => {
+  t.mock.property(process, "env", { ...env });
+  for (const host of ["localhost:3000", "127.0.0.1:3000", "preview.up.railway.app", "www.lnxbeats.fr.evil.test", "evil.test@www.lnxbeats.fr", "www.lnxbeats.fr/path", "www.lnxbeats.fr:80", "www.lnxbeats.fr, evil.test"]) {
+    const response = proxy(new NextRequest("http://127.0.0.1:3000/discographie", { headers: { host, "x-forwarded-host": "www.lnxbeats.fr", "x-forwarded-proto": "https" } }));
+    assert.doesNotMatch(response.headers.get("content-security-policy") ?? "", analyticsPattern, host);
+  }
+  const apex = proxy(new NextRequest("http://127.0.0.1:3000/discographie", { headers: { host: "lnxbeats.fr" } }));
+  assert.equal(apex.status, 308);
+  assert.equal(apex.headers.get("location"), "https://www.lnxbeats.fr/discographie");
+  assert.equal(apex.headers.get("content-security-policy"), null);
+});
+
+test("canonical reverse-proxy Host still requires Production flags and a public path", t => {
+  const request = (path: string) => new NextRequest(`http://127.0.0.1:3000${path}`, { headers: { host: "www.lnxbeats.fr" } });
+  const scopedEnv: NodeJS.ProcessEnv = { ...env };
+  t.mock.property(process, "env", scopedEnv);
+  for (const path of ["/compte", "/admin", "/api/auth/session", "/musique/checkout", "/musique/panier", "/commander"]) {
+    assert.doesNotMatch(proxy(request(path)).headers.get("content-security-policy") ?? "", analyticsPattern, path);
+  }
+  for (const context of [{ ...env, RAILWAY_ENVIRONMENT_NAME: "preview" }, { ...env, ANALYTICS_ENABLED: "false" }, { ...env, SITE_URL: "http://127.0.0.1:3000" }]) {
+    Object.assign(scopedEnv, context);
+    assert.doesNotMatch(proxy(request("/discographie")).headers.get("content-security-policy") ?? "", analyticsPattern);
+  }
 });
 
 test("new GA-only nonce pages do not broaden the existing CMP network perimeter", t => {

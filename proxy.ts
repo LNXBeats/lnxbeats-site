@@ -8,6 +8,8 @@ import { digitalPaypalCheckoutPath, digitalPaypalSdkConfiguration } from "@/lib/
 import { LANGUAGE_COOKIE, siteLocale } from "@/lib/i18n/config";
 import { ANALYTICS_CANONICAL_ORIGIN, allowsAnalyticsPath, resolveAnalyticsConfiguration } from "@/lib/analytics/policy";
 
+const ANALYTICS_CANONICAL_HOST = new URL(ANALYTICS_CANONICAL_ORIGIN).hostname;
+
 // This one streaming upload already enforces Admin/origin and 80 MiB limits.
 // Canonical policy returns "none" for it; do not clone/truncate its multipart
 // body at the photo cap. All other routes retain their existing proxy behavior.
@@ -16,9 +18,10 @@ export const config = {
 };
 
 export function proxy(request: NextRequest) {
+  const requestHost = request.headers.get("host") ?? request.nextUrl.host;
   const policy = resolvePublicOriginPolicy({
     method: request.method,
-    host: request.headers.get("host") ?? request.nextUrl.host,
+    host: requestHost,
     pathname: request.nextUrl.pathname,
     search: request.nextUrl.search,
   });
@@ -32,8 +35,13 @@ export function proxy(request: NextRequest) {
   requestHeaders.delete("content-security-policy-report-only");
   const digitalCheckout = digitalPaypalCheckoutPath(request.nextUrl.pathname);
   const paypal = digitalCheckout ? digitalPaypalSdkConfiguration(process.env) : null;
+  // Railway terminates HTTPS before Next, whose URL may use an internal HTTP
+  // origin. Use the same Host as canonical routing, with strict authority syntax.
+  // This only grants CSP permission: the client still requires the exact HTTPS
+  // origin and explicit consent before loading Analytics. Never trust forwarded Host.
+  const publicHost = requestHost.trim().toLowerCase();
   const analytics = resolveAnalyticsConfiguration(process.env) !== null
-    && request.nextUrl.origin === ANALYTICS_CANONICAL_ORIGIN
+    && (publicHost === ANALYTICS_CANONICAL_HOST || publicHost === `${ANALYTICS_CANONICAL_HOST}:443`)
     && allowsAnalyticsPath(request.nextUrl.pathname);
   const existingNonceRoute = digitalCheckout || nonceCspEnabled(request.nextUrl.pathname, process.env);
   const nonce = ["GET", "HEAD"].includes(request.method) && (existingNonceRoute || analytics)
