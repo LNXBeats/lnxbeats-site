@@ -10,7 +10,7 @@ import { CreationMediaStage } from "@/components/creations/creation-media-stage"
 import { CreationCollaborators } from "@/components/creations/creation-collaborators";
 import { Container } from "@/components/container";
 import { JsonLd } from "@/components/json-ld";
-import { creationArtwork } from "@/lib/creations/types";
+import { creationArtwork, resolvedCreationPrimaryMedia } from "@/lib/creations/types";
 import { getPublicCreation, listPublicCreations } from "@/lib/creations/queries";
 import { createPublicPageMetadata } from "@/lib/seo/metadata";
 import { buildCreationStructuredData } from "@/lib/seo/structured-data";
@@ -80,7 +80,7 @@ export default async function CreationPage({ params }: { params: Promise<{ slug:
         <nav className="creation-detail-page__breadcrumb" aria-label={serverT(locale, "Fil d’Ariane")}>
           <Link href="/creations"><T text="Créations"/></Link><span aria-hidden="true">/</span><OriginalName>{creation.title}</OriginalName>
         </nav>
-        <CreationMediaStage creations={[creation]} showRail={false} showGrid={false} headingLevel="h1" />
+        <CreationMediaStage key={creation.slug} creations={[creation]} showRail={false} showGrid={false} headingLevel="h1" watchVideo={resolvedCreationPrimaryMedia(creation) === "video"} />
 
         <div className="creation-detail-content">
           {creation.description ? (

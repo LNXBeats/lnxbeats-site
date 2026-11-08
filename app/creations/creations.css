@@ -96,6 +96,16 @@
 
 .creation-stage__media { min-width: 0; }
 
+/* On a dedicated clip page the playable media is the primary content. */
+.creation-stage[data-watch-video="true"] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(.75rem, 2vw, 1.5rem);
+}
+
+.creation-stage[data-watch-video="true"] .creation-stage__copy {
+  padding-inline: clamp(.5rem, 2vw, 1.25rem);
+}
+
 .creation-stage__frame {
   position: relative;
   display: grid;

@@ -46,6 +46,7 @@ type CreationMediaStageProps = {
   showRail?: boolean;
   showGrid?: boolean;
   headingLevel?: "h1" | "h2";
+  watchVideo?: boolean;
 };
 
 type MediaElement = HTMLAudioElement | HTMLVideoElement;
@@ -150,11 +151,17 @@ export function CreationMediaStage({
   showRail = true,
   showGrid = true,
   headingLevel = "h2",
+  watchVideo = false,
 }: CreationMediaStageProps) {
   const { t } = useSiteLanguage();
   const safeInitialIndex = Math.max(0, creations.findIndex((creation) => creation.slug === initialSlug));
   const initialCreation = creations[safeInitialIndex] ?? creations[0];
-  const initialMode = initialCreation ? primaryPresentationMedia(initialCreation) : "cover";
+  // A public, single-creation detail page is a watch page. Keep the catalogue
+  // lazy: it must not advertise a carousel selection as the page's main video.
+  const watchCreation = watchVideo && creations.length === 1 && initialCreation?.video ? initialCreation : null;
+  const watchSource = watchCreation?.video?.url;
+  const initialVideoSlug = watchCreation?.slug ?? null;
+  const initialMode = watchCreation ? "video" : initialCreation ? primaryPresentationMedia(initialCreation) : "cover";
   const [state, dispatch] = useReducer(
     selectionFromAction,
     initialCreation
@@ -165,14 +172,14 @@ export function CreationMediaStage({
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
-  const loadedRef = useRef<Record<CreationMediaKind, string | null>>({ audio: null, video: null });
+  const loadedRef = useRef<Record<CreationMediaKind, string | null>>({ audio: null, video: initialVideoSlug });
   const positionsRef = useRef(new Map<string, number>());
   const playRequestRef = useRef(0);
   const recoveryAttemptsRef = useRef(new Map<string, number>());
-  const [videoMounted, setVideoMounted] = useState(false);
+  const [videoMounted, setVideoMounted] = useState(Boolean(watchCreation));
   const [loadedMedia, setLoadedMedia] = useState<Record<CreationMediaKind, string | null>>({
     audio: null,
-    video: null,
+    video: initialVideoSlug,
   });
   const [progress, setProgress] = useState({ key: "", current: 0, duration: 0 });
   const [failedMedia, setFailedMedia] = useState<string | null>(null);
@@ -422,7 +429,7 @@ export function CreationMediaStage({
 
   return (
     <section className="creation-experience" aria-labelledby={headingId} data-selected-creation={selected.slug} data-active-media={state.activeMedia ? `${state.activeMedia.creationSlug}:${state.activeMedia.kind}` : ""}>
-      <div className="creation-stage" data-primary-media={state.selectedMedia}>
+      <div className="creation-stage" data-primary-media={state.selectedMedia} data-watch-video={watchCreation ? "true" : undefined}>
         <div className="creation-stage__media">
           <div
             className="creation-stage__frame"
@@ -434,6 +441,7 @@ export function CreationMediaStage({
             {videoMounted ? (
               <video
                 ref={videoRef}
+                src={watchSource}
                 className={`creation-stage__video${videoVisible ? " is-visible" : ""}`}
                 controls
                 playsInline

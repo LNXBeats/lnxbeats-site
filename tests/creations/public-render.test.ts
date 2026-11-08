@@ -40,13 +40,17 @@ test("initial SSR renders every media combination without mounting or fetching a
       video: video ? asset("video") : null,
       links: [],
     });
-    const render = (value) => renderToStaticMarkup(
-      React.createElement(CreationMediaStage, { creations: [value], showRail: false, showGrid: false }),
+    const render = (value, props = {}) => renderToStaticMarkup(
+      React.createElement(CreationMediaStage, { creations: [value], showRail: false, showGrid: false, ...props }),
     );
     const audioOnly = render(creation("audio", "audio", true, false));
     const videoOnly = render(creation("video", "video", false, true));
     const combined = render(creation("combined", "video", true, true));
     const portrait = render({ ...creation("portrait", "video", false, true), video: { ...asset("video"), width: 1080, height: 1440 } });
+    const watch = render({ ...creation("watch", "video", true, true), poster: asset("poster") }, { watchVideo: true });
+    const watchWithoutVideo = render(creation("audio-watch", "audio", true, false), { watchVideo: true });
+    const watchWithMultipleCreations = render(creation("catalogue", "video", false, true), { watchVideo: true, creations: [creation("first", "video", false, true), creation("second", "video", false, true)] });
+    const watchVideo = watch.match(/<video\b[^>]*>/)?.[0] ?? "";
     console.log(JSON.stringify({
       audioOnly: {
         audioControl: audioOnly.includes("creation-stage__audio-player"),
@@ -68,6 +72,17 @@ test("initial SSR renders every media combination without mounting or fetching a
         visibleVideoPill: videoOnly.includes(">Lire la vidéo<"),
         audioOverlay: audioOnly.includes("creation-stage__audio-overlay"),
       },
+      watch: {
+        nativePlayerVisible: watchVideo.includes('is-visible') && watchVideo.includes('aria-hidden="false"'),
+        source: watchVideo.includes('src="/media/creations/video"'),
+        poster: watchVideo.includes('poster="/media/creations/poster"'),
+        controls: /\bcontrols(?:="")?\b/.test(watchVideo),
+        noPreload: watchVideo.includes('preload="none"'),
+        noAutoplay: !/\bautoplay\b/i.test(watchVideo),
+        audioChoice: watch.includes(">Audio</button>"),
+        withoutVideo: !watchWithoutVideo.includes("<video"),
+        multipleCreations: !watchWithMultipleCreations.includes("<video"),
+      },
     }));
   `;
   const { stdout } = await execute(process.execPath, ["--import", "tsx", "--input-type=module", "-e", script], {
@@ -80,5 +95,6 @@ test("initial SSR renders every media combination without mounting or fetching a
     videoOnly: { videoMounted: false, sourcePresent: false, videoLaunch: true },
     combined: { videoMounted: false, audioChoice: true, videoChoice: true },
     presentation: { exactPortraitRatioBeforePlay: true, svgLaunch: true, visibleVideoPill: false, audioOverlay: false },
+    watch: { nativePlayerVisible: true, source: true, poster: true, controls: true, noPreload: true, noAutoplay: true, audioChoice: true, withoutVideo: true, multipleCreations: true },
   });
 });

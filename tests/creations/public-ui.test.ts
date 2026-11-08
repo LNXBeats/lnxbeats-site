@@ -4,13 +4,14 @@ import test from "node:test";
 
 const read = (path: string) => readFile(new URL(`../../${path}`, import.meta.url), "utf8");
 
-test("the public stage performs no eager or automatic media playback", async () => {
+test("only a dedicated watch page exposes the initial video source, without autoplay or preload", async () => {
   const source = await read("components/creations/creation-media-stage.tsx");
   const videoOpeningTag = source.match(/<video([\s\S]*?)>/)?.[1] ?? "";
   const audioOpeningTag = source.match(/<audio([\s\S]*?)>/)?.[1] ?? "";
 
   assert.doesNotMatch(source, /\bautoPlay\b/i);
-  assert.doesNotMatch(videoOpeningTag, /\bsrc\s*=/);
+  assert.match(source, /watchVideo && creations.length === 1 && initialCreation\?\.video/);
+  assert.match(videoOpeningTag, /\bsrc=\{watchSource\}/);
   assert.doesNotMatch(audioOpeningTag, /\bsrc\s*=/);
   assert.match(videoOpeningTag, /controls/);
   assert.match(videoOpeningTag, /playsInline/);
