@@ -245,17 +245,15 @@ test("le preflight PostgreSQL est read-only et rapporte l'outbox sans réclamer"
   assert.equal("update" in (database.orderNotification as object), false);
 });
 
-test("la configuration Railway racine ne force aucun déploiement sur les services partagés", async () => {
-  const [rootConfiguration, schedulerConfiguration, packageSource, schedulerSource, healthRoute] = await Promise.all([
-    readFile("railway.toml", "utf8"),
+test("aucun fichier Railway hérité à la racine ne configure les services partagés", async () => {
+  await assert.rejects(readFile("railway.toml", "utf8"), { code: "ENOENT" });
+  await assert.rejects(readFile("railway.json", "utf8"), { code: "ENOENT" });
+  const [schedulerConfiguration, packageSource, schedulerSource, healthRoute] = await Promise.all([
     readFile("railway.scheduler.toml", "utf8"),
     readFile("package.json", "utf8"),
     readFile("scripts/notifications-scheduler.ts", "utf8"),
     readFile("app/api/health/route.ts", "utf8"),
   ]);
-
-  assert.match(rootConfiguration, /\[build\]\s+builder = "RAILPACK"/);
-  assert.doesNotMatch(rootConfiguration, /\[deploy\]|startCommand|healthcheck|cronSchedule|preDeployCommand|restartPolicy/i);
 
   const packageConfiguration = JSON.parse(packageSource) as { scripts: Record<string, string> };
   assert.equal(packageConfiguration.scripts.start, "MALLOC_ARENA_MAX=2 next start");
